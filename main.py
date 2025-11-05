@@ -988,12 +988,9 @@ async def report_handler(request):
                     
                     # Parse the report data
                     parsed_data = parse_report_data(response_text)
-                    
-                    return web.json_response({
-                        "status": "success",
-                        "data": parsed_data,
-                        "redirects_followed": redirect_count
-                    })
+                    result = {"status": "success", "redirects_followed": redirect_count}
+                    result.update(parsed_data)
+                    return web.json_response(result)
                 
                 # Handle 302 redirect
                 location = response.headers.get("Location")

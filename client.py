@@ -85,40 +85,38 @@ async def get_report(session: aiohttp.ClientSession, report_id: str) -> bool:
                     print(f"Full report saved to {filename}")
                     
                     # Display parsed data if available
-                    parsed_data = data.get("parsed_data", {})
-                    if parsed_data:
-                        print("\n--- Parsed Report Data ---")
-                        if parsed_data.get("patient_name"):
-                            print(f"Patient Name: {parsed_data['patient_name']}")
-                        if parsed_data.get("age"):
-                            print(f"Age: {parsed_data['age']}")
-                        if parsed_data.get("gender"):
-                            print(f"Gender: {parsed_data['gender']}")
-                        if parsed_data.get("patient_id"):
-                            print(f"Patient ID (CNP): {parsed_data['patient_id']}")
-                        if parsed_data.get("patient_code"):
-                            print(f"Patient Code: {parsed_data['patient_code']}")
-                        if parsed_data.get("sample_datetime"):
-                            print(f"Sample Date/Time: {parsed_data['sample_datetime']}")
-                        if parsed_data.get("examination"):
-                            print(f"Examination: {parsed_data['examination']}")
-                        
-                        # Handle multiple reports
-                        reports = parsed_data.get("reports", [])
-                        if reports:
-                            print(f"\nReports ({len(reports)} found):")
-                            for i, report in enumerate(reports, 1):
-                                investigation = report.get("investigation", '')
-                                print(f"\nReport {i}: {report['investigation']}")
-                                if report.get("result"):
-                                    print(f"{report['result']}")
-                        elif parsed_data.get("result"):
-                            # Fallback to single result if reports list is empty
-                            print(f"Result: {parsed_data['result']}")
-                        
-                        if parsed_data.get("examiner"):
-                            print(f"\nExaminer: {parsed_data['examiner']}")
-                        print("--------------------------")
+                    print("\n--- Parsed Report Data ---")
+                    if data.get("patient_name"):
+                        print(f"Patient Name: {data['patient_name']}")
+                    if data.get("age"):
+                        print(f"Age: {data['age']}")
+                    if data.get("gender"):
+                        print(f"Gender: {data['gender']}")
+                    if data.get("patient_id"):
+                        print(f"Patient ID (CNP): {data['patient_id']}")
+                    if data.get("patient_code"):
+                        print(f"Patient Code: {data['patient_code']}")
+                    if data.get("sample_datetime"):
+                        print(f"Sample Date/Time: {data['sample_datetime']}")
+                    if data.get("examination"):
+                        print(f"Examination: {data['examination']}")
+                    
+                    # Handle multiple reports
+                    reports = data.get("reports", [])
+                    if reports:
+                        print(f"\nReports ({len(reports)} found):")
+                        for i, report in enumerate(reports, 1):
+                            investigation = report.get("investigation", '')
+                            print(f"\nReport {i}: {report['investigation']}")
+                            if report.get("result"):
+                                print(f"{report['result']}")
+                    elif data.get("result"):
+                        # Fallback to single result if reports list is empty
+                        print(f"Result: {data['result']}")
+                    
+                    if data.get("examiner"):
+                        print(f"\nExaminer: {data['examiner']}")
+                    print("--------------------------")
                     
                     return True
                 else:
@@ -152,24 +150,22 @@ async def get_checkout(session: aiohttp.ClientSession, checkout_id: str) -> bool
                     print(f"Full checkout saved to {filename}")
                     
                     # Display parsed data if available
-                    parsed_data = data.get("parsed_data", {})
-                    if parsed_data:
-                        print("\n--- Parsed Checkout Data ---")
-                        if parsed_data.get("patient_name"):
-                            print(f"Patient Name: {parsed_data['patient_name']}")
-                        if parsed_data.get("patient_id"):
-                            print(f"Patient ID: {parsed_data['patient_id']}")
-                        if parsed_data.get("admission_diagnostic"):
-                            print(f"Admission Diagnostic: {parsed_data['admission_diagnostic']}")
-                        if parsed_data.get("epicrisis"):
-                            print(f"Epicrisis: {parsed_data['epicrisis']}")
-                        if parsed_data.get("diagnostic"):
-                            print(f"Diagnostic: {parsed_data['diagnostic']}")
-                        if parsed_data.get("surgery"):
-                            print(f"Surgery: {parsed_data['surgery']}")
-                        if parsed_data.get("recommendations"):
-                            print(f"Recommendations: {parsed_data['recommendations']}")
-                        print("--------------------------")
+                    print("\n--- Parsed Checkout Data ---")
+                    if data.get("patient_name"):
+                        print(f"Patient Name: {data['patient_name']}")
+                    if data.get("patient_id"):
+                        print(f"Patient ID: {data['patient_id']}")
+                    if data.get("admission_diagnostic"):
+                        print(f"Admission Diagnostic: {data['admission_diagnostic']}")
+                    if data.get("epicrisis"):
+                        print(f"Epicrisis: {data['epicrisis']}")
+                    if data.get("diagnostic"):
+                        print(f"Diagnostic: {data['diagnostic']}")
+                    if data.get("surgery"):
+                        print(f"Surgery: {data['surgery']}")
+                    if data.get("recommendations"):
+                        print(f"Recommendations: {data['recommendations']}")
+                    print("--------------------------")
                     
                     return True
                 else:
