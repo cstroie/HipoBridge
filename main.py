@@ -614,7 +614,8 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
             if parent:
                 textarea = parent.find_next('textarea')
                 if textarea:
-                    checkout_data["epicrisis"] = textarea.get_text().strip()
+                    epicrisis_content = textarea.get_text().strip()
+                    checkout_data["epicrisis"] = html_to_markdown(epicrisis_content)
         
         # Extract diagnostic (textarea after 'Diagnostic externare')
         diagnostic_elements = soup.find_all(text=re.compile(r'Diagnostic externare', re.IGNORECASE))
@@ -623,7 +624,8 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
             if parent:
                 textarea = parent.find_next('textarea')
                 if textarea:
-                    checkout_data["diagnostic"] = textarea.get_text().strip()
+                    diagnostic_content = textarea.get_text().strip()
+                    checkout_data["diagnostic"] = html_to_markdown(diagnostic_content)
         
         # Extract surgery (textarea after 'Protocol operator:')
         surgery_elements = soup.find_all(text=re.compile(r'Protocol operator:', re.IGNORECASE))
@@ -632,7 +634,8 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
             if parent:
                 textarea = parent.find_next('textarea')
                 if textarea:
-                    checkout_data["surgery"] = textarea.get_text().strip()
+                    surgery_content = textarea.get_text().strip()
+                    checkout_data["surgery"] = html_to_markdown(surgery_content)
         
         # Extract recommendations (textarea after 'Recomandari')
         recommendations_elements = soup.find_all(text=re.compile(r'Recomandari', re.IGNORECASE))
@@ -641,7 +644,8 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
             if parent:
                 textarea = parent.find_next('textarea')
                 if textarea:
-                    checkout_data["recommendations"] = textarea.get_text().strip()
+                    recommendations_content = textarea.get_text().strip()
+                    checkout_data["recommendations"] = html_to_markdown(recommendations_content)
         
         return checkout_data
     except Exception as e:
