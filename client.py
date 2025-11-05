@@ -77,11 +77,37 @@ async def get_report(session: aiohttp.ClientSession, report_id: str) -> bool:
                 data = await response.json()
                 if data.get("status") == "success":
                     print(f"Report retrieval successful! (followed {data.get('redirects_followed', 0)} redirects)")
-                    # Save response to file for inspection
+                    
+                    # Save HTML response to file for inspection
                     filename = f"report_{report_id}.html"
                     with open(filename, "w") as f:
                         f.write(data.get("data", ""))
-                    print(f"Report saved to {filename}")
+                    print(f"Full report saved to {filename}")
+                    
+                    # Display parsed data if available
+                    parsed_data = data.get("parsed_data", {})
+                    if parsed_data:
+                        print("\n--- Parsed Report Data ---")
+                        if parsed_data.get("patient_name"):
+                            print(f"Patient Name: {parsed_data['patient_name']}")
+                        if parsed_data.get("age"):
+                            print(f"Age: {parsed_data['age']}")
+                        if parsed_data.get("gender"):
+                            print(f"Gender: {parsed_data['gender']}")
+                        if parsed_data.get("patient_id"):
+                            print(f"Patient ID (CNP): {parsed_data['patient_id']}")
+                        if parsed_data.get("patient_code"):
+                            print(f"Patient Code: {parsed_data['patient_code']}")
+                        if parsed_data.get("sample_datetime"):
+                            print(f"Sample Date/Time: {parsed_data['sample_datetime']}")
+                        if parsed_data.get("examination"):
+                            print(f"Examination: {parsed_data['examination']}")
+                        if parsed_data.get("result"):
+                            print(f"Result: {parsed_data['result']}")
+                        if parsed_data.get("examiner"):
+                            print(f"Examiner: {parsed_data['examiner']}")
+                        print("--------------------------")
+                    
                     return True
                 else:
                     print(f"Report retrieval failed: {data.get('message', 'No message')}")
