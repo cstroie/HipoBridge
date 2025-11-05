@@ -174,12 +174,102 @@ async def service_post_handler(request):
     logger.debug(f"POST /api/service response: {result}")
     return web.json_response(result)
 
+async def patient_search_handler(request):
+    """Search for patients by name or other criteria"""
+    logger.info("GET /api/patient/search endpoint accessed")
+    
+    # Get search parameters from query string
+    search_term = request.query.get('term', '')
+    search_type = request.query.get('type', 'PA')  # PA = patient, P = presentation, etc.
+    
+    if not search_term:
+        logger.warning("No search term provided")
+        return web.json_response({
+            "status": "error",
+            "message": "Search term is required"
+        }, status=400)
+    
+    logger.info(f"Searching for patients with term: {search_term}, type: {search_type}")
+    
+    try:
+        session = await get_session()
+        
+        # First ensure we're logged in
+        login_success = await login_if_needed()
+        if not login_success:
+            logger.error("Failed to login for patient search")
+            return web.json_response({
+                "status": "error",
+                "message": "Authentication failed"
+            }, status=401)
+        
+        # Prepare search data
+        search_data = {
+            "strDescription": search_term,
+            "hdnSearchType": "1",  # Simple search
+            "searchWhat": search_type,
+            "pageNo": "1"
+        }
+        
+        # Make search request to the patient search page
+        search_url = f"{SERVICE_URL}/files/search.asp?what={search_type}"
+        logger.debug(f"Making patient search request to: {search_url}")
+        
+        async with session.post(
+            search_url,
+            data=search_data,
+            headers=HEADERS
+        ) as response:
+            response_text = await response.text()
+            logger.debug(f"Patient search response status: {response.status}")
+            
+            # Check if we got redirected to login page (session expired)
+            if is_login_page(response_text):
+                logger.warning("Session expired during patient search, attempting re-login")
+                login_success = await login_if_needed()
+                if login_success:
+                    # Retry the search
+                    async with session.post(
+                        search_url,
+                        data=search_data,
+                        headers=HEADERS
+                    ) as retry_response:
+                        response_text = await retry_response.text()
+                        logger.debug(f"Retry search response status: {retry_response.status}")
+                        
+                        if is_login_page(response_text):
+                            logger.error("Login failed after retry")
+                            return web.json_response({
+                                "status": "error",
+                                "message": "Authentication failed after retry"
+                            }, status=401)
+                else:
+                    logger.error("Re-login failed")
+                    return web.json_response({
+                        "status": "error",
+                        "message": "Authentication failed"
+                    }, status=401)
+            
+            logger.info("Patient search completed successfully")
+            return web.json_response({
+                "status": "success",
+                "data": response_text
+            })
+            
+    except Exception as e:
+        logger.error(f"Patient search failed with exception: {e}")
+        return web.json_response({
+            "status": "error",
+            "message": str(e)
+        }, status=500)
+
 async def init_app():
     logger.info("Initializing web application")
     app = web.Application()
     app.router.add_get('/', root_handler)
     app.router.add_get('/api/service', service_get_handler)
     app.router.add_post('/api/service', service_post_handler)
+    app.router.add_get('/api/patient/search', patient_search_handler)
     
     # Setup startup and cleanup
     app.on_startup.append(on_startup)
