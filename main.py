@@ -592,18 +592,15 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
         
         for result_element in result_elements:
             try:
-                # Get the parent element which contains the investigation name
-                parent = result_element.parent
-                
-                # The investigation name is the text after "REZULTAT:" in the parent element
-                parent_text = parent.get_text()
-                investigation_match = re.search(r'REZULTAT:\s*(.*?)(?:\s*$)', parent_text, re.IGNORECASE)
+                # The investigation name is the text after "REZULTAT:" in the element
+                element_text = result_element.get_text()
+                investigation_match = re.search(r'REZULTAT:\s*(.*?)(?:\s*$)', element_text, re.IGNORECASE)
                 investigation_name = ""
                 if investigation_match:
                     investigation_name = investigation_match.group(1).strip()
                 
                 # Find the next div sibling which contains the actual result
-                result_div = parent.find_next('div')
+                result_div = result_element.find_next('div')
                 result_content = ""
                 if result_div:
                     result_content = html_to_markdown(result_div.get_text().strip())

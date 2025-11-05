@@ -108,11 +108,10 @@ async def get_report(session: aiohttp.ClientSession, report_id: str) -> bool:
                         if reports:
                             print(f"\nReports ({len(reports)} found):")
                             for i, report in enumerate(reports, 1):
-                                print(f"\n  Report {i}:")
-                                if report.get("investigation"):
-                                    print(f"    Investigation: {report['investigation']}")
+                                investigation = report.get("investigation", '')
+                                print(f"\nReport {i}: {report['investigation']}")
                                 if report.get("result"):
-                                    print(f"    Result: {report['result']}")
+                                    print(f"{report['result']}")
                         elif parsed_data.get("result"):
                             # Fallback to single result if reports list is empty
                             print(f"Result: {parsed_data['result']}")
