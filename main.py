@@ -405,9 +405,14 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
         text_content = soup.get_text()
         
         # Extract patient name
-        name_match = re.search(r'(?:Nume:|PACIENT:)\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
+        name_match = re.search(r'(?:Nume:|PACIENT:)\s*([^\n\r<>&]+?)(?:\s+VARSTA:|\s+SEX:|\s+C\.N\.P:|\s+COD\s+PACIENT:)', text_content, re.IGNORECASE)
         if name_match:
             report_data["patient_name"] = name_match.group(1).strip()
+        else:
+            # Fallback pattern if the above doesn't match
+            name_match = re.search(r'(?:Nume:|PACIENT:)\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
+            if name_match:
+                report_data["patient_name"] = name_match.group(1).strip()
         
         # Extract age
         age_match = re.search(r'Varsta:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
