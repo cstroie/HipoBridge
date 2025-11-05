@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
 import os
-from urllib.parse import urljoin
-from fastapi import FastAPI
-import uvicorn
-import httpx
 import asyncio
-from typing import Dict, Any
-
-app = FastAPI()
+import aiohttp
+from aiohttp import web
+from typing import Dict, Any, Optional
+import json
 
 # Configuration
-SERVICE_URL = "http://192.168.3.230/hipocrate"  # Updated to Hipocrate service URL
+SERVICE_URL = "http://192.168.3.230/hipocrate"
 PORT = 44660
 
 # Get credentials from environment variables
@@ -26,12 +23,17 @@ HEADERS = {
     "Connection": "keep-alive",
 }
 
-# Create async HTTP client
-client = httpx.AsyncClient()
+# Global session
+session: Optional[aiohttp.ClientSession] = None
 
-@app.get("/")
-async def root():
-    return {"message": "Web API Interface to Hipocrate Service"}
+async def get_session():
+    global session
+    if session is None or session.closed:
+        session = aiohttp.ClientSession()
+    return session
+
+async def root_handler(request):
+    return web.json_response({"message": "Web API Interface to Hipocrate Service"})
 
 def is_login_page(content: str) -> bool:
     """Detect if we're on the login page"""
@@ -43,6 +45,7 @@ async def login_if_needed() -> bool:
         return False
     
     try:
+        session = await get_session()
         # Prepare login data
         login_data = {
             "username": HYP_USER,
@@ -50,14 +53,15 @@ async def login_if_needed() -> bool:
         }
         
         # Submit login form
-        login_response = await client.post(
+        async with session.post(
             SERVICE_URL, 
             data=login_data, 
             headers=HEADERS
-        )
+        ) as login_response:
+            response_text = await login_response.text()
         
         # Check if login was successful (not redirected back to login page)
-        if not is_login_page(login_response.text):
+        if not is_login_page(response_text):
             return True
         return False
     except Exception:
@@ -66,25 +70,30 @@ async def login_if_needed() -> bool:
 async def handle_service_request(method: str, data: Dict[str, Any] = None) -> Dict[str, Any]:
     """Handle service requests with automatic login"""
     try:
+        session = await get_session()
         # Make initial request
         if method == "GET":
-            response = await client.get(SERVICE_URL, headers=HEADERS)
+            async with session.get(SERVICE_URL, headers=HEADERS) as response:
+                response_text = await response.text()
         else:  # POST
-            response = await client.post(SERVICE_URL, json=data, headers=HEADERS)
+            async with session.post(SERVICE_URL, json=data, headers=HEADERS) as response:
+                response_text = await response.text()
         
         # Check if we got redirected to login page
-        if is_login_page(response.text):
+        if is_login_page(response_text):
             # Try to login
             login_success = await login_if_needed()
             if login_success:
                 # Retry the original request
                 if method == "GET":
-                    response = await client.get(SERVICE_URL, headers=HEADERS)
+                    async with session.get(SERVICE_URL, headers=HEADERS) as response:
+                        response_text = await response.text()
                 else:  # POST
-                    response = await client.post(SERVICE_URL, json=data, headers=HEADERS)
+                    async with session.post(SERVICE_URL, json=data, headers=HEADERS) as response:
+                        response_text = await response.text()
                 
                 # Check if login was successful after retry
-                if is_login_page(response.text):
+                if is_login_page(response_text):
                     return {
                         "status": "error",
                         "message": "Login failed or session expired"
@@ -97,7 +106,7 @@ async def handle_service_request(method: str, data: Dict[str, Any] = None) -> Di
         
         return {
             "status": "success",
-            "data": response.text
+            "data": response_text
         }
     except Exception as e:
         return {
@@ -105,17 +114,42 @@ async def handle_service_request(method: str, data: Dict[str, Any] = None) -> Di
             "message": str(e)
         }
 
-@app.get("/api/service")
-async def call_service() -> Dict[str, Any]:
-    return await handle_service_request("GET")
+async def service_get_handler(request):
+    result = await handle_service_request("GET")
+    return web.json_response(result)
 
-@app.post("/api/service")
-async def post_to_service(data: Dict[str, Any]) -> Dict[str, Any]:
-    return await handle_service_request("POST", data)
+async def service_post_handler(request):
+    try:
+        data = await request.json()
+    except json.JSONDecodeError:
+        return web.json_response({
+            "status": "error",
+            "message": "Invalid JSON data"
+        }, status=400)
+    
+    result = await handle_service_request("POST", data)
+    return web.json_response(result)
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    await client.aclose()
+async def init_app():
+    app = web.Application()
+    app.router.add_get('/', root_handler)
+    app.router.add_get('/api/service', service_get_handler)
+    app.router.add_post('/api/service', service_post_handler)
+    
+    # Setup startup and cleanup
+    app.on_startup.append(on_startup)
+    app.on_cleanup.append(on_cleanup)
+    
+    return app
+
+async def on_startup(app):
+    await get_session()
+
+async def on_cleanup(app):
+    global session
+    if session and not session.closed:
+        await session.close()
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=PORT)
+    app = init_app()
+    web.run_app(app, host="0.0.0.0", port=PORT)
