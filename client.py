@@ -223,7 +223,7 @@ async def main():
     """Main function to parse arguments and run the client"""
     parser = argparse.ArgumentParser(description="Hipocrate API Client")
     parser.add_argument("--username", "-u", help="Username for login")
-    parser.add_argument("--password", "-p", help="Password for login")
+    parser.add_argument("--password", "-w", help="Password for login")
     parser.add_argument("--search", "-s", help="Search term for patient search")
     parser.add_argument("--type", "-t", default="PA", help="Search type (default: PA)")
     parser.add_argument("--report", "-r", help="Report ID to retrieve")
