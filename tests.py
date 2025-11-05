@@ -32,7 +32,13 @@ async def test_service_get_endpoint(session: aiohttp.ClientSession) -> bool:
     """Test the service GET endpoint"""
     print("Testing service GET endpoint...")
     try:
-        async with session.get(f"{BASE_URL}/api/service") as response:
+        # Add credentials to headers if available
+        headers = {}
+        if HYP_USER and HYP_PASS:
+            headers["X-Username"] = HYP_USER
+            headers["X-Password"] = HYP_PASS
+            
+        async with session.get(f"{BASE_URL}/api/service", headers=headers) as response:
             if response.status == 200:
                 data = await response.json()
                 print(f"  ✓ Service GET returned status: {data.get('status', 'unknown')}")
@@ -49,7 +55,13 @@ async def test_service_post_endpoint(session: aiohttp.ClientSession) -> bool:
     print("Testing service POST endpoint...")
     try:
         test_data = {"test": "data"}
-        async with session.post(f"{BASE_URL}/api/service", json=test_data) as response:
+        # Add credentials to headers if available
+        headers = {}
+        if HYP_USER and HYP_PASS:
+            headers["X-Username"] = HYP_USER
+            headers["X-Password"] = HYP_PASS
+            
+        async with session.post(f"{BASE_URL}/api/service", json=test_data, headers=headers) as response:
             if response.status == 200:
                 data = await response.json()
                 print(f"  ✓ Service POST returned status: {data.get('status', 'unknown')}")
@@ -66,7 +78,13 @@ async def test_patient_search_endpoint(session: aiohttp.ClientSession) -> bool:
     print("Testing patient search endpoint...")
     try:
         # Test with a simple search term
-        async with session.get(f"{BASE_URL}/api/patient/search?term=test") as response:
+        # Add credentials to headers if available
+        headers = {}
+        if HYP_USER and HYP_PASS:
+            headers["X-Username"] = HYP_USER
+            headers["X-Password"] = HYP_PASS
+            
+        async with session.get(f"{BASE_URL}/api/patient/search?term=test", headers=headers) as response:
             if response.status == 200:
                 data = await response.json()
                 print(f"  ✓ Patient search returned status: {data.get('status', 'unknown')}")
