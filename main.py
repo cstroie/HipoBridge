@@ -380,6 +380,80 @@ async def patient_search_handler(request):
             "message": str(e)
         }, status=500)
 
+def parse_report_data(html_content: str) -> Dict[str, Any]:
+    """Parse HTML report content and extract structured data"""
+    import re
+    from bs4 import BeautifulSoup
+    
+    try:
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Initialize result dictionary
+        report_data = {
+            "patient_name": "",
+            "age": "",
+            "gender": "",
+            "patient_id": "",
+            "patient_code": "",
+            "sample_datetime": "",
+            "examination": "",
+            "result": "",
+            "examiner": ""
+        }
+        
+        # Extract text content for pattern matching
+        text_content = soup.get_text()
+        
+        # Extract patient name
+        name_match = re.search(r'(?:Nume:|PACIENT:)\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
+        if name_match:
+            report_data["patient_name"] = name_match.group(1).strip()
+        
+        # Extract age
+        age_match = re.search(r'Varsta:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
+        if age_match:
+            report_data["age"] = age_match.group(1).strip()
+        
+        # Extract gender
+        gender_match = re.search(r'Sex:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
+        if gender_match:
+            report_data["gender"] = gender_match.group(1).strip()
+        
+        # Extract patient ID (CNP)
+        cnp_match = re.search(r'C\.N\.P:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
+        if cnp_match:
+            report_data["patient_id"] = cnp_match.group(1).strip()
+        
+        # Extract patient code
+        code_match = re.search(r'Cod pacient:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
+        if code_match:
+            report_data["patient_code"] = code_match.group(1).strip()
+        
+        # Extract sample date and time
+        datetime_match = re.search(r'(?:Data si ora recoltarii:|Data investigatiei:)\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
+        if datetime_match:
+            report_data["sample_datetime"] = datetime_match.group(1).strip()
+        
+        # Extract examination
+        exam_match = re.search(r'EXAMINARE EFECTUATA:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
+        if exam_match:
+            report_data["examination"] = exam_match.group(1).strip()
+        
+        # Extract result (text after "REZULTAT:")
+        result_match = re.search(r'REZULTAT:\s*([^\n\r]+(?:\n[^\n\r]+)*)', text_content, re.IGNORECASE)
+        if result_match:
+            report_data["result"] = result_match.group(1).strip()
+        
+        # Extract examiner (MEDIC,)
+        examiner_match = re.search(r'MEDIC,\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
+        if examiner_match:
+            report_data["examiner"] = examiner_match.group(1).strip()
+        
+        return report_data
+    except Exception as e:
+        logger.error(f"Error parsing report data: {e}")
+        return {}
+
 async def report_handler(request):
     """Retrieve a report by ID, following redirect chains"""
     logger.info("GET /api/report endpoint accessed")
@@ -444,9 +518,14 @@ async def report_handler(request):
                             response_text = raw_data.decode('latin-1')
                     
                     logger.info(f"Report retrieval completed successfully after {redirect_count} redirects")
+                    
+                    # Parse the report data
+                    parsed_data = parse_report_data(response_text)
+                    
                     return web.json_response({
                         "status": "success",
                         "data": response_text,
+                        "parsed_data": parsed_data,
                         "redirects_followed": redirect_count
                     })
                 
