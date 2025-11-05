@@ -508,6 +508,9 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
     """Parse HTML report content and extract structured data"""
     
     try:
+        # First replace &nbsp; with spaces
+        html_content = html_content.replace('&nbsp;', ' ')
+        
         soup = BeautifulSoup(html_content, 'html.parser')
         
         # Initialize result dictionary
