@@ -456,14 +456,11 @@ def html_to_markdown(html_content: str) -> str:
         cleaned_text = cleaned_text.replace('&amp;nbsp;', ' ')
         return re.sub(r'\s+', ' ', cleaned_text.strip())
 
-def get_textarea_content_after_label(html_content: str, label_regex: str) -> str:
+def get_textarea_content_after_label(soup: BeautifulSoup, label_regex: str) -> str:
     """Get content of first textarea after a label matching the given regex"""
-    from bs4 import BeautifulSoup
     import re
     
     try:
-        soup = BeautifulSoup(html_content, 'html.parser')
-        
         # Find elements with text matching the label regex
         label_elements = soup.find_all(string=re.compile(label_regex, re.IGNORECASE))
         if label_elements:
@@ -645,44 +642,24 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
                 break
         
         # Extract epicrisis (first textarea after 'Epicriza:')
-        epicrisis_elements = soup.find_all(string=re.compile(r'Epicriza[^:]*:', re.IGNORECASE))
-        if epicrisis_elements:
-            parent = epicrisis_elements[0].parent
-            if parent:
-                textarea = parent.find_next('textarea')
-                if textarea:
-                    epicrisis_content = textarea.get_text().strip()
-                    checkout_data["epicrisis"] = html_to_markdown(epicrisis_content)
+        epicrisis_content = get_textarea_content_after_label(soup, r'Epicriza[^:]*:')
+        if epicrisis_content:
+            checkout_data["epicrisis"] = html_to_markdown(epicrisis_content)
         
         # Extract diagnostic (textarea after 'Diagnostic externare')
-        diagnostic_elements = soup.find_all(string=re.compile(r'Diagnostic externare[^:]*:', re.IGNORECASE))
-        if diagnostic_elements:
-            parent = diagnostic_elements[0].parent
-            if parent:
-                textarea = parent.find_next('textarea')
-                if textarea:
-                    diagnostic_content = textarea.get_text().strip()
-                    checkout_data["diagnostic"] = html_to_markdown(diagnostic_content)
+        diagnostic_content = get_textarea_content_after_label(soup, r'Diagnostic externare[^:]*:')
+        if diagnostic_content:
+            checkout_data["diagnostic"] = html_to_markdown(diagnostic_content)
         
         # Extract surgery (textarea after 'Protocol operator:')
-        surgery_elements = soup.find_all(string=re.compile(r'Protocol operator[^:]*:', re.IGNORECASE))
-        if surgery_elements:
-            parent = surgery_elements[0].parent
-            if parent:
-                textarea = parent.find_next('textarea')
-                if textarea:
-                    surgery_content = textarea.get_text().strip()
-                    checkout_data["surgery"] = html_to_markdown(surgery_content)
+        surgery_content = get_textarea_content_after_label(soup, r'Protocol operator[^:]*:')
+        if surgery_content:
+            checkout_data["surgery"] = html_to_markdown(surgery_content)
         
         # Extract recommendations (textarea after 'Recomandari')
-        recommendations_elements = soup.find_all(string=re.compile(r'Recomandari[^:]*:', re.IGNORECASE))
-        if recommendations_elements:
-            parent = recommendations_elements[0].parent
-            if parent:
-                textarea = parent.find_next('textarea')
-                if textarea:
-                    recommendations_content = textarea.get_text().strip()
-                    checkout_data["recommendations"] = html_to_markdown(recommendations_content)
+        recommendations_content = get_textarea_content_after_label(soup, r'Recomandari[^:]*:')
+        if recommendations_content:
+            checkout_data["recommendations"] = html_to_markdown(recommendations_content)
         
         return checkout_data
     except Exception as e:
