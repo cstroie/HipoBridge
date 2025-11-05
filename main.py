@@ -507,6 +507,106 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
         logger.error(f"Error parsing report data: {e}")
         return {}
 
+async def checkout_handler(request):
+    """Retrieve checkout information by ID"""
+    logger.info("GET /api/checkout endpoint accessed")
+    
+    # Get credentials from request headers (optional)
+    username = request.headers.get("X-Username")
+    password = request.headers.get("X-Password")
+    
+    # Get checkout ID from query string
+    checkout_id = request.query.get('id')
+    
+    if not checkout_id:
+        logger.warning("No checkout ID provided")
+        return web.json_response({
+            "status": "error",
+            "message": "Checkout ID is required"
+        }, status=400)
+    
+    logger.info(f"Retrieving checkout with ID: {checkout_id}")
+    
+    try:
+        session = await get_session()
+        
+        # Log current cookies before request
+        if session.cookie_jar:
+            cookies = session.cookie_jar.filter_cookies(SERVICE_URL)
+            logger.debug(f"Using {len(cookies)} cookies for checkout request")
+        
+        # First ensure we're logged in
+        login_success = await login_if_needed(username, password)
+        if not login_success:
+            logger.error("Failed to login for checkout retrieval")
+            return web.json_response({
+                "status": "error",
+                "message": "Authentication failed"
+            }, status=401)
+        
+        # Make request to the checkout endpoint
+        checkout_url = f"{SERVICE_URL}/files/checkout.asp?id={checkout_id}"
+        logger.debug(f"Making checkout request to: {checkout_url}")
+        
+        async with session.get(checkout_url, headers=HEADERS) as response:
+            # Handle encoding properly - the service may not be using UTF-8
+            try:
+                response_text = await response.text()
+            except UnicodeDecodeError:
+                # If UTF-8 fails, try to get raw bytes and decode with latin-1 or windows-1252
+                raw_data = await response.read()
+                try:
+                    response_text = raw_data.decode('windows-1252')
+                except UnicodeDecodeError:
+                    response_text = raw_data.decode('latin-1')
+            
+            logger.debug(f"Checkout response status: {response.status}")
+            
+            # Check if we got redirected to login page (session expired)
+            if is_login_page(response_text):
+                logger.warning("Session expired during checkout retrieval, attempting re-login")
+                login_success = await login_if_needed(username, password)
+                if login_success:
+                    # Retry the request
+                    async with session.get(checkout_url, headers=HEADERS) as retry_response:
+                        # Handle encoding properly - the service may not be using UTF-8
+                        try:
+                            response_text = await retry_response.text()
+                        except UnicodeDecodeError:
+                            # If UTF-8 fails, try to get raw bytes and decode with latin-1 or windows-1252
+                            raw_data = await retry_response.read()
+                            try:
+                                response_text = raw_data.decode('windows-1252')
+                            except UnicodeDecodeError:
+                                response_text = raw_data.decode('latin-1')
+                        logger.debug(f"Retry checkout response status: {retry_response.status}")
+                        
+                        if is_login_page(response_text):
+                            logger.error("Login failed after retry")
+                            return web.json_response({
+                                "status": "error",
+                                "message": "Authentication failed after retry"
+                            }, status=401)
+                else:
+                    logger.error("Re-login failed")
+                    return web.json_response({
+                        "status": "error",
+                        "message": "Authentication failed"
+                    }, status=401)
+            
+            logger.info("Checkout retrieval completed successfully")
+            return web.json_response({
+                "status": "success",
+                "data": response_text
+            })
+            
+    except Exception as e:
+        logger.error(f"Checkout retrieval failed with exception: {e}")
+        return web.json_response({
+            "status": "error",
+            "message": str(e)
+        }, status=500)
+
 async def report_handler(request):
     """Retrieve a report by ID, following redirect chains"""
     logger.info("GET /api/report endpoint accessed")
@@ -628,6 +728,7 @@ async def init_app():
     app.router.add_post('/api/service', service_post_handler)
     app.router.add_get('/api/patient/search', patient_search_handler)
     app.router.add_get('/api/report', report_handler)
+    app.router.add_get('/api/checkout', checkout_handler)
     app.router.add_post('/api/login', login_handler)
     
     # Setup startup and cleanup
