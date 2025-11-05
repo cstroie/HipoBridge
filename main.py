@@ -380,6 +380,69 @@ async def patient_search_handler(request):
             "message": str(e)
         }, status=500)
 
+def html_to_markdown(html_content: str) -> str:
+    """Convert HTML content to clean markdown"""
+    from bs4 import BeautifulSoup
+    import re
+    
+    try:
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Remove XML namespace declarations and processing instructions
+        for ns_decl in soup.find_all(re.compile(r'^\?xml')):
+            ns_decl.decompose()
+        
+        # Remove Microsoft Office specific tags
+        for tag in soup.find_all(['o:p', 'xml:namespace']):
+            tag.decompose()
+        
+        # Convert common HTML elements to markdown
+        # Headings
+        for tag in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
+            level = int(tag.name[1])
+            tag.insert_before('#' * level + ' ')
+            tag.insert_after('\n\n')
+            tag.unwrap()
+        
+        # Paragraphs
+        for p in soup.find_all('p'):
+            p.insert_after('\n\n')
+            p.unwrap()
+        
+        # Line breaks
+        for br in soup.find_all('br'):
+            br.replace_with('\n')
+        
+        # Bold
+        for b in soup.find_all(['b', 'strong']):
+            b.insert_before('**')
+            b.insert_after('**')
+            b.unwrap()
+        
+        # Italic
+        for i in soup.find_all(['i', 'em']):
+            i.insert_before('*')
+            i.insert_after('*')
+            i.unwrap()
+        
+        # Underline (convert to italic as markdown doesn't have underline)
+        for u in soup.find_all('u'):
+            u.insert_before('*')
+            u.insert_after('*')
+            u.unwrap()
+        
+        # Remove excessive whitespace
+        text = soup.get_text()
+        # Normalize whitespace
+        text = re.sub(r'[ \t]+', ' ', text)
+        text = re.sub(r'\n\s*\n', '\n\n', text)
+        text = text.strip()
+        
+        return text
+    except Exception as e:
+        # If parsing fails, return cleaned text
+        return re.sub(r'\s+', ' ', html_content.strip())
+
 def parse_report_data(html_content: str) -> Dict[str, Any]:
     """Parse HTML report content and extract structured data"""
     import re
@@ -477,7 +540,7 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
                     # Remove excessive whitespace while preserving line breaks
                     cleaned_result = re.sub(r'[ \t]+', ' ', result_text.strip())
                     cleaned_result = re.sub(r'\n\s*\n', '\n', cleaned_result)
-                    report_data["result"] = cleaned_result
+                    report_data["result"] = html_to_markdown(cleaned_result)
                 else:
                     # Fallback: get all text from parent
                     result_text = parent.get_text()
