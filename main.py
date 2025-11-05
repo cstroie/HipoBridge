@@ -444,10 +444,24 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
         if exam_match:
             report_data["examination"] = exam_match.group(1).strip()
         
-        # Extract result (text after "REZULTAT:")
-        result_match = re.search(r'REZULTAT:\s*([^\n\r]+(?:\n[^\n\r]+)*)', text_content, re.IGNORECASE)
-        if result_match:
-            report_data["result"] = result_match.group(1).strip()
+        # Extract result (text after "REZULTAT:" - more comprehensive extraction)
+        # First try to find the result in the HTML structure
+        result_elements = soup.find_all(text=re.compile(r'REZULTAT:', re.IGNORECASE))
+        if result_elements:
+            # Get the parent element which should contain the full result
+            parent = result_elements[0].parent
+            if parent:
+                # Get all text from the parent element and its siblings
+                result_text = parent.get_text()
+                # Extract text after "REZULTAT:"
+                result_match = re.search(r'REZULTAT:\s*(.+)', result_text, re.IGNORECASE | re.DOTALL)
+                if result_match:
+                    report_data["result"] = result_match.group(1).strip()
+        else:
+            # Fallback to simple regex on text content
+            result_match = re.search(r'REZULTAT:\s*([^\n\r]+(?:\n[^\n\r]+)*)', text_content, re.IGNORECASE)
+            if result_match:
+                report_data["result"] = result_match.group(1).strip()
         
         # Extract examiner (MEDIC,)
         examiner_match = re.search(r'MEDIC,\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
