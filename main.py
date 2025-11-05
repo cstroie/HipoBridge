@@ -595,6 +595,7 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
         checkout_data = {
             "patient_name": "",
             "patient_id": "",
+            "patient_code": "",
             "admission_diagnostic": "",
             "epicrisis": "",
             "diagnostic": "",
@@ -610,7 +611,7 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
             href = patient_link.get('href', '')
             id_match = re.search(r'id=([^&"]+)', href)
             if id_match:
-                checkout_data["patient_id"] = id_match.group(1).strip()
+                checkout_data["patient_code"] = id_match.group(1).strip()
         
         # Extract admission diagnostic
         diag_elements = soup.find_all('td', string=re.compile(r'Diagnostic\s*:', re.IGNORECASE))
@@ -621,7 +622,7 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
                 break
         
         # Extract epicrisis (first textarea after 'Epicriza:')
-        epicrisis_elements = soup.find_all(string=re.compile(r'Epicriza:', re.IGNORECASE))
+        epicrisis_elements = soup.find_all(string=re.compile(r'Epicriza[^:]*:', re.IGNORECASE))
         if epicrisis_elements:
             parent = epicrisis_elements[0].parent
             if parent:
@@ -631,7 +632,7 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
                     checkout_data["epicrisis"] = html_to_markdown(epicrisis_content)
         
         # Extract diagnostic (textarea after 'Diagnostic externare')
-        diagnostic_elements = soup.find_all(string=re.compile(r'Diagnostic externare', re.IGNORECASE))
+        diagnostic_elements = soup.find_all(string=re.compile(r'Diagnostic externare[^:]*:', re.IGNORECASE))
         if diagnostic_elements:
             parent = diagnostic_elements[0].parent
             if parent:
@@ -641,7 +642,7 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
                     checkout_data["diagnostic"] = html_to_markdown(diagnostic_content)
         
         # Extract surgery (textarea after 'Protocol operator:')
-        surgery_elements = soup.find_all(string=re.compile(r'Protocol operator:', re.IGNORECASE))
+        surgery_elements = soup.find_all(string=re.compile(r'Protocol operator[^:]*:', re.IGNORECASE))
         if surgery_elements:
             parent = surgery_elements[0].parent
             if parent:
@@ -651,7 +652,7 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
                     checkout_data["surgery"] = html_to_markdown(surgery_content)
         
         # Extract recommendations (textarea after 'Recomandari')
-        recommendations_elements = soup.find_all(string=re.compile(r'Recomandari', re.IGNORECASE))
+        recommendations_elements = soup.find_all(string=re.compile(r'Recomandari[^:]*:', re.IGNORECASE))
         if recommendations_elements:
             parent = recommendations_elements[0].parent
             if parent:
