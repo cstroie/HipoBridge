@@ -521,7 +521,7 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
             "sample_date": "",
             "sample_time": "",
             "examination": "",
-            "result": "",
+            "reports": [],  # List of reports instead of single result
             "examiner": ""
         }
         
@@ -583,16 +583,36 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
         if exam_match:
             report_data["examination"] = re.sub(r'\s+', ' ', exam_match.group(1).strip())
         
-        # Extract result (text after "REZULTAT:" - more comprehensive extraction)
-        report_data["result"] = get_textarea_content_after_label(soup, r'REZULTAT[^:]*:')
-        if not report_data["result"]:
-            # Fallback to simple regex on text content
-            result_match = re.search(r'REZULTAT:\s*([^\n\r]+(?:\n[^\n\r]+)*)', text_content, re.IGNORECASE)
-            if result_match:
-                # Remove excessive whitespace while preserving line breaks
-                cleaned_result = re.sub(r'[ \t]+', ' ', result_match.group(1).strip())
-                cleaned_result = re.sub(r'\n\s*\n', '\n', cleaned_result)
-                report_data["result"] = html_to_markdown(cleaned_result)
+        # Extract multiple reports
+        # Find all elements with text starting with "REZULTAT:"
+        result_elements = soup.find_all(string=re.compile(r'^REZULTAT:', re.IGNORECASE))
+        
+        for result_element in result_elements:
+            try:
+                # Get the parent element which contains the investigation name
+                parent = result_element.parent
+                
+                # The investigation name is the text after "REZULTAT:" in the parent element
+                parent_text = parent.get_text()
+                investigation_match = re.search(r'REZULTAT:\s*(.*?)(?:\s*$)', parent_text, re.IGNORECASE)
+                investigation_name = ""
+                if investigation_match:
+                    investigation_name = investigation_match.group(1).strip()
+                
+                # Find the next div sibling which contains the actual result
+                result_div = parent.find_next('div')
+                result_content = ""
+                if result_div:
+                    result_content = html_to_markdown(result_div.get_text().strip())
+                
+                # Add to reports list
+                report_data["reports"].append({
+                    "investigation": investigation_name,
+                    "result": result_content
+                })
+            except Exception as e:
+                logger.error(f"Error parsing individual report: {e}")
+                continue
         
         # Extract examiner (MEDIC,)
         examiner_match = re.search(r'MEDIC,\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
