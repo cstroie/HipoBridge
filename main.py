@@ -186,6 +186,75 @@ async def service_post_handler(request):
     logger.debug(f"POST /api/service response: {result}")
     return web.json_response(result)
 
+async def login_handler(request):
+    """Explicit login endpoint"""
+    logger.info("POST /api/login endpoint accessed")
+    
+    try:
+        # Get credentials from request body or environment variables
+        data = await request.json()
+        username = data.get("username") or HYP_USER
+        password = data.get("password") or HYP_PASS
+        
+        if not username or not password:
+            logger.warning("Username or password not provided")
+            return web.json_response({
+                "status": "error",
+                "message": "Username and password are required"
+            }, status=400)
+        
+        # Update global credentials if provided in request
+        global HYP_USER, HYP_PASS
+        if data.get("username"):
+            HYP_USER = data["username"]
+        if data.get("password"):
+            HYP_PASS = data["password"]
+        
+        # Attempt login
+        login_success = await login_if_needed()
+        
+        if login_success:
+            logger.info("Login successful via API endpoint")
+            return web.json_response({
+                "status": "success",
+                "message": "Login successful"
+            })
+        else:
+            logger.error("Login failed via API endpoint")
+            return web.json_response({
+                "status": "error",
+                "message": "Login failed"
+            }, status=401)
+            
+    except json.JSONDecodeError:
+        # Try login with environment variables if no JSON body
+        if HYP_USER and HYP_PASS:
+            login_success = await login_if_needed()
+            if login_success:
+                logger.info("Login successful via API endpoint (using env vars)")
+                return web.json_response({
+                    "status": "success",
+                    "message": "Login successful"
+                })
+            else:
+                logger.error("Login failed via API endpoint (using env vars)")
+                return web.json_response({
+                    "status": "error",
+                    "message": "Login failed"
+                }, status=401)
+        else:
+            logger.warning("No credentials provided and env vars not set")
+            return web.json_response({
+                "status": "error",
+                "message": "No credentials provided"
+            }, status=400)
+    except Exception as e:
+        logger.error(f"Login endpoint failed with exception: {e}")
+        return web.json_response({
+            "status": "error",
+            "message": str(e)
+        }, status=500)
+
 async def patient_search_handler(request):
     """Search for patients by name or other criteria"""
     logger.info("GET /api/patient/search endpoint accessed")
@@ -287,6 +356,7 @@ async def init_app():
     app.router.add_get('/api/service', service_get_handler)
     app.router.add_post('/api/service', service_post_handler)
     app.router.add_get('/api/patient/search', patient_search_handler)
+    app.router.add_post('/api/login', login_handler)
     
     # Setup startup and cleanup
     app.on_startup.append(on_startup)
