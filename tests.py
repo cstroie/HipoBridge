@@ -183,9 +183,9 @@ async def run_all_tests() -> None:
             test_root_endpoint,
             test_service_get_endpoint,
             test_service_post_endpoint,
+            test_login_endpoint_success,
             test_patient_search_endpoint,
             test_invalid_patient_search,
-            test_login_endpoint_success,
             test_login_endpoint_missing_credentials,
             test_login_endpoint_invalid_json
         ]
