@@ -69,10 +69,12 @@ async def login_if_needed(username: str = None, password: str = None) -> bool:
     
     try:
         session = await get_session()
-        # Prepare login data
+        # Prepare login data to match browser submission
         login_data = {
-            "username": user,
-            "password": pwd
+            "id_recuperare_pwd_2": "",
+            "strUser": user,
+            "strPwd": pwd,
+            "cboLang": "ro"
         }
         
         # Use the correct login endpoint
