@@ -5,6 +5,14 @@ import aiohttp
 from aiohttp import web
 from typing import Dict, Any, Optional
 import json
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Configuration
 SERVICE_URL = "http://192.168.3.230/hipocrate"
@@ -29,19 +37,29 @@ session: Optional[aiohttp.ClientSession] = None
 async def get_session():
     global session
     if session is None or session.closed:
+        logger.debug("Creating new aiohttp ClientSession")
         session = aiohttp.ClientSession()
+    else:
+        logger.debug("Reusing existing aiohttp ClientSession")
     return session
 
 async def root_handler(request):
+    logger.info("Root endpoint accessed")
     return web.json_response({"message": "Web API Interface to Hipocrate Service"})
 
 def is_login_page(content: str) -> bool:
     """Detect if we're on the login page"""
-    return "RECUPERARE PAROLA" in content and "Username" in content and "Password" in content
+    is_login = "RECUPERARE PAROLA" in content and "Username" in content and "Password" in content
+    if is_login:
+        logger.debug("Detected login page")
+    return is_login
 
 async def login_if_needed() -> bool:
     """Attempt to login if we're on the login page"""
+    logger.info("Attempting login if needed")
+    
     if not HYP_USER or not HYP_PASS:
+        logger.warning("HYP_USER or HYP_PASS not set, skipping login")
         return False
     
     try:
@@ -52,6 +70,7 @@ async def login_if_needed() -> bool:
             "password": HYP_PASS
         }
         
+        logger.debug(f"Submitting login form to {SERVICE_URL}")
         # Submit login form
         async with session.post(
             SERVICE_URL, 
@@ -59,78 +78,104 @@ async def login_if_needed() -> bool:
             headers=HEADERS
         ) as login_response:
             response_text = await login_response.text()
+            logger.debug(f"Login response status: {login_response.status}")
         
         # Check if login was successful (not redirected back to login page)
         if not is_login_page(response_text):
+            logger.info("Login successful")
             return True
+        else:
+            logger.warning("Login failed - still on login page")
         return False
-    except Exception:
+    except Exception as e:
+        logger.error(f"Login failed with exception: {e}")
         return False
 
 async def handle_service_request(method: str, data: Dict[str, Any] = None) -> Dict[str, Any]:
     """Handle service requests with automatic login"""
+    logger.info(f"Handling {method} request to service")
+    
     try:
         session = await get_session()
         # Make initial request
         if method == "GET":
+            logger.debug(f"Making GET request to {SERVICE_URL}")
             async with session.get(SERVICE_URL, headers=HEADERS) as response:
                 response_text = await response.text()
+                logger.debug(f"GET response status: {response.status}")
         else:  # POST
+            logger.debug(f"Making POST request to {SERVICE_URL} with data: {data}")
             async with session.post(SERVICE_URL, json=data, headers=HEADERS) as response:
                 response_text = await response.text()
+                logger.debug(f"POST response status: {response.status}")
         
         # Check if we got redirected to login page
         if is_login_page(response_text):
+            logger.info("Detected login page, attempting login")
             # Try to login
             login_success = await login_if_needed()
             if login_success:
+                logger.info("Retrying original request after successful login")
                 # Retry the original request
                 if method == "GET":
                     async with session.get(SERVICE_URL, headers=HEADERS) as response:
                         response_text = await response.text()
+                        logger.debug(f"Retry GET response status: {response.status}")
                 else:  # POST
                     async with session.post(SERVICE_URL, json=data, headers=HEADERS) as response:
                         response_text = await response.text()
+                        logger.debug(f"Retry POST response status: {response.status}")
                 
                 # Check if login was successful after retry
                 if is_login_page(response_text):
+                    logger.error("Login failed or session expired after retry")
                     return {
                         "status": "error",
                         "message": "Login failed or session expired"
                     }
             else:
+                logger.error("Login required but failed")
                 return {
                     "status": "error",
                     "message": "Login required but failed"
                 }
         
+        logger.info(f"Service request successful")
         return {
             "status": "success",
             "data": response_text
         }
     except Exception as e:
+        logger.error(f"Service request failed with exception: {e}")
         return {
             "status": "error",
             "message": str(e)
         }
 
 async def service_get_handler(request):
+    logger.info("GET /api/service endpoint accessed")
     result = await handle_service_request("GET")
+    logger.debug(f"GET /api/service response: {result}")
     return web.json_response(result)
 
 async def service_post_handler(request):
+    logger.info("POST /api/service endpoint accessed")
     try:
         data = await request.json()
+        logger.debug(f"POST data received: {data}")
     except json.JSONDecodeError:
+        logger.error("Invalid JSON data received")
         return web.json_response({
             "status": "error",
             "message": "Invalid JSON data"
         }, status=400)
     
     result = await handle_service_request("POST", data)
+    logger.debug(f"POST /api/service response: {result}")
     return web.json_response(result)
 
 async def init_app():
+    logger.info("Initializing web application")
     app = web.Application()
     app.router.add_get('/', root_handler)
     app.router.add_get('/api/service', service_get_handler)
@@ -143,13 +188,17 @@ async def init_app():
     return app
 
 async def on_startup(app):
+    logger.info("Application startup")
     await get_session()
 
 async def on_cleanup(app):
+    logger.info("Application cleanup")
     global session
     if session and not session.closed:
+        logger.debug("Closing aiohttp ClientSession")
         await session.close()
 
 if __name__ == "__main__":
+    logger.info(f"Starting web server on port {PORT}")
     app = init_app()
     web.run_app(app, host="0.0.0.0", port=PORT)
