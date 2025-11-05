@@ -94,9 +94,12 @@ async def login_if_needed(username: str = None, password: str = None) -> bool:
                 cookies = session.cookie_jar.filter_cookies(SERVICE_URL)
                 logger.debug(f"Session cookies after login: {len(cookies)} cookies")
         
-        # Check if login was successful (not redirected back to login page)
-        if not is_login_page(response_text):
-            logger.info("Login successful")
+        # Check if login was successful (redirect to main.asp or not on login page)
+        if response.status == 302 and "main.asp" in response.headers.get("Location", ""):
+            logger.info("Login successful - redirected to main.asp")
+            return True
+        elif not is_login_page(response_text):
+            logger.info("Login successful - not on login page")
             return True
         else:
             logger.warning("Login failed - still on login page")
