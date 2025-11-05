@@ -301,7 +301,16 @@ async def patient_search_handler(request):
             data=search_data,
             headers=HEADERS
         ) as response:
-            response_text = await response.text()
+            # Handle encoding properly - the service may not be using UTF-8
+            try:
+                response_text = await response.text()
+            except UnicodeDecodeError:
+                # If UTF-8 fails, try to get raw bytes and decode with latin-1 or windows-1252
+                raw_data = await response.read()
+                try:
+                    response_text = raw_data.decode('windows-1252')
+                except UnicodeDecodeError:
+                    response_text = raw_data.decode('latin-1')
             logger.debug(f"Patient search response status: {response.status}")
             
             # Check if we got redirected to login page (session expired)
@@ -315,7 +324,16 @@ async def patient_search_handler(request):
                         data=search_data,
                         headers=HEADERS
                     ) as retry_response:
-                        response_text = await retry_response.text()
+                        # Handle encoding properly - the service may not be using UTF-8
+                        try:
+                            response_text = await retry_response.text()
+                        except UnicodeDecodeError:
+                            # If UTF-8 fails, try to get raw bytes and decode with latin-1 or windows-1252
+                            raw_data = await retry_response.read()
+                            try:
+                                response_text = raw_data.decode('windows-1252')
+                            except UnicodeDecodeError:
+                                response_text = raw_data.decode('latin-1')
                         logger.debug(f"Retry search response status: {retry_response.status}")
                         
                         if is_login_page(response_text):
