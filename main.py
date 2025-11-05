@@ -69,6 +69,13 @@ async def login_if_needed(username: str = None, password: str = None) -> bool:
     
     try:
         session = await get_session()
+        
+        # First, access the default.asp page to get initial cookies
+        default_url = f"{SERVICE_URL}/default.asp"
+        logger.debug(f"Accessing default page to get cookies: {default_url}")
+        async with session.get(default_url, headers=HEADERS) as default_response:
+            logger.debug(f"Default page response status: {default_response.status}")
+            
         # Prepare login data to match browser submission
         login_data = {
             "id_recuperare_pwd_2": "",
@@ -77,6 +84,10 @@ async def login_if_needed(username: str = None, password: str = None) -> bool:
             "cboLang": "ro"
         }
         
+        # Add referer header for the login request
+        login_headers = HEADERS.copy()
+        login_headers["Referer"] = default_url
+        
         # Use the correct login endpoint
         login_url = f"{SERVICE_URL}/security/logon.asp"
         logger.debug(f"Submitting login form to {login_url}")
@@ -84,7 +95,7 @@ async def login_if_needed(username: str = None, password: str = None) -> bool:
         async with session.post(
             login_url, 
             data=login_data, 
-            headers=HEADERS
+            headers=login_headers
         ) as login_response:
             response_text = await login_response.text()
             logger.debug(f"Login response status: {login_response.status}")
