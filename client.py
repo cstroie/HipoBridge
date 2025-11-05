@@ -119,6 +119,57 @@ async def get_report(session: aiohttp.ClientSession, report_id: str) -> bool:
         print(f"Report retrieval failed with exception: {e}")
         return False
 
+async def get_checkout(session: aiohttp.ClientSession, checkout_id: str) -> bool:
+    """Retrieve checkout information by ID using the API"""
+    print(f"Retrieving checkout with ID: {checkout_id}")
+    
+    try:
+        # Make checkout request
+        async with session.get(
+            f"{BASE_URL}/api/checkout?id={checkout_id}"
+        ) as response:
+            if response.status == 200:
+                data = await response.json()
+                if data.get("status") == "success":
+                    print("Checkout retrieval successful!")
+                    
+                    # Save HTML response to file for inspection
+                    filename = f"checkout_{checkout_id}.html"
+                    with open(filename, "w") as f:
+                        f.write(data.get("data", ""))
+                    print(f"Full checkout saved to {filename}")
+                    
+                    # Display parsed data if available
+                    parsed_data = data.get("parsed_data", {})
+                    if parsed_data:
+                        print("\n--- Parsed Checkout Data ---")
+                        if parsed_data.get("patient_name"):
+                            print(f"Patient Name: {parsed_data['patient_name']}")
+                        if parsed_data.get("patient_id"):
+                            print(f"Patient ID: {parsed_data['patient_id']}")
+                        if parsed_data.get("admission_diagnostic"):
+                            print(f"Admission Diagnostic: {parsed_data['admission_diagnostic']}")
+                        if parsed_data.get("epicrisis"):
+                            print(f"Epicrisis: {parsed_data['epicrisis']}")
+                        if parsed_data.get("diagnostic"):
+                            print(f"Diagnostic: {parsed_data['diagnostic']}")
+                        if parsed_data.get("surgery"):
+                            print(f"Surgery: {parsed_data['surgery']}")
+                        if parsed_data.get("recommendations"):
+                            print(f"Recommendations: {parsed_data['recommendations']}")
+                        print("--------------------------")
+                    
+                    return True
+                else:
+                    print(f"Checkout retrieval failed: {data.get('message', 'No message')}")
+                    return False
+            else:
+                print(f"Checkout retrieval failed with status: {response.status}")
+                return False
+    except Exception as e:
+        print(f"Checkout retrieval failed with exception: {e}")
+        return False
+
 async def main():
     """Main function to parse arguments and run the client"""
     parser = argparse.ArgumentParser(description="Hipocrate API Client")
@@ -127,6 +178,7 @@ async def main():
     parser.add_argument("--search", "-s", help="Search term for patient search")
     parser.add_argument("--type", "-t", default="PA", help="Search type (default: PA)")
     parser.add_argument("--report", "-r", help="Report ID to retrieve")
+    parser.add_argument("--checkout", "-c", help="Checkout ID to retrieve")
     
     args = parser.parse_args()
     
@@ -134,8 +186,8 @@ async def main():
     username = args.username or os.getenv("HYP_USER")
     password = args.password or os.getenv("HYP_PASS")
     
-    if not args.search and not args.report:
-        print("Error: Either search term or report ID is required")
+    if not args.search and not args.report and not args.checkout:
+        print("Error: Either search term, report ID, or checkout ID is required")
         parser.print_help()
         return 1
     
@@ -162,6 +214,13 @@ async def main():
             report_success = await get_report(session, args.report)
             if not report_success:
                 print("Failed to retrieve report")
+                return 1
+        
+        # Retrieve checkout if requested
+        if args.checkout:
+            checkout_success = await get_checkout(session, args.checkout)
+            if not checkout_success:
+                print("Failed to retrieve checkout")
                 return 1
         
         print("All operations completed successfully!")
