@@ -436,11 +436,13 @@ def html_to_markdown(html_content: str) -> str:
         text = soup.get_text()
         # Decode HTML entities
         text = html.unescape(text)
+        # Remove various forms of non-breaking spaces
+        text = text.replace('\xa0', ' ')  # &nbsp; character entity
+        text = text.replace('&nbsp;', ' ')
+        text = text.replace('&amp;nbsp;', ' ')
         # Normalize whitespace
         text = re.sub(r'[ \t]+', ' ', text)
         text = re.sub(r'\n\s*\n', '\n\n', text)
-        # Remove non-breaking spaces
-        text = text.replace('\xa0', ' ')
         text = text.strip()
         
         return text
@@ -448,8 +450,10 @@ def html_to_markdown(html_content: str) -> str:
         # If parsing fails, return cleaned text
         # Decode HTML entities
         cleaned_text = html.unescape(html_content)
-        # Remove non-breaking spaces
-        cleaned_text = cleaned_text.replace('\xa0', ' ')
+        # Remove various forms of non-breaking spaces
+        cleaned_text = cleaned_text.replace('\xa0', ' ')  # &nbsp; character entity
+        cleaned_text = cleaned_text.replace('&nbsp;', ' ')
+        cleaned_text = cleaned_text.replace('&amp;nbsp;', ' ')
         return re.sub(r'\s+', ' ', cleaned_text.strip())
 
 def parse_report_data(html_content: str) -> Dict[str, Any]:
