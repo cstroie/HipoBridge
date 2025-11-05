@@ -70,6 +70,21 @@ async def login_if_needed(username: str = None, password: str = None) -> bool:
     try:
         session = await get_session()
         
+        # First, check if we're already logged in by accessing main.asp
+        main_url = f"{SERVICE_URL}/main.asp"
+        logger.debug(f"Checking if already logged in by accessing: {main_url}")
+        async with session.get(main_url, headers=HEADERS) as main_response:
+            main_text = await main_response.text()
+            logger.debug(f"Main page response status: {main_response.status}")
+            
+            # If we're not on the login page, we're already logged in
+            if not is_login_page(main_text):
+                logger.info("Already logged in, skipping login")
+                return True
+        
+        # If we're on the login page, proceed with login
+        logger.info("Not logged in, proceeding with login")
+        
         # First, access the default.asp page to get initial cookies
         default_url = f"{SERVICE_URL}/default.asp"
         logger.debug(f"Accessing default page to get cookies: {default_url}")
