@@ -384,6 +384,7 @@ def html_to_markdown(html_content: str) -> str:
     """Convert HTML content to clean markdown"""
     from bs4 import BeautifulSoup
     import re
+    import html
     
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
@@ -431,17 +432,25 @@ def html_to_markdown(html_content: str) -> str:
             u.insert_after('*')
             u.unwrap()
         
-        # Remove excessive whitespace
+        # Remove excessive whitespace and HTML entities
         text = soup.get_text()
+        # Decode HTML entities
+        text = html.unescape(text)
         # Normalize whitespace
         text = re.sub(r'[ \t]+', ' ', text)
         text = re.sub(r'\n\s*\n', '\n\n', text)
+        # Remove non-breaking spaces
+        text = text.replace('\xa0', ' ')
         text = text.strip()
         
         return text
     except Exception as e:
         # If parsing fails, return cleaned text
-        return re.sub(r'\s+', ' ', html_content.strip())
+        # Decode HTML entities
+        cleaned_text = html.unescape(html_content)
+        # Remove non-breaking spaces
+        cleaned_text = cleaned_text.replace('\xa0', ' ')
+        return re.sub(r'\s+', ' ', cleaned_text.strip())
 
 def parse_report_data(html_content: str) -> Dict[str, Any]:
     """Parse HTML report content and extract structured data"""
