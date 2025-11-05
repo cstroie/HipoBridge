@@ -463,21 +463,31 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
             report_data["examination"] = re.sub(r'\s+', ' ', exam_match.group(1).strip())
         
         # Extract result (text after "REZULTAT:" - more comprehensive extraction)
-        # First try to find the result in the HTML structure
+        # Look for the div that contains the actual result content
         result_elements = soup.find_all(text=re.compile(r'REZULTAT:', re.IGNORECASE))
         if result_elements:
-            # Get the parent element which should contain the full result
+            # Get the parent element which should contain the examination name and result div
             parent = result_elements[0].parent
             if parent:
-                # Get all text from the parent element and its siblings
-                result_text = parent.get_text()
-                # Extract text after "REZULTAT:"
-                result_match = re.search(r'REZULTAT:\s*(.+)', result_text, re.IGNORECASE | re.DOTALL)
-                if result_match:
+                # Look for the next div sibling which contains the actual result
+                next_div = parent.find_next('div')
+                if next_div:
+                    # Extract text from the div containing the actual result
+                    result_text = next_div.get_text()
                     # Remove excessive whitespace while preserving line breaks
-                    cleaned_result = re.sub(r'[ \t]+', ' ', result_match.group(1).strip())
+                    cleaned_result = re.sub(r'[ \t]+', ' ', result_text.strip())
                     cleaned_result = re.sub(r'\n\s*\n', '\n', cleaned_result)
                     report_data["result"] = cleaned_result
+                else:
+                    # Fallback: get all text from parent
+                    result_text = parent.get_text()
+                    # Extract text after "REZULTAT:"
+                    result_match = re.search(r'REZULTAT:\s*(.+)', result_text, re.IGNORECASE | re.DOTALL)
+                    if result_match:
+                        # Remove excessive whitespace while preserving line breaks
+                        cleaned_result = re.sub(r'[ \t]+', ' ', result_match.group(1).strip())
+                        cleaned_result = re.sub(r'\n\s*\n', '\n', cleaned_result)
+                        report_data["result"] = cleaned_result
         else:
             # Fallback to simple regex on text content
             result_match = re.search(r'REZULTAT:\s*([^\n\r]+(?:\n[^\n\r]+)*)', text_content, re.IGNORECASE)
