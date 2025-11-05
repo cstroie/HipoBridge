@@ -610,7 +610,15 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
             href = patient_link.get('href', '')
             id_match = re.search(r'id=([^&"]+)', href)
             if id_match:
-                checkout_data["patient_code"] = id_match.group(1).strip()
+                checkout_data["patient_id"] = id_match.group(1).strip()
+        
+        # Extract patient code (Cod pacient)
+        code_elements = soup.find_all('td', string=re.compile(r'Cod pacient\s*:', re.IGNORECASE))
+        for code_element in code_elements:
+            next_td = code_element.find_next('td')
+            if next_td:
+                checkout_data["patient_code"] = next_td.get_text().strip()
+                break
         
         # Extract admission diagnostic
         diag_elements = soup.find_all('td', string=re.compile(r'Diagnostic\s*:', re.IGNORECASE))
