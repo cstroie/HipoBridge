@@ -8,6 +8,7 @@ import json
 import logging
 import re
 from bs4 import BeautifulSoup
+import html
 from datetime import datetime
 
 # Configure logging
@@ -409,9 +410,6 @@ async def patient_search_handler(request):
 
 def html_to_markdown(html_content: str) -> str:
     """Convert HTML content to clean markdown"""
-    from bs4 import BeautifulSoup
-    import re
-    import html
     
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
@@ -497,8 +495,7 @@ def get_textarea_content_after_label(soup: 'BeautifulSoup', label_regex: str) ->
                 # Find the next textarea sibling
                 textarea = parent.find_next('textarea')
                 if textarea:
-                    content = textarea.get_text().strip()
-                    return html_to_markdown(content)
+                    return html_to_markdown(str(textarea))
         return ""
     except Exception as e:
         logger.error(f"Error extracting textarea content after label '{label_regex}': {e}")
@@ -603,7 +600,7 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
                 result_div = result_element.find_next('div')
                 result_content = ""
                 if result_div:
-                    result_content = html_to_markdown(result_div.get_text().strip())
+                    result_content = html_to_markdown(str(result_div))
                 
                 # Add to reports list
                 report_data["reports"].append({
