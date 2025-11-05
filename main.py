@@ -74,7 +74,16 @@ async def login_if_needed(username: str = None, password: str = None) -> bool:
         main_url = f"{SERVICE_URL}/main.asp"
         logger.debug(f"Checking if already logged in by accessing: {main_url}")
         async with session.get(main_url, headers=HEADERS) as main_response:
-            main_text = await main_response.text()
+            # Handle encoding properly - the service may not be using UTF-8
+            try:
+                main_text = await main_response.text()
+            except UnicodeDecodeError:
+                # If UTF-8 fails, try to get raw bytes and decode with latin-1 or windows-1252
+                raw_data = await main_response.read()
+                try:
+                    main_text = raw_data.decode('windows-1252')
+                except UnicodeDecodeError:
+                    main_text = raw_data.decode('latin-1')
             logger.debug(f"Main page response status: {main_response.status}")
             
             # If we're not on the login page, we're already logged in
