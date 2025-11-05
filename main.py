@@ -6,6 +6,9 @@ from aiohttp import web
 from typing import Dict, Any, Optional
 import json
 import logging
+import re
+from bs4 import BeautifulSoup
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(
@@ -503,9 +506,6 @@ def get_textarea_content_after_label(soup: 'BeautifulSoup', label_regex: str) ->
 
 def parse_report_data(html_content: str) -> Dict[str, Any]:
     """Parse HTML report content and extract structured data"""
-    import re
-    from bs4 import BeautifulSoup
-    from datetime import datetime
     
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
