@@ -910,7 +910,9 @@ async def checkout_handler(request):
             # Parse the checkout data
             parsed_data = parse_checkout_data(response_text)
             
-            return web.json_response({"status": "success",}.extend(parsed_data))
+            result = {"status": "success"}
+            result.update(parsed_data)
+            return web.json_response(result)
             
     except Exception as e:
         logger.error(f"Checkout retrieval failed with exception: {e}")
