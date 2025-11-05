@@ -1,0 +1,2 @@
+export HYP_USER="your_username"
+export HYP_PASS="your_password"
