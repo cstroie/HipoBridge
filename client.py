@@ -102,10 +102,23 @@ async def get_report(session: aiohttp.ClientSession, report_id: str) -> bool:
                             print(f"Sample Date/Time: {parsed_data['sample_datetime']}")
                         if parsed_data.get("examination"):
                             print(f"Examination: {parsed_data['examination']}")
-                        if parsed_data.get("result"):
+                        
+                        # Handle multiple reports
+                        reports = parsed_data.get("reports", [])
+                        if reports:
+                            print(f"\nReports ({len(reports)} found):")
+                            for i, report in enumerate(reports, 1):
+                                print(f"\n  Report {i}:")
+                                if report.get("investigation"):
+                                    print(f"    Investigation: {report['investigation']}")
+                                if report.get("result"):
+                                    print(f"    Result: {report['result']}")
+                        elif parsed_data.get("result"):
+                            # Fallback to single result if reports list is empty
                             print(f"Result: {parsed_data['result']}")
+                        
                         if parsed_data.get("examiner"):
-                            print(f"Examiner: {parsed_data['examiner']}")
+                            print(f"\nExaminer: {parsed_data['examiner']}")
                         print("--------------------------")
                     
                     return True
