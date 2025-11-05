@@ -127,7 +127,7 @@ async def handle_service_request(method: str, data: Dict[str, Any] = None, usern
         
         # Check if we got redirected to login page
         if is_login_page(response_text):
-            logger.info("Detected login page, attempting login")
+            logger.warning("Detected login page, attempting login")
             # Try to login
             login_success = await login_if_needed(username, password)
             if login_success:
