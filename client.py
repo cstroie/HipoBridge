@@ -170,6 +170,55 @@ async def get_checkout(session: aiohttp.ClientSession, checkout_id: str) -> bool
         print(f"Checkout retrieval failed with exception: {e}")
         return False
 
+async def get_patient(session: aiohttp.ClientSession, patient_id: str) -> bool:
+    """Retrieve patient information by ID using the API"""
+    print(f"Retrieving patient with ID: {patient_id}")
+    
+    try:
+        # Make patient request
+        async with session.get(
+            f"{BASE_URL}/api/patient?id={patient_id}"
+        ) as response:
+            if response.status == 200:
+                data = await response.json()
+                if data.get("status") == "success":
+                    print("Patient retrieval successful!")
+                    
+                    # Save HTML response to file for inspection
+                    filename = f"patient_{patient_id}.html"
+                    with open(filename, "w") as f:
+                        f.write(data.get("data", ""))
+                    print(f"Full patient data saved to {filename}")
+                    
+                    # Display associated checkout and checkin IDs
+                    checkout_ids = data.get("checkout_ids", [])
+                    checkin_ids = data.get("checkin_ids", [])
+                    
+                    if checkout_ids:
+                        print(f"\nCheckout IDs ({len(checkout_ids)} found):")
+                        for i, checkout_id in enumerate(checkout_ids, 1):
+                            print(f"  {i}. {checkout_id}")
+                    else:
+                        print("\nNo checkout IDs found")
+                    
+                    if checkin_ids:
+                        print(f"\nCheckin IDs ({len(checkin_ids)} found):")
+                        for i, checkin_id in enumerate(checkin_ids, 1):
+                            print(f"  {i}. {checkin_id}")
+                    else:
+                        print("\nNo checkin IDs found")
+                    
+                    return True
+                else:
+                    print(f"Patient retrieval failed: {data.get('message', 'No message')}")
+                    return False
+            else:
+                print(f"Patient retrieval failed with status: {response.status}")
+                return False
+    except Exception as e:
+        print(f"Patient retrieval failed with exception: {e}")
+        return False
+
 async def main():
     """Main function to parse arguments and run the client"""
     parser = argparse.ArgumentParser(description="Hipocrate API Client")
@@ -179,6 +228,7 @@ async def main():
     parser.add_argument("--type", "-t", default="PA", help="Search type (default: PA)")
     parser.add_argument("--report", "-r", help="Report ID to retrieve")
     parser.add_argument("--checkout", "-c", help="Checkout ID to retrieve")
+    parser.add_argument("--patient", "-p", help="Patient ID to retrieve")
     
     args = parser.parse_args()
     
@@ -186,8 +236,8 @@ async def main():
     username = args.username or os.getenv("HYP_USER")
     password = args.password or os.getenv("HYP_PASS")
     
-    if not args.search and not args.report and not args.checkout:
-        print("Error: Either search term, report ID, or checkout ID is required")
+    if not args.search and not args.report and not args.checkout and not args.patient:
+        print("Error: Either search term, report ID, checkout ID, or patient ID is required")
         parser.print_help()
         return 1
     
@@ -221,6 +271,13 @@ async def main():
             checkout_success = await get_checkout(session, args.checkout)
             if not checkout_success:
                 print("Failed to retrieve checkout")
+                return 1
+        
+        # Retrieve patient if requested
+        if args.patient:
+            patient_success = await get_patient(session, args.patient)
+            if not patient_success:
+                print("Failed to retrieve patient")
                 return 1
         
         print("All operations completed successfully!")
