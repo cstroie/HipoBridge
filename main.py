@@ -78,7 +78,7 @@ async def login_if_needed(username: str = None, password: str = None) -> bool:
         }
         
         # Use the correct login endpoint
-        login_url = f"{SERVICE_URL}/logon.asp"
+        login_url = f"{SERVICE_URL}/security/logon.asp"
         logger.debug(f"Submitting login form to {login_url}")
         # Submit login form
         async with session.post(
