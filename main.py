@@ -560,10 +560,8 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
             report_data["examination"] = re.sub(r'\s+', ' ', exam_match.group(1).strip())
         
         # Extract result (text after "REZULTAT:" - more comprehensive extraction)
-        result_content = get_textarea_content_after_label(soup, r'REZULTAT[^:]*:')
-        if result_content:
-            report_data["result"] = result_content
-        else:
+        report_data["result"] = get_textarea_content_after_label(soup, r'REZULTAT[^:]*:')
+        if not report_data["result"]:
             # Fallback to simple regex on text content
             result_match = re.search(r'REZULTAT:\s*([^\n\r]+(?:\n[^\n\r]+)*)', text_content, re.IGNORECASE)
             if result_match:
@@ -629,24 +627,16 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
                 break
         
         # Extract epicrisis (first textarea after 'Epicriza:')
-        epicrisis_content = get_textarea_content_after_label(soup, r'Epicriza[^:]*:')
-        if epicrisis_content:
-            checkout_data["epicrisis"] = html_to_markdown(epicrisis_content)
+        checkout_data["epicrisis"] = get_textarea_content_after_label(soup, r'Epicriza[^:]*:')
         
         # Extract diagnostic (textarea after 'Diagnostic externare')
-        diagnostic_content = get_textarea_content_after_label(soup, r'Diagnostic externare[^:]*:')
-        if diagnostic_content:
-            checkout_data["diagnostic"] = html_to_markdown(diagnostic_content)
+        checkout_data["diagnostic"] = get_textarea_content_after_label(soup, r'Diagnostic externare[^:]*:')
         
         # Extract surgery (textarea after 'Protocol operator:')
-        surgery_content = get_textarea_content_after_label(soup, r'Protocol operator[^:]*:')
-        if surgery_content:
-            checkout_data["surgery"] = html_to_markdown(surgery_content)
+        checkout_data["surgery"] = get_textarea_content_after_label(soup, r'Protocol operator[^:]*:')
         
         # Extract recommendations (textarea after 'Recomandari')
-        recommendations_content = get_textarea_content_after_label(soup, r'Recomandari[^:]*:')
-        if recommendations_content:
-            checkout_data["recommendations"] = html_to_markdown(recommendations_content)
+        checkout_data["recommendations"] = get_textarea_content_after_label(soup, r'Recomandari[^:]*:')
         
         return checkout_data
     except Exception as e:
