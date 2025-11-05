@@ -456,7 +456,7 @@ def html_to_markdown(html_content: str) -> str:
         cleaned_text = cleaned_text.replace('&amp;nbsp;', ' ')
         return re.sub(r'\s+', ' ', cleaned_text.strip())
 
-def get_textarea_content_after_label(soup: BeautifulSoup, label_regex: str) -> str:
+def get_textarea_content_after_label(soup: 'BeautifulSoup', label_regex: str) -> str:
     """Get content of first textarea after a label matching the given regex"""
     import re
     
