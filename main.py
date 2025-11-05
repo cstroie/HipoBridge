@@ -384,6 +384,7 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
     """Parse HTML report content and extract structured data"""
     import re
     from bs4 import BeautifulSoup
+    from datetime import datetime
     
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
@@ -396,6 +397,8 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
             "patient_id": "",
             "patient_code": "",
             "sample_datetime": "",
+            "sample_date": "",
+            "sample_time": "",
             "examination": "",
             "result": "",
             "examiner": ""
@@ -407,42 +410,57 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
         # Extract patient name
         name_match = re.search(r'(?:Nume:|PACIENT:)\s*([^\n\r<>&]+?)(?:\s+VARSTA:|\s+SEX:|\s+C\.N\.P:|\s+COD\s+PACIENT:)', text_content, re.IGNORECASE)
         if name_match:
-            report_data["patient_name"] = name_match.group(1).strip()
+            report_data["patient_name"] = re.sub(r'\s+', ' ', name_match.group(1).strip())
         else:
             # Fallback pattern if the above doesn't match
             name_match = re.search(r'(?:Nume:|PACIENT:)\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
             if name_match:
-                report_data["patient_name"] = name_match.group(1).strip()
+                report_data["patient_name"] = re.sub(r'\s+', ' ', name_match.group(1).strip())
         
         # Extract age
         age_match = re.search(r'Varsta:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
         if age_match:
-            report_data["age"] = age_match.group(1).strip()
+            report_data["age"] = re.sub(r'\s+', ' ', age_match.group(1).strip())
         
         # Extract gender
         gender_match = re.search(r'Sex:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
         if gender_match:
-            report_data["gender"] = gender_match.group(1).strip()
+            report_data["gender"] = re.sub(r'\s+', ' ', gender_match.group(1).strip())
         
         # Extract patient ID (CNP)
         cnp_match = re.search(r'C\.N\.P:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
         if cnp_match:
-            report_data["patient_id"] = cnp_match.group(1).strip()
+            report_data["patient_id"] = re.sub(r'\s+', ' ', cnp_match.group(1).strip())
         
         # Extract patient code
         code_match = re.search(r'Cod pacient:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
         if code_match:
-            report_data["patient_code"] = code_match.group(1).strip()
+            report_data["patient_code"] = re.sub(r'\s+', ' ', code_match.group(1).strip())
         
         # Extract sample date and time
         datetime_match = re.search(r'(?:Data si ora recoltarii:|Data investigatiei:)\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
         if datetime_match:
-            report_data["sample_datetime"] = datetime_match.group(1).strip()
+            datetime_str = re.sub(r'\s+', ' ', datetime_match.group(1).strip())
+            report_data["sample_datetime"] = datetime_str
+            
+            # Try to parse date and time
+            try:
+                # Handle common date formats
+                if re.match(r'\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}', datetime_str):
+                    dt = datetime.strptime(datetime_str, '%d/%m/%Y %H:%M:%S')
+                    report_data["sample_date"] = dt.strftime('%Y-%m-%d')
+                    report_data["sample_time"] = dt.strftime('%H:%M:%S')
+                elif re.match(r'\d{2}/\d{2}/\d{4}', datetime_str):
+                    dt = datetime.strptime(datetime_str, '%d/%m/%Y')
+                    report_data["sample_date"] = dt.strftime('%Y-%m-%d')
+            except ValueError:
+                # If parsing fails, leave date/time fields empty
+                pass
         
         # Extract examination
         exam_match = re.search(r'EXAMINARE EFECTUATA:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
         if exam_match:
-            report_data["examination"] = exam_match.group(1).strip()
+            report_data["examination"] = re.sub(r'\s+', ' ', exam_match.group(1).strip())
         
         # Extract result (text after "REZULTAT:" - more comprehensive extraction)
         # First try to find the result in the HTML structure
@@ -456,17 +474,23 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
                 # Extract text after "REZULTAT:"
                 result_match = re.search(r'REZULTAT:\s*(.+)', result_text, re.IGNORECASE | re.DOTALL)
                 if result_match:
-                    report_data["result"] = result_match.group(1).strip()
+                    # Remove excessive whitespace while preserving line breaks
+                    cleaned_result = re.sub(r'[ \t]+', ' ', result_match.group(1).strip())
+                    cleaned_result = re.sub(r'\n\s*\n', '\n', cleaned_result)
+                    report_data["result"] = cleaned_result
         else:
             # Fallback to simple regex on text content
             result_match = re.search(r'REZULTAT:\s*([^\n\r]+(?:\n[^\n\r]+)*)', text_content, re.IGNORECASE)
             if result_match:
-                report_data["result"] = result_match.group(1).strip()
+                # Remove excessive whitespace while preserving line breaks
+                cleaned_result = re.sub(r'[ \t]+', ' ', result_match.group(1).strip())
+                cleaned_result = re.sub(r'\n\s*\n', '\n', cleaned_result)
+                report_data["result"] = cleaned_result
         
         # Extract examiner (MEDIC,)
         examiner_match = re.search(r'MEDIC,\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
         if examiner_match:
-            report_data["examiner"] = examiner_match.group(1).strip()
+            report_data["examiner"] = re.sub(r'\s+', ' ', examiner_match.group(1).strip())
         
         return report_data
     except Exception as e:
