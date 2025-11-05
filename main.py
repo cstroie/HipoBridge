@@ -643,6 +643,139 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
         logger.error(f"Error parsing checkout data: {e}")
         return {}
 
+async def patient_handler(request):
+    """Retrieve patient information by ID"""
+    logger.info("GET /api/patient endpoint accessed")
+    
+    # Get credentials from request headers (optional)
+    username = request.headers.get("X-Username")
+    password = request.headers.get("X-Password")
+    
+    # Get patient ID from query string
+    patient_id = request.query.get('id')
+    
+    if not patient_id:
+        logger.warning("No patient ID provided")
+        return web.json_response({
+            "status": "error",
+            "message": "Patient ID is required"
+        }, status=400)
+    
+    logger.info(f"Retrieving patient with ID: {patient_id}")
+    
+    try:
+        session = await get_session()
+        
+        # Log current cookies before request
+        if session.cookie_jar:
+            cookies = session.cookie_jar.filter_cookies(SERVICE_URL)
+            logger.debug(f"Using {len(cookies)} cookies for patient request")
+        
+        # First ensure we're logged in
+        login_success = await login_if_needed(username, password)
+        if not login_success:
+            logger.error("Failed to login for patient retrieval")
+            return web.json_response({
+                "status": "error",
+                "message": "Authentication failed"
+            }, status=401)
+        
+        # Make request to the patient endpoint
+        patient_url = f"{SERVICE_URL}/Pacient/edit.asp?id={patient_id}"
+        logger.debug(f"Making patient request to: {patient_url}")
+        
+        async with session.get(patient_url, headers=HEADERS) as response:
+            # Handle encoding properly - the service may not be using UTF-8
+            try:
+                response_text = await response.text()
+            except UnicodeDecodeError:
+                # If UTF-8 fails, try to get raw bytes and decode with latin-1 or windows-1252
+                raw_data = await response.read()
+                try:
+                    response_text = raw_data.decode('windows-1252')
+                except UnicodeDecodeError:
+                    response_text = raw_data.decode('latin-1')
+            
+            logger.debug(f"Patient response status: {response.status}")
+            
+            # Check if we got redirected to login page (session expired)
+            if is_login_page(response_text):
+                logger.warning("Session expired during patient retrieval, attempting re-login")
+                login_success = await login_if_needed(username, password)
+                if login_success:
+                    # Retry the request
+                    async with session.get(patient_url, headers=HEADERS) as retry_response:
+                        # Handle encoding properly - the service may not be using UTF-8
+                        try:
+                            response_text = await retry_response.text()
+                        except UnicodeDecodeError:
+                            # If UTF-8 fails, try to get raw bytes and decode with latin-1 or windows-1252
+                            raw_data = await retry_response.read()
+                            try:
+                                response_text = raw_data.decode('windows-1252')
+                            except UnicodeDecodeError:
+                                response_text = raw_data.decode('latin-1')
+                        logger.debug(f"Retry patient response status: {retry_response.status}")
+                        
+                        if is_login_page(response_text):
+                            logger.error("Login failed after retry")
+                            return web.json_response({
+                                "status": "error",
+                                "message": "Authentication failed after retry"
+                            }, status=401)
+                else:
+                    logger.error("Re-login failed")
+                    return web.json_response({
+                        "status": "error",
+                        "message": "Authentication failed"
+                    }, status=401)
+            
+            # Parse the patient data to extract checkout and checkin IDs
+            checkout_ids = []
+            checkin_ids = []
+            
+            try:
+                from bs4 import BeautifulSoup
+                import re
+                
+                soup = BeautifulSoup(response_text, 'html.parser')
+                
+                # Extract checkout IDs
+                checkout_links = soup.find_all('a', href=re.compile(r'../files/checkout\.asp\?id='))
+                for link in checkout_links:
+                    href = link.get('href', '')
+                    id_match = re.search(r'id=([^&"]+)', href)
+                    if id_match:
+                        checkout_ids.append(id_match.group(1))
+                
+                # Extract checkin IDs
+                checkin_links = soup.find_all('a', href=re.compile(r'../files/checkin\.asp\?id='))
+                for link in checkin_links:
+                    href = link.get('href', '')
+                    id_match = re.search(r'id=([^&"]+)', href)
+                    if id_match:
+                        checkin_ids.append(id_match.group(1))
+                
+                logger.info(f"Found {len(checkout_ids)} checkout IDs and {len(checkin_ids)} checkin IDs")
+                
+            except Exception as e:
+                logger.error(f"Error parsing patient data: {e}")
+            
+            logger.info("Patient retrieval completed successfully")
+            return web.json_response({
+                "status": "success",
+                "data": response_text,
+                "checkout_ids": checkout_ids,
+                "checkin_ids": checkin_ids
+            })
+            
+    except Exception as e:
+        logger.error(f"Patient retrieval failed with exception: {e}")
+        return web.json_response({
+            "status": "error",
+            "message": str(e)
+        }, status=500)
+
 async def checkout_handler(request):
     """Retrieve checkout information by ID"""
     logger.info("GET /api/checkout endpoint accessed")
@@ -867,6 +1000,7 @@ async def init_app():
     app.router.add_get('/api/service', service_get_handler)
     app.router.add_post('/api/service', service_post_handler)
     app.router.add_get('/api/patient/search', patient_search_handler)
+    app.router.add_get('/api/patient', patient_handler)
     app.router.add_get('/api/report', report_handler)
     app.router.add_get('/api/checkout', checkout_handler)
     app.router.add_post('/api/login', login_handler)
