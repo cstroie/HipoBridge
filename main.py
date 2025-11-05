@@ -808,7 +808,6 @@ async def patient_handler(request):
             logger.info("Patient retrieval completed successfully")
             return web.json_response({
                 "status": "success",
-                "data": response_text,
                 "checkout_ids": checkout_ids,
                 "checkin_ids": checkin_ids
             })
@@ -911,11 +910,7 @@ async def checkout_handler(request):
             # Parse the checkout data
             parsed_data = parse_checkout_data(response_text)
             
-            return web.json_response({
-                "status": "success",
-                "data": response_text,
-                "parsed_data": parsed_data
-            })
+            return web.json_response({"status": "success",}.extend(parsed_data))
             
     except Exception as e:
         logger.error(f"Checkout retrieval failed with exception: {e}")
@@ -994,8 +989,7 @@ async def report_handler(request):
                     
                     return web.json_response({
                         "status": "success",
-                        "data": response_text,
-                        "parsed_data": parsed_data,
+                        "data": parsed_data,
                         "redirects_followed": redirect_count
                     })
                 
