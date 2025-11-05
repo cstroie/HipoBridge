@@ -412,6 +412,9 @@ def html_to_markdown(html_content: str) -> str:
     """Convert HTML content to clean markdown"""
     
     try:
+        # First convert HTML entities to their characters
+        html_content = html.unescape(html_content)
+        
         soup = BeautifulSoup(html_content, 'html.parser')
         
         # Remove XML namespace declarations and processing instructions
@@ -505,8 +508,8 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
     """Parse HTML report content and extract structured data"""
     
     try:
-        # First replace &nbsp; with spaces
-        html_content = html_content.replace('&nbsp;', ' ')
+        # First convert HTML entities to their characters
+        html_content = html.unescape(html_content)
         
         soup = BeautifulSoup(html_content, 'html.parser')
         
