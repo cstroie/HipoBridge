@@ -37,8 +37,9 @@ session: Optional[aiohttp.ClientSession] = None
 async def get_session():
     global session
     if session is None or session.closed:
-        logger.debug("Creating new aiohttp ClientSession")
-        session = aiohttp.ClientSession()
+        logger.debug("Creating new aiohttp ClientSession with cookie support")
+        # Create session with automatic cookie handling
+        session = aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(unsafe=True))
     else:
         logger.debug("Reusing existing aiohttp ClientSession")
     return session
@@ -79,6 +80,11 @@ async def login_if_needed() -> bool:
         ) as login_response:
             response_text = await login_response.text()
             logger.debug(f"Login response status: {login_response.status}")
+            
+            # Log cookie information
+            if session.cookie_jar:
+                cookies = session.cookie_jar.filter_cookies(SERVICE_URL)
+                logger.debug(f"Session cookies after login: {len(cookies)} cookies")
         
         # Check if login was successful (not redirected back to login page)
         if not is_login_page(response_text):
@@ -97,6 +103,12 @@ async def handle_service_request(method: str, data: Dict[str, Any] = None) -> Di
     
     try:
         session = await get_session()
+        
+        # Log current cookies before request
+        if session.cookie_jar:
+            cookies = session.cookie_jar.filter_cookies(SERVICE_URL)
+            logger.debug(f"Using {len(cookies)} cookies for request")
+        
         # Make initial request
         if method == "GET":
             logger.debug(f"Making GET request to {SERVICE_URL}")
@@ -193,6 +205,11 @@ async def patient_search_handler(request):
     
     try:
         session = await get_session()
+        
+        # Log current cookies before search
+        if session.cookie_jar:
+            cookies = session.cookie_jar.filter_cookies(SERVICE_URL)
+            logger.debug(f"Using {len(cookies)} cookies for patient search")
         
         # First ensure we're logged in
         login_success = await login_if_needed()
