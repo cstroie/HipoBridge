@@ -456,6 +456,29 @@ def html_to_markdown(html_content: str) -> str:
         cleaned_text = cleaned_text.replace('&amp;nbsp;', ' ')
         return re.sub(r'\s+', ' ', cleaned_text.strip())
 
+def get_textarea_content_after_label(html_content: str, label_regex: str) -> str:
+    """Get content of first textarea after a label matching the given regex"""
+    from bs4 import BeautifulSoup
+    import re
+    
+    try:
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Find elements with text matching the label regex
+        label_elements = soup.find_all(string=re.compile(label_regex, re.IGNORECASE))
+        if label_elements:
+            # Get the parent element which should contain the label
+            parent = label_elements[0].parent
+            if parent:
+                # Find the next textarea sibling
+                textarea = parent.find_next('textarea')
+                if textarea:
+                    return textarea.get_text().strip()
+        return ""
+    except Exception as e:
+        logger.error(f"Error extracting textarea content after label '{label_regex}': {e}")
+        return ""
+
 def parse_report_data(html_content: str) -> Dict[str, Any]:
     """Parse HTML report content and extract structured data"""
     import re
