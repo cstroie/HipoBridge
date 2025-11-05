@@ -507,6 +507,84 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
         logger.error(f"Error parsing report data: {e}")
         return {}
 
+def parse_checkout_data(html_content: str) -> Dict[str, Any]:
+    """Parse HTML checkout content and extract structured data"""
+    import re
+    from bs4 import BeautifulSoup
+    
+    try:
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Initialize result dictionary
+        checkout_data = {
+            "patient_name": "",
+            "patient_id": "",
+            "admission_diagnostic": "",
+            "epicrisis": "",
+            "diagnostic": "",
+            "surgery": "",
+            "recommendations": ""
+        }
+        
+        # Extract patient name and ID from the link
+        patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id='))
+        if patient_link:
+            checkout_data["patient_name"] = patient_link.get_text().strip()
+            # Extract patient ID from href
+            href = patient_link.get('href', '')
+            id_match = re.search(r'id=([^&"]+)', href)
+            if id_match:
+                checkout_data["patient_id"] = id_match.group(1).strip()
+        
+        # Extract admission diagnostic
+        diag_elements = soup.find_all('td', string=re.compile(r'Diagnostic\s*:', re.IGNORECASE))
+        for diag_element in diag_elements:
+            next_td = diag_element.find_next('td')
+            if next_td:
+                checkout_data["admission_diagnostic"] = next_td.get_text().strip()
+                break
+        
+        # Extract epicrisis (first textarea after 'Epicriza:')
+        epicrisis_elements = soup.find_all(text=re.compile(r'Epicriza:', re.IGNORECASE))
+        if epicrisis_elements:
+            parent = epicrisis_elements[0].parent
+            if parent:
+                textarea = parent.find_next('textarea')
+                if textarea:
+                    checkout_data["epicrisis"] = textarea.get_text().strip()
+        
+        # Extract diagnostic (textarea after 'Diagnostic externare')
+        diagnostic_elements = soup.find_all(text=re.compile(r'Diagnostic externare', re.IGNORECASE))
+        if diagnostic_elements:
+            parent = diagnostic_elements[0].parent
+            if parent:
+                textarea = parent.find_next('textarea')
+                if textarea:
+                    checkout_data["diagnostic"] = textarea.get_text().strip()
+        
+        # Extract surgery (textarea after 'Protocol operator:')
+        surgery_elements = soup.find_all(text=re.compile(r'Protocol operator:', re.IGNORECASE))
+        if surgery_elements:
+            parent = surgery_elements[0].parent
+            if parent:
+                textarea = parent.find_next('textarea')
+                if textarea:
+                    checkout_data["surgery"] = textarea.get_text().strip()
+        
+        # Extract recommendations (textarea after 'Recomandari')
+        recommendations_elements = soup.find_all(text=re.compile(r'Recomandari', re.IGNORECASE))
+        if recommendations_elements:
+            parent = recommendations_elements[0].parent
+            if parent:
+                textarea = parent.find_next('textarea')
+                if textarea:
+                    checkout_data["recommendations"] = textarea.get_text().strip()
+        
+        return checkout_data
+    except Exception as e:
+        logger.error(f"Error parsing checkout data: {e}")
+        return {}
+
 async def checkout_handler(request):
     """Retrieve checkout information by ID"""
     logger.info("GET /api/checkout endpoint accessed")
@@ -595,9 +673,13 @@ async def checkout_handler(request):
                     }, status=401)
             
             logger.info("Checkout retrieval completed successfully")
+            # Parse the checkout data
+            parsed_data = parse_checkout_data(response_text)
+            
             return web.json_response({
                 "status": "success",
-                "data": response_text
+                "data": response_text,
+                "parsed_data": parsed_data
             })
             
     except Exception as e:
