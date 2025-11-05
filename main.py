@@ -380,6 +380,114 @@ async def patient_search_handler(request):
             "message": str(e)
         }, status=500)
 
+async def report_handler(request):
+    """Retrieve a report by ID, following redirect chains"""
+    logger.info("GET /api/report endpoint accessed")
+    
+    # Get credentials from request headers (optional)
+    username = request.headers.get("X-Username")
+    password = request.headers.get("X-Password")
+    
+    # Get report ID from query string
+    report_id = request.query.get('id')
+    
+    if not report_id:
+        logger.warning("No report ID provided")
+        return web.json_response({
+            "status": "error",
+            "message": "Report ID is required"
+        }, status=400)
+    
+    logger.info(f"Retrieving report with ID: {report_id}")
+    
+    try:
+        session = await get_session()
+        
+        # Log current cookies before request
+        if session.cookie_jar:
+            cookies = session.cookie_jar.filter_cookies(SERVICE_URL)
+            logger.debug(f"Using {len(cookies)} cookies for report request")
+        
+        # First ensure we're logged in
+        login_success = await login_if_needed(username, password)
+        if not login_success:
+            logger.error("Failed to login for report retrieval")
+            return web.json_response({
+                "status": "error",
+                "message": "Authentication failed"
+            }, status=401)
+        
+        # Make initial request to the report endpoint
+        report_url = f"{SERVICE_URL}/analyse/Reports/analyseFile.asp?id={report_id}"
+        logger.debug(f"Making initial report request to: {report_url}")
+        
+        # Follow up to 5 redirects to get the final report data
+        redirect_count = 0
+        max_redirects = 5
+        current_url = report_url
+        
+        while redirect_count < max_redirects:
+            async with session.get(current_url, headers=HEADERS) as response:
+                logger.debug(f"Report request response status: {response.status}")
+                
+                # If we get the final data (not a redirect), break the loop
+                if response.status != 302:
+                    # Handle encoding properly - the service may not be using UTF-8
+                    try:
+                        response_text = await response.text()
+                    except UnicodeDecodeError:
+                        # If UTF-8 fails, try to get raw bytes and decode with latin-1 or windows-1252
+                        raw_data = await response.read()
+                        try:
+                            response_text = raw_data.decode('windows-1252')
+                        except UnicodeDecodeError:
+                            response_text = raw_data.decode('latin-1')
+                    
+                    logger.info(f"Report retrieval completed successfully after {redirect_count} redirects")
+                    return web.json_response({
+                        "status": "success",
+                        "data": response_text,
+                        "redirects_followed": redirect_count
+                    })
+                
+                # Handle 302 redirect
+                location = response.headers.get("Location")
+                if not location:
+                    logger.error("302 redirect without Location header")
+                    return web.json_response({
+                        "status": "error",
+                        "message": "Redirect without location header"
+                    }, status=500)
+                
+                # Construct the full URL for the redirect
+                if location.startswith("/"):
+                    # Relative path from root
+                    current_url = f"http://192.168.3.230{location}"
+                elif location.startswith("http"):
+                    # Full URL
+                    current_url = location
+                else:
+                    # Relative path from current directory
+                    base_path = "/".join(current_url.split("/")[:-1])
+                    current_url = f"{base_path}/{location}"
+                
+                logger.debug(f"Following redirect #{redirect_count + 1} to: {current_url}")
+                redirect_count += 1
+        
+        # If we've exceeded the maximum redirects
+        logger.error(f"Exceeded maximum redirects ({max_redirects}) while retrieving report")
+        return web.json_response({
+            "status": "error",
+            "message": f"Exceeded maximum redirects ({max_redirects})"
+        }, status=500)
+            
+    except Exception as e:
+        logger.error(f"Report retrieval failed with exception: {e}")
+        return web.json_response({
+            "status": "error",
+            "message": str(e)
+        }, status=500)
+
 async def init_app():
     logger.info("Initializing web application")
     app = web.Application()
@@ -387,6 +495,7 @@ async def init_app():
     app.router.add_get('/api/service', service_get_handler)
     app.router.add_post('/api/service', service_post_handler)
     app.router.add_get('/api/patient/search', patient_search_handler)
+    app.router.add_get('/api/report', report_handler)
     app.router.add_post('/api/login', login_handler)
     
     # Setup startup and cleanup
