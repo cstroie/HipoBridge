@@ -470,7 +470,8 @@ def get_textarea_content_after_label(soup: 'BeautifulSoup', label_regex: str) ->
                 # Find the next textarea sibling
                 textarea = parent.find_next('textarea')
                 if textarea:
-                    return textarea.get_text().strip()
+                    content = textarea.get_text().strip()
+                    return html_to_markdown(content)
         return ""
     except Exception as e:
         logger.error(f"Error extracting textarea content after label '{label_regex}': {e}")
