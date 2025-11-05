@@ -190,6 +190,9 @@ async def login_handler(request):
     """Explicit login endpoint"""
     logger.info("POST /api/login endpoint accessed")
     
+    # Declare globals at the beginning of the function
+    global HYP_USER, HYP_PASS
+    
     try:
         # Get credentials from request body or environment variables
         data = await request.json()
@@ -204,7 +207,6 @@ async def login_handler(request):
             }, status=400)
         
         # Update global credentials if provided in request
-        global HYP_USER, HYP_PASS
         if data.get("username"):
             HYP_USER = data["username"]
         if data.get("password"):
