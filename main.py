@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 SERVICE_URL = "http://192.168.3.230/hipocrate"
 PORT = 44660
 
-# Get credentials from environment variables
+# Get credentials from environment variables (fallback)
 HYP_USER = os.getenv("HYP_USER")
 HYP_PASS = os.getenv("HYP_PASS")
 
@@ -55,20 +55,24 @@ def is_login_page(content: str) -> bool:
         logger.debug("Detected login page")
     return is_login
 
-async def login_if_needed() -> bool:
+async def login_if_needed(username: str = None, password: str = None) -> bool:
     """Attempt to login if we're on the login page"""
     logger.info("Attempting login if needed")
     
-    if not HYP_USER or not HYP_PASS:
-        logger.warning("HYP_USER or HYP_PASS not set, skipping login")
+    # Use provided credentials or fallback to environment variables
+    user = username or HYP_USER
+    pwd = password or HYP_PASS
+    
+    if not user or not pwd:
+        logger.warning("Username or password not set, skipping login")
         return False
     
     try:
         session = await get_session()
         # Prepare login data
         login_data = {
-            "username": HYP_USER,
-            "password": HYP_PASS
+            "username": user,
+            "password": pwd
         }
         
         logger.debug(f"Submitting login form to {SERVICE_URL}")
@@ -97,7 +101,7 @@ async def login_if_needed() -> bool:
         logger.error(f"Login failed with exception: {e}")
         return False
 
-async def handle_service_request(method: str, data: Dict[str, Any] = None) -> Dict[str, Any]:
+async def handle_service_request(method: str, data: Dict[str, Any] = None, username: str = None, password: str = None) -> Dict[str, Any]:
     """Handle service requests with automatic login"""
     logger.info(f"Handling {method} request to service")
     
@@ -125,7 +129,7 @@ async def handle_service_request(method: str, data: Dict[str, Any] = None) -> Di
         if is_login_page(response_text):
             logger.info("Detected login page, attempting login")
             # Try to login
-            login_success = await login_if_needed()
+            login_success = await login_if_needed(username, password)
             if login_success:
                 logger.info("Retrying original request after successful login")
                 # Retry the original request
@@ -166,12 +170,22 @@ async def handle_service_request(method: str, data: Dict[str, Any] = None) -> Di
 
 async def service_get_handler(request):
     logger.info("GET /api/service endpoint accessed")
-    result = await handle_service_request("GET")
+    
+    # Get credentials from request headers (optional)
+    username = request.headers.get("X-Username")
+    password = request.headers.get("X-Password")
+    
+    result = await handle_service_request("GET", username=username, password=password)
     logger.debug(f"GET /api/service response: {result}")
     return web.json_response(result)
 
 async def service_post_handler(request):
     logger.info("POST /api/service endpoint accessed")
+    
+    # Get credentials from request headers (optional)
+    username = request.headers.get("X-Username")
+    password = request.headers.get("X-Password")
+    
     try:
         data = await request.json()
         logger.debug(f"POST data received: {data}")
@@ -182,7 +196,7 @@ async def service_post_handler(request):
             "message": "Invalid JSON data"
         }, status=400)
     
-    result = await handle_service_request("POST", data)
+    result = await handle_service_request("POST", data, username=username, password=password)
     logger.debug(f"POST /api/service response: {result}")
     return web.json_response(result)
 
@@ -190,14 +204,11 @@ async def login_handler(request):
     """Explicit login endpoint"""
     logger.info("POST /api/login endpoint accessed")
     
-    # Declare globals at the beginning of the function
-    global HYP_USER, HYP_PASS
-    
     try:
-        # Get credentials from request body or environment variables
+        # Get credentials from request body
         data = await request.json()
-        username = data.get("username") or HYP_USER
-        password = data.get("password") or HYP_PASS
+        username = data.get("username")
+        password = data.get("password")
         
         if not username or not password:
             logger.warning("Username or password not provided")
@@ -206,14 +217,8 @@ async def login_handler(request):
                 "message": "Username and password are required"
             }, status=400)
         
-        # Update global credentials if provided in request
-        if data.get("username"):
-            HYP_USER = data["username"]
-        if data.get("password"):
-            HYP_PASS = data["password"]
-        
-        # Attempt login
-        login_success = await login_if_needed()
+        # Attempt login with provided credentials
+        login_success = await login_if_needed(username, password)
         
         if login_success:
             logger.info("Login successful via API endpoint")
@@ -229,27 +234,11 @@ async def login_handler(request):
             }, status=401)
             
     except json.JSONDecodeError:
-        # Try login with environment variables if no JSON body
-        if HYP_USER and HYP_PASS:
-            login_success = await login_if_needed()
-            if login_success:
-                logger.info("Login successful via API endpoint (using env vars)")
-                return web.json_response({
-                    "status": "success",
-                    "message": "Login successful"
-                })
-            else:
-                logger.error("Login failed via API endpoint (using env vars)")
-                return web.json_response({
-                    "status": "error",
-                    "message": "Login failed"
-                }, status=401)
-        else:
-            logger.warning("No credentials provided and env vars not set")
-            return web.json_response({
-                "status": "error",
-                "message": "No credentials provided"
-            }, status=400)
+        logger.warning("Invalid JSON data received for login")
+        return web.json_response({
+            "status": "error",
+            "message": "Invalid JSON data"
+        }, status=400)
     except Exception as e:
         logger.error(f"Login endpoint failed with exception: {e}")
         return web.json_response({
@@ -260,6 +249,10 @@ async def login_handler(request):
 async def patient_search_handler(request):
     """Search for patients by name or other criteria"""
     logger.info("GET /api/patient/search endpoint accessed")
+    
+    # Get credentials from request headers (optional)
+    username = request.headers.get("X-Username")
+    password = request.headers.get("X-Password")
     
     # Get search parameters from query string
     search_term = request.query.get('term', '')
@@ -283,7 +276,7 @@ async def patient_search_handler(request):
             logger.debug(f"Using {len(cookies)} cookies for patient search")
         
         # First ensure we're logged in
-        login_success = await login_if_needed()
+        login_success = await login_if_needed(username, password)
         if not login_success:
             logger.error("Failed to login for patient search")
             return web.json_response({
@@ -314,7 +307,7 @@ async def patient_search_handler(request):
             # Check if we got redirected to login page (session expired)
             if is_login_page(response_text):
                 logger.warning("Session expired during patient search, attempting re-login")
-                login_success = await login_if_needed()
+                login_success = await login_if_needed(username, password)
                 if login_success:
                     # Retry the search
                     async with session.post(
