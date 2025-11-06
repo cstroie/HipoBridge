@@ -48,12 +48,25 @@ async def search_patients(session: aiohttp.ClientSession, search_term: str) -> b
             if response.status == 200:
                 data = await response.json()
                 if data.get("status") == "success":
-                    print("Patient search successful!")
-                    # Save response to file for inspection
-                    with open("patient_search_results.html", "w") as f:
-                        f.write(data.get("data", ""))
-                    print("Results saved to patient_search_results.html")
-                    return True
+                    result_type = data.get("type", "raw")
+                    print(f"Patient search successful! (type: {result_type})")
+                    
+                    if result_type == "single_patient":
+                        patient_data = data.get("data", {})
+                        print(f"Found single patient: {patient_data.get('patient_name', 'Unknown')}")
+                        return True
+                    elif result_type == "multiple_patients":
+                        patients = data.get("data", [])
+                        print(f"Found {len(patients)} patients:")
+                        for i, patient in enumerate(patients, 1):
+                            print(f"  {i}. {patient.get('patient_name', 'Unknown')} (Code: {patient.get('patient_code', 'N/A')})")
+                        return True
+                    else:
+                        # Save raw response to file for inspection
+                        with open("patient_search_results.html", "w") as f:
+                            f.write(data.get("data", ""))
+                        print("Results saved to patient_search_results.html")
+                        return True
                 else:
                     print(f"Patient search failed: {data.get('message', 'No message')}")
                     return False

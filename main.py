@@ -353,8 +353,8 @@ async def patient_search_handler(request):
             "strShowLastFile": "1",
             "strCheckedIn": "-1",
             "strCODQR": "",
-            "btnCODQR": "IMPORTA+COD+QR",
-            "btnCODQRClear": "STERGE+COD+QR",
+            "btnCODQR": "IMPORTA COD QR",
+            "btnCODQRClear": "STERGE COD QR",
             "hdnQRSave": "",
             "IdQR": ""
         }
