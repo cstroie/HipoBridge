@@ -210,8 +210,76 @@ async def get_checkout(session: aiohttp.ClientSession, checkout_id: str) -> bool
         print(f"Checkout retrieval failed with exception: {e}")
         return False
 
+async def get_patient_code_from_cnp(session: aiohttp.ClientSession, cnp: str) -> str:
+    """Get patient code by validating CNP and searching for the patient"""
+    # First validate the CNP
+    try:
+        async with session.get(f"{BASE_URL}/api/cnp?id={cnp}") as response:
+            if response.status == 200:
+                data = await response.json()
+                if data.get("status") == "success" and data.get("valid"):
+                    print(f"CNP {cnp} is valid, searching for patient...")
+                else:
+                    print(f"CNP {cnp} is not valid")
+                    return None
+            else:
+                print(f"Failed to validate CNP with status: {response.status}")
+                return None
+    except Exception as e:
+        print(f"Failed to validate CNP: {e}")
+        return None
+    
+    # Search for the patient using the CNP
+    try:
+        async with session.get(f"{BASE_URL}/api/patient/search?q={cnp}") as response:
+            if response.status == 200:
+                data = await response.json()
+                if data.get("status") == "success":
+                    result_type = data.get("type")
+                    if result_type == "single_patient":
+                        patient_data = data.get("data", {})
+                        patient_code = patient_data.get("patient_code")
+                        if patient_code:
+                            print(f"Found patient code: {patient_code}")
+                            return patient_code
+                        else:
+                            print("Patient code not found in search results")
+                            return None
+                    elif result_type == "multiple_patients":
+                        patients = data.get("data", [])
+                        if patients:
+                            # Use the first patient's code
+                            patient_code = patients[0].get("patient_code")
+                            if patient_code:
+                                print(f"Found patient code: {patient_code} (first of {len(patients)} matches)")
+                                return patient_code
+                        print("No patient code found in search results")
+                        return None
+                    else:
+                        print("Unexpected search result type")
+                        return None
+                else:
+                    print(f"Patient search failed: {data.get('message', 'No message')}")
+                    return None
+            else:
+                print(f"Patient search failed with status: {response.status}")
+                return None
+    except Exception as e:
+        print(f"Patient search failed with exception: {e}")
+        return None
+
 async def get_patient(session: aiohttp.ClientSession, patient_id: str) -> bool:
     """Retrieve patient information by ID using the API"""
+    # Check if patient_id is a 13-digit CNP
+    if patient_id.isdigit() and len(patient_id) == 13:
+        print(f"Detected 13-digit ID, checking if it's a valid CNP: {patient_id}")
+        patient_code = await get_patient_code_from_cnp(session, patient_id)
+        if patient_code:
+            patient_id = patient_code
+            print(f"Using patient code {patient_id} for retrieval")
+        else:
+            print("Could not resolve CNP to patient code, using original ID")
+    
     print(f"Retrieving patient with ID: {patient_id}")
     
     try:
@@ -261,6 +329,16 @@ async def get_patient(session: aiohttp.ClientSession, patient_id: str) -> bool:
 
 async def get_analyses(session: aiohttp.ClientSession, patient_id: str) -> bool:
     """Retrieve all analyses for a patient by ID using the API"""
+    # Check if patient_id is a 13-digit CNP
+    if patient_id.isdigit() and len(patient_id) == 13:
+        print(f"Detected 13-digit ID, checking if it's a valid CNP: {patient_id}")
+        patient_code = await get_patient_code_from_cnp(session, patient_id)
+        if patient_code:
+            patient_id = patient_code
+            print(f"Using patient code {patient_id} for analyses retrieval")
+        else:
+            print("Could not resolve CNP to patient code, using original ID")
+    
     print(f"Retrieving analyses for patient with ID: {patient_id}")
     
     try:
