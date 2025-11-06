@@ -417,8 +417,29 @@ async def patient_search_handler(request):
                     }, status=401)
             
             logger.info("Patient search completed successfully")
+            
+            # Try to parse as single patient page first
+            single_patient_data = parse_single_patient_data(response_text)
+            if single_patient_data and single_patient_data.get("patient_name"):
+                return web.json_response({
+                    "status": "success",
+                    "type": "single_patient",
+                    "data": single_patient_data
+                })
+            
+            # Try to parse as multiple patients page
+            multiple_patients_data = parse_multiple_patients_data(response_text)
+            if multiple_patients_data:
+                return web.json_response({
+                    "status": "success",
+                    "type": "multiple_patients",
+                    "data": multiple_patients_data
+                })
+            
+            # If neither parser worked, return raw data
             return web.json_response({
                 "status": "success",
+                "type": "raw",
                 "data": response_text
             })
             
@@ -644,6 +665,79 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Error parsing report data: {e}")
         return {}
+
+def parse_single_patient_data(html_content: str) -> Dict[str, Any]:
+    """Parse HTML content for a single patient page and extract patient data"""
+    try:
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Check if this is a single patient page by looking for 'Date pasaportale' in title
+        title = soup.find('title')
+        if not title or 'Date pasaportale' not in title.get_text():
+            return {}
+        
+        # Extract patient name from div with id "div_navbar"
+        navbar_div = soup.find('div', id='div_navbar')
+        patient_name = ""
+        if navbar_div:
+            patient_name = navbar_div.get_text().strip()
+        
+        return {
+            "patient_name": patient_name
+        }
+    except Exception as e:
+        logger.error(f"Error parsing single patient data: {e}")
+        return {}
+
+def parse_multiple_patients_data(html_content: str) -> List[Dict[str, Any]]:
+    """Parse HTML content for multiple patient search results and extract patient data"""
+    try:
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Check if this is a search results page by looking for 'Fisier' in title
+        title = soup.find('title')
+        if not title or 'Fisier' not in title.get_text():
+            return []
+        
+        patients = []
+        
+        # Find all table rows
+        rows = soup.find_all('tr')
+        
+        for row in rows:
+            # Look for the patient code link
+            code_link = row.find('a', href=re.compile(r"javascript:Edit\('([^']+)'\);"))
+            if not code_link:
+                continue
+                
+            # Extract patient code
+            code_href = code_link.get('href')
+            code_match = re.search(r"javascript:Edit\('([^']+)'\);", code_href)
+            if not code_match:
+                continue
+            patient_code = code_match.group(1)
+            
+            # Look for the patient name link (next link in the row)
+            name_links = row.find_all('a')
+            for name_link in name_links:
+                if name_link != code_link:
+                    # Extract patient name
+                    # Remove font tags and formatting
+                    name_text = name_link.get_text()
+                    # Clean up the name (remove extra spaces, normalize)
+                    patient_name = re.sub(r'\s+', ' ', name_text.strip())
+                    
+                    if patient_name:
+                        patients.append({
+                            "patient_code": patient_code,
+                            "patient_name": patient_name
+                        })
+                    break
+        
+        return patients
+    except Exception as e:
+        logger.error(f"Error parsing multiple patients data: {e}")
+        return []
 
 def parse_checkout_data(html_content: str) -> Dict[str, Any]:
     """Parse HTML checkout content and extract structured data"""
