@@ -266,7 +266,7 @@ async def main():
     parser.add_argument("--password", "-w", help="Password for login")
     parser.add_argument("--search", "-s", help="Search term for patient search")
     parser.add_argument("--report", "-r", help="Report ID to retrieve")
-    parser.add_argument("--checkout", "-c", help="Checkout ID to retrieve")
+    parser.add_argument("--checkout", "-o", help="Checkout ID to retrieve")
     parser.add_argument("--patient", "-p", help="Patient ID to retrieve")
     
     args = parser.parse_args()
