@@ -657,9 +657,25 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
                 continue
         
         # Extract examiner (MEDIC, or Medic validator:)
-        examiner_match = re.search(r'(?:MEDIC,|Medic validator:)\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
-        if examiner_match:
-            report_data["examiner"] = re.sub(r'\s+', ' ', examiner_match.group(1).strip())
+        # Handle both plain text and HTML formatted examiner names
+        examiner_patterns = [
+            r'(?:MEDIC,|Medic validator:)\s*([^\n\r<>&]+)',
+            r'(?:MEDIC,|Medic validator:)\s*<b[^>]*>([^<]+)</b>',
+            r'(?:MEDIC,|Medic validator:)[^>]*>\s*([^\n\r<>&]+)'
+        ]
+        
+        examiner_name = ""
+        for pattern in examiner_patterns:
+            examiner_match = re.search(pattern, html_content, re.IGNORECASE)
+            if examiner_match:
+                examiner_name = examiner_match.group(1).strip()
+                # Clean up HTML entities and extra whitespace
+                examiner_name = html.unescape(examiner_name)
+                examiner_name = re.sub(r'\s+', ' ', examiner_name)
+                break
+        
+        if examiner_name:
+            report_data["examiner"] = examiner_name
         
         return report_data
     except Exception as e:
