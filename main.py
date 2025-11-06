@@ -1102,24 +1102,71 @@ async def checkout_handler(request):
             "message": str(e)
         }, status=500)
 
-def parse_analyses_data(html_content: str) -> List[str]:
-    """Parse HTML analyses content and extract report IDs"""
+def parse_analyses_data(html_content: str) -> List[Dict[str, str]]:
+    """Parse HTML analyses content and extract report IDs and analysis types"""
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
         
         # Initialize result list
-        report_ids = []
+        analyses = []
         
         # Find all links to analysis reports
         report_links = soup.find_all('a', href=re.compile(r'../analyse/Reports/analyseFile\.asp\?id=\d+'))
         
         for link in report_links:
+            # Extract report ID
             href = link.get('href', '')
             id_match = re.search(r'id=(\d+)', href)
-            if id_match:
-                report_ids.append(id_match.group(1))
+            if not id_match:
+                continue
+            
+            report_id = id_match.group(1)
+            
+            # Find the parent table row
+            parent_row = link.find_parent('tr')
+            if not parent_row:
+                # If no parent row, just add the ID without type
+                analyses.append({
+                    "report_id": report_id,
+                    "type": "unknown"
+                })
+                continue
+            
+            # Look for the analysis type in the same row
+            # The type is coded as 'XXXX-Radio', 'XXXX-lab', 'XXXX-IRM', etc.
+            type_text = ""
+            cells = parent_row.find_all('td')
+            for cell in cells:
+                cell_text = cell.get_text().strip()
+                # Look for pattern like 'XXXX-Radio', 'XXXX-lab', etc.
+                type_match = re.search(r'\d{4}-(\w+)', cell_text)
+                if type_match:
+                    type_text = type_match.group(1).lower()
+                    break
+            
+            # If we didn't find the type in the standard format, try to infer from the text
+            if not type_text:
+                # Look for common type indicators in the row
+                row_text = parent_row.get_text().lower()
+                if 'radio' in row_text or 'radiologie' in row_text:
+                    type_text = "radio"
+                elif 'lab' in row_text or 'laborator' in row_text:
+                    type_text = "lab"
+                elif 'irm' in row_text:
+                    type_text = "irm"
+                elif 'ct' in row_text:
+                    type_text = "ct"
+                elif 'eco' in row_text or 'ecografie' in row_text:
+                    type_text = "eco"
+                else:
+                    type_text = "unknown"
+            
+            analyses.append({
+                "report_id": report_id,
+                "type": type_text
+            })
         
-        return report_ids
+        return analyses
     except Exception as e:
         logger.error(f"Error parsing analyses data: {e}")
         return []
@@ -1212,12 +1259,12 @@ async def analyses_handler(request):
                     }, status=401)
             
             logger.info("Analyses retrieval completed successfully")
-            # Parse the analyses data to extract report IDs
-            report_ids = parse_analyses_data(response_text)
+            # Parse the analyses data to extract report IDs and types
+            analyses = parse_analyses_data(response_text)
             
             return web.json_response({
                 "status": "success",
-                "report_ids": report_ids
+                "analyses": analyses
             })
             
     except Exception as e:

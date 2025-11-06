@@ -273,15 +273,15 @@ async def get_analyses(session: aiohttp.ClientSession, patient_id: str) -> bool:
                 if data.get("status") == "success":
                     print("Analyses retrieval successful!")
                     
-                    # Display report IDs
-                    report_ids = data.get("report_ids", [])
+                    # Display analyses
+                    analyses = data.get("analyses", [])
                     
-                    if report_ids:
-                        print(f"\nReport IDs ({len(report_ids)} found):")
-                        for i, report_id in enumerate(report_ids, 1):
-                            print(f"  {i}. {report_id}")
+                    if analyses:
+                        print(f"\nAnalyses ({len(analyses)} found):")
+                        for i, analysis in enumerate(analyses, 1):
+                            print(f"  {i}. ID: {analysis.get('report_id', 'N/A')} - Type: {analysis.get('type', 'unknown')}")
                     else:
-                        print("\nNo report IDs found")
+                        print("\nNo analyses found")
                     
                     return True
                 else:
