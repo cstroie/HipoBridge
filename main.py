@@ -300,9 +300,8 @@ async def patient_search_handler(request):
     username = request.headers.get("X-Username")
     password = request.headers.get("X-Password")
     
-    # Get search parameters from query string
-    search_term = request.query.get('term', '')
-    search_type = request.query.get('type', 'PA')  # PA = patient, P = presentation, etc.
+    # Get search parameter from query string
+    search_term = request.query.get('q', '')
     
     if not search_term:
         logger.warning("No search term provided")
@@ -311,7 +310,7 @@ async def patient_search_handler(request):
             "message": "Search term is required"
         }, status=400)
     
-    logger.info(f"Searching for patients with term: {search_term}, type: {search_type}")
+    logger.info(f"Searching for patients with term: {search_term}")
     
     try:
         session = await get_session()
@@ -330,16 +329,38 @@ async def patient_search_handler(request):
                 "message": "Authentication failed"
             }, status=401)
         
-        # Prepare search data
+        # Prepare full search data as captured in the POST request
         search_data = {
+            "hdnSearchType": "1",
+            "pageNo": "1",
             "strDescription": search_term,
-            "hdnSearchType": "1",  # Simple search
-            "searchWhat": search_type,
-            "pageNo": "1"
+            "strLastName": "",
+            "strFirstName": "",
+            "strCodePres": "",
+            "strCNP": "",
+            "strSDate": "",
+            "strEDate": "",
+            "strProfessionID": "",
+            "strSex": "",
+            "strReference": "",
+            "selSection": "0",
+            "selDoctor": "",
+            "intDiagnosisP": "",
+            "DiagnosisP": "",
+            "intDiagnosisPDRG": "",
+            "DiagnosisPDRG": "",
+            "searchWhat": "PA",
+            "strShowLastFile": "1",
+            "strCheckedIn": "-1",
+            "strCODQR": "",
+            "btnCODQR": "IMPORTA+COD+QR",
+            "btnCODQRClear": "STERGE+COD+QR",
+            "hdnQRSave": "",
+            "IdQR": ""
         }
         
         # Make search request to the patient search page
-        search_url = f"{SERVICE_URL}/files/search.asp?what={search_type}"
+        search_url = f"{SERVICE_URL}/files/search.asp?what=PA"
         logger.debug(f"Making patient search request to: {search_url}")
         
         async with session.post(

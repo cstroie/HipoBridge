@@ -36,14 +36,14 @@ async def login(session: aiohttp.ClientSession, username: str, password: str) ->
         print(f"Login failed with exception: {e}")
         return False
 
-async def search_patients(session: aiohttp.ClientSession, search_term: str, search_type: str = "PA") -> bool:
+async def search_patients(session: aiohttp.ClientSession, search_term: str) -> bool:
     """Search for patients using the API"""
-    print(f"Searching for patients with term: '{search_term}' (type: {search_type})")
+    print(f"Searching for patients with term: '{search_term}'")
     
     try:
         # Make search request
         async with session.get(
-            f"{BASE_URL}/api/patient/search?term={search_term}&type={search_type}"
+            f"{BASE_URL}/api/patient/search?q={search_term}"
         ) as response:
             if response.status == 200:
                 data = await response.json()
@@ -233,7 +233,6 @@ async def main():
     parser.add_argument("--username", "-u", help="Username for login")
     parser.add_argument("--password", "-w", help="Password for login")
     parser.add_argument("--search", "-s", help="Search term for patient search")
-    parser.add_argument("--type", "-t", default="PA", help="Search type (default: PA)")
     parser.add_argument("--report", "-r", help="Report ID to retrieve")
     parser.add_argument("--checkout", "-c", help="Checkout ID to retrieve")
     parser.add_argument("--patient", "-p", help="Patient ID to retrieve")
@@ -262,7 +261,7 @@ async def main():
         
         # Perform patient search if requested
         if args.search:
-            search_success = await search_patients(session, args.search, args.type)
+            search_success = await search_patients(session, args.search)
             if not search_success:
                 print("Failed to search patients")
                 return 1
