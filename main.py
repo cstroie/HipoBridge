@@ -3,7 +3,7 @@ import os
 import asyncio
 import aiohttp
 from aiohttp import web
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import json
 import logging
 import re
