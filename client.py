@@ -63,6 +63,16 @@ async def search_patients(session: aiohttp.ClientSession, search_term: str) -> b
                             print(f"  Presentations ({len(presentations)} found):")
                             for i, pres_id in enumerate(presentations, 1):
                                 print(f"    {i}. {pres_id}")
+                        if patient_data.get('checkins'):
+                            checkins = patient_data['checkins']
+                            print(f"  Checkins ({len(checkins)} found):")
+                            for i, checkin_id in enumerate(checkins, 1):
+                                print(f"    {i}. {checkin_id}")
+                        if patient_data.get('checkouts'):
+                            checkouts = patient_data['checkouts']
+                            print(f"  Checkouts ({len(checkouts)} found):")
+                            for i, checkout_id in enumerate(checkouts, 1):
+                                print(f"    {i}. {checkout_id}")
                         return True
                     elif result_type == "multiple_patients":
                         patients = data.get("data", [])

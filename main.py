@@ -709,11 +709,31 @@ def parse_single_patient_data(html_content: str) -> Dict[str, Any]:
             if id_match:
                 presentations.append(id_match.group(1))
         
+        # Extract checkins
+        checkins = []
+        checkin_links = soup.find_all('a', href=re.compile(r'../files/checkin\.asp\?id='))
+        for link in checkin_links:
+            href = link.get('href', '')
+            id_match = re.search(r'id=([^&"]+)', href)
+            if id_match:
+                checkins.append(id_match.group(1))
+        
+        # Extract checkouts
+        checkouts = []
+        checkout_links = soup.find_all('a', href=re.compile(r'../files/checkout\.asp\?id='))
+        for link in checkout_links:
+            href = link.get('href', '')
+            id_match = re.search(r'id=([^&"]+)', href)
+            if id_match:
+                checkouts.append(id_match.group(1))
+        
         return {
             "patient_name": patient_name,
             "patient_id": patient_id,
             "patient_code": patient_code,
-            "presentations": presentations
+            "presentations": presentations,
+            "checkins": checkins,
+            "checkouts": checkouts
         }
     except Exception as e:
         logger.error(f"Error parsing single patient data: {e}")
