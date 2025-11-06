@@ -360,8 +360,23 @@ async def get_analyses(session: aiohttp.ClientSession, patient_id: str) -> bool:
                     
                     if analyses:
                         print(f"\nAnalyses ({len(analyses)} found):")
+                        imaging_analyses = []
                         for i, analysis in enumerate(analyses, 1):
-                            print(f"  {i}. ID: {analysis.get('report_id', 'N/A')} - Type: {analysis.get('type', 'unknown')}")
+                            analysis_type = analysis.get('type', 'unknown')
+                            print(f"  {i}. ID: {analysis.get('report_id', 'N/A')} - Type: {analysis_type}")
+                            
+                            # Check if this is an imaging analysis that needs report retrieval
+                            if analysis_type in ['radio', 'ct', 'irm', 'eco']:
+                                imaging_analyses.append(analysis)
+                        
+                        # Retrieve reports for imaging analyses
+                        if imaging_analyses:
+                            print(f"\nRetrieving reports for {len(imaging_analyses)} imaging analyses:")
+                            for analysis in imaging_analyses:
+                                report_id = analysis.get('report_id')
+                                analysis_type = analysis.get('type')
+                                print(f"\n--- Report for {analysis_type.upper()} (ID: {report_id}) ---")
+                                await get_report(session, report_id)
                     else:
                         print("\nNo analyses found")
                     
