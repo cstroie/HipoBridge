@@ -54,6 +54,15 @@ async def search_patients(session: aiohttp.ClientSession, search_term: str) -> b
                     if result_type == "single_patient":
                         patient_data = data.get("data", {})
                         print(f"Found single patient: {patient_data.get('patient_name', 'Unknown')}")
+                        if patient_data.get('patient_id'):
+                            print(f"  Patient ID (CNP): {patient_data['patient_id']}")
+                        if patient_data.get('patient_code'):
+                            print(f"  Patient Code: {patient_data['patient_code']}")
+                        if patient_data.get('presentations'):
+                            presentations = patient_data['presentations']
+                            print(f"  Presentations ({len(presentations)} found):")
+                            for i, pres_id in enumerate(presentations, 1):
+                                print(f"    {i}. {pres_id}")
                         return True
                     elif result_type == "multiple_patients":
                         patients = data.get("data", [])
