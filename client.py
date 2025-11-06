@@ -351,7 +351,11 @@ async def get_analyses(session: aiohttp.ClientSession, patient_id: str) -> bool:
                 if data.get("status") == "success":
                     print("Analyses retrieval successful!")
                     
-                    # Display analyses
+                    # Display patient name and analyses
+                    patient_name = data.get("patient_name", "")
+                    if patient_name:
+                        print(f"Patient: {patient_name}")
+                    
                     analyses = data.get("analyses", [])
                     
                     if analyses:

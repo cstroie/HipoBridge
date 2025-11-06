@@ -1102,13 +1102,21 @@ async def checkout_handler(request):
             "message": str(e)
         }, status=500)
 
-def parse_analyses_data(html_content: str) -> List[Dict[str, str]]:
-    """Parse HTML analyses content and extract report IDs and analysis types"""
+def parse_analyses_data(html_content: str) -> Dict[str, Any]:
+    """Parse HTML analyses content and extract report IDs, analysis types, and patient name"""
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
         
-        # Initialize result list
-        analyses = []
+        # Initialize result
+        result = {
+            "patient_name": "",
+            "analyses": []
+        }
+        
+        # Extract patient name from the link pattern
+        patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id=\d+'))
+        if patient_link:
+            result["patient_name"] = patient_link.get_text().strip()
         
         # Find all links to analysis reports
         report_links = soup.find_all('a', href=re.compile(r'../analyse/Reports/analyseFile\.asp\?id=\d+'))
@@ -1126,7 +1134,7 @@ def parse_analyses_data(html_content: str) -> List[Dict[str, str]]:
             parent_row = link.find_parent('tr')
             if not parent_row:
                 # If no parent row, just add the ID without type
-                analyses.append({
+                result["analyses"].append({
                     "report_id": report_id,
                     "type": "unknown"
                 })
@@ -1161,15 +1169,15 @@ def parse_analyses_data(html_content: str) -> List[Dict[str, str]]:
                 else:
                     type_text = "unknown"
             
-            analyses.append({
+            result["analyses"].append({
                 "report_id": report_id,
                 "type": type_text
             })
         
-        return analyses
+        return result
     except Exception as e:
         logger.error(f"Error parsing analyses data: {e}")
-        return []
+        return {"patient_name": "", "analyses": []}
 
 async def analyses_handler(request):
     """Retrieve all analyses for a patient by ID"""
@@ -1259,12 +1267,13 @@ async def analyses_handler(request):
                     }, status=401)
             
             logger.info("Analyses retrieval completed successfully")
-            # Parse the analyses data to extract report IDs and types
-            analyses = parse_analyses_data(response_text)
+            # Parse the analyses data to extract report IDs, types, and patient name
+            parsed_data = parse_analyses_data(response_text)
             
             return web.json_response({
                 "status": "success",
-                "analyses": analyses
+                "patient_name": parsed_data["patient_name"],
+                "analyses": parsed_data["analyses"]
             })
             
     except Exception as e:
