@@ -682,8 +682,38 @@ def parse_single_patient_data(html_content: str) -> Dict[str, Any]:
         if navbar_div:
             patient_name = navbar_div.get_text().strip()
         
+        # Extract patient ID (CNP) from text input after 'CNP:'
+        patient_id = ""
+        cnp_labels = soup.find_all(string=re.compile(r'CNP\s*:', re.IGNORECASE))
+        for label in cnp_labels:
+            # Find the parent element and then look for the next input
+            parent = label.parent
+            if parent:
+                input_field = parent.find_next('input', type='text')
+                if input_field:
+                    patient_id = input_field.get('value', '').strip()
+                    break
+        
+        # Extract patient code from hidden input with id "hdnCodeID"
+        patient_code = ""
+        code_input = soup.find('input', id='hdnCodeID', type='hidden')
+        if code_input:
+            patient_code = code_input.get('value', '').strip()
+        
+        # Extract presentations
+        presentations = []
+        presentation_links = soup.find_all('a', href=re.compile(r'../files/presentation\.asp\?id='))
+        for link in presentation_links:
+            href = link.get('href', '')
+            id_match = re.search(r'id=([^&"]+)', href)
+            if id_match:
+                presentations.append(id_match.group(1))
+        
         return {
-            "patient_name": patient_name
+            "patient_name": patient_name,
+            "patient_id": patient_id,
+            "patient_code": patient_code,
+            "presentations": presentations
         }
     except Exception as e:
         logger.error(f"Error parsing single patient data: {e}")
