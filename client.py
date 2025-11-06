@@ -259,6 +259,41 @@ async def get_patient(session: aiohttp.ClientSession, patient_id: str) -> bool:
         print(f"Patient retrieval failed with exception: {e}")
         return False
 
+async def get_analyses(session: aiohttp.ClientSession, patient_id: str) -> bool:
+    """Retrieve all analyses for a patient by ID using the API"""
+    print(f"Retrieving analyses for patient with ID: {patient_id}")
+    
+    try:
+        # Make analyses request
+        async with session.get(
+            f"{BASE_URL}/api/analyses?id={patient_id}"
+        ) as response:
+            if response.status == 200:
+                data = await response.json()
+                if data.get("status") == "success":
+                    print("Analyses retrieval successful!")
+                    
+                    # Display report IDs
+                    report_ids = data.get("report_ids", [])
+                    
+                    if report_ids:
+                        print(f"\nReport IDs ({len(report_ids)} found):")
+                        for i, report_id in enumerate(report_ids, 1):
+                            print(f"  {i}. {report_id}")
+                    else:
+                        print("\nNo report IDs found")
+                    
+                    return True
+                else:
+                    print(f"Analyses retrieval failed: {data.get('message', 'No message')}")
+                    return False
+            else:
+                print(f"Analyses retrieval failed with status: {response.status}")
+                return False
+    except Exception as e:
+        print(f"Analyses retrieval failed with exception: {e}")
+        return False
+
 async def main():
     """Main function to parse arguments and run the client"""
     parser = argparse.ArgumentParser(description="Hipocrate API Client")
@@ -268,6 +303,7 @@ async def main():
     parser.add_argument("--report", "-r", help="Report ID to retrieve")
     parser.add_argument("--checkout", "-o", help="Checkout ID to retrieve")
     parser.add_argument("--patient", "-p", help="Patient ID to retrieve")
+    parser.add_argument("--analyses", "-a", help="Patient ID to retrieve analyses for")
     
     args = parser.parse_args()
     
@@ -275,8 +311,8 @@ async def main():
     username = args.username or os.getenv("HYP_USER")
     password = args.password or os.getenv("HYP_PASS")
     
-    if not args.search and not args.report and not args.checkout and not args.patient:
-        print("Error: Either search term, report ID, checkout ID, or patient ID is required")
+    if not args.search and not args.report and not args.checkout and not args.patient and not args.analyses:
+        print("Error: Either search term, report ID, checkout ID, patient ID, or analyses ID is required")
         parser.print_help()
         return 1
     
@@ -317,6 +353,13 @@ async def main():
             patient_success = await get_patient(session, args.patient)
             if not patient_success:
                 print("Failed to retrieve patient")
+                return 1
+        
+        # Retrieve analyses if requested
+        if args.analyses:
+            analyses_success = await get_analyses(session, args.analyses)
+            if not analyses_success:
+                print("Failed to retrieve analyses")
                 return 1
         
         print("All operations completed successfully!")

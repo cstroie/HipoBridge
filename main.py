@@ -1102,6 +1102,131 @@ async def checkout_handler(request):
             "message": str(e)
         }, status=500)
 
+def parse_analyses_data(html_content: str) -> List[str]:
+    """Parse HTML analyses content and extract report IDs"""
+    try:
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Initialize result list
+        report_ids = []
+        
+        # Find all links to analysis reports
+        report_links = soup.find_all('a', href=re.compile(r'../analyse/Reports/analyseFile\.asp\?id=\d+'))
+        
+        for link in report_links:
+            href = link.get('href', '')
+            id_match = re.search(r'id=(\d+)', href)
+            if id_match:
+                report_ids.append(id_match.group(1))
+        
+        return report_ids
+    except Exception as e:
+        logger.error(f"Error parsing analyses data: {e}")
+        return []
+
+async def analyses_handler(request):
+    """Retrieve all analyses for a patient by ID"""
+    logger.info("GET /api/analyses endpoint accessed")
+    
+    # Get credentials from request headers (optional)
+    username = request.headers.get("X-Username")
+    password = request.headers.get("X-Password")
+    
+    # Get patient ID from query string
+    patient_id = request.query.get('id')
+    
+    if not patient_id:
+        logger.warning("No patient ID provided")
+        return web.json_response({
+            "status": "error",
+            "message": "Patient ID is required"
+        }, status=400)
+    
+    logger.info(f"Retrieving analyses for patient with ID: {patient_id}")
+    
+    try:
+        session = await get_session()
+        
+        # Log current cookies before request
+        if session.cookie_jar:
+            cookies = session.cookie_jar.filter_cookies(SERVICE_URL)
+            logger.debug(f"Using {len(cookies)} cookies for analyses request")
+        
+        # First ensure we're logged in
+        login_success = await login_if_needed(username, password)
+        if not login_success:
+            logger.error("Failed to login for analyses retrieval")
+            return web.json_response({
+                "status": "error",
+                "message": "Authentication failed"
+            }, status=401)
+        
+        # Make request to the analyses endpoint
+        analyses_url = f"{SERVICE_URL}/pacient/analyses.asp?type=PA&pacid={patient_id}"
+        logger.debug(f"Making analyses request to: {analyses_url}")
+        
+        async with session.get(analyses_url, headers=HEADERS) as response:
+            # Handle encoding properly - the service may not be using UTF-8
+            try:
+                response_text = await response.text()
+            except UnicodeDecodeError:
+                # If UTF-8 fails, try to get raw bytes and decode with latin-1 or windows-1252
+                raw_data = await response.read()
+                try:
+                    response_text = raw_data.decode('windows-1252')
+                except UnicodeDecodeError:
+                    response_text = raw_data.decode('latin-1')
+            
+            logger.debug(f"Analyses response status: {response.status}")
+            
+            # Check if we got redirected to login page (session expired)
+            if is_login_page(response_text):
+                logger.warning("Session expired during analyses retrieval, attempting re-login")
+                login_success = await login_if_needed(username, password)
+                if login_success:
+                    # Retry the request
+                    async with session.get(analyses_url, headers=HEADERS) as retry_response:
+                        # Handle encoding properly - the service may not be using UTF-8
+                        try:
+                            response_text = await retry_response.text()
+                        except UnicodeDecodeError:
+                            # If UTF-8 fails, try to get raw bytes and decode with latin-1 or windows-1252
+                            raw_data = await retry_response.read()
+                            try:
+                                response_text = raw_data.decode('windows-1252')
+                            except UnicodeDecodeError:
+                                response_text = raw_data.decode('latin-1')
+                        logger.debug(f"Retry analyses response status: {retry_response.status}")
+                        
+                        if is_login_page(response_text):
+                            logger.error("Login failed after retry")
+                            return web.json_response({
+                                "status": "error",
+                                "message": "Authentication failed after retry"
+                            }, status=401)
+                else:
+                    logger.error("Re-login failed")
+                    return web.json_response({
+                        "status": "error",
+                        "message": "Authentication failed"
+                    }, status=401)
+            
+            logger.info("Analyses retrieval completed successfully")
+            # Parse the analyses data to extract report IDs
+            report_ids = parse_analyses_data(response_text)
+            
+            return web.json_response({
+                "status": "success",
+                "report_ids": report_ids
+            })
+            
+    except Exception as e:
+        logger.error(f"Analyses retrieval failed with exception: {e}")
+        return web.json_response({
+            "status": "error",
+            "message": str(e)
+        }, status=500)
+
 async def report_handler(request):
     """Retrieve a report by ID, following redirect chains"""
     logger.info("GET /api/report endpoint accessed")
@@ -1219,6 +1344,7 @@ async def init_app():
     app.router.add_post('/api/service', service_post_handler)
     app.router.add_get('/api/patient/search', patient_search_handler)
     app.router.add_get('/api/patient', patient_handler)
+    app.router.add_get('/api/analyses', analyses_handler)
     app.router.add_get('/api/report', report_handler)
     app.router.add_get('/api/checkout', checkout_handler)
     app.router.add_post('/api/login', login_handler)
