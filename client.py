@@ -294,6 +294,31 @@ async def get_analyses(session: aiohttp.ClientSession, patient_id: str) -> bool:
         print(f"Analyses retrieval failed with exception: {e}")
         return False
 
+async def validate_cnp(session: aiohttp.ClientSession, cnp: str) -> bool:
+    """Validate a Romanian CNP using the API"""
+    print(f"Validating CNP: {cnp}")
+    
+    try:
+        # Make CNP validation request
+        async with session.get(
+            f"{BASE_URL}/api/cnp?id={cnp}"
+        ) as response:
+            if response.status == 200:
+                data = await response.json()
+                if data.get("status") == "success":
+                    is_valid = data.get("valid", False)
+                    print(f"CNP validation result: {'Valid' if is_valid else 'Invalid'}")
+                    return True
+                else:
+                    print(f"CNP validation failed: {data.get('message', 'No message')}")
+                    return False
+            else:
+                print(f"CNP validation failed with status: {response.status}")
+                return False
+    except Exception as e:
+        print(f"CNP validation failed with exception: {e}")
+        return False
+
 async def main():
     """Main function to parse arguments and run the client"""
     parser = argparse.ArgumentParser(description="Hipocrate API Client")
@@ -304,6 +329,7 @@ async def main():
     parser.add_argument("--checkout", "-o", help="Checkout ID to retrieve")
     parser.add_argument("--patient", "-p", help="Patient ID to retrieve")
     parser.add_argument("--analyses", "-a", help="Patient ID to retrieve analyses for")
+    parser.add_argument("--cnp", "-c", help="CNP to validate")
     
     args = parser.parse_args()
     
@@ -311,8 +337,8 @@ async def main():
     username = args.username or os.getenv("HYP_USER")
     password = args.password or os.getenv("HYP_PASS")
     
-    if not args.search and not args.report and not args.checkout and not args.patient and not args.analyses:
-        print("Error: Either search term, report ID, checkout ID, patient ID, or analyses ID is required")
+    if not args.search and not args.report and not args.checkout and not args.patient and not args.analyses and not args.cnp:
+        print("Error: Either search term, report ID, checkout ID, patient ID, analyses ID, or CNP is required")
         parser.print_help()
         return 1
     
@@ -360,6 +386,13 @@ async def main():
             analyses_success = await get_analyses(session, args.analyses)
             if not analyses_success:
                 print("Failed to retrieve analyses")
+                return 1
+        
+        # Validate CNP if requested
+        if args.cnp:
+            cnp_success = await validate_cnp(session, args.cnp)
+            if not cnp_success:
+                print("Failed to validate CNP")
                 return 1
         
         print("All operations completed successfully!")

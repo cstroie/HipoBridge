@@ -1274,6 +1274,84 @@ async def analyses_handler(request):
             "message": str(e)
         }, status=500)
 
+def validate_cnp(cnp: str) -> bool:
+    """Validate a Romanian CNP (Personal Numerical Code)"""
+    # Check if CNP is exactly 13 digits
+    if not cnp or len(cnp) != 13 or not cnp.isdigit():
+        return False
+    
+    # Extract components
+    gender_digit = int(cnp[0])
+    year = int(cnp[1:3])
+    month = int(cnp[3:5])
+    day = int(cnp[5:7])
+    county_code = int(cnp[7:9])
+    
+    # Validate gender digit (1-8 are valid)
+    if gender_digit < 1 or gender_digit > 8:
+        return False
+    
+    # Validate month (1-12)
+    if month < 1 or month > 12:
+        return False
+    
+    # Validate day (1-31)
+    if day < 1 or day > 31:
+        return False
+    
+    # Validate county code (1-52, excluding 47-50)
+    if county_code < 1 or county_code > 52 or (47 <= county_code <= 50):
+        return False
+    
+    # Validate date by trying to create a datetime object
+    try:
+        # Determine century based on gender digit
+        if gender_digit in [1, 2]:
+            full_year = 1900 + year
+        elif gender_digit in [3, 4]:
+            full_year = 1800 + year
+        elif gender_digit in [5, 6]:
+            full_year = 2000 + year
+        else:  # 7, 8
+            full_year = 2000 + year  # For people born after 2000
+        
+        # Check if date is valid
+        datetime(full_year, month, day)
+    except ValueError:
+        return False
+    
+    # Validate control digit using checksum
+    weights = [2, 7, 9, 1, 4, 6, 3, 5, 8, 2, 7, 9]
+    checksum = sum(int(cnp[i]) * weights[i] for i in range(12)) % 11
+    control_digit = 1 if checksum == 10 else checksum
+    
+    return control_digit == int(cnp[12])
+
+async def cnp_handler(request):
+    """Validate a Romanian CNP (Personal Numerical Code)"""
+    logger.info("GET /api/cnp endpoint accessed")
+    
+    # Get CNP from query string
+    cnp = request.query.get('id')
+    
+    if not cnp:
+        logger.warning("No CNP provided")
+        return web.json_response({
+            "status": "error",
+            "message": "CNP is required"
+        }, status=400)
+    
+    logger.info(f"Validating CNP: {cnp}")
+    
+    # Validate CNP
+    is_valid = validate_cnp(cnp)
+    
+    return web.json_response({
+        "status": "success",
+        "cnp": cnp,
+        "valid": is_valid
+    })
+
 async def report_handler(request):
     """Retrieve a report by ID, following redirect chains"""
     logger.info("GET /api/report endpoint accessed")
@@ -1394,6 +1472,7 @@ async def init_app():
     app.router.add_get('/api/analyses', analyses_handler)
     app.router.add_get('/api/report', report_handler)
     app.router.add_get('/api/checkout', checkout_handler)
+    app.router.add_get('/api/cnp', cnp_handler)
     app.router.add_post('/api/login', login_handler)
     
     # Setup startup and cleanup
