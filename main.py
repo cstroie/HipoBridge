@@ -656,8 +656,8 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
                 logger.error(f"Error parsing individual report: {e}")
                 continue
         
-        # Extract examiner (MEDIC,)
-        examiner_match = re.search(r'MEDIC,\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
+        # Extract examiner (MEDIC, or Medic validator:)
+        examiner_match = re.search(r'(?:MEDIC,|Medic validator:)\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
         if examiner_match:
             report_data["examiner"] = re.sub(r'\s+', ' ', examiner_match.group(1).strip())
         
