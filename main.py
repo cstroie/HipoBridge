@@ -49,18 +49,48 @@ async def get_session():
     return session
 
 async def root_handler(request):
+    """Handle requests to the root endpoint.
+    
+    Returns a simple JSON response indicating the service is running.
+    
+    Args:
+        request: The incoming HTTP request
+        
+    Returns:
+        web.Response: JSON response with service information
+    """
     logger.info("Root endpoint accessed")
     return web.json_response({"message": "Web API Interface to Hipocrate Service"})
 
 def is_login_page(content: str) -> bool:
-    """Detect if we're on the login page"""
+    """Detect if the provided content is a login page.
+    
+    Checks for specific text patterns that indicate we're on the login page.
+    
+    Args:
+        content (str): HTML content to check
+        
+    Returns:
+        bool: True if content appears to be a login page, False otherwise
+    """
     is_login = "RECUPERARE PAROLA" in content and "Username" in content and "Password" in content
     if is_login:
         logger.debug("Detected login page")
     return is_login
 
 async def login_if_needed(username: str = None, password: str = None) -> bool:
-    """Attempt to login if we're on the login page"""
+    """Attempt to login to the Hipocrate service if needed.
+    
+    Checks if we're currently on the login page, and if so, performs login
+    using the provided or environment credentials.
+    
+    Args:
+        username (str, optional): Username for login. Defaults to environment variable.
+        password (str, optional): Password for login. Defaults to environment variable.
+        
+    Returns:
+        bool: True if login was successful or not needed, False otherwise
+    """
     logger.info("Attempting login if needed")
     
     # Use provided credentials or fallback to environment variables
@@ -148,7 +178,20 @@ async def login_if_needed(username: str = None, password: str = None) -> bool:
         return False
 
 async def handle_service_request(method: str, data: Dict[str, Any] = None, username: str = None, password: str = None) -> Dict[str, Any]:
-    """Handle service requests with automatic login"""
+    """Handle service requests with automatic login.
+    
+    Makes HTTP requests to the Hipocrate service, automatically handling
+    login if needed and managing session cookies.
+    
+    Args:
+        method (str): HTTP method ("GET" or "POST")
+        data (Dict[str, Any], optional): Data to send with POST requests
+        username (str, optional): Username for login if needed
+        password (str, optional): Password for login if needed
+        
+    Returns:
+        Dict[str, Any]: Response with status and data
+    """
     logger.info(f"Handling {method} request to service")
     
     try:
@@ -215,6 +258,16 @@ async def handle_service_request(method: str, data: Dict[str, Any] = None, usern
         }
 
 async def service_get_handler(request):
+    """Handle GET requests to the service endpoint.
+    
+    Makes a GET request to the Hipocrate service, handling authentication automatically.
+    
+    Args:
+        request: The incoming HTTP request with optional X-Username and X-Password headers
+        
+    Returns:
+        web.Response: JSON response with the service data or error information
+    """
     logger.info("GET /api/service endpoint accessed")
     
     # Get credentials from request headers (optional)
@@ -226,6 +279,18 @@ async def service_get_handler(request):
     return web.json_response(result)
 
 async def service_post_handler(request):
+    """Handle POST requests to the service endpoint.
+    
+    Makes a POST request to the Hipocrate service with JSON data, 
+    handling authentication automatically.
+    
+    Args:
+        request: The incoming HTTP request with optional X-Username and X-Password headers
+                 and JSON data in the request body
+        
+    Returns:
+        web.Response: JSON response with the service data or error information
+    """
     logger.info("POST /api/service endpoint accessed")
     
     # Get credentials from request headers (optional)
@@ -247,7 +312,16 @@ async def service_post_handler(request):
     return web.json_response(result)
 
 async def login_handler(request):
-    """Explicit login endpoint"""
+    """Handle explicit login requests.
+    
+    Performs login to the Hipocrate service using credentials provided in the request body.
+    
+    Args:
+        request: The incoming HTTP request with JSON body containing username and password
+        
+    Returns:
+        web.Response: JSON response indicating login success or failure
+    """
     logger.info("POST /api/login endpoint accessed")
     
     try:
@@ -293,7 +367,18 @@ async def login_handler(request):
         }, status=500)
 
 async def patient_search_handler(request):
-    """Search for patients by name or other criteria"""
+    """Search for patients by name or other criteria.
+    
+    Performs a patient search on the Hipocrate service using the provided search term.
+    Can return either a single patient result or multiple patient results.
+    
+    Args:
+        request: The incoming HTTP request with 'q' query parameter for search term
+                 and optional X-Username and X-Password headers for authentication
+        
+    Returns:
+        web.Response: JSON response with search results or error information
+    """
     logger.info("GET /api/patient/search endpoint accessed")
     
     # Get credentials from request headers (optional)
@@ -451,7 +536,17 @@ async def patient_search_handler(request):
         }, status=500)
 
 def html_to_markdown(html_content: str) -> str:
-    """Convert HTML content to clean markdown"""
+    """Convert HTML content to clean markdown text.
+    
+    Processes HTML content by removing unnecessary tags, converting formatting
+    elements to markdown syntax, and normalizing whitespace.
+    
+    Args:
+        html_content (str): HTML content to convert
+        
+    Returns:
+        str: Clean markdown text
+    """
     
     try:
         # First convert HTML entities to their characters
@@ -546,7 +641,18 @@ def html_to_markdown(html_content: str) -> str:
         return re.sub(r'\s+', ' ', cleaned_text.strip())
 
 def get_textarea_content_after_label(soup: 'BeautifulSoup', label_regex: str) -> str:
-    """Get content of first textarea after a label matching the given regex"""
+    """Get content of first textarea after a label matching the given regex.
+    
+    Searches for a label matching the regex pattern and returns the content
+    of the first textarea element that follows it.
+    
+    Args:
+        soup (BeautifulSoup): Parsed HTML content
+        label_regex (str): Regular expression pattern to match label text
+        
+    Returns:
+        str: Content of the textarea converted to markdown, or empty string if not found
+    """
     import re
     
     try:
@@ -566,7 +672,17 @@ def get_textarea_content_after_label(soup: 'BeautifulSoup', label_regex: str) ->
         return ""
 
 def parse_report_data(html_content: str) -> Dict[str, Any]:
-    """Parse HTML report content and extract structured data"""
+    """Parse HTML report content and extract structured data.
+    
+    Extracts patient information, examination details, and report results
+    from HTML report content.
+    
+    Args:
+        html_content (str): HTML content of the report
+        
+    Returns:
+        Dict[str, Any]: Dictionary containing parsed report data
+    """
     
     try:
         # First convert HTML entities to their characters
@@ -702,7 +818,17 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
         return {}
 
 def parse_single_patient_data(html_content: str) -> Dict[str, Any]:
-    """Parse HTML content for a single patient page and extract patient data"""
+    """Parse HTML content for a single patient page and extract patient data.
+    
+    Extracts patient name, ID, code, and associated presentation/checkin/checkout IDs
+    from a single patient page HTML content.
+    
+    Args:
+        html_content (str): HTML content of the single patient page
+        
+    Returns:
+        Dict[str, Any]: Dictionary containing parsed patient data, or empty dict if not a patient page
+    """
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
         
@@ -775,7 +901,16 @@ def parse_single_patient_data(html_content: str) -> Dict[str, Any]:
         return {}
 
 def parse_multiple_patients_data(html_content: str) -> List[Dict[str, Any]]:
-    """Parse HTML content for multiple patient search results and extract patient data"""
+    """Parse HTML content for multiple patient search results and extract patient data.
+    
+    Extracts patient names and codes from search results page with multiple patients.
+    
+    Args:
+        html_content (str): HTML content of the search results page
+        
+    Returns:
+        List[Dict[str, Any]]: List of dictionaries containing patient data
+    """
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
         
@@ -825,7 +960,16 @@ def parse_multiple_patients_data(html_content: str) -> List[Dict[str, Any]]:
         return []
 
 def parse_checkout_data(html_content: str) -> Dict[str, Any]:
-    """Parse HTML checkout content and extract structured data"""
+    """Parse HTML checkout content and extract structured data.
+    
+    Extracts patient information and medical data from checkout HTML content.
+    
+    Args:
+        html_content (str): HTML content of the checkout page
+        
+    Returns:
+        Dict[str, Any]: Dictionary containing parsed checkout data
+    """
     import re
     from bs4 import BeautifulSoup
     
@@ -888,7 +1032,18 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
         return {}
 
 async def patient_handler(request):
-    """Retrieve patient information by ID"""
+    """Retrieve patient information by ID.
+    
+    Gets patient information from the Hipocrate service and extracts
+    associated checkin and checkout IDs.
+    
+    Args:
+        request: The incoming HTTP request with 'id' query parameter for patient ID
+                 and optional X-Username and X-Password headers for authentication
+        
+    Returns:
+        web.Response: JSON response with patient data or error information
+    """
     logger.info("GET /api/patient endpoint accessed")
     
     # Get credentials from request headers (optional)
@@ -1020,7 +1175,18 @@ async def patient_handler(request):
         }, status=500)
 
 async def checkout_handler(request):
-    """Retrieve checkout information by ID"""
+    """Retrieve checkout information by ID.
+    
+    Gets checkout information from the Hipocrate service and parses
+    the medical data into structured format.
+    
+    Args:
+        request: The incoming HTTP request with 'id' query parameter for checkout ID
+                 and optional X-Username and X-Password headers for authentication
+        
+    Returns:
+        web.Response: JSON response with checkout data or error information
+    """
     logger.info("GET /api/checkout endpoint accessed")
     
     # Get credentials from request headers (optional)
@@ -1122,7 +1288,17 @@ async def checkout_handler(request):
         }, status=500)
 
 def parse_analyses_data(html_content: str) -> Dict[str, Any]:
-    """Parse HTML analyses content and extract report IDs, analysis types, and patient name"""
+    """Parse HTML analyses content and extract report IDs, analysis types, and patient name.
+    
+    Extracts patient name and list of analyses with their types and report IDs
+    from the analyses HTML page.
+    
+    Args:
+        html_content (str): HTML content of the analyses page
+        
+    Returns:
+        Dict[str, Any]: Dictionary containing patient name and list of analyses
+    """
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
         
@@ -1199,7 +1375,18 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
         return {"patient_name": "", "analyses": []}
 
 async def analyses_handler(request):
-    """Retrieve all analyses for a patient by ID"""
+    """Retrieve all analyses for a patient by ID.
+    
+    Gets all analyses for a specific patient from the Hipocrate service
+    and parses the data into structured format.
+    
+    Args:
+        request: The incoming HTTP request with 'id' query parameter for patient ID
+                 and optional X-Username and X-Password headers for authentication
+        
+    Returns:
+        web.Response: JSON response with analyses data or error information
+    """
     logger.info("GET /api/analyses endpoint accessed")
     
     # Get credentials from request headers (optional)
@@ -1303,7 +1490,21 @@ async def analyses_handler(request):
         }, status=500)
 
 def validate_cnp(cnp: str) -> bool:
-    """Validate a Romanian CNP (Personal Numerical Code)"""
+    """Validate a Romanian CNP (Personal Numerical Code).
+    
+    Checks if the provided string is a valid Romanian CNP by verifying:
+    - Length (13 digits)
+    - Gender digit (1-8)
+    - Date components (year, month, day)
+    - County code (1-52, excluding 47-50)
+    - Control digit using checksum algorithm
+    
+    Args:
+        cnp (str): The CNP to validate
+        
+    Returns:
+        bool: True if CNP is valid, False otherwise
+    """
     # Check if CNP is exactly 13 digits
     if not cnp or len(cnp) != 13 or not cnp.isdigit():
         return False
@@ -1356,7 +1557,16 @@ def validate_cnp(cnp: str) -> bool:
     return control_digit == int(cnp[12])
 
 async def cnp_handler(request):
-    """Validate a Romanian CNP (Personal Numerical Code)"""
+    """Validate a Romanian CNP (Personal Numerical Code).
+    
+    Validates a Romanian CNP using the internal validation algorithm.
+    
+    Args:
+        request: The incoming HTTP request with 'id' query parameter for CNP
+        
+    Returns:
+        web.Response: JSON response with validation result
+    """
     logger.info("GET /api/cnp endpoint accessed")
     
     # Get CNP from query string
@@ -1381,7 +1591,18 @@ async def cnp_handler(request):
     })
 
 async def report_handler(request):
-    """Retrieve a report by ID, following redirect chains"""
+    """Retrieve a report by ID, following redirect chains.
+    
+    Gets a report from the Hipocrate service, following any redirects to
+    retrieve the final report data, then parses it into structured format.
+    
+    Args:
+        request: The incoming HTTP request with 'id' query parameter for report ID
+                 and optional X-Username and X-Password headers for authentication
+        
+    Returns:
+        web.Response: JSON response with report data or error information
+    """
     logger.info("GET /api/report endpoint accessed")
     
     # Get credentials from request headers (optional)
@@ -1490,6 +1711,13 @@ async def report_handler(request):
         }, status=500)
 
 async def init_app():
+    """Initialize the web application.
+    
+    Sets up routes and application lifecycle handlers.
+    
+    Returns:
+        web.Application: Configured web application
+    """
     logger.info("Initializing web application")
     app = web.Application()
     app.router.add_get('/', root_handler)
@@ -1510,10 +1738,24 @@ async def init_app():
     return app
 
 async def on_startup(app):
+    """Handle application startup.
+    
+    Initializes the HTTP session.
+    
+    Args:
+        app: The web application
+    """
     logger.info("Application startup")
     await get_session()
 
 async def on_cleanup(app):
+    """Handle application cleanup.
+    
+    Closes the HTTP session.
+    
+    Args:
+        app: The web application
+    """
     logger.info("Application cleanup")
     global session
     if session and not session.closed:
