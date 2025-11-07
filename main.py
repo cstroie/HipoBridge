@@ -68,49 +68,28 @@ async def root_handler(request):
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hipocrate Patient Analyzer</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
     <style>
         :root {
-            --primary-color: #3498db;
-            --secondary-color: #2c3e50;
-            --success-color: #27ae60;
-            --warning-color: #f39c12;
-            --error-color: #e74c3c;
-            --light-color: #ecf0f1;
-            --dark-color: #34495e;
-            --border-radius: 8px;
-            --box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+            --spacing-card: 1.5rem;
         }
         
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
-            color: #333;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
         }
         
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-        
         header {
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 2rem;
             color: white;
-            padding: 20px;
+            padding: 1.5rem;
         }
         
         header h1 {
             font-size: 2.5rem;
-            margin-bottom: 10px;
+            margin-bottom: 0.5rem;
             text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
         }
         
@@ -120,129 +99,55 @@ async def root_handler(request):
         }
         
         .card {
-            background: white;
-            border-radius: var(--border-radius);
-            box-shadow: var(--box-shadow);
-            padding: 30px;
-            margin-bottom: 30px;
-        }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: var(--dark-color);
-        }
-        
-        input[type="text"] {
-            width: 100%;
-            padding: 12px 15px;
-            border: 2px solid #ddd;
-            border-radius: var(--border-radius);
-            font-size: 16px;
-            transition: border-color 0.3s;
-        }
-        
-        input[type="text"]:focus {
-            border-color: var(--primary-color);
-            outline: none;
-            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
-        }
-        
-        button {
-            background: var(--primary-color);
-            color: white;
-            border: none;
-            padding: 12px 25px;
-            border-radius: var(--border-radius);
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: 600;
-            transition: all 0.3s;
-            box-shadow: var(--box-shadow);
-        }
-        
-        button:hover {
-            background: #2980b9;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
-        }
-        
-        button:disabled {
-            background: #bdc3c7;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
+            background: var(--card-background-color);
+            border-radius: calc(var(--border-radius) * 2);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: var(--spacing-card);
+            margin-bottom: 2rem;
         }
         
         .results {
             display: none;
-            margin-top: 30px;
+            margin-top: 2rem;
         }
         
         .results-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid var(--light-color);
-        }
-        
-        .results-header h2 {
-            color: var(--secondary-color);
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--muted-border-color);
         }
         
         .patient-info {
-            background: var(--light-color);
-            padding: 20px;
+            background: var(--muted-background-color);
+            padding: 1.5rem;
             border-radius: var(--border-radius);
-            margin-bottom: 20px;
-        }
-        
-        .patient-info h3 {
-            color: var(--secondary-color);
-            margin-bottom: 15px;
+            margin-bottom: 1.5rem;
         }
         
         .info-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 15px;
-        }
-        
-        .info-item {
-            background: white;
-            padding: 15px;
-            border-radius: var(--border-radius);
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-        }
-        
-        .info-item strong {
-            display: block;
-            color: var(--dark-color);
-            margin-bottom: 5px;
+            gap: 1rem;
         }
         
         .analyses-section {
-            margin-top: 30px;
+            margin-top: 2rem;
         }
         
         .analyses-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 20px;
+            gap: 1.5rem;
         }
         
         .analysis-card {
-            background: white;
+            background: var(--card-background-color);
             border-radius: var(--border-radius);
-            box-shadow: var(--box-shadow);
-            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 1.5rem;
             transition: transform 0.3s;
         }
         
@@ -261,13 +166,13 @@ async def root_handler(request):
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 15px;
+            margin-bottom: 1rem;
         }
         
         .analysis-type {
-            padding: 5px 10px;
+            padding: 0.25rem 0.5rem;
             border-radius: 20px;
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             font-weight: bold;
             text-transform: uppercase;
         }
@@ -280,23 +185,23 @@ async def root_handler(request):
         .unknown .analysis-type { background: #95a5a6; color: white; }
         
         .analysis-content {
-            margin-top: 15px;
+            margin-top: 1rem;
         }
         
         .loading {
             text-align: center;
-            padding: 20px;
+            padding: 1.5rem;
             display: none;
         }
         
         .spinner {
             border: 4px solid rgba(0, 0, 0, 0.1);
             border-radius: 50%;
-            border-top: 4px solid var(--primary-color);
+            border-top: 4px solid var(--primary);
             width: 40px;
             height: 40px;
             animation: spin 1s linear infinite;
-            margin: 0 auto 15px;
+            margin: 0 auto 1rem;
         }
         
         @keyframes spin {
@@ -306,38 +211,38 @@ async def root_handler(request):
         
         .error {
             background: #ffebee;
-            color: var(--error-color);
-            padding: 15px;
+            color: var(--contrast);
+            padding: 1rem;
             border-radius: var(--border-radius);
-            border-left: 5px solid var(--error-color);
-            margin: 20px 0;
+            border-left: 5px solid #e74c3c;
+            margin: 1.5rem 0;
             display: none;
         }
         
         .success {
             background: #e8f5e9;
-            color: var(--success-color);
-            padding: 15px;
+            color: var(--contrast);
+            padding: 1rem;
             border-radius: var(--border-radius);
-            border-left: 5px solid var(--success-color);
-            margin: 20px 0;
+            border-left: 5px solid #27ae60;
+            margin: 1.5rem 0;
             display: none;
         }
         
         .no-data {
             text-align: center;
-            padding: 40px 20px;
-            color: #7f8c8d;
+            padding: 2.5rem 1.5rem;
+            color: var(--muted-color);
         }
         
         .no-data i {
             font-size: 3rem;
-            margin-bottom: 15px;
+            margin-bottom: 1rem;
             display: block;
         }
         
         @media (max-width: 768px) {
-            .container {
+            body {
                 padding: 10px;
             }
             
@@ -346,7 +251,7 @@ async def root_handler(request):
             }
             
             .card {
-                padding: 20px;
+                padding: 1.25rem;
             }
             
             .info-grid {
@@ -372,9 +277,11 @@ async def root_handler(request):
                 <p>Enter a 13-digit Romanian CNP to retrieve patient information and medical analyses.</p>
                 
                 <form id="cnpForm">
-                    <div class="form-group">
-                        <label for="cnpInput">Patient CNP (13 digits):</label>
-                        <input type="text" id="cnpInput" name="cnp" placeholder="e.g., 1234567890123" maxlength="13" required>
+                    <div class="grid">
+                        <div>
+                            <label for="cnpInput">Patient CNP (13 digits):</label>
+                            <input type="text" id="cnpInput" name="cnp" placeholder="e.g., 1234567890123" maxlength="13" required>
+                        </div>
                     </div>
                     <button type="submit" id="analyzeBtn">Analyze Patient</button>
                 </form>
@@ -396,15 +303,15 @@ async def root_handler(request):
                     <div class="patient-info">
                         <h3>Basic Information</h3>
                         <div class="info-grid">
-                            <div class="info-item">
+                            <div class="card">
                                 <strong>Name</strong>
                                 <span id="patientName"></span>
                             </div>
-                            <div class="info-item">
+                            <div class="card">
                                 <strong>Patient Code</strong>
                                 <span id="patientCode"></span>
                             </div>
-                            <div class="info-item">
+                            <div class="card">
                                 <strong>CNP</strong>
                                 <span id="patientCnp"></span>
                             </div>
@@ -414,15 +321,15 @@ async def root_handler(request):
                     <div class="patient-info">
                         <h3>Medical Records</h3>
                         <div class="info-grid">
-                            <div class="info-item">
+                            <div class="card">
                                 <strong>Presentations</strong>
                                 <span id="presentationsCount">0</span>
                             </div>
-                            <div class="info-item">
+                            <div class="card">
                                 <strong>Checkins</strong>
                                 <span id="checkinsCount">0</span>
                             </div>
-                            <div class="info-item">
+                            <div class="card">
                                 <strong>Checkouts</strong>
                                 <span id="checkoutsCount">0</span>
                             </div>
@@ -607,7 +514,7 @@ async def root_handler(request):
                                 <p><strong>Type:</strong> ${analysis.type || 'Unknown'}</p>
                                 <p><strong>Report ID:</strong> ${analysis.report_id}</p>
                                 ${analysis.type && ['radio', 'ct', 'irm', 'eco'].includes(analysis.type) ? 
-                                    `<button class="view-report-btn" data-id="${analysis.report_id}" data-type="${analysis.type}">View Report</button>` : 
+                                    `<button class="view-report-btn secondary" data-id="${analysis.report_id}" data-type="${analysis.type}">View Report</button>` : 
                                     ''}
                             </div>
                         `;
@@ -687,11 +594,11 @@ async def root_handler(request):
                         }
                         
                         .modal-content {
-                            background-color: #fefefe;
+                            background-color: var(--card-background-color);
                             margin: 5% auto;
-                            padding: 20px;
-                            border: 1px solid #888;
-                            border-radius: 8px;
+                            padding: 1.5rem;
+                            border: 1px solid var(--muted-border-color);
+                            border-radius: var(--border-radius);
                             width: 90%;
                             max-width: 800px;
                             max-height: 80vh;
@@ -700,44 +607,44 @@ async def root_handler(request):
                         }
                         
                         .close {
-                            color: #aaa;
+                            color: var(--muted-color);
                             float: right;
                             font-size: 28px;
                             font-weight: bold;
                             cursor: pointer;
                             position: absolute;
-                            right: 15px;
-                            top: 10px;
+                            right: 1rem;
+                            top: 0.5rem;
                         }
                         
                         .close:hover,
                         .close:focus {
-                            color: black;
+                            color: var(--contrast);
                         }
                         
                         .report-header {
-                            margin-bottom: 20px;
-                            padding-bottom: 10px;
-                            border-bottom: 1px solid #eee;
+                            margin-bottom: 1.5rem;
+                            padding-bottom: 1rem;
+                            border-bottom: 1px solid var(--muted-border-color);
                         }
                         
                         .report-section {
-                            margin-bottom: 20px;
+                            margin-bottom: 1.5rem;
                         }
                         
                         .report-section h3 {
-                            color: #2c3e50;
-                            margin-bottom: 10px;
+                            color: var(--contrast);
+                            margin-bottom: 0.75rem;
                         }
                         
                         .report-item {
-                            margin-bottom: 10px;
+                            margin-bottom: 0.75rem;
                         }
                         
                         .report-item strong {
                             display: inline-block;
                             width: 150px;
-                            color: #34495e;
+                            color: var(--contrast);
                         }
                     `;
                     document.head.appendChild(style);
@@ -806,7 +713,7 @@ async def root_handler(request):
                                 <strong>Investigation ${index + 1}:</strong> ${report.investigation || 'N/A'}
                             </div>
                             <div class="report-item">
-                                <pre style="white-space: pre-wrap; background: #f8f9fa; padding: 10px; border-radius: 4px;">${report.result || 'No result data'}</pre>
+                                <pre style="white-space: pre-wrap; background: var(--muted-background-color); padding: 0.75rem; border-radius: var(--border-radius);">${report.result || 'No result data'}</pre>
                             </div>
                         `;
                     });
@@ -816,7 +723,7 @@ async def root_handler(request):
                     content += `
                         <div class="report-section">
                             <h3>Result</h3>
-                            <pre style="white-space: pre-wrap; background: #f8f9fa; padding: 10px; border-radius: 4px;">${reportData.result}</pre>
+                            <pre style="white-space: pre-wrap; background: var(--muted-background-color); padding: 0.75rem; border-radius: var(--border-radius);">${reportData.result}</pre>
                         </div>
                     `;
                 }
