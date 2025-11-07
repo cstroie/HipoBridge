@@ -13,6 +13,59 @@ import json
 # Configuration
 BASE_URL = "http://localhost:44660"
 
+async def _make_api_request(session: aiohttp.ClientSession, method: str, url: str, data: dict = None) -> tuple:
+    """Make an API request and return the response data and success status.
+    
+    Args:
+        session (aiohttp.ClientSession): The HTTP session to use for the request
+        method (str): HTTP method ("GET" or "POST")
+        url (str): The URL to request
+        data (dict, optional): Data to send with POST requests
+        
+    Returns:
+        tuple: (data, success) where data is the response data and success is a boolean
+    """
+    try:
+        if method == "GET":
+            async with session.get(url) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data, True
+                else:
+                    data = await response.json()
+                    return data, False
+        else:  # POST
+            async with session.post(url, json=data) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data, True
+                else:
+                    data = await response.json()
+                    return data, False
+    except Exception as e:
+        return {"status": "error", "message": str(e)}, False
+
+async def _print_response_result(operation: str, data: dict, success: bool) -> bool:
+    """Print the result of an API operation and return success status.
+    
+    Args:
+        operation (str): The name of the operation (e.g., "Login", "Patient search")
+        data (dict): The response data
+        success (bool): Whether the request was successful
+        
+    Returns:
+        bool: True if operation was successful, False otherwise
+    """
+    if success:
+        message = data.get('message', 'No message')
+        print(f"{operation} successful: {message}")
+        return True
+    else:
+        message = data.get('message', 'No message')
+        status = data.get('status', 'unknown')
+        print(f"{operation} failed: {message} (status: {status})")
+        return False
+
 async def login(session: aiohttp.ClientSession, username: str, password: str) -> bool:
     """Perform login to the Hipocrate API.
     
@@ -33,18 +86,13 @@ async def login(session: aiohttp.ClientSession, username: str, password: str) ->
         "password": password
     }
     
-    try:
-        async with session.post(f"{BASE_URL}/api/login", json=login_data) as response:
-            if response.status == 200:
-                data = await response.json()
-                print(f"Login successful: {data.get('message', 'No message')}")
-                return True
-            else:
-                data = await response.json()
-                print(f"Login failed with status {response.status}: {data.get('message', 'No message')}")
-                return False
-    except Exception as e:
-        print(f"Login failed with exception: {e}")
+    data, success = await _make_api_request(session, "POST", f"{BASE_URL}/api/login", login_data)
+    
+    if success and data.get("status") == "success":
+        print(f"Login successful: {data.get('message', 'No message')}")
+        return True
+    else:
+        print(f"Login failed: {data.get('message', 'No message')}")
         return False
 
 async def search_patients(session: aiohttp.ClientSession, search_term: str) -> bool:
@@ -62,61 +110,50 @@ async def search_patients(session: aiohttp.ClientSession, search_term: str) -> b
     """
     print(f"Searching for patients with term: '{search_term}'")
     
-    try:
-        # Make search request
-        async with session.get(
-            f"{BASE_URL}/api/patient/search?q={search_term}"
-        ) as response:
-            if response.status == 200:
-                data = await response.json()
-                if data.get("status") == "success":
-                    result_type = data.get("type", "raw")
-                    print(f"Patient search successful! (type: {result_type})")
-                    
-                    if result_type == "single_patient":
-                        patient_data = data.get("data", {})
-                        print(f"Found single patient: {patient_data.get('patient_name', 'Unknown')}")
-                        if patient_data.get('patient_id'):
-                            print(f"  Patient ID (CNP): {patient_data['patient_id']}")
-                        if patient_data.get('patient_code'):
-                            print(f"  Patient Code: {patient_data['patient_code']}")
-                        if patient_data.get('presentations'):
-                            presentations = patient_data['presentations']
-                            print(f"  Presentations ({len(presentations)} found):")
-                            for i, pres_id in enumerate(presentations, 1):
-                                print(f"    {i}. {pres_id}")
-                        if patient_data.get('checkins'):
-                            checkins = patient_data['checkins']
-                            print(f"  Checkins ({len(checkins)} found):")
-                            for i, checkin_id in enumerate(checkins, 1):
-                                print(f"    {i}. {checkin_id}")
-                        if patient_data.get('checkouts'):
-                            checkouts = patient_data['checkouts']
-                            print(f"  Checkouts ({len(checkouts)} found):")
-                            for i, checkout_id in enumerate(checkouts, 1):
-                                print(f"    {i}. {checkout_id}")
-                        return True
-                    elif result_type == "multiple_patients":
-                        patients = data.get("data", [])
-                        print(f"Found {len(patients)} patients:")
-                        for i, patient in enumerate(patients, 1):
-                            print(f"  {i}. {patient.get('patient_name', 'Unknown')} (Code: {patient.get('patient_code', 'N/A')})")
-                        return True
-                    else:
-                        # Save raw response to file for inspection
-                        with open("patient_search_results.html", "w") as f:
-                            f.write(data.get("data", ""))
-                        print("Results saved to patient_search_results.html")
-                        return True
-                else:
-                    print(f"Patient search failed: {data.get('message', 'No message')}")
-                    return False
-            else:
-                print(f"Patient search failed with status: {response.status}")
-                return False
-    except Exception as e:
-        print(f"Patient search failed with exception: {e}")
+    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/api/patient/search?q={search_term}")
+    
+    if not success or data.get("status") != "success":
+        print(f"Patient search failed: {data.get('message', 'No message')}")
         return False
+    
+    result_type = data.get("type", "raw")
+    print(f"Patient search successful! (type: {result_type})")
+    
+    if result_type == "single_patient":
+        patient_data = data.get("data", {})
+        print(f"Found single patient: {patient_data.get('patient_name', 'Unknown')}")
+        if patient_data.get('patient_id'):
+            print(f"  Patient ID (CNP): {patient_data['patient_id']}")
+        if patient_data.get('patient_code'):
+            print(f"  Patient Code: {patient_data['patient_code']}")
+        if patient_data.get('presentations'):
+            presentations = patient_data['presentations']
+            print(f"  Presentations ({len(presentations)} found):")
+            for i, pres_id in enumerate(presentations, 1):
+                print(f"    {i}. {pres_id}")
+        if patient_data.get('checkins'):
+            checkins = patient_data['checkins']
+            print(f"  Checkins ({len(checkins)} found):")
+            for i, checkin_id in enumerate(checkins, 1):
+                print(f"    {i}. {checkin_id}")
+        if patient_data.get('checkouts'):
+            checkouts = patient_data['checkouts']
+            print(f"  Checkouts ({len(checkouts)} found):")
+            for i, checkout_id in enumerate(checkouts, 1):
+                print(f"    {i}. {checkout_id}")
+        return True
+    elif result_type == "multiple_patients":
+        patients = data.get("data", [])
+        print(f"Found {len(patients)} patients:")
+        for i, patient in enumerate(patients, 1):
+            print(f"  {i}. {patient.get('patient_name', 'Unknown')} (Code: {patient.get('patient_code', 'N/A')})")
+        return True
+    else:
+        # Save raw response to file for inspection
+        with open("patient_search_results.html", "w") as f:
+            f.write(data.get("data", ""))
+        print("Results saved to patient_search_results.html")
+        return True
 
 async def get_report(session: aiohttp.ClientSession, report_id: str) -> bool:
     """Retrieve a report by ID using the API.
@@ -132,60 +169,49 @@ async def get_report(session: aiohttp.ClientSession, report_id: str) -> bool:
     """
     print(f"Retrieving report with ID: {report_id}")
     
-    try:
-        # Make report request
-        async with session.get(
-            f"{BASE_URL}/api/report?id={report_id}"
-        ) as response:
-            if response.status == 200:
-                data = await response.json()
-                if data.get("status") == "success":
-                    print(f"Report retrieval successful! (followed {data.get('redirects_followed', 0)} redirects)")
-                    
-                    # Display parsed data if available
-                    print("\n--- Parsed Report Data ---")
-                    if data.get("patient_name"):
-                        print(f"Patient Name: {data['patient_name']}")
-                    if data.get("age"):
-                        print(f"Age: {data['age']}")
-                    if data.get("gender"):
-                        print(f"Gender: {data['gender']}")
-                    if data.get("patient_id"):
-                        print(f"Patient ID (CNP): {data['patient_id']}")
-                    if data.get("patient_code"):
-                        print(f"Patient Code: {data['patient_code']}")
-                    if data.get("sample_datetime"):
-                        print(f"Sample Date/Time: {data['sample_datetime']}")
-                    if data.get("examination"):
-                        print(f"Examination: {data['examination']}")
-                    
-                    # Handle multiple reports
-                    reports = data.get("reports", [])
-                    if reports:
-                        print(f"\nReports ({len(reports)} found):")
-                        for i, report in enumerate(reports, 1):
-                            investigation = report.get("investigation", '')
-                            print(f"\nReport {i}: {report['investigation']}")
-                            if report.get("result"):
-                                print(f"{report['result']}")
-                    elif data.get("result"):
-                        # Fallback to single result if reports list is empty
-                        print(f"Result: {data['result']}")
-                    
-                    if data.get("examiner"):
-                        print(f"\nExaminer: {data['examiner']}")
-                    print("--------------------------")
-                    
-                    return True
-                else:
-                    print(f"Report retrieval failed: {data.get('message', 'No message')}")
-                    return False
-            else:
-                print(f"Report retrieval failed with status: {response.status}")
-                return False
-    except Exception as e:
-        print(f"Report retrieval failed with exception: {e}")
+    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/api/report?id={report_id}")
+    
+    if not success or data.get("status") != "success":
+        print(f"Report retrieval failed: {data.get('message', 'No message')}")
         return False
+    
+    print(f"Report retrieval successful! (followed {data.get('redirects_followed', 0)} redirects)")
+    
+    # Display parsed data if available
+    print("\n--- Parsed Report Data ---")
+    if data.get("patient_name"):
+        print(f"Patient Name: {data['patient_name']}")
+    if data.get("age"):
+        print(f"Age: {data['age']}")
+    if data.get("gender"):
+        print(f"Gender: {data['gender']}")
+    if data.get("patient_id"):
+        print(f"Patient ID (CNP): {data['patient_id']}")
+    if data.get("patient_code"):
+        print(f"Patient Code: {data['patient_code']}")
+    if data.get("sample_datetime"):
+        print(f"Sample Date/Time: {data['sample_datetime']}")
+    if data.get("examination"):
+        print(f"Examination: {data['examination']}")
+    
+    # Handle multiple reports
+    reports = data.get("reports", [])
+    if reports:
+        print(f"\nReports ({len(reports)} found):")
+        for i, report in enumerate(reports, 1):
+            investigation = report.get("investigation", '')
+            print(f"\nReport {i}: {report['investigation']}")
+            if report.get("result"):
+                print(f"{report['result']}")
+    elif data.get("result"):
+        # Fallback to single result if reports list is empty
+        print(f"Result: {data['result']}")
+    
+    if data.get("examiner"):
+        print(f"\nExaminer: {data['examiner']}")
+    print("--------------------------")
+    
+    return True
 
 async def get_checkout(session: aiohttp.ClientSession, checkout_id: str) -> bool:
     """Retrieve checkout information by ID using the API.
@@ -201,44 +227,33 @@ async def get_checkout(session: aiohttp.ClientSession, checkout_id: str) -> bool
     """
     print(f"Retrieving checkout with ID: {checkout_id}")
     
-    try:
-        # Make checkout request
-        async with session.get(
-            f"{BASE_URL}/api/checkout?id={checkout_id}"
-        ) as response:
-            if response.status == 200:
-                data = await response.json()
-                if data.get("status") == "success":
-                    print("Checkout retrieval successful!")
-                    
-                    # Display parsed data if available
-                    print("\n--- Parsed Checkout Data ---")
-                    if data.get("patient_name"):
-                        print(f"Patient Name: {data['patient_name']}")
-                    if data.get("patient_id"):
-                        print(f"Patient ID: {data['patient_id']}")
-                    if data.get("admission_diagnostic"):
-                        print(f"Admission Diagnostic: {data['admission_diagnostic']}")
-                    if data.get("epicrisis"):
-                        print(f"Epicrisis: {data['epicrisis']}")
-                    if data.get("diagnostic"):
-                        print(f"Diagnostic: {data['diagnostic']}")
-                    if data.get("surgery"):
-                        print(f"Surgery: {data['surgery']}")
-                    if data.get("recommendations"):
-                        print(f"Recommendations: {data['recommendations']}")
-                    print("--------------------------")
-                    
-                    return True
-                else:
-                    print(f"Checkout retrieval failed: {data.get('message', 'No message')}")
-                    return False
-            else:
-                print(f"Checkout retrieval failed with status: {response.status}")
-                return False
-    except Exception as e:
-        print(f"Checkout retrieval failed with exception: {e}")
+    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/api/checkout?id={checkout_id}")
+    
+    if not success or data.get("status") != "success":
+        print(f"Checkout retrieval failed: {data.get('message', 'No message')}")
         return False
+    
+    print("Checkout retrieval successful!")
+    
+    # Display parsed data if available
+    print("\n--- Parsed Checkout Data ---")
+    if data.get("patient_name"):
+        print(f"Patient Name: {data['patient_name']}")
+    if data.get("patient_id"):
+        print(f"Patient ID: {data['patient_id']}")
+    if data.get("admission_diagnostic"):
+        print(f"Admission Diagnostic: {data['admission_diagnostic']}")
+    if data.get("epicrisis"):
+        print(f"Epicrisis: {data['epicrisis']}")
+    if data.get("diagnostic"):
+        print(f"Diagnostic: {data['diagnostic']}")
+    if data.get("surgery"):
+        print(f"Surgery: {data['surgery']}")
+    if data.get("recommendations"):
+        print(f"Recommendations: {data['recommendations']}")
+    print("--------------------------")
+    
+    return True
 
 async def get_patient_code_from_cnp(session: aiohttp.ClientSession, cnp: str) -> str:
     """Get patient code by validating CNP and searching for the patient.
@@ -254,59 +269,43 @@ async def get_patient_code_from_cnp(session: aiohttp.ClientSession, cnp: str) ->
         str: The patient code if found, None otherwise
     """
     # First validate the CNP
-    try:
-        async with session.get(f"{BASE_URL}/api/cnp?id={cnp}") as response:
-            if response.status == 200:
-                data = await response.json()
-                if data.get("status") == "success" and data.get("valid"):
-                    print(f"CNP {cnp} is valid, searching for patient...")
-                else:
-                    print(f"CNP {cnp} is not valid")
-                    return None
-            else:
-                print(f"Failed to validate CNP with status: {response.status}")
-                return None
-    except Exception as e:
-        print(f"Failed to validate CNP: {e}")
+    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/api/cnp?id={cnp}")
+    
+    if not success or data.get("status") != "success" or not data.get("valid"):
+        print(f"CNP {cnp} is not valid")
         return None
     
+    print(f"CNP {cnp} is valid, searching for patient...")
+    
     # Search for the patient using the CNP
-    try:
-        async with session.get(f"{BASE_URL}/api/patient/search?q={cnp}") as response:
-            if response.status == 200:
-                data = await response.json()
-                if data.get("status") == "success":
-                    result_type = data.get("type")
-                    if result_type == "single_patient":
-                        patient_data = data.get("data", {})
-                        patient_code = patient_data.get("patient_code")
-                        if patient_code:
-                            print(f"Found patient code: {patient_code}")
-                            return patient_code
-                        else:
-                            print("Patient code not found in search results")
-                            return None
-                    elif result_type == "multiple_patients":
-                        patients = data.get("data", [])
-                        if patients:
-                            # Use the first patient's code
-                            patient_code = patients[0].get("patient_code")
-                            if patient_code:
-                                print(f"Found patient code: {patient_code} (first of {len(patients)} matches)")
-                                return patient_code
-                        print("No patient code found in search results")
-                        return None
-                    else:
-                        print("Unexpected search result type")
-                        return None
-                else:
-                    print(f"Patient search failed: {data.get('message', 'No message')}")
-                    return None
-            else:
-                print(f"Patient search failed with status: {response.status}")
-                return None
-    except Exception as e:
-        print(f"Patient search failed with exception: {e}")
+    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/api/patient/search?q={cnp}")
+    
+    if not success or data.get("status") != "success":
+        print(f"Patient search failed: {data.get('message', 'No message')}")
+        return None
+    
+    result_type = data.get("type")
+    if result_type == "single_patient":
+        patient_data = data.get("data", {})
+        patient_code = patient_data.get("patient_code")
+        if patient_code:
+            print(f"Found patient code: {patient_code}")
+            return patient_code
+        else:
+            print("Patient code not found in search results")
+            return None
+    elif result_type == "multiple_patients":
+        patients = data.get("data", [])
+        if patients:
+            # Use the first patient's code
+            patient_code = patients[0].get("patient_code")
+            if patient_code:
+                print(f"Found patient code: {patient_code} (first of {len(patients)} matches)")
+                return patient_code
+        print("No patient code found in search results")
+        return None
+    else:
+        print("Unexpected search result type")
         return None
 
 async def get_patient(session: aiohttp.ClientSession, patient_id: str) -> bool:
@@ -334,44 +333,33 @@ async def get_patient(session: aiohttp.ClientSession, patient_id: str) -> bool:
     
     print(f"Retrieving patient with ID: {patient_id}")
     
-    try:
-        # Make patient request
-        async with session.get(
-            f"{BASE_URL}/api/patient?id={patient_id}"
-        ) as response:
-            if response.status == 200:
-                data = await response.json()
-                if data.get("status") == "success":
-                    print("Patient retrieval successful!")
-                    
-                    # Display associated checkout and checkin IDs
-                    checkout_ids = data.get("checkout_ids", [])
-                    checkin_ids = data.get("checkin_ids", [])
-                    
-                    if checkout_ids:
-                        print(f"\nCheckout IDs ({len(checkout_ids)} found):")
-                        for i, checkout_id in enumerate(checkout_ids, 1):
-                            print(f"  {i}. {checkout_id}")
-                    else:
-                        print("\nNo checkout IDs found")
-                    
-                    if checkin_ids:
-                        print(f"\nCheckin IDs ({len(checkin_ids)} found):")
-                        for i, checkin_id in enumerate(checkin_ids, 1):
-                            print(f"  {i}. {checkin_id}")
-                    else:
-                        print("\nNo checkin IDs found")
-                    
-                    return True
-                else:
-                    print(f"Patient retrieval failed: {data.get('message', 'No message')}")
-                    return False
-            else:
-                print(f"Patient retrieval failed with status: {response.status}")
-                return False
-    except Exception as e:
-        print(f"Patient retrieval failed with exception: {e}")
+    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/api/patient?id={patient_id}")
+    
+    if not success or data.get("status") != "success":
+        print(f"Patient retrieval failed: {data.get('message', 'No message')}")
         return False
+    
+    print("Patient retrieval successful!")
+    
+    # Display associated checkout and checkin IDs
+    checkout_ids = data.get("checkout_ids", [])
+    checkin_ids = data.get("checkin_ids", [])
+    
+    if checkout_ids:
+        print(f"\nCheckout IDs ({len(checkout_ids)} found):")
+        for i, checkout_id in enumerate(checkout_ids, 1):
+            print(f"  {i}. {checkout_id}")
+    else:
+        print("\nNo checkout IDs found")
+    
+    if checkin_ids:
+        print(f"\nCheckin IDs ({len(checkin_ids)} found):")
+        for i, checkin_id in enumerate(checkin_ids, 1):
+            print(f"  {i}. {checkin_id}")
+    else:
+        print("\nNo checkin IDs found")
+    
+    return True
 
 async def get_analyses(session: aiohttp.ClientSession, patient_id: str) -> bool:
     """Retrieve all analyses for a patient by ID using the API.
@@ -400,55 +388,44 @@ async def get_analyses(session: aiohttp.ClientSession, patient_id: str) -> bool:
     
     print(f"Retrieving analyses for patient with ID: {patient_id}")
     
-    try:
-        # Make analyses request
-        async with session.get(
-            f"{BASE_URL}/api/analyses?id={patient_id}"
-        ) as response:
-            if response.status == 200:
-                data = await response.json()
-                if data.get("status") == "success":
-                    print("Analyses retrieval successful!")
-                    
-                    # Display patient name and analyses
-                    patient_name = data.get("patient_name", "")
-                    if patient_name:
-                        print(f"Patient: {patient_name}")
-                    
-                    analyses = data.get("analyses", [])
-                    
-                    if analyses:
-                        print(f"\nAnalyses ({len(analyses)} found):")
-                        imaging_analyses = []
-                        for i, analysis in enumerate(analyses, 1):
-                            analysis_type = analysis.get('type', 'unknown')
-                            print(f"  {i}. ID: {analysis.get('report_id', 'N/A')} - Type: {analysis_type}")
-                            
-                            # Check if this is an imaging analysis that needs report retrieval
-                            if analysis_type in ['radio', 'ct', 'irm', 'eco']:
-                                imaging_analyses.append(analysis)
-                        
-                        # Retrieve reports for imaging analyses
-                        if imaging_analyses:
-                            print(f"\nRetrieving reports for {len(imaging_analyses)} imaging analyses:")
-                            for analysis in imaging_analyses:
-                                report_id = analysis.get('report_id')
-                                analysis_type = analysis.get('type')
-                                print(f"\n--- Report for {analysis_type.upper()} (ID: {report_id}) ---")
-                                await get_report(session, report_id)
-                    else:
-                        print("\nNo analyses found")
-                    
-                    return True
-                else:
-                    print(f"Analyses retrieval failed: {data.get('message', 'No message')}")
-                    return False
-            else:
-                print(f"Analyses retrieval failed with status: {response.status}")
-                return False
-    except Exception as e:
-        print(f"Analyses retrieval failed with exception: {e}")
+    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/api/analyses?id={patient_id}")
+    
+    if not success or data.get("status") != "success":
+        print(f"Analyses retrieval failed: {data.get('message', 'No message')}")
         return False
+    
+    print("Analyses retrieval successful!")
+    
+    # Display patient name and analyses
+    patient_name = data.get("patient_name", "")
+    if patient_name:
+        print(f"Patient: {patient_name}")
+    
+    analyses = data.get("analyses", [])
+    
+    if analyses:
+        print(f"\nAnalyses ({len(analyses)} found):")
+        imaging_analyses = []
+        for i, analysis in enumerate(analyses, 1):
+            analysis_type = analysis.get('type', 'unknown')
+            print(f"  {i}. ID: {analysis.get('report_id', 'N/A')} - Type: {analysis_type}")
+            
+            # Check if this is an imaging analysis that needs report retrieval
+            if analysis_type in ['radio', 'ct', 'irm', 'eco']:
+                imaging_analyses.append(analysis)
+        
+        # Retrieve reports for imaging analyses
+        if imaging_analyses:
+            print(f"\nRetrieving reports for {len(imaging_analyses)} imaging analyses:")
+            for analysis in imaging_analyses:
+                report_id = analysis.get('report_id')
+                analysis_type = analysis.get('type')
+                print(f"\n--- Report for {analysis_type.upper()} (ID: {report_id}) ---")
+                await get_report(session, report_id)
+    else:
+        print("\nNo analyses found")
+    
+    return True
 
 async def validate_cnp(session: aiohttp.ClientSession, cnp: str) -> bool:
     """Validate a Romanian CNP using the API.
@@ -464,26 +441,15 @@ async def validate_cnp(session: aiohttp.ClientSession, cnp: str) -> bool:
     """
     print(f"Validating CNP: {cnp}")
     
-    try:
-        # Make CNP validation request
-        async with session.get(
-            f"{BASE_URL}/api/cnp?id={cnp}"
-        ) as response:
-            if response.status == 200:
-                data = await response.json()
-                if data.get("status") == "success":
-                    is_valid = data.get("valid", False)
-                    print(f"CNP validation result: {'Valid' if is_valid else 'Invalid'}")
-                    return True
-                else:
-                    print(f"CNP validation failed: {data.get('message', 'No message')}")
-                    return False
-            else:
-                print(f"CNP validation failed with status: {response.status}")
-                return False
-    except Exception as e:
-        print(f"CNP validation failed with exception: {e}")
+    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/api/cnp?id={cnp}")
+    
+    if not success or data.get("status") != "success":
+        print(f"CNP validation failed: {data.get('message', 'No message')}")
         return False
+    
+    is_valid = data.get("valid", False)
+    print(f"CNP validation result: {'Valid' if is_valid else 'Invalid'}")
+    return True
 
 async def main():
     """Main function to parse arguments and run the client.
