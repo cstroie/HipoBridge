@@ -617,10 +617,35 @@ async def root_handler(request):
                     
                     // Add event listeners to view report buttons
                     document.querySelectorAll('.view-report-btn').forEach(button => {
-                        button.addEventListener('click', function() {
+                        button.addEventListener('click', async function() {
                             const reportId = this.getAttribute('data-id');
                             const reportType = this.getAttribute('data-type');
-                            alert(`Report viewing functionality for ${reportType} report #${reportId} would be implemented here.`);
+                            
+                            // Show loading state
+                            showLoading();
+                            hideError();
+                            hideSuccess();
+                            
+                            try {
+                                // Fetch report data
+                                const reportResponse = await fetch(`/api/report?id=${reportId}`);
+                                const reportData = await reportResponse.json();
+                                
+                                if (reportData.status !== 'success') {
+                                    showError(`Failed to retrieve ${reportType} report #${reportId}.`);
+                                    return;
+                                }
+                                
+                                // Display report in a modal
+                                displayReportModal(reportData, reportId, reportType);
+                                showSuccess(`Successfully loaded ${reportType} report #${reportId}.`);
+                                
+                            } catch (err) {
+                                console.error('Error:', err);
+                                showError(`An error occurred while retrieving the ${reportType} report #${reportId}.`);
+                            } finally {
+                                hideLoading();
+                            }
                         });
                     });
                 } else {
@@ -630,6 +655,186 @@ async def root_handler(request):
                 
                 // Show results
                 results.style.display = 'block';
+            }
+            
+            function displayReportModal(reportData, reportId, reportType) {
+                // Create modal container if it doesn't exist
+                let modal = document.getElementById('reportModal');
+                if (!modal) {
+                    modal = document.createElement('div');
+                    modal.id = 'reportModal';
+                    modal.className = 'modal';
+                    modal.innerHTML = `
+                        <div class="modal-content">
+                            <span class="close">&times;</span>
+                            <div id="modalContent"></div>
+                        </div>
+                    `;
+                    document.body.appendChild(modal);
+                    
+                    // Add modal styles
+                    const style = document.createElement('style');
+                    style.textContent = `
+                        .modal {
+                            display: none;
+                            position: fixed;
+                            z-index: 1000;
+                            left: 0;
+                            top: 0;
+                            width: 100%;
+                            height: 100%;
+                            background-color: rgba(0,0,0,0.4);
+                        }
+                        
+                        .modal-content {
+                            background-color: #fefefe;
+                            margin: 5% auto;
+                            padding: 20px;
+                            border: 1px solid #888;
+                            border-radius: 8px;
+                            width: 90%;
+                            max-width: 800px;
+                            max-height: 80vh;
+                            overflow-y: auto;
+                            position: relative;
+                        }
+                        
+                        .close {
+                            color: #aaa;
+                            float: right;
+                            font-size: 28px;
+                            font-weight: bold;
+                            cursor: pointer;
+                            position: absolute;
+                            right: 15px;
+                            top: 10px;
+                        }
+                        
+                        .close:hover,
+                        .close:focus {
+                            color: black;
+                        }
+                        
+                        .report-header {
+                            margin-bottom: 20px;
+                            padding-bottom: 10px;
+                            border-bottom: 1px solid #eee;
+                        }
+                        
+                        .report-section {
+                            margin-bottom: 20px;
+                        }
+                        
+                        .report-section h3 {
+                            color: #2c3e50;
+                            margin-bottom: 10px;
+                        }
+                        
+                        .report-item {
+                            margin-bottom: 10px;
+                        }
+                        
+                        .report-item strong {
+                            display: inline-block;
+                            width: 150px;
+                            color: #34495e;
+                        }
+                    `;
+                    document.head.appendChild(style);
+                    
+                    // Close modal when clicking on X
+                    modal.querySelector('.close').addEventListener('click', function() {
+                        modal.style.display = 'none';
+                    });
+                    
+                    // Close modal when clicking outside of it
+                    window.addEventListener('click', function(event) {
+                        if (event.target === modal) {
+                            modal.style.display = 'none';
+                        }
+                    });
+                }
+                
+                // Populate modal content
+                const modalContent = modal.querySelector('#modalContent');
+                let content = `
+                    <div class="report-header">
+                        <h2>${reportType.toUpperCase()} Report #${reportId}</h2>
+                    </div>
+                `;
+                
+                // Patient information
+                content += `
+                    <div class="report-section">
+                        <h3>Patient Information</h3>
+                `;
+                
+                if (reportData.patient_name) {
+                    content += `<div class="report-item"><strong>Name:</strong> ${reportData.patient_name}</div>`;
+                }
+                if (reportData.patient_id) {
+                    content += `<div class="report-item"><strong>CNP:</strong> ${reportData.patient_id}</div>`;
+                }
+                if (reportData.patient_code) {
+                    content += `<div class="report-item"><strong>Patient Code:</strong> ${reportData.patient_code}</div>`;
+                }
+                if (reportData.age) {
+                    content += `<div class="report-item"><strong>Age:</strong> ${reportData.age}</div>`;
+                }
+                if (reportData.gender) {
+                    content += `<div class="report-item"><strong>Gender:</strong> ${reportData.gender}</div>`;
+                }
+                if (reportData.sample_datetime) {
+                    content += `<div class="report-item"><strong>Sample Date/Time:</strong> ${reportData.sample_datetime}</div>`;
+                }
+                if (reportData.examination) {
+                    content += `<div class="report-item"><strong>Examination:</strong> ${reportData.examination}</div>`;
+                }
+                
+                content += `</div>`;
+                
+                // Report results
+                if (reportData.reports && reportData.reports.length > 0) {
+                    content += `
+                        <div class="report-section">
+                            <h3>Results</h3>
+                    `;
+                    
+                    reportData.reports.forEach((report, index) => {
+                        content += `
+                            <div class="report-item">
+                                <strong>Investigation ${index + 1}:</strong> ${report.investigation || 'N/A'}
+                            </div>
+                            <div class="report-item">
+                                <pre style="white-space: pre-wrap; background: #f8f9fa; padding: 10px; border-radius: 4px;">${report.result || 'No result data'}</pre>
+                            </div>
+                        `;
+                    });
+                    
+                    content += `</div>`;
+                } else if (reportData.result) {
+                    content += `
+                        <div class="report-section">
+                            <h3>Result</h3>
+                            <pre style="white-space: pre-wrap; background: #f8f9fa; padding: 10px; border-radius: 4px;">${reportData.result}</pre>
+                        </div>
+                    `;
+                }
+                
+                // Examiner information
+                if (reportData.examiner) {
+                    content += `
+                        <div class="report-section">
+                            <h3>Examiner</h3>
+                            <div class="report-item">${reportData.examiner}</div>
+                        </div>
+                    `;
+                }
+                
+                modalContent.innerHTML = content;
+                
+                // Show modal
+                modal.style.display = 'block';
             }
         });
     </script>
