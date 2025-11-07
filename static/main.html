@@ -7,13 +7,12 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.slate.min.css">
     <link rel="stylesheet" href="/static/styles.css">
 </head>
-<body>
-    <main class="container">
-        <header>
-            <h1>Hipocrate Patient Analyzer</h1>
-            <p>Enter a patient's CNP to retrieve and analyze their medical information</p>
-        </header>
-        
+<body class="container">
+    <header>
+        <h1>Hipocrate Patient Analyzer</h1>
+        <p>Enter a patient's CNP to retrieve and analyze their medical information</p>
+    </header>
+    <main>
         <section>
             <hgroup>
                 <h2>Patient Analysis</h2>
@@ -38,15 +37,14 @@
             <div class="error" id="error"></div>
             <div class="success" id="success"></div>
             
-            <div class="results" id="results">
-                <header class="results-header">
+        </section>
+            <article class="results" id="results">
+                <hgroup>
                     <h2>Patient Information</h2>
-                    <div>Patient ID: <span id="patientId"></span></div>
-                </header>
+                    <p>Patient ID: <span id="patientId"></span></p>
+                </hgroup>
                 
-                <section>
-                    <h3>Basic Information</h3>
-                    <div class="grid">
+                <header class="grid">
                         <article>
                             <strong>Name</strong>
                             <span id="patientName"></span>
@@ -59,12 +57,16 @@
                             <strong>CNP</strong>
                             <span id="patientCnp"></span>
                         </article>
-                    </div>
-                </section>
+                </header>
                 
-                <section>
-                    <h3>Medical Records</h3>
-                    <div class="grid">
+                <main id="analysesContainer">
+                        <div class="no-data" id="noAnalyses">
+                            <p>No analyses found for this patient</p>
+                        </div>
+                        <div class="grid" id="analysesGrid"></div>
+                </main>
+                
+                <footer class="grid">
                         <article>
                             <strong>Presentations</strong>
                             <span id="presentationsCount">0</span>
@@ -77,20 +79,8 @@
                             <strong>Checkouts</strong>
                             <span id="checkoutsCount">0</span>
                         </article>
-                    </div>
-                </section>
-                
-                <section>
-                    <h3>Medical Analyses</h3>
-                    <div id="analysesContainer">
-                        <div class="no-data" id="noAnalyses">
-                            <p>No analyses found for this patient</p>
-                        </div>
-                        <div class="grid" id="analysesGrid"></div>
-                    </div>
-                </section>
-            </div>
-        </section>
+                </footer>
+            </article>
     </main>
 
     <script src="/static/scripts.js"></script>
