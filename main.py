@@ -467,6 +467,23 @@ def html_to_markdown(html_content: str) -> str:
         for tag in soup.find_all(['o:p', 'xml:namespace']):
             tag.decompose()
         
+        # Remove wrapping <b> tags that might enclose the entire content
+        # Check if there's a single <b> tag that contains everything
+        body_content = soup.find('body')
+        if body_content:
+            content_children = list(body_content.children)
+            if len(content_children) == 1 and content_children[0].name == 'b':
+                # If the only child is a <b> tag, unwrap it
+                content_children[0].unwrap()
+        else:
+            # If no body tag, check if the soup itself has a single <b> child
+            root_children = list(soup.children)
+            # Filter out text nodes that are only whitespace
+            element_children = [child for child in root_children if hasattr(child, 'name') and child.name]
+            if len(element_children) == 1 and element_children[0].name == 'b':
+                # If the only element child is a <b> tag, unwrap it
+                element_children[0].unwrap()
+        
         # Convert common HTML elements to markdown
         # Headings
         for tag in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
@@ -484,10 +501,12 @@ def html_to_markdown(html_content: str) -> str:
         for br in soup.find_all('br'):
             br.replace_with('\n')
         
-        # Bold
+        # Bold (but skip if it's a wrapper tag)
         for b in soup.find_all(['b', 'strong']):
-            b.insert_before('**')
-            b.insert_after('**')
+            # Check if this is a wrapper tag (contains all other content)
+            if not (b.parent.name == 'body' or b.parent == soup) or len(list(b.parent.children)) > 1:
+                b.insert_before('**')
+                b.insert_after('**')
             b.unwrap()
         
         # Italic
