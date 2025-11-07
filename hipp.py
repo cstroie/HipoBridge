@@ -1274,8 +1274,10 @@ def validate_cnp(cnp: str) -> bool:
     if day < 1 or day > 31:
         return False
     
-    # Validate county code (1-52, excluding 47-50)
-    if county_code < 1 or county_code > 52 or (47 <= county_code <= 50):
+    # Validate county code (1-52, excluding 47-50, plus 70-79 for diaspora, 90-99 for special cases)
+    if not ((1 <= county_code <= 52 and not (47 <= county_code <= 50)) or 
+            (70 <= county_code <= 79) or 
+            (90 <= county_code <= 99)):
         return False
     
     # Validate date by trying to create a datetime object
