@@ -8,91 +8,90 @@
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <div class="container">
+    <main class="container">
         <header>
             <h1>Hipocrate Patient Analyzer</h1>
             <p>Enter a patient's CNP to retrieve and analyze their medical information</p>
         </header>
         
-        <main>
-            <div class="card">
-                <h2>Patient Analysis</h2>
-                <p>Enter a 13-digit Romanian CNP to retrieve patient information and medical analyses.</p>
-                
-                <form id="cnpForm">
-                    <div class="grid">
-                        <div>
-                            <label for="cnpInput">Patient CNP (13 digits):</label>
-                            <input type="text" id="cnpInput" name="cnp" placeholder="e.g., 1234567890123" maxlength="13" required>
-                        </div>
+        <section>
+            <h2>Patient Analysis</h2>
+            <p>Enter a 13-digit Romanian CNP to retrieve patient information and medical analyses.</p>
+            
+            <form id="cnpForm">
+                <div class="grid">
+                    <div>
+                        <label for="cnpInput">Patient CNP (13 digits):</label>
+                        <input type="text" id="cnpInput" name="cnp" placeholder="e.g., 1234567890123" maxlength="13" required>
                     </div>
-                    <button type="submit" id="analyzeBtn">Analyze Patient</button>
-                </form>
-                
-                <div class="loading" id="loading">
-                    <div class="spinner"></div>
-                    <p>Analyzing patient data...</p>
+                </div>
+                <button type="submit" id="analyzeBtn">Analyze Patient</button>
+            </form>
+            
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Analyzing patient data...</p>
+            </div>
+            
+            <div class="error" id="error"></div>
+            <div class="success" id="success"></div>
+            
+            <div class="results" id="results">
+                <div class="results-header">
+                    <h2>Patient Information</h2>
+                    <div>Patient ID: <span id="patientId"></span></div>
                 </div>
                 
-                <div class="error" id="error"></div>
-                <div class="success" id="success"></div>
-                
-                <div class="results" id="results">
-                    <div class="results-header">
-                        <h2>Patient Information</h2>
-                        <div>Patient ID: <span id="patientId"></span></div>
-                    </div>
-                    
-                    <div class="patient-info">
+                <div class="grid">
+                    <div>
                         <h3>Basic Information</h3>
-                        <div class="info-grid">
-                            <div class="card">
+                        <div class="grid">
+                            <article>
                                 <strong>Name</strong>
                                 <span id="patientName"></span>
-                            </div>
-                            <div class="card">
+                            </article>
+                            <article>
                                 <strong>Patient Code</strong>
                                 <span id="patientCode"></span>
-                            </div>
-                            <div class="card">
+                            </article>
+                            <article>
                                 <strong>CNP</strong>
                                 <span id="patientCnp"></span>
-                            </div>
+                            </article>
                         </div>
                     </div>
                     
-                    <div class="patient-info">
+                    <div>
                         <h3>Medical Records</h3>
-                        <div class="info-grid">
-                            <div class="card">
+                        <div class="grid">
+                            <article>
                                 <strong>Presentations</strong>
                                 <span id="presentationsCount">0</span>
-                            </div>
-                            <div class="card">
+                            </article>
+                            <article>
                                 <strong>Checkins</strong>
                                 <span id="checkinsCount">0</span>
-                            </div>
-                            <div class="card">
+                            </article>
+                            <article>
                                 <strong>Checkouts</strong>
                                 <span id="checkoutsCount">0</span>
-                            </div>
+                            </article>
                         </div>
                     </div>
-                    
-                    <div class="analyses-section">
-                        <h3>Medical Analyses</h3>
-                        <div id="analysesContainer">
-                            <div class="no-data" id="noAnalyses">
-                                <i>📋</i>
-                                <p>No analyses found for this patient</p>
-                            </div>
-                            <div class="analyses-grid" id="analysesGrid"></div>
+                </div>
+                
+                <div>
+                    <h3>Medical Analyses</h3>
+                    <div id="analysesContainer">
+                        <div class="no-data" id="noAnalyses">
+                            <p>No analyses found for this patient</p>
                         </div>
+                        <div class="grid" id="analysesGrid"></div>
                     </div>
                 </div>
             </div>
-        </main>
-    </div>
+        </section>
+    </main>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -245,7 +244,7 @@
                     analysesGrid.innerHTML = '';
                     
                     analysesData.analyses.forEach(analysis => {
-                        const analysisCard = document.createElement('div');
+                        const analysisCard = document.createElement('article');
                         analysisCard.className = `analysis-card ${analysis.type || 'unknown'}`;
                         
                         analysisCard.innerHTML = `

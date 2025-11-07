@@ -1,7 +1,3 @@
-:root {
-    --spacing-card: 1.5rem;
-}
-
 body {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     min-height: 100vh;
@@ -26,14 +22,6 @@ header p {
     opacity: 0.9;
 }
 
-.card {
-    background: var(--card-background-color);
-    border-radius: calc(var(--border-radius) * 2);
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    padding: var(--spacing-card);
-    margin-bottom: 2rem;
-}
-
 .results {
     display: none;
     margin-top: 2rem;
@@ -48,34 +36,7 @@ header p {
     border-bottom: 2px solid var(--muted-border-color);
 }
 
-.patient-info {
-    background: var(--muted-background-color);
-    padding: 1.5rem;
-    border-radius: var(--border-radius);
-    margin-bottom: 1.5rem;
-}
-
-.info-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 1rem;
-}
-
-.analyses-section {
-    margin-top: 2rem;
-}
-
-.analyses-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 1.5rem;
-}
-
 .analysis-card {
-    background: var(--card-background-color);
-    border-radius: var(--border-radius);
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    padding: 1.5rem;
     transition: transform 0.3s;
 }
 
@@ -163,12 +124,6 @@ header p {
     color: var(--muted-color);
 }
 
-.no-data i {
-    font-size: 3rem;
-    margin-bottom: 1rem;
-    display: block;
-}
-
 @media (max-width: 768px) {
     body {
         padding: 10px;
@@ -176,17 +131,5 @@ header p {
     
     header h1 {
         font-size: 2rem;
-    }
-    
-    .card {
-        padding: 1.25rem;
-    }
-    
-    .info-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .analyses-grid {
-        grid-template-columns: 1fr;
     }
 }
