@@ -37,50 +37,48 @@
             <div class="success" id="success"></div>
             
             <div class="results" id="results">
-                <div class="results-header">
+                <header class="results-header">
                     <h2>Patient Information</h2>
                     <div>Patient ID: <span id="patientId"></span></div>
-                </div>
+                </header>
                 
-                <div class="grid">
-                    <div>
-                        <h3>Basic Information</h3>
-                        <div class="grid">
-                            <article>
-                                <strong>Name</strong>
-                                <span id="patientName"></span>
-                            </article>
-                            <article>
-                                <strong>Patient Code</strong>
-                                <span id="patientCode"></span>
-                            </article>
-                            <article>
-                                <strong>CNP</strong>
-                                <span id="patientCnp"></span>
-                            </article>
-                        </div>
+                <section>
+                    <h3>Basic Information</h3>
+                    <div class="grid">
+                        <article>
+                            <strong>Name</strong>
+                            <span id="patientName"></span>
+                        </article>
+                        <article>
+                            <strong>Patient Code</strong>
+                            <span id="patientCode"></span>
+                        </article>
+                        <article>
+                            <strong>CNP</strong>
+                            <span id="patientCnp"></span>
+                        </article>
                     </div>
-                    
-                    <div>
-                        <h3>Medical Records</h3>
-                        <div class="grid">
-                            <article>
-                                <strong>Presentations</strong>
-                                <span id="presentationsCount">0</span>
-                            </article>
-                            <article>
-                                <strong>Checkins</strong>
-                                <span id="checkinsCount">0</span>
-                            </article>
-                            <article>
-                                <strong>Checkouts</strong>
-                                <span id="checkoutsCount">0</span>
-                            </article>
-                        </div>
-                    </div>
-                </div>
+                </section>
                 
-                <div>
+                <section>
+                    <h3>Medical Records</h3>
+                    <div class="grid">
+                        <article>
+                            <strong>Presentations</strong>
+                            <span id="presentationsCount">0</span>
+                        </article>
+                        <article>
+                            <strong>Checkins</strong>
+                            <span id="checkinsCount">0</span>
+                        </article>
+                        <article>
+                            <strong>Checkouts</strong>
+                            <span id="checkoutsCount">0</span>
+                        </article>
+                    </div>
+                </section>
+                
+                <section>
                     <h3>Medical Analyses</h3>
                     <div id="analysesContainer">
                         <div class="no-data" id="noAnalyses">
@@ -88,7 +86,7 @@
                         </div>
                         <div class="grid" id="analysesGrid"></div>
                     </div>
-                </div>
+                </section>
             </div>
         </section>
     </main>
