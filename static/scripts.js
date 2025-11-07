@@ -147,11 +147,13 @@ document.addEventListener('DOMContentLoaded', function() {
             noAnalyses.style.display = 'none';
             analysesGrid.innerHTML = '';
             
-            analysesData.analyses.forEach(analysis => {
+            // Process each analysis
+            for (const analysis of analysesData.analyses) {
                 const analysisCard = document.createElement('article');
                 analysisCard.className = `analysis-card ${analysis.type || 'unknown'}`;
                 
-                analysisCard.innerHTML = `
+                // Start building the card content
+                let cardContent = `
                     <header>
                         <h4>Analysis #${analysis.report_id}</h4>
                         <span class="analysis-type">${analysis.type || 'Unknown'}</span>
@@ -159,6 +161,37 @@ document.addEventListener('DOMContentLoaded', function() {
                     <main>
                         <p><strong>Type:</strong> ${analysis.type || 'Unknown'}</p>
                         <p><strong>Report ID:</strong> ${analysis.report_id}</p>
+                `;
+                
+                // For imaging analyses, fetch and display report content
+                if (analysis.type && ['radio', 'ct', 'irm', 'eco'].includes(analysis.type)) {
+                    try {
+                        // Fetch report data
+                        const reportResponse = await fetch(`/api/reports?id=${analysis.report_id}`);
+                        const reportData = await reportResponse.json();
+                        
+                        if (reportData.status === 'success' && reportData.reports && reportData.reports.length > 0) {
+                            // Add report content to the card
+                            cardContent += `<div class="report-preview">`;
+                            reportData.reports.forEach((report, index) => {
+                                cardContent += `<p><strong>${report.investigation || 'Investigation'}:</strong></p>`;
+                                if (report.result) {
+                                    // Truncate result to first 100 characters for preview
+                                    const truncatedResult = report.result.length > 100 ? 
+                                        report.result.substring(0, 100) + '...' : 
+                                        report.result;
+                                    cardContent += `<p>${truncatedResult}</p>`;
+                                }
+                            });
+                            cardContent += `</div>`;
+                        }
+                    } catch (err) {
+                        console.error('Error fetching report data:', err);
+                    }
+                }
+                
+                // Add the footer with the view report button
+                cardContent += `
                     </main>
                     <footer>
                         ${analysis.type && ['radio', 'ct', 'irm', 'eco'].includes(analysis.type) ? 
@@ -167,8 +200,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     </footer>
                 `;
                 
+                analysisCard.innerHTML = cardContent;
                 analysesGrid.appendChild(analysisCard);
-            });
+            }
             
             // Add event listeners to view report buttons
             document.querySelectorAll('.view-report-btn').forEach(button => {
