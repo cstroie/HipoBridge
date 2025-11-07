@@ -1336,6 +1336,654 @@ async def cnp_handler(request):
         "valid": is_valid
     })
 
+async def spec_handler(request):
+    """Serve the OpenAPI specification.
+    
+    Returns the OpenAPI specification in JSON format for API documentation.
+    
+    Args:
+        request: The incoming HTTP request
+        
+    Returns:
+        web.Response: JSON response with OpenAPI specification
+    """
+    logger.info("GET /api/spec endpoint accessed")
+    
+    spec = {
+        "openapi": "3.0.0",
+        "info": {
+            "title": "Hipocrate Patient Analyzer API",
+            "description": "API for accessing patient data from the Hipocrate medical system",
+            "version": "1.0.0"
+        },
+        "servers": [
+            {
+                "url": f"http://localhost:{PORT}",
+                "description": "Local development server"
+            }
+        ],
+        "paths": {
+            "/": {
+                "get": {
+                    "summary": "Web interface",
+                    "description": "Returns the web interface for patient analysis",
+                    "responses": {
+                        "200": {
+                            "description": "HTML web interface"
+                        }
+                    }
+                }
+            },
+            "/api/login": {
+                "post": {
+                    "summary": "Login to Hipocrate system",
+                    "description": "Authenticate with the Hipocrate medical system",
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "username": {
+                                            "type": "string",
+                                            "description": "Username for Hipocrate system"
+                                        },
+                                        "password": {
+                                            "type": "string",
+                                            "description": "Password for Hipocrate system"
+                                        }
+                                    },
+                                    "required": ["username", "password"]
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Successful login",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "status": {
+                                                "type": "string",
+                                                "example": "success"
+                                            },
+                                            "message": {
+                                                "type": "string",
+                                                "example": "Login successful"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "400": {
+                            "description": "Missing credentials",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "status": {
+                                                "type": "string",
+                                                "example": "error"
+                                            },
+                                            "message": {
+                                                "type": "string",
+                                                "example": "Username and password are required"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "401": {
+                            "description": "Login failed",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "status": {
+                                                "type": "string",
+                                                "example": "error"
+                                            },
+                                            "message": {
+                                                "type": "string",
+                                                "example": "Login failed"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/patient/search": {
+                "get": {
+                    "summary": "Search for patients",
+                    "description": "Search for patients by name or CNP",
+                    "parameters": [
+                        {
+                            "name": "q",
+                            "in": "query",
+                            "required": True,
+                            "description": "Search term (patient name or CNP)",
+                            "schema": {
+                                "type": "string"
+                            }
+                        },
+                        {
+                            "name": "X-Username",
+                            "in": "header",
+                            "required": False,
+                            "description": "Username for authentication",
+                            "schema": {
+                                "type": "string"
+                            }
+                        },
+                        {
+                            "name": "X-Password",
+                            "in": "header",
+                            "required": False,
+                            "description": "Password for authentication",
+                            "schema": {
+                                "type": "string"
+                            }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Search results",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "status": {
+                                                "type": "string",
+                                                "example": "success"
+                                            },
+                                            "type": {
+                                                "type": "string",
+                                                "example": "single_patient"
+                                            },
+                                            "data": {
+                                                "type": "object"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "400": {
+                            "description": "Missing search term",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "status": {
+                                                "type": "string",
+                                                "example": "error"
+                                            },
+                                            "message": {
+                                                "type": "string",
+                                                "example": "Search term is required"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/patient": {
+                "get": {
+                    "summary": "Get patient information",
+                    "description": "Retrieve patient information by ID",
+                    "parameters": [
+                        {
+                            "name": "id",
+                            "in": "query",
+                            "required": True,
+                            "description": "Patient ID",
+                            "schema": {
+                                "type": "string"
+                            }
+                        },
+                        {
+                            "name": "X-Username",
+                            "in": "header",
+                            "required": False,
+                            "description": "Username for authentication",
+                            "schema": {
+                                "type": "string"
+                            }
+                        },
+                        {
+                            "name": "X-Password",
+                            "in": "header",
+                            "required": False,
+                            "description": "Password for authentication",
+                            "schema": {
+                                "type": "string"
+                            }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Patient information",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "status": {
+                                                "type": "string",
+                                                "example": "success"
+                                            },
+                                            "checkout_ids": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "checkin_ids": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "400": {
+                            "description": "Missing patient ID",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "status": {
+                                                "type": "string",
+                                                "example": "error"
+                                            },
+                                            "message": {
+                                                "type": "string",
+                                                "example": "Patient ID is required"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/analyses": {
+                "get": {
+                    "summary": "Get patient analyses",
+                    "description": "Retrieve all analyses for a patient",
+                    "parameters": [
+                        {
+                            "name": "id",
+                            "in": "query",
+                            "required": True,
+                            "description": "Patient ID",
+                            "schema": {
+                                "type": "string"
+                            }
+                        },
+                        {
+                            "name": "X-Username",
+                            "in": "header",
+                            "required": False,
+                            "description": "Username for authentication",
+                            "schema": {
+                                "type": "string"
+                            }
+                        },
+                        {
+                            "name": "X-Password",
+                            "in": "header",
+                            "required": False,
+                            "description": "Password for authentication",
+                            "schema": {
+                                "type": "string"
+                            }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Patient analyses",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "status": {
+                                                "type": "string",
+                                                "example": "success"
+                                            },
+                                            "patient_name": {
+                                                "type": "string"
+                                            },
+                                            "analyses": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "report_id": {
+                                                            "type": "string"
+                                                        },
+                                                        "type": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "400": {
+                            "description": "Missing patient ID",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "status": {
+                                                "type": "string",
+                                                "example": "error"
+                                            },
+                                            "message": {
+                                                "type": "string",
+                                                "example": "Patient ID is required"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/report": {
+                "get": {
+                    "summary": "Get analysis report",
+                    "description": "Retrieve an analysis report by ID",
+                    "parameters": [
+                        {
+                            "name": "id",
+                            "in": "query",
+                            "required": True,
+                            "description": "Report ID",
+                            "schema": {
+                                "type": "string"
+                            }
+                        },
+                        {
+                            "name": "X-Username",
+                            "in": "header",
+                            "required": False,
+                            "description": "Username for authentication",
+                            "schema": {
+                                "type": "string"
+                            }
+                        },
+                        {
+                            "name": "X-Password",
+                            "in": "header",
+                            "required": False,
+                            "description": "Password for authentication",
+                            "schema": {
+                                "type": "string"
+                            }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Analysis report",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "status": {
+                                                "type": "string",
+                                                "example": "success"
+                                            },
+                                            "patient_name": {
+                                                "type": "string"
+                                            },
+                                            "age": {
+                                                "type": "string"
+                                            },
+                                            "gender": {
+                                                "type": "string"
+                                            },
+                                            "patient_id": {
+                                                "type": "string"
+                                            },
+                                            "patient_code": {
+                                                "type": "string"
+                                            },
+                                            "sample_datetime": {
+                                                "type": "string"
+                                            },
+                                            "examination": {
+                                                "type": "string"
+                                            },
+                                            "reports": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "examiner": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "400": {
+                            "description": "Missing report ID",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "status": {
+                                                "type": "string",
+                                                "example": "error"
+                                            },
+                                            "message": {
+                                                "type": "string",
+                                                "example": "Report ID is required"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/checkout": {
+                "get": {
+                    "summary": "Get checkout information",
+                    "description": "Retrieve checkout information by ID",
+                    "parameters": [
+                        {
+                            "name": "id",
+                            "in": "query",
+                            "required": True,
+                            "description": "Checkout ID",
+                            "schema": {
+                                "type": "string"
+                            }
+                        },
+                        {
+                            "name": "X-Username",
+                            "in": "header",
+                            "required": False,
+                            "description": "Username for authentication",
+                            "schema": {
+                                "type": "string"
+                            }
+                        },
+                        {
+                            "name": "X-Password",
+                            "in": "header",
+                            "required": False,
+                            "description": "Password for authentication",
+                            "schema": {
+                                "type": "string"
+                            }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Checkout information",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "status": {
+                                                "type": "string",
+                                                "example": "success"
+                                            },
+                                            "patient_name": {
+                                                "type": "string"
+                                            },
+                                            "patient_id": {
+                                                "type": "string"
+                                            },
+                                            "patient_code": {
+                                                "type": "string"
+                                            },
+                                            "admission_diagnostic": {
+                                                "type": "string"
+                                            },
+                                            "epicrisis": {
+                                                "type": "string"
+                                            },
+                                            "diagnostic": {
+                                                "type": "string"
+                                            },
+                                            "surgery": {
+                                                "type": "string"
+                                            },
+                                            "recommendations": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "400": {
+                            "description": "Missing checkout ID",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "status": {
+                                                "type": "string",
+                                                "example": "error"
+                                            },
+                                            "message": {
+                                                "type": "string",
+                                                "example": "Checkout ID is required"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/cnp": {
+                "get": {
+                    "summary": "Validate CNP",
+                    "description": "Validate a Romanian Personal Numerical Code (CNP)",
+                    "parameters": [
+                        {
+                            "name": "id",
+                            "in": "query",
+                            "required": True,
+                            "description": "CNP to validate",
+                            "schema": {
+                                "type": "string"
+                            }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "CNP validation result",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "status": {
+                                                "type": "string",
+                                                "example": "success"
+                                            },
+                                            "cnp": {
+                                                "type": "string"
+                                            },
+                                            "valid": {
+                                                "type": "boolean"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "400": {
+                            "description": "Missing CNP",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "status": {
+                                                "type": "string",
+                                                "example": "error"
+                                            },
+                                            "message": {
+                                                "type": "string",
+                                                "example": "CNP is required"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    return web.json_response(spec)
+
 async def report_handler(request):
     """Retrieve a report by ID, following redirect chains.
     
@@ -1476,6 +2124,7 @@ async def init_app():
     app.router.add_get('/api/checkout', checkout_handler)
     app.router.add_get('/api/cnp', cnp_handler)
     app.router.add_post('/api/login', login_handler)
+    app.router.add_get('/api/spec', spec_handler)
     app.router.add_static('/static/', path='static', name='static')
     
     # Setup startup and cleanup
