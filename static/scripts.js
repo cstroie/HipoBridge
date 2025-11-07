@@ -155,12 +155,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Start building the card content
                 let cardContent = `
                     <header>
-                        <h4>Analysis #${analysis.report_id}</h4>
-                        <span class="analysis-type">${analysis.type || 'Unknown'}</span>
+                        <h4>Analysis #${analysis.report_id} ${analysis.type || ''}</h4>
                     </header>
                     <main>
-                        <p><strong>Type:</strong> ${analysis.type || 'Unknown'}</p>
-                        <p><strong>Report ID:</strong> ${analysis.report_id}</p>
                 `;
                 
                 // For imaging analyses, fetch and display report content
@@ -176,11 +173,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             reportData.reports.forEach((report, index) => {
                                 cardContent += `<p><strong>${report.investigation || 'Investigation'}:</strong></p>`;
                                 if (report.result) {
-                                    // Truncate result to first 100 characters for preview
-                                    const truncatedResult = report.result.length > 100 ? 
-                                        report.result.substring(0, 100) + '...' : 
-                                        report.result;
-                                    cardContent += `<p>${truncatedResult}</p>`;
+                                    cardContent += `<p>${report.result}</p>`;
                                 }
                             });
                             cardContent += `</div>`;
@@ -193,11 +186,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Add the footer with the view report button
                 cardContent += `
                     </main>
-                    <footer>
-                        ${analysis.type && ['radio', 'ct', 'irm', 'eco'].includes(analysis.type) ? 
-                            `<button class="view-report-btn secondary" data-id="${analysis.report_id}" data-type="${analysis.type}">View Report</button>` : 
-                            ''}
-                    </footer>
                 `;
                 
                 analysisCard.innerHTML = cardContent;
