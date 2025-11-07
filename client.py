@@ -110,7 +110,7 @@ async def search_patients(session: aiohttp.ClientSession, search_term: str) -> b
     """
     print(f"Searching for patients with term: '{search_term}'")
     
-    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/api/patient/search?q={search_term}")
+    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/api/patients/search?q={search_term}")
     
     if not success or data.get("status") != "success":
         print(f"Patient search failed: {data.get('message', 'No message')}")
@@ -169,7 +169,7 @@ async def get_report(session: aiohttp.ClientSession, report_id: str) -> bool:
     """
     print(f"Retrieving report with ID: {report_id}")
     
-    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/api/report?id={report_id}")
+    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/api/reports?id={report_id}")
     
     if not success or data.get("status") != "success":
         print(f"Report retrieval failed: {data.get('message', 'No message')}")
@@ -227,7 +227,7 @@ async def get_checkout(session: aiohttp.ClientSession, checkout_id: str) -> bool
     """
     print(f"Retrieving checkout with ID: {checkout_id}")
     
-    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/api/checkout?id={checkout_id}")
+    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/api/checkouts?id={checkout_id}")
     
     if not success or data.get("status") != "success":
         print(f"Checkout retrieval failed: {data.get('message', 'No message')}")
@@ -278,7 +278,7 @@ async def get_patient_code_from_cnp(session: aiohttp.ClientSession, cnp: str) ->
     print(f"CNP {cnp} is valid, searching for patient...")
     
     # Search for the patient using the CNP
-    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/api/patient/search?q={cnp}")
+    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/api/patients/search?q={cnp}")
     
     if not success or data.get("status") != "success":
         print(f"Patient search failed: {data.get('message', 'No message')}")
@@ -333,7 +333,7 @@ async def get_patient(session: aiohttp.ClientSession, patient_id: str) -> bool:
     
     print(f"Retrieving patient with ID: {patient_id}")
     
-    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/api/patient?id={patient_id}")
+    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/api/patients?id={patient_id}")
     
     if not success or data.get("status") != "success":
         print(f"Patient retrieval failed: {data.get('message', 'No message')}")
