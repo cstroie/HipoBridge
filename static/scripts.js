@@ -152,17 +152,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 analysisCard.className = `analysis-card ${analysis.type || 'unknown'}`;
                 
                 analysisCard.innerHTML = `
-                    <div class="analysis-header">
+                    <header>
                         <h4>Analysis #${analysis.report_id}</h4>
                         <span class="analysis-type">${analysis.type || 'Unknown'}</span>
-                    </div>
-                    <div class="analysis-content">
+                    </header>
+                    <main>
                         <p><strong>Type:</strong> ${analysis.type || 'Unknown'}</p>
                         <p><strong>Report ID:</strong> ${analysis.report_id}</p>
+                    </main>
+                    <footer>
                         ${analysis.type && ['radio', 'ct', 'irm', 'eco'].includes(analysis.type) ? 
                             `<button class="view-report-btn secondary" data-id="${analysis.report_id}" data-type="${analysis.type}">View Report</button>` : 
                             ''}
-                    </div>
+                    </footer>
                 `;
                 
                 analysesGrid.appendChild(analysisCard);
