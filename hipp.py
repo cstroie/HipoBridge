@@ -1463,7 +1463,7 @@ async def spec_handler(request):
                     }
                 }
             },
-            "/api/patient/search": {
+            "/api/patients/search": {
                 "get": {
                     "summary": "Search for patients",
                     "description": "Search for patients by name or CNP",
@@ -1543,7 +1543,7 @@ async def spec_handler(request):
                     }
                 }
             },
-            "/api/patient": {
+            "/api/patients": {
                 "get": {
                     "summary": "Get patient information",
                     "description": "Retrieve patient information by ID",
@@ -1718,7 +1718,7 @@ async def spec_handler(request):
                     }
                 }
             },
-            "/api/report": {
+            "/api/reports": {
                 "get": {
                     "summary": "Get analysis report",
                     "description": "Retrieve an analysis report by ID",
@@ -1821,7 +1821,7 @@ async def spec_handler(request):
                     }
                 }
             },
-            "/api/checkout": {
+            "/api/checkouts": {
                 "get": {
                     "summary": "Get checkout information",
                     "description": "Retrieve checkout information by ID",
@@ -2117,11 +2117,11 @@ async def init_app():
     logger.info("Initializing web application")
     app = web.Application()
     app.router.add_get('/', root_handler)
-    app.router.add_get('/api/patient/search', patient_search_handler)
-    app.router.add_get('/api/patient', patient_handler)
+    app.router.add_get('/api/patients/search', patient_search_handler)
+    app.router.add_get('/api/patients', patient_handler)
     app.router.add_get('/api/analyses', analyses_handler)
-    app.router.add_get('/api/report', report_handler)
-    app.router.add_get('/api/checkout', checkout_handler)
+    app.router.add_get('/api/reports', report_handler)
+    app.router.add_get('/api/checkouts', checkout_handler)
     app.router.add_get('/api/cnp', cnp_handler)
     app.router.add_post('/api/login', login_handler)
     app.router.add_get('/api/spec', spec_handler)
