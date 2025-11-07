@@ -366,6 +366,103 @@ async def login_handler(request):
             "message": str(e)
         }, status=500)
 
+async def make_authenticated_request(session, url, method="GET", data=None, username=None, password=None):
+    """Make an authenticated request to the Hipocrate service with automatic login handling.
+    
+    Args:
+        session: The aiohttp session to use
+        url (str): The URL to request
+        method (str): HTTP method ("GET" or "POST")
+        data (dict, optional): Data to send with POST requests
+        username (str, optional): Username for login if needed
+        password (str, optional): Password for login if needed
+        
+    Returns:
+        tuple: (response_text, success, error_response) where success is boolean
+    """
+    try:
+        # Log current cookies before request
+        if session.cookie_jar:
+            cookies = session.cookie_jar.filter_cookies(SERVICE_URL)
+            logger.debug(f"Using {len(cookies)} cookies for request to {url}")
+        
+        # First ensure we're logged in
+        login_success = await login_if_needed(username, password)
+        if not login_success:
+            logger.error(f"Failed to login for request to {url}")
+            return None, False, web.json_response({
+                "status": "error",
+                "message": "Authentication failed"
+            }, status=401)
+        
+        # Make the request
+        if method == "GET":
+            logger.debug(f"Making GET request to: {url}")
+            async with session.get(url, headers=HEADERS) as response:
+                response_text = await _handle_response_encoding(response)
+                logger.debug(f"GET response status: {response.status}")
+        else:  # POST
+            logger.debug(f"Making POST request to: {url}")
+            async with session.post(url, data=data, headers=HEADERS) as response:
+                response_text = await _handle_response_encoding(response)
+                logger.debug(f"POST response status: {response.status}")
+        
+        # Check if we got redirected to login page (session expired)
+        if is_login_page(response_text):
+            logger.warning(f"Session expired during request to {url}, attempting re-login")
+            login_success = await login_if_needed(username, password)
+            if login_success:
+                # Retry the request
+                if method == "GET":
+                    async with session.get(url, headers=HEADERS) as retry_response:
+                        response_text = await _handle_response_encoding(retry_response)
+                        logger.debug(f"Retry GET response status: {retry_response.status}")
+                else:  # POST
+                    async with session.post(url, data=data, headers=HEADERS) as retry_response:
+                        response_text = await _handle_response_encoding(retry_response)
+                        logger.debug(f"Retry POST response status: {retry_response.status}")
+                
+                if is_login_page(response_text):
+                    logger.error("Login failed after retry")
+                    return None, False, web.json_response({
+                        "status": "error",
+                        "message": "Authentication failed after retry"
+                    }, status=401)
+            else:
+                logger.error("Re-login failed")
+                return None, False, web.json_response({
+                    "status": "error",
+                    "message": "Authentication failed"
+                }, status=401)
+        
+        return response_text, True, None
+    except Exception as e:
+        logger.error(f"Request to {url} failed with exception: {e}")
+        return None, False, web.json_response({
+            "status": "error",
+            "message": str(e)
+        }, status=500)
+
+async def _handle_response_encoding(response):
+    """Handle response encoding for the Hipocrate service.
+    
+    Args:
+        response: The aiohttp response object
+        
+    Returns:
+        str: Decoded response text
+    """
+    try:
+        response_text = await response.text()
+    except UnicodeDecodeError:
+        # If UTF-8 fails, try to get raw bytes and decode with latin-1 or windows-1252
+        raw_data = await response.read()
+        try:
+            response_text = raw_data.decode('windows-1252')
+        except UnicodeDecodeError:
+            response_text = raw_data.decode('latin-1')
+    return response_text
+
 async def patient_search_handler(request):
     """Search for patients by name or other criteria.
     
@@ -400,20 +497,6 @@ async def patient_search_handler(request):
     try:
         session = await get_session()
         
-        # Log current cookies before search
-        if session.cookie_jar:
-            cookies = session.cookie_jar.filter_cookies(SERVICE_URL)
-            logger.debug(f"Using {len(cookies)} cookies for patient search")
-        
-        # First ensure we're logged in
-        login_success = await login_if_needed(username, password)
-        if not login_success:
-            logger.error("Failed to login for patient search")
-            return web.json_response({
-                "status": "error",
-                "message": "Authentication failed"
-            }, status=401)
-        
         # Prepare full search data as captured in the POST request
         search_data = {
             "hdnSearchType": "1",
@@ -446,87 +529,40 @@ async def patient_search_handler(request):
         
         # Make search request to the patient search page
         search_url = f"{SERVICE_URL}/files/search.asp?what=PA"
-        logger.debug(f"Making patient search request to: {search_url}")
         
-        async with session.post(
-            search_url,
-            data=search_data,
-            headers=HEADERS
-        ) as response:
-            # Handle encoding properly - the service may not be using UTF-8
-            try:
-                response_text = await response.text()
-            except UnicodeDecodeError:
-                # If UTF-8 fails, try to get raw bytes and decode with latin-1 or windows-1252
-                raw_data = await response.read()
-                try:
-                    response_text = raw_data.decode('windows-1252')
-                except UnicodeDecodeError:
-                    response_text = raw_data.decode('latin-1')
-            logger.debug(f"Patient search response status: {response.status}")
-            
-            # Check if we got redirected to login page (session expired)
-            if is_login_page(response_text):
-                logger.warning("Session expired during patient search, attempting re-login")
-                login_success = await login_if_needed(username, password)
-                if login_success:
-                    # Retry the search
-                    async with session.post(
-                        search_url,
-                        data=search_data,
-                        headers=HEADERS
-                    ) as retry_response:
-                        # Handle encoding properly - the service may not be using UTF-8
-                        try:
-                            response_text = await retry_response.text()
-                        except UnicodeDecodeError:
-                            # If UTF-8 fails, try to get raw bytes and decode with latin-1 or windows-1252
-                            raw_data = await retry_response.read()
-                            try:
-                                response_text = raw_data.decode('windows-1252')
-                            except UnicodeDecodeError:
-                                response_text = raw_data.decode('latin-1')
-                        logger.debug(f"Retry search response status: {retry_response.status}")
-                        
-                        if is_login_page(response_text):
-                            logger.error("Login failed after retry")
-                            return web.json_response({
-                                "status": "error",
-                                "message": "Authentication failed after retry"
-                            }, status=401)
-                else:
-                    logger.error("Re-login failed")
-                    return web.json_response({
-                        "status": "error",
-                        "message": "Authentication failed"
-                    }, status=401)
-            
-            logger.info("Patient search completed successfully")
-            
-            # Try to parse as single patient page first
-            single_patient_data = parse_single_patient_data(response_text)
-            if single_patient_data and single_patient_data.get("patient_name"):
-                return web.json_response({
-                    "status": "success",
-                    "type": "single_patient",
-                    "data": single_patient_data
-                })
-            
-            # Try to parse as multiple patients page
-            multiple_patients_data = parse_multiple_patients_data(response_text)
-            if multiple_patients_data:
-                return web.json_response({
-                    "status": "success",
-                    "type": "multiple_patients",
-                    "data": multiple_patients_data
-                })
-            
-            # If neither parser worked, return raw data
+        response_text, success, error_response = await make_authenticated_request(
+            session, search_url, "POST", search_data, username, password
+        )
+        
+        if not success:
+            return error_response
+        
+        logger.info("Patient search completed successfully")
+        
+        # Try to parse as single patient page first
+        single_patient_data = parse_single_patient_data(response_text)
+        if single_patient_data and single_patient_data.get("patient_name"):
             return web.json_response({
                 "status": "success",
-                "type": "raw",
-                "data": response_text
+                "type": "single_patient",
+                "data": single_patient_data
             })
+        
+        # Try to parse as multiple patients page
+        multiple_patients_data = parse_multiple_patients_data(response_text)
+        if multiple_patients_data:
+            return web.json_response({
+                "status": "success",
+                "type": "multiple_patients",
+                "data": multiple_patients_data
+            })
+        
+        # If neither parser worked, return raw data
+        return web.json_response({
+            "status": "success",
+            "type": "raw",
+            "data": response_text
+        })
             
     except Exception as e:
         logger.error(f"Patient search failed with exception: {e}")
@@ -1065,107 +1101,53 @@ async def patient_handler(request):
     try:
         session = await get_session()
         
-        # Log current cookies before request
-        if session.cookie_jar:
-            cookies = session.cookie_jar.filter_cookies(SERVICE_URL)
-            logger.debug(f"Using {len(cookies)} cookies for patient request")
-        
-        # First ensure we're logged in
-        login_success = await login_if_needed(username, password)
-        if not login_success:
-            logger.error("Failed to login for patient retrieval")
-            return web.json_response({
-                "status": "error",
-                "message": "Authentication failed"
-            }, status=401)
-        
         # Make request to the patient endpoint
         patient_url = f"{SERVICE_URL}/Pacient/edit.asp?id={patient_id}"
-        logger.debug(f"Making patient request to: {patient_url}")
         
-        async with session.get(patient_url, headers=HEADERS) as response:
-            # Handle encoding properly - the service may not be using UTF-8
-            try:
-                response_text = await response.text()
-            except UnicodeDecodeError:
-                # If UTF-8 fails, try to get raw bytes and decode with latin-1 or windows-1252
-                raw_data = await response.read()
-                try:
-                    response_text = raw_data.decode('windows-1252')
-                except UnicodeDecodeError:
-                    response_text = raw_data.decode('latin-1')
+        response_text, success, error_response = await make_authenticated_request(
+            session, patient_url, "GET", None, username, password
+        )
+        
+        if not success:
+            return error_response
+        
+        # Parse the patient data to extract checkout and checkin IDs
+        checkout_ids = []
+        checkin_ids = []
+        
+        try:
+            from bs4 import BeautifulSoup
+            import re
             
-            logger.debug(f"Patient response status: {response.status}")
+            soup = BeautifulSoup(response_text, 'html.parser')
             
-            # Check if we got redirected to login page (session expired)
-            if is_login_page(response_text):
-                logger.warning("Session expired during patient retrieval, attempting re-login")
-                login_success = await login_if_needed(username, password)
-                if login_success:
-                    # Retry the request
-                    async with session.get(patient_url, headers=HEADERS) as retry_response:
-                        # Handle encoding properly - the service may not be using UTF-8
-                        try:
-                            response_text = await retry_response.text()
-                        except UnicodeDecodeError:
-                            # If UTF-8 fails, try to get raw bytes and decode with latin-1 or windows-1252
-                            raw_data = await retry_response.read()
-                            try:
-                                response_text = raw_data.decode('windows-1252')
-                            except UnicodeDecodeError:
-                                response_text = raw_data.decode('latin-1')
-                        logger.debug(f"Retry patient response status: {retry_response.status}")
-                        
-                        if is_login_page(response_text):
-                            logger.error("Login failed after retry")
-                            return web.json_response({
-                                "status": "error",
-                                "message": "Authentication failed after retry"
-                            }, status=401)
-                else:
-                    logger.error("Re-login failed")
-                    return web.json_response({
-                        "status": "error",
-                        "message": "Authentication failed"
-                    }, status=401)
+            # Extract checkout IDs
+            checkout_links = soup.find_all('a', href=re.compile(r'../files/checkout\.asp\?id='))
+            for link in checkout_links:
+                href = link.get('href', '')
+                id_match = re.search(r'id=([^&"]+)', href)
+                if id_match:
+                    checkout_ids.append(id_match.group(1))
             
-            # Parse the patient data to extract checkout and checkin IDs
-            checkout_ids = []
-            checkin_ids = []
+            # Extract checkin IDs
+            checkin_links = soup.find_all('a', href=re.compile(r'../files/checkin\.asp\?id='))
+            for link in checkin_links:
+                href = link.get('href', '')
+                id_match = re.search(r'id=([^&"]+)', href)
+                if id_match:
+                    checkin_ids.append(id_match.group(1))
             
-            try:
-                from bs4 import BeautifulSoup
-                import re
-                
-                soup = BeautifulSoup(response_text, 'html.parser')
-                
-                # Extract checkout IDs
-                checkout_links = soup.find_all('a', href=re.compile(r'../files/checkout\.asp\?id='))
-                for link in checkout_links:
-                    href = link.get('href', '')
-                    id_match = re.search(r'id=([^&"]+)', href)
-                    if id_match:
-                        checkout_ids.append(id_match.group(1))
-                
-                # Extract checkin IDs
-                checkin_links = soup.find_all('a', href=re.compile(r'../files/checkin\.asp\?id='))
-                for link in checkin_links:
-                    href = link.get('href', '')
-                    id_match = re.search(r'id=([^&"]+)', href)
-                    if id_match:
-                        checkin_ids.append(id_match.group(1))
-                
-                logger.info(f"Found {len(checkout_ids)} checkout IDs and {len(checkin_ids)} checkin IDs")
-                
-            except Exception as e:
-                logger.error(f"Error parsing patient data: {e}")
+            logger.info(f"Found {len(checkout_ids)} checkout IDs and {len(checkin_ids)} checkin IDs")
             
-            logger.info("Patient retrieval completed successfully")
-            return web.json_response({
-                "status": "success",
-                "checkout_ids": checkout_ids,
-                "checkin_ids": checkin_ids
-            })
+        except Exception as e:
+            logger.error(f"Error parsing patient data: {e}")
+        
+        logger.info("Patient retrieval completed successfully")
+        return web.json_response({
+            "status": "success",
+            "checkout_ids": checkout_ids,
+            "checkin_ids": checkin_ids
+        })
             
     except Exception as e:
         logger.error(f"Patient retrieval failed with exception: {e}")
@@ -1208,77 +1190,23 @@ async def checkout_handler(request):
     try:
         session = await get_session()
         
-        # Log current cookies before request
-        if session.cookie_jar:
-            cookies = session.cookie_jar.filter_cookies(SERVICE_URL)
-            logger.debug(f"Using {len(cookies)} cookies for checkout request")
-        
-        # First ensure we're logged in
-        login_success = await login_if_needed(username, password)
-        if not login_success:
-            logger.error("Failed to login for checkout retrieval")
-            return web.json_response({
-                "status": "error",
-                "message": "Authentication failed"
-            }, status=401)
-        
         # Make request to the checkout endpoint
         checkout_url = f"{SERVICE_URL}/files/checkout.asp?id={checkout_id}"
-        logger.debug(f"Making checkout request to: {checkout_url}")
         
-        async with session.get(checkout_url, headers=HEADERS) as response:
-            # Handle encoding properly - the service may not be using UTF-8
-            try:
-                response_text = await response.text()
-            except UnicodeDecodeError:
-                # If UTF-8 fails, try to get raw bytes and decode with latin-1 or windows-1252
-                raw_data = await response.read()
-                try:
-                    response_text = raw_data.decode('windows-1252')
-                except UnicodeDecodeError:
-                    response_text = raw_data.decode('latin-1')
-            
-            logger.debug(f"Checkout response status: {response.status}")
-            
-            # Check if we got redirected to login page (session expired)
-            if is_login_page(response_text):
-                logger.warning("Session expired during checkout retrieval, attempting re-login")
-                login_success = await login_if_needed(username, password)
-                if login_success:
-                    # Retry the request
-                    async with session.get(checkout_url, headers=HEADERS) as retry_response:
-                        # Handle encoding properly - the service may not be using UTF-8
-                        try:
-                            response_text = await retry_response.text()
-                        except UnicodeDecodeError:
-                            # If UTF-8 fails, try to get raw bytes and decode with latin-1 or windows-1252
-                            raw_data = await retry_response.read()
-                            try:
-                                response_text = raw_data.decode('windows-1252')
-                            except UnicodeDecodeError:
-                                response_text = raw_data.decode('latin-1')
-                        logger.debug(f"Retry checkout response status: {retry_response.status}")
-                        
-                        if is_login_page(response_text):
-                            logger.error("Login failed after retry")
-                            return web.json_response({
-                                "status": "error",
-                                "message": "Authentication failed after retry"
-                            }, status=401)
-                else:
-                    logger.error("Re-login failed")
-                    return web.json_response({
-                        "status": "error",
-                        "message": "Authentication failed"
-                    }, status=401)
-            
-            logger.info("Checkout retrieval completed successfully")
-            # Parse the checkout data
-            parsed_data = parse_checkout_data(response_text)
-            
-            result = {"status": "success"}
-            result.update(parsed_data)
-            return web.json_response(result)
+        response_text, success, error_response = await make_authenticated_request(
+            session, checkout_url, "GET", None, username, password
+        )
+        
+        if not success:
+            return error_response
+        
+        logger.info("Checkout retrieval completed successfully")
+        # Parse the checkout data
+        parsed_data = parse_checkout_data(response_text)
+        
+        result = {"status": "success"}
+        result.update(parsed_data)
+        return web.json_response(result)
             
     except Exception as e:
         logger.error(f"Checkout retrieval failed with exception: {e}")
@@ -1408,79 +1336,25 @@ async def analyses_handler(request):
     try:
         session = await get_session()
         
-        # Log current cookies before request
-        if session.cookie_jar:
-            cookies = session.cookie_jar.filter_cookies(SERVICE_URL)
-            logger.debug(f"Using {len(cookies)} cookies for analyses request")
-        
-        # First ensure we're logged in
-        login_success = await login_if_needed(username, password)
-        if not login_success:
-            logger.error("Failed to login for analyses retrieval")
-            return web.json_response({
-                "status": "error",
-                "message": "Authentication failed"
-            }, status=401)
-        
         # Make request to the analyses endpoint
         analyses_url = f"{SERVICE_URL}/pacient/analyses.asp?type=PA&pacid={patient_id}"
-        logger.debug(f"Making analyses request to: {analyses_url}")
         
-        async with session.get(analyses_url, headers=HEADERS) as response:
-            # Handle encoding properly - the service may not be using UTF-8
-            try:
-                response_text = await response.text()
-            except UnicodeDecodeError:
-                # If UTF-8 fails, try to get raw bytes and decode with latin-1 or windows-1252
-                raw_data = await response.read()
-                try:
-                    response_text = raw_data.decode('windows-1252')
-                except UnicodeDecodeError:
-                    response_text = raw_data.decode('latin-1')
-            
-            logger.debug(f"Analyses response status: {response.status}")
-            
-            # Check if we got redirected to login page (session expired)
-            if is_login_page(response_text):
-                logger.warning("Session expired during analyses retrieval, attempting re-login")
-                login_success = await login_if_needed(username, password)
-                if login_success:
-                    # Retry the request
-                    async with session.get(analyses_url, headers=HEADERS) as retry_response:
-                        # Handle encoding properly - the service may not be using UTF-8
-                        try:
-                            response_text = await retry_response.text()
-                        except UnicodeDecodeError:
-                            # If UTF-8 fails, try to get raw bytes and decode with latin-1 or windows-1252
-                            raw_data = await retry_response.read()
-                            try:
-                                response_text = raw_data.decode('windows-1252')
-                            except UnicodeDecodeError:
-                                response_text = raw_data.decode('latin-1')
-                        logger.debug(f"Retry analyses response status: {retry_response.status}")
-                        
-                        if is_login_page(response_text):
-                            logger.error("Login failed after retry")
-                            return web.json_response({
-                                "status": "error",
-                                "message": "Authentication failed after retry"
-                            }, status=401)
-                else:
-                    logger.error("Re-login failed")
-                    return web.json_response({
-                        "status": "error",
-                        "message": "Authentication failed"
-                    }, status=401)
-            
-            logger.info("Analyses retrieval completed successfully")
-            # Parse the analyses data to extract report IDs, types, and patient name
-            parsed_data = parse_analyses_data(response_text)
-            
-            return web.json_response({
-                "status": "success",
-                "patient_name": parsed_data["patient_name"],
-                "analyses": parsed_data["analyses"]
-            })
+        response_text, success, error_response = await make_authenticated_request(
+            session, analyses_url, "GET", None, username, password
+        )
+        
+        if not success:
+            return error_response
+        
+        logger.info("Analyses retrieval completed successfully")
+        # Parse the analyses data to extract report IDs, types, and patient name
+        parsed_data = parse_analyses_data(response_text)
+        
+        return web.json_response({
+            "status": "success",
+            "patient_name": parsed_data["patient_name"],
+            "analyses": parsed_data["analyses"]
+        })
             
     except Exception as e:
         logger.error(f"Analyses retrieval failed with exception: {e}")
@@ -1624,11 +1498,6 @@ async def report_handler(request):
     try:
         session = await get_session()
         
-        # Log current cookies before request
-        if session.cookie_jar:
-            cookies = session.cookie_jar.filter_cookies(SERVICE_URL)
-            logger.debug(f"Using {len(cookies)} cookies for report request")
-        
         # First ensure we're logged in
         login_success = await login_if_needed(username, password)
         if not login_success:
@@ -1648,22 +1517,29 @@ async def report_handler(request):
         current_url = report_url
         
         while redirect_count < max_redirects:
+            response_text, success, error_response = await make_authenticated_request(
+                session, current_url, "GET", None, username, password
+            )
+            
+            if not success:
+                # If authentication failed during redirect, return the error
+                if redirect_count > 0:
+                    logger.info(f"Report retrieval completed successfully after {redirect_count} redirects")
+                    # Parse the report data we have so far
+                    parsed_data = parse_report_data(response_text)
+                    result = {"status": "success", "redirects_followed": redirect_count}
+                    result.update(parsed_data)
+                    return web.json_response(result)
+                else:
+                    return error_response
+            
+            # Check if this is the final response (not a redirect)
+            # We need to make a direct request to check the status code
             async with session.get(current_url, headers=HEADERS) as response:
                 logger.debug(f"Report request response status: {response.status}")
                 
                 # If we get the final data (not a redirect), break the loop
                 if response.status != 302:
-                    # Handle encoding properly - the service may not be using UTF-8
-                    try:
-                        response_text = await response.text()
-                    except UnicodeDecodeError:
-                        # If UTF-8 fails, try to get raw bytes and decode with latin-1 or windows-1252
-                        raw_data = await response.read()
-                        try:
-                            response_text = raw_data.decode('windows-1252')
-                        except UnicodeDecodeError:
-                            response_text = raw_data.decode('latin-1')
-                    
                     logger.info(f"Report retrieval completed successfully after {redirect_count} redirects")
                     
                     # Parse the report data
