@@ -211,182 +211,94 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function displayReportModal(reportData, reportId, reportType) {
-        // Create modal container if it doesn't exist
-        let modal = document.getElementById('reportModal');
-        if (!modal) {
-            modal = document.createElement('div');
-            modal.id = 'reportModal';
-            modal.className = 'modal';
-            modal.innerHTML = `
-                <div class="modal-content">
-                    <span class="close">&times;</span>
-                    <div id="modalContent"></div>
-                </div>
-            `;
-            document.body.appendChild(modal);
-            
-            // Add modal styles
-            const style = document.createElement('style');
-            style.textContent = `
-                .modal {
-                    display: none;
-                    position: fixed;
-                    z-index: 1000;
-                    left: 0;
-                    top: 0;
-                    width: 100%;
-                    height: 100%;
-                    background-color: rgba(0,0,0,0.4);
-                }
-                
-                .modal-content {
-                    background-color: var(--card-background-color);
-                    margin: 5% auto;
-                    padding: 1.5rem;
-                    border: 1px solid var(--muted-border-color);
-                    border-radius: var(--border-radius);
-                    width: 90%;
-                    max-width: 800px;
-                    max-height: 80vh;
-                    overflow-y: auto;
-                    position: relative;
-                }
-                
-                .close {
-                    color: var(--muted-color);
-                    float: right;
-                    font-size: 28px;
-                    font-weight: bold;
-                    cursor: pointer;
-                    position: absolute;
-                    right: 1rem;
-                    top: 0.5rem;
-                }
-                
-                .close:hover,
-                .close:focus {
-                    color: var(--contrast);
-                }
-                
-                .report-header {
-                    margin-bottom: 1.5rem;
-                    padding-bottom: 1rem;
-                    border-bottom: 1px solid var(--muted-border-color);
-                }
-                
-                .report-section {
-                    margin-bottom: 1.5rem;
-                }
-                
-                .report-section h3 {
-                    color: var(--contrast);
-                    margin-bottom: 0.75rem;
-                }
-                
-                .report-item {
-                    margin-bottom: 0.75rem;
-                }
-                
-                .report-item strong {
-                    display: inline-block;
-                    width: 150px;
-                    color: var(--contrast);
-                }
-            `;
-            document.head.appendChild(style);
-            
-            // Close modal when clicking on X
-            modal.querySelector('.close').addEventListener('click', function() {
-                modal.style.display = 'none';
-            });
-            
-            // Close modal when clicking outside of it
-            window.addEventListener('click', function(event) {
-                if (event.target === modal) {
-                    modal.style.display = 'none';
-                }
-            });
-        }
+        // Use PicoCSS modal
+        const modal = document.createElement('dialog');
+        modal.id = 'reportModal';
+        modal.className = 'modal';
         
-        // Populate modal content
-        const modalContent = modal.querySelector('#modalContent');
         let content = `
-            <div class="report-header">
-                <h2>${reportType.toUpperCase()} Report #${reportId}</h2>
-            </div>
+            <article>
+                <header>
+                    <h2>${reportType.toUpperCase()} Report #${reportId}</h2>
+                    <button class="close" aria-label="Close" rel="prev"></button>
+                </header>
+                <main>
         `;
         
         // Patient information
-        content += `
-            <div class="report-section">
-                <h3>Patient Information</h3>
-        `;
+        content += `<div class="report-section">`;
+        content += `<h3>Patient Information</h3>`;
         
         if (reportData.patient_name) {
-            content += `<div class="report-item"><strong>Name:</strong> ${reportData.patient_name}</div>`;
+            content += `<p><strong>Name:</strong> ${reportData.patient_name}</p>`;
         }
         if (reportData.patient_id) {
-            content += `<div class="report-item"><strong>CNP:</strong> ${reportData.patient_id}</div>`;
+            content += `<p><strong>CNP:</strong> ${reportData.patient_id}</p>`;
         }
         if (reportData.patient_code) {
-            content += `<div class="report-item"><strong>Patient Code:</strong> ${reportData.patient_code}</div>`;
+            content += `<p><strong>Patient Code:</strong> ${reportData.patient_code}</p>`;
         }
         if (reportData.age) {
-            content += `<div class="report-item"><strong>Age:</strong> ${reportData.age}</div>`;
+            content += `<p><strong>Age:</strong> ${reportData.age}</p>`;
         }
         if (reportData.gender) {
-            content += `<div class="report-item"><strong>Gender:</strong> ${reportData.gender}</div>`;
+            content += `<p><strong>Gender:</strong> ${reportData.gender}</p>`;
         }
         if (reportData.sample_datetime) {
-            content += `<div class="report-item"><strong>Sample Date/Time:</strong> ${reportData.sample_datetime}</div>`;
+            content += `<p><strong>Sample Date/Time:</strong> ${reportData.sample_datetime}</p>`;
         }
         if (reportData.examination) {
-            content += `<div class="report-item"><strong>Examination:</strong> ${reportData.examination}</div>`;
+            content += `<p><strong>Examination:</strong> ${reportData.examination}</p>`;
         }
         
         content += `</div>`;
         
         // Report results
         if (reportData.reports && reportData.reports.length > 0) {
-            content += `
-                <div class="report-section">
-                    <h3>Results</h3>
-            `;
+            content += `<div class="report-section">`;
+            content += `<h3>Results</h3>`;
             
             reportData.reports.forEach((report, index) => {
-                content += `
-                    <div class="report-item">
-                        <strong>Investigation ${index + 1}:</strong> ${report.investigation || 'N/A'}
-                    </div>
-                    <div class="report-item">
-                        <pre style="white-space: pre-wrap; background: var(--muted-background-color); padding: 0.75rem; border-radius: var(--border-radius);">${report.result || 'No result data'}</pre>
-                    </div>
-                `;
+                content += `<p><strong>Investigation ${index + 1}:</strong> ${report.investigation || 'N/A'}</p>`;
+                content += `<pre style="white-space: pre-wrap; background: var(--muted-background-color); padding: 0.75rem; border-radius: var(--border-radius);">${report.result || 'No result data'}</pre>`;
             });
             
             content += `</div>`;
         } else if (reportData.result) {
-            content += `
-                <div class="report-section">
-                    <h3>Result</h3>
-                    <pre style="white-space: pre-wrap; background: var(--muted-background-color); padding: 0.75rem; border-radius: var(--border-radius);">${reportData.result}</pre>
-                </div>
-            `;
+            content += `<div class="report-section">`;
+            content += `<h3>Result</h3>`;
+            content += `<pre style="white-space: pre-wrap; background: var(--muted-background-color); padding: 0.75rem; border-radius: var(--border-radius);">${reportData.result}</pre>`;
+            content += `</div>`;
         }
         
         // Examiner information
         if (reportData.examiner) {
-            content += `
-                <div class="report-section">
-                    <h3>Examiner</h3>
-                    <div class="report-item">${reportData.examiner}</div>
-                </div>
-            `;
+            content += `<div class="report-section">`;
+            content += `<h3>Examiner</h3>`;
+            content += `<p>${reportData.examiner}</p>`;
+            content += `</div>`;
         }
         
-        modalContent.innerHTML = content;
+        content += `
+                </main>
+                <footer>
+                    <button class="secondary" data-close-modal>Close</button>
+                </footer>
+            </article>
+        `;
+        
+        modal.innerHTML = content;
+        document.body.appendChild(modal);
+        
+        // Add event listeners for closing the modal
+        const closeButtons = modal.querySelectorAll('[data-close-modal], .close');
+        closeButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                modal.remove();
+            });
+        });
         
         // Show modal
-        modal.style.display = 'block';
+        modal.showModal();
     }
 });
