@@ -110,12 +110,6 @@ async def get_report(session: aiohttp.ClientSession, report_id: str) -> bool:
                 if data.get("status") == "success":
                     print(f"Report retrieval successful! (followed {data.get('redirects_followed', 0)} redirects)")
                     
-                    # Save HTML response to file for inspection
-                    filename = f"report_{report_id}.html"
-                    with open(filename, "w") as f:
-                        f.write(data.get("data", ""))
-                    print(f"Full report saved to {filename}")
-                    
                     # Display parsed data if available
                     print("\n--- Parsed Report Data ---")
                     if data.get("patient_name"):
@@ -174,12 +168,6 @@ async def get_checkout(session: aiohttp.ClientSession, checkout_id: str) -> bool
                 data = await response.json()
                 if data.get("status") == "success":
                     print("Checkout retrieval successful!")
-                    
-                    # Save HTML response to file for inspection
-                    filename = f"checkout_{checkout_id}.html"
-                    with open(filename, "w") as f:
-                        f.write(data.get("data", ""))
-                    print(f"Full checkout saved to {filename}")
                     
                     # Display parsed data if available
                     print("\n--- Parsed Checkout Data ---")
@@ -291,12 +279,6 @@ async def get_patient(session: aiohttp.ClientSession, patient_id: str) -> bool:
                 data = await response.json()
                 if data.get("status") == "success":
                     print("Patient retrieval successful!")
-                    
-                    # Save HTML response to file for inspection
-                    filename = f"patient_{patient_id}.html"
-                    with open(filename, "w") as f:
-                        f.write(data.get("data", ""))
-                    print(f"Full patient data saved to {filename}")
                     
                     # Display associated checkout and checkin IDs
                     checkout_ids = data.get("checkout_ids", [])
