@@ -227,56 +227,51 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Patient information
         content += `<div class="report-section">`;
-        content += `<h3>Patient Information</h3>`;
-        
-        if (reportData.patient_name) {
-            content += `<p><strong>Name:</strong> ${reportData.patient_name}</p>`;
+        content += `<h3>`;
+        content += `${reportData.patient_name}`;
+        if (reportData.gender) {
+            content += `, ${reportData.gender}`;
         }
+        if (reportData.age) {
+            content += `, ${reportData.age}`;
+        }
+        content += `</h3>`;
+        
         if (reportData.patient_id) {
             content += `<p><strong>CNP:</strong> ${reportData.patient_id}</p>`;
         }
         if (reportData.patient_code) {
             content += `<p><strong>Patient Code:</strong> ${reportData.patient_code}</p>`;
         }
-        if (reportData.age) {
-            content += `<p><strong>Age:</strong> ${reportData.age}</p>`;
-        }
-        if (reportData.gender) {
-            content += `<p><strong>Gender:</strong> ${reportData.gender}</p>`;
-        }
         if (reportData.sample_datetime) {
-            content += `<p><strong>Sample Date/Time:</strong> ${reportData.sample_datetime}</p>`;
-        }
-        if (reportData.examination) {
-            content += `<p><strong>Examination:</strong> ${reportData.examination}</p>`;
+            content += `<p><strong>Date/Time:</strong> ${reportData.sample_datetime}</p>`;
         }
         
         content += `</div>`;
         
         // Report results
         if (reportData.reports && reportData.reports.length > 0) {
-            content += `<div class="report-section">`;
+            content += `<section class="report-section">`;
             content += `<h3>Results</h3>`;
             
             reportData.reports.forEach((report, index) => {
-                content += `<p><strong>Investigation ${index + 1}:</strong> ${report.investigation || 'N/A'}</p>`;
+                content += `<p><strong>${index + 1}: ${report.investigation || 'N/A'}</strong></p>`;
                 content += `<pre style="white-space: pre-wrap; background: var(--muted-background-color); padding: 0.75rem; border-radius: var(--border-radius);">${report.result || 'No result data'}</pre>`;
             });
             
-            content += `</div>`;
+            content += `</section>`;
         } else if (reportData.result) {
-            content += `<div class="report-section">`;
+            content += `<section class="report-section">`;
             content += `<h3>Result</h3>`;
             content += `<pre style="white-space: pre-wrap; background: var(--muted-background-color); padding: 0.75rem; border-radius: var(--border-radius);">${reportData.result}</pre>`;
-            content += `</div>`;
+            content += `</section>`;
         }
         
         // Examiner information
         if (reportData.examiner) {
-            content += `<div class="report-section">`;
-            content += `<h3>Examiner</h3>`;
-            content += `<p>${reportData.examiner}</p>`;
-            content += `</div>`;
+            content += `<section class="report-section">`;
+            content += `<p><strong>Examiner:</strong> ${reportData.examiner}</p>`;
+            content += `</section>`;
         }
         
         content += `
