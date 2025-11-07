@@ -51,16 +51,593 @@ async def get_session():
 async def root_handler(request):
     """Handle requests to the root endpoint.
     
-    Returns a simple JSON response indicating the service is running.
+    Returns a web page with a CNP input form and analysis functionality.
     
     Args:
         request: The incoming HTTP request
         
     Returns:
-        web.Response: JSON response with service information
+        web.Response: HTML response with the web interface
     """
     logger.info("Root endpoint accessed")
-    return web.json_response({"message": "Web API Interface to Hipocrate Service"})
+    
+    html_content = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hipocrate Patient Analyzer</title>
+    <style>
+        :root {
+            --primary-color: #3498db;
+            --secondary-color: #2c3e50;
+            --success-color: #27ae60;
+            --warning-color: #f39c12;
+            --error-color: #e74c3c;
+            --light-color: #ecf0f1;
+            --dark-color: #34495e;
+            --border-radius: 8px;
+            --box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+            padding: 20px;
+        }
+        
+        header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        
+        header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        .card {
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--dark-color);
+        }
+        
+        input[type="text"] {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #ddd;
+            border-radius: var(--border-radius);
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        input[type="text"]:focus {
+            border-color: var(--primary-color);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+        }
+        
+        button {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s;
+            box-shadow: var(--box-shadow);
+        }
+        
+        button:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+        }
+        
+        button:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .results {
+            display: none;
+            margin-top: 30px;
+        }
+        
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--light-color);
+        }
+        
+        .results-header h2 {
+            color: var(--secondary-color);
+        }
+        
+        .patient-info {
+            background: var(--light-color);
+            padding: 20px;
+            border-radius: var(--border-radius);
+            margin-bottom: 20px;
+        }
+        
+        .patient-info h3 {
+            color: var(--secondary-color);
+            margin-bottom: 15px;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+        }
+        
+        .info-item {
+            background: white;
+            padding: 15px;
+            border-radius: var(--border-radius);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+        
+        .info-item strong {
+            display: block;
+            color: var(--dark-color);
+            margin-bottom: 5px;
+        }
+        
+        .analyses-section {
+            margin-top: 30px;
+        }
+        
+        .analyses-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .analysis-card {
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            padding: 20px;
+            transition: transform 0.3s;
+        }
+        
+        .analysis-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .analysis-card.radio { border-left: 5px solid #3498db; }
+        .analysis-card.ct { border-left: 5px solid #9b59b6; }
+        .analysis-card.irm { border-left: 5px solid #e74c3c; }
+        .analysis-card.eco { border-left: 5px solid #27ae60; }
+        .analysis-card.lab { border-left: 5px solid #f39c12; }
+        .analysis-card.unknown { border-left: 5px solid #95a5a6; }
+        
+        .analysis-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .analysis-type {
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        
+        .radio .analysis-type { background: #3498db; color: white; }
+        .ct .analysis-type { background: #9b59b6; color: white; }
+        .irm .analysis-type { background: #e74c3c; color: white; }
+        .eco .analysis-type { background: #27ae60; color: white; }
+        .lab .analysis-type { background: #f39c12; color: white; }
+        .unknown .analysis-type { background: #95a5a6; color: white; }
+        
+        .analysis-content {
+            margin-top: 15px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            display: none;
+        }
+        
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top: 4px solid var(--primary-color);
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error {
+            background: #ffebee;
+            color: var(--error-color);
+            padding: 15px;
+            border-radius: var(--border-radius);
+            border-left: 5px solid var(--error-color);
+            margin: 20px 0;
+            display: none;
+        }
+        
+        .success {
+            background: #e8f5e9;
+            color: var(--success-color);
+            padding: 15px;
+            border-radius: var(--border-radius);
+            border-left: 5px solid var(--success-color);
+            margin: 20px 0;
+            display: none;
+        }
+        
+        .no-data {
+            text-align: center;
+            padding: 40px 20px;
+            color: #7f8c8d;
+        }
+        
+        .no-data i {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            display: block;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            header h1 {
+                font-size: 2rem;
+            }
+            
+            .card {
+                padding: 20px;
+            }
+            
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .analyses-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Hipocrate Patient Analyzer</h1>
+            <p>Enter a patient's CNP to retrieve and analyze their medical information</p>
+        </header>
+        
+        <main>
+            <div class="card">
+                <h2>Patient Analysis</h2>
+                <p>Enter a 13-digit Romanian CNP to retrieve patient information and medical analyses.</p>
+                
+                <form id="cnpForm">
+                    <div class="form-group">
+                        <label for="cnpInput">Patient CNP (13 digits):</label>
+                        <input type="text" id="cnpInput" name="cnp" placeholder="e.g., 1234567890123" maxlength="13" required>
+                    </div>
+                    <button type="submit" id="analyzeBtn">Analyze Patient</button>
+                </form>
+                
+                <div class="loading" id="loading">
+                    <div class="spinner"></div>
+                    <p>Analyzing patient data...</p>
+                </div>
+                
+                <div class="error" id="error"></div>
+                <div class="success" id="success"></div>
+                
+                <div class="results" id="results">
+                    <div class="results-header">
+                        <h2>Patient Information</h2>
+                        <div>Patient ID: <span id="patientId"></span></div>
+                    </div>
+                    
+                    <div class="patient-info">
+                        <h3>Basic Information</h3>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <strong>Name</strong>
+                                <span id="patientName"></span>
+                            </div>
+                            <div class="info-item">
+                                <strong>Patient Code</strong>
+                                <span id="patientCode"></span>
+                            </div>
+                            <div class="info-item">
+                                <strong>CNP</strong>
+                                <span id="patientCnp"></span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="patient-info">
+                        <h3>Medical Records</h3>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <strong>Presentations</strong>
+                                <span id="presentationsCount">0</span>
+                            </div>
+                            <div class="info-item">
+                                <strong>Checkins</strong>
+                                <span id="checkinsCount">0</span>
+                            </div>
+                            <div class="info-item">
+                                <strong>Checkouts</strong>
+                                <span id="checkoutsCount">0</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="analyses-section">
+                        <h3>Medical Analyses</h3>
+                        <div id="analysesContainer">
+                            <div class="no-data" id="noAnalyses">
+                                <i>📋</i>
+                                <p>No analyses found for this patient</p>
+                            </div>
+                            <div class="analyses-grid" id="analysesGrid"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('cnpForm');
+            const cnpInput = document.getElementById('cnpInput');
+            const analyzeBtn = document.getElementById('analyzeBtn');
+            const loading = document.getElementById('loading');
+            const errorDiv = document.getElementById('error');
+            const successDiv = document.getElementById('success');
+            const results = document.getElementById('results');
+            
+            // Form submission handler
+            form.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                const cnp = cnpInput.value.trim();
+                
+                // Validate CNP format
+                if (!cnp || cnp.length !== 13 || !/^\d+$/.test(cnp)) {
+                    showError('Please enter a valid 13-digit CNP');
+                    return;
+                }
+                
+                // Show loading state
+                showLoading();
+                hideError();
+                hideSuccess();
+                results.style.display = 'none';
+                
+                try {
+                    // Validate CNP
+                    const cnpResponse = await fetch(`/api/cnp?id=${cnp}`);
+                    const cnpData = await cnpResponse.json();
+                    
+                    if (cnpData.status !== 'success' || !cnpData.valid) {
+                        showError('Invalid CNP. Please check the number and try again.');
+                        return;
+                    }
+                    
+                    showSuccess('Valid CNP detected. Retrieving patient information...');
+                    
+                    // Search for patient
+                    const searchResponse = await fetch(`/api/patient/search?q=${cnp}`);
+                    const searchData = await searchResponse.json();
+                    
+                    if (searchData.status !== 'success') {
+                        showError('Failed to retrieve patient information.');
+                        return;
+                    }
+                    
+                    let patientCode = null;
+                    let patientData = null;
+                    
+                    if (searchData.type === 'single_patient') {
+                        patientCode = searchData.data.patient_code;
+                        patientData = searchData.data;
+                    } else if (searchData.type === 'multiple_patients' && searchData.data.length > 0) {
+                        patientCode = searchData.data[0].patient_code;
+                        // Get full patient data
+                        const patientResponse = await fetch(`/api/patient?id=${patientCode}`);
+                        const patientResult = await patientResponse.json();
+                        if (patientResult.status === 'success') {
+                            patientData = {
+                                patient_name: searchData.data[0].patient_name,
+                                patient_code: patientCode,
+                                patient_id: cnp,
+                                presentations: [],
+                                checkins: patientResult.checkin_ids || [],
+                                checkouts: patientResult.checkout_ids || []
+                            };
+                        }
+                    } else {
+                        showError('No patient found with this CNP.');
+                        return;
+                    }
+                    
+                    if (!patientCode || !patientData) {
+                        showError('Failed to retrieve patient data.');
+                        return;
+                    }
+                    
+                    showSuccess('Patient information retrieved successfully. Loading analyses...');
+                    
+                    // Get analyses
+                    const analysesResponse = await fetch(`/api/analyses?id=${patientCode}`);
+                    const analysesData = await analysesResponse.json();
+                    
+                    if (analysesData.status !== 'success') {
+                        showError('Failed to retrieve patient analyses.');
+                        return;
+                    }
+                    
+                    // Display all data
+                    displayPatientData(patientData, analysesData);
+                    showSuccess('Analysis complete!');
+                    
+                } catch (err) {
+                    console.error('Error:', err);
+                    showError('An error occurred while analyzing the patient data. Please try again.');
+                } finally {
+                    hideLoading();
+                }
+            });
+            
+            function showLoading() {
+                loading.style.display = 'block';
+                analyzeBtn.disabled = true;
+            }
+            
+            function hideLoading() {
+                loading.style.display = 'none';
+                analyzeBtn.disabled = false;
+            }
+            
+            function showError(message) {
+                errorDiv.textContent = message;
+                errorDiv.style.display = 'block';
+                hideLoading();
+            }
+            
+            function hideError() {
+                errorDiv.style.display = 'none';
+            }
+            
+            function showSuccess(message) {
+                successDiv.textContent = message;
+                successDiv.style.display = 'block';
+            }
+            
+            function hideSuccess() {
+                successDiv.style.display = 'none';
+            }
+            
+            function displayPatientData(patientData, analysesData) {
+                // Display patient information
+                document.getElementById('patientId').textContent = patientData.patient_id || 'N/A';
+                document.getElementById('patientName').textContent = patientData.patient_name || 'N/A';
+                document.getElementById('patientCode').textContent = patientData.patient_code || 'N/A';
+                document.getElementById('patientCnp').textContent = patientData.patient_id || 'N/A';
+                document.getElementById('presentationsCount').textContent = (patientData.presentations || []).length;
+                document.getElementById('checkinsCount').textContent = (patientData.checkins || []).length;
+                document.getElementById('checkoutsCount').textContent = (patientData.checkouts || []).length;
+                
+                // Display analyses
+                const analysesGrid = document.getElementById('analysesGrid');
+                const noAnalyses = document.getElementById('noAnalyses');
+                
+                if (analysesData.analyses && analysesData.analyses.length > 0) {
+                    noAnalyses.style.display = 'none';
+                    analysesGrid.innerHTML = '';
+                    
+                    analysesData.analyses.forEach(analysis => {
+                        const analysisCard = document.createElement('div');
+                        analysisCard.className = `analysis-card ${analysis.type || 'unknown'}`;
+                        
+                        analysisCard.innerHTML = `
+                            <div class="analysis-header">
+                                <h4>Analysis #${analysis.report_id}</h4>
+                                <span class="analysis-type">${analysis.type || 'Unknown'}</span>
+                            </div>
+                            <div class="analysis-content">
+                                <p><strong>Type:</strong> ${analysis.type || 'Unknown'}</p>
+                                <p><strong>Report ID:</strong> ${analysis.report_id}</p>
+                                ${analysis.type && ['radio', 'ct', 'irm', 'eco'].includes(analysis.type) ? 
+                                    `<button class="view-report-btn" data-id="${analysis.report_id}" data-type="${analysis.type}">View Report</button>` : 
+                                    ''}
+                            </div>
+                        `;
+                        
+                        analysesGrid.appendChild(analysisCard);
+                    });
+                    
+                    // Add event listeners to view report buttons
+                    document.querySelectorAll('.view-report-btn').forEach(button => {
+                        button.addEventListener('click', function() {
+                            const reportId = this.getAttribute('data-id');
+                            const reportType = this.getAttribute('data-type');
+                            alert(`Report viewing functionality for ${reportType} report #${reportId} would be implemented here.`);
+                        });
+                    });
+                } else {
+                    noAnalyses.style.display = 'block';
+                    analysesGrid.innerHTML = '';
+                }
+                
+                // Show results
+                results.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>
+    """
+    
+    return web.Response(text=html_content, content_type='text/html')
 
 def is_login_page(content: str) -> bool:
     """Detect if the provided content is a login page.
