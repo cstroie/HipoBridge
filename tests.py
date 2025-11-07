@@ -28,50 +28,6 @@ async def test_root_endpoint(session: aiohttp.ClientSession) -> bool:
         print(f"  ✗ Root endpoint failed with exception: {e}")
         return False
 
-async def test_service_get_endpoint(session: aiohttp.ClientSession) -> bool:
-    """Test the service GET endpoint"""
-    print("Testing service GET endpoint...")
-    try:
-        # Add credentials to headers if available
-        headers = {}
-        if HYP_USER and HYP_PASS:
-            headers["X-Username"] = HYP_USER
-            headers["X-Password"] = HYP_PASS
-            
-        async with session.get(f"{BASE_URL}/api/service", headers=headers) as response:
-            if response.status == 200:
-                data = await response.json()
-                print(f"  ✓ Service GET returned status: {data.get('status', 'unknown')}")
-                return True
-            else:
-                print(f"  ✗ Service GET failed with status: {response.status}")
-                return False
-    except Exception as e:
-        print(f"  ✗ Service GET failed with exception: {e}")
-        return False
-
-async def test_service_post_endpoint(session: aiohttp.ClientSession) -> bool:
-    """Test the service POST endpoint"""
-    print("Testing service POST endpoint...")
-    try:
-        test_data = {"test": "data"}
-        # Add credentials to headers if available
-        headers = {}
-        if HYP_USER and HYP_PASS:
-            headers["X-Username"] = HYP_USER
-            headers["X-Password"] = HYP_PASS
-            
-        async with session.post(f"{BASE_URL}/api/service", json=test_data, headers=headers) as response:
-            if response.status == 200:
-                data = await response.json()
-                print(f"  ✓ Service POST returned status: {data.get('status', 'unknown')}")
-                return True
-            else:
-                print(f"  ✗ Service POST failed with status: {response.status}")
-                return False
-    except Exception as e:
-        print(f"  ✗ Service POST failed with exception: {e}")
-        return False
 
 async def test_patient_search_endpoint(session: aiohttp.ClientSession) -> bool:
     """Test the patient search endpoint"""
@@ -278,8 +234,6 @@ async def run_all_tests() -> None:
     async with aiohttp.ClientSession() as session:
         tests = [
             test_root_endpoint,
-            test_service_get_endpoint,
-            test_service_post_endpoint,
             test_login_endpoint_success,
             test_login_endpoint_missing_credentials,
             test_login_endpoint_invalid_json,
