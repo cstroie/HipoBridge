@@ -38,7 +38,7 @@ document.addEventListener('DOMContentLoaded', function() {
             showSuccess('Valid CNP detected. Retrieving patient information...');
             
             // Search for patient
-            const searchResponse = await fetch(`/api/patient/search?q=${cnp}`);
+            const searchResponse = await fetch(`/api/patients/search?q=${cnp}`);
             const searchData = await searchResponse.json();
             
             if (searchData.status !== 'success') {
@@ -55,7 +55,7 @@ document.addEventListener('DOMContentLoaded', function() {
             } else if (searchData.type === 'multiple_patients' && searchData.data.length > 0) {
                 patientCode = searchData.data[0].patient_code;
                 // Get full patient data
-                const patientResponse = await fetch(`/api/patient?id=${patientCode}`);
+                const patientResponse = await fetch(`/api/patients?id=${patientCode}`);
                 const patientResult = await patientResponse.json();
                 if (patientResult.status === 'success') {
                     patientData = {
@@ -181,7 +181,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     try {
                         // Fetch report data
-                        const reportResponse = await fetch(`/api/report?id=${reportId}`);
+                        const reportResponse = await fetch(`/api/reports?id=${reportId}`);
                         const reportData = await reportResponse.json();
                         
                         if (reportData.status !== 'success') {
