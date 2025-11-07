@@ -14,7 +14,18 @@ import json
 BASE_URL = "http://localhost:44660"
 
 async def login(session: aiohttp.ClientSession, username: str, password: str) -> bool:
-    """Perform login to the API"""
+    """Perform login to the Hipocrate API.
+    
+    Makes a POST request to the API login endpoint with the provided credentials.
+    
+    Args:
+        session (aiohttp.ClientSession): The HTTP session to use for the request
+        username (str): Username for authentication
+        password (str): Password for authentication
+        
+    Returns:
+        bool: True if login was successful, False otherwise
+    """
     print(f"Logging in as {username}...")
     
     login_data = {
@@ -37,7 +48,18 @@ async def login(session: aiohttp.ClientSession, username: str, password: str) ->
         return False
 
 async def search_patients(session: aiohttp.ClientSession, search_term: str) -> bool:
-    """Search for patients using the API"""
+    """Search for patients using the API.
+    
+    Performs a patient search on the Hipocrate service using the provided search term.
+    Can return either a single patient result or multiple patient results.
+    
+    Args:
+        session (aiohttp.ClientSession): The HTTP session to use for the request
+        search_term (str): The term to search for (patient name, CNP, etc.)
+        
+    Returns:
+        bool: True if search was successful, False otherwise
+    """
     print(f"Searching for patients with term: '{search_term}'")
     
     try:
@@ -97,7 +119,17 @@ async def search_patients(session: aiohttp.ClientSession, search_term: str) -> b
         return False
 
 async def get_report(session: aiohttp.ClientSession, report_id: str) -> bool:
-    """Retrieve a report by ID using the API"""
+    """Retrieve a report by ID using the API.
+    
+    Gets a report from the Hipocrate service and displays the parsed data.
+    
+    Args:
+        session (aiohttp.ClientSession): The HTTP session to use for the request
+        report_id (str): The ID of the report to retrieve
+        
+    Returns:
+        bool: True if retrieval was successful, False otherwise
+    """
     print(f"Retrieving report with ID: {report_id}")
     
     try:
@@ -156,7 +188,17 @@ async def get_report(session: aiohttp.ClientSession, report_id: str) -> bool:
         return False
 
 async def get_checkout(session: aiohttp.ClientSession, checkout_id: str) -> bool:
-    """Retrieve checkout information by ID using the API"""
+    """Retrieve checkout information by ID using the API.
+    
+    Gets checkout information from the Hipocrate service and displays the parsed data.
+    
+    Args:
+        session (aiohttp.ClientSession): The HTTP session to use for the request
+        checkout_id (str): The ID of the checkout to retrieve
+        
+    Returns:
+        bool: True if retrieval was successful, False otherwise
+    """
     print(f"Retrieving checkout with ID: {checkout_id}")
     
     try:
@@ -199,7 +241,18 @@ async def get_checkout(session: aiohttp.ClientSession, checkout_id: str) -> bool
         return False
 
 async def get_patient_code_from_cnp(session: aiohttp.ClientSession, cnp: str) -> str:
-    """Get patient code by validating CNP and searching for the patient"""
+    """Get patient code by validating CNP and searching for the patient.
+    
+    Validates a Romanian CNP and then searches for the corresponding patient
+    to retrieve their patient code.
+    
+    Args:
+        session (aiohttp.ClientSession): The HTTP session to use for requests
+        cnp (str): The Romanian CNP to validate and search for
+        
+    Returns:
+        str: The patient code if found, None otherwise
+    """
     # First validate the CNP
     try:
         async with session.get(f"{BASE_URL}/api/cnp?id={cnp}") as response:
@@ -257,7 +310,18 @@ async def get_patient_code_from_cnp(session: aiohttp.ClientSession, cnp: str) ->
         return None
 
 async def get_patient(session: aiohttp.ClientSession, patient_id: str) -> bool:
-    """Retrieve patient information by ID using the API"""
+    """Retrieve patient information by ID using the API.
+    
+    Gets patient information from the Hipocrate service. If a 13-digit CNP is provided,
+    it will be validated and converted to a patient code before retrieval.
+    
+    Args:
+        session (aiohttp.ClientSession): The HTTP session to use for the request
+        patient_id (str): The patient ID or CNP to retrieve
+        
+    Returns:
+        bool: True if retrieval was successful, False otherwise
+    """
     # Check if patient_id is a 13-digit CNP
     if patient_id.isdigit() and len(patient_id) == 13:
         print(f"Detected 13-digit ID, checking if it's a valid CNP: {patient_id}")
@@ -310,7 +374,20 @@ async def get_patient(session: aiohttp.ClientSession, patient_id: str) -> bool:
         return False
 
 async def get_analyses(session: aiohttp.ClientSession, patient_id: str) -> bool:
-    """Retrieve all analyses for a patient by ID using the API"""
+    """Retrieve all analyses for a patient by ID using the API.
+    
+    Gets all analyses for a specific patient from the Hipocrate service.
+    If a 13-digit CNP is provided, it will be validated and converted to 
+    a patient code before retrieval. For imaging analyses (radio, ct, irm, eco),
+    the corresponding reports will be automatically retrieved and displayed.
+    
+    Args:
+        session (aiohttp.ClientSession): The HTTP session to use for the request
+        patient_id (str): The patient ID or CNP to retrieve analyses for
+        
+    Returns:
+        bool: True if retrieval was successful, False otherwise
+    """
     # Check if patient_id is a 13-digit CNP
     if patient_id.isdigit() and len(patient_id) == 13:
         print(f"Detected 13-digit ID, checking if it's a valid CNP: {patient_id}")
@@ -374,7 +451,17 @@ async def get_analyses(session: aiohttp.ClientSession, patient_id: str) -> bool:
         return False
 
 async def validate_cnp(session: aiohttp.ClientSession, cnp: str) -> bool:
-    """Validate a Romanian CNP using the API"""
+    """Validate a Romanian CNP using the API.
+    
+    Validates a Romanian CNP (Personal Numerical Code) using the API endpoint.
+    
+    Args:
+        session (aiohttp.ClientSession): The HTTP session to use for the request
+        cnp (str): The Romanian CNP to validate
+        
+    Returns:
+        bool: True if validation request was successful, False otherwise
+    """
     print(f"Validating CNP: {cnp}")
     
     try:
@@ -399,7 +486,14 @@ async def validate_cnp(session: aiohttp.ClientSession, cnp: str) -> bool:
         return False
 
 async def main():
-    """Main function to parse arguments and run the client"""
+    """Main function to parse arguments and run the client.
+    
+    Parses command line arguments and executes the requested operations
+    (login, patient search, report retrieval, etc.).
+    
+    Returns:
+        int: Exit code (0 for success, 1 for failure)
+    """
     parser = argparse.ArgumentParser(description="Hipocrate API Client")
     parser.add_argument("--username", "-u", help="Username for login")
     parser.add_argument("--password", "-w", help="Password for login")
