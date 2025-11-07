@@ -89,7 +89,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // Display all data
-            displayPatientData(patientData, analysesData);
+            await displayPatientData(patientData, analysesData);
             showSuccess('Analysis complete!');
             
         } catch (err) {
