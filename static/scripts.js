@@ -147,8 +147,13 @@ document.addEventListener('DOMContentLoaded', function() {
             noAnalyses.style.display = 'none';
             analysesGrid.innerHTML = '';
             
-            // Process each analysis
+            // Process each analysis - only display imaging analyses
             for (const analysis of analysesData.analyses) {
+                // Only display analyses with types 'radio', 'ct', 'irm', or 'eco'
+                if (!analysis.type || !['radio', 'ct', 'irm', 'eco'].includes(analysis.type)) {
+                    continue;
+                }
+                
                 const analysisCard = document.createElement('article');
                 analysisCard.className = `analysis-card ${analysis.type || 'unknown'}`;
                 
