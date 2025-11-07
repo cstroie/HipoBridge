@@ -129,7 +129,7 @@ document.addEventListener('DOMContentLoaded', function() {
         successDiv.style.display = 'none';
     }
     
-    function displayPatientData(patientData, analysesData) {
+    async function displayPatientData(patientData, analysesData) {
         // Display patient information
         document.getElementById('patientId').textContent = patientData.patient_id || 'N/A';
         document.getElementById('patientName').textContent = patientData.patient_name || 'N/A';
