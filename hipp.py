@@ -1203,6 +1203,10 @@ async def analyses_handler(request):
             "message": "Patient ID is required"
         }, status=400)
     
+    # Get optional parameters
+    analysis_type = request.query.get('type')
+    datetime_filter = request.query.get('dt')
+    
     logger.info(f"Retrieving analyses for patient with ID: {patient_id}")
     
     try:
@@ -1222,10 +1226,70 @@ async def analyses_handler(request):
         # Parse the analyses data to extract report IDs, types, and patient name
         parsed_data = parse_analyses_data(response_text)
         
+        # Filter analyses by type if specified
+        analyses = parsed_data["analyses"]
+        if analysis_type:
+            analyses = [a for a in analyses if a["type"] == analysis_type]
+        
+        # Filter analyses by datetime if specified
+        if datetime_filter and analyses:
+            # For datetime filtering, we need to get report details to check dates
+            filtered_analyses = []
+            try:
+                from datetime import datetime, timedelta
+                
+                # Parse the filter datetime
+                filter_dt = datetime.fromisoformat(datetime_filter)
+                # Define the time window (up to 6 hours later)
+                max_dt = filter_dt + timedelta(hours=6)
+                
+                # Check each analysis
+                for analysis in analyses:
+                    # Get report details to extract datetime
+                    report_url = f"{SERVICE_URL}/analyse/Reports/analyseFile.asp?id={analysis['report_id']}"
+                    report_text, success, _ = await make_authenticated_request(
+                        session, report_url, "GET", None, username, password
+                    )
+                    
+                    if success:
+                        # Parse report to get datetime
+                        report_data = parse_report_data(report_text)
+                        report_datetime_str = report_data.get("sample_datetime")
+                        
+                        if report_datetime_str:
+                            # Try to parse the report datetime
+                            try:
+                                # Handle common date formats
+                                if re.match(r'\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}', report_datetime_str):
+                                    report_dt = datetime.strptime(report_datetime_str, '%d/%m/%Y %H:%M:%S')
+                                elif re.match(r'\d{2}/\d{2}/\d{4}', report_datetime_str):
+                                    report_dt = datetime.strptime(report_datetime_str, '%d/%m/%Y')
+                                else:
+                                    # Try ISO format
+                                    report_dt = datetime.fromisoformat(report_datetime_str)
+                                
+                                # Check if report is within the time window
+                                if filter_dt <= report_dt <= max_dt:
+                                    filtered_analyses.append(analysis)
+                            except ValueError:
+                                # If we can't parse the datetime, include the analysis
+                                filtered_analyses.append(analysis)
+                        else:
+                            # If no datetime in report, include the analysis
+                            filtered_analyses.append(analysis)
+                    else:
+                        # If we can't get report details, include the analysis
+                        filtered_analyses.append(analysis)
+                
+                analyses = filtered_analyses
+            except Exception as e:
+                logger.error(f"Error filtering analyses by datetime: {e}")
+                # If datetime filtering fails, return unfiltered analyses
+        
         return web.json_response({
             "status": "success",
             "patient_name": parsed_data["patient_name"],
-            "analyses": parsed_data["analyses"]
+            "analyses": analyses
         })
             
     except Exception as e:
@@ -1642,6 +1706,25 @@ async def spec_handler(request):
                             "description": "Patient ID",
                             "schema": {
                                 "type": "string"
+                            }
+                        },
+                        {
+                            "name": "type",
+                            "in": "query",
+                            "required": False,
+                            "description": "Analysis type to filter by (e.g., radio, ct, irm, eco, lab)",
+                            "schema": {
+                                "type": "string"
+                            }
+                        },
+                        {
+                            "name": "dt",
+                            "in": "query",
+                            "required": False,
+                            "description": "Date/time filter in ISO format (YYYY-MM-DDTHH:mm:ss) - includes reports older than this but no older than 6 hours later",
+                            "schema": {
+                                "type": "string",
+                                "format": "date-time"
                             }
                         },
                         {
