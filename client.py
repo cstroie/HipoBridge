@@ -308,15 +308,62 @@ async def get_patient_code_from_cnp(session: aiohttp.ClientSession, cnp: str) ->
         print("Unexpected search result type")
         return None
 
+async def search_patient_code_by_partial_cnp(session: aiohttp.ClientSession, partial_cnp: str) -> str:
+    """Search for patient code using partial CNP.
+    
+    Searches for patients using a partial CNP and returns the patient code
+    of the first match if found.
+    
+    Args:
+        session (aiohttp.ClientSession): The HTTP session to use for requests
+        partial_cnp (str): The partial CNP to search for (without the asterisk)
+        
+    Returns:
+        str: The patient code if found, None otherwise
+    """
+    print(f"Searching for patient with partial CNP: {partial_cnp}")
+    
+    # Search for the patient using the partial CNP
+    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/api/patients/search?q={partial_cnp}")
+    
+    if not success or data.get("status") != "success":
+        print(f"Patient search failed: {data.get('message', 'No message')}")
+        return None
+    
+    result_type = data.get("type")
+    if result_type == "single_patient":
+        patient_data = data.get("data", {})
+        patient_code = patient_data.get("patient_code")
+        if patient_code:
+            print(f"Found patient code: {patient_code}")
+            return patient_code
+        else:
+            print("Patient code not found in search results")
+            return None
+    elif result_type == "multiple_patients":
+        patients = data.get("data", [])
+        if patients:
+            # Use the first patient's code
+            patient_code = patients[0].get("patient_code")
+            if patient_code:
+                print(f"Found patient code: {patient_code} (first of {len(patients)} matches)")
+                return patient_code
+        print("No patient code found in search results")
+        return None
+    else:
+        print("Unexpected search result type")
+        return None
+
 async def get_patient(session: aiohttp.ClientSession, patient_id: str) -> bool:
     """Retrieve patient information by ID using the API.
     
     Gets patient information from the Hipocrate service. If a 13-digit CNP is provided,
-    it will be validated and converted to a patient code before retrieval.
+    it will be validated and converted to a patient code before retrieval. If the ID ends
+    with *, it's treated as a partial CNP and searched for.
     
     Args:
         session (aiohttp.ClientSession): The HTTP session to use for the request
-        patient_id (str): The patient ID or CNP to retrieve
+        patient_id (str): The patient ID, CNP, or partial CNP to retrieve
         
     Returns:
         bool: True if retrieval was successful, False otherwise
@@ -330,6 +377,17 @@ async def get_patient(session: aiohttp.ClientSession, patient_id: str) -> bool:
             print(f"Using patient code {patient_id} for retrieval")
         else:
             print("Could not resolve CNP to patient code, using original ID")
+    # Check if patient_id ends with *, treat as partial CNP
+    elif patient_id.endswith('*'):
+        partial_cnp = patient_id[:-1]  # Remove the asterisk
+        if partial_cnp:  # Make sure there's something left
+            print(f"Detected partial CNP search: {partial_cnp}")
+            patient_code = await search_patient_code_by_partial_cnp(session, partial_cnp)
+            if patient_code:
+                patient_id = patient_code
+                print(f"Using patient code {patient_id} for retrieval")
+            else:
+                print("Could not find patient with partial CNP, using original ID")
     
     print(f"Retrieving patient with ID: {patient_id}")
     
@@ -366,12 +424,13 @@ async def get_analyses(session: aiohttp.ClientSession, patient_id: str, analysis
     
     Gets all analyses for a specific patient from the Hipocrate service.
     If a 13-digit CNP is provided, it will be validated and converted to 
-    a patient code before retrieval. For imaging analyses (radio, ct, irm, eco),
+    a patient code before retrieval. If the ID ends with *, it's treated as
+    a partial CNP and searched for. For imaging analyses (radio, ct, irm, eco),
     the corresponding reports will be automatically retrieved and displayed.
     
     Args:
         session (aiohttp.ClientSession): The HTTP session to use for the request
-        patient_id (str): The patient ID or CNP to retrieve analyses for
+        patient_id (str): The patient ID, CNP, or partial CNP to retrieve analyses for
         analysis_type (str, optional): Analysis type to filter by (e.g., radio, ct, irm, eco, lab)
         datetime_filter (str, optional): Date/time filter in ISO format (YYYY-MM-DDTHH:mm:ss)
         
@@ -387,6 +446,17 @@ async def get_analyses(session: aiohttp.ClientSession, patient_id: str, analysis
             print(f"Using patient code {patient_id} for analyses retrieval")
         else:
             print("Could not resolve CNP to patient code, using original ID")
+    # Check if patient_id ends with *, treat as partial CNP
+    elif patient_id.endswith('*'):
+        partial_cnp = patient_id[:-1]  # Remove the asterisk
+        if partial_cnp:  # Make sure there's something left
+            print(f"Detected partial CNP search: {partial_cnp}")
+            patient_code = await search_patient_code_by_partial_cnp(session, partial_cnp)
+            if patient_code:
+                patient_id = patient_code
+                print(f"Using patient code {patient_id} for analyses retrieval")
+            else:
+                print("Could not find patient with partial CNP, using original ID")
     
     # Build URL with optional parameters
     url = f"{BASE_URL}/api/analyses?id={patient_id}"
