@@ -173,6 +173,18 @@ document.addEventListener('DOMContentLoaded', function() {
                         const reportData = await reportResponse.json();
                         
                         if (reportData.status === 'success' && reportData.reports && reportData.reports.length > 0) {
+                            // Add report metadata (date/time and examiner) if available
+                            if (reportData.sample_datetime || reportData.examiner) {
+                                cardContent += `<div class="report-meta">`;
+                                if (reportData.sample_datetime) {
+                                    cardContent += `<p><strong>Date/Time:</strong> ${reportData.sample_datetime}</p>`;
+                                }
+                                if (reportData.examiner) {
+                                    cardContent += `<p><strong>Examiner:</strong> ${reportData.examiner}</p>`;
+                                }
+                                cardContent += `</div>`;
+                            }
+                            
                             // Add report content to the card
                             cardContent += `<div class="report-preview">`;
                             reportData.reports.forEach((report, index) => {
