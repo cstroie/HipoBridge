@@ -26,16 +26,21 @@ document.addEventListener('DOMContentLoaded', function() {
         results.style.display = 'none';
         
         try {
-            // Validate CNP
-            const cnpResponse = await fetch(`/api/cnp?id=${cnp}`);
-            const cnpData = await cnpResponse.json();
-            
-            if (cnpData.status !== 'success' || !cnpData.valid) {
-                showError('Invalid CNP. Please check the number and try again.');
-                return;
+            // For partial CNP searches (ending with *), skip CNP validation
+            if (!cnp.endsWith('*')) {
+                // Validate CNP
+                const cnpResponse = await fetch(`/api/cnp?id=${cnp}`);
+                const cnpData = await cnpResponse.json();
+                
+                if (cnpData.status !== 'success' || !cnpData.valid) {
+                    showError('Invalid CNP. Please check the number and try again.');
+                    return;
+                }
+                
+                showSuccess('Valid CNP detected. Retrieving patient information...');
+            } else {
+                showSuccess('Searching for patient with partial CNP...');
             }
-            
-            showSuccess('Valid CNP detected. Retrieving patient information...');
             
             // Search for patient
             const searchResponse = await fetch(`/api/patients/search?q=${cnp}`);
@@ -68,7 +73,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     };
                 }
             } else {
-                showError('No patient found with this CNP.');
+                showError('No patient found with this search term.');
                 return;
             }
             
