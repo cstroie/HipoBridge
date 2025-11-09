@@ -1713,7 +1713,7 @@ async def spec_handler(request):
             "/api/analyses": {
                 "get": {
                     "summary": "Get patient analyses",
-                    "description": "Retrieve all analyses for a patient",
+                    "description": "Retrieve all analyses for a patient with optional filtering by type and datetime",
                     "parameters": [
                         {
                             "name": "id",
