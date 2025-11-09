@@ -694,7 +694,17 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
                 result_div = result_element.find_next('div')
                 result_content = ""
                 if result_div:
-                    result_content = html_to_markdown(str(result_div))
+                    # Check if the div contains only a single <b> tag as its child
+                    div_children = list(result_div.children)
+                    # Filter out text nodes that contain only whitespace
+                    element_children = [child for child in div_children if hasattr(child, 'name') and child.name]
+                    
+                    if len(element_children) == 1 and element_children[0].name == 'b':
+                        # If the only child is a <b> tag, use its content directly
+                        result_content = html_to_markdown(str(element_children[0]))
+                    else:
+                        # Otherwise, process the entire div
+                        result_content = html_to_markdown(str(result_div))
                 
                 # Add to reports list
                 report_data["reports"].append({
