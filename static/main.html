@@ -16,14 +16,14 @@
         <section>
             <hgroup>
                 <h2>Patient Analysis</h2>
-                <p>Enter a 13-digit Romanian CNP to retrieve patient information and medical analyses.</p>
+                <p>Enter a 13-digit Romanian CNP or partial CNP (ending with *) to retrieve patient information and medical analyses.</p>
             </hgroup>
             
             <form id="cnpForm">
                 <div class="grid">
                     <div>
-                        <label for="cnpInput">Patient CNP (13 digits):</label>
-                        <input type="text" id="cnpInput" name="cnp" placeholder="e.g., 1234567890123" maxlength="13" required>
+                        <label for="cnpInput">Patient CNP or Partial CNP:</label>
+                        <input type="text" id="cnpInput" name="cnp" placeholder="e.g., 1234567890123 or 1234567*" required>
                     </div>
                 </div>
                 <button type="submit" id="analyzeBtn">Analyze Patient</button>

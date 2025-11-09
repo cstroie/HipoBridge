@@ -13,9 +13,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const cnp = cnpInput.value.trim();
         
-        // Validate CNP format
-        if (!cnp || cnp.length !== 13 || !/^\d+$/.test(cnp)) {
-            showError('Please enter a valid 13-digit CNP');
+        // Validate CNP format - either 13-digit CNP or partial CNP ending with *
+        if (!cnp || (!/^\d{13}$/.test(cnp) && !/^\d+\*$/.test(cnp))) {
+            showError('Please enter a valid 13-digit CNP or partial CNP (digits followed by *)');
             return;
         }
         
