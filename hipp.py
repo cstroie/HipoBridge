@@ -16,7 +16,7 @@ logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('hipp')
 
 # Configuration
 SERVICE_URL = "http://192.168.3.230/hipocrate"
