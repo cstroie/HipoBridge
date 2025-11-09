@@ -340,6 +340,7 @@ async def patient_search_handler(request):
     
     Performs a patient search on the Hipocrate service using the provided search term.
     Can return either a single patient result or multiple patient results.
+    If the search term ends with *, it's treated as a partial CNP search.
     
     Args:
         request: The incoming HTTP request with 'q' query parameter for search term
@@ -364,7 +365,13 @@ async def patient_search_handler(request):
             "message": "Search term is required"
         }, status=400)
     
-    logger.info(f"Searching for patients with term: {search_term}")
+    # Check if search term ends with *, treat as partial CNP
+    if search_term.endswith('*'):
+        actual_search_term = search_term[:-1]  # Remove the asterisk
+        logger.info(f"Performing partial CNP search for: {actual_search_term}")
+    else:
+        actual_search_term = search_term
+        logger.info(f"Searching for patients with term: {search_term}")
     
     try:
         session = await get_session()
@@ -373,7 +380,7 @@ async def patient_search_handler(request):
         search_data = {
             "hdnSearchType": "1",
             "pageNo": "1",
-            "strDescription": search_term,
+            "strDescription": actual_search_term,
             "strLastName": "",
             "strFirstName": "",
             "strCodePres": "",
