@@ -361,7 +361,7 @@ async def get_patient(session: aiohttp.ClientSession, patient_id: str) -> bool:
     
     return True
 
-async def get_analyses(session: aiohttp.ClientSession, patient_id: str) -> bool:
+async def get_analyses(session: aiohttp.ClientSession, patient_id: str, analysis_type: str = None, datetime_filter: str = None) -> bool:
     """Retrieve all analyses for a patient by ID using the API.
     
     Gets all analyses for a specific patient from the Hipocrate service.
@@ -372,6 +372,8 @@ async def get_analyses(session: aiohttp.ClientSession, patient_id: str) -> bool:
     Args:
         session (aiohttp.ClientSession): The HTTP session to use for the request
         patient_id (str): The patient ID or CNP to retrieve analyses for
+        analysis_type (str, optional): Analysis type to filter by (e.g., radio, ct, irm, eco, lab)
+        datetime_filter (str, optional): Date/time filter in ISO format (YYYY-MM-DDTHH:mm:ss)
         
     Returns:
         bool: True if retrieval was successful, False otherwise
@@ -386,9 +388,20 @@ async def get_analyses(session: aiohttp.ClientSession, patient_id: str) -> bool:
         else:
             print("Could not resolve CNP to patient code, using original ID")
     
-    print(f"Retrieving analyses for patient with ID: {patient_id}")
+    # Build URL with optional parameters
+    url = f"{BASE_URL}/api/analyses?id={patient_id}"
+    if analysis_type:
+        url += f"&type={analysis_type}"
+    if datetime_filter:
+        url += f"&dt={datetime_filter}"
     
-    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/api/analyses?id={patient_id}")
+    print(f"Retrieving analyses for patient with ID: {patient_id}")
+    if analysis_type:
+        print(f"Filtering by analysis type: {analysis_type}")
+    if datetime_filter:
+        print(f"Filtering by datetime: {datetime_filter}")
+    
+    data, success = await _make_api_request(session, "GET", url)
     
     if not success or data.get("status") != "success":
         print(f"Analyses retrieval failed: {data.get('message', 'No message')}")
@@ -468,6 +481,8 @@ async def main():
     parser.add_argument("--checkout", "-o", help="Checkout ID to retrieve")
     parser.add_argument("--patient", "-p", help="Patient ID to retrieve")
     parser.add_argument("--analyses", "-a", help="Patient ID to retrieve analyses for")
+    parser.add_argument("--analysis-type", "-t", help="Analysis type to filter by (e.g., radio, ct, irm, eco, lab)")
+    parser.add_argument("--datetime-filter", "-d", help="Date/time filter in ISO format (YYYY-MM-DDTHH:mm:ss)")
     parser.add_argument("--cnp", "-c", help="CNP to validate")
     
     args = parser.parse_args()
@@ -522,7 +537,7 @@ async def main():
         
         # Retrieve analyses if requested
         if args.analyses:
-            analyses_success = await get_analyses(session, args.analyses)
+            analyses_success = await get_analyses(session, args.analyses, args.analysis_type, args.datetime_filter)
             if not analyses_success:
                 print("Failed to retrieve analyses")
                 return 1
