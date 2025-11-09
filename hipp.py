@@ -507,7 +507,13 @@ def html_to_markdown(html_content: str) -> str:
         # Bold (but skip if it's a wrapper tag)
         for b in soup.find_all(['b', 'strong']):
             # Check if this is a wrapper tag (contains all other content)
-            if not (b.parent.name == 'body' or b.parent == soup) or len(list(b.parent.children)) > 1:
+            parent_children = list(b.parent.children)
+            # Filter out text nodes that are only whitespace
+            element_children = [child for child in parent_children if hasattr(child, 'name') and child.name]
+            
+            # Skip if this is a wrapper tag (only child element in parent)
+            is_wrapper = (b.parent.name == 'body' or b.parent == soup) and len(element_children) == 1
+            if not is_wrapper:
                 b.insert_before('**')
                 b.insert_after('**')
             b.unwrap()
