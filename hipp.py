@@ -846,13 +846,13 @@ def parse_single_patient_data(html_content: str) -> Dict[str, Any]:
 def parse_multiple_patients_data(html_content: str) -> List[Dict[str, Any]]:
     """Parse HTML content for multiple patient search results and extract patient data.
     
-    Extracts patient names and codes from search results page with multiple patients.
+    Extracts patient names, CNP, and codes from search results page with multiple patients.
     
     Args:
         html_content (str): HTML content of the search results page
         
     Returns:
-        List[Dict[str, Any]]: List of dictionaries containing patient data
+        List[Dict[str, Any]]: List of dictionaries containing patient data (name, CNP, code only)
     """
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
@@ -882,6 +882,7 @@ def parse_multiple_patients_data(html_content: str) -> List[Dict[str, Any]]:
             
             # Look for the patient name link (next link in the row)
             name_links = row.find_all('a')
+            patient_name = ""
             for name_link in name_links:
                 if name_link != code_link:
                     # Extract patient name
@@ -889,13 +890,28 @@ def parse_multiple_patients_data(html_content: str) -> List[Dict[str, Any]]:
                     name_text = name_link.get_text()
                     # Clean up the name (remove extra spaces, normalize)
                     patient_name = re.sub(r'\s+', ' ', name_text.strip())
-                    
-                    if patient_name:
-                        patients.append({
-                            "patient_code": patient_code,
-                            "patient_name": patient_name
-                        })
                     break
+            
+            # Look for CNP in the row (text input field with CNP)
+            patient_cnp = ""
+            cnp_inputs = row.find_all('input', type='text')
+            for cnp_input in cnp_inputs:
+                # Check if this input is for CNP by looking at surrounding context
+                parent = cnp_input.find_parent('td')
+                if parent and parent.find_previous_sibling('td'):
+                    prev_td = parent.find_previous_sibling('td')
+                    if prev_td and 'cnp' in prev_td.get_text().lower():
+                        patient_cnp = cnp_input.get('value', '').strip()
+                        break
+            
+            # Only add patient if we have at least a name or code
+            if patient_name or patient_code:
+                patient_data = {
+                    "patient_name": patient_name,
+                    "patient_id": patient_cnp,  # CNP
+                    "patient_code": patient_code
+                }
+                patients.append(patient_data)
         
         return patients
     except Exception as e:
