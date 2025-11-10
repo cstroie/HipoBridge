@@ -463,19 +463,28 @@ async def patient_search_handler(request):
         
         # Try to parse as multiple patients page
         multiple_patients_data = parse_multiple_patients_data(response_text)
-        if multiple_patients_data:
+        if multiple_patients_data and len(multiple_patients_data) > 0:
             return web.json_response({
                 "status": "success",
                 "type": "multiple_patients",
                 "data": multiple_patients_data
             })
         
-        # If neither parser worked, return raw data
+        # Check if we're on a "no results" page
+        if "nu a fost gasit" in response_text.lower() or "no results" in response_text.lower():
+            return web.json_response({
+                "status": "success",
+                "type": "no_results",
+                "data": []
+            })
+        
+        # If neither parser worked, return an error
+        logger.warning("Unable to parse patient search results")
         return web.json_response({
-            "status": "success",
-            "type": "raw",
-            "data": response_text
-        })
+            "status": "error",
+            "message": "Unable to parse patient search results",
+            "type": "parse_error"
+        }, status=500)
             
     except Exception as e:
         logger.error(f"Patient search failed with exception: {e}")
