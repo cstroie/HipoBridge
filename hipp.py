@@ -376,9 +376,12 @@ async def patient_search_handler(request):
     try:
         session = await get_session()
         
-        # Check if the search term looks like a CNP (13 digits) without the asterisk
-        is_cnp_search = (len(actual_search_term) == 13 and actual_search_term.isdigit()) or \
-                       (len(actual_search_term) == 14 and actual_search_term.endswith('*') and actual_search_term[:-1].isdigit())
+        # Check if the search term looks like a CNP (13 digits) or partial CNP (less than 14 chars, all digits except last one is '*')
+        is_full_cnp = len(actual_search_term) == 13 and actual_search_term.isdigit()
+        is_partial_cnp = (len(actual_search_term) < 14 and 
+                         actual_search_term.endswith('*') and 
+                         actual_search_term[:-1].isdigit())
+        is_cnp_search = is_full_cnp or is_partial_cnp
         
         # For CNP searches, we need to remove the asterisk when placing in strCNP field
         cnp_value = actual_search_term
