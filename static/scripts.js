@@ -111,8 +111,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
+            // Get the most recent checkout epicrisis
+            let epicrisisData = null;
+            if (patientData.checkouts && patientData.checkouts.length > 0) {
+                // Get the most recent checkout (first in the list)
+                const checkoutId = patientData.checkouts[0];
+                try {
+                    const checkoutResponse = await fetch(`/api/checkouts?id=${checkoutId}`);
+                    const checkoutData = await checkoutResponse.json();
+                    
+                    if (checkoutData.status === 'success') {
+                        epicrisisData = {
+                            epicrisis: checkoutData.epicrisis || '',
+                            checkout_id: checkoutId
+                        };
+                    }
+                } catch (err) {
+                    console.error('Error fetching checkout data:', err);
+                }
+            }
+            
             // Display all data
-            await displayPatientData(patientData, analysesData);
+            await displayPatientData(patientData, analysesData, epicrisisData);
             showToast('Analysis complete!', 'success');
             
         } catch (err) {
@@ -201,7 +221,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 3000);
     }
     
-    async function displayPatientData(patientData, analysesData) {
+    async function displayPatientData(patientData, analysesData, epicrisisData = null) {
         // Display patient information
         document.getElementById('patientId').textContent = patientData.patient_id || 'N/A';
         document.getElementById('patientName').textContent = patientData.patient_name || 'N/A';
@@ -210,6 +230,15 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('presentationsCount').textContent = (patientData.presentations || []).length;
         document.getElementById('checkinsCount').textContent = (patientData.checkins || []).length;
         document.getElementById('checkoutsCount').textContent = (patientData.checkouts || []).length;
+        
+        // Display epicrisis if available
+        const epicrisisSection = document.getElementById('epicrisisSection');
+        if (epicrisisData && epicrisisData.epicrisis) {
+            document.getElementById('epicrisisContent').textContent = epicrisisData.epicrisis;
+            epicrisisSection.style.display = 'block';
+        } else {
+            epicrisisSection.style.display = 'none';
+        }
         
         // Display analyses
         const analysesGrid = document.getElementById('analysesGrid');
