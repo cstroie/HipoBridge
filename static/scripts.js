@@ -35,13 +35,13 @@ document.addEventListener('DOMContentLoaded', function() {
         results.style.display = 'none';
         
         try {
-            // For partial CNP searches (ending with *), skip CNP validation
-            if (!cnp.endsWith('*')) {
+            // Only validate CNP for actual CNP formats (13 digits)
+            if (isCNPFormat) {
                 // Validate CNP using server-side API
                 try {
                     const cnpResponse = await fetch(`/api/cnp?id=${cnp}`);
                     const cnpData = await cnpResponse.json();
-                
+            
                     if (cnpData.status !== 'success' || !cnpData.valid) {
                         showError('Invalid CNP. Please check the number and try again.');
                         return;
@@ -51,10 +51,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     showError('Error validating CNP. Please try again.');
                     return;
                 }
-            
+        
                 showToast('Valid CNP detected. Retrieving patient information...', 'success');
-            } else {
+            } else if (isPartialCNPFormat) {
                 showToast('Searching for patient with partial CNP...', 'success');
+            } else {
+                // For patient name/code searches
+                showToast('Searching for patient by name or code...', 'success');
             }
             
             // Search for patient
