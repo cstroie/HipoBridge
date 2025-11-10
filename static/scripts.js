@@ -22,25 +22,23 @@ document.addEventListener('DOMContentLoaded', function() {
         const isCNPFormat = /^\d{13}$/.test(cnp);
         const isPartialCNPFormat = /^\d+\*$/.test(cnp);
         
-        // If it's not CNP format, treat as patient name or code
-        if (!isCNPFormat && !isPartialCNPFormat) {
-            // For non-CNP searches, we don't do any client-side validation
-            showToast('Searching for patient by name or code...', 'success');
-        }
-        
         // Show loading state
         showLoading();
         hideError();
         results.style.display = 'none';
         
+        // Notify user of search start
+        showToast('Starting patient search...', 'success');
+        
         try {
-            // Only validate CNP for actual CNP formats (13 digits)
+            // Determine search type and notify user
             if (isCNPFormat) {
+                showToast('Validating CNP...', 'success');
                 // Validate CNP using server-side API
                 try {
                     const cnpResponse = await fetch(`/api/cnp?id=${cnp}`);
                     const cnpData = await cnpResponse.json();
-            
+        
                     if (cnpData.status !== 'success' || !cnpData.valid) {
                         showError('Invalid CNP. Please check the number and try again.');
                         return;
@@ -50,7 +48,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     showError('Error validating CNP. Please try again.');
                     return;
                 }
-        
+    
                 showToast('Valid CNP detected. Retrieving patient information...', 'success');
             } else if (isPartialCNPFormat) {
                 showToast('Searching for patient with partial CNP...', 'success');
@@ -60,10 +58,12 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // Search for patient
+            showToast('Searching patient database...', 'success');
             const searchResponse = await fetch(`/api/patients/search?q=${cnp}`);
             const searchData = await searchResponse.json();
             
             if (searchData.status !== 'success') {
+                console.error('Failed to retrieve patient information:', searchData);
                 showError('Failed to retrieve patient information.');
                 return;
             }
@@ -95,6 +95,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             if (!patientCode || !patientData) {
+                console.error('Failed to retrieve patient data:', { patientCode, patientData });
                 showError('Failed to retrieve patient data.');
                 return;
             }
@@ -102,10 +103,12 @@ document.addEventListener('DOMContentLoaded', function() {
             showToast('Patient information retrieved successfully. Loading analyses...', 'success');
             
             // Get analyses
+            showToast('Loading patient analyses...', 'success');
             const analysesResponse = await fetch(`/api/analyses?id=${patientCode}`);
             const analysesData = await analysesResponse.json();
             
             if (analysesData.status !== 'success') {
+                console.error('Failed to retrieve patient analyses:', analysesData);
                 showError('Failed to retrieve patient analyses.');
                 return;
             }
@@ -113,6 +116,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Get the most recent checkout epicrisis
             let epicrisisData = null;
             if (patientData.checkouts && patientData.checkouts.length > 0) {
+                showToast('Loading epicrisis data...', 'success');
                 // Get the most recent checkout (first in the list)
                 const checkoutId = patientData.checkouts[0];
                 try {
@@ -151,6 +155,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function showError(message) {
+        console.error('Application error:', message);
         errorDiv.textContent = message;
         errorDiv.style.display = 'block';
         hideLoading();
