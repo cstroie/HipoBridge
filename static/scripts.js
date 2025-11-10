@@ -3,7 +3,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('cnpForm');
     const cnpInput = document.getElementById('cnpInput');
     const analyzeBtn = document.getElementById('analyzeBtn');
-    const loading = document.getElementById('loading');
     const errorDiv = document.getElementById('error');
     const results = document.getElementById('results');
     
@@ -144,12 +143,10 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     function showLoading() {
-        loading.style.display = 'block';
         analyzeBtn.disabled = true;
     }
     
     function hideLoading() {
-        loading.style.display = 'none';
         analyzeBtn.disabled = false;
     }
     
