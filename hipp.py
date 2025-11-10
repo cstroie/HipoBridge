@@ -367,8 +367,8 @@ async def patient_search_handler(request):
     
     # Check if search term ends with *, treat as partial CNP
     if search_term.endswith('*'):
-        actual_search_term = search_term[:-1]  # Remove the asterisk
-        logger.info(f"Performing partial CNP search for: {actual_search_term}")
+        actual_search_term = search_term  # Keep the asterisk for Hipocrate
+        logger.info(f"Performing partial CNP search for: {search_term}")
     else:
         actual_search_term = search_term
         logger.info(f"Searching for patients with term: {search_term}")
@@ -376,8 +376,14 @@ async def patient_search_handler(request):
     try:
         session = await get_session()
         
-        # Check if the search term looks like a CNP (13 digits)
-        is_cnp_search = len(actual_search_term) == 13 and actual_search_term.isdigit()
+        # Check if the search term looks like a CNP (13 digits) without the asterisk
+        is_cnp_search = (len(actual_search_term) == 13 and actual_search_term.isdigit()) or \
+                       (len(actual_search_term) == 14 and actual_search_term.endswith('*') and actual_search_term[:-1].isdigit())
+        
+        # For CNP searches, we need to remove the asterisk when placing in strCNP field
+        cnp_value = actual_search_term
+        if actual_search_term.endswith('*'):
+            cnp_value = actual_search_term[:-1]
         
         # Prepare full search data as captured in the POST request
         search_data = {
@@ -387,7 +393,7 @@ async def patient_search_handler(request):
             "strLastName": "",
             "strFirstName": "",
             "strCodePres": "",
-            "strCNP": actual_search_term if is_cnp_search else "",
+            "strCNP": cnp_value if is_cnp_search else "",
             "strSDate": "",
             "strEDate": "",
             "strProfessionID": "",
