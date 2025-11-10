@@ -376,15 +376,18 @@ async def patient_search_handler(request):
     try:
         session = await get_session()
         
+        # Check if the search term looks like a CNP (13 digits)
+        is_cnp_search = len(actual_search_term) == 13 and actual_search_term.isdigit()
+        
         # Prepare full search data as captured in the POST request
         search_data = {
             "hdnSearchType": "1",
             "pageNo": "1",
-            "strDescription": actual_search_term,
+            "strDescription": "" if is_cnp_search else actual_search_term,
             "strLastName": "",
             "strFirstName": "",
             "strCodePres": "",
-            "strCNP": "",
+            "strCNP": actual_search_term if is_cnp_search else "",
             "strSDate": "",
             "strEDate": "",
             "strProfessionID": "",
