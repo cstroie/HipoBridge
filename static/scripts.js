@@ -13,10 +13,20 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const cnp = cnpInput.value.trim();
         
-        // Validate CNP format - either 13-digit CNP or partial CNP ending with *
-        if (!cnp || (!/^\d{13}$/.test(cnp) && !/^\d+\*$/.test(cnp))) {
-            showError('Please enter a valid 13-digit CNP or partial CNP (digits followed by *)');
+        // Validate input - allow CNP (13 digits), partial CNP (digits followed by *), or patient name
+        if (!cnp) {
+            showError('Please enter a valid patient identifier (CNP, partial CNP, patient code, or patient name)');
             return;
+        }
+        
+        // Check if it's a CNP format (13 digits) or partial CNP (digits followed by *)
+        const isCNPFormat = /^\d{13}$/.test(cnp);
+        const isPartialCNPFormat = /^\d+\*$/.test(cnp);
+        
+        // If it's not CNP format, treat as patient name or code
+        if (!isCNPFormat && !isPartialCNPFormat) {
+            // For non-CNP searches, we don't do any client-side validation
+            showToast('Searching for patient by name or code...', 'success');
         }
         
         // Show loading state
