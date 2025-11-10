@@ -126,6 +126,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (checkoutData.status === 'success') {
                         epicrisisData = {
                             epicrisis: checkoutData.epicrisis || '',
+                            date: checkoutData.sample_datetime || '',
                             checkout_id: checkoutId
                         };
                     }
@@ -261,9 +262,19 @@ document.addEventListener('DOMContentLoaded', function() {
             try {
                 const htmlContent = await convertMarkdownToHtml(epicrisisData.epicrisis);
                 document.getElementById('epicrisisContent').innerHTML = htmlContent;
+                
+                // Display date if available
+                const dateElement = document.getElementById('epicrisisDate');
+                if (epicrisisData.date) {
+                    dateElement.textContent = `Date: ${epicrisisData.date}`;
+                    dateElement.style.display = 'block';
+                } else {
+                    dateElement.style.display = 'none';
+                }
             } catch (err) {
                 console.error('Error converting epicrisis markdown:', err);
                 document.getElementById('epicrisisContent').textContent = epicrisisData.epicrisis;
+                document.getElementById('epicrisisDate').style.display = 'none';
             }
             epicrisisSection.style.display = 'block';
         } else {
