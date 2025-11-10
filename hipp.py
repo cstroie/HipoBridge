@@ -1475,6 +1475,92 @@ async def cnp_handler(request):
         "valid": is_valid
     })
 
+def markdown_to_html(markdown_text: str) -> str:
+    """Convert simple markdown to basic HTML.
+    
+    Supports:
+    - Paragraphs (double newlines)
+    - Line breaks (single newlines)
+    - Bold text (**text** or __text__)
+    - Italic text (*text* or _text_)
+    - Headers (# Header, ## Header, etc.)
+    - Unordered lists (- item or * item)
+    - Ordered lists (1. item, 2. item, etc.)
+    
+    Args:
+        markdown_text (str): Markdown text to convert
+        
+    Returns:
+        str: HTML representation of the markdown
+    """
+    import re
+    
+    # Escape HTML characters
+    html = markdown_text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    
+    # Headers (# Header, ## Header, etc.)
+    html = re.sub(r'^###### (.*)$', r'<h6>\1</h6>', html, flags=re.MULTILINE)
+    html = re.sub(r'^##### (.*)$', r'<h5>\1</h5>', html, flags=re.MULTILINE)
+    html = re.sub(r'^#### (.*)$', r'<h4>\1</h4>', html, flags=re.MULTILINE)
+    html = re.sub(r'^### (.*)$', r'<h3>\1</h3>', html, flags=re.MULTILINE)
+    html = re.sub(r'^## (.*)$', r'<h2>\1</h2>', html, flags=re.MULTILINE)
+    html = re.sub(r'^# (.*)$', r'<h1>\1</h1>', html, flags=re.MULTILINE)
+    
+    # Bold (**text** or __text__)
+    html = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', html)
+    html = re.sub(r'__(.*?)__', r'<strong>\1</strong>', html)
+    
+    # Italic (*text* or _text_)
+    html = re.sub(r'\*(.*?)\*', r'<em>\1</em>', html)
+    html = re.sub(r'_(.*?)_', r'<em>\1</em>', html)
+    
+    # Unordered lists (- item or * item)
+    html = re.sub(r'^\s*[-*]\s+(.*)$', r'<li>\1</li>', html, flags=re.MULTILINE)
+    html = re.sub(r'(<li>.*</li>\s*)+', r'<ul>\n\g<0></ul>\n', html)
+    
+    # Ordered lists (1. item, 2. item, etc.)
+    html = re.sub(r'^\s*\d+\.\s+(.*)$', r'<li>\1</li>', html, flags=re.MULTILINE)
+    html = re.sub(r'(<li>.*</li>\s*)+', r'<ol>\n\g<0></ol>\n', html)
+    
+    # Paragraphs (separated by double newlines)
+    paragraphs = html.split('\n\n')
+    html = '\n'.join([f'<p>{p}</p>' if not p.startswith(('<h', '<ul', '<ol')) else p for p in paragraphs if p.strip()])
+    
+    # Line breaks (single newlines within paragraphs)
+    html = html.replace('\n', '<br>')
+    
+    return html
+
+async def markdown_handler(request):
+    """Convert markdown text to HTML.
+    
+    Takes markdown text and converts it to basic HTML.
+    
+    Args:
+        request: The incoming HTTP request with 'text' query parameter
+        
+    Returns:
+        web.Response: JSON response with HTML content
+    """
+    logger.info("GET /api/markdown endpoint accessed")
+    
+    # Get markdown text from query string
+    markdown_text = request.query.get('text', '')
+    
+    try:
+        html_content = markdown_to_html(markdown_text)
+        
+        return web.json_response({
+            "status": "success",
+            "html": html_content
+        })
+    except Exception as e:
+        logger.error(f"Markdown conversion failed: {e}")
+        return web.json_response({
+            "status": "error",
+            "message": str(e)
+        }, status=500)
+
 async def spec_handler(request):
     """Serve the OpenAPI specification.
     
@@ -1593,6 +1679,63 @@ async def spec_handler(request):
                                             "message": {
                                                 "type": "string",
                                                 "example": "Login failed"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/markdown": {
+                "get": {
+                    "summary": "Convert markdown to HTML",
+                    "description": "Convert simple markdown text to basic HTML",
+                    "parameters": [
+                        {
+                            "name": "text",
+                            "in": "query",
+                            "required": False,
+                            "description": "Markdown text to convert",
+                            "schema": {
+                                "type": "string"
+                            }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "HTML conversion result",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "status": {
+                                                "type": "string",
+                                                "example": "success"
+                                            },
+                                            "html": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "500": {
+                            "description": "Conversion error",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "status": {
+                                                "type": "string",
+                                                "example": "error"
+                                            },
+                                            "message": {
+                                                "type": "string"
                                             }
                                         }
                                     }
@@ -2282,6 +2425,7 @@ async def init_app():
     app.router.add_get('/api/checkouts', checkout_handler)
     app.router.add_get('/api/cnp', cnp_handler)
     app.router.add_post('/api/login', login_handler)
+    app.router.add_get('/api/markdown', markdown_handler)
     app.router.add_get('/api/spec', spec_handler)
     app.router.add_static('/static/', path='static', name='static')
     

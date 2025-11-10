@@ -221,6 +221,21 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 3000);
     }
     
+    async function convertMarkdownToHtml(markdownText) {
+        try {
+            const response = await fetch(`/api/markdown?text=${encodeURIComponent(markdownText)}`);
+            const data = await response.json();
+            if (data.status === 'success') {
+                return data.html;
+            } else {
+                throw new Error('Markdown conversion failed');
+            }
+        } catch (err) {
+            console.error('Error converting markdown to HTML:', err);
+            return markdownText; // Return original text if conversion fails
+        }
+    }
+
     async function displayPatientData(patientData, analysesData, epicrisisData = null) {
         // Display patient information
         document.getElementById('patientId').textContent = patientData.patient_id || 'N/A';
@@ -234,7 +249,14 @@ document.addEventListener('DOMContentLoaded', function() {
         // Display epicrisis if available
         const epicrisisSection = document.getElementById('epicrisisSection');
         if (epicrisisData && epicrisisData.epicrisis) {
-            document.getElementById('epicrisisContent').textContent = epicrisisData.epicrisis;
+            // Convert markdown to HTML for epicrisis
+            try {
+                const htmlContent = await convertMarkdownToHtml(epicrisisData.epicrisis);
+                document.getElementById('epicrisisContent').innerHTML = htmlContent;
+            } catch (err) {
+                console.error('Error converting epicrisis markdown:', err);
+                document.getElementById('epicrisisContent').textContent = epicrisisData.epicrisis;
+            }
             epicrisisSection.style.display = 'block';
         } else {
             epicrisisSection.style.display = 'none';
@@ -288,12 +310,18 @@ document.addEventListener('DOMContentLoaded', function() {
                             
                             // Add report content to the card
                             cardContent += `<div class="report-preview">`;
-                            reportData.reports.forEach((report, index) => {
+                            for (const report of reportData.reports) {
                                 cardContent += `<p><strong>${report.investigation || 'Investigation'}:</strong></p>`;
                                 if (report.result) {
-                                    cardContent += `<p>${report.result}</p>`;
+                                    try {
+                                        const htmlResult = await convertMarkdownToHtml(report.result);
+                                        cardContent += `<div>${htmlResult}</div>`;
+                                    } catch (err) {
+                                        console.error('Error converting report markdown:', err);
+                                        cardContent += `<p>${report.result}</p>`;
+                                    }
                                 }
-                            });
+                            }
                             cardContent += `</div>`;
                         }
                     } catch (err) {
