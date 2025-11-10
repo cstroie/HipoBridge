@@ -223,7 +223,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     async function convertMarkdownToHtml(markdownText) {
         try {
-            const response = await fetch(`/api/markdown?text=${encodeURIComponent(markdownText)}`);
+            const response = await fetch(`/api/md2html?text=${encodeURIComponent(markdownText)}`);
             const data = await response.json();
             if (data.status === 'success') {
                 return data.html;

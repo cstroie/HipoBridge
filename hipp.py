@@ -1531,7 +1531,7 @@ def markdown_to_html(markdown_text: str) -> str:
     
     return html
 
-async def markdown_handler(request):
+async def md2html_handler(request):
     """Convert markdown text to HTML.
     
     Takes markdown text and converts it to basic HTML.
@@ -1542,7 +1542,7 @@ async def markdown_handler(request):
     Returns:
         web.Response: JSON response with HTML content
     """
-    logger.info("GET /api/markdown endpoint accessed")
+    logger.info("GET /api/md2html endpoint accessed")
     
     # Get markdown text from query string
     markdown_text = request.query.get('text', '')
@@ -1688,7 +1688,7 @@ async def spec_handler(request):
                     }
                 }
             },
-            "/api/markdown": {
+            "/api/md2html": {
                 "get": {
                     "summary": "Convert markdown to HTML",
                     "description": "Convert simple markdown text to basic HTML",
@@ -2425,7 +2425,7 @@ async def init_app():
     app.router.add_get('/api/checkouts', checkout_handler)
     app.router.add_get('/api/cnp', cnp_handler)
     app.router.add_post('/api/login', login_handler)
-    app.router.add_get('/api/markdown', markdown_handler)
+    app.router.add_get('/api/md2html', md2html_handler)
     app.router.add_get('/api/spec', spec_handler)
     app.router.add_static('/static/', path='static', name='static')
     
