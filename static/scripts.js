@@ -5,7 +5,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const analyzeBtn = document.getElementById('analyzeBtn');
     const loading = document.getElementById('loading');
     const errorDiv = document.getElementById('error');
-    const successDiv = document.getElementById('success');
     const results = document.getElementById('results');
     
     // Form submission handler
@@ -23,7 +22,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Show loading state
         showLoading();
         hideError();
-        hideSuccess();
         results.style.display = 'none';
         
         try {
@@ -44,9 +42,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
             
-                showSuccess('Valid CNP detected. Retrieving patient information...');
+                showToast('Valid CNP detected. Retrieving patient information...', 'success');
             } else {
-                showSuccess('Searching for patient with partial CNP...');
+                showToast('Searching for patient with partial CNP...', 'success');
             }
             
             // Search for patient
@@ -89,7 +87,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
-            showSuccess('Patient information retrieved successfully. Loading analyses...');
+            showToast('Patient information retrieved successfully. Loading analyses...', 'success');
             
             // Get analyses
             const analysesResponse = await fetch(`/api/analyses?id=${patientCode}`);
@@ -102,7 +100,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Display all data
             await displayPatientData(patientData, analysesData);
-            showSuccess('Analysis complete!');
+            showToast('Analysis complete!', 'success');
             
         } catch (err) {
             console.error('Error:', err);
@@ -132,13 +130,62 @@ document.addEventListener('DOMContentLoaded', function() {
         errorDiv.style.display = 'none';
     }
     
-    function showSuccess(message) {
-        successDiv.textContent = message;
-        successDiv.style.display = 'block';
-    }
-    
-    function hideSuccess() {
-        successDiv.style.display = 'none';
+    function showToast(message, type = 'success') {
+        // Create toast container if it doesn't exist
+        let toastContainer = document.getElementById('toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.id = 'toast-container';
+            toastContainer.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                z-index: 10000;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            `;
+            document.body.appendChild(toastContainer);
+        }
+        
+        // Create toast element
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.textContent = message;
+        toast.style.cssText = `
+            padding: 12px 20px;
+            border-radius: 4px;
+            color: white;
+            background-color: ${type === 'success' ? '#4caf50' : '#f44336'};
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            animation: slideIn 0.3s, fadeOut 0.5s 2.5s forwards;
+            max-width: 300px;
+        `;
+        
+        // Add CSS for animations
+        if (!document.getElementById('toast-styles')) {
+            const style = document.createElement('style');
+            style.id = 'toast-styles';
+            style.textContent = `
+                @keyframes slideIn {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+                @keyframes fadeOut {
+                    from { opacity: 1; }
+                    to { opacity: 0; }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        
+        // Add toast to container
+        toastContainer.appendChild(toast);
+        
+        // Remove toast after animation completes
+        setTimeout(() => {
+            toast.remove();
+        }, 3000);
     }
     
     async function displayPatientData(patientData, analysesData) {
