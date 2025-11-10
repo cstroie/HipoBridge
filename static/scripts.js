@@ -1,3 +1,76 @@
+// CNP validation function (moved from server-side)
+function validateCNP(cnp) {
+    // Check if CNP is exactly 13 digits
+    if (!cnp || cnp.length !== 13 || !/^\d+$/.test(cnp)) {
+        return false;
+    }
+    
+    // Extract components
+    const genderDigit = parseInt(cnp[0]);
+    const year = parseInt(cnp.substring(1, 3));
+    const month = parseInt(cnp.substring(3, 5));
+    const day = parseInt(cnp.substring(5, 7));
+    const countyCode = parseInt(cnp.substring(7, 9));
+    
+    // Validate gender digit (1-8 are valid)
+    if (genderDigit < 1 || genderDigit > 8) {
+        return false;
+    }
+    
+    // Validate month (1-12)
+    if (month < 1 || month > 12) {
+        return false;
+    }
+    
+    // Validate day (1-31)
+    if (day < 1 || day > 31) {
+        return false;
+    }
+    
+    // Validate county code (1-52, excluding 47-50, plus 70-79 for diaspora, 90-99 for special cases)
+    if (!((countyCode >= 1 && countyCode <= 52 && !(countyCode >= 47 && countyCode <= 50)) || 
+          (countyCode >= 70 && countyCode <= 79) || 
+          (countyCode >= 90 && countyCode <= 99))) {
+        return false;
+    }
+    
+    // Validate date by trying to create a date object
+    try {
+        // Determine century based on gender digit
+        let fullYear;
+        if (genderDigit === 1 || genderDigit === 2) {
+            fullYear = 1900 + year;
+        } else if (genderDigit === 3 || genderDigit === 4) {
+            fullYear = 1800 + year;
+        } else if (genderDigit === 5 || genderDigit === 6) {
+            fullYear = 2000 + year;
+        } else { // 7, 8
+            fullYear = 2000 + year; // For people born after 2000
+        }
+        
+        // Check if date is valid
+        const date = new Date(fullYear, month - 1, day);
+        if (date.getFullYear() !== fullYear || 
+            date.getMonth() !== month - 1 || 
+            date.getDate() !== day) {
+            return false;
+        }
+    } catch (e) {
+        return false;
+    }
+    
+    // Validate control digit using checksum
+    const weights = [2, 7, 9, 1, 4, 6, 3, 5, 8, 2, 7, 9];
+    let checksum = 0;
+    for (let i = 0; i < 12; i++) {
+        checksum += parseInt(cnp[i]) * weights[i];
+    }
+    checksum %= 11;
+    const controlDigit = checksum === 10 ? 1 : checksum;
+    
+    return controlDigit === parseInt(cnp[12]);
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('cnpForm');
     const cnpInput = document.getElementById('cnpInput');
@@ -28,11 +101,8 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             // For partial CNP searches (ending with *), skip CNP validation
             if (!cnp.endsWith('*')) {
-                // Validate CNP
-                const cnpResponse = await fetch(`/api/cnp?id=${cnp}`);
-                const cnpData = await cnpResponse.json();
-                
-                if (cnpData.status !== 'success' || !cnpData.valid) {
+                // Validate CNP using client-side function
+                if (!validateCNP(cnp)) {
                     showError('Invalid CNP. Please check the number and try again.');
                     return;
                 }
@@ -213,40 +283,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 analysisCard.innerHTML = cardContent;
                 analysesGrid.appendChild(analysisCard);
             }
-            
-            // Add event listeners to view report buttons
-            document.querySelectorAll('.view-report-btn').forEach(button => {
-                button.addEventListener('click', async function() {
-                    const reportId = this.getAttribute('data-id');
-                    const reportType = this.getAttribute('data-type');
-                    
-                    // Show loading state
-                    showLoading();
-                    hideError();
-                    hideSuccess();
-                    
-                    try {
-                        // Fetch report data
-                        const reportResponse = await fetch(`/api/reports?id=${reportId}`);
-                        const reportData = await reportResponse.json();
-                        
-                        if (reportData.status !== 'success') {
-                            showError(`Failed to retrieve ${reportType} report #${reportId}.`);
-                            return;
-                        }
-                        
-                        // Display report in a modal
-                        displayReportModal(reportData, reportId, reportType);
-                        showSuccess(`Successfully loaded ${reportType} report #${reportId}.`);
-                        
-                    } catch (err) {
-                        console.error('Error:', err);
-                        showError(`An error occurred while retrieving the ${reportType} report #${reportId}.`);
-                    } finally {
-                        hideLoading();
-                    }
-                });
-            });
         } else {
             noAnalyses.style.display = 'block';
             analysesGrid.innerHTML = '';
