@@ -2438,7 +2438,7 @@ async def init_app():
     app.router.add_get('/api/checkouts', checkout_handler)
     app.router.add_get('/api/cnp', cnp_handler)
     app.router.add_post('/api/login', login_handler)
-    app.router.add_get('/api/md2html', md2html_handler)
+    app.router.add_post('/api/md2html', md2html_handler)
     app.router.add_get('/api/spec', spec_handler)
     app.router.add_static('/static/', path='static', name='static')
     
