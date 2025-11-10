@@ -414,10 +414,10 @@ async def patient_search_handler(request):
         search_data = {
             "hdnSearchType": "1",
             "pageNo": "1",
-            "strDescription": actual_search_term if search_type == "name" else "",
+            "strDescription": actual_search_term if search_type in ["name", "code"] else "",
             "strLastName": "",
             "strFirstName": "",
-            "strCodePres": actual_search_term if search_type == "code" else "",
+            "strCodePres": "",
             "strCNP": cnp_value if search_type in ["cnp", "partial_cnp"] else "",
             "strSDate": "",
             "strEDate": "",
