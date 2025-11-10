@@ -1537,23 +1537,30 @@ async def md2html_handler(request):
     Takes markdown text and converts it to basic HTML.
     
     Args:
-        request: The incoming HTTP request with 'text' query parameter
+        request: The incoming HTTP request with JSON body containing 'text' field
         
     Returns:
         web.Response: JSON response with HTML content
     """
-    logger.info("GET /api/md2html endpoint accessed")
-    
-    # Get markdown text from query string
-    markdown_text = request.query.get('text', '')
+    logger.info("POST /api/md2html endpoint accessed")
     
     try:
+        # Get markdown text from request body
+        data = await request.json()
+        markdown_text = data.get('text', '')
+        
         html_content = markdown_to_html(markdown_text)
         
         return web.json_response({
             "status": "success",
             "html": html_content
         })
+    except json.JSONDecodeError:
+        logger.warning("Invalid JSON data received for markdown conversion")
+        return web.json_response({
+            "status": "error",
+            "message": "Invalid JSON data"
+        }, status=400)
     except Exception as e:
         logger.error(f"Markdown conversion failed: {e}")
         return web.json_response({
@@ -1689,20 +1696,26 @@ async def spec_handler(request):
                 }
             },
             "/api/md2html": {
-                "get": {
+                "post": {
                     "summary": "Convert markdown to HTML",
                     "description": "Convert simple markdown text to basic HTML",
-                    "parameters": [
-                        {
-                            "name": "text",
-                            "in": "query",
-                            "required": False,
-                            "description": "Markdown text to convert",
-                            "schema": {
-                                "type": "string"
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "text": {
+                                            "type": "string",
+                                            "description": "Markdown text to convert"
+                                        }
+                                    },
+                                    "required": ["text"]
+                                }
                             }
                         }
-                    ],
+                    },
                     "responses": {
                         "200": {
                             "description": "HTML conversion result",
