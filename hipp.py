@@ -1197,23 +1197,72 @@ def convert_to_fhir_patient(patient_data: Dict[str, Any], request) -> Dict[str, 
         "address": []
     }
 
-    # Add extensions for encounter/admission/discharge IDs
+    # Add telecom information if available
+    if patient_data.get("phone"):
+        fhir_patient["telecom"].append({
+            "system": "phone",
+            "value": patient_data["phone"]
+        })
+    
+    if patient_data.get("email"):
+        fhir_patient["telecom"].append({
+            "system": "email",
+            "value": patient_data["email"]
+        })
+
+    # Add address information if available
+    if patient_data.get("address"):
+        fhir_patient["address"].append({
+            "text": patient_data["address"]
+        })
+
+    # Add extensions for additional patient data
     fhir_patient["extension"] = []
+    
+    # Add CID if available
+    if patient_data.get("cid"):
+        fhir_patient["extension"].append({
+            "url": f"http://{request.host}/fhir/StructureDefinition/patient-cid",
+            "valueString": patient_data["cid"]
+        })
+    
+    # Add weight if available
+    if patient_data.get("weight"):
+        fhir_patient["extension"].append({
+            "url": f"http://{request.host}/fhir/StructureDefinition/patient-weight",
+            "valueString": patient_data["weight"]
+        })
+    
+    # Add height if available
+    if patient_data.get("height"):
+        fhir_patient["extension"].append({
+            "url": f"http://{request.host}/fhir/StructureDefinition/patient-height",
+            "valueString": patient_data["height"]
+        })
+    
+    # Add MCP if available
+    if patient_data.get("mcp"):
+        fhir_patient["extension"].append({
+            "url": f"http://{request.host}/fhir/StructureDefinition/patient-mcp",
+            "valueString": patient_data["mcp"]
+        })
+
+    # Add extensions for encounter/admission/discharge IDs
     if "encounters" in patient_data:
         fhir_patient["extension"].append({
             "url": f"http://{request.host}/fhir/StructureDefinition/encounter-ids",
             "valueString": ",".join(patient_data["encounters"])
-    })
+        })
     if "admissions" in patient_data:
         fhir_patient["extension"].append({
             "url": f"http://{request.host}/fhir/StructureDefinition/admission-ids",
             "valueString": ",".join(patient_data["admissions"])
-    })
+        })
     if "discharges" in patient_data:
         fhir_patient["extension"].append({
             "url": f"http://{request.host}/fhir/StructureDefinition/discharge-ids",
             "valueString": ",".join(patient_data["discharges"])
-    })
+        })
     
     # Add CNP as additional identifier if available
     if cnp:
