@@ -322,6 +322,11 @@ async def get_patient_code_from_cnp(session: aiohttp.ClientSession, cnp: str) ->
     Returns:
         str: The patient code if found, None otherwise
     """
+    # Check cache first
+    if cnp in cnp_cache:
+        print(f"Found patient code for CNP {cnp} in cache")
+        return cnp_cache[cnp]
+    
     # First validate the CNP
     data, success = await _make_api_request(session, "GET", f"{BASE_URL}/fhir/ValueSet/cnp?id={cnp}")
     
@@ -344,6 +349,9 @@ async def get_patient_code_from_cnp(session: aiohttp.ClientSession, cnp: str) ->
         patient_code = patient_data.get("patient_code")
         if patient_code:
             print(f"Found patient code: {patient_code}")
+            # Cache the result
+            if len(cnp_cache) < cache_max_size:
+                cnp_cache[cnp] = patient_code
             return patient_code
         else:
             print("Patient code not found in search results")
@@ -355,6 +363,9 @@ async def get_patient_code_from_cnp(session: aiohttp.ClientSession, cnp: str) ->
             patient_code = patients[0].get("patient_code")
             if patient_code:
                 print(f"Found patient code: {patient_code} (first of {len(patients)} matches)")
+                # Cache the result
+                if len(cnp_cache) < cache_max_size:
+                    cnp_cache[cnp] = patient_code
                 return patient_code
         print("No patient code found in search results")
         return None
