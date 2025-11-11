@@ -356,8 +356,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     analysisType = observation.code.coding[0].code || 'unknown';
                 }
                 
-                // Only display analyses with types 'radio', 'ct', 'irm', or 'eco'
-                if (!['radio', 'ct', 'irm', 'eco'].includes(analysisType)) {
+                // Display analyses with imaging types 'radio', 'ct', 'irm', 'eco', 'lac', 'lii', 'rads'
+                if (!['radio', 'ct', 'irm', 'eco', 'lac', 'lii', 'rads'].includes(analysisType)) {
                     continue;
                 }
                 
@@ -373,7 +373,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 `;
                 
                 // For imaging analyses, fetch and display report content
-                if (['radio', 'ct', 'irm', 'eco'].includes(analysisType)) {
+                if (['radio', 'ct', 'irm', 'eco', 'lac', 'lii', 'rads'].includes(analysisType)) {
                     try {
                         // Fetch report data using FHIR API
                         const reportResponse = await fetch(`/fhir/DiagnosticReport?identifier=${observation.id}`);
