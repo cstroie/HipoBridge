@@ -981,6 +981,9 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
                 if 'DG.PREZUMTIV:' in td_text:
                     report_data["presumptive_diagnosis"] = td_text.split('DG.PREZUMTIV:', 1)[1].strip()
         
+
+        print(report_data)
+
         return report_data
     except Exception as e:
         logger.error(f"Error parsing report data: {e}")
