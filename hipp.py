@@ -283,6 +283,7 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
             # Create a copy of headers without Content-Type to avoid conflicts
             post_headers = HEADERS.copy()
             post_headers.pop("Content-Type", None)  # Remove Content-Type if present
+            # When sending form data, let aiohttp set the Content-Type automatically
             async with session.post(url, data=data, headers=post_headers) as response:
                 response_text = await _handle_response_encoding(response)
                 logger.debug(f"POST response status: {response.status}")
