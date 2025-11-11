@@ -153,6 +153,39 @@ session: Optional[aiohttp.ClientSession] = None
 cnp_cache: Dict[str, str] = {}
 cache_max_size = 1000  # Maximum number of entries to cache
 
+def extract_field_from_td(soup: BeautifulSoup, label_regex: str) -> str:
+    """Extract field data from a table cell containing a label.
+    
+    Args:
+        soup: BeautifulSoup object of the parsed HTML content
+        label_regex: Regular expression pattern to match label text
+        
+    Returns:
+        Extracted field content or empty string if not found
+    """
+    try:
+        # Look for the table cell containing this label
+        label_element = soup.find(string=re.compile(label_regex, re.IGNORECASE))
+        if label_element:
+            # Find the parent td element
+            parent_td = label_element.find_parent('td')
+            if parent_td:
+                # Extract text content from the same td and clean it
+                # Remove the label part and get the rest
+                td_text = parent_td.get_text(separator=' ', strip=True)
+                # Find the label in the text and extract everything after it
+                match = re.search(label_regex, td_text, re.IGNORECASE)
+                if match:
+                    # Get the position after the matched label
+                    label_end = match.end()
+                    # Extract the content after the label
+                    content = td_text[label_end:].strip()
+                    return content
+        return ""
+    except Exception as e:
+        logger.error(f"Error extracting field with label '{label_regex}': {e}")
+        return ""
+
 def create_error_response(message: str, status_code: int = 400, details: Dict[str, Any] = None) -> web.Response:
     """Create a standardized error response.
     
@@ -946,54 +979,22 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
         if examiner_name:
             report_data["examiner"] = examiner_name
         
-        # Extract reason for referral (DIAGNOSTIC DE TRIMITERE)
-        # Look for the table cell containing this label
-        referral_label = soup.find(string=re.compile(r'DIAGNOSTIC DE TRIMITERE:', re.IGNORECASE))
-        if referral_label:
-            # Find the parent td element
-            parent_td = referral_label.find_parent('td')
-            if parent_td:
-                # Extract text content from the same td and clean it
-                # Remove the label part and get the rest
-                td_text = parent_td.get_text(separator=' ', strip=True)
-                if 'DIAGNOSTIC DE TRIMITERE:' in td_text:
-                    referral_text = td_text.split('DIAGNOSTIC DE TRIMITERE:', 1)[1].strip()
-                    # Split into code and text - first part numeric is the code, rest is the reason
-                    parts = referral_text.split(' ', 1)
-                    if parts:
-                        # Check if first part is numeric (the code)
-                        if parts[0].isdigit():
-                            report_data["referral_code"] = parts[0]
-                            report_data["referral_reason"] = parts[1].strip() if len(parts) > 1 else ""
-                        else:
-                            report_data["referral_reason"] = referral_text
+        # Extract fields using the helper function
+        report_data["referral_reason"] = extract_field_from_td(soup, r'DIAGNOSTIC DE TRIMITERE:')
+        report_data["presumptive_diagnosis"] = extract_field_from_td(soup, r'DG\.PREZUMTIV:')
+        report_data["special_indications"] = extract_field_from_td(soup, r'INDICATII SPECIALE:')
+        report_data["referring_physician"] = extract_field_from_td(soup, r'TRIMIS DE:\s*MEDIC')
         
-        # Extract presumptive diagnosis (DG.PREZUMTIV)
-        # Look for the table cell containing this label
-        presumptive_label = soup.find(string=re.compile(r'DG\.PREZUMTIV:', re.IGNORECASE))
-        if presumptive_label:
-            # Find the parent td element
-            parent_td = presumptive_label.find_parent('td')
-            if parent_td:
-                # Extract text content from the same td and clean it
-                # Remove the label part and get the rest
-                td_text = parent_td.get_text(separator=' ', strip=True)
-                if 'DG.PREZUMTIV:' in td_text:
-                    report_data["presumptive_diagnosis"] = td_text.split('DG.PREZUMTIV:', 1)[1].strip()
+        # Parse referral code and reason if we have referral data
+        if report_data["referral_reason"]:
+            # Split into code and text - first part numeric is the code, rest is the reason
+            parts = report_data["referral_reason"].split(' ', 1)
+            if parts:
+                # Check if first part is numeric (the code)
+                if parts[0].isdigit():
+                    report_data["referral_code"] = parts[0]
+                    report_data["referral_reason"] = parts[1].strip() if len(parts) > 1 else ""
         
-        # Extract special indications (INDICATII SPECIALE)
-        # Look for the table cell containing this label
-        indications_label = soup.find(string=re.compile(r'INDICATII SPECIALE:', re.IGNORECASE))
-        if indications_label:
-            # Find the parent td element
-            parent_td = indications_label.find_parent('td')
-            if parent_td:
-                # Extract text content from the same td and clean it
-                # Remove the label part and get the rest
-                td_text = parent_td.get_text(separator=' ', strip=True)
-                if 'INDICATII SPECIALE:' in td_text:
-                    report_data["special_indications"] = td_text.split('INDICATII SPECIALE:', 1)[1].strip()
-
         print(report_data)
 
         return report_data
