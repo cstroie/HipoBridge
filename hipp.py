@@ -1908,13 +1908,13 @@ async def spec_handler(request):
     Returns:
         web.Response: JSON response with OpenAPI specification
     """
-    logger.info("GET /api/spec endpoint accessed")
+    logger.info("GET /fhir/spec endpoint accessed")
     
     spec = {
         "openapi": "3.0.0",
         "info": {
-            "title": "Hipocrate Patient Analyzer API",
-            "description": "API for accessing patient data from the Hipocrate medical system",
+            "title": "Hipocrate Patient Analyzer API (FHIR)",
+            "description": "FHIR-compatible API for accessing patient data from the Hipocrate medical system",
             "version": "1.0.0"
         },
         "servers": [
@@ -1935,7 +1935,7 @@ async def spec_handler(request):
                     }
                 }
             },
-            "/api/login": {
+            "/fhir/login": {
                 "post": {
                     "summary": "Login to Hipocrate system",
                     "description": "Authenticate with the Hipocrate medical system",
@@ -2024,7 +2024,7 @@ async def spec_handler(request):
                     }
                 }
             },
-            "/api/md2html": {
+            "/fhir/md2html": {
                 "post": {
                     "summary": "Convert markdown to HTML",
                     "description": "Convert simple markdown text to basic HTML",
@@ -2087,16 +2087,16 @@ async def spec_handler(request):
                     }
                 }
             },
-            "/api/patients/search": {
+            "/fhir/Patient": {
                 "get": {
                     "summary": "Search for patients",
-                    "description": "Search for patients by name or CNP",
+                    "description": "Search for patients by name, CNP, or patient code. Returns FHIR Patient resources.",
                     "parameters": [
                         {
                             "name": "q",
                             "in": "query",
                             "required": True,
-                            "description": "Search term (patient name or CNP)",
+                            "description": "Search term (patient name, CNP, patient code, or partial CNP ending with *)",
                             "schema": {
                                 "type": "string"
                             }
@@ -2122,24 +2122,30 @@ async def spec_handler(request):
                     ],
                     "responses": {
                         "200": {
-                            "description": "Search results",
+                            "description": "Search results as FHIR Patient resource or Bundle",
                             "content": {
-                                "application/json": {
+                                "application/fhir+json": {
                                     "schema": {
-                                        "type": "object",
-                                        "properties": {
-                                            "status": {
-                                                "type": "string",
-                                                "example": "success"
+                                        "oneOf": [
+                                            {
+                                                "type": "object",
+                                                "properties": {
+                                                    "resourceType": {
+                                                        "type": "string",
+                                                        "example": "Patient"
+                                                    }
+                                                }
                                             },
-                                            "type": {
-                                                "type": "string",
-                                                "example": "single_patient"
-                                            },
-                                            "data": {
-                                                "type": "object"
+                                            {
+                                                "type": "object",
+                                                "properties": {
+                                                    "resourceType": {
+                                                        "type": "string",
+                                                        "example": "Bundle"
+                                                    }
+                                                }
                                             }
-                                        }
+                                        ]
                                     }
                                 }
                             }
@@ -2167,14 +2173,14 @@ async def spec_handler(request):
                     }
                 }
             },
-            "/api/patients": {
+            "/fhir/Patient/{id}": {
                 "get": {
                     "summary": "Get patient information",
-                    "description": "Retrieve patient information by ID",
+                    "description": "Retrieve patient information by ID as FHIR Patient resource",
                     "parameters": [
                         {
                             "name": "id",
-                            "in": "query",
+                            "in": "path",
                             "required": True,
                             "description": "Patient ID",
                             "schema": {
@@ -2202,27 +2208,33 @@ async def spec_handler(request):
                     ],
                     "responses": {
                         "200": {
-                            "description": "Patient information",
+                            "description": "Patient information as FHIR Patient resource",
                             "content": {
-                                "application/json": {
+                                "application/fhir+json": {
                                     "schema": {
                                         "type": "object",
                                         "properties": {
-                                            "status": {
+                                            "resourceType": {
                                                 "type": "string",
-                                                "example": "success"
+                                                "example": "Patient"
                                             },
-                                            "checkout_ids": {
-                                                "type": "array",
-                                                "items": {
-                                                    "type": "string"
-                                                }
+                                            "id": {
+                                                "type": "string"
                                             },
-                                            "checkin_ids": {
-                                                "type": "array",
-                                                "items": {
-                                                    "type": "string"
-                                                }
+                                            "identifier": {
+                                                "type": "array"
+                                            },
+                                            "name": {
+                                                "type": "array"
+                                            },
+                                            "gender": {
+                                                "type": "string"
+                                            },
+                                            "birthDate": {
+                                                "type": "string"
+                                            },
+                                            "extension": {
+                                                "type": "array"
                                             }
                                         }
                                     }
@@ -2252,13 +2264,13 @@ async def spec_handler(request):
                     }
                 }
             },
-            "/api/analyses": {
+            "/fhir/Observation": {
                 "get": {
                     "summary": "Get patient analyses",
-                    "description": "Retrieve all analyses for a patient with optional filtering by type and datetime",
+                    "description": "Retrieve all analyses for a patient as FHIR Observation resources with optional filtering by type and datetime",
                     "parameters": [
                         {
-                            "name": "id",
+                            "name": "patient",
                             "in": "query",
                             "required": True,
                             "description": "Patient ID",
@@ -2306,29 +2318,29 @@ async def spec_handler(request):
                     ],
                     "responses": {
                         "200": {
-                            "description": "Patient analyses",
+                            "description": "Patient analyses as FHIR Bundle of Observation resources",
                             "content": {
-                                "application/json": {
+                                "application/fhir+json": {
                                     "schema": {
                                         "type": "object",
                                         "properties": {
-                                            "status": {
+                                            "resourceType": {
                                                 "type": "string",
-                                                "example": "success"
+                                                "example": "Bundle"
                                             },
-                                            "patient_name": {
-                                                "type": "string"
-                                            },
-                                            "analyses": {
+                                            "entry": {
                                                 "type": "array",
                                                 "items": {
                                                     "type": "object",
                                                     "properties": {
-                                                        "report_id": {
-                                                            "type": "string"
-                                                        },
-                                                        "type": {
-                                                            "type": "string"
+                                                        "resource": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "resourceType": {
+                                                                    "type": "string",
+                                                                    "example": "Observation"
+                                                                }
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -2361,13 +2373,13 @@ async def spec_handler(request):
                     }
                 }
             },
-            "/api/reports": {
+            "/fhir/DiagnosticReport": {
                 "get": {
                     "summary": "Get analysis report",
-                    "description": "Retrieve an analysis report by ID",
+                    "description": "Retrieve an analysis report by ID as FHIR DiagnosticReport resource",
                     "parameters": [
                         {
-                            "name": "id",
+                            "name": "identifier",
                             "in": "query",
                             "required": True,
                             "description": "Report ID",
@@ -2396,44 +2408,38 @@ async def spec_handler(request):
                     ],
                     "responses": {
                         "200": {
-                            "description": "Analysis report",
+                            "description": "Analysis report as FHIR DiagnosticReport resource",
                             "content": {
-                                "application/json": {
+                                "application/fhir+json": {
                                     "schema": {
                                         "type": "object",
                                         "properties": {
-                                            "status": {
+                                            "resourceType": {
                                                 "type": "string",
-                                                "example": "success"
+                                                "example": "DiagnosticReport"
                                             },
-                                            "patient_name": {
+                                            "id": {
                                                 "type": "string"
                                             },
-                                            "age": {
+                                            "status": {
                                                 "type": "string"
                                             },
-                                            "gender": {
+                                            "code": {
+                                                "type": "object"
+                                            },
+                                            "subject": {
+                                                "type": "object"
+                                            },
+                                            "effectiveDateTime": {
                                                 "type": "string"
                                             },
-                                            "patient_id": {
-                                                "type": "string"
+                                            "performer": {
+                                                "type": "array"
                                             },
-                                            "patient_code": {
-                                                "type": "string"
+                                            "result": {
+                                                "type": "array"
                                             },
-                                            "sample_datetime": {
-                                                "type": "string"
-                                            },
-                                            "examination": {
-                                                "type": "string"
-                                            },
-                                            "reports": {
-                                                "type": "array",
-                                                "items": {
-                                                    "type": "object"
-                                                }
-                                            },
-                                            "examiner": {
+                                            "conclusion": {
                                                 "type": "string"
                                             }
                                         }
@@ -2464,13 +2470,13 @@ async def spec_handler(request):
                     }
                 }
             },
-            "/api/checkouts": {
+            "/fhir/Encounter": {
                 "get": {
                     "summary": "Get checkout information",
-                    "description": "Retrieve checkout information by ID",
+                    "description": "Retrieve checkout information by ID as FHIR Encounter resource",
                     "parameters": [
                         {
-                            "name": "id",
+                            "name": "identifier",
                             "in": "query",
                             "required": True,
                             "description": "Checkout ID",
@@ -2499,39 +2505,45 @@ async def spec_handler(request):
                     ],
                     "responses": {
                         "200": {
-                            "description": "Checkout information",
+                            "description": "Checkout information as FHIR Encounter resource",
                             "content": {
-                                "application/json": {
+                                "application/fhir+json": {
                                     "schema": {
                                         "type": "object",
                                         "properties": {
-                                            "status": {
+                                            "resourceType": {
                                                 "type": "string",
-                                                "example": "success"
+                                                "example": "Encounter"
                                             },
-                                            "patient_name": {
+                                            "id": {
                                                 "type": "string"
                                             },
-                                            "patient_id": {
+                                            "status": {
                                                 "type": "string"
                                             },
-                                            "patient_code": {
-                                                "type": "string"
+                                            "class": {
+                                                "type": "object"
                                             },
-                                            "admission_diagnostic": {
-                                                "type": "string"
+                                            "type": {
+                                                "type": "array"
                                             },
-                                            "epicrisis": {
-                                                "type": "string"
+                                            "subject": {
+                                                "type": "object"
                                             },
-                                            "diagnostic": {
-                                                "type": "string"
+                                            "participant": {
+                                                "type": "array"
                                             },
-                                            "surgery": {
-                                                "type": "string"
+                                            "reasonCode": {
+                                                "type": "array"
                                             },
-                                            "recommendations": {
-                                                "type": "string"
+                                            "diagnosis": {
+                                                "type": "array"
+                                            },
+                                            "text": {
+                                                "type": "object"
+                                            },
+                                            "note": {
+                                                "type": "array"
                                             }
                                         }
                                     }
@@ -2561,7 +2573,7 @@ async def spec_handler(request):
                     }
                 }
             },
-            "/api/cnp": {
+            "/fhir/ValueSet/cnp": {
                 "get": {
                     "summary": "Validate CNP",
                     "description": "Validate a Romanian Personal Numerical Code (CNP)",
