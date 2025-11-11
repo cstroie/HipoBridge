@@ -1464,6 +1464,16 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
             if code_match:
                 result["patient_code"] = code_match.group(1)
         
+        # Extract CNP from table (next TD after 'CNP:')
+        cnp_cells = soup.find_all('td', string=re.compile(r'CNP:', re.IGNORECASE))
+        for cnp_cell in cnp_cells:
+            next_td = cnp_cell.find_next('td')
+            if next_td:
+                cnp_text = next_td.get_text().strip()
+                if cnp_text and cnp_text.isdigit() and len(cnp_text) == 13:
+                    result["patient_id"] = cnp_text
+                    break
+        
         # Find all links to analysis reports
         report_links = soup.find_all('a', href=re.compile(r'../analyse/Reports/analyseFile\.asp\?id=\d+'))
         
