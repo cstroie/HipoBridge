@@ -162,13 +162,12 @@ document.addEventListener('DOMContentLoaded', function() {
             // Get analyses using FHIR API
             showToast('Loading patient analyses...', 'success');
             const analysesResponse = await fetch(`/fhir/Observation?patient=${patientCode}`);
-            const analysesData = await analysesResponse.json();
             
-            if (analysesData.status !== 'success') {
-                console.error('Failed to retrieve patient analyses:', analysesData);
-                showError('Failed to retrieve patient analyses.');
-                return;
+            if (!analysesResponse.ok) {
+                throw new Error(`HTTP error! status: ${analysesResponse.status}`);
             }
+            
+            const analysesData = await analysesResponse.json();
             
             // Get the most recent checkout epicrisis using FHIR API
             let epicrisisData = null;
@@ -178,12 +177,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 const checkoutId = patientData.checkouts[0];
                 try {
                     const checkoutResponse = await fetch(`/fhir/Encounter?identifier=${checkoutId}`);
-                    const checkoutData = await checkoutResponse.json();
                     
-                    if (checkoutData.status === 'success') {
+                    if (checkoutResponse.ok) {
+                        const checkoutData = await checkoutResponse.json();
                         epicrisisData = {
-                            epicrisis: checkoutData.epicrisis || '',
-                            date: checkoutData.sample_datetime || '',
+                            epicrisis: checkoutData.text ? checkoutData.text.div : '',
+                            date: checkoutData.period ? checkoutData.period.start : '',
                             checkout_id: checkoutId
                         };
                     }
@@ -342,60 +341,67 @@ document.addEventListener('DOMContentLoaded', function() {
         const analysesGrid = document.getElementById('analysesGrid');
         const noAnalyses = document.getElementById('noAnalyses');
         
-        if (analysesData.analyses && analysesData.analyses.length > 0) {
+        // Check if we have a FHIR Bundle of Observations
+        if (analysesData.resourceType === "Bundle" && analysesData.entry && analysesData.entry.length > 0) {
             noAnalyses.style.display = 'none';
             analysesGrid.innerHTML = '';
             
-            // Process each analysis - only display imaging analyses
-            for (const analysis of analysesData.analyses) {
+            // Process each observation - only display imaging analyses
+            for (const entry of analysesData.entry) {
+                const observation = entry.resource;
+                
+                // Extract type from observation code
+                let analysisType = 'unknown';
+                if (observation.code && observation.code.coding && observation.code.coding.length > 0) {
+                    analysisType = observation.code.coding[0].code || 'unknown';
+                }
+                
                 // Only display analyses with types 'radio', 'ct', 'irm', or 'eco'
-                if (!analysis.type || !['radio', 'ct', 'irm', 'eco'].includes(analysis.type)) {
+                if (!['radio', 'ct', 'irm', 'eco'].includes(analysisType)) {
                     continue;
                 }
                 
                 const analysisCard = document.createElement('article');
-                analysisCard.className = `analysis-card ${analysis.type || 'unknown'}`;
+                analysisCard.className = `analysis-card ${analysisType}`;
                 
                 // Start building the card content
                 let cardContent = `
                     <header>
-                        <h4>Analysis #${analysis.report_id} ${analysis.type || ''}</h4>
+                        <h4>Analysis #${observation.id} ${analysisType}</h4>
                     </header>
                     <main>
                 `;
                 
                 // For imaging analyses, fetch and display report content
-                if (analysis.type && ['radio', 'ct', 'irm', 'eco'].includes(analysis.type)) {
+                if (['radio', 'ct', 'irm', 'eco'].includes(analysisType)) {
                     try {
                         // Fetch report data using FHIR API
-                        const reportResponse = await fetch(`/fhir/DiagnosticReport?identifier=${analysis.report_id}`);
-                        const reportData = await reportResponse.json();
+                        const reportResponse = await fetch(`/fhir/DiagnosticReport?identifier=${observation.id}`);
                         
-                        if (reportData.status === 'success' && reportData.reports && reportData.reports.length > 0) {
-                            // Add report metadata (date/time and examiner) if available
-                            if (reportData.sample_datetime || reportData.examiner) {
+                        if (reportResponse.ok) {
+                            const reportData = await reportResponse.json();
+                            
+                            // Add report metadata (date/time and performer) if available
+                            if (reportData.effectiveDateTime || (reportData.performer && reportData.performer.length > 0)) {
                                 cardContent += `<div class="report-meta">`;
-                                if (reportData.sample_datetime) {
-                                    cardContent += `<p><strong>Date/Time:</strong> ${reportData.sample_datetime}</p>`;
+                                if (reportData.effectiveDateTime) {
+                                    cardContent += `<p><strong>Date/Time:</strong> ${reportData.effectiveDateTime}</p>`;
                                 }
-                                if (reportData.examiner) {
-                                    cardContent += `<p><strong>Examiner:</strong> ${reportData.examiner}</p>`;
+                                if (reportData.performer && reportData.performer.length > 0) {
+                                    cardContent += `<p><strong>Performer:</strong> ${reportData.performer[0].display || ''}</p>`;
                                 }
                                 cardContent += `</div>`;
                             }
                             
                             // Add report content to the card
                             cardContent += `<div class="report-preview">`;
-                            for (const report of reportData.reports) {
-                                cardContent += `<p><strong>${report.investigation || 'Investigation'}:</strong></p>`;
-                                if (report.result) {
-                                    try {
-                                        const htmlResult = await convertMarkdownToHtml(report.result);
-                                        cardContent += `<div>${htmlResult}</div>`;
-                                    } catch (err) {
-                                        console.error('Error converting report markdown:', err);
-                                        cardContent += `<p>${report.result}</p>`;
-                                    }
+                            if (reportData.conclusion) {
+                                try {
+                                    const htmlResult = await convertMarkdownToHtml(reportData.conclusion);
+                                    cardContent += `<div>${htmlResult}</div>`;
+                                } catch (err) {
+                                    console.error('Error converting report markdown:', err);
+                                    cardContent += `<p>${reportData.conclusion}</p>`;
                                 }
                             }
                             cardContent += `</div>`;
@@ -405,13 +411,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
                 
-                // Add the footer with the view report button
                 cardContent += `
                     </main>
                 `;
                 
                 analysisCard.innerHTML = cardContent;
                 analysesGrid.appendChild(analysisCard);
+            }
+            
+            // Check if we actually added any cards
+            if (analysesGrid.children.length === 0) {
+                noAnalyses.style.display = 'block';
             }
         } else {
             noAnalyses.style.display = 'block';
