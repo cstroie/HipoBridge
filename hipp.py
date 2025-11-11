@@ -1271,6 +1271,7 @@ def convert_to_fhir_patient(patient_data: Dict[str, Any], request) -> Dict[str, 
             "value": cnp
         })
     
+    # Return the FHIR Patient resource
     return fhir_patient
 
 def parse_multiple_patients_data(html_content: str) -> List[Dict[str, Any]]:
