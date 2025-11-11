@@ -1064,9 +1064,9 @@ def parse_patient_data(html_content: str) -> Dict[str, Any]:
                 patient_data["address"] = selected_option.get_text().strip()
         
         # Derive sex and birth date from CNP if available
-        if patient_cnp and len(patient_cnp) == 13 and patient_cnp.isdigit():
+        if patient_data.get("patient_cnp") and len(patient_data["patient_cnp"]) == 13 and patient_data["patient_cnp"].isdigit():
             # Extract gender from first digit
-            gender_digit = int(patient_cnp[0])
+            gender_digit = int(patient_data["patient_cnp"][0])
             if gender_digit in [1, 3, 5, 7]:
                 patient_data["sex"] = "male"
             elif gender_digit in [2, 4, 6, 8]:
@@ -1084,9 +1084,9 @@ def parse_patient_data(html_content: str) -> Dict[str, Any]:
                 else:  # 7, 8
                     year_prefix = "20"  # For people born after 2000
                 
-                year = f"{year_prefix}{patient_cnp[1:3]}"
-                month = patient_cnp[3:5]
-                day = patient_cnp[5:7]
+                year = f"{year_prefix}{patient_data['patient_cnp'][1:3]}"
+                month = patient_data["patient_cnp"][3:5]
+                day = patient_data["patient_cnp"][5:7]
                 patient_data["birth_date"] = f"{year}-{month}-{day}"
             except Exception:
                 pass  # Keep birth_date empty if parsing fails
