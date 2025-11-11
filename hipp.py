@@ -10,6 +10,7 @@ import re
 from bs4 import BeautifulSoup
 import html
 from datetime import datetime
+import configparser
 
 
 # Configure logging
@@ -19,9 +20,49 @@ logging.basicConfig(
 )
 logger = logging.getLogger('HippoBridge')
 
-# Configuration
-SERVICE_URL = "http://192.168.3.230/hipocrate"
-PORT = 44660
+# Default configuration
+DEFAULT_CONFIG = {
+    'server': {
+        'port': '44660',
+        'host': '0.0.0.0'
+    },
+    'hipocrate': {
+        'service_url': 'http://192.168.3.230/hipocrate'
+    }
+}
+
+def load_config():
+    """Load configuration from hipp.cfg and local.cfg (if exists).
+    
+    Returns:
+        dict: Configuration dictionary with merged settings
+    """
+    config = configparser.ConfigParser()
+    
+    # Read default config
+    config.read_dict(DEFAULT_CONFIG)
+    
+    # Load main config file
+    if os.path.exists('hipp.cfg'):
+        logger.info("Loading hipp.cfg configuration")
+        config.read('hipp.cfg')
+    else:
+        logger.info("hipp.cfg not found, using default configuration")
+    
+    # Load local config if exists (will override hipp.cfg)
+    if os.path.exists('local.cfg'):
+        logger.info("Loading local.cfg configuration (overrides hipp.cfg)")
+        config.read('local.cfg')
+    
+    return config
+
+# Load configuration
+config = load_config()
+
+# Configuration values
+SERVICE_URL = config.get('hipocrate', 'service_url')
+PORT = config.getint('server', 'port')
+HOST = config.get('server', 'host')
 
 # Get credentials from environment variables (fallback)
 HYP_USER = os.getenv("HYP_USER")
@@ -3254,6 +3295,6 @@ async def on_cleanup(app):
         await session.close()
 
 if __name__ == "__main__":
-    logger.info("Starting HippoBridge server")
+    logger.info(f"Starting HippoBridge server on {HOST}:{PORT}")
     app = init_app()
-    web.run_app(app, host="0.0.0.0", port=PORT)
+    web.run_app(app, host=HOST, port=PORT)

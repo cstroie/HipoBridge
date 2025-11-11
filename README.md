@@ -33,9 +33,25 @@ HippoBridge is a medical data integration system that provides a modern web inte
 
 ## Configuration
 
+### Environment Variables
 Set the following environment variables:
 - `HYP_USER`: Hipocrate system username
 - `HYP_PASS`: Hipocrate system password
+
+### Configuration Files
+The application uses configuration files for server and service settings:
+- `hipp.cfg`: Main configuration file with default settings
+- `local.cfg`: Local overrides (optional, not tracked in version control)
+
+Configuration file format:
+```ini
+[server]
+port = 44660
+host = 0.0.0.0
+
+[hipocrate]
+service_url = http://192.168.3.230/hipocrate
+```
 
 ## Usage
 
