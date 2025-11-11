@@ -579,7 +579,7 @@ async def fhir_patient_search(request):
         logger.info("Patient search completed successfully")
         
         # Try to parse as single patient page first
-        patient_data = parse_single_patient_data(response_text)
+        patient_data = parse_patient_data(response_text)
         if patient_data and patient_data.get("patient_name"):
             fhir_patient = convert_to_fhir_patient(patient_data, request)
             return web.json_response(fhir_patient)
@@ -966,10 +966,10 @@ def is_expected_page(soup: BeautifulSoup, expected_title_text: str) -> bool:
     title = soup.find('title')
     return title and expected_title_text in title.get_text()
 
-def parse_single_patient_data(html_content: str) -> Dict[str, Any]:
+def parse_patient_data(html_content: str) -> Dict[str, Any]:
     """Parse HTML content for a single patient page and extract patient data.
     
-    Extracts patient name, ID, code, and associated presentation/checkin/checkout IDs
+    Extracts patient name, ID, code, and associated encounter/checkin/checkout IDs
     from a single patient page HTML content.
     
     Args:
@@ -1106,47 +1106,41 @@ def parse_single_patient_data(html_content: str) -> Dict[str, Any]:
                     except Exception:
                         pass  # Keep birth_date empty if parsing fails
         
-        # Extract presentations
-        presentations = []
-        presentation_links = soup.find_all('a', href=re.compile(r'../files/presentation\.asp\?id='))
-        for link in presentation_links:
+        # Extract encounters / presentations
+        encounter_links = soup.find_all('a', href=re.compile(r'../files/presentation\.asp\?id='))
+        for link in encounter_links:
             href = link.get('href', '')
             id_match = re.search(r'id=([^&"]+)', href)
             if id_match:
-                presentations.append(id_match.group(1))
+                patient_data["encounters"].append(id_match.group(1))
         
-        # Extract checkins
-        checkins = []
-        checkin_links = soup.find_all('a', href=re.compile(r'../files/checkin\.asp\?id='))
-        for link in checkin_links:
+        # Extract admissions / checkins
+        admission_links = soup.find_all('a', href=re.compile(r'../files/checkin\.asp\?id='))
+        for link in admission_links:
             href = link.get('href', '')
             id_match = re.search(r'id=([^&"]+)', href)
             if id_match:
-                checkins.append(id_match.group(1))
+                patient_data["admissions"].append(id_match.group(1))
         
-        # Extract checkouts
-        checkouts = []
-        checkout_links = soup.find_all('a', href=re.compile(r'../files/checkout\.asp\?id='))
-        for link in checkout_links:
+        # Extract discharges / checkouts
+        discharge_links = soup.find_all('a', href=re.compile(r'../files/checkout\.asp\?id='))
+        for link in discharge_links:
             href = link.get('href', '')
             id_match = re.search(r'id=([^&"]+)', href)
             if id_match:
-                checkouts.append(id_match.group(1))
+                patient_data["discharges"].append(id_match.group(1))
         
-        patient_data["presentations"] = presentations
-        patient_data["checkins"] = checkins
-        patient_data["checkouts"] = checkouts
-        
+        # Return the extracted patient data
         return patient_data
     except Exception as e:
-        logger.error(f"Error parsing single patient data: {e}")
+        logger.error(f"Error parsing patient data: {e}")
         return {}
 
 def convert_to_fhir_patient(patient_data: Dict[str, Any], request) -> Dict[str, Any]:
     """Convert patient data to FHIR Patient resource format.
     
     Args:
-        patient_data: Patient data from parse_single_patient_data
+        patient_data: Patient data from parse_patient_data
         request: The HTTP request object to get the host
         
     Returns:
@@ -1415,7 +1409,7 @@ async def fhir_patient_read(request):
         checkin_ids = []
         
         # For FHIR endpoint, we need to get patient details first
-        patient_data = parse_single_patient_data(response_text)
+        patient_data = parse_patient_data(response_text)
         if patient_data and patient_data.get("patient_name"):
             fhir_patient = convert_to_fhir_patient(patient_data, request)
             # Add extensions for checkin/checkout IDs
