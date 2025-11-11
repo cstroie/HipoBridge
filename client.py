@@ -69,7 +69,7 @@ async def _print_response_result(operation: str, data: dict, success: bool) -> b
 async def login(session: aiohttp.ClientSession, username: str, password: str) -> bool:
     """Perform login to the Hipocrate API.
     
-    Makes a POST request to the API login endpoint with the provided credentials.
+    Makes a POST request to the FHIR API login endpoint with the provided credentials.
     
     Args:
         session (aiohttp.ClientSession): The HTTP session to use for the request
@@ -86,7 +86,7 @@ async def login(session: aiohttp.ClientSession, username: str, password: str) ->
         "password": password
     }
     
-    data, success = await _make_api_request(session, "POST", f"{BASE_URL}/api/login", login_data)
+    data, success = await _make_api_request(session, "POST", f"{BASE_URL}/fhir/login", login_data)
     
     if success and data.get("status") == "success":
         print(f"Login successful: {data.get('message', 'No message')}")
@@ -96,14 +96,15 @@ async def login(session: aiohttp.ClientSession, username: str, password: str) ->
         return False
 
 async def search_patients(session: aiohttp.ClientSession, search_term: str, fhir_format: bool = False) -> bool:
-    """Search for patients using the API.
+    """Search for patients using the FHIR API.
     
     Performs a patient search on the Hipocrate service using the provided search term.
-    Can return either a single patient result or multiple patient results.
+    Returns FHIR Patient resources or Bundle.
     
     Args:
         session (aiohttp.ClientSession): The HTTP session to use for the request
         search_term (str): The term to search for (patient name, CNP, etc.)
+        fhir_format (bool): Whether to request FHIR format (default: False)
         
     Returns:
         bool: True if search was successful, False otherwise
@@ -115,7 +116,7 @@ async def search_patients(session: aiohttp.ClientSession, search_term: str, fhir
         headers["Accept"] = "application/fhir+json"
     
     try:
-        async with session.get(f"{BASE_URL}/api/patients/search?q={search_term}", headers=headers) as response:
+        async with session.get(f"{BASE_URL}/fhir/Patient?q={search_term}", headers=headers) as response:
             if response.status == 200:
                 content_type = response.headers.get("Content-Type", "")
                 if "application/fhir+json" in content_type:
@@ -203,9 +204,10 @@ async def search_patients(session: aiohttp.ClientSession, search_term: str, fhir
         return True
 
 async def get_report(session: aiohttp.ClientSession, report_id: str) -> bool:
-    """Retrieve a report by ID using the API.
+    """Retrieve a report by ID using the FHIR API.
     
     Gets a report from the Hipocrate service and displays the parsed data.
+    Returns FHIR DiagnosticReport resource.
     
     Args:
         session (aiohttp.ClientSession): The HTTP session to use for the request
@@ -216,7 +218,7 @@ async def get_report(session: aiohttp.ClientSession, report_id: str) -> bool:
     """
     print(f"Retrieving report with ID: {report_id}")
     
-    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/api/reports?id={report_id}")
+    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/fhir/DiagnosticReport?identifier={report_id}")
     
     if not success or data.get("status") != "success":
         print(f"Report retrieval failed: {data.get('message', 'No message')}")
@@ -261,9 +263,10 @@ async def get_report(session: aiohttp.ClientSession, report_id: str) -> bool:
     return True
 
 async def get_checkout(session: aiohttp.ClientSession, checkout_id: str) -> bool:
-    """Retrieve checkout information by ID using the API.
+    """Retrieve checkout information by ID using the FHIR API.
     
     Gets checkout information from the Hipocrate service and displays the parsed data.
+    Returns FHIR Encounter resource.
     
     Args:
         session (aiohttp.ClientSession): The HTTP session to use for the request
@@ -274,7 +277,7 @@ async def get_checkout(session: aiohttp.ClientSession, checkout_id: str) -> bool
     """
     print(f"Retrieving checkout with ID: {checkout_id}")
     
-    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/api/checkouts?id={checkout_id}")
+    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/fhir/Encounter?identifier={checkout_id}")
     
     if not success or data.get("status") != "success":
         print(f"Checkout retrieval failed: {data.get('message', 'No message')}")
@@ -306,7 +309,7 @@ async def get_patient_code_from_cnp(session: aiohttp.ClientSession, cnp: str) ->
     """Get patient code by validating CNP and searching for the patient.
     
     Validates a Romanian CNP and then searches for the corresponding patient
-    to retrieve their patient code.
+    to retrieve their patient code using FHIR endpoints.
     
     Args:
         session (aiohttp.ClientSession): The HTTP session to use for requests
@@ -316,7 +319,7 @@ async def get_patient_code_from_cnp(session: aiohttp.ClientSession, cnp: str) ->
         str: The patient code if found, None otherwise
     """
     # First validate the CNP
-    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/api/cnp?id={cnp}")
+    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/fhir/ValueSet/cnp?id={cnp}")
     
     if not success or data.get("status") != "success" or not data.get("valid"):
         print(f"CNP {cnp} is not valid")
@@ -325,7 +328,7 @@ async def get_patient_code_from_cnp(session: aiohttp.ClientSession, cnp: str) ->
     print(f"CNP {cnp} is valid, searching for patient...")
     
     # Search for the patient using the CNP
-    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/api/patients/search?q={cnp}")
+    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/fhir/Patient?q={cnp}")
     
     if not success or data.get("status") != "success":
         print(f"Patient search failed: {data.get('message', 'No message')}")
@@ -359,7 +362,7 @@ async def search_patient_code_by_partial_cnp(session: aiohttp.ClientSession, par
     """Search for patient code using partial CNP.
     
     Searches for patients using a partial CNP and returns the patient code
-    of the first match if found.
+    of the first match if found using FHIR endpoints.
     
     Args:
         session (aiohttp.ClientSession): The HTTP session to use for requests
@@ -371,7 +374,7 @@ async def search_patient_code_by_partial_cnp(session: aiohttp.ClientSession, par
     print(f"Searching for patient with partial CNP: {partial_cnp}")
     
     # Search for the patient using the partial CNP
-    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/api/patients/search?q={partial_cnp}")
+    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/fhir/Patient?q={partial_cnp}")
     
     if not success or data.get("status") != "success":
         print(f"Patient search failed: {data.get('message', 'No message')}")
@@ -402,11 +405,11 @@ async def search_patient_code_by_partial_cnp(session: aiohttp.ClientSession, par
         return None
 
 async def get_patient(session: aiohttp.ClientSession, patient_id: str) -> bool:
-    """Retrieve patient information by ID using the API.
+    """Retrieve patient information by ID using the FHIR API.
     
     Gets patient information from the Hipocrate service. If a 13-digit CNP is provided,
     it will be validated and converted to a patient code before retrieval. If the ID ends
-    with *, it's treated as a partial CNP and searched for.
+    with *, it's treated as a partial CNP and searched for. Returns FHIR Patient resource.
     
     Args:
         session (aiohttp.ClientSession): The HTTP session to use for the request
@@ -438,7 +441,7 @@ async def get_patient(session: aiohttp.ClientSession, patient_id: str) -> bool:
     
     print(f"Retrieving patient with ID: {patient_id}")
     
-    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/api/patients?id={patient_id}")
+    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/fhir/Patient/{patient_id}")
     
     if not success or data.get("status") != "success":
         print(f"Patient retrieval failed: {data.get('message', 'No message')}")
@@ -467,13 +470,14 @@ async def get_patient(session: aiohttp.ClientSession, patient_id: str) -> bool:
     return True
 
 async def get_analyses(session: aiohttp.ClientSession, patient_id: str, analysis_type: str = None, datetime_filter: str = None) -> bool:
-    """Retrieve all analyses for a patient by ID using the API.
+    """Retrieve all analyses for a patient by ID using the FHIR API.
     
     Gets all analyses for a specific patient from the Hipocrate service.
     If a 13-digit CNP is provided, it will be validated and converted to 
     a patient code before retrieval. If the ID ends with *, it's treated as
     a partial CNP and searched for. For imaging analyses (radio, ct, irm, eco),
     the corresponding reports will be automatically retrieved and displayed.
+    Returns FHIR Bundle of Observation resources.
     
     Args:
         session (aiohttp.ClientSession): The HTTP session to use for the request
@@ -506,7 +510,7 @@ async def get_analyses(session: aiohttp.ClientSession, patient_id: str, analysis
                 print("Could not find patient with partial CNP, using original ID")
     
     # Build URL with optional parameters
-    url = f"{BASE_URL}/api/analyses?id={patient_id}"
+    url = f"{BASE_URL}/fhir/Observation?patient={patient_id}"
     if analysis_type:
         url += f"&type={analysis_type}"
     if datetime_filter:
@@ -558,9 +562,9 @@ async def get_analyses(session: aiohttp.ClientSession, patient_id: str, analysis
     return True
 
 async def validate_cnp(session: aiohttp.ClientSession, cnp: str) -> bool:
-    """Validate a Romanian CNP using the API.
+    """Validate a Romanian CNP using the FHIR API.
     
-    Validates a Romanian CNP (Personal Numerical Code) using the API endpoint.
+    Validates a Romanian CNP (Personal Numerical Code) using the FHIR API endpoint.
     
     Args:
         session (aiohttp.ClientSession): The HTTP session to use for the request
@@ -571,7 +575,7 @@ async def validate_cnp(session: aiohttp.ClientSession, cnp: str) -> bool:
     """
     print(f"Validating CNP: {cnp}")
     
-    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/api/cnp?id={cnp}")
+    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/fhir/ValueSet/cnp?id={cnp}")
     
     if not success or data.get("status") != "success":
         print(f"CNP validation failed: {data.get('message', 'No message')}")

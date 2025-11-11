@@ -34,9 +34,9 @@ document.addEventListener('DOMContentLoaded', function() {
             // Determine search type and notify user
             if (isCNPFormat) {
                 showToast('Validating CNP...', 'success');
-                // Validate CNP using server-side API
+                // Validate CNP using server-side FHIR API
                 try {
-                    const cnpResponse = await fetch(`/api/cnp?id=${cnp}`);
+                    const cnpResponse = await fetch(`/fhir/ValueSet/cnp?id=${cnp}`);
                     const cnpData = await cnpResponse.json();
         
                     if (cnpData.status !== 'success' || !cnpData.valid) {
@@ -57,9 +57,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 showToast('Searching for patient by name or code...', 'success');
             }
             
-            // Search for patient
+            // Search for patient using FHIR API
             showToast('Searching patient database...', 'success');
-            const searchResponse = await fetch(`/api/patients/search?q=${cnp}`);
+            const searchResponse = await fetch(`/fhir/Patient?q=${cnp}`);
             const searchData = await searchResponse.json();
             
             if (searchData.status !== 'success') {
@@ -76,8 +76,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 patientData = searchData.data;
             } else if (searchData.type === 'multiple_patients' && searchData.data.length > 0) {
                 patientCode = searchData.data[0].patient_code;
-                // Get full patient data
-                const patientResponse = await fetch(`/api/patients?id=${patientCode}`);
+                // Get full patient data using FHIR API
+                const patientResponse = await fetch(`/fhir/Patient/${patientCode}`);
                 const patientResult = await patientResponse.json();
                 if (patientResult.status === 'success') {
                     patientData = {
@@ -102,9 +102,9 @@ document.addEventListener('DOMContentLoaded', function() {
             
             showToast('Patient information retrieved successfully. Loading analyses...', 'success');
             
-            // Get analyses
+            // Get analyses using FHIR API
             showToast('Loading patient analyses...', 'success');
-            const analysesResponse = await fetch(`/api/analyses?id=${patientCode}`);
+            const analysesResponse = await fetch(`/fhir/Observation?patient=${patientCode}`);
             const analysesData = await analysesResponse.json();
             
             if (analysesData.status !== 'success') {
@@ -113,14 +113,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
-            // Get the most recent checkout epicrisis
+            // Get the most recent checkout epicrisis using FHIR API
             let epicrisisData = null;
             if (patientData.checkouts && patientData.checkouts.length > 0) {
                 showToast('Loading epicrisis data...', 'success');
                 // Get the most recent checkout (first in the list)
                 const checkoutId = patientData.checkouts[0];
                 try {
-                    const checkoutResponse = await fetch(`/api/checkouts?id=${checkoutId}`);
+                    const checkoutResponse = await fetch(`/fhir/Encounter?identifier=${checkoutId}`);
                     const checkoutData = await checkoutResponse.json();
                     
                     if (checkoutData.status === 'success') {
@@ -226,7 +226,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     async function convertMarkdownToHtml(markdownText) {
         try {
-            const response = await fetch('/api/md2html', {
+            const response = await fetch('/fhir/md2html', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -310,8 +310,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 // For imaging analyses, fetch and display report content
                 if (analysis.type && ['radio', 'ct', 'irm', 'eco'].includes(analysis.type)) {
                     try {
-                        // Fetch report data
-                        const reportResponse = await fetch(`/api/reports?id=${analysis.report_id}`);
+                        // Fetch report data using FHIR API
+                        const reportResponse = await fetch(`/fhir/DiagnosticReport?identifier=${analysis.report_id}`);
                         const reportData = await reportResponse.json();
                         
                         if (reportData.status === 'success' && reportData.reports && reportData.reports.length > 0) {
