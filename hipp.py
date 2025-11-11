@@ -2671,16 +2671,7 @@ async def fhir_diagnostic_report_read(request):
             )
             
             if not success:
-                # If authentication failed during redirect, return the error
-                if redirect_count > 0:
-                    logger.info(f"Report retrieval completed successfully after {redirect_count} redirects")
-                    # Parse the report data we have so far
-                    parsed_data = parse_report_data(response_text)
-                    result = {"status": "success", "redirects_followed": redirect_count}
-                    result.update(parsed_data)
-                    return web.json_response(result)
-                else:
-                    return error_response
+                return error_response
             
             # Check if this is the final response (not a redirect)
             # We need to make a direct request to check the status code
@@ -2758,30 +2749,6 @@ async def fhir_diagnostic_report_read(request):
                     fhir_report["media"] = []
                     
                     return web.json_response(fhir_report, headers={"Content-Type": "application/fhir+json"})
-                
-                # Handle 302 redirect
-                location = response.headers.get("Location")
-                if not location:
-                    logger.error("302 redirect without Location header")
-                    return web.json_response({
-                        "status": "error",
-                        "message": "Redirect without location header"
-                    }, status=500)
-                
-                # Construct the full URL for the redirect
-                if location.startswith("/"):
-                    # Relative path from root
-                    current_url = f"http://192.168.3.230{location}"
-                elif location.startswith("http"):
-                    # Full URL
-                    current_url = location
-                else:
-                    # Relative path from current directory
-                    base_path = "/".join(current_url.split("/")[:-1])
-                    current_url = f"{base_path}/{location}"
-                
-                logger.debug(f"Following redirect #{redirect_count + 1} to: {current_url}")
-                redirect_count += 1
                 
                 # Handle 302 redirect
                 location = response.headers.get("Location")
