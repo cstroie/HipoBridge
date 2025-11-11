@@ -1282,61 +1282,51 @@ def parse_multiple_patients_data(html_content: str) -> List[Dict[str, Any]]:
         
         # Check if this is a search results page by looking for 'Fisier' in title
         if not is_expected_page(soup, 'Fisier'):
-            # Log snnippet of response for debugging
+            # Log snippet of response for debugging
             logger.debug(f"Response text snippet: {html_content[:500]}...")
             # Return empty list if not expected page
             return []
         
         patients = []
 
-        # Find all table rows
-        rows = soup.find_all('tr')
+        # Find all links with the pattern javascript:Edit('patient_id')
+        patient_links = soup.find_all('a', href=re.compile(r"javascript:Edit\('([^']+)'\);"))
         
-        for row in rows:
-            # Look for the patient id link
-            id_link = row.find('a', href=re.compile(r"javascript:Edit\('([^']+)'\);"))
-            if not id_link:
-                continue
-                
-            # Extract patient id
-            id_href = id_link.get('href')
-            id_match = re.search(r"javascript:Edit\('([^']+)'\);", id_href)
+        for link in patient_links:
+            # Extract patient id from href
+            href = link.get('href')
+            id_match = re.search(r"javascript:Edit\('([^']+)'\);", href)
             if not id_match:
                 continue
             patient_id = id_match.group(1)
             
-            # Look for the patient name link (next link in the row)
-            name_links = row.find_all('a')
-            patient_name = ""
-            for name_link in name_links:
-                if name_link != id_link:
-                    # Extract patient name
-                    # Remove font tags and formatting
-                    name_text = name_link.get_text()
-                    # Clean up the name (remove extra spaces, normalize)
-                    patient_name = re.sub(r'\s+', ' ', name_text.strip())
-                    break
+            # Extract patient name from the link text
+            patient_name = link.get_text().strip()
             
-            # Look for CNP in the row (text input field with CNP)
+            # Look for CNP in the same row or nearby elements
             patient_cnp = ""
-            cnp_inputs = row.find_all('input', type='text')
-            for cnp_input in cnp_inputs:
-                # Check if this input is for CNP by looking at surrounding context
-                parent = cnp_input.find_parent('td')
-                if parent and parent.find_previous_sibling('td'):
-                    prev_td = parent.find_previous_sibling('td')
-                    if prev_td and 'cnp' in prev_td.get_text().lower():
-                        patient_cnp = cnp_input.get('value', '').strip()
-                        break
+            # Find the parent row of this link
+            parent_row = link.find_parent('tr')
+            if parent_row:
+                # Look for input fields in the row that might contain CNP
+                cnp_inputs = parent_row.find_all('input', type='text')
+                for cnp_input in cnp_inputs:
+                    # Check if this input is for CNP by looking at surrounding context
+                    parent_td = cnp_input.find_parent('td')
+                    if parent_td:
+                        # Look for a previous cell that contains "CNP"
+                        prev_td = parent_td.find_previous_sibling('td')
+                        if prev_td and 'cnp' in prev_td.get_text().lower():
+                            patient_cnp = cnp_input.get('value', '').strip()
+                            break
             
-            # Only add patient if we have at least a name or id
-            if patient_name or patient_id:
-                patient_data = {
-                    "patient_name": patient_name,
-                    "patient_cnp": patient_cnp,  # CNP
-                    "patient_id": patient_id
-                }
-                patients.append(patient_data)
+            # Add patient data to list
+            patient_data = {
+                "patient_name": patient_name,
+                "patient_cnp": patient_cnp,  # CNP
+                "patient_id": patient_id
+            }
+            patients.append(patient_data)
         
         return patients
     except Exception as e:
