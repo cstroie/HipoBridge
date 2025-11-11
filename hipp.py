@@ -307,8 +307,9 @@ async def login_if_needed(username: str = None, password: str = None) -> bool:
             logger.debug(f"Login response status: {login_response.status}")
             
             # Log cookie information
+            from yarl import URL
             if session.cookie_jar:
-                cookies = session.cookie_jar.filter_cookies(SERVICE_URL)
+                cookies = session.cookie_jar.filter_cookies(URL(SERVICE_URL))
                 logger.debug(f"Session cookies after login: {len(cookies)} cookies")
         
         # Check if login was successful (redirect to main.asp or not on login page)
@@ -385,8 +386,9 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
     """
     try:
         # Log current cookies before request
+        from yarl import URL
         if session.cookie_jar:
-            cookies = session.cookie_jar.filter_cookies(SERVICE_URL)
+            cookies = session.cookie_jar.filter_cookies(URL(SERVICE_URL))
             logger.debug(f"Using {len(cookies)} cookies for request to {url}")
         
         # First ensure we're logged in
