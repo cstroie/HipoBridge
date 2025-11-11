@@ -998,7 +998,11 @@ def parse_patient_data(html_content: str) -> Dict[str, Any]:
             return {"error": "Invalid patient id"}
         
         # Patient data
-        patient_data = {}
+        patient_data = {
+            "encounters": [],
+            "admissions": [],
+            "discharges": []
+        }
         
         # Extract patient name from input elements
         family_input = soup.find('input', id='strNume', type='text')
