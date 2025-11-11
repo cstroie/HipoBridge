@@ -947,23 +947,39 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
             report_data["examiner"] = examiner_name
         
         # Extract reason for referral (DIAGNOSTIC DE TRIMITERE)
-        referral_match = re.search(r'DIAGNOSTIC DE TRIMITERE:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
-        if referral_match:
-            referral_text = referral_match.group(1).strip()
-            # Split into code and text - first part numeric is the code, rest is the reason
-            parts = referral_text.split(' ', 1)
-            if parts:
-                # Check if first part is numeric (the code)
-                if parts[0].isdigit():
-                    report_data["referral_code"] = parts[0]
-                    report_data["referral_reason"] = parts[1].strip() if len(parts) > 1 else ""
-                else:
-                    report_data["referral_reason"] = referral_text
+        # Look for the table cell containing this label
+        referral_label = soup.find(string=re.compile(r'DIAGNOSTIC DE TRIMITERE:', re.IGNORECASE))
+        if referral_label:
+            # Find the parent td element
+            parent_td = referral_label.find_parent('td')
+            if parent_td:
+                # Get the next sibling td which should contain the referral data
+                next_td = parent_td.find_next_sibling('td')
+                if next_td:
+                    # Extract text content and clean it
+                    referral_text = next_td.get_text(separator=' ', strip=True)
+                    # Split into code and text - first part numeric is the code, rest is the reason
+                    parts = referral_text.split(' ', 1)
+                    if parts:
+                        # Check if first part is numeric (the code)
+                        if parts[0].isdigit():
+                            report_data["referral_code"] = parts[0]
+                            report_data["referral_reason"] = parts[1].strip() if len(parts) > 1 else ""
+                        else:
+                            report_data["referral_reason"] = referral_text
         
         # Extract presumptive diagnosis (DG.PREZUMTIV)
-        presumptive_match = re.search(r'DG\.PREZUMTIV:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
-        if presumptive_match:
-            report_data["presumptive_diagnosis"] = presumptive_match.group(1).strip()
+        # Look for the table cell containing this label
+        presumptive_label = soup.find(string=re.compile(r'DG\.PREZUMTIV:', re.IGNORECASE))
+        if presumptive_label:
+            # Find the parent td element
+            parent_td = presumptive_label.find_parent('td')
+            if parent_td:
+                # Get the next sibling td which should contain the diagnosis data
+                next_td = parent_td.find_next_sibling('td')
+                if next_td:
+                    # Extract text content and clean it
+                    report_data["presumptive_diagnosis"] = next_td.get_text(separator=' ', strip=True)
         
         return report_data
     except Exception as e:
