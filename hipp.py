@@ -986,11 +986,18 @@ def parse_single_patient_data(html_content: str) -> Dict[str, Any]:
         if not is_expected_page(soup, 'Date pasaportale'):
             return {"error": "Backend returned an unexpected page"}
         
-        # Extract patient name from div with id "div_navbar"
-        navbar_div = soup.find('div', id='div_navbar')
-        patient_name = ""
-        if navbar_div:
-            patient_name = navbar_div.get_text().strip()
+        # Extract patient name from input elements
+        family_name = ""
+        family_input = soup.find('input', id='strNume', type='text')
+        if family_input:
+            family_name = family_input.get('value', '').strip()
+        
+        given_name = ""
+        given_input = soup.find('input', id='strPrenume', type='text')
+        if given_input:
+            given_name = given_input.get('value', '').strip()
+        
+        patient_name = f"{family_name} {given_name}".strip()
         
         # If patient name is empty or null, the patient code is invalid
         if not patient_name:
@@ -1008,6 +1015,73 @@ def parse_single_patient_data(html_content: str) -> Dict[str, Any]:
         code_input = soup.find('input', id='hdnCodeID', type='hidden')
         if code_input:
             patient_code = code_input.get('value', '').strip()
+        
+        # Extract additional patient data
+        patient_data = {
+            "patient_name": patient_name,
+            "patient_id": patient_id,
+            "patient_code": patient_code,
+            "family_name": family_name,
+            "given_name": given_name
+        }
+        
+        # Extract CID
+        cid_input = soup.find('input', id='strCID', type='text')
+        if cid_input:
+            patient_data["cid"] = cid_input.get('value', '').strip()
+        
+        # Extract phone
+        phone_input = soup.find('input', id='strTelefon', type='text')
+        if phone_input:
+            patient_data["phone"] = phone_input.get('value', '').strip()
+        
+        # Extract email
+        email_input = soup.find('input', id='strEmail', type='text')
+        if email_input:
+            patient_data["email"] = email_input.get('value', '').strip()
+        
+        # Extract weight
+        weight_input = soup.find('input', id='strGreutate', type='text')
+        if weight_input:
+            patient_data["weight"] = weight_input.get('value', '').strip()
+        
+        # Extract height
+        height_input = soup.find('input', id='strInaltime', type='text')
+        if height_input:
+            patient_data["height"] = height_input.get('value', '').strip()
+        
+        # Extract MCP
+        mcp_input = soup.find('input', id='strmcp', type='text')
+        if mcp_input:
+            patient_data["mcp"] = mcp_input.get('value', '').strip()
+        
+        # Derive sex and birth date from CNP if available
+        if patient_id and len(patient_id) == 13 and patient_id.isdigit():
+            # Extract gender from first digit
+            gender_digit = int(patient_id[0])
+            if gender_digit in [1, 3, 5, 7]:
+                patient_data["sex"] = "male"
+            elif gender_digit in [2, 4, 6, 8]:
+                patient_data["sex"] = "female"
+            
+            # Extract birth date
+            try:
+                year_prefix = ""
+                if gender_digit in [1, 2]:
+                    year_prefix = "19"
+                elif gender_digit in [3, 4]:
+                    year_prefix = "18"
+                elif gender_digit in [5, 6]:
+                    year_prefix = "20"
+                else:  # 7, 8
+                    year_prefix = "20"  # For people born after 2000
+                
+                year = f"{year_prefix}{patient_id[1:3]}"
+                month = patient_id[3:5]
+                day = patient_id[5:7]
+                patient_data["birth_date"] = f"{year}-{month}-{day}"
+            except Exception:
+                pass  # Keep birth_date empty if parsing fails
         
         # Extract presentations
         presentations = []
@@ -1036,14 +1110,11 @@ def parse_single_patient_data(html_content: str) -> Dict[str, Any]:
             if id_match:
                 checkouts.append(id_match.group(1))
         
-        return {
-            "patient_name": patient_name,
-            "patient_id": patient_id,
-            "patient_code": patient_code,
-            "presentations": presentations,
-            "checkins": checkins,
-            "checkouts": checkouts
-        }
+        patient_data["presentations"] = presentations
+        patient_data["checkins"] = checkins
+        patient_data["checkouts"] = checkouts
+        
+        return patient_data
     except Exception as e:
         logger.error(f"Error parsing single patient data: {e}")
         return {}
