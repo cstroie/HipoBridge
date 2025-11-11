@@ -1570,22 +1570,33 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
                 # Look for pattern like 'XXXX-Radio', 'XXXX-lab', etc.
                 type_match = re.search(r'\d{4}-(\w+)', type_text)
                 if type_match:
-                    analysis_data["type"] = type_match.group(1).lower()
+                    extracted_type = type_match.group(1).lower()
+                    # Check if the extracted type is in our known analysis types
+                    if extracted_type in ANALYSIS_TYPES:
+                        analysis_data["type"] = extracted_type
+                    else:
+                        analysis_data["type"] = "unknown"
                 else:
                     # If we didn't find the type in the standard format, try to infer from the text
                     type_text_lower = type_text.lower()
-                    if 'radio' in type_text_lower or 'radiologie' in type_text_lower:
-                        analysis_data["type"] = "radio"
-                    elif 'lab' in type_text_lower or 'laborator' in type_text_lower:
-                        analysis_data["type"] = "lab"
-                    elif 'irm' in type_text_lower:
-                        analysis_data["type"] = "irm"
-                    elif 'ct' in type_text_lower:
-                        analysis_data["type"] = "ct"
-                    elif 'eco' in type_text_lower or 'ecografie' in type_text_lower:
-                        analysis_data["type"] = "eco"
-                    else:
-                        analysis_data["type"] = "unknown"
+                    found_type = "unknown"
+                    # Check each known analysis type
+                    for analysis_type in ANALYSIS_TYPES:
+                        if analysis_type in type_text_lower:
+                            found_type = analysis_type
+                            break
+                        # Check for alternative names
+                        elif analysis_type == "radio" and ('radiologie' in type_text_lower):
+                            found_type = "radio"
+                            break
+                        elif analysis_type == "lab" and ('laborator' in type_text_lower):
+                            found_type = "lab"
+                            break
+                        elif analysis_type == "eco" and ('ecografie' in type_text_lower):
+                            found_type = "eco"
+                            break
+                    
+                    analysis_data["type"] = found_type
                 
                 # Cell 7: Requesting doctor
                 doctor_text = cells[7].get_text().strip()
