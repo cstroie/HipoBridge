@@ -566,27 +566,26 @@ async def fhir_patient_search(request):
         # Create a copy of headers without Content-Type to avoid conflicts
         post_headers = HEADERS.copy()
         post_headers.pop("Content-Type", None)
-        
+
         # Make the authenticated request
+        start_time = datetime.now()
         response_text, success, error_response = await make_authenticated_request(
             session, search_url, "POST", search_data, username, password
         )
-        # Check for errors
+        duration = (datetime.now() - start_time).total_seconds()
+        # Check for errors in the response
         if not success:
             return error_response
-        
-        logger.info("Patient search completed, parsing results")
+        logger.info(f"Patient search completed in {duration:.2f} seconds")
         
         ## Try to parse as single patient page first
-        #patient_data = parse_patient_data(response_text)
-        #if patient_data and patient_data.get("patient_id") and not patient_data.get("error"):
-        #    fhir_patient = convert_to_fhir_patient(patient_data, request)
-        #    return web.json_response(fhir_patient)
+        patient_data = parse_patient_data(response_text)
+        if patient_data and patient_data.get("patient_id") and not patient_data.get("error"):
+            fhir_patient = convert_to_fhir_patient(patient_data, request)
+            return web.json_response(fhir_patient)
         
         # Try to parse as multiple patients page
         multiple_patients_data = parse_multiple_patients_data(response_text)
-
-        #return create_error_response(response_text, 404)
 
         if multiple_patients_data and len(multiple_patients_data) > 0:
             # Convert multiple patients to FHIR Bundle
@@ -646,7 +645,7 @@ async def fhir_patient_search(request):
         # If neither parser worked, return an error
         logger.warning("Unable to parse patient search results")
         # Log a snippet of the response for debugging
-        logger.debug(f"Response text snippet: {response_text[:500]}...")
+        logger.debug(f"Response text snippet: {response_text[:200]}...")
         return create_error_response(
             "Unable to parse patient search results", 
             500, 
@@ -825,11 +824,11 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
             "gender": "",
             "patient_cnp": "",
             "patient_id": "",
-            "sample_datetime": "",
-            "sample_date": "",
-            "sample_time": "",
+            "datetime": "",
+            "date": "",
+            "time": "",
             "examination": "",
-            "reports": [],  # List of reports instead of single result
+            "reports": [],
             "examiner": ""
         }
         
@@ -870,21 +869,18 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
         datetime_match = re.search(r'(?:Data si ora recoltarii:|Data investigatiei:)\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
         if datetime_match:
             datetime_str = re.sub(r'\s+', ' ', datetime_match.group(1).strip())
-            report_data["sample_datetime"] = datetime_str
             
             # Try to parse date and time
             try:
                 # Handle common date formats
                 if re.match(r'\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}', datetime_str):
                     dt = datetime.strptime(datetime_str, '%d/%m/%Y %H:%M:%S')
-                    report_data["sample_date"] = dt.strftime('%Y-%m-%d')
-                    report_data["sample_time"] = dt.strftime('%H:%M:%S')
                 elif re.match(r'\d{2}/\d{2}/\d{4}', datetime_str):
                     dt = datetime.strptime(datetime_str, '%d/%m/%Y')
-                    report_data["sample_date"] = dt.strftime('%Y-%m-%d')
             except ValueError:
                 # If parsing fails, leave date/time fields empty
                 pass
+            report_data["datetime"] = dt
         
         # Extract examination
         exam_match = re.search(r'EXAMINARE EFECTUATA:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
@@ -987,7 +983,7 @@ def parse_patient_data(html_content: str) -> Dict[str, Any]:
         # Check if this is a single patient page by looking for 'Date pasaportale' in title
         if not is_expected_page(soup, 'Date pasaportale'):
             # Log snnippet of response for debugging
-            logger.debug(f"Response text snippet: {html_content[:1000]}...")
+            #logger.debug(f"Response text snippet: {html_content[:200]}...")
             return {"error": "Backend returned an unexpected page"}
         
         # Check if there is patient data on page by getting the name from the div with id "div_navbar"
@@ -1270,7 +1266,7 @@ def parse_multiple_patients_data(html_content: str) -> List[Dict[str, Any]]:
         html_content: HTML content of the search results page
         
     Returns:
-        List of dictionaries containing patient data (name, CNP, id only)
+        List of dictionaries containing patient data (name, ID only)
     """
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
@@ -1278,16 +1274,15 @@ def parse_multiple_patients_data(html_content: str) -> List[Dict[str, Any]]:
         # Check if this is a search results page by looking for 'Fisier' in title
         if not is_expected_page(soup, 'Fisier'):
             # Log snippet of response for debugging
-            logger.debug(f"Response text snippet: {html_content[:500]}...")
+            #logger.debug(f"Response text snippet: {html_content[:200]}...")
             # Return empty list if not expected page
             return []
-        
-        patients = []
 
         # Find all links with the pattern javascript:Edit('patient_id')
-        patient_links = soup.find_all('a', href=re.compile(r"javascript:Edit\('([^']+)'\);"))
-        
-        for link in patient_links:
+        patients_links = soup.find_all('a', href=re.compile(r"javascript:Edit\('([^']+)'\);"))    
+        patients = []
+
+        for link in patients_links:
             # Extract patient id from href
             href = link.get('href')
             id_match = re.search(r"javascript:Edit\('([^']+)'\);", href)
@@ -1296,29 +1291,14 @@ def parse_multiple_patients_data(html_content: str) -> List[Dict[str, Any]]:
             patient_id = id_match.group(1)
             
             # Extract patient name from the link text
-            patient_name = link.get_text().strip()
-            
-            # Look for CNP in the same row or nearby elements
-            patient_cnp = ""
-            # Find the parent row of this link
-            parent_row = link.find_parent('tr')
-            if parent_row:
-                # Look for input fields in the row that might contain CNP
-                cnp_inputs = parent_row.find_all('input', type='text')
-                for cnp_input in cnp_inputs:
-                    # Check if this input is for CNP by looking at surrounding context
-                    parent_td = cnp_input.find_parent('td')
-                    if parent_td:
-                        # Look for a previous cell that contains "CNP"
-                        prev_td = parent_td.find_previous_sibling('td')
-                        if prev_td and 'cnp' in prev_td.get_text().lower():
-                            patient_cnp = cnp_input.get('value', '').strip()
-                            break
-            
+            patient_name = link.get_text().strip().upper()
+            if patient_name == patient_id:
+                # If name is same as id, skip this entry
+                continue
+
             # Add patient data to list
             patient_data = {
                 "patient_name": patient_name,
-                "patient_cnp": patient_cnp,  # CNP
                 "patient_id": patient_id
             }
             patients.append(patient_data)
@@ -1432,12 +1412,16 @@ async def fhir_patient_read(request):
         # Make request to the patient endpoint
         patient_url = f"{SERVICE_URL}/Pacient/edit.asp?id={patient_id}"
         
+        # Make the authenticated request
+        start_time = datetime.now()
         response_text, success, error_response = await make_authenticated_request(
             session, patient_url, "GET", None, username, password
         )
+        duration = (datetime.now() - start_time).total_seconds()
         # Check for errors in the response
         if not success:
             return error_response
+        logger.info(f"Patient info retrieved in {duration:.2f} seconds")
         
         # For FHIR endpoint, we need to get patient details first
         patient_data = parse_patient_data(response_text)
@@ -1485,15 +1469,17 @@ async def fhir_encounter_read(request):
         
         # Make request to the checkout endpoint
         checkout_url = f"{SERVICE_URL}/files/checkout.asp?id={encounter_id}"
-        
+        # Make the authenticated request
+        start_time = datetime.now()
         response_text, success, error_response = await make_authenticated_request(
             session, checkout_url, "GET", None, username, password
         )
-        
+        duration = (datetime.now() - start_time).total_seconds()
+        # Check for errors in the response
         if not success:
             return error_response
         
-        logger.info("Encounter retrieval completed successfully")
+        logger.info(f"Encounter retrieval completed successfully in {duration:.2f} seconds")
         # Parse the checkout data
         parsed_data = parse_checkout_data(response_text)
         
@@ -1761,7 +1747,6 @@ async def fhir_observation_search(request):
     
     # Get optional parameters
     analysis_type = request.query.get('type')
-    datetime_filter = request.query.get('dt')
     full_data = request.query.get('full', 'no').lower() == 'yes'
     
     logger.info(f"Retrieving analyses list for patient with ID: {patient_id}")
@@ -1776,12 +1761,13 @@ async def fhir_observation_search(request):
         if full_data:
             analyses_url += "&full=yes"
         
+        # Make the authenticated request
         start_time = datetime.now()
         response_text, success, error_response = await make_authenticated_request(
             session, analyses_url, "GET", None, username, password
         )
         duration = (datetime.now() - start_time).total_seconds()
-        
+        # Check for errors in the response
         if not success:
             return error_response
         
@@ -1879,12 +1865,18 @@ async def fhir_observation_read(request):
         
         # Get report details to extract observation data
         report_url = f"{SERVICE_URL}/analyse/Reports/analyseFile.asp?id={observation_id}"
+
+        # Make the authenticated request
+        start_time = datetime.now()
         report_text, success, error_response = await make_authenticated_request(
             session, report_url, "GET", None, username, password
         )
-        
+        duration = (datetime.now() - start_time).total_seconds()
+        # Check for errors in the response
         if not success:
             return error_response
+        
+        logger.info(f"Report retrieved in {duration:.2f} seconds")
         
         # Parse report to get observation data
         report_data = parse_report_data(report_text)
@@ -1923,8 +1915,8 @@ async def fhir_observation_read(request):
         }
         
         # Add effective datetime if available
-        if report_data.get("sample_datetime"):
-            fhir_observation["effectiveDateTime"] = report_data["sample_datetime"]
+        if report_data.get("datetime"):
+            fhir_observation["effectiveDateTime"] = report_data["datetime"]
         
         # Add performer if available
         if report_data.get("examiner"):
@@ -3244,13 +3236,17 @@ async def fhir_diagnostic_report_read(request):
         current_url = report_url
         
         while redirect_count < max_redirects:
+            # Make the authenticated request
+            start_time = datetime.now()
             response_text, success, error_response = await make_authenticated_request(
                 session, current_url, "GET", None, username, password
             )
-            
+            duration = (datetime.now() - start_time).total_seconds()
+            # Check for errors in the response
             if not success:
                 return error_response
-            
+            logger.info(f"Report retrieved in {duration:.2f} seconds")
+
             # Check if this is the final response (not a redirect)
             # We need to make a direct request to check the status code
             async with session.get(current_url, headers=HEADERS) as response:
@@ -3298,8 +3294,8 @@ async def fhir_diagnostic_report_read(request):
                     }
                     
                     # Add effective date if available
-                    if parsed_data.get("sample_datetime"):
-                        fhir_report["effectiveDateTime"] = parsed_data["sample_datetime"]
+                    if parsed_data.get("datetime"):
+                        fhir_report["effectiveDateTime"] = parsed_data["datetime"]
                     
                     # Add performer if available
                     if parsed_data.get("examiner"):
