@@ -2691,7 +2691,7 @@ async def fhir_diagnostic_report_read(request):
         
         # Make initial request to the report endpoint
         report_url = f"{SERVICE_URL}/analyse/Reports/analyseFile.asp?id={report_id}"
-        logger.debug(f"Making initial report request to: {report_url}")
+        logger.debug(f"Making report request to: {report_url}")
         
         # Follow up to 5 redirects to get the final report data
         redirect_count = 0
@@ -2780,6 +2780,7 @@ async def fhir_diagnostic_report_read(request):
                     
                     # Add media references placeholder
                     fhir_report["media"] = []
+                    print(fhir_report)
                     
                     return web.json_response(fhir_report, headers={"Content-Type": "application/fhir+json"})
                 
