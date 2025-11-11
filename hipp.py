@@ -580,7 +580,7 @@ async def fhir_patient_search(request):
         
         # Try to parse as single patient page first
         patient_data = parse_patient_data(response_text)
-        if patient_data and patient_data.get("patient_name") and not patient_data.get("error"):
+        if patient_data and patient_data.get("patient_id") and not patient_data.get("error"):
             fhir_patient = convert_to_fhir_patient(patient_data, request)
             return web.json_response(fhir_patient)
         
@@ -629,7 +629,6 @@ async def fhir_patient_search(request):
                 bundle["entry"].append({
                     "resource": fhir_patient
                 })
-            
             return web.json_response(bundle)
         
         # Check if we're on a "no results" page
@@ -1005,9 +1004,7 @@ def parse_patient_data(html_content: str) -> Dict[str, Any]:
         
         # Patient data
         patient_data = {
-            "encounters": [],
-            "admissions": [],
-            "discharges": []
+            "patient_name": patient_name_from_navbar,
         }
         
         # Extract patient name from input elements
@@ -1019,12 +1016,8 @@ def parse_patient_data(html_content: str) -> Dict[str, Any]:
         if given_input:
             patient_data["given_name"] = given_input.get('value', '').strip()
         
-        patient_name = f"{patient_data.get('family_name', '')} {patient_data.get('given_name', '')}".strip()
-        
-        # If patient name is empty or null, the patient id is invalid
-        if not patient_name:
-            logger.warning("Patient name is empty, invalid patient id")
-            return {"error": "Invalid patient id"}
+        if family_input and given_input:
+            patient_data["patient_name"] = f"{patient_data.get('family_name', '')} {patient_data.get('given_name', '')}".strip()
         
         # Extract patient ID (CNP) from input element with id "strCNP"
         cnp_input = soup.find('input', id='strCNP', type='text')
@@ -1095,6 +1088,8 @@ def parse_patient_data(html_content: str) -> Dict[str, Any]:
         
         # Extract encounters / presentations
         encounter_links = soup.find_all('a', href=re.compile(r'../files/presentation\.asp\?id='))
+        if encounter_links:
+            patient_data["encounters"] = []
         for link in encounter_links:
             href = link.get('href', '')
             id_match = re.search(r'id=([^&"]+)', href)
@@ -1103,6 +1098,8 @@ def parse_patient_data(html_content: str) -> Dict[str, Any]:
         
         # Extract admissions / checkins
         admission_links = soup.find_all('a', href=re.compile(r'../files/checkin\.asp\?id='))
+        if admission_links:
+            patient_data["admissions"] = []
         for link in admission_links:
             href = link.get('href', '')
             id_match = re.search(r'id=([^&"]+)', href)
@@ -1111,6 +1108,8 @@ def parse_patient_data(html_content: str) -> Dict[str, Any]:
         
         # Extract discharges / checkouts
         discharge_links = soup.find_all('a', href=re.compile(r'../files/checkout\.asp\?id='))
+        if discharge_links:
+            patient_data["discharges"] = []
         for link in discharge_links:
             href = link.get('href', '')
             id_match = re.search(r'id=([^&"]+)', href)
