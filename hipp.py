@@ -1543,6 +1543,7 @@ async def fhir_observation_search(request):
     # Get optional parameters
     analysis_type = request.query.get('type')
     datetime_filter = request.query.get('dt')
+    full_data = request.query.get('full', 'no').lower() == 'yes'
     
     logger.info(f"Retrieving analyses for patient with ID: {patient_id}")
     
@@ -1551,6 +1552,10 @@ async def fhir_observation_search(request):
         
         # Make request to the analyses endpoint
         analyses_url = f"{SERVICE_URL}/pacient/analyses.asp?type=PA&pacid={patient_id}"
+        
+        # Add full=yes parameter if requested
+        if full_data:
+            analyses_url += "&full=yes"
         
         response_text, success, error_response = await make_authenticated_request(
             session, analyses_url, "GET", None, username, password
