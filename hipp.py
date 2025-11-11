@@ -205,7 +205,7 @@ async def root_handler(request):
 def is_login_page(content: str) -> bool:
     """Detect if the provided content is a login page.
     
-    Checks for specific text patterns that indicate we're on the login page.
+    Checks for 'Identificare' in the HTML title to determine if we're on the login page.
     
     Args:
         content: HTML content to check
@@ -213,7 +213,15 @@ def is_login_page(content: str) -> bool:
     Returns:
         True if content appears to be a login page, False otherwise
     """
-    is_login = "RECUPERARE PAROLA" in content and "Username" in content and "Password" in content
+    # Parse the HTML content to extract the title
+    try:
+        soup = BeautifulSoup(content, 'html.parser')
+        title = soup.find('title')
+        is_login = title and 'Identificare' in title.get_text()
+    except Exception:
+        # Fallback to simple string check if parsing fails
+        is_login = "RECUPERARE PAROLA" in content and "Username" in content and "Password" in content
+    
     if is_login:
         logger.debug("Detected login page")
     return is_login
