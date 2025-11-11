@@ -95,7 +95,7 @@ async def login(session: aiohttp.ClientSession, username: str, password: str) ->
         print(f"Login failed: {data.get('message', 'No message')}")
         return False
 
-async def search_patients(session: aiohttp.ClientSession, search_term: str) -> bool:
+async def search_patients(session: aiohttp.ClientSession, search_term: str, fhir_format: bool = False) -> bool:
     """Search for patients using the API.
     
     Performs a patient search on the Hipocrate service using the provided search term.
@@ -110,12 +110,59 @@ async def search_patients(session: aiohttp.ClientSession, search_term: str) -> b
     """
     print(f"Searching for patients with term: '{search_term}'")
     
-    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/api/patients/search?q={search_term}")
+    headers = {}
+    if fhir_format:
+        headers["Accept"] = "application/fhir+json"
     
-    if not success or data.get("status") != "success":
-        print(f"Patient search failed: {data.get('message', 'No message')}")
+    try:
+        async with session.get(f"{BASE_URL}/api/patients/search?q={search_term}", headers=headers) as response:
+            if response.status == 200:
+                content_type = response.headers.get("Content-Type", "")
+                if "application/fhir+json" in content_type:
+                    data = await response.json()
+                    # Handle FHIR response
+                    if data.get("resourceType") == "Bundle":
+                        print(f"Patient search successful! Found {data.get('total', 0)} patients (FHIR Bundle)")
+                        entries = data.get("entry", [])
+                        for i, entry in enumerate(entries, 1):
+                            patient = entry.get("resource", {})
+                            patient_id = patient.get("id", "N/A")
+                            names = patient.get("name", [])
+                            display_name = "Unknown"
+                            if names:
+                                name = names[0]
+                                given = " ".join(name.get("given", []))
+                                family = name.get("family", "")
+                                display_name = f"{given} {family}".strip() or "Unknown"
+                            print(f"  {i}. {display_name} (ID: {patient_id})")
+                    elif data.get("resourceType") == "Patient":
+                        print("Patient search successful! Found single patient (FHIR Patient)")
+                        names = data.get("name", [])
+                        display_name = "Unknown"
+                        if names:
+                            name = names[0]
+                            given = " ".join(name.get("given", []))
+                            family = name.get("family", "")
+                            display_name = f"{given} {family}".strip() or "Unknown"
+                        patient_id = data.get("id", "N/A")
+                        print(f"  Patient: {display_name} (ID: {patient_id})")
+                    return True
+                else:
+                    data = await response.json()
+                    if not data.get("status") == "success":
+                        print(f"Patient search failed: {data.get('message', 'No message')}")
+                        return False
+                result_type = data.get("type", "raw")
+                print(f"Patient search successful! (type: {result_type})")
+            else:
+                data = await response.json()
+                print(f"Patient search failed: {data.get('message', 'No message')}")
+                return False
+    except Exception as e:
+        print(f"Patient search failed: {str(e)}")
         return False
     
+    # Handle non-FHIR response
     result_type = data.get("type", "raw")
     print(f"Patient search successful! (type: {result_type})")
     
@@ -547,6 +594,7 @@ async def main():
     parser.add_argument("--username", "-u", help="Username for login")
     parser.add_argument("--password", "-w", help="Password for login")
     parser.add_argument("--search", "-s", help="Search term for patient search")
+    parser.add_argument("--fhir", "-f", action="store_true", help="Return results in FHIR format")
     parser.add_argument("--report", "-r", help="Report ID to retrieve")
     parser.add_argument("--checkout", "-o", help="Checkout ID to retrieve")
     parser.add_argument("--patient", "-p", help="Patient ID to retrieve")
@@ -579,7 +627,7 @@ async def main():
         
         # Perform patient search if requested
         if args.search:
-            search_success = await search_patients(session, args.search)
+            search_success = await search_patients(session, args.search, args.fhir)
             if not search_success:
                 print("Failed to search patients")
                 return 1

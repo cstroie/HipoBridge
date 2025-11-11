@@ -455,28 +455,94 @@ async def patient_search_handler(request):
         # Try to parse as single patient page first
         single_patient_data = parse_single_patient_data(response_text)
         if single_patient_data and single_patient_data.get("patient_name"):
-            return web.json_response({
-                "status": "success",
-                "type": "single_patient",
-                "data": single_patient_data
-            })
+            # Check if FHIR format is requested
+            accept_header = request.headers.get("Accept", "")
+            if "application/fhir+json" in accept_header:
+                fhir_patient = convert_to_fhir_patient(single_patient_data)
+                return web.json_response(fhir_patient, headers={"Content-Type": "application/fhir+json"})
+            else:
+                return web.json_response({
+                    "status": "success",
+                    "type": "single_patient",
+                    "data": single_patient_data
+                })
         
         # Try to parse as multiple patients page
         multiple_patients_data = parse_multiple_patients_data(response_text)
         if multiple_patients_data and len(multiple_patients_data) > 0:
-            return web.json_response({
-                "status": "success",
-                "type": "multiple_patients",
-                "data": multiple_patients_data
-            })
+            # Check if FHIR format is requested
+            accept_header = request.headers.get("Accept", "")
+            if "application/fhir+json" in accept_header:
+                # Convert multiple patients to FHIR Bundle
+                bundle = {
+                    "resourceType": "Bundle",
+                    "type": "searchset",
+                    "total": len(multiple_patients_data),
+                    "entry": []
+                }
+                
+                for patient in multiple_patients_data:
+                    # Create minimal FHIR patient resource for each
+                    name_parts = patient.get("patient_name", "").split()
+                    given_names = name_parts[:-1] if len(name_parts) > 1 else name_parts
+                    family_name = name_parts[-1] if len(name_parts) > 1 else ""
+                    
+                    fhir_patient = {
+                        "resourceType": "Patient",
+                        "id": patient.get("patient_code", ""),
+                        "identifier": [
+                            {
+                                "system": "http://hospital-system/patient-code",
+                                "value": patient.get("patient_code", "")
+                            }
+                        ],
+                        "name": [
+                            {
+                                "use": "official",
+                                "family": family_name,
+                                "given": given_names
+                            }
+                        ]
+                    }
+                    
+                    # Add CNP if available
+                    if patient.get("patient_id"):
+                        fhir_patient["identifier"].append({
+                            "system": "http://hospital-system/cnp",
+                            "value": patient.get("patient_id", "")
+                        })
+                    
+                    bundle["entry"].append({
+                        "resource": fhir_patient
+                    })
+                
+                return web.json_response(bundle, headers={"Content-Type": "application/fhir+json"})
+            else:
+                return web.json_response({
+                    "status": "success",
+                    "type": "multiple_patients",
+                    "data": multiple_patients_data
+                })
         
         # Check if we're on a "no results" page
         if "nu a fost gasit" in response_text.lower() or "no results" in response_text.lower():
-            return web.json_response({
-                "status": "success",
-                "type": "no_results",
-                "data": []
-            })
+            # Check if FHIR format is requested
+            accept_header = request.headers.get("Accept", "")
+            if "application/fhir+json" in accept_header:
+                # Return empty FHIR Bundle
+                bundle = {
+                    "resourceType": "Bundle",
+                    "type": "searchset",
+                    "total": 0,
+                    "entry": []
+                }
+                return web.json_response(bundle, headers={"Content-Type": "application/fhir+json"})
+            else:
+                return web.json_response({
+                    "status": "success",
+                    "type": "no_results",
+                    "data": []
+                })
         
         # If neither parser worked, return an error
         logger.warning("Unable to parse patient search results")
@@ -873,6 +939,53 @@ def parse_single_patient_data(html_content: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Error parsing single patient data: {e}")
         return {}
+
+def convert_to_fhir_patient(patient_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert patient data to FHIR Patient resource format.
+    
+    Args:
+        patient_data (Dict[str, Any]): Patient data from parse_single_patient_data
+        
+    Returns:
+        Dict[str, Any]: FHIR Patient resource
+    """
+    # Parse patient name if available
+    name_parts = patient_data.get("patient_name", "").split()
+    given_names = name_parts[:-1] if len(name_parts) > 1 else name_parts
+    family_name = name_parts[-1] if len(name_parts) > 1 else ""
+    
+    # Create FHIR Patient resource
+    fhir_patient = {
+        "resourceType": "Patient",
+        "id": patient_data.get("patient_code", ""),
+        "identifier": [
+            {
+                "system": "http://hospital-system/patient-code",
+                "value": patient_data.get("patient_code", "")
+            }
+        ],
+        "name": [
+            {
+                "use": "official",
+                "family": family_name,
+                "given": given_names
+            }
+        ],
+        "telecom": [],
+        "gender": "unknown",
+        "birthDate": "",
+        "address": [],
+        "active": True
+    }
+    
+    # Add CNP as additional identifier if available
+    if patient_data.get("patient_id"):
+        fhir_patient["identifier"].append({
+            "system": "http://hospital-system/cnp",
+            "value": patient_data.get("patient_id", "")
+        })
+    
+    return fhir_patient
 
 def parse_multiple_patients_data(html_content: str) -> List[Dict[str, Any]]:
     """Parse HTML content for multiple patient search results and extract patient data.
