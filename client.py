@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Client script to interact with the Hipocrate API
+Client script to interact with the HippoBridge API
 Performs login (if needed) and patient search operations
 """
 import asyncio
@@ -71,7 +71,7 @@ async def _print_response_result(operation: str, data: dict, success: bool) -> b
         return False
 
 async def login(session: aiohttp.ClientSession, username: str, password: str) -> bool:
-    """Perform login to the Hipocrate API.
+    """Perform login to the HippoBridge API.
     
     Makes a POST request to the FHIR API login endpoint with the provided credentials.
     
@@ -102,7 +102,7 @@ async def login(session: aiohttp.ClientSession, username: str, password: str) ->
 async def search_patients(session: aiohttp.ClientSession, search_term: str, fhir_format: bool = False) -> bool:
     """Search for patients using the FHIR API.
     
-    Performs a patient search on the Hipocrate service using the provided search term.
+    Performs a patient search on the HippoBridge service using the provided search term.
     Returns FHIR Patient resources or Bundle.
     
     Args:
@@ -161,7 +161,7 @@ async def search_patients(session: aiohttp.ClientSession, search_term: str, fhir
 async def get_report(session: aiohttp.ClientSession, report_id: str) -> bool:
     """Retrieve a report by ID using the FHIR API.
     
-    Gets a report from the Hipocrate service and displays the parsed data.
+    Gets a report from the HippoBridge service and displays the parsed data.
     Returns FHIR DiagnosticReport resource.
     
     Args:
@@ -233,7 +233,7 @@ async def get_report(session: aiohttp.ClientSession, report_id: str) -> bool:
 async def get_checkout(session: aiohttp.ClientSession, checkout_id: str) -> bool:
     """Retrieve checkout information by ID using the FHIR API.
     
-    Gets checkout information from the Hipocrate service and displays the parsed data.
+    Gets checkout information from the HippoBridge service and displays the parsed data.
     Returns FHIR Encounter resource.
     
     Args:
@@ -437,7 +437,7 @@ async def search_patient_code_by_partial_cnp(session: aiohttp.ClientSession, par
 async def get_patient(session: aiohttp.ClientSession, patient_id: str) -> bool:
     """Retrieve patient information by ID using the FHIR API.
     
-    Gets patient information from the Hipocrate service. If a 13-digit CNP is provided,
+    Gets patient information from the HippoBridge service. If a 13-digit CNP is provided,
     it will be validated and converted to a patient code before retrieval. If the ID ends
     with *, it's treated as a partial CNP and searched for. Returns FHIR Patient resource.
     
@@ -550,7 +550,7 @@ async def get_patient(session: aiohttp.ClientSession, patient_id: str) -> bool:
 async def get_analyses(session: aiohttp.ClientSession, patient_id: str, analysis_type: str = None, datetime_filter: str = None) -> bool:
     """Retrieve all analyses for a patient by ID using the FHIR API.
     
-    Gets all analyses for a specific patient from the Hipocrate service.
+    Gets all analyses for a specific patient from the HippoBridge service.
     If a 13-digit CNP is provided, it will be validated and converted to 
     a patient code before retrieval. If the ID ends with *, it's treated as
     a partial CNP and searched for. For imaging analyses (radio, ct, irm, eco),
@@ -668,7 +668,7 @@ async def validate_cnp(session: aiohttp.ClientSession, cnp: str) -> bool:
     return True
 
 async def main():
-    """Main function to parse arguments and run the client.
+    """Main function to parse arguments and run the HippoBridge client.
     
     Parses command line arguments and executes the requested operations
     (login, patient search, report retrieval, etc.).
@@ -676,7 +676,7 @@ async def main():
     Returns:
         int: Exit code (0 for success, 1 for failure)
     """
-    parser = argparse.ArgumentParser(description="Hipocrate API Client")
+    parser = argparse.ArgumentParser(description="HippoBridge API Client")
     parser.add_argument("--username", "-u", help="Username for login")
     parser.add_argument("--password", "-w", help="Password for login")
     parser.add_argument("--search", "-s", help="Search term for patient search")

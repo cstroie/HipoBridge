@@ -17,7 +17,7 @@ logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger('hipp')
+logger = logging.getLogger('HippoBridge')
 
 # Configuration
 SERVICE_URL = "http://192.168.3.230/hipocrate"
@@ -3254,6 +3254,6 @@ async def on_cleanup(app):
         await session.close()
 
 if __name__ == "__main__":
-    logger.info(f"Starting web server on port {PORT}")
+    logger.info("Starting HippoBridge server")
     app = init_app()
     web.run_app(app, host="0.0.0.0", port=PORT)
