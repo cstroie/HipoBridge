@@ -1665,12 +1665,6 @@ async def fhir_observation_search(request):
             })
         
         return web.json_response(bundle, headers={"Content-Type": "application/fhir+json"})
-    
-    return web.json_response({
-        "status": "success",
-        "patient_name": parsed_data["patient_name"],
-        "analyses": analyses
-    })
             
     except Exception as e:
         logger.error(f"Analyses retrieval failed with exception: {e}")
