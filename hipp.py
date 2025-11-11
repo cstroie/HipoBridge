@@ -1055,6 +1055,13 @@ def parse_single_patient_data(html_content: str) -> Dict[str, Any]:
         if mcp_input:
             patient_data["mcp"] = mcp_input.get('value', '').strip()
         
+        # Extract address from SELECT with id strDomLegal_LocId
+        address_select = soup.find('select', id='strDomLegal_LocId')
+        if address_select:
+            selected_option = address_select.find('option', selected=True)
+            if selected_option:
+                patient_data["address"] = selected_option.get_text().strip()
+        
         # Derive sex and birth date from CNP if available
         if patient_id and len(patient_id) == 13 and patient_id.isdigit():
             # Extract gender from first digit
