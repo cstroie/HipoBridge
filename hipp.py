@@ -40,11 +40,11 @@ HEADERS = {
 ANALYSIS_TYPES = {
     "radio": {
         "display": "Radiology",
-        "definition": "Radiology/X-ray examinations"
+        "definition": "Radiology"
     },
     "ct": {
         "display": "CT Scan",
-        "definition": "Computed Tomography scans"
+        "definition": "Computed Tomography"
     },
     "irm": {
         "display": "MRI",
@@ -52,7 +52,7 @@ ANALYSIS_TYPES = {
     },
     "eco": {
         "display": "Ultrasound",
-        "definition": "Echography/Ultrasound examinations"
+        "definition": "Echography"
     },
     "lab": {
         "display": "Laboratory",
@@ -60,19 +60,19 @@ ANALYSIS_TYPES = {
     },
     "lac": {
         "display": "Angiography and Cardiac Catheterization",
-        "definition": "Angiography and Cardiac Catheterization procedures"
+        "definition": "Angiography and Cardiac Catheterization"
     },
     "lii": {
         "display": "Interventional Radiology",
-        "definition": "Interventional Radiology procedures"
+        "definition": "Interventional Radiology"
     },
     "rads": {
         "display": "Fluoroscopy and CEUS",
-        "definition": "Fluoroscopy and Contrast-Enhanced Ultrasound procedures"
+        "definition": "Fluoroscopy and Contrast-Enhanced Ultrasound"
     },
     "apa": {
         "display": "Anatomopathology",
-        "definition": "Anatomopathology examinations"
+        "definition": "Anatomopathology"
     }
 }
 
