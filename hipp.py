@@ -1632,7 +1632,7 @@ async def fhir_observation_search(request):
         for analysis in analyses:
             fhir_observation = {
                 "resourceType": "Observation",
-                "id": analysis["report_id"],
+                "id": analysis["analysis_id"],
                 "meta": {
                     "lastUpdated": datetime.now().isoformat()
                 },
