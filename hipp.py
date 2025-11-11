@@ -10,14 +10,29 @@ import re
 from bs4 import BeautifulSoup
 import html
 from datetime import datetime
+import structlog
 
 
-# Configure logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+# Configure structured logging
+structlog.configure(
+    processors=[
+        structlog.stdlib.filter_by_level,
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.processors.UnicodeDecoder(),
+        structlog.stdlib.render_to_log_kwargs,
+    ],
+    context_class=dict,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
 )
-logger = logging.getLogger('hipp')
+
+logger = structlog.get_logger('hipp')
 
 # Configuration
 SERVICE_URL = "http://192.168.3.230/hipocrate"
@@ -125,7 +140,7 @@ async def root_handler(request):
     Returns:
         web.Response: HTML response with the web interface
     """
-    logger.info("Root endpoint accessed")
+    logger.info("Root endpoint accessed", endpoint="/", method="GET")
     
     # Serve the external HTML file
     with open('static/main.html', 'r') as f:
@@ -162,14 +177,14 @@ async def login_if_needed(username: str = None, password: str = None) -> bool:
     Returns:
         bool: True if login was successful or not needed, False otherwise
     """
-    logger.info("Attempting login if needed")
+    logger.info("Attempting login if needed", component="auth")
     
     # Use provided credentials or fallback to environment variables
     user = username or HYP_USER
     pwd = password or HYP_PASS
     
     if not user or not pwd:
-        logger.warning("Username or password not set, skipping login")
+        logger.warning("Username or password not set, skipping login", component="auth", reason="missing_credentials")
         return False
     
     try:
@@ -177,7 +192,7 @@ async def login_if_needed(username: str = None, password: str = None) -> bool:
         
         # First, check if we're already logged in by accessing main.asp
         main_url = f"{SERVICE_URL}/main.asp"
-        logger.debug(f"Checking if already logged in by accessing: {main_url}")
+        logger.debug("Checking if already logged in", component="auth", url=main_url)
         async with session.get(main_url, headers=HEADERS) as main_response:
             # Handle encoding properly - the service may not be using UTF-8
             try:
@@ -189,21 +204,21 @@ async def login_if_needed(username: str = None, password: str = None) -> bool:
                     main_text = raw_data.decode('windows-1252')
                 except UnicodeDecodeError:
                     main_text = raw_data.decode('latin-1')
-            logger.debug(f"Main page response status: {main_response.status}")
+            logger.debug("Main page response", component="auth", status=main_response.status)
             
             # If we're not on the login page, we're already logged in
             if not is_login_page(main_text):
-                logger.info("Already logged in, skipping login")
+                logger.info("Already logged in, skipping login", component="auth", state="already_authenticated")
                 return True
         
         # If we're on the login page, proceed with login
-        logger.info("Not logged in, proceeding with login")
+        logger.info("Not logged in, proceeding with login", component="auth", state="needs_authentication")
         
         # First, access the default.asp page to get initial cookies
         default_url = f"{SERVICE_URL}/default.asp"
-        logger.debug(f"Accessing default page to get cookies: {default_url}")
+        logger.debug("Accessing default page to get cookies", component="auth", url=default_url)
         async with session.get(default_url, headers=HEADERS) as default_response:
-            logger.debug(f"Default page response status: {default_response.status}")
+            logger.debug("Default page response", component="auth", status=default_response.status)
             
         # Prepare login data to match browser submission
         login_data = {
@@ -219,7 +234,7 @@ async def login_if_needed(username: str = None, password: str = None) -> bool:
         
         # Use the correct login endpoint
         login_url = f"{SERVICE_URL}/security/logon.asp"
-        logger.debug(f"Submitting login form to {login_url}")
+        logger.debug("Submitting login form", component="auth", url=login_url)
         # Submit login form
         async with session.post(
             login_url, 
@@ -227,25 +242,25 @@ async def login_if_needed(username: str = None, password: str = None) -> bool:
             headers=login_headers
         ) as login_response:
             response_text = await login_response.text()
-            logger.debug(f"Login response status: {login_response.status}")
+            logger.debug("Login response", component="auth", status=login_response.status)
             
             # Log cookie information
             if session.cookie_jar:
                 cookies = session.cookie_jar.filter_cookies(SERVICE_URL)
-                logger.debug(f"Session cookies after login: {len(cookies)} cookies")
+                logger.debug("Session cookies after login", component="auth", cookie_count=len(cookies))
         
         # Check if login was successful (redirect to main.asp or not on login page)
         if login_response.status == 302 and "main.asp" in login_response.headers.get("Location", ""):
-            logger.info("Login successful - redirected to main.asp")
+            logger.info("Login successful - redirected to main.asp", component="auth", result="success", redirect_target="main.asp")
             return True
         elif not is_login_page(response_text):
-            logger.info("Login successful - not on login page")
+            logger.info("Login successful - not on login page", component="auth", result="success", state="authenticated")
             return True
         else:
-            logger.warning("Login failed - still on login page")
+            logger.warning("Login failed - still on login page", component="auth", result="failure", state="login_page")
         return False
     except Exception as e:
-        logger.error(f"Login failed with exception: {e}")
+        logger.error("Login failed with exception", component="auth", error=str(e), exc_info=True)
         return False
 
 
@@ -419,7 +434,7 @@ async def fhir_patient_search(request):
     Returns:
         web.Response: JSON response with search results or error information
     """
-    logger.info("GET /fhir/Patient endpoint accessed")
+    logger.info("GET /fhir/Patient endpoint accessed", endpoint="/fhir/Patient", method="GET")
     
     # Get credentials from request headers (optional)
     username = request.headers.get("X-Username")
@@ -429,7 +444,7 @@ async def fhir_patient_search(request):
     search_term = request.query.get('q', '')
     
     if not search_term:
-        logger.warning("No search term provided")
+        logger.warning("No search term provided", endpoint="/fhir/Patient", error="missing_search_term")
         return create_error_response("Search term is required")
     
     try:
@@ -447,15 +462,15 @@ async def fhir_patient_search(request):
                 if validate_cnp(search_term):
                     search_type = "cnp"
                     cnp_value = search_term
-                    logger.info(f"Performing CNP search for: {search_term}")
+                    logger.info("Performing CNP search", endpoint="/fhir/Patient", search_type="cnp", term=search_term)
                 else:
                     # Not a valid CNP, treat as patient code
                     search_type = "code"
-                    logger.info(f"Performing patient code search for: {search_term}")
+                    logger.info("Performing patient code search", endpoint="/fhir/Patient", search_type="code", term=search_term)
             else:
                 # Numeric but not 13 digits, treat as patient code
                 search_type = "code"
-                logger.info(f"Performing patient code search for: {search_term}")
+                logger.info("Performing patient code search", endpoint="/fhir/Patient", search_type="code", term=search_term)
         else:
             # Check if search term ends with *, treat as partial CNP
             if search_term.endswith('*'):
@@ -465,17 +480,17 @@ async def fhir_patient_search(request):
                     search_type = "partial_cnp"
                     actual_search_term = search_term  # Keep the asterisk for Hipocrate
                     cnp_value = prefix
-                    logger.info(f"Performing partial CNP search for: {search_term}")
+                    logger.info("Performing partial CNP search", endpoint="/fhir/Patient", search_type="partial_cnp", term=search_term)
                 else:
                     # Not a valid partial CNP, treat as name search
                     search_type = "name"
                     actual_search_term = search_term
-                    logger.info(f"Searching for patients by name: {search_term}")
+                    logger.info("Searching for patients by name", endpoint="/fhir/Patient", search_type="name", term=search_term)
             else:
                 # Not numeric, treat as name search
                 search_type = "name"
                 actual_search_term = search_term
-                logger.info(f"Searching for patients by name: {search_term}")
+                logger.info("Searching for patients by name", endpoint="/fhir/Patient", search_type="name", term=search_term)
         
         # Prepare full search data as captured in the POST request
         search_data = {
@@ -522,7 +537,7 @@ async def fhir_patient_search(request):
         if not success:
             return error_response
         
-        logger.info("Patient search completed successfully")
+        logger.info("Patient search completed successfully", endpoint="/fhir/Patient", result="success")
         
         # Try to parse as single patient page first
         single_patient_data = parse_single_patient_data(response_text)
@@ -590,7 +605,7 @@ async def fhir_patient_search(request):
             return web.json_response(bundle)
         
         # If neither parser worked, return an error
-        logger.warning("Unable to parse patient search results")
+        logger.warning("Unable to parse patient search results", endpoint="/fhir/Patient", error="parse_failure")
         return create_error_response(
             "Unable to parse patient search results", 
             500, 
@@ -598,7 +613,7 @@ async def fhir_patient_search(request):
         )
             
     except Exception as e:
-        logger.error(f"Patient search failed with exception: {e}")
+        logger.error("Patient search failed with exception", endpoint="/fhir/Patient", error=str(e), exc_info=True)
         return create_error_response(str(e), 500)
 
 def html_to_markdown(html_content: str) -> str:
@@ -1226,13 +1241,13 @@ async def fhir_patient_read(request):
         web.Response: JSON response with patient data or error information
     """
     patient_id = request.match_info.get('id')
-    logger.info(f"GET /fhir/Patient/{patient_id} endpoint accessed")
+    logger.info("GET /fhir/Patient/{id} endpoint accessed", endpoint=f"/fhir/Patient/{patient_id}", method="GET", patient_id=patient_id)
     
     if not patient_id:
-        logger.warning("No patient ID provided")
+        logger.warning("No patient ID provided", endpoint=f"/fhir/Patient/{patient_id}", error="missing_patient_id")
         return create_error_response("Patient ID is required")
     
-    logger.info(f"Retrieving patient with ID: {patient_id}")
+    logger.info("Retrieving patient", endpoint=f"/fhir/Patient/{patient_id}", patient_id=patient_id)
     
     # Get credentials from request headers (optional)
     username = request.headers.get("X-Username")
@@ -1277,12 +1292,12 @@ async def fhir_patient_read(request):
                 if id_match:
                     checkin_ids.append(id_match.group(1))
             
-            logger.info(f"Found {len(checkout_ids)} checkout IDs and {len(checkin_ids)} checkin IDs")
+            logger.info("Found patient IDs", endpoint=f"/fhir/Patient/{patient_id}", checkout_count=len(checkout_ids), checkin_count=len(checkin_ids))
             
         except Exception as e:
-            logger.error(f"Error parsing patient data: {e}")
+            logger.error("Error parsing patient data", endpoint=f"/fhir/Patient/{patient_id}", error=str(e), exc_info=True)
         
-        logger.info("Patient retrieval completed successfully")
+        logger.info("Patient retrieval completed successfully", endpoint=f"/fhir/Patient/{patient_id}", result="success")
         
         # For FHIR endpoint, we need to get patient details first
         single_patient_data = parse_single_patient_data(response_text)
@@ -1304,7 +1319,7 @@ async def fhir_patient_read(request):
             return web.json_response(fhir_patient, headers={"Content-Type": "application/fhir+json"})
             
     except Exception as e:
-        logger.error(f"Patient retrieval failed with exception: {e}")
+        logger.error("Patient retrieval failed with exception", endpoint=f"/fhir/Patient/{patient_id}", error=str(e), exc_info=True)
         return create_error_response(str(e), 500)
 
 async def fhir_encounter_read(request):
