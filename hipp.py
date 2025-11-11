@@ -220,8 +220,8 @@ def is_login_page(content: str) -> bool:
         is_login = title and 'Identificare' in title.get_text()
     except Exception:
         # Fallback to simple string check if parsing fails
-        is_login = "RECUPERARE PAROLA" in content and "Username" in content and "Password" in content
-    
+        is_login = "Username" in content and "Password" in content
+    # Log detection result
     if is_login:
         logger.debug("Detected login page")
     return is_login
