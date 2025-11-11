@@ -2759,9 +2759,29 @@ async def fhir_diagnostic_report_read(request):
                     
                     return web.json_response(fhir_report, headers={"Content-Type": "application/fhir+json"})
                 
-                result = {"status": "success", "redirects_followed": redirect_count}
-                result.update(parsed_data)
-                return web.json_response(result)
+                # Handle 302 redirect
+                location = response.headers.get("Location")
+                if not location:
+                    logger.error("302 redirect without Location header")
+                    return web.json_response({
+                        "status": "error",
+                        "message": "Redirect without location header"
+                    }, status=500)
+                
+                # Construct the full URL for the redirect
+                if location.startswith("/"):
+                    # Relative path from root
+                    current_url = f"http://192.168.3.230{location}"
+                elif location.startswith("http"):
+                    # Full URL
+                    current_url = location
+                else:
+                    # Relative path from current directory
+                    base_path = "/".join(current_url.split("/")[:-1])
+                    current_url = f"{base_path}/{location}"
+                
+                logger.debug(f"Following redirect #{redirect_count + 1} to: {current_url}")
+                redirect_count += 1
                 
                 # Handle 302 redirect
                 location = response.headers.get("Location")
