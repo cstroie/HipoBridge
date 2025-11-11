@@ -579,9 +579,9 @@ async def fhir_patient_search(request):
         logger.info("Patient search completed successfully")
         
         # Try to parse as single patient page first
-        single_patient_data = parse_single_patient_data(response_text)
-        if single_patient_data and single_patient_data.get("patient_name"):
-            fhir_patient = convert_to_fhir_patient(single_patient_data, request)
+        patient_data = parse_single_patient_data(response_text)
+        if patient_data and patient_data.get("patient_name"):
+            fhir_patient = convert_to_fhir_patient(patient_data, request)
             return web.json_response(fhir_patient)
         
         # Try to parse as multiple patients page
@@ -972,7 +972,7 @@ def parse_single_patient_data(html_content: str) -> Dict[str, Any]:
         # Check if this is a single patient page by looking for 'Date pasaportale' in title
         title = soup.find('title')
         if not title or 'Date pasaportale' not in title.get_text():
-            return {}
+            return {"error": "Backend returned an unexpected page"}
         
         # Extract patient name from div with id "div_navbar"
         navbar_div = soup.find('div', id='div_navbar')
@@ -1290,7 +1290,7 @@ async def fhir_patient_read(request):
     
     if not patient_id:
         logger.warning("No patient ID provided")
-        return create_error_response("Patient ID is required")
+        return create_error_response("Patient ID is required (not CNP)")
     
     logger.info(f"Retrieving patient with ID: {patient_id}")
     
@@ -1307,7 +1307,7 @@ async def fhir_patient_read(request):
         response_text, success, error_response = await make_authenticated_request(
             session, patient_url, "GET", None, username, password
         )
-        
+        # Check for errors in the response
         if not success:
             return error_response
         
@@ -1315,39 +1315,10 @@ async def fhir_patient_read(request):
         checkout_ids = []
         checkin_ids = []
         
-        try:
-            from bs4 import BeautifulSoup
-            import re
-            
-            soup = BeautifulSoup(response_text, 'html.parser')
-            
-            # Extract checkout IDs
-            checkout_links = soup.find_all('a', href=re.compile(r'../files/checkout\.asp\?id='))
-            for link in checkout_links:
-                href = link.get('href', '')
-                id_match = re.search(r'id=([^&"]+)', href)
-                if id_match:
-                    checkout_ids.append(id_match.group(1))
-            
-            # Extract checkin IDs
-            checkin_links = soup.find_all('a', href=re.compile(r'../files/checkin\.asp\?id='))
-            for link in checkin_links:
-                href = link.get('href', '')
-                id_match = re.search(r'id=([^&"]+)', href)
-                if id_match:
-                    checkin_ids.append(id_match.group(1))
-            
-            logger.info(f"Found patient IDs for endpoint /fhir/Patient/{patient_id}: checkout_count={len(checkout_ids)}, checkin_count={len(checkin_ids)}")
-            
-        except Exception as e:
-            logger.error(f"Error parsing patient data: {e}")
-        
-        logger.info("Patient retrieval completed successfully")
-        
         # For FHIR endpoint, we need to get patient details first
-        single_patient_data = parse_single_patient_data(response_text)
-        if single_patient_data and single_patient_data.get("patient_name"):
-            fhir_patient = convert_to_fhir_patient(single_patient_data, request)
+        patient_data = parse_single_patient_data(response_text)
+        if patient_data and patient_data.get("patient_name"):
+            fhir_patient = convert_to_fhir_patient(patient_data, request)
             # Add extensions for checkin/checkout IDs
             if checkin_ids or checkout_ids:
                 fhir_patient["extension"] = []
@@ -1363,8 +1334,10 @@ async def fhir_patient_read(request):
                     })
             return web.json_response(fhir_patient)
         else:
-            # Return an error if we couldn't parse patient data
-            return create_error_response("Unable to parse patient data", 500)
+            if 'error' in patient_data:
+                return create_error_response(patient_data['error'], 404)
+            # Return an error if we couldn't read patient data
+            return create_error_response("Unable to read patient data", 500)
             
     except Exception as e:
         logger.error(f"Patient retrieval failed with exception: {e}")
