@@ -1685,7 +1685,7 @@ async def fhir_observation_search(request):
                 "resourceType": "Observation",
                 "id": analysis["analysis_id"],
                 "meta": {
-                    "lastUpdated": analysis["datetime"]
+                    "lastUpdated": analysis["datetime"].isoformat() if "datetime" in analysis and analysis["datetime"] else datetime.now().isoformat()
                 },
                 "status": "final",
                 "category": [
