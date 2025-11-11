@@ -1958,6 +1958,26 @@ async def fhir_analysis_types(request):
                 "code": "lab",
                 "display": "Laboratory",
                 "definition": "Laboratory tests"
+            },
+            {
+                "code": "LAC",
+                "display": "Angiography and Cardiac Catheterization",
+                "definition": "Angiography and Cardiac Catheterization procedures"
+            },
+            {
+                "code": "LII",
+                "display": "Interventional Radiology",
+                "definition": "Interventional Radiology procedures"
+            },
+            {
+                "code": "rads",
+                "display": "Fluoroscopy and CEUS",
+                "definition": "Fluoroscopy and Contrast-Enhanced Ultrasound procedures"
+            },
+            {
+                "code": "APA",
+                "display": "Anatomopathology",
+                "definition": "Anatomopathology examinations"
             }
         ]
     }
