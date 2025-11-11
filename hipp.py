@@ -31,6 +31,7 @@ import os
 import asyncio
 import aiohttp
 from aiohttp import web
+from yarl import URL
 from typing import Dict, Any, Optional, List
 import json
 import logging
@@ -307,7 +308,6 @@ async def login_if_needed(username: str = None, password: str = None) -> bool:
             logger.debug(f"Login response status: {login_response.status}")
             
             # Log cookie information
-            from yarl import URL
             if session.cookie_jar:
                 cookies = session.cookie_jar.filter_cookies(URL(SERVICE_URL))
                 logger.debug(f"Session cookies after login: {len(cookies)} cookies")
@@ -386,7 +386,6 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
     """
     try:
         # Log current cookies before request
-        from yarl import URL
         if session.cookie_jar:
             cookies = session.cookie_jar.filter_cookies(URL(SERVICE_URL))
             logger.debug(f"Using {len(cookies)} cookies for request to {url}")
@@ -1370,7 +1369,7 @@ async def fhir_patient_read(request):
                         "url": f"http://{request.host}/fhir/StructureDefinition/checkout-ids",
                         "valueString": ",".join(checkout_ids)
                     })
-            return web.json_response(fhir_patient, headers={"Content-Type": "application/fhir+json"})
+            return web.json_response(fhir_patient)
         else:
             # Return an error if we couldn't parse patient data
             return create_error_response("Unable to parse patient data", 500)
