@@ -27,7 +27,7 @@ DEFAULT_CONFIG = {
         'host': '0.0.0.0'
     },
     'hipocrate': {
-        'service_url': 'http://192.168.3.230/hipocrate'
+        'service_url': 'http://127.0.0.1/hipocrate'
     }
 }
 
