@@ -1162,34 +1162,15 @@ def convert_to_fhir_patient(patient_data: Dict[str, Any], request) -> Dict[str, 
     
     # Fallback to deriving from CNP if gender/birth date are not available
     cnp = patient_data.get("patient_id", "")
-    if (not gender or gender == "unknown") and cnp and len(cnp) == 13 and cnp.isdigit():
-        # Extract gender from first digit
-        gender_digit = int(cnp[0])
-        if gender_digit in [1, 3, 5, 7]:
-            gender = "male"
-        elif gender_digit in [2, 4, 6, 8]:
-            gender = "female"
+    if (not gender or gender == "unknown") and cnp:
+        parsed_cnp = parse_cnp(cnp)
+        if parsed_cnp.get("valid"):
+            gender = parsed_cnp.get("gender", "unknown")
     
-    if not birth_date and cnp and len(cnp) == 13 and cnp.isdigit():
-        # Extract birth date
-        try:
-            gender_digit = int(cnp[0])
-            year_prefix = ""
-            if gender_digit in [1, 2]:
-                year_prefix = "19"
-            elif gender_digit in [3, 4]:
-                year_prefix = "18"
-            elif gender_digit in [5, 6]:
-                year_prefix = "20"
-            else:  # 7, 8
-                year_prefix = "20"  # For people born after 2000
-            
-            year = f"{year_prefix}{cnp[1:3]}"
-            month = cnp[3:5]
-            day = cnp[5:7]
-            birth_date = f"{year}-{month}-{day}"
-        except Exception:
-            pass  # Keep birth_date empty if parsing fails
+    if not birth_date and cnp:
+        parsed_cnp = parse_cnp(cnp)
+        if parsed_cnp.get("valid"):
+            birth_date = parsed_cnp.get("birth_date", "")
     
     # Create FHIR Patient resource
     fhir_patient = {
