@@ -1064,32 +1064,11 @@ def parse_patient_data(html_content: str) -> Dict[str, Any]:
                 patient_data["address"] = selected_option.get_text().strip()
         
         # Derive sex and birth date from CNP if available
-        if patient_data.get("patient_cnp") and len(patient_data["patient_cnp"]) == 13 and patient_data["patient_cnp"].isdigit():
-            # Extract gender from first digit
-            gender_digit = int(patient_data["patient_cnp"][0])
-            if gender_digit in [1, 3, 5, 7]:
-                patient_data["sex"] = "male"
-            elif gender_digit in [2, 4, 6, 8]:
-                patient_data["sex"] = "female"
-            
-            # Extract birth date
-            try:
-                year_prefix = ""
-                if gender_digit in [1, 2]:
-                    year_prefix = "19"
-                elif gender_digit in [3, 4]:
-                    year_prefix = "18"
-                elif gender_digit in [5, 6]:
-                    year_prefix = "20"
-                else:  # 7, 8
-                    year_prefix = "20"  # For people born after 2000
-                
-                year = f"{year_prefix}{patient_data['patient_cnp'][1:3]}"
-                month = patient_data["patient_cnp"][3:5]
-                day = patient_data["patient_cnp"][5:7]
-                patient_data["birth_date"] = f"{year}-{month}-{day}"
-            except Exception:
-                pass  # Keep birth_date empty if parsing fails
+        if patient_data.get("patient_cnp"):
+            parsed_cnp = parse_cnp(patient_data["patient_cnp"])
+            if parsed_cnp.get("valid"):
+                patient_data["sex"] = parsed_cnp.get("gender", "unknown")
+                patient_data["birth_date"] = parsed_cnp.get("birth_date", "")
         
         # If we couldn't derive birth date from CNP, try to get it from strDataNastere input
         if not patient_data.get("birth_date"):
