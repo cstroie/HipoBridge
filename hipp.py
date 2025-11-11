@@ -314,13 +314,13 @@ async def login_if_needed(username: str = None, password: str = None) -> bool:
         
         # Check if login was successful (redirect to main.asp or not on login page)
         if login_response.status == 302 and "main.asp" in login_response.headers.get("Location", ""):
-            logger.info("Login successful - redirected to main.asp")
+            logger.info("Login successful: redirected to main.asp")
             return True
         elif not is_login_page(response_text):
-            logger.info("Login successful - not on login page")
+            logger.info("Login successful: not on login page")
             return True
         else:
-            logger.warning("Login failed - still on login page")
+            logger.warning("Login failed: still on login page")
         return False
     except Exception as e:
         logger.error(f"Login failed with exception: {e}")
