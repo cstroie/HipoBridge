@@ -384,13 +384,9 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
     Returns:
         Tuple of (response_text, success, error_response) where success is boolean
     """
-    try:
-        # Log current cookies before request
-        if session.cookie_jar:
-            cookies = session.cookie_jar.filter_cookies(URL(SERVICE_URL))
-            logger.debug(f"Using {len(cookies)} cookies for request to {url}")
-        
-        # Make the request
+    
+    async def _make_request(use_retry_headers=False):
+        """Helper function to make a request with proper headers."""
         if method == "GET":
             logger.debug(f"Making GET request to: {url}")
             async with session.get(url, headers=HEADERS) as response:
@@ -401,7 +397,8 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
             # For POST requests, we need to be careful about Content-Type headers
             # Create a copy of headers without Content-Type to avoid conflicts
             post_headers = HEADERS.copy()
-            post_headers.pop("Content-Type", None)
+            if use_retry_headers or method == "POST":
+                post_headers.pop("Content-Type", None)
             # When sending form data, let aiohttp set the Content-Type automatically
             if data:
                 async with session.post(url, data=data, headers=post_headers) as response:
@@ -411,29 +408,24 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
                 async with session.post(url, headers=post_headers) as response:
                     response_text = await _handle_response_encoding(response)
                     logger.debug(f"POST response status: {response.status}")
+        return response_text
+    
+    try:
+        # Log current cookies before request
+        if session.cookie_jar:
+            cookies = session.cookie_jar.filter_cookies(URL(SERVICE_URL))
+            logger.debug(f"Using {len(cookies)} cookies for request to {url}")
+        
+        # Make the initial request
+        response_text = await _make_request()
         
         # Check if we got redirected to login page (session expired)
         if is_login_page(response_text):
             logger.warning(f"Session expired during request to {url}, attempting re-login")
             login_success = await login_if_needed(username, password)
             if login_success:
-                # Retry the request
-                if method == "GET":
-                    async with session.get(url, headers=HEADERS) as retry_response:
-                        response_text = await _handle_response_encoding(retry_response)
-                        logger.debug(f"Retry GET response status: {retry_response.status}")
-                else:  # POST
-                    # For retry POST requests, also remove Content-Type from headers
-                    post_headers = HEADERS.copy()
-                    post_headers.pop("Content-Type", None)
-                    if data:
-                        async with session.post(url, data=data, headers=post_headers) as retry_response:
-                            response_text = await _handle_response_encoding(retry_response)
-                            logger.debug(f"Retry POST response status: {retry_response.status}")
-                    else:
-                        async with session.post(url, headers=post_headers) as retry_response:
-                            response_text = await _handle_response_encoding(retry_response)
-                            logger.debug(f"Retry POST response status: {retry_response.status}")
+                # Retry the request with special headers for POST
+                response_text = await _make_request(use_retry_headers=True)
                 
                 if is_login_page(response_text):
                     logger.error("Login failed after retry")
