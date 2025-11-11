@@ -985,19 +985,20 @@ def parse_single_patient_data(html_content: str) -> Dict[str, Any]:
         # Check if this is a single patient page by looking for 'Date pasaportale' in title
         if not is_expected_page(soup, 'Date pasaportale'):
             return {"error": "Backend returned an unexpected page"}
-        
+                
+        patient_name = f"{patient_data.get('family_name', '')} {patient_data.get('given_name', '')}".strip()
+
+        # Patient data
+        patient_data = {}
+
         # Extract patient name from input elements
-        family_name = ""
         family_input = soup.find('input', id='strNume', type='text')
         if family_input:
-            family_name = family_input.get('value', '').strip()
+            patient_data["family_name"] = family_input.get('value', '').strip()
         
-        given_name = ""
         given_input = soup.find('input', id='strPrenume', type='text')
         if given_input:
-            given_name = given_input.get('value', '').strip()
-        
-        patient_name = f"{family_name} {given_name}".strip()
+            patient_data["given_name"] = given_input.get('value', '').strip()
         
         # If patient name is empty or null, the patient code is invalid
         if not patient_name:
@@ -1008,22 +1009,13 @@ def parse_single_patient_data(html_content: str) -> Dict[str, Any]:
         patient_id = ""
         cnp_input = soup.find('input', id='strCNP', type='text')
         if cnp_input:
-            patient_id = cnp_input.get('value', '').strip()
+            patient_data["patient_id"] = cnp_input.get('value', '').strip()
         
         # Extract patient code from hidden input with id "hdnCodeID"
         patient_code = ""
         code_input = soup.find('input', id='hdnCodeID', type='hidden')
         if code_input:
-            patient_code = code_input.get('value', '').strip()
-        
-        # Extract additional patient data
-        patient_data = {
-            "patient_name": patient_name,
-            "patient_id": patient_id,
-            "patient_code": patient_code,
-            "family_name": family_name,
-            "given_name": given_name
-        }
+            patient_data["patient_code"] = code_input.get('value', '').strip()
         
         # Extract CID
         cid_input = soup.find('input', id='strCID', type='text')
