@@ -17,20 +17,6 @@ Key Features:
 - Web interface for patient analysis
 - Configuration via file with environment variable overrides
 
-Endpoints:
-- GET / - Web interface for patient analysis
-- GET /fhir/Patient - Search patients
-- GET /fhir/Patient/{id} - Get patient details
-- GET /fhir/Observation - List patient observations
-- GET /fhir/Observation/{id} - Get observation details
-- GET /fhir/DiagnosticReport - Get diagnostic report
-- GET /fhir/Encounter - Get encounter (checkout) information
-- GET /fhir/ValueSet/cnp - Validate Romanian CNP
-- POST /fhir/login - Authenticate with Hipocrate system
-- POST /fhir/md2html - Convert markdown to HTML
-- GET /fhir/CodeSystem/analysis-types - Get analysis types terminology
-- GET /fhir/spec - Get OpenAPI specification
-
 Configuration:
 - Server settings (host, port) in hipp.cfg
 - Hipocrate service URL in hipp.cfg
