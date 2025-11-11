@@ -35,6 +35,46 @@ HEADERS = {
     "Connection": "keep-alive",
 }
 
+# Analysis types dictionary for reuse across functions
+ANALYSIS_TYPES = {
+    "radio": {
+        "display": "Radiology",
+        "definition": "Radiology/X-ray examinations"
+    },
+    "ct": {
+        "display": "CT Scan",
+        "definition": "Computed Tomography scans"
+    },
+    "irm": {
+        "display": "MRI",
+        "definition": "Magnetic Resonance Imaging"
+    },
+    "eco": {
+        "display": "Ultrasound",
+        "definition": "Echography/Ultrasound examinations"
+    },
+    "lab": {
+        "display": "Laboratory",
+        "definition": "Laboratory tests"
+    },
+    "lac": {
+        "display": "Angiography and Cardiac Catheterization",
+        "definition": "Angiography and Cardiac Catheterization procedures"
+    },
+    "lii": {
+        "display": "Interventional Radiology",
+        "definition": "Interventional Radiology procedures"
+    },
+    "rads": {
+        "display": "Fluoroscopy and CEUS",
+        "definition": "Fluoroscopy and Contrast-Enhanced Ultrasound procedures"
+    },
+    "apa": {
+        "display": "Anatomopathology",
+        "definition": "Anatomopathology examinations"
+    }
+}
+
 # Global session
 session: Optional[aiohttp.ClientSession] = None
 
@@ -2094,46 +2134,6 @@ async def fhir_analysis_types(request):
     }
     
     return web.json_response(code_system)
-
-# Analysis types dictionary for reuse across functions
-ANALYSIS_TYPES = {
-    "radio": {
-        "display": "Radiology",
-        "definition": "Radiology/X-ray examinations"
-    },
-    "ct": {
-        "display": "CT Scan",
-        "definition": "Computed Tomography scans"
-    },
-    "irm": {
-        "display": "MRI",
-        "definition": "Magnetic Resonance Imaging"
-    },
-    "eco": {
-        "display": "Ultrasound",
-        "definition": "Echography/Ultrasound examinations"
-    },
-    "lab": {
-        "display": "Laboratory",
-        "definition": "Laboratory tests"
-    },
-    "LAC": {
-        "display": "Angiography and Cardiac Catheterization",
-        "definition": "Angiography and Cardiac Catheterization procedures"
-    },
-    "LII": {
-        "display": "Interventional Radiology",
-        "definition": "Interventional Radiology procedures"
-    },
-    "rads": {
-        "display": "Fluoroscopy and CEUS",
-        "definition": "Fluoroscopy and Contrast-Enhanced Ultrasound procedures"
-    },
-    "APA": {
-        "display": "Anatomopathology",
-        "definition": "Anatomopathology examinations"
-    }
-}
 
 async def fhir_specification(request):
     """Serve the OpenAPI specification.
