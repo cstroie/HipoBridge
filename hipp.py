@@ -603,11 +603,11 @@ async def fhir_patient_search(request):
                 
                 fhir_patient = {
                     "resourceType": "Patient",
-                    "id": patient.get("patient_code", ""),
+                    "id": patient.get("patient_id", ""),
                     "identifier": [
                         {
-                            "system": f"http://{request.host}/fhir/NamingSystem/patient-code",
-                            "value": patient.get("patient_code", "")
+                            "system": f"http://{request.host}/fhir/NamingSystem/patient-id",
+                            "value": patient.get("patient_id", "")
                         }
                     ],
                     "name": [
@@ -620,10 +620,10 @@ async def fhir_patient_search(request):
                 }
                 
                 # Add CNP if available
-                if patient.get("patient_id"):
+                if patient.get("patient_cnp"):
                     fhir_patient["identifier"].append({
                         "system": "http://hospital-system/cnp",
-                        "value": patient.get("patient_id", "")
+                        "value": patient.get("patient_cnp", "")
                     })
                 
                 bundle["entry"].append({
@@ -821,8 +821,8 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
             "patient_name": "",
             "age": "",
             "gender": "",
+            "patient_cnp": "",
             "patient_id": "",
-            "patient_code": "",
             "sample_datetime": "",
             "sample_date": "",
             "sample_time": "",
@@ -854,15 +854,15 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
         if gender_match:
             report_data["gender"] = re.sub(r'\s+', ' ', gender_match.group(1).strip())
         
-        # Extract patient ID (CNP)
+        # Extract patient CNP
         cnp_match = re.search(r'C\.N\.P:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
         if cnp_match:
-            report_data["patient_id"] = re.sub(r'\s+', ' ', cnp_match.group(1).strip())
+            report_data["patient_cnp"] = re.sub(r'\s+', ' ', cnp_match.group(1).strip())
         
         # Extract patient code
         code_match = re.search(r'Cod pacient:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
         if code_match:
-            report_data["patient_code"] = re.sub(r'\s+', ' ', code_match.group(1).strip())
+            report_data["patient_id"] = re.sub(r'\s+', ' ', code_match.group(1).strip())
         
         # Extract sample date and time
         datetime_match = re.search(r'(?:Data si ora recoltarii:|Data investigatiei:)\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
@@ -969,7 +969,7 @@ def is_expected_page(soup: BeautifulSoup, expected_title_text: str) -> bool:
 def parse_patient_data(html_content: str) -> Dict[str, Any]:
     """Parse HTML content for a single patient page and extract patient data.
     
-    Extracts patient name, ID, code, and associated encounter/checkin/checkout IDs
+    Extracts patient name, CNP, id, and associated encounter/admission/discharge IDs
     from a single patient page HTML content.
     
     Args:
@@ -977,7 +977,7 @@ def parse_patient_data(html_content: str) -> Dict[str, Any]:
         
     Returns:
         Dictionary containing parsed patient data, or empty dict if not a patient page
-        Returns {"error": "Invalid patient code"} if patient name is empty
+        Returns {"error": "Invalid patient id"} if patient name is empty
     """
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
@@ -989,13 +989,13 @@ def parse_patient_data(html_content: str) -> Dict[str, Any]:
         # Check if there is patient data on page by getting the name from the div with id "div_navbar"
         navbar_div = soup.find('div', id='div_navbar')
         if not navbar_div:
-            logger.warning("No navbar div found, invalid patient code")
-            return {"error": "Invalid patient code"}
+            logger.warning("No navbar div found, invalid patient id")
+            return {"error": "Invalid patient id"}
         
         patient_name_from_navbar = navbar_div.get_text().strip()
         if not patient_name_from_navbar:
-            logger.warning("Patient name from navbar is empty, invalid patient code")
-            return {"error": "Invalid patient code"}
+            logger.warning("Patient name from navbar is empty, invalid patient id")
+            return {"error": "Invalid patient id"}
         
         # Patient data
         patient_data = {}
@@ -1011,22 +1011,20 @@ def parse_patient_data(html_content: str) -> Dict[str, Any]:
         
         patient_name = f"{patient_data.get('family_name', '')} {patient_data.get('given_name', '')}".strip()
         
-        # If patient name is empty or null, the patient code is invalid
+        # If patient name is empty or null, the patient id is invalid
         if not patient_name:
-            logger.warning("Patient name is empty, invalid patient code")
-            return {"error": "Invalid patient code"}
+            logger.warning("Patient name is empty, invalid patient id")
+            return {"error": "Invalid patient id"}
         
         # Extract patient ID (CNP) from input element with id "strCNP"
-        patient_id = ""
         cnp_input = soup.find('input', id='strCNP', type='text')
         if cnp_input:
-            patient_data["patient_id"] = cnp_input.get('value', '').strip()
+            patient_data["patient_cnp"] = cnp_input.get('value', '').strip()
         
-        # Extract patient code from hidden input with id "hdnCodeID"
-        patient_code = ""
-        code_input = soup.find('input', id='hdnCodeID', type='hidden')
-        if code_input:
-            patient_data["patient_code"] = code_input.get('value', '').strip()
+        # Extract patient id from hidden input with id "hdnCodeID"
+        id_input = soup.find('input', id='hdnCodeID', type='hidden')
+        if id_input:
+            patient_data["patient_id"] = id_input.get('value', '').strip()
         
         # Extract CID
         cid_input = soup.find('input', id='strCID', type='text')
@@ -1066,9 +1064,9 @@ def parse_patient_data(html_content: str) -> Dict[str, Any]:
                 patient_data["address"] = selected_option.get_text().strip()
         
         # Derive sex and birth date from CNP if available
-        if patient_id and len(patient_id) == 13 and patient_id.isdigit():
+        if patient_cnp and len(patient_cnp) == 13 and patient_cnp.isdigit():
             # Extract gender from first digit
-            gender_digit = int(patient_id[0])
+            gender_digit = int(patient_cnp[0])
             if gender_digit in [1, 3, 5, 7]:
                 patient_data["sex"] = "male"
             elif gender_digit in [2, 4, 6, 8]:
@@ -1086,9 +1084,9 @@ def parse_patient_data(html_content: str) -> Dict[str, Any]:
                 else:  # 7, 8
                     year_prefix = "20"  # For people born after 2000
                 
-                year = f"{year_prefix}{patient_id[1:3]}"
-                month = patient_id[3:5]
-                day = patient_id[5:7]
+                year = f"{year_prefix}{patient_cnp[1:3]}"
+                month = patient_cnp[3:5]
+                day = patient_cnp[5:7]
                 patient_data["birth_date"] = f"{year}-{month}-{day}"
             except Exception:
                 pass  # Keep birth_date empty if parsing fails
@@ -1161,7 +1159,7 @@ def convert_to_fhir_patient(patient_data: Dict[str, Any], request) -> Dict[str, 
     birth_date = patient_data.get("birth_date", "")
     
     # Fallback to deriving from CNP if gender/birth date are not available
-    cnp = patient_data.get("patient_id", "")
+    cnp = patient_data.get("patient_cnp", "")
     if (not gender or gender == "unknown") and cnp:
         parsed_cnp = parse_cnp(cnp)
         if parsed_cnp.get("valid"):
@@ -1175,14 +1173,14 @@ def convert_to_fhir_patient(patient_data: Dict[str, Any], request) -> Dict[str, 
     # Create FHIR Patient resource
     fhir_patient = {
         "resourceType": "Patient",
-        "id": patient_data.get("patient_code", ""),
+        "id": patient_data.get("patient_id", ""),
         "meta": {
             "lastUpdated": datetime.now().isoformat()
         },
         "identifier": [
             {
-                "system": f"http://{request.host}/fhir/NamingSystem/patient-code",
-                "value": patient_data.get("patient_code", "")
+                "system": f"http://{request.host}/fhir/NamingSystem/patient-id",
+                "value": patient_data.get("patient_id", "")
             }
         ],
         "active": True,
@@ -1198,6 +1196,24 @@ def convert_to_fhir_patient(patient_data: Dict[str, Any], request) -> Dict[str, 
         "telecom": [],
         "address": []
     }
+
+    # Add extensions for encounter/admission/discharge IDs
+    fhir_patient["extension"] = []
+    if "encounters" in patient_data:
+        fhir_patient["extension"].append({
+            "url": f"http://{request.host}/fhir/StructureDefinition/encounter-ids",
+            "valueString": ",".join(patient_data["encounters"])
+    })
+    if "admissions" in patient_data:
+        fhir_patient["extension"].append({
+            "url": f"http://{request.host}/fhir/StructureDefinition/admission-ids",
+            "valueString": ",".join(patient_data["admissions"])
+    })
+    if "discharges" in patient_data:
+        fhir_patient["extension"].append({
+            "url": f"http://{request.host}/fhir/StructureDefinition/discharge-ids",
+            "valueString": ",".join(patient_data["discharges"])
+    })
     
     # Add CNP as additional identifier if available
     if cnp:
@@ -1211,13 +1227,13 @@ def convert_to_fhir_patient(patient_data: Dict[str, Any], request) -> Dict[str, 
 def parse_multiple_patients_data(html_content: str) -> List[Dict[str, Any]]:
     """Parse HTML content for multiple patient search results and extract patient data.
     
-    Extracts patient names, CNP, and codes from search results page with multiple patients.
+    Extracts patient names, CNP, and ids from search results page with multiple patients.
     
     Args:
         html_content: HTML content of the search results page
         
     Returns:
-        List of dictionaries containing patient data (name, CNP, code only)
+        List of dictionaries containing patient data (name, CNP, id only)
     """
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
@@ -1232,23 +1248,23 @@ def parse_multiple_patients_data(html_content: str) -> List[Dict[str, Any]]:
         rows = soup.find_all('tr')
         
         for row in rows:
-            # Look for the patient code link
-            code_link = row.find('a', href=re.compile(r"javascript:Edit\('([^']+)'\);"))
-            if not code_link:
+            # Look for the patient id link
+            id_link = row.find('a', href=re.compile(r"javascript:Edit\('([^']+)'\);"))
+            if not id_link:
                 continue
                 
-            # Extract patient code
-            code_href = code_link.get('href')
-            code_match = re.search(r"javascript:Edit\('([^']+)'\);", code_href)
-            if not code_match:
+            # Extract patient id
+            id_href = id_link.get('href')
+            id_match = re.search(r"javascript:Edit\('([^']+)'\);", id_href)
+            if not id_match:
                 continue
-            patient_code = code_match.group(1)
+            patient_id = id_match.group(1)
             
             # Look for the patient name link (next link in the row)
             name_links = row.find_all('a')
             patient_name = ""
             for name_link in name_links:
-                if name_link != code_link:
+                if name_link != id_link:
                     # Extract patient name
                     # Remove font tags and formatting
                     name_text = name_link.get_text()
@@ -1268,12 +1284,12 @@ def parse_multiple_patients_data(html_content: str) -> List[Dict[str, Any]]:
                         patient_cnp = cnp_input.get('value', '').strip()
                         break
             
-            # Only add patient if we have at least a name or code
-            if patient_name or patient_code:
+            # Only add patient if we have at least a name or id
+            if patient_name or patient_id:
                 patient_data = {
                     "patient_name": patient_name,
-                    "patient_id": patient_cnp,  # CNP
-                    "patient_code": patient_code
+                    "patient_cnp": patient_cnp,  # CNP
+                    "patient_id": patient_id
                 }
                 patients.append(patient_data)
         
@@ -1302,8 +1318,8 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
         # Initialize result dictionary
         checkout_data = {
             "patient_name": "",
+            "patient_cnp": "",
             "patient_id": "",
-            "patient_code": "",
             "admission_diagnostic": "",
             "epicrisis": "",
             "diagnostic": "",
@@ -1321,12 +1337,12 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
             if id_match:
                 checkout_data["patient_id"] = id_match.group(1).strip()
         
-        # Extract patient code (Cod pacient)
+        # Extract patient id (Cod pacient)
         code_elements = soup.find_all('td', string=re.compile(r'Cod pacient\s*:', re.IGNORECASE))
         for code_element in code_elements:
             next_td = code_element.find_next('td')
             if next_td:
-                checkout_data["patient_code"] = next_td.get_text().strip()
+                checkout_data["patient_id"] = next_td.get_text().strip()
                 break
         
         # Extract admission diagnostic
@@ -1358,7 +1374,7 @@ async def fhir_patient_read(request):
     """Retrieve patient information by ID.
     
     Gets patient information from the Hipocrate service and extracts
-    associated checkin and checkout IDs.
+    associated admission and discharge IDs.
     
     Args:
         request: The incoming HTTP request with 'id' query parameter for patient ID
@@ -1393,27 +1409,10 @@ async def fhir_patient_read(request):
         if not success:
             return error_response
         
-        # Parse the patient data to extract checkout and checkin IDs
-        checkout_ids = []
-        checkin_ids = []
-        
         # For FHIR endpoint, we need to get patient details first
         patient_data = parse_patient_data(response_text)
         if patient_data and patient_data.get("patient_name"):
             fhir_patient = convert_to_fhir_patient(patient_data, request)
-            # Add extensions for checkin/checkout IDs
-            if checkin_ids or checkout_ids:
-                fhir_patient["extension"] = []
-                if checkin_ids:
-                    fhir_patient["extension"].append({
-                        "url": f"http://{request.host}/fhir/StructureDefinition/checkin-ids",
-                        "valueString": ",".join(checkin_ids)
-                    })
-                if checkout_ids:
-                    fhir_patient["extension"].append({
-                        "url": f"http://{request.host}/fhir/StructureDefinition/checkout-ids",
-                        "valueString": ",".join(checkout_ids)
-                    })
             return web.json_response(fhir_patient)
         else:
             if 'error' in patient_data:
@@ -1493,7 +1492,7 @@ async def fhir_encounter_read(request):
                 }
             ],
             "subject": {
-                "reference": f"Patient/{parsed_data.get('patient_code', '')}"
+                "reference": f"Patient/{parsed_data.get('patient_id', '')}"
             },
             "participant": []
         }
@@ -1565,16 +1564,16 @@ async def fhir_encounter_read(request):
         return create_error_response(str(e), 500)
 
 def parse_analyses_data(html_content: str) -> Dict[str, Any]:
-    """Parse HTML analyses content and extract analysis IDs, analysis types, patient name, and patient code.
+    """Parse HTML analyses content and extract analysis IDs, analysis types, patient name, and patient id.
     
-    Extracts patient name, patient code, and list of analyses with their types and analysis IDs
+    Extracts patient name, patient id, and list of analyses with their types and analysis IDs
     from the analyses HTML page.
     
     Args:
         html_content: HTML content of the analyses page
         
     Returns:
-        Dictionary containing patient name, patient code, and list of analyses
+        Dictionary containing patient name, patient id, and list of analyses
     """
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
@@ -1582,24 +1581,24 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
         # Check if this is the correct page by looking for 'Cereri de Laborator' in title
         if not is_expected_page(soup, 'Cereri de Laborator'):
             logger.warning("Page is not a laboratory requests page")
-            return {"patient_name": "", "patient_code": "", "analyses": []}
+            return {"patient_name": "", "patient_id": "", "analyses": []}
         
         # Initialize result
         result = {
             "patient_name": "",
-            "patient_code": "",
+            "patient_id": "",
             "analyses": []
         }
         
-        # Extract patient name and code from the link pattern
+        # Extract patient name and id from the link pattern
         patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id=\d+'))
         if patient_link:
             result["patient_name"] = patient_link.get_text().strip()
-            # Extract patient code from href
+            # Extract patient id from href
             href = patient_link.get('href', '')
             code_match = re.search(r'id=(\d+)', href)
             if code_match:
-                result["patient_code"] = code_match.group(1)
+                result["patient_id"] = code_match.group(1)
         
         # Extract CNP from table (next TD after 'CNP:')
         cnp_cells = soup.find_all('td', string=re.compile(r'CNP:', re.IGNORECASE))
@@ -1608,7 +1607,7 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
             if next_td:
                 cnp_text = next_td.get_text().strip()
                 if cnp_text and cnp_text.isdigit() and len(cnp_text) == 13:
-                    result["patient_id"] = cnp_text
+                    result["patient_cnp"] = cnp_text
                     break
         
         # Find all links to analysis analysis
@@ -1650,7 +1649,7 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
                     checkin_href = checkin_link.get('href', '')
                     checkin_match = re.search(r'id=(\d+)', checkin_href)
                     if checkin_match:
-                        analysis_data["checkin_id"] = checkin_match.group(1)
+                        analysis_data["admission"] = checkin_match.group(1)
                 
                 # Cell 4: Date
                 date_text = cells[4].get_text().strip()
@@ -1704,7 +1703,7 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
         return result
     except Exception as e:
         logger.error(f"Error parsing analyses data: {e}")
-        return {"patient_name": "", "patient_code": "", "analyses": []}
+        return {"patient_name": "", "patient_id": "", "analyses": []}
 
 async def fhir_observation_search(request):
     """Retrieve list of observations for a patient by ID.
@@ -1889,7 +1888,7 @@ async def fhir_observation_read(request):
                 "text": report_data.get("examination", "Analysis")
             },
             "subject": {
-                "reference": f"Patient/{report_data.get('patient_code', patient_id)}"
+                "reference": f"Patient/{report_data.get('patient_id', patient_id)}"
             }
         }
         
@@ -3264,7 +3263,7 @@ async def fhir_diagnostic_report_read(request):
                             "text": parsed_data.get("examination", "Imaging Report")
                         },
                         "subject": {
-                            "reference": f"Patient/{parsed_data.get('patient_code', '')}"
+                            "reference": f"Patient/{parsed_data.get('patient_id', '')}"
                         }
                     }
                     
