@@ -1441,6 +1441,12 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
         
+        # Check if this is the correct page by looking for 'Cereri de Laborator' in title
+        title = soup.find('title')
+        if not title or 'Cereri de Laborator' not in title.get_text():
+            logger.warning("Page is not a laboratory requests page")
+            return {"patient_name": "", "analyses": []}
+        
         # Initialize result
         result = {
             "patient_name": "",
