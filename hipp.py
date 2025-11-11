@@ -950,11 +950,12 @@ def parse_single_patient_data(html_content: str) -> Dict[str, Any]:
         logger.error(f"Error parsing single patient data: {e}")
         return {}
 
-def convert_to_fhir_patient(patient_data: Dict[str, Any]) -> Dict[str, Any]:
+def convert_to_fhir_patient(patient_data: Dict[str, Any], request) -> Dict[str, Any]:
     """Convert patient data to FHIR Patient resource format.
     
     Args:
         patient_data (Dict[str, Any]): Patient data from parse_single_patient_data
+        request: The HTTP request object to get the host
         
     Returns:
         Dict[str, Any]: FHIR Patient resource
@@ -1257,7 +1258,7 @@ async def fhir_patient_read(request):
         # For FHIR endpoint, we need to get patient details first
         single_patient_data = parse_single_patient_data(response_text)
         if single_patient_data and single_patient_data.get("patient_name"):
-            fhir_patient = convert_to_fhir_patient(single_patient_data)
+            fhir_patient = convert_to_fhir_patient(single_patient_data, request)
             # Add extensions for checkin/checkout IDs
             if checkin_ids or checkout_ids:
                 fhir_patient["extension"] = []
