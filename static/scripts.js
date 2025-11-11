@@ -39,7 +39,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     const cnpResponse = await fetch(`/fhir/ValueSet/cnp?id=${cnp}`);
                     const cnpData = await cnpResponse.json();
         
-                    if (cnpData.status !== 'success' || !cnpData.valid) {
+                    if (!cnpData.valid) {
                         showError('Invalid CNP. Please check the number and try again.');
                         return;
                     }
@@ -59,34 +59,91 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Search for patient using FHIR API
             showToast('Searching patient database...', 'success');
-            const searchResponse = await fetch(`/fhir/Patient?q=${cnp}`);
-            const searchData = await searchResponse.json();
+            const searchResponse = await fetch(`/fhir/Patient?q=${encodeURIComponent(cnp)}`);
             
-            if (searchData.status !== 'success') {
-                console.error('Failed to retrieve patient information:', searchData);
-                showError('Failed to retrieve patient information.');
-                return;
+            if (!searchResponse.ok) {
+                throw new Error(`HTTP error! status: ${searchResponse.status}`);
             }
+            
+            const searchData = await searchResponse.json();
             
             let patientCode = null;
             let patientData = null;
             
-            if (searchData.type === 'single_patient') {
-                patientCode = searchData.data.patient_code;
-                patientData = searchData.data;
-            } else if (searchData.type === 'multiple_patients' && searchData.data.length > 0) {
-                patientCode = searchData.data[0].patient_code;
+            // Check if it's a single patient (FHIR Patient resource) or multiple patients (FHIR Bundle)
+            if (searchData.resourceType === "Patient") {
+                // Single patient
+                patientCode = searchData.id;
+                patientData = {
+                    patient_name: searchData.name && searchData.name[0] ? 
+                        `${searchData.name[0].given.join(' ')} ${searchData.name[0].family}` : 'N/A',
+                    patient_code: searchData.id,
+                    patient_id: searchData.identifier ? 
+                        searchData.identifier.find(id => id.system === "http://hospital-system/cnp")?.value : '',
+                    presentations: [],
+                    checkins: [],
+                    checkouts: []
+                };
+                
+                // Extract checkin/checkout IDs from extensions if available
+                if (searchData.extension) {
+                    const checkinExt = searchData.extension.find(ext => 
+                        ext.url === "http://hospital-system/StructureDefinition/checkin-ids");
+                    const checkoutExt = searchData.extension.find(ext => 
+                        ext.url === "http://hospital-system/StructureDefinition/checkout-ids");
+                    
+                    if (checkinExt) {
+                        patientData.checkins = checkinExt.valueString.split(',');
+                    }
+                    if (checkoutExt) {
+                        patientData.checkouts = checkoutExt.valueString.split(',');
+                    }
+                }
+            } else if (searchData.resourceType === "Bundle" && searchData.entry && searchData.entry.length > 0) {
+                // Multiple patients in a bundle
+                const firstPatient = searchData.entry[0].resource;
+                patientCode = firstPatient.id;
+                
                 // Get full patient data using FHIR API
                 const patientResponse = await fetch(`/fhir/Patient/${patientCode}`);
-                const patientResult = await patientResponse.json();
-                if (patientResult.status === 'success') {
+                if (patientResponse.ok) {
+                    const patientResult = await patientResponse.json();
                     patientData = {
-                        patient_name: searchData.data[0].patient_name,
-                        patient_code: patientCode,
-                        patient_id: cnp,
+                        patient_name: patientResult.name && patientResult.name[0] ? 
+                            `${patientResult.name[0].given.join(' ')} ${patientResult.name[0].family}` : 'N/A',
+                        patient_code: patientResult.id,
+                        patient_id: patientResult.identifier ? 
+                            patientResult.identifier.find(id => id.system === "http://hospital-system/cnp")?.value : '',
                         presentations: [],
-                        checkins: patientResult.checkin_ids || [],
-                        checkouts: patientResult.checkout_ids || []
+                        checkins: [],
+                        checkouts: []
+                    };
+                    
+                    // Extract checkin/checkout IDs from extensions if available
+                    if (patientResult.extension) {
+                        const checkinExt = patientResult.extension.find(ext => 
+                            ext.url === "http://hospital-system/StructureDefinition/checkin-ids");
+                        const checkoutExt = patientResult.extension.find(ext => 
+                            ext.url === "http://hospital-system/StructureDefinition/checkout-ids");
+                        
+                        if (checkinExt) {
+                            patientData.checkins = checkinExt.valueString.split(',');
+                        }
+                        if (checkoutExt) {
+                            patientData.checkouts = checkoutExt.valueString.split(',');
+                        }
+                    }
+                } else {
+                    // Fallback if we can't get detailed patient data
+                    patientData = {
+                        patient_name: firstPatient.name && firstPatient.name[0] ? 
+                            `${firstPatient.name[0].given.join(' ')} ${firstPatient.name[0].family}` : 'N/A',
+                        patient_code: firstPatient.id,
+                        patient_id: firstPatient.identifier ? 
+                            firstPatient.identifier.find(id => id.system === "http://hospital-system/cnp")?.value : '',
+                        presentations: [],
+                        checkins: [],
+                        checkouts: []
                     };
                 }
             } else {
