@@ -303,13 +303,50 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function displayPatientData(patientData, analysesData, epicrisisData = null) {
         // Display patient information
-        document.getElementById('patientId').textContent = patientData.patient_id || 'N/A';
-        document.getElementById('patientName').textContent = patientData.patient_name || 'N/A';
-        document.getElementById('patientCode').textContent = patientData.patient_code || 'N/A';
-        document.getElementById('patientCnp').textContent = patientData.patient_id || 'N/A';
-        document.getElementById('presentationsCount').textContent = (patientData.presentations || []).length;
-        document.getElementById('checkinsCount').textContent = (patientData.checkins || []).length;
-        document.getElementById('checkoutsCount').textContent = (patientData.checkouts || []).length;
+        document.getElementById('patientId').textContent = patientData.id || 'N/A';
+        document.getElementById('patientName').textContent = (patientData.name && patientData.name[0]) 
+            ? `${patientData.name[0].family || ''} ${patientData.name[0].given ? patientData.name[0].given.join(' ') : ''}` 
+            : 'N/A';
+        document.getElementById('patientCode').textContent = patientData.id || 'N/A';
+        document.getElementById('patientCnp').textContent = patientData.identifier 
+            ? patientData.identifier.find(id => id.system && id.system.includes('cnp'))?.value || 'N/A' 
+            : 'N/A';
+        document.getElementById('patientGender').textContent = patientData.gender || 'N/A';
+        document.getElementById('patientBirthDate').textContent = patientData.birthDate || 'N/A';
+        
+        // Extract telecom information
+        if (patientData.telecom) {
+            const phone = patientData.telecom.find(t => t.system === 'phone');
+            const email = patientData.telecom.find(t => t.system === 'email');
+            document.getElementById('patientPhone').textContent = phone ? phone.value : 'N/A';
+            document.getElementById('patientEmail').textContent = email ? email.value : 'N/A';
+        } else {
+            document.getElementById('patientPhone').textContent = 'N/A';
+            document.getElementById('patientEmail').textContent = 'N/A';
+        }
+        
+        // Extract address information
+        if (patientData.address && patientData.address[0]) {
+            document.getElementById('patientAddress').textContent = patientData.address[0].text || 'N/A';
+        } else {
+            document.getElementById('patientAddress').textContent = 'N/A';
+        }
+        
+        // Extract encounter/admission/discharge counts from extensions
+        let encounterCount = 0, admissionCount = 0, dischargeCount = 0;
+        if (patientData.extension) {
+            const encounterExt = patientData.extension.find(ext => ext.url && ext.url.includes('encounter-ids'));
+            const admissionExt = patientData.extension.find(ext => ext.url && ext.url.includes('admission-ids'));
+            const dischargeExt = patientData.extension.find(ext => ext.url && ext.url.includes('discharge-ids'));
+            
+            encounterCount = encounterExt ? encounterExt.valueString.split(',').filter(id => id).length : 0;
+            admissionCount = admissionExt ? admissionExt.valueString.split(',').filter(id => id).length : 0;
+            dischargeCount = dischargeExt ? dischargeExt.valueString.split(',').filter(id => id).length : 0;
+        }
+        
+        document.getElementById('presentationsCount').textContent = encounterCount;
+        document.getElementById('checkinsCount').textContent = admissionCount;
+        document.getElementById('checkoutsCount').textContent = dischargeCount;
         
         // Display epicrisis if available
         const epicrisisSection = document.getElementById('epicrisisSection');
