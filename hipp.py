@@ -1557,14 +1557,16 @@ async def fhir_observation_search(request):
         if full_data:
             analyses_url += "&full=yes"
         
+        start_time = datetime.now()
         response_text, success, error_response = await make_authenticated_request(
             session, analyses_url, "GET", None, username, password
         )
+        duration = (datetime.now() - start_time).total_seconds()
         
         if not success:
             return error_response
         
-        logger.info("Analyses list retrieval completed successfully")
+        logger.info(f"Analyses list retrieval completed successfully in {duration:.2f} seconds")
         # Parse the analyses data to extract report IDs, types, and patient name
         parsed_data = parse_analyses_data(response_text)
         
