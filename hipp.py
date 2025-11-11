@@ -953,6 +953,19 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
         logger.error(f"Error parsing report data: {e}")
         return {}
 
+def is_expected_page(soup: BeautifulSoup, expected_title_text: str) -> bool:
+    """Check if the parsed HTML content is the expected page by looking for specific text in the title.
+    
+    Args:
+        soup: BeautifulSoup object of the parsed HTML content
+        expected_title_text: Text that should be present in the page title
+        
+    Returns:
+        True if the page title contains the expected text, False otherwise
+    """
+    title = soup.find('title')
+    return title and expected_title_text in title.get_text()
+
 def parse_single_patient_data(html_content: str) -> Dict[str, Any]:
     """Parse HTML content for a single patient page and extract patient data.
     
@@ -970,8 +983,7 @@ def parse_single_patient_data(html_content: str) -> Dict[str, Any]:
         soup = BeautifulSoup(html_content, 'html.parser')
         
         # Check if this is a single patient page by looking for 'Date pasaportale' in title
-        title = soup.find('title')
-        if not title or 'Date pasaportale' not in title.get_text():
+        if not is_expected_page(soup, 'Date pasaportale'):
             return {"error": "Backend returned an unexpected page"}
         
         # Extract patient name from div with id "div_navbar"
@@ -1140,8 +1152,7 @@ def parse_multiple_patients_data(html_content: str) -> List[Dict[str, Any]]:
         soup = BeautifulSoup(html_content, 'html.parser')
         
         # Check if this is a search results page by looking for 'Fisier' in title
-        title = soup.find('title')
-        if not title or 'Fisier' not in title.get_text():
+        if not is_expected_page(soup, 'Fisier'):
             return []
         
         patients = []
@@ -1498,8 +1509,7 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
         soup = BeautifulSoup(html_content, 'html.parser')
         
         # Check if this is the correct page by looking for 'Cereri de Laborator' in title
-        title = soup.find('title')
-        if not title or 'Cereri de Laborator' not in title.get_text():
+        if not is_expected_page(soup, 'Cereri de Laborator'):
             logger.warning("Page is not a laboratory requests page")
             return {"patient_name": "", "patient_code": "", "analyses": []}
         
