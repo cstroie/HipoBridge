@@ -500,7 +500,6 @@ async def fhir_patient_search(request):
             if len(search_term) == 13:
                 if validate_cnp(search_term):
                     search_type = "cnp"
-                    cnp_value = search_term
                     logger.info(f"Performing CNP search for: {search_term}")
                 else:
                     # Not a valid CNP, treat as patient code
@@ -518,7 +517,6 @@ async def fhir_patient_search(request):
                 if prefix.isdigit() and len(prefix) < 13:
                     search_type = "partial_cnp"
                     actual_search_term = search_term  # Keep the asterisk for Hipocrate
-                    cnp_value = prefix
                     logger.info(f"Performing partial CNP search for: {search_term}")
                 else:
                     # Not a valid partial CNP, treat as name search
@@ -567,25 +565,29 @@ async def fhir_patient_search(request):
         # For POST requests, we need to be careful about Content-Type headers
         # Create a copy of headers without Content-Type to avoid conflicts
         post_headers = HEADERS.copy()
-        post_headers.pop("Content-Type", None)  # Remove Content-Type if present
+        post_headers.pop("Content-Type", None)
         
+        # Make the authenticated request
         response_text, success, error_response = await make_authenticated_request(
             session, search_url, "POST", search_data, username, password
         )
-        
+        # Check for errors
         if not success:
             return error_response
         
-        logger.info("Patient search completed successfully")
+        logger.info("Patient search completed, parsing results")
         
-        # Try to parse as single patient page first
-        patient_data = parse_patient_data(response_text)
-        if patient_data and patient_data.get("patient_id") and not patient_data.get("error"):
-            fhir_patient = convert_to_fhir_patient(patient_data, request)
-            return web.json_response(fhir_patient)
+        ## Try to parse as single patient page first
+        #patient_data = parse_patient_data(response_text)
+        #if patient_data and patient_data.get("patient_id") and not patient_data.get("error"):
+        #    fhir_patient = convert_to_fhir_patient(patient_data, request)
+        #    return web.json_response(fhir_patient)
         
         # Try to parse as multiple patients page
         multiple_patients_data = parse_multiple_patients_data(response_text)
+
+        #return create_error_response(response_text, 404)
+
         if multiple_patients_data and len(multiple_patients_data) > 0:
             # Convert multiple patients to FHIR Bundle
             bundle = {
@@ -618,14 +620,13 @@ async def fhir_patient_search(request):
                         }
                     ]
                 }
-                
                 # Add CNP if available
                 if patient.get("patient_cnp"):
                     fhir_patient["identifier"].append({
-                        "system": f"http://{request.host}/fhir/NamingSystem/cnp",
+                        "system": f"http://{request.host}/fhir/NamingSystem/patient-cnp",
                         "value": patient.get("patient_cnp", "")
                     })
-                
+                # Add entry to bundle
                 bundle["entry"].append({
                     "resource": fhir_patient
                 })
@@ -644,12 +645,13 @@ async def fhir_patient_search(request):
         
         # If we have patient data with an error, return that error
         if patient_data and patient_data.get("error"):
-            logger.warning(f"Patient data parsing error: {patient_data['error']}")
+            logger.warning(f"Patient searching error: {patient_data['error']}")
             return create_error_response(patient_data["error"], 404)
         
         # If neither parser worked, return an error
         logger.warning("Unable to parse patient search results")
-        logger.debug(f"Response text snippet: {response_text[:500]}...")  # Log snippet for debugging
+        # Log a snippet of the response for debugging
+        logger.debug(f"Response text snippet: {response_text[:500]}...")
         return create_error_response(
             "Unable to parse patient search results", 
             500, 
@@ -989,6 +991,8 @@ def parse_patient_data(html_content: str) -> Dict[str, Any]:
         
         # Check if this is a single patient page by looking for 'Date pasaportale' in title
         if not is_expected_page(soup, 'Date pasaportale'):
+            # Log snnippet of response for debugging
+            logger.debug(f"Response text snippet: {html_content[:1000]}...")
             return {"error": "Backend returned an unexpected page"}
         
         # Check if there is patient data on page by getting the name from the div with id "div_navbar"
@@ -1255,7 +1259,7 @@ def convert_to_fhir_patient(patient_data: Dict[str, Any], request) -> Dict[str, 
     # Add CNP as additional identifier if available
     if cnp:
         fhir_patient["identifier"].append({
-            "system": f"http://{request.host}/fhir/NamingSystem/cnp",
+            "system": f"http://{request.host}/fhir/NamingSystem/patient-cnp",
             "value": cnp
         })
     
@@ -1278,10 +1282,13 @@ def parse_multiple_patients_data(html_content: str) -> List[Dict[str, Any]]:
         
         # Check if this is a search results page by looking for 'Fisier' in title
         if not is_expected_page(soup, 'Fisier'):
+            # Log snnippet of response for debugging
+            logger.debug(f"Response text snippet: {html_content[:500]}...")
+            # Return empty list if not expected page
             return []
         
         patients = []
-        
+
         # Find all table rows
         rows = soup.find_all('tr')
         
@@ -1449,7 +1456,7 @@ async def fhir_patient_read(request):
         
         # For FHIR endpoint, we need to get patient details first
         patient_data = parse_patient_data(response_text)
-        if patient_data and patient_data.get("patient_name") and not patient_data.get("error"):
+        if patient_data and patient_data.get("patient_id") and not patient_data.get("error"):
             fhir_patient = convert_to_fhir_patient(patient_data, request)
             return web.json_response(fhir_patient)
         else:
