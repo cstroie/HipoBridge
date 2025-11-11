@@ -953,11 +953,11 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
             # Find the parent td element
             parent_td = referral_label.find_parent('td')
             if parent_td:
-                # Get the next sibling td which should contain the referral data
-                next_td = parent_td.find_next_sibling('td')
-                if next_td:
-                    # Extract text content and clean it
-                    referral_text = next_td.get_text(separator=' ', strip=True)
+                # Extract text content from the same td and clean it
+                # Remove the label part and get the rest
+                td_text = parent_td.get_text(separator=' ', strip=True)
+                if 'DIAGNOSTIC DE TRIMITERE:' in td_text:
+                    referral_text = td_text.split('DIAGNOSTIC DE TRIMITERE:', 1)[1].strip()
                     # Split into code and text - first part numeric is the code, rest is the reason
                     parts = referral_text.split(' ', 1)
                     if parts:
@@ -975,11 +975,11 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
             # Find the parent td element
             parent_td = presumptive_label.find_parent('td')
             if parent_td:
-                # Get the next sibling td which should contain the diagnosis data
-                next_td = parent_td.find_next_sibling('td')
-                if next_td:
-                    # Extract text content and clean it
-                    report_data["presumptive_diagnosis"] = next_td.get_text(separator=' ', strip=True)
+                # Extract text content from the same td and clean it
+                # Remove the label part and get the rest
+                td_text = parent_td.get_text(separator=' ', strip=True)
+                if 'DG.PREZUMTIV:' in td_text:
+                    report_data["presumptive_diagnosis"] = td_text.split('DG.PREZUMTIV:', 1)[1].strip()
         
         return report_data
     except Exception as e:
