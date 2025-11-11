@@ -1906,6 +1906,64 @@ async def fhir_markdown_to_html(request):
             "message": str(e)
         }, status=500)
 
+async def fhir_analysis_types(request):
+    """Serve the analysis types terminology.
+    
+    Returns a FHIR CodeSystem resource defining the analysis types used in the hospital system.
+    
+    Args:
+        request: The incoming HTTP request
+        
+    Returns:
+        web.Response: JSON response with CodeSystem resource
+    """
+    logger.info("GET /fhir/CodeSystem/analysis-types endpoint accessed")
+    
+    code_system = {
+        "resourceType": "CodeSystem",
+        "id": "analysis-types",
+        "url": "http://hospital-system/analysis-types",
+        "version": "1.0.0",
+        "name": "HospitalAnalysisTypes",
+        "title": "Hospital Analysis Types",
+        "status": "active",
+        "experimental": False,
+        "date": datetime.now().strftime('%Y-%m-%d'),
+        "publisher": "Hospital System",
+        "description": "Code system for analysis types used in the hospital",
+        "caseSensitive": True,
+        "content": "complete",
+        "concept": [
+            {
+                "code": "radio",
+                "display": "Radiology",
+                "definition": "Radiology/X-ray examinations"
+            },
+            {
+                "code": "ct",
+                "display": "CT Scan",
+                "definition": "Computed Tomography scans"
+            },
+            {
+                "code": "irm",
+                "display": "MRI",
+                "definition": "Magnetic Resonance Imaging"
+            },
+            {
+                "code": "eco",
+                "display": "Ultrasound",
+                "definition": "Echography/Ultrasound examinations"
+            },
+            {
+                "code": "lab",
+                "display": "Laboratory",
+                "definition": "Laboratory tests"
+            }
+        ]
+    }
+    
+    return web.json_response(code_system)
+
 async def fhir_specification(request):
     """Serve the OpenAPI specification.
     
@@ -2841,6 +2899,7 @@ async def init_app():
     app.router.add_get('/fhir/ValueSet/cnp', fhir_cnp_validate)
     app.router.add_post('/fhir/login', fhir_login)
     app.router.add_post('/fhir/md2html', fhir_markdown_to_html)
+    app.router.add_get('/fhir/CodeSystem/analysis-types', fhir_analysis_types)
     app.router.add_get('/fhir/spec', fhir_specification)
     app.router.add_static('/static/', path='static', name='static')
     
