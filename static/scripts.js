@@ -79,7 +79,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         `${searchData.name[0].given.join(' ')} ${searchData.name[0].family}` : 'N/A',
                     patient_code: searchData.id,
                     patient_id: searchData.identifier ? 
-                        searchData.identifier.find(id => id.system === "http://hospital-system/cnp")?.value : '',
+                        searchData.identifier.find(id => id.system.includes("cnp"))?.value : '',
                     presentations: [],
                     checkins: [],
                     checkouts: []
@@ -88,9 +88,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Extract checkin/checkout IDs from extensions if available
                 if (searchData.extension) {
                     const checkinExt = searchData.extension.find(ext => 
-                        ext.url === "http://hospital-system/StructureDefinition/checkin-ids");
+                        ext.url.includes("checkin-ids"));
                     const checkoutExt = searchData.extension.find(ext => 
-                        ext.url === "http://hospital-system/StructureDefinition/checkout-ids");
+                        ext.url.includes("checkout-ids"));
                     
                     if (checkinExt) {
                         patientData.checkins = checkinExt.valueString.split(',');

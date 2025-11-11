@@ -517,7 +517,7 @@ async def fhir_patient_search(request):
                     "id": patient.get("patient_code", ""),
                     "identifier": [
                         {
-                            "system": "http://hospital-system/patient-code",
+                            "system": f"http://{request.host}/fhir/NamingSystem/patient-code",
                             "value": patient.get("patient_code", "")
                         }
                     ],
@@ -1005,7 +1005,7 @@ def convert_to_fhir_patient(patient_data: Dict[str, Any]) -> Dict[str, Any]:
         },
         "identifier": [
             {
-                "system": "http://hospital-system/patient-code",
+                "system": f"http://{request.host}/fhir/NamingSystem/patient-code",
                 "value": patient_data.get("patient_code", "")
             }
         ],
@@ -1026,7 +1026,7 @@ def convert_to_fhir_patient(patient_data: Dict[str, Any]) -> Dict[str, Any]:
     # Add CNP as additional identifier if available
     if cnp:
         fhir_patient["identifier"].append({
-            "system": "http://hospital-system/cnp",
+            "system": f"http://{request.host}/fhir/NamingSystem/cnp",
             "value": cnp
         })
     
@@ -1263,12 +1263,12 @@ async def fhir_patient_read(request):
                 fhir_patient["extension"] = []
                 if checkin_ids:
                     fhir_patient["extension"].append({
-                        "url": "http://hospital-system/StructureDefinition/checkin-ids",
+                        "url": f"http://{request.host}/fhir/StructureDefinition/checkin-ids",
                         "valueString": ",".join(checkin_ids)
                     })
                 if checkout_ids:
                     fhir_patient["extension"].append({
-                        "url": "http://hospital-system/StructureDefinition/checkout-ids",
+                        "url": f"http://{request.host}/fhir/StructureDefinition/checkout-ids",
                         "valueString": ",".join(checkout_ids)
                     })
             return web.json_response(fhir_patient, headers={"Content-Type": "application/fhir+json"})
@@ -2818,7 +2818,7 @@ async def fhir_diagnostic_report_read(request):
                         "code": {
                             "coding": [
                                 {
-                                    "system": "http://hospital-system/report-types",
+                                    "system": f"http://{request.host}/fhir/CodeSystem/report-types",
                                     "code": "imaging-report",
                                     "display": "Imaging Report"
                                 }
