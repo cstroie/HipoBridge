@@ -1496,39 +1496,63 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
                 })
                 continue
             
-            # Look for the analysis type in the same row
-            # The type is coded as 'XXXX-Radio', 'XXXX-lab', 'XXXX-IRM', etc.
-            type_text = ""
-            cells = parent_row.find_all('td')
-            for cell in cells:
-                cell_text = cell.get_text().strip()
-                # Look for pattern like 'XXXX-Radio', 'XXXX-lab', etc.
-                type_match = re.search(r'\d{4}-(\w+)', cell_text)
-                if type_match:
-                    type_text = type_match.group(1).lower()
-                    break
-            
-            # If we didn't find the type in the standard format, try to infer from the text
-            if not type_text:
-                # Look for common type indicators in the row
-                row_text = parent_row.get_text().lower()
-                if 'radio' in row_text or 'radiologie' in row_text:
-                    type_text = "radio"
-                elif 'lab' in row_text or 'laborator' in row_text:
-                    type_text = "lab"
-                elif 'irm' in row_text:
-                    type_text = "irm"
-                elif 'ct' in row_text:
-                    type_text = "ct"
-                elif 'eco' in row_text or 'ecografie' in row_text:
-                    type_text = "eco"
-                else:
-                    type_text = "unknown"
-            
-            result["analyses"].append({
+            # Extract information from table cells
+            analysis_data = {
                 "report_id": report_id,
-                "type": type_text
-            })
+                "type": "unknown"
+            }
+            
+            cells = parent_row.find_all('td')
+            if len(cells) >= 8:
+                # Cell 0: Report link (already processed)
+                # Cell 1: Checkbox (ignore)
+                # Cell 2: Barcode (ignore)
+                # Cell 3: Checkin code
+                checkin_link = cells[3].find('a', href=re.compile(r'/files/checkin\.asp\?id=\d+'))
+                if checkin_link:
+                    checkin_href = checkin_link.get('href', '')
+                    checkin_match = re.search(r'id=(\d+)', checkin_href)
+                    if checkin_match:
+                        analysis_data["checkin_id"] = checkin_match.group(1)
+                
+                # Cell 4: Date
+                date_text = cells[4].get_text().strip()
+                if date_text:
+                    analysis_data["date"] = date_text
+                
+                # Cell 5: Priority
+                priority_text = cells[5].get_text().strip()
+                if priority_text:
+                    analysis_data["priority"] = priority_text
+                
+                # Cell 6: Analysis type
+                type_text = cells[6].get_text().strip()
+                # Look for pattern like 'XXXX-Radio', 'XXXX-lab', etc.
+                type_match = re.search(r'\d{4}-(\w+)', type_text)
+                if type_match:
+                    analysis_data["type"] = type_match.group(1).lower()
+                else:
+                    # If we didn't find the type in the standard format, try to infer from the text
+                    type_text_lower = type_text.lower()
+                    if 'radio' in type_text_lower or 'radiologie' in type_text_lower:
+                        analysis_data["type"] = "radio"
+                    elif 'lab' in type_text_lower or 'laborator' in type_text_lower:
+                        analysis_data["type"] = "lab"
+                    elif 'irm' in type_text_lower:
+                        analysis_data["type"] = "irm"
+                    elif 'ct' in type_text_lower:
+                        analysis_data["type"] = "ct"
+                    elif 'eco' in type_text_lower or 'ecografie' in type_text_lower:
+                        analysis_data["type"] = "eco"
+                    else:
+                        analysis_data["type"] = "unknown"
+                
+                # Cell 7: Requesting doctor
+                doctor_text = cells[7].get_text().strip()
+                if doctor_text:
+                    analysis_data["requesting_doctor"] = doctor_text
+            
+            result["analyses"].append(analysis_data)
         
         return result
     except Exception as e:
