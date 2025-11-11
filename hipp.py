@@ -2067,6 +2067,15 @@ async def fhir_analysis_types(request):
     """
     logger.info("GET /fhir/CodeSystem/analysis-types endpoint accessed")
     
+    # Build concepts list using for loop
+    concepts = []
+    for code, details in ANALYSIS_TYPES.items():
+        concepts.append({
+            "code": code,
+            "display": details["display"],
+            "definition": details["definition"]
+        })
+    
     code_system = {
         "resourceType": "CodeSystem",
         "id": "analysis-types",
@@ -2081,53 +2090,7 @@ async def fhir_analysis_types(request):
         "description": "Code system for analysis types used in the hospital",
         "caseSensitive": True,
         "content": "complete",
-        "concept": [
-            {
-                "code": "radio",
-                "display": ANALYSIS_TYPES["radio"]["display"],
-                "definition": ANALYSIS_TYPES["radio"]["definition"]
-            },
-            {
-                "code": "ct",
-                "display": ANALYSIS_TYPES["ct"]["display"],
-                "definition": ANALYSIS_TYPES["ct"]["definition"]
-            },
-            {
-                "code": "irm",
-                "display": ANALYSIS_TYPES["irm"]["display"],
-                "definition": ANALYSIS_TYPES["irm"]["definition"]
-            },
-            {
-                "code": "eco",
-                "display": ANALYSIS_TYPES["eco"]["display"],
-                "definition": ANALYSIS_TYPES["eco"]["definition"]
-            },
-            {
-                "code": "lab",
-                "display": ANALYSIS_TYPES["lab"]["display"],
-                "definition": ANALYSIS_TYPES["lab"]["definition"]
-            },
-            {
-                "code": "LAC",
-                "display": ANALYSIS_TYPES["LAC"]["display"],
-                "definition": ANALYSIS_TYPES["LAC"]["definition"]
-            },
-            {
-                "code": "LII",
-                "display": ANALYSIS_TYPES["LII"]["display"],
-                "definition": ANALYSIS_TYPES["LII"]["definition"]
-            },
-            {
-                "code": "rads",
-                "display": ANALYSIS_TYPES["rads"]["display"],
-                "definition": ANALYSIS_TYPES["rads"]["definition"]
-            },
-            {
-                "code": "APA",
-                "display": ANALYSIS_TYPES["APA"]["display"],
-                "definition": ANALYSIS_TYPES["APA"]["definition"]
-            }
-        ]
+        "concept": concepts
     }
     
     return web.json_response(code_system)
