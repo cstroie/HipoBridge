@@ -997,17 +997,11 @@ def parse_single_patient_data(html_content: str) -> Dict[str, Any]:
             logger.warning("Patient name is empty, invalid patient code")
             return {"error": "Invalid patient code"}
         
-        # Extract patient ID (CNP) from text input after 'CNP:'
+        # Extract patient ID (CNP) from input element with id "strCNP"
         patient_id = ""
-        cnp_labels = soup.find_all(string=re.compile(r'CNP\s*:', re.IGNORECASE))
-        for label in cnp_labels:
-            # Find the parent element and then look for the next input
-            parent = label.parent
-            if parent:
-                input_field = parent.find_next('input', type='text')
-                if input_field:
-                    patient_id = input_field.get('value', '').strip()
-                    break
+        cnp_input = soup.find('input', id='strCNP', type='text')
+        if cnp_input:
+            patient_id = cnp_input.get('value', '').strip()
         
         # Extract patient code from hidden input with id "hdnCodeID"
         patient_code = ""
