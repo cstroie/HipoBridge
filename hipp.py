@@ -349,13 +349,7 @@ async def patient_search_handler(request):
     Returns:
         web.Response: JSON response with search results or error information
     """
-    # Determine if this is a FHIR endpoint call
-    is_fhir = request.path.startswith('/fhir/')
-    
-    if is_fhir:
-        logger.info("GET /fhir/Patient endpoint accessed")
-    else:
-        logger.info("GET /api/patient/search endpoint accessed")
+    logger.info("GET /fhir/Patient endpoint accessed")
     
     # Get credentials from request headers (optional)
     username = request.headers.get("X-Username")
@@ -461,94 +455,67 @@ async def patient_search_handler(request):
         # Try to parse as single patient page first
         single_patient_data = parse_single_patient_data(response_text)
         if single_patient_data and single_patient_data.get("patient_name"):
-            # Check if FHIR format is requested (either via Accept header or FHIR endpoint)
-            accept_header = request.headers.get("Accept", "")
-            if "application/fhir+json" in accept_header or is_fhir:
-                fhir_patient = convert_to_fhir_patient(single_patient_data)
-                return web.json_response(fhir_patient, headers={"Content-Type": "application/fhir+json"})
-            else:
-                return web.json_response({
-                    "status": "success",
-                    "type": "single_patient",
-                    "data": single_patient_data
-                })
+            fhir_patient = convert_to_fhir_patient(single_patient_data)
+            return web.json_response(fhir_patient, headers={"Content-Type": "application/fhir+json"})
         
         # Try to parse as multiple patients page
         multiple_patients_data = parse_multiple_patients_data(response_text)
         if multiple_patients_data and len(multiple_patients_data) > 0:
-            # Check if FHIR format is requested (either via Accept header or FHIR endpoint)
-            accept_header = request.headers.get("Accept", "")
-            if "application/fhir+json" in accept_header or is_fhir:
-                # Convert multiple patients to FHIR Bundle
-                bundle = {
-                    "resourceType": "Bundle",
-                    "type": "searchset",
-                    "total": len(multiple_patients_data),
-                    "entry": []
+            # Convert multiple patients to FHIR Bundle
+            bundle = {
+                "resourceType": "Bundle",
+                "type": "searchset",
+                "total": len(multiple_patients_data),
+                "entry": []
+            }
+            
+            for patient in multiple_patients_data:
+                # Create minimal FHIR patient resource for each
+                name_parts = patient.get("patient_name", "").split()
+                given_names = name_parts[:-1] if len(name_parts) > 1 else name_parts
+                family_name = name_parts[-1] if len(name_parts) > 1 else ""
+                
+                fhir_patient = {
+                    "resourceType": "Patient",
+                    "id": patient.get("patient_code", ""),
+                    "identifier": [
+                        {
+                            "system": "http://hospital-system/patient-code",
+                            "value": patient.get("patient_code", "")
+                        }
+                    ],
+                    "name": [
+                        {
+                            "use": "official",
+                            "family": family_name,
+                            "given": given_names
+                        }
+                    ]
                 }
                 
-                for patient in multiple_patients_data:
-                    # Create minimal FHIR patient resource for each
-                    name_parts = patient.get("patient_name", "").split()
-                    given_names = name_parts[:-1] if len(name_parts) > 1 else name_parts
-                    family_name = name_parts[-1] if len(name_parts) > 1 else ""
-                    
-                    fhir_patient = {
-                        "resourceType": "Patient",
-                        "id": patient.get("patient_code", ""),
-                        "identifier": [
-                            {
-                                "system": "http://hospital-system/patient-code",
-                                "value": patient.get("patient_code", "")
-                            }
-                        ],
-                        "name": [
-                            {
-                                "use": "official",
-                                "family": family_name,
-                                "given": given_names
-                            }
-                        ]
-                    }
-                    
-                    # Add CNP if available
-                    if patient.get("patient_id"):
-                        fhir_patient["identifier"].append({
-                            "system": "http://hospital-system/cnp",
-                            "value": patient.get("patient_id", "")
-                        })
-                    
-                    bundle["entry"].append({
-                        "resource": fhir_patient
+                # Add CNP if available
+                if patient.get("patient_id"):
+                    fhir_patient["identifier"].append({
+                        "system": "http://hospital-system/cnp",
+                        "value": patient.get("patient_id", "")
                     })
                 
-                return web.json_response(bundle, headers={"Content-Type": "application/fhir+json"})
-            else:
-                return web.json_response({
-                    "status": "success",
-                    "type": "multiple_patients",
-                    "data": multiple_patients_data
+                bundle["entry"].append({
+                    "resource": fhir_patient
                 })
+            
+            return web.json_response(bundle, headers={"Content-Type": "application/fhir+json"})
         
         # Check if we're on a "no results" page
         if "nu a fost gasit" in response_text.lower() or "no results" in response_text.lower():
-            # Check if FHIR format is requested (either via Accept header or FHIR endpoint)
-            accept_header = request.headers.get("Accept", "")
-            if "application/fhir+json" in accept_header or is_fhir:
-                # Return empty FHIR Bundle
-                bundle = {
-                    "resourceType": "Bundle",
-                    "type": "searchset",
-                    "total": 0,
-                    "entry": []
-                }
-                return web.json_response(bundle, headers={"Content-Type": "application/fhir+json"})
-            else:
-                return web.json_response({
-                    "status": "success",
-                    "type": "no_results",
-                    "data": []
-                })
+            # Return empty FHIR Bundle
+            bundle = {
+                "resourceType": "Bundle",
+                "type": "searchset",
+                "total": 0,
+                "entry": []
+            }
+            return web.json_response(bundle, headers={"Content-Type": "application/fhir+json"})
         
         # If neither parser worked, return an error
         logger.warning("Unable to parse patient search results")
@@ -1153,15 +1120,8 @@ async def patient_handler(request):
     Returns:
         web.Response: JSON response with patient data or error information
     """
-    # Determine if this is a FHIR endpoint call
-    is_fhir = request.path.startswith('/fhir/')
-    
-    if is_fhir:
-        patient_id = request.match_info.get('id')
-        logger.info(f"GET /fhir/Patient/{patient_id} endpoint accessed")
-    else:
-        patient_id = request.query.get('id')
-        logger.info("GET /api/patient endpoint accessed")
+    patient_id = request.match_info.get('id')
+    logger.info(f"GET /fhir/Patient/{patient_id} endpoint accessed")
     
     if not patient_id:
         logger.warning("No patient ID provided")
@@ -1234,30 +1194,22 @@ async def patient_handler(request):
         
         logger.info("Patient retrieval completed successfully")
         
-        # If this is a FHIR endpoint, return FHIR Patient resource
-        if is_fhir:
-            # For FHIR endpoint, we need to get patient details first
-            single_patient_data = parse_single_patient_data(response_text)
-            if single_patient_data and single_patient_data.get("patient_name"):
-                fhir_patient = convert_to_fhir_patient(single_patient_data)
-                # Add extensions for checkin/checkout IDs
-                fhir_patient["extension"] = [
-                    {
-                        "url": "http://hospital-system/StructureDefinition/checkin-ids",
-                        "valueString": ",".join(checkin_ids)
-                    },
-                    {
-                        "url": "http://hospital-system/StructureDefinition/checkout-ids",
-                        "valueString": ",".join(checkout_ids)
-                    }
-                ]
-                return web.json_response(fhir_patient, headers={"Content-Type": "application/fhir+json"})
-        
-        return web.json_response({
-            "status": "success",
-            "checkout_ids": checkout_ids,
-            "checkin_ids": checkin_ids
-        })
+        # For FHIR endpoint, we need to get patient details first
+        single_patient_data = parse_single_patient_data(response_text)
+        if single_patient_data and single_patient_data.get("patient_name"):
+            fhir_patient = convert_to_fhir_patient(single_patient_data)
+            # Add extensions for checkin/checkout IDs
+            fhir_patient["extension"] = [
+                {
+                    "url": "http://hospital-system/StructureDefinition/checkin-ids",
+                    "valueString": ",".join(checkin_ids)
+                },
+                {
+                    "url": "http://hospital-system/StructureDefinition/checkout-ids",
+                    "valueString": ",".join(checkout_ids)
+                }
+            ]
+            return web.json_response(fhir_patient, headers={"Content-Type": "application/fhir+json"})
             
     except Exception as e:
         logger.error(f"Patient retrieval failed with exception: {e}")
@@ -1279,15 +1231,8 @@ async def checkout_handler(request):
     Returns:
         web.Response: JSON response with checkout data or error information
     """
-    # Determine if this is a FHIR endpoint call
-    is_fhir = request.path.startswith('/fhir/')
-    
-    if is_fhir:
-        checkout_id = request.query.get('identifier')
-        logger.info(f"GET /fhir/Encounter endpoint accessed with identifier: {checkout_id}")
-    else:
-        checkout_id = request.query.get('id')
-        logger.info("GET /api/checkout endpoint accessed")
+    checkout_id = request.query.get('identifier')
+    logger.info(f"GET /fhir/Encounter endpoint accessed with identifier: {checkout_id}")
     
     if not checkout_id:
         logger.warning("No checkout ID provided")
@@ -2741,16 +2686,10 @@ async def init_app():
     app.router.add_get('/fhir/DiagnosticReport', report_handler)
     app.router.add_get('/fhir/Encounter', checkout_handler)
     app.router.add_get('/fhir/Observation', analyses_handler)
-    # Legacy endpoints (kept for backward compatibility)
-    app.router.add_get('/api/patients/search', patient_search_handler)
-    app.router.add_get('/api/patients', patient_handler)
-    app.router.add_get('/api/analyses', analyses_handler)
-    app.router.add_get('/api/reports', report_handler)
-    app.router.add_get('/api/checkouts', checkout_handler)
-    app.router.add_get('/api/cnp', cnp_handler)
-    app.router.add_post('/api/login', login_handler)
-    app.router.add_post('/api/md2html', md2html_handler)
-    app.router.add_get('/api/spec', spec_handler)
+    app.router.add_get('/fhir/ValueSet/cnp', cnp_handler)
+    app.router.add_post('/fhir/login', login_handler)
+    app.router.add_post('/fhir/md2html', md2html_handler)
+    app.router.add_get('/fhir/spec', spec_handler)
     app.router.add_static('/static/', path='static', name='static')
     
     # Setup startup and cleanup
