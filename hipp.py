@@ -1379,6 +1379,9 @@ async def fhir_patient_read(request):
                         "valueString": ",".join(checkout_ids)
                     })
             return web.json_response(fhir_patient, headers={"Content-Type": "application/fhir+json"})
+        else:
+            # Return an error if we couldn't parse patient data
+            return create_error_response("Unable to parse patient data", 500)
             
     except Exception as e:
         logger.error(f"Patient retrieval failed with exception: {e}")
