@@ -492,7 +492,7 @@ async def fhir_patient_search(request):
         # Try to parse as single patient page first
         single_patient_data = parse_single_patient_data(response_text)
         if single_patient_data and single_patient_data.get("patient_name"):
-            fhir_patient = convert_to_fhir_patient(single_patient_data)
+            fhir_patient = convert_to_fhir_patient(single_patient_data, request)
             return web.json_response(fhir_patient)
         
         # Try to parse as multiple patients page
