@@ -390,7 +390,7 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
         if method == "GET":
             logger.debug(f"Making GET request to: {url}")
             async with session.get(url, headers=HEADERS) as response:
-                response_text = await _handle_response_encoding(response)
+                response_text = await handle_response_encoding(response)
                 logger.debug(f"GET response status: {response.status}")
         else:  # POST
             logger.debug(f"Making POST request to: {url}")
@@ -402,11 +402,11 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
             # When sending form data, let aiohttp set the Content-Type automatically
             if data:
                 async with session.post(url, data=data, headers=post_headers) as response:
-                    response_text = await _handle_response_encoding(response)
+                    response_text = await handle_response_encoding(response)
                     logger.debug(f"POST response status: {response.status}")
             else:
                 async with session.post(url, headers=post_headers) as response:
-                    response_text = await _handle_response_encoding(response)
+                    response_text = await handle_response_encoding(response)
                     logger.debug(f"POST response status: {response.status}")
         return response_text
     
@@ -426,20 +426,20 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
             if login_success:
                 # Retry the request with special headers for POST
                 response_text = await _make_request(use_retry_headers=True)
-                
+                # Check again if still on login page
                 if is_login_page(response_text):
                     logger.error("Login failed after retry")
                     return None, False, create_error_response("Authentication failed after retry", 401)
             else:
                 logger.error("Re-login failed")
                 return None, False, create_error_response("Authentication failed", 401)
-        
+        # If we reach here, we have a valid response
         return response_text, True, None
     except Exception as e:
         logger.error(f"Request to {url} failed with exception: {e}")
         return None, False, create_error_response(str(e), 500)
 
-async def _handle_response_encoding(response):
+async def handle_response_encoding(response):
     """Handle response encoding for the Hipocrate service.
     
     Args:
