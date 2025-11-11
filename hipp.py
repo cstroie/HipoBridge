@@ -38,6 +38,10 @@ HEADERS = {
 # Global session
 session: Optional[aiohttp.ClientSession] = None
 
+# Simple in-memory cache for CNP to patient code mappings
+cnp_cache: Dict[str, str] = {}
+cache_max_size = 1000  # Maximum number of entries to cache
+
 async def get_session():
     global session
     if session is None or session.closed:

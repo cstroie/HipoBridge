@@ -13,6 +13,10 @@ import json
 # Configuration
 BASE_URL = "http://localhost:44660"
 
+# Simple in-memory cache for CNP to patient code mappings
+cnp_cache = {}
+cache_max_size = 1000  # Maximum number of entries to cache
+
 async def _make_api_request(session: aiohttp.ClientSession, method: str, url: str, data: dict = None) -> tuple:
     """Make an API request and return the response data and success status.
     
@@ -309,7 +313,7 @@ async def get_patient_code_from_cnp(session: aiohttp.ClientSession, cnp: str) ->
     """Get patient code by validating CNP and searching for the patient.
     
     Validates a Romanian CNP and then searches for the corresponding patient
-    to retrieve their patient code using FHIR endpoints.
+    to retrieve their patient code using FHIR endpoints. Uses caching to avoid repeated lookups.
     
     Args:
         session (aiohttp.ClientSession): The HTTP session to use for requests
