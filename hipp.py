@@ -985,12 +985,21 @@ def parse_single_patient_data(html_content: str) -> Dict[str, Any]:
         # Check if this is a single patient page by looking for 'Date pasaportale' in title
         if not is_expected_page(soup, 'Date pasaportale'):
             return {"error": "Backend returned an unexpected page"}
-                
-        patient_name = f"{patient_data.get('family_name', '')} {patient_data.get('given_name', '')}".strip()
-
+        
+        # Check if there is patient data on page by getting the name from the div with id "div_navbar"
+        navbar_div = soup.find('div', id='div_navbar')
+        if not navbar_div:
+            logger.warning("No navbar div found, invalid patient code")
+            return {"error": "Invalid patient code"}
+        
+        patient_name_from_navbar = navbar_div.get_text().strip()
+        if not patient_name_from_navbar:
+            logger.warning("Patient name from navbar is empty, invalid patient code")
+            return {"error": "Invalid patient code"}
+        
         # Patient data
         patient_data = {}
-
+        
         # Extract patient name from input elements
         family_input = soup.find('input', id='strNume', type='text')
         if family_input:
@@ -999,6 +1008,8 @@ def parse_single_patient_data(html_content: str) -> Dict[str, Any]:
         given_input = soup.find('input', id='strPrenume', type='text')
         if given_input:
             patient_data["given_name"] = given_input.get('value', '').strip()
+        
+        patient_name = f"{patient_data.get('family_name', '')} {patient_data.get('given_name', '')}".strip()
         
         # If patient name is empty or null, the patient code is invalid
         if not patient_name:
