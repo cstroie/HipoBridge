@@ -946,6 +946,20 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
         if examiner_name:
             report_data["examiner"] = examiner_name
         
+        # Extract reason for referral (DIAGNOSTIC DE TRIMITERE)
+        referral_match = re.search(r'DIAGNOSTIC DE TRIMITERE:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
+        if referral_match:
+            referral_text = referral_match.group(1).strip()
+            # Split into code and text - first part numeric is the code, rest is the reason
+            parts = referral_text.split(' ', 1)
+            if parts:
+                # Check if first part is numeric (the code)
+                if parts[0].isdigit():
+                    report_data["referral_code"] = parts[0]
+                    report_data["referral_reason"] = parts[1].strip() if len(parts) > 1 else ""
+                else:
+                    report_data["referral_reason"] = referral_text
+        
         return report_data
     except Exception as e:
         logger.error(f"Error parsing report data: {e}")
