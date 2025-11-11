@@ -3366,6 +3366,69 @@ async def fhir_diagnostic_report_read(request):
                                     "data": first_report["result"]
                                 }]
                     
+                    # Add additional data as extensions if available
+                    extensions = []
+                    
+                    # Add patient details if available
+                    if parsed_data.get("patient_name"):
+                        extensions.append({
+                            "url": f"http://{request.host}/fhir/StructureDefinition/patient-name",
+                            "valueString": parsed_data["patient_name"]
+                        })
+                    
+                    if parsed_data.get("age"):
+                        extensions.append({
+                            "url": f"http://{request.host}/fhir/StructureDefinition/patient-age",
+                            "valueString": parsed_data["age"]
+                        })
+                    
+                    if parsed_data.get("gender"):
+                        extensions.append({
+                            "url": f"http://{request.host}/fhir/StructureDefinition/patient-gender",
+                            "valueString": parsed_data["gender"]
+                        })
+                    
+                    if parsed_data.get("patient_cnp"):
+                        extensions.append({
+                            "url": f"http://{request.host}/fhir/StructureDefinition/patient-cnp",
+                            "valueString": parsed_data["patient_cnp"]
+                        })
+                    
+                    # Add examination details if available
+                    if parsed_data.get("referral_reason"):
+                        extensions.append({
+                            "url": f"http://{request.host}/fhir/StructureDefinition/referral-reason",
+                            "valueString": parsed_data["referral_reason"]
+                        })
+                    
+                    if parsed_data.get("referral_code"):
+                        extensions.append({
+                            "url": f"http://{request.host}/fhir/StructureDefinition/referral-code",
+                            "valueString": parsed_data["referral_code"]
+                        })
+                    
+                    if parsed_data.get("presumptive_diagnosis"):
+                        extensions.append({
+                            "url": f"http://{request.host}/fhir/StructureDefinition/presumptive-diagnosis",
+                            "valueString": parsed_data["presumptive_diagnosis"]
+                        })
+                    
+                    if parsed_data.get("special_indications"):
+                        extensions.append({
+                            "url": f"http://{request.host}/fhir/StructureDefinition/special-indications",
+                            "valueString": parsed_data["special_indications"]
+                        })
+                    
+                    if parsed_data.get("referring_physician"):
+                        extensions.append({
+                            "url": f"http://{request.host}/fhir/StructureDefinition/referring-physician",
+                            "valueString": parsed_data["referring_physician"]
+                        })
+                    
+                    # Add extensions to the report if any were added
+                    if extensions:
+                        fhir_report["extension"] = extensions
+                    
                     # Add media references placeholder
                     fhir_report["media"] = []
                     
