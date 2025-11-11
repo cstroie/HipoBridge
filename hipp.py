@@ -1564,15 +1564,19 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
                         # Handle common date formats like "07 Nov 2025 10:29:00"
                         from datetime import datetime
                         import re
-                        
+                    
                         # Match format like "07 Nov 2025 10:29:00"
                         match = re.match(r'(\d{2}) (\w{3}) (\d{4}) (\d{2}:\d{2}:\d{2})', date_text)
                         if match:
                             day, month_abbr, year, time_part = match.groups()
                             # Convert month abbreviation to number
+                            # Include Romanian month abbreviations
                             months = {
                                 'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
                                 'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
+                                'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12',
+                                'Ian': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
+                                'Mai': '05', 'Iun': '06', 'Iul': '07', 'Aug': '08',
                                 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
                             }
                             month = months.get(month_abbr, '01')
