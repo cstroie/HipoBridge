@@ -1356,7 +1356,7 @@ async def fhir_patient_read(request):
                 if id_match:
                     checkin_ids.append(id_match.group(1))
             
-            logger.info("Found patient IDs", endpoint=f"/fhir/Patient/{patient_id}", checkout_count=len(checkout_ids), checkin_count=len(checkin_ids))
+            logger.info(f"Found patient IDs for endpoint /fhir/Patient/{patient_id}: checkout_count={len(checkout_ids)}, checkin_count={len(checkin_ids)}")
             
         except Exception as e:
             logger.error(f"Error parsing patient data: {e}")
