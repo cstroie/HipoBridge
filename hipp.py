@@ -1563,20 +1563,18 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
                     # Try to parse the date string into a proper datetime object
                     try:
                         # Handle common date formats like "07 Nov 2025 10:29:00"
-                        match = re.match(r'(\d{2}) (\w{3}) (\d{4}) (\d{2}:\d{2}:\d{2})', date_text)
-                        if match:
-                            day, month_abbr, year, time_part = match.groups()
-                            # Convert month abbreviation to number
-                            # Include Romanian month abbreviations
-                            months = {
-                                'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
-                                'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
-                                'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12',
-                                'Ian': '01', 'Mai': '05', 'Iun': '06', 'Iul': '07'
-                            }
-                            month = months.get(month_abbr, '01')
-                            date_str = f"{year}-{month}-{day} {time_part}"
-                            analysis_data["datetime"] = datetime.strptime(date_str, '%Y-%m-%d %H:%M:%S')
+                        # Create a mapping for Romanian month abbreviations to English ones
+                        month_mapping = {
+                            'Ian': 'Jan', 'Mai': 'May', 'Iun': 'Jun', 'Iul': 'Jul'
+                        }
+                        
+                        # Replace Romanian month abbreviations with English ones
+                        formatted_date = date_text
+                        for ro_month, en_month in month_mapping.items():
+                            formatted_date = formatted_date.replace(ro_month, en_month)
+                        
+                        # Parse the datetime using strptime
+                        analysis_data["datetime"] = datetime.strptime(formatted_date, '%d %b %Y %H:%M:%S')
                     except Exception as e:
                         logger.debug(f"Could not parse datetime from string '{date_text}': {e}")
                         # Keep the original string if parsing fails
