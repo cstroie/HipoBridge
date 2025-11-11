@@ -493,7 +493,7 @@ async def fhir_patient_search(request):
         single_patient_data = parse_single_patient_data(response_text)
         if single_patient_data and single_patient_data.get("patient_name"):
             fhir_patient = convert_to_fhir_patient(single_patient_data)
-            return web.json_response(fhir_patient, headers={"Content-Type": "application/fhir+json"})
+            return web.json_response(fhir_patient)
         
         # Try to parse as multiple patients page
         multiple_patients_data = parse_multiple_patients_data(response_text)
@@ -541,7 +541,7 @@ async def fhir_patient_search(request):
                     "resource": fhir_patient
                 })
             
-            return web.json_response(bundle, headers={"Content-Type": "application/fhir+json"})
+            return web.json_response(bundle)
         
         # Check if we're on a "no results" page
         if "nu a fost gasit" in response_text.lower() or "no results" in response_text.lower():
@@ -552,7 +552,7 @@ async def fhir_patient_search(request):
                 "total": 0,
                 "entry": []
             }
-            return web.json_response(bundle, headers={"Content-Type": "application/fhir+json"})
+            return web.json_response(bundle)
         
         # If neither parser worked, return an error
         logger.warning("Unable to parse patient search results")
@@ -1416,7 +1416,7 @@ async def fhir_encounter_read(request):
                 }
             ]
         
-        return web.json_response(fhir_encounter, headers={"Content-Type": "application/fhir+json"})
+        return web.json_response(fhir_encounter)
             
     except Exception as e:
         logger.error(f"Encounter retrieval failed with exception: {e}")
@@ -1701,7 +1701,7 @@ async def fhir_observation_search(request):
                 "resource": fhir_observation
             })
         
-        return web.json_response(bundle, headers={"Content-Type": "application/fhir+json"})
+        return web.json_response(bundle)
             
     except Exception as e:
         logger.error(f"Analyses retrieval failed with exception: {e}")
@@ -2782,7 +2782,7 @@ async def fhir_diagnostic_report_read(request):
                     fhir_report["media"] = []
                     print(fhir_report)
                     
-                    return web.json_response(fhir_report, headers={"Content-Type": "application/fhir+json"})
+                    return web.json_response(fhir_report)
                 
                 # Handle 302 redirect
                 location = response.headers.get("Location")
