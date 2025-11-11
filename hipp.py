@@ -1259,14 +1259,14 @@ async def fhir_encounter_read(request):
     encounter_id = request.query.get('identifier')
     logger.info(f"GET /fhir/Encounter endpoint accessed with identifier: {encounter_id}")
     
-    if not checkout_id:
-        logger.warning("No checkout ID provided")
+    if not encounter_id:
+        logger.warning("No encounter ID provided")
         return web.json_response({
             "status": "error",
-            "message": "Checkout ID is required"
+            "message": "Encounter ID is required"
         }, status=400)
     
-    logger.info(f"Retrieving checkout with ID: {checkout_id}")
+    logger.info(f"Retrieving encounter with ID: {encounter_id}")
     
     # Get credentials from request headers (optional)
     username = request.headers.get("X-Username")
@@ -1276,7 +1276,7 @@ async def fhir_encounter_read(request):
         session = await get_session()
         
         # Make request to the checkout endpoint
-        checkout_url = f"{SERVICE_URL}/files/checkout.asp?id={checkout_id}"
+        checkout_url = f"{SERVICE_URL}/files/checkout.asp?id={encounter_id}"
         
         response_text, success, error_response = await make_authenticated_request(
             session, checkout_url, "GET", None, username, password
@@ -1285,110 +1285,104 @@ async def fhir_encounter_read(request):
         if not success:
             return error_response
         
-        logger.info("Checkout retrieval completed successfully")
+        logger.info("Encounter retrieval completed successfully")
         # Parse the checkout data
         parsed_data = parse_checkout_data(response_text)
         
-        # If this is a FHIR endpoint, return FHIR Encounter resource
-        if is_fhir:
-            # Create enhanced FHIR Encounter resource
-            fhir_encounter = {
-                "resourceType": "Encounter",
-                "id": checkout_id,
-                "meta": {
-                    "lastUpdated": datetime.now().isoformat()
-                },
-                "status": "finished",
-                "class": {
-                    "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
-                    "code": "IMP",
-                    "display": "inpatient encounter"
-                },
+        # Create enhanced FHIR Encounter resource
+        fhir_encounter = {
+            "resourceType": "Encounter",
+            "id": encounter_id,
+            "meta": {
+                "lastUpdated": datetime.now().isoformat()
+            },
+            "status": "finished",
+            "class": {
+                "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+                "code": "IMP",
+                "display": "inpatient encounter"
+            },
+            "type": [
+                {
+                    "coding": [
+                        {
+                            "system": "http://snomed.info/sct",
+                            "code": "305056002",
+                            "display": "Admission to hospital"
+                        }
+                    ]
+                }
+            ],
+            "subject": {
+                "reference": f"Patient/{parsed_data.get('patient_code', '')}"
+            },
+            "participant": []
+        }
+        
+        # Add performer if available
+        if parsed_data.get("examiner"):
+            fhir_encounter["participant"].append({
                 "type": [
                     {
                         "coding": [
                             {
-                                "system": "http://snomed.info/sct",
-                                "code": "305056002",
-                                "display": "Admission to hospital"
+                                "system": "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
+                                "code": "ATND",
+                                "display": "attender"
                             }
                         ]
                     }
                 ],
-                "subject": {
-                    "reference": f"Patient/{parsed_data.get('patient_code', '')}"
-                },
-                "participant": []
+                "individual": {
+                    "display": parsed_data["examiner"]
+                }
+            })
+        
+        # Add reason (admission diagnostic) if available
+        if parsed_data.get("admission_diagnostic"):
+            fhir_encounter["reasonCode"] = [
+                {
+                    "text": parsed_data["admission_diagnostic"]
+                }
+            ]
+        
+        # Add text summary if epicrisis exists
+        if parsed_data.get("epicrisis"):
+            fhir_encounter["text"] = {
+                "status": "generated",
+                "div": f"<div xmlns=\"http://www.w3.org/1999/xhtml\">{parsed_data['epicrisis']}</div>"
             }
             
-            # Add performer if available
-            if parsed_data.get("examiner"):
-                fhir_encounter["participant"].append({
-                    "type": [
-                        {
-                            "coding": [
-                                {
-                                    "system": "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
-                                    "code": "ATND",
-                                    "display": "attender"
-                                }
-                            ]
-                        }
-                    ],
-                    "individual": {
-                        "display": parsed_data["examiner"]
-                    }
-                })
-            
-            # Add reason (admission diagnostic) if available
-            if parsed_data.get("admission_diagnostic"):
-                fhir_encounter["reasonCode"] = [
-                    {
-                        "text": parsed_data["admission_diagnostic"]
-                    }
-                ]
-            
-            # Add text summary if epicrisis exists
-            if parsed_data.get("epicrisis"):
-                fhir_encounter["text"] = {
-                    "status": "generated",
-                    "div": f"<div xmlns=\"http://www.w3.org/1999/xhtml\">{parsed_data['epicrisis']}</div>"
+            # Also add as a note
+            fhir_encounter["note"] = [
+                {
+                    "text": parsed_data["epicrisis"]
                 }
-                
-                # Also add as a note
-                fhir_encounter["note"] = [
-                    {
-                        "text": parsed_data["epicrisis"]
-                    }
-                ]
-            
-            # Add diagnosis if available
-            if parsed_data.get("diagnostic"):
-                fhir_encounter["diagnosis"] = [
-                    {
-                        "condition": {
-                            "display": parsed_data["diagnostic"]
-                        },
-                        "use": {
-                            "coding": [
-                                {
-                                    "system": "http://terminology.hl7.org/CodeSystem/diagnosis-role",
-                                    "code": "DD",
-                                    "display": "Discharge diagnosis"
-                                }
-                            ]
-                        }
-                    }
-                ]
-            
-            return web.json_response(fhir_encounter, headers={"Content-Type": "application/fhir+json"})
+            ]
         
-        result = {"status": "success"}
-        result.update(parsed_data)
-        return web.json_response(result)
+        # Add diagnosis if available
+        if parsed_data.get("diagnostic"):
+            fhir_encounter["diagnosis"] = [
+                {
+                    "condition": {
+                        "display": parsed_data["diagnostic"]
+                    },
+                    "use": {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/diagnosis-role",
+                                "code": "DD",
+                                "display": "Discharge diagnosis"
+                            }
+                        ]
+                    }
+                }
+            ]
+        
+        return web.json_response(fhir_encounter, headers={"Content-Type": "application/fhir+json"})
             
     except Exception as e:
-        logger.error(f"Checkout retrieval failed with exception: {e}")
+        logger.error(f"Encounter retrieval failed with exception: {e}")
         return web.json_response({
             "status": "error",
             "message": str(e)
@@ -1591,94 +1585,92 @@ async def fhir_observation_search(request):
                 logger.error(f"Error filtering analyses by datetime: {e}")
                 # If datetime filtering fails, return unfiltered analyses
         
-        # If this is a FHIR endpoint, return FHIR Observation resources
-        if is_fhir:
-            # Create FHIR Bundle of Observation resources
-            bundle = {
-                "resourceType": "Bundle",
-                "type": "searchset",
-                "total": len(analyses),
-                "entry": []
-            }
+        # Create FHIR Bundle of Observation resources
+        bundle = {
+            "resourceType": "Bundle",
+            "type": "searchset",
+            "total": len(analyses),
+            "entry": []
+        }
+        
+        for analysis in analyses:
+            # Get report details to extract observation data
+            report_url = f"{SERVICE_URL}/analyse/Reports/analyseFile.asp?id={analysis['report_id']}"
+            report_text, success, _ = await make_authenticated_request(
+                session, report_url, "GET", None, username, password
+            )
             
-            for analysis in analyses:
-                # Get report details to extract observation data
-                report_url = f"{SERVICE_URL}/analyse/Reports/analyseFile.asp?id={analysis['report_id']}"
-                report_text, success, _ = await make_authenticated_request(
-                    session, report_url, "GET", None, username, password
-                )
-                
-                fhir_observation = {
-                    "resourceType": "Observation",
-                    "id": analysis["report_id"],
-                    "meta": {
-                        "lastUpdated": datetime.now().isoformat()
-                    },
-                    "status": "final",
-                    "category": [
-                        {
-                            "coding": [
-                                {
-                                    "system": "http://terminology.hl7.org/CodeSystem/observation-category",
-                                    "code": "laboratory" if analysis["type"] == "lab" else "imaging",
-                                    "display": "Laboratory" if analysis["type"] == "lab" else "Imaging"
-                                }
-                            ]
-                        }
-                    ],
-                    "code": {
+            fhir_observation = {
+                "resourceType": "Observation",
+                "id": analysis["report_id"],
+                "meta": {
+                    "lastUpdated": datetime.now().isoformat()
+                },
+                "status": "final",
+                "category": [
+                    {
                         "coding": [
                             {
-                                "system": "http://hospital-system/analysis-types",
-                                "code": analysis["type"],
-                                "display": analysis["type"].upper()
-                            }
-                        ],
-                        "text": f"{analysis['type'].upper()} Analysis"
-                    },
-                    "subject": {
-                        "reference": f"Patient/{patient_id}"
-                    }
-                }
-                
-                # Add report data if available
-                if success:
-                    report_data = parse_report_data(report_text)
-                    
-                    # Add effective datetime if available
-                    if report_data.get("sample_datetime"):
-                        fhir_observation["effectiveDateTime"] = report_data["sample_datetime"]
-                    
-                    # Add performer if available
-                    if report_data.get("examiner"):
-                        fhir_observation["performer"] = [
-                            {
-                                "display": report_data["examiner"]
+                                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                                "code": "laboratory" if analysis["type"] == "lab" else "imaging",
+                                "display": "Laboratory" if analysis["type"] == "lab" else "Imaging"
                             }
                         ]
-                    
-                    # Add value/comment if available
-                    if report_data.get("reports"):
-                        # For now, add the first report result as a comment
-                        first_report = report_data["reports"][0] if report_data["reports"] else None
-                        if first_report and first_report.get("result"):
-                            fhir_observation["note"] = [
-                                {
-                                    "text": first_report["result"]
-                                }
-                            ]
-                
-                bundle["entry"].append({
-                    "resource": fhir_observation
-                })
+                    }
+                ],
+                "code": {
+                    "coding": [
+                        {
+                            "system": "http://hospital-system/analysis-types",
+                            "code": analysis["type"],
+                            "display": analysis["type"].upper()
+                        }
+                    ],
+                    "text": f"{analysis['type'].upper()} Analysis"
+                },
+                "subject": {
+                    "reference": f"Patient/{patient_id}"
+                }
+            }
             
-            return web.json_response(bundle, headers={"Content-Type": "application/fhir+json"})
+            # Add report data if available
+            if success:
+                report_data = parse_report_data(report_text)
+                
+                # Add effective datetime if available
+                if report_data.get("sample_datetime"):
+                    fhir_observation["effectiveDateTime"] = report_data["sample_datetime"]
+                
+                # Add performer if available
+                if report_data.get("examiner"):
+                    fhir_observation["performer"] = [
+                        {
+                            "display": report_data["examiner"]
+                        }
+                    ]
+                
+                # Add value/comment if available
+                if report_data.get("reports"):
+                    # For now, add the first report result as a comment
+                    first_report = report_data["reports"][0] if report_data["reports"] else None
+                    if first_report and first_report.get("result"):
+                        fhir_observation["note"] = [
+                            {
+                                "text": first_report["result"]
+                            }
+                        ]
+            
+            bundle["entry"].append({
+                "resource": fhir_observation
+            })
         
-        return web.json_response({
-            "status": "success",
-            "patient_name": parsed_data["patient_name"],
-            "analyses": analyses
-        })
+        return web.json_response(bundle, headers={"Content-Type": "application/fhir+json"})
+    
+    return web.json_response({
+        "status": "success",
+        "patient_name": parsed_data["patient_name"],
+        "analyses": analyses
+    })
             
     except Exception as e:
         logger.error(f"Analyses retrieval failed with exception: {e}")
@@ -2704,76 +2696,74 @@ async def fhir_diagnostic_report_read(request):
                     # Parse the report data
                     parsed_data = parse_report_data(response_text)
                     
-                    # If this is a FHIR endpoint, return FHIR DiagnosticReport resource
-                    if is_fhir:
-                        # Create enhanced FHIR DiagnosticReport resource
-                        fhir_report = {
-                            "resourceType": "DiagnosticReport",
-                            "id": report_id,
-                            "meta": {
-                                "lastUpdated": datetime.now().isoformat()
-                            },
-                            "status": "final",
-                            "category": [
-                                {
-                                    "coding": [
-                                        {
-                                            "system": "http://terminology.hl7.org/CodeSystem/v2-0074",
-                                            "code": "RAD",
-                                            "display": "Radiology"
-                                        }
-                                    ]
-                                }
-                            ],
-                            "code": {
+                    # Create enhanced FHIR DiagnosticReport resource
+                    fhir_report = {
+                        "resourceType": "DiagnosticReport",
+                        "id": report_id,
+                        "meta": {
+                            "lastUpdated": datetime.now().isoformat()
+                        },
+                        "status": "final",
+                        "category": [
+                            {
                                 "coding": [
                                     {
-                                        "system": "http://hospital-system/report-types",
-                                        "code": "imaging-report",
-                                        "display": "Imaging Report"
+                                        "system": "http://terminology.hl7.org/CodeSystem/v2-0074",
+                                        "code": "RAD",
+                                        "display": "Radiology"
                                     }
-                                ],
-                                "text": parsed_data.get("examination", "Imaging Report")
-                            },
-                            "subject": {
-                                "reference": f"Patient/{parsed_data.get('patient_code', '')}"
+                                ]
                             }
-                        }
-                        
-                        # Add effective date if available
-                        if parsed_data.get("sample_datetime"):
-                            fhir_report["effectiveDateTime"] = parsed_data["sample_datetime"]
-                        
-                        # Add performer if available
-                        if parsed_data.get("examiner"):
-                            fhir_report["performer"] = [
+                        ],
+                        "code": {
+                            "coding": [
                                 {
-                                    "display": parsed_data["examiner"]
+                                    "system": "http://hospital-system/report-types",
+                                    "code": "imaging-report",
+                                    "display": "Imaging Report"
                                 }
-                            ]
-                        
-                        # Add results if available
-                        if parsed_data.get("reports"):
-                            fhir_report["result"] = []
-                            for i, report in enumerate(parsed_data["reports"]):
-                                fhir_report["result"].append({
-                                    "reference": f"Observation/{report_id}-{i}"
-                                })
-                            
-                            # Add conclusion from the first report result
-                            if parsed_data["reports"]:
-                                first_report = parsed_data["reports"][0]
-                                if first_report.get("result"):
-                                    fhir_report["conclusion"] = first_report["result"]
-                        
-                        # Add media references placeholder
-                        fhir_report["media"] = []
-                        
-                        return web.json_response(fhir_report, headers={"Content-Type": "application/fhir+json"})
+                            ],
+                            "text": parsed_data.get("examination", "Imaging Report")
+                        },
+                        "subject": {
+                            "reference": f"Patient/{parsed_data.get('patient_code', '')}"
+                        }
+                    }
                     
-                    result = {"status": "success", "redirects_followed": redirect_count}
-                    result.update(parsed_data)
-                    return web.json_response(result)
+                    # Add effective date if available
+                    if parsed_data.get("sample_datetime"):
+                        fhir_report["effectiveDateTime"] = parsed_data["sample_datetime"]
+                    
+                    # Add performer if available
+                    if parsed_data.get("examiner"):
+                        fhir_report["performer"] = [
+                            {
+                                "display": parsed_data["examiner"]
+                            }
+                        ]
+                    
+                    # Add results if available
+                    if parsed_data.get("reports"):
+                        fhir_report["result"] = []
+                        for i, report in enumerate(parsed_data["reports"]):
+                            fhir_report["result"].append({
+                                "reference": f"Observation/{report_id}-{i}"
+                            })
+                        
+                        # Add conclusion from the first report result
+                        if parsed_data["reports"]:
+                            first_report = parsed_data["reports"][0]
+                            if first_report.get("result"):
+                                fhir_report["conclusion"] = first_report["result"]
+                    
+                    # Add media references placeholder
+                    fhir_report["media"] = []
+                    
+                    return web.json_response(fhir_report, headers={"Content-Type": "application/fhir+json"})
+                
+                result = {"status": "success", "redirects_followed": redirect_count}
+                result.update(parsed_data)
+                return web.json_response(result)
                 
                 # Handle 302 redirect
                 location = response.headers.get("Location")
