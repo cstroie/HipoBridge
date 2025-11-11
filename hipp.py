@@ -37,7 +37,8 @@ Configuration:
 - Credentials via HYP_USER and HYP_PASS environment variables
 - Local overrides in local.cfg (optional)
 
-Author: [Author Name]
+Author: Costin Stroie <costinstroie@eridu.eu.org>
+License: GPL-3.0
 Version: 1.0.0
 """
 import os
