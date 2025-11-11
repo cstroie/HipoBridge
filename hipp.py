@@ -1449,11 +1449,11 @@ async def fhir_patient_read(request):
         
         # For FHIR endpoint, we need to get patient details first
         patient_data = parse_patient_data(response_text)
-        if patient_data and patient_data.get("patient_name"):
+        if patient_data and patient_data.get("patient_name") and not patient_data.get("error"):
             fhir_patient = convert_to_fhir_patient(patient_data, request)
             return web.json_response(fhir_patient)
         else:
-            if 'error' in patient_data:
+            if patient_data and 'error' in patient_data:
                 return create_error_response(patient_data['error'], 404)
             # Return an error if we couldn't read patient data
             return create_error_response("Unable to read patient data", 500)
