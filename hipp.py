@@ -183,7 +183,7 @@ async def login_if_needed(username: str = None, password: str = None) -> bool:
         return False
 
 
-async def login_handler(request):
+async def fhir_login(request):
     """Handle explicit login requests.
     
     Performs login to the Hipocrate service using credentials provided in the request body.
@@ -194,7 +194,7 @@ async def login_handler(request):
     Returns:
         web.Response: JSON response indicating login success or failure
     """
-    logger.info("POST /api/login endpoint accessed")
+    logger.info("POST /fhir/login endpoint accessed")
     
     try:
         # Get credentials from request body
@@ -335,7 +335,7 @@ async def _handle_response_encoding(response):
             response_text = raw_data.decode('latin-1')
     return response_text
 
-async def patient_search_handler(request):
+async def fhir_patient_search(request):
     """Search for patients by name or other criteria.
     
     Performs a patient search on the Hipocrate service using the provided search term.
@@ -1142,7 +1142,7 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
         logger.error(f"Error parsing checkout data: {e}")
         return {}
 
-async def patient_handler(request):
+async def fhir_patient_read(request):
     """Retrieve patient information by ID.
     
     Gets patient information from the Hipocrate service and extracts
@@ -1243,28 +1243,21 @@ async def patient_handler(request):
             "message": str(e)
         }, status=500)
 
-async def checkout_handler(request):
-    """Retrieve checkout information by ID.
+async def fhir_encounter_read(request):
+    """Retrieve encounter information by ID.
     
-    Gets checkout information from the Hipocrate service and parses
+    Gets encounter information from the Hipocrate service and parses
     the medical data into structured format.
     
     Args:
-        request: The incoming HTTP request with 'id' query parameter for checkout ID
+        request: The incoming HTTP request with 'identifier' query parameter for encounter ID
                  and optional X-Username and X-Password headers for authentication
         
     Returns:
-        web.Response: JSON response with checkout data or error information
+        web.Response: JSON response with encounter data or error information
     """
-    # Determine if this is a FHIR endpoint call
-    is_fhir = request.path.startswith('/fhir/')
-    
-    if is_fhir:
-        checkout_id = request.query.get('identifier')
-        logger.info(f"GET /fhir/Encounter endpoint accessed with identifier: {checkout_id}")
-    else:
-        checkout_id = request.query.get('id')
-        logger.info("GET /api/checkout endpoint accessed")
+    encounter_id = request.query.get('identifier')
+    logger.info(f"GET /fhir/Encounter endpoint accessed with identifier: {encounter_id}")
     
     if not checkout_id:
         logger.warning("No checkout ID provided")
@@ -1488,28 +1481,21 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
         logger.error(f"Error parsing analyses data: {e}")
         return {"patient_name": "", "analyses": []}
 
-async def analyses_handler(request):
-    """Retrieve all analyses for a patient by ID.
+async def fhir_observation_search(request):
+    """Retrieve all observations for a patient by ID.
     
-    Gets all analyses for a specific patient from the Hipocrate service
+    Gets all observations for a specific patient from the Hipocrate service
     and parses the data into structured format.
     
     Args:
-        request: The incoming HTTP request with 'id' query parameter for patient ID
+        request: The incoming HTTP request with 'patient' query parameter for patient ID
                  and optional X-Username and X-Password headers for authentication
         
     Returns:
-        web.Response: JSON response with analyses data or error information
+        web.Response: JSON response with observations data or error information
     """
-    # Determine if this is a FHIR endpoint call
-    is_fhir = request.path.startswith('/fhir/')
-    
-    if is_fhir:
-        patient_id = request.query.get('patient')
-        logger.info(f"GET /fhir/Observation endpoint accessed for patient: {patient_id}")
-    else:
-        patient_id = request.query.get('id')
-        logger.info("GET /api/analyses endpoint accessed")
+    patient_id = request.query.get('patient')
+    logger.info(f"GET /fhir/Observation endpoint accessed for patient: {patient_id}")
     
     # Get credentials from request headers (optional)
     username = request.headers.get("X-Username")
@@ -1770,7 +1756,7 @@ def validate_cnp(cnp: str) -> bool:
     
     return control_digit == int(cnp[12])
 
-async def cnp_handler(request):
+async def fhir_cnp_validate(request):
     """Validate a Romanian CNP (Personal Numerical Code).
     
     Validates a Romanian CNP using the internal validation algorithm.
@@ -1781,7 +1767,7 @@ async def cnp_handler(request):
     Returns:
         web.Response: JSON response with validation result
     """
-    logger.info("GET /api/cnp endpoint accessed")
+    logger.info("GET /fhir/ValueSet/cnp endpoint accessed")
     
     # Get CNP from query string
     cnp = request.query.get('id')
@@ -1860,7 +1846,7 @@ def markdown_to_html(markdown_text: str) -> str:
     
     return html
 
-async def md2html_handler(request):
+async def fhir_markdown_to_html(request):
     """Convert markdown text to HTML.
     
     Takes markdown text and converts it to basic HTML.
@@ -1871,7 +1857,7 @@ async def md2html_handler(request):
     Returns:
         web.Response: JSON response with HTML content
     """
-    logger.info("POST /api/md2html endpoint accessed")
+    logger.info("POST /fhir/md2html endpoint accessed")
     
     try:
         # Get markdown text from request body
@@ -1897,7 +1883,7 @@ async def md2html_handler(request):
             "message": str(e)
         }, status=500)
 
-async def spec_handler(request):
+async def fhir_specification(request):
     """Serve the OpenAPI specification.
     
     Returns the OpenAPI specification in JSON format for API documentation.
@@ -2639,28 +2625,21 @@ async def spec_handler(request):
     
     return web.json_response(spec)
 
-async def report_handler(request):
-    """Retrieve a report by ID, following redirect chains.
+async def fhir_diagnostic_report_read(request):
+    """Retrieve a diagnostic report by ID, following redirect chains.
     
-    Gets a report from the Hipocrate service, following any redirects to
+    Gets a diagnostic report from the Hipocrate service, following any redirects to
     retrieve the final report data, then parses it into structured format.
     
     Args:
-        request: The incoming HTTP request with 'id' query parameter for report ID
+        request: The incoming HTTP request with 'identifier' query parameter for report ID
                  and optional X-Username and X-Password headers for authentication
         
     Returns:
-        web.Response: JSON response with report data or error information
+        web.Response: JSON response with diagnostic report data or error information
     """
-    # Determine if this is a FHIR endpoint call
-    is_fhir = request.path.startswith('/fhir/')
-    
-    if is_fhir:
-        report_id = request.query.get('identifier')
-        logger.info(f"GET /fhir/DiagnosticReport endpoint accessed with identifier: {report_id}")
-    else:
-        report_id = request.query.get('id')
-        logger.info("GET /api/report endpoint accessed")
+    report_id = request.query.get('identifier')
+    logger.info(f"GET /fhir/DiagnosticReport endpoint accessed with identifier: {report_id}")
     
     # Get credentials from request headers (optional)
     username = request.headers.get("X-Username")
@@ -2846,15 +2825,15 @@ async def init_app():
     app = web.Application()
     app.router.add_get('/', root_handler)
     # FHIR-compatible endpoints
-    app.router.add_get('/fhir/Patient', patient_search_handler)
-    app.router.add_get('/fhir/Patient/{id}', patient_handler)
-    app.router.add_get('/fhir/DiagnosticReport', report_handler)
-    app.router.add_get('/fhir/Encounter', checkout_handler)
-    app.router.add_get('/fhir/Observation', analyses_handler)
-    app.router.add_get('/fhir/ValueSet/cnp', cnp_handler)
-    app.router.add_post('/fhir/login', login_handler)
-    app.router.add_post('/fhir/md2html', md2html_handler)
-    app.router.add_get('/fhir/spec', spec_handler)
+    app.router.add_get('/fhir/Patient', fhir_patient_search)
+    app.router.add_get('/fhir/Patient/{id}', fhir_patient_read)
+    app.router.add_get('/fhir/DiagnosticReport', fhir_diagnostic_report_read)
+    app.router.add_get('/fhir/Encounter', fhir_encounter_read)
+    app.router.add_get('/fhir/Observation', fhir_observation_search)
+    app.router.add_get('/fhir/ValueSet/cnp', fhir_cnp_validate)
+    app.router.add_post('/fhir/login', fhir_login)
+    app.router.add_post('/fhir/md2html', fhir_markdown_to_html)
+    app.router.add_get('/fhir/spec', fhir_specification)
     app.router.add_static('/static/', path='static', name='static')
     
     # Setup startup and cleanup
