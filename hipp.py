@@ -1156,21 +1156,24 @@ def convert_to_fhir_patient(patient_data: Dict[str, Any], request) -> Dict[str, 
         family_name = name_parts[0] if len(name_parts) > 0 else ""
         given_names = name_parts[1:] if len(name_parts) > 1 else []
     
-    # Extract gender and birth date from CNP if available
-    gender = "unknown"
-    birth_date = ""
-    cnp = patient_data.get("patient_id", "")
+    # Use already extracted gender and birth date if available
+    gender = patient_data.get("sex", "unknown")
+    birth_date = patient_data.get("birth_date", "")
     
-    if cnp and len(cnp) == 13 and cnp.isdigit():
+    # Fallback to deriving from CNP if gender/birth date are not available
+    cnp = patient_data.get("patient_id", "")
+    if (not gender or gender == "unknown") and cnp and len(cnp) == 13 and cnp.isdigit():
         # Extract gender from first digit
         gender_digit = int(cnp[0])
         if gender_digit in [1, 3, 5, 7]:
             gender = "male"
         elif gender_digit in [2, 4, 6, 8]:
             gender = "female"
-        
+    
+    if not birth_date and cnp and len(cnp) == 13 and cnp.isdigit():
         # Extract birth date
         try:
+            gender_digit = int(cnp[0])
             year_prefix = ""
             if gender_digit in [1, 2]:
                 year_prefix = "19"
