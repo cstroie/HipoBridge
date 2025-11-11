@@ -1146,10 +1146,15 @@ def convert_to_fhir_patient(patient_data: Dict[str, Any], request) -> Dict[str, 
     Returns:
         FHIR Patient resource
     """
-    # Parse patient name if available - first part is family name, rest are given names
-    name_parts = patient_data.get("patient_name", "").split()
-    family_name = name_parts[0] if len(name_parts) > 0 else ""
-    given_names = name_parts[1:] if len(name_parts) > 1 else []
+    # Use already extracted family name and given name if available
+    family_name = patient_data.get("family_name", "")
+    given_names = [patient_data.get("given_name", "")] if patient_data.get("given_name") else []
+    
+    # Fallback to parsing from full name if family/given names are not available
+    if not family_name and not given_names:
+        name_parts = patient_data.get("patient_name", "").split()
+        family_name = name_parts[0] if len(name_parts) > 0 else ""
+        given_names = name_parts[1:] if len(name_parts) > 1 else []
     
     # Extract gender and birth date from CNP if available
     gender = "unknown"
