@@ -1711,6 +1711,114 @@ async def fhir_observation_search(request):
             "message": str(e)
         }, status=500)
 
+def parse_cnp(cnp: str) -> Dict[str, Any]:
+    """Parse a Romanian CNP (Personal Numerical Code) and extract meaningful data.
+    
+    Extracts gender, birth date, county, and other information from a valid CNP.
+    
+    Args:
+        cnp (str): The CNP to parse
+        
+    Returns:
+        Dict[str, Any]: Dictionary with parsed data including:
+            - valid: bool - whether the CNP is valid
+            - gender: str - male/female
+            - birth_date: str - ISO format date (YYYY-MM-DD)
+            - county_code: int - county code
+            - county_name: str - county name
+            - serial: str - serial number
+            - control_digit: int - control digit
+    """
+    # Check if CNP is exactly 13 digits
+    if not cnp or len(cnp) != 13 or not cnp.isdigit():
+        return {"valid": False}
+    
+    # Extract components
+    gender_digit = int(cnp[0])
+    year = int(cnp[1:3])
+    month = int(cnp[3:5])
+    day = int(cnp[5:7])
+    county_code = int(cnp[7:9])
+    serial = cnp[9:12]
+    control_digit = int(cnp[12])
+    
+    # County codes mapping
+    county_names = {
+        1: "Alba", 2: "Arad", 3: "Argeș", 4: "Bacău", 5: "Bihor", 6: "Bistrița-Năsăud",
+        7: "Botoșani", 8: "Brașov", 9: "Brăila", 10: "Buzău", 11: "Caraș-Severin",
+        12: "Cluj", 13: "Constanța", 14: "Covasna", 15: "Dâmbovița", 16: "Dolj",
+        17: "Galați", 18: "Gorj", 19: "Harghita", 20: "Hunedoara", 21: "Ialomița",
+        22: "Iași", 23: "Ilfov", 24: "Maramureș", 25: "Mehedinți", 26: "Mureș",
+        27: "Neamț", 28: "Olt", 29: "Prahova", 30: "Satu Mare", 31: "Sălaj",
+        32: "Sibiu", 33: "Suceava", 34: "Teleorman", 35: "Timiș", 36: "Tulcea",
+        37: "Vaslui", 38: "Vâlcea", 39: "Vrancea", 40: "București", 41: "București",
+        42: "București", 43: "București", 44: "București", 45: "București", 46: "București",
+        51: "Călărași", 52: "Giurgiu",
+        70: "Diaspora", 71: "Diaspora", 72: "Diaspora", 73: "Diaspora", 74: "Diaspora",
+        75: "Diaspora", 76: "Diaspora", 77: "Diaspora", 78: "Diaspora", 79: "Diaspora",
+        90: "Special", 91: "Special", 92: "Special", 93: "Special", 94: "Special",
+        95: "Special", 96: "Special", 97: "Special", 98: "Special", 99: "Special"
+    }
+    
+    # Validate gender digit (1-8 are valid)
+    if gender_digit < 1 or gender_digit > 8:
+        return {"valid": False}
+    
+    # Validate month (1-12)
+    if month < 1 or month > 12:
+        return {"valid": False}
+    
+    # Validate day (1-31)
+    if day < 1 or day > 31:
+        return {"valid": False}
+    
+    # Validate county code (1-52, excluding 47-50, plus 70-79 for diaspora, 90-99 for special cases)
+    if not ((1 <= county_code <= 52 and not (47 <= county_code <= 50)) or 
+            (70 <= county_code <= 79) or 
+            (90 <= county_code <= 99)):
+        return {"valid": False}
+    
+    # Validate date by trying to create a datetime object
+    try:
+        # Determine century based on gender digit
+        if gender_digit in [1, 2]:
+            full_year = 1900 + year
+        elif gender_digit in [3, 4]:
+            full_year = 1800 + year
+        elif gender_digit in [5, 6]:
+            full_year = 2000 + year
+        else:  # 7, 8
+            full_year = 2000 + year  # For people born after 2000
+        
+        # Check if date is valid
+        birth_date = datetime(full_year, month, day)
+    except ValueError:
+        return {"valid": False}
+    
+    # Validate control digit using checksum
+    weights = [2, 7, 9, 1, 4, 6, 3, 5, 8, 2, 7, 9]
+    checksum = sum(int(cnp[i]) * weights[i] for i in range(12)) % 11
+    calculated_control_digit = 1 if checksum == 10 else checksum
+    
+    if calculated_control_digit != control_digit:
+        return {"valid": False}
+    
+    # Determine gender
+    gender = "male" if gender_digit in [1, 3, 5, 7] else "female"
+    
+    # Get county name
+    county_name = county_names.get(county_code, "Unknown")
+    
+    return {
+        "valid": True,
+        "gender": gender,
+        "birth_date": birth_date.strftime('%Y-%m-%d'),
+        "county_code": county_code,
+        "county_name": county_name,
+        "serial": serial,
+        "control_digit": control_digit
+    }
+
 def validate_cnp(cnp: str) -> bool:
     """Validate a Romanian CNP (Personal Numerical Code).
     
@@ -1727,69 +1835,19 @@ def validate_cnp(cnp: str) -> bool:
     Returns:
         bool: True if CNP is valid, False otherwise
     """
-    # Check if CNP is exactly 13 digits
-    if not cnp or len(cnp) != 13 or not cnp.isdigit():
-        return False
-    
-    # Extract components
-    gender_digit = int(cnp[0])
-    year = int(cnp[1:3])
-    month = int(cnp[3:5])
-    day = int(cnp[5:7])
-    county_code = int(cnp[7:9])
-    
-    # Validate gender digit (1-8 are valid)
-    if gender_digit < 1 or gender_digit > 8:
-        return False
-    
-    # Validate month (1-12)
-    if month < 1 or month > 12:
-        return False
-    
-    # Validate day (1-31)
-    if day < 1 or day > 31:
-        return False
-    
-    # Validate county code (1-52, excluding 47-50, plus 70-79 for diaspora, 90-99 for special cases)
-    if not ((1 <= county_code <= 52 and not (47 <= county_code <= 50)) or 
-            (70 <= county_code <= 79) or 
-            (90 <= county_code <= 99)):
-        return False
-    
-    # Validate date by trying to create a datetime object
-    try:
-        # Determine century based on gender digit
-        if gender_digit in [1, 2]:
-            full_year = 1900 + year
-        elif gender_digit in [3, 4]:
-            full_year = 1800 + year
-        elif gender_digit in [5, 6]:
-            full_year = 2000 + year
-        else:  # 7, 8
-            full_year = 2000 + year  # For people born after 2000
-        
-        # Check if date is valid
-        datetime(full_year, month, day)
-    except ValueError:
-        return False
-    
-    # Validate control digit using checksum
-    weights = [2, 7, 9, 1, 4, 6, 3, 5, 8, 2, 7, 9]
-    checksum = sum(int(cnp[i]) * weights[i] for i in range(12)) % 11
-    control_digit = 1 if checksum == 10 else checksum
-    
-    return control_digit == int(cnp[12])
+    parsed_data = parse_cnp(cnp)
+    return parsed_data.get("valid", False)
 
 async def fhir_cnp_validate(request):
     """Validate a Romanian CNP (Personal Numerical Code).
     
-    Validates a Romanian CNP using the internal validation algorithm.
+    Validates a Romanian CNP using the internal validation algorithm and returns parsed data.
     
     Args:
         request: The incoming HTTP request with 'id' query parameter for CNP
         
     Returns:
-        web.Response: JSON response with validation result
+        web.Response: JSON response with validation result and parsed data
     """
     logger.info("GET /fhir/ValueSet/cnp endpoint accessed")
     
@@ -1805,14 +1863,27 @@ async def fhir_cnp_validate(request):
     
     logger.info(f"Validating CNP: {cnp}")
     
-    # Validate CNP
-    is_valid = validate_cnp(cnp)
+    # Parse CNP to get detailed information
+    parsed_data = parse_cnp(cnp)
     
-    return web.json_response({
+    response_data = {
         "status": "success",
         "cnp": cnp,
-        "valid": is_valid
-    })
+        "valid": parsed_data.get("valid", False)
+    }
+    
+    # Add parsed data if valid
+    if parsed_data.get("valid"):
+        response_data.update({
+            "gender": parsed_data.get("gender"),
+            "birth_date": parsed_data.get("birth_date"),
+            "county_code": parsed_data.get("county_code"),
+            "county_name": parsed_data.get("county_name"),
+            "serial": parsed_data.get("serial"),
+            "control_digit": parsed_data.get("control_digit")
+        })
+    
+    return web.json_response(response_data)
 
 def markdown_to_html(markdown_text: str) -> str:
     """Convert simple markdown to basic HTML.
