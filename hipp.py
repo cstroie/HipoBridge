@@ -1083,6 +1083,19 @@ def parse_single_patient_data(html_content: str) -> Dict[str, Any]:
             except Exception:
                 pass  # Keep birth_date empty if parsing fails
         
+        # If we couldn't derive birth date from CNP, try to get it from strDataNastere input
+        if not patient_data.get("birth_date"):
+            birth_date_input = soup.find('input', id='strDataNastere', type='text')
+            if birth_date_input:
+                birth_date_value = birth_date_input.get('value', '').strip()
+                # Convert DD/MM/YYYY format to YYYY-MM-DD
+                if birth_date_value and re.match(r'\d{2}/\d{2}/\d{4}', birth_date_value):
+                    try:
+                        day, month, year = birth_date_value.split('/')
+                        patient_data["birth_date"] = f"{year}-{month}-{day}"
+                    except Exception:
+                        pass  # Keep birth_date empty if parsing fails
+        
         # Extract presentations
         presentations = []
         presentation_links = soup.find_all('a', href=re.compile(r'../files/presentation\.asp\?id='))
