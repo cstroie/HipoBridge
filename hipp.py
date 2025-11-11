@@ -1,4 +1,45 @@
 #!/usr/bin/env python3
+"""
+HippoBridge - FHIR Bridge for Hipocrate Medical System
+
+This application provides a FHIR-compatible API bridge to access patient data 
+from the Hipocrate medical system. It exposes endpoints for patient search, 
+retrieval, observations, diagnostic reports, and encounters.
+
+Key Features:
+- FHIR-compatible REST API
+- Patient search by name, CNP, or patient code
+- Patient data retrieval with checkin/checkout IDs
+- Observation (analysis) listing and details
+- Diagnostic report retrieval with redirect handling
+- Encounter (checkout) information
+- CNP validation and parsing
+- Web interface for patient analysis
+- Configuration via file with environment variable overrides
+
+Endpoints:
+- GET / - Web interface for patient analysis
+- GET /fhir/Patient - Search patients
+- GET /fhir/Patient/{id} - Get patient details
+- GET /fhir/Observation - List patient observations
+- GET /fhir/Observation/{id} - Get observation details
+- GET /fhir/DiagnosticReport - Get diagnostic report
+- GET /fhir/Encounter - Get encounter (checkout) information
+- GET /fhir/ValueSet/cnp - Validate Romanian CNP
+- POST /fhir/login - Authenticate with Hipocrate system
+- POST /fhir/md2html - Convert markdown to HTML
+- GET /fhir/CodeSystem/analysis-types - Get analysis types terminology
+- GET /fhir/spec - Get OpenAPI specification
+
+Configuration:
+- Server settings (host, port) in hipp.cfg
+- Hipocrate service URL in hipp.cfg
+- Credentials via HYP_USER and HYP_PASS environment variables
+- Local overrides in local.cfg (optional)
+
+Author: [Author Name]
+Version: 1.0.0
+"""
 import os
 import asyncio
 import aiohttp
