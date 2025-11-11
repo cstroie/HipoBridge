@@ -1427,9 +1427,9 @@ async def fhir_encounter_read(request):
         }, status=500)
 
 def parse_analyses_data(html_content: str) -> Dict[str, Any]:
-    """Parse HTML analyses content and extract report IDs, analysis types, patient name, and patient code.
+    """Parse HTML analyses content and extract analysis IDs, analysis types, patient name, and patient code.
     
-    Extracts patient name, patient code, and list of analyses with their types and report IDs
+    Extracts patient name, patient code, and list of analyses with their types and analysis IDs
     from the analyses HTML page.
     
     Args:
@@ -1474,38 +1474,38 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
                     result["patient_id"] = cnp_text
                     break
         
-        # Find all links to analysis reports
-        report_links = soup.find_all('a', href=re.compile(r'../analyse/Reports/analyseFile\.asp\?id=\d+'))
+        # Find all links to analysis analysis
+        analysis_links = soup.find_all('a', href=re.compile(r'../analyse/Reports/analyseFile\.asp\?id=\d+'))
         
-        for link in report_links:
-            # Extract report ID
+        for link in analysis_links:
+            # Extract analysis ID
             href = link.get('href', '')
             id_match = re.search(r'id=(\d+)', href)
             if not id_match:
                 continue
             
-            report_id = id_match.group(1)
+            analysis_id = id_match.group(1)
             
             # Find the parent table row
             parent_row = link.find_parent('tr')
             if not parent_row:
                 # If no parent row, just add the ID without type
                 result["analyses"].append({
-                    "report_id": report_id,
+                    "analysis_id": analysis_id,
                     "type": "unknown"
                 })
                 continue
             
             # Extract information from table cells
             analysis_data = {
-                "report_id": report_id,
+                "analysis_id": analysis_id,
                 "type": "unknown"
             }
             
             cells = parent_row.find_all('td')
             if len(cells) >= 8:
-                # Cell 0: Report link (already processed)
-                # Cell 1: Checkbox (ignore)
+                # Cell 0: Checkbox (ignore)
+                # Cell 1: Report link (already processed)
                 # Cell 2: Barcode (ignore)
                 # Cell 3: Checkin code
                 checkin_link = cells[3].find('a', href=re.compile(r'/files/checkin\.asp\?id=\d+'))
