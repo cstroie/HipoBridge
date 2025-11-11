@@ -2084,53 +2084,93 @@ async def fhir_analysis_types(request):
         "concept": [
             {
                 "code": "radio",
-                "display": "Radiology",
-                "definition": "Radiology/X-ray examinations"
+                "display": ANALYSIS_TYPES["radio"]["display"],
+                "definition": ANALYSIS_TYPES["radio"]["definition"]
             },
             {
                 "code": "ct",
-                "display": "CT Scan",
-                "definition": "Computed Tomography scans"
+                "display": ANALYSIS_TYPES["ct"]["display"],
+                "definition": ANALYSIS_TYPES["ct"]["definition"]
             },
             {
                 "code": "irm",
-                "display": "MRI",
-                "definition": "Magnetic Resonance Imaging"
+                "display": ANALYSIS_TYPES["irm"]["display"],
+                "definition": ANALYSIS_TYPES["irm"]["definition"]
             },
             {
                 "code": "eco",
-                "display": "Ultrasound",
-                "definition": "Echography/Ultrasound examinations"
+                "display": ANALYSIS_TYPES["eco"]["display"],
+                "definition": ANALYSIS_TYPES["eco"]["definition"]
             },
             {
                 "code": "lab",
-                "display": "Laboratory",
-                "definition": "Laboratory tests"
+                "display": ANALYSIS_TYPES["lab"]["display"],
+                "definition": ANALYSIS_TYPES["lab"]["definition"]
             },
             {
                 "code": "LAC",
-                "display": "Angiography and Cardiac Catheterization",
-                "definition": "Angiography and Cardiac Catheterization procedures"
+                "display": ANALYSIS_TYPES["LAC"]["display"],
+                "definition": ANALYSIS_TYPES["LAC"]["definition"]
             },
             {
                 "code": "LII",
-                "display": "Interventional Radiology",
-                "definition": "Interventional Radiology procedures"
+                "display": ANALYSIS_TYPES["LII"]["display"],
+                "definition": ANALYSIS_TYPES["LII"]["definition"]
             },
             {
                 "code": "rads",
-                "display": "Fluoroscopy and CEUS",
-                "definition": "Fluoroscopy and Contrast-Enhanced Ultrasound procedures"
+                "display": ANALYSIS_TYPES["rads"]["display"],
+                "definition": ANALYSIS_TYPES["rads"]["definition"]
             },
             {
                 "code": "APA",
-                "display": "Anatomopathology",
-                "definition": "Anatomopathology examinations"
+                "display": ANALYSIS_TYPES["APA"]["display"],
+                "definition": ANALYSIS_TYPES["APA"]["definition"]
             }
         ]
     }
     
     return web.json_response(code_system)
+
+# Analysis types dictionary for reuse across functions
+ANALYSIS_TYPES = {
+    "radio": {
+        "display": "Radiology",
+        "definition": "Radiology/X-ray examinations"
+    },
+    "ct": {
+        "display": "CT Scan",
+        "definition": "Computed Tomography scans"
+    },
+    "irm": {
+        "display": "MRI",
+        "definition": "Magnetic Resonance Imaging"
+    },
+    "eco": {
+        "display": "Ultrasound",
+        "definition": "Echography/Ultrasound examinations"
+    },
+    "lab": {
+        "display": "Laboratory",
+        "definition": "Laboratory tests"
+    },
+    "LAC": {
+        "display": "Angiography and Cardiac Catheterization",
+        "definition": "Angiography and Cardiac Catheterization procedures"
+    },
+    "LII": {
+        "display": "Interventional Radiology",
+        "definition": "Interventional Radiology procedures"
+    },
+    "rads": {
+        "display": "Fluoroscopy and CEUS",
+        "definition": "Fluoroscopy and Contrast-Enhanced Ultrasound procedures"
+    },
+    "APA": {
+        "display": "Anatomopathology",
+        "definition": "Anatomopathology examinations"
+    }
+}
 
 async def fhir_specification(request):
     """Serve the OpenAPI specification.
