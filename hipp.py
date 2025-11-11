@@ -153,39 +153,6 @@ session: Optional[aiohttp.ClientSession] = None
 cnp_cache: Dict[str, str] = {}
 cache_max_size = 1000  # Maximum number of entries to cache
 
-def extract_field_from_td(soup: BeautifulSoup, label_regex: str) -> str:
-    """Extract field data from a table cell containing a label.
-    
-    Args:
-        soup: BeautifulSoup object of the parsed HTML content
-        label_regex: Regular expression pattern to match label text
-        
-    Returns:
-        Extracted field content or empty string if not found
-    """
-    try:
-        # Look for the table cell containing this label
-        label_element = soup.find(string=re.compile(label_regex, re.IGNORECASE))
-        if label_element:
-            # Find the parent td element
-            parent_td = label_element.find_parent('td')
-            if parent_td:
-                # Extract text content from the same td and clean it
-                # Remove the label part and get the rest
-                td_text = parent_td.get_text(separator=' ', strip=True)
-                # Find the label in the text and extract everything after it
-                match = re.search(label_regex, td_text, re.IGNORECASE)
-                if match:
-                    # Get the position after the matched label
-                    label_end = match.end()
-                    # Extract the content after the label
-                    content = td_text[label_end:].strip()
-                    return content
-        return ""
-    except Exception as e:
-        logger.error(f"Error extracting field with label '{label_regex}': {e}")
-        return ""
-
 def create_error_response(message: str, status_code: int = 400, details: Dict[str, Any] = None) -> web.Response:
     """Create a standardized error response.
     
@@ -844,6 +811,39 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
         Dictionary containing parsed report data
     """
     
+    def extract_field_from_td(soup: BeautifulSoup, label_regex: str) -> str:
+        """Extract field data from a table cell containing a label.
+        
+        Args:
+            soup: BeautifulSoup object of the parsed HTML content
+            label_regex: Regular expression pattern to match label text
+            
+        Returns:
+            Extracted field content or empty string if not found
+        """
+        try:
+            # Look for the table cell containing this label
+            label_element = soup.find(string=re.compile(label_regex, re.IGNORECASE))
+            if label_element:
+                # Find the parent td element
+                parent_td = label_element.find_parent('td')
+                if parent_td:
+                    # Extract text content from the same td and clean it
+                    # Remove the label part and get the rest
+                    td_text = parent_td.get_text(separator=' ', strip=True)
+                    # Find the label in the text and extract everything after it
+                    match = re.search(label_regex, td_text, re.IGNORECASE)
+                    if match:
+                        # Get the position after the matched label
+                        label_end = match.end()
+                        # Extract the content after the label
+                        content = td_text[label_end:].strip()
+                        return content
+            return ""
+        except Exception as e:
+            logger.error(f"Error extracting field with label '{label_regex}': {e}")
+            return ""
+
     try:
         # First convert HTML entities to their characters
         html_content = html.unescape(html_content)
@@ -862,7 +862,7 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
             "time": "",
             "examination": "",
             "reports": [],
-            "examiner": ""
+            "performer": ""
         }
         
         # Extract text content for pattern matching
@@ -902,7 +902,6 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
         datetime_match = re.search(r'(?:Data si ora recoltarii:|Data investigatiei:)\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
         if datetime_match:
             datetime_str = re.sub(r'\s+', ' ', datetime_match.group(1).strip())
-            
             # Try to parse date and time
             try:
                 # Handle common date formats
@@ -913,12 +912,24 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
             except ValueError:
                 # If parsing fails, leave date/time fields empty
                 pass
-            report_data["datetime"] = dt
+            report_data["datetime"] = dt.isoformat()
         
-        # Extract examination
-        exam_match = re.search(r'EXAMINARE EFECTUATA:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
-        if exam_match:
-            report_data["examination"] = re.sub(r'\s+', ' ', exam_match.group(1).strip())
+        # Extract fields using the helper function
+        report_data["examination"] = extract_field_from_td(soup, r'EXAMINARE EFECTUATA:')
+        report_data["referral_reason"] = extract_field_from_td(soup, r'DIAGNOSTIC DE TRIMITERE:')
+        report_data["presumptive_diagnosis"] = extract_field_from_td(soup, r'DG\.PREZUMTIV:')
+        report_data["special_indications"] = extract_field_from_td(soup, r'INDICATII SPECIALE:')
+        report_data["referring_physician"] = extract_field_from_td(soup, r'TRIMIS DE:\s*MEDIC')
+        
+        # Parse referral code and reason if we have referral data
+        if report_data["referral_reason"]:
+            # Split into code and text - first part numeric is the code, rest is the reason
+            parts = report_data["referral_reason"].split(' ', 1)
+            if parts:
+                # Check if first part is numeric (the code)
+                if parts[0].isdigit():
+                    report_data["referral_code"] = parts[0]
+                    report_data["referral_reason"] = parts[1].strip() if len(parts) > 1 else ""
         
         # Extract multiple reports
         # Find all elements with text starting with "REZULTAT:"
@@ -958,42 +969,26 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
                 logger.error(f"Error parsing individual report: {e}")
                 continue
         
-        # Extract examiner (MEDIC, or Medic validator:)
-        # Handle both plain text and HTML formatted examiner names
-        examiner_patterns = [
+        # Extract performer (MEDIC, or Medic validator:)
+        # Handle both plain text and HTML formatted performer names
+        performer_patterns = [
             r'(?:MEDIC,|Medic validator:)\s*([^\n\r<>&]+)',
             r'(?:MEDIC,|Medic validator:)\s*<b[^>]*>([^<]+)</b>',
             r'(?:MEDIC,|Medic validator:)[^>]*>\s*([^\n\r<>&]+)'
         ]
         
-        examiner_name = ""
-        for pattern in examiner_patterns:
-            examiner_match = re.search(pattern, html_content, re.IGNORECASE)
-            if examiner_match:
-                examiner_name = examiner_match.group(1).strip()
+        performer_name = ""
+        for pattern in performer_patterns:
+            performer_match = re.search(pattern, html_content, re.IGNORECASE)
+            if performer_match:
+                performer_name = performer_match.group(1).strip()
                 # Clean up HTML entities and extra whitespace
-                examiner_name = html.unescape(examiner_name)
-                examiner_name = re.sub(r'\s+', ' ', examiner_name)
+                performer_name = html.unescape(performer_name)
+                performer_name = re.sub(r'\s+', ' ', performer_name)
                 break
         
-        if examiner_name:
-            report_data["examiner"] = examiner_name
-        
-        # Extract fields using the helper function
-        report_data["referral_reason"] = extract_field_from_td(soup, r'DIAGNOSTIC DE TRIMITERE:')
-        report_data["presumptive_diagnosis"] = extract_field_from_td(soup, r'DG\.PREZUMTIV:')
-        report_data["special_indications"] = extract_field_from_td(soup, r'INDICATII SPECIALE:')
-        report_data["referring_physician"] = extract_field_from_td(soup, r'TRIMIS DE:\s*MEDIC')
-        
-        # Parse referral code and reason if we have referral data
-        if report_data["referral_reason"]:
-            # Split into code and text - first part numeric is the code, rest is the reason
-            parts = report_data["referral_reason"].split(' ', 1)
-            if parts:
-                # Check if first part is numeric (the code)
-                if parts[0].isdigit():
-                    report_data["referral_code"] = parts[0]
-                    report_data["referral_reason"] = parts[1].strip() if len(parts) > 1 else ""
+        if performer_name:
+            report_data["performer"] = performer_name
         
         print(report_data)
 
@@ -1565,7 +1560,7 @@ async def fhir_encounter_read(request):
         }
         
         # Add performer if available
-        if parsed_data.get("examiner"):
+        if parsed_data.get("performer"):
             fhir_encounter["participant"].append({
                 "type": [
                     {
@@ -1579,7 +1574,7 @@ async def fhir_encounter_read(request):
                     }
                 ],
                 "individual": {
-                    "display": parsed_data["examiner"]
+                    "display": parsed_data["performer"]
                 }
             })
         
@@ -1970,10 +1965,10 @@ async def fhir_observation_read(request):
             fhir_observation["effectiveDateTime"] = report_data["datetime"]
         
         # Add performer if available
-        if report_data.get("examiner"):
+        if report_data.get("performer"):
             fhir_observation["performer"] = [
                 {
-                    "display": report_data["examiner"]
+                    "display": report_data["performer"]
                 }
             ]
         
@@ -3349,10 +3344,10 @@ async def fhir_diagnostic_report_read(request):
                         fhir_report["effectiveDateTime"] = parsed_data["datetime"]
                     
                     # Add performer if available
-                    if parsed_data.get("examiner"):
+                    if parsed_data.get("performer"):
                         fhir_report["performer"] = [
                             {
-                                "display": parsed_data["examiner"]
+                                "display": parsed_data["performer"]
                             }
                         ]
                     
