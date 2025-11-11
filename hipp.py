@@ -279,7 +279,11 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
                 logger.debug(f"GET response status: {response.status}")
         else:  # POST
             logger.debug(f"Making POST request to: {url}")
-            async with session.post(url, data=data, headers=HEADERS) as response:
+            # For POST requests, we need to be careful about Content-Type headers
+            # Create a copy of headers without Content-Type to avoid conflicts
+            post_headers = HEADERS.copy()
+            post_headers.pop("Content-Type", None)  # Remove Content-Type if present
+            async with session.post(url, data=data, headers=post_headers) as response:
                 response_text = await _handle_response_encoding(response)
                 logger.debug(f"POST response status: {response.status}")
         
@@ -294,7 +298,10 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
                         response_text = await _handle_response_encoding(retry_response)
                         logger.debug(f"Retry GET response status: {retry_response.status}")
                 else:  # POST
-                    async with session.post(url, data=data, headers=HEADERS) as retry_response:
+                    # For retry POST requests, also remove Content-Type from headers
+                    post_headers = HEADERS.copy()
+                    post_headers.pop("Content-Type", None)  # Remove Content-Type if present
+                    async with session.post(url, data=data, headers=post_headers) as retry_response:
                         response_text = await _handle_response_encoding(retry_response)
                         logger.debug(f"Retry POST response status: {retry_response.status}")
                 
