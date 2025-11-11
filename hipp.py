@@ -550,8 +550,8 @@ async def fhir_patient_search(request):
             for patient in multiple_patients_data:
                 # Create minimal FHIR patient resource for each
                 name_parts = patient.get("patient_name", "").split()
-                given_names = name_parts[:-1] if len(name_parts) > 1 else name_parts
-                family_name = name_parts[-1] if len(name_parts) > 1 else ""
+                family_name = name_parts[0] if len(name_parts) > 0 else ""
+                given_names = name_parts[1:] if len(name_parts) > 1 else []
                 
                 fhir_patient = {
                     "resourceType": "Patient",
