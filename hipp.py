@@ -1563,10 +1563,10 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
                     try:
                         # Handle common date formats like "07 Nov 2025 10:29:00"
                         from datetime import datetime
-                        import re
+                        import re as regex_module
                     
                         # Match format like "07 Nov 2025 10:29:00"
-                        match = re.match(r'(\d{2}) (\w{3}) (\d{4}) (\d{2}:\d{2}:\d{2})', date_text)
+                        match = regex_module.match(r'(\d{2}) (\w{3}) (\d{4}) (\d{2}:\d{2}:\d{2})', date_text)
                         if match:
                             day, month_abbr, year, time_part = match.groups()
                             # Convert month abbreviation to number
