@@ -128,12 +128,12 @@ def create_error_response(message: str, status_code: int = 400, details: Dict[st
     """Create a standardized error response.
     
     Args:
-        message (str): Error message
-        status_code (int): HTTP status code (default: 400)
-        details (Dict[str, Any], optional): Additional error details
+        message: Error message
+        status_code: HTTP status code (default: 400)
+        details: Additional error details
         
     Returns:
-        web.Response: Standardized JSON error response
+        Standardized JSON error response
     """
     response_data = {
         "status": "error",
@@ -164,7 +164,7 @@ async def root_handler(request):
         request: The incoming HTTP request
         
     Returns:
-        web.Response: HTML response with the web interface
+        HTML response with the web interface
     """
     logger.info("Root endpoint accessed")
     
@@ -180,10 +180,10 @@ def is_login_page(content: str) -> bool:
     Checks for specific text patterns that indicate we're on the login page.
     
     Args:
-        content (str): HTML content to check
+        content: HTML content to check
         
     Returns:
-        bool: True if content appears to be a login page, False otherwise
+        True if content appears to be a login page, False otherwise
     """
     is_login = "RECUPERARE PAROLA" in content and "Username" in content and "Password" in content
     if is_login:
@@ -197,11 +197,11 @@ async def login_if_needed(username: str = None, password: str = None) -> bool:
     using the provided or environment credentials.
     
     Args:
-        username (str, optional): Username for login. Defaults to environment variable.
-        password (str, optional): Password for login. Defaults to environment variable.
+        username: Username for login. Defaults to environment variable.
+        password: Password for login. Defaults to environment variable.
         
     Returns:
-        bool: True if login was successful or not needed, False otherwise
+        True if login was successful or not needed, False otherwise
     """
     logger.info("Attempting login if needed")
     
@@ -299,7 +299,7 @@ async def fhir_login(request):
         request: The incoming HTTP request with JSON body containing username and password
         
     Returns:
-        web.Response: JSON response indicating login success or failure
+        JSON response indicating login success or failure
     """
     logger.info("POST /fhir/login endpoint accessed")
     
@@ -338,14 +338,14 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
     
     Args:
         session: The aiohttp session to use
-        url (str): The URL to request
-        method (str): HTTP method ("GET" or "POST")
-        data (dict, optional): Data to send with POST requests
-        username (str, optional): Username for login if needed
-        password (str, optional): Password for login if needed
+        url: The URL to request
+        method: HTTP method ("GET" or "POST")
+        data: Data to send with POST requests
+        username: Username for login if needed
+        password: Password for login if needed
         
     Returns:
-        tuple: (response_text, success, error_response) where success is boolean
+        Tuple of (response_text, success, error_response) where success is boolean
     """
     try:
         # Log current cookies before request
@@ -433,7 +433,7 @@ async def _handle_response_encoding(response):
         response: The aiohttp response object
         
     Returns:
-        str: Decoded response text
+        Decoded response text
     """
     try:
         response_text = await response.text()
@@ -458,7 +458,7 @@ async def fhir_patient_search(request):
                  and optional X-Username and X-Password headers for authentication
         
     Returns:
-        web.Response: JSON response with search results or error information
+        JSON response with search results or error information
     """
     logger.info("GET /fhir/Patient endpoint accessed")
     
@@ -649,10 +649,10 @@ def html_to_markdown(html_content: str) -> str:
     elements to markdown syntax, and normalizing whitespace.
     
     Args:
-        html_content (str): HTML content to convert
+        html_content: HTML content to convert
         
     Returns:
-        str: Clean markdown text
+        Clean markdown text
     """
     
     try:
@@ -760,11 +760,11 @@ def get_textarea_content_after_label(soup: 'BeautifulSoup', label_regex: str) ->
     of the first textarea element that follows it.
     
     Args:
-        soup (BeautifulSoup): Parsed HTML content
-        label_regex (str): Regular expression pattern to match label text
+        soup: Parsed HTML content
+        label_regex: Regular expression pattern to match label text
         
     Returns:
-        str: Content of the textarea converted to markdown, or empty string if not found
+        Content of the textarea converted to markdown, or empty string if not found
     """
     import re
     
@@ -791,10 +791,10 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
     from HTML report content.
     
     Args:
-        html_content (str): HTML content of the report
+        html_content: HTML content of the report
         
     Returns:
-        Dict[str, Any]: Dictionary containing parsed report data
+        Dictionary containing parsed report data
     """
     
     try:
@@ -947,10 +947,10 @@ def parse_single_patient_data(html_content: str) -> Dict[str, Any]:
     from a single patient page HTML content.
     
     Args:
-        html_content (str): HTML content of the single patient page
+        html_content: HTML content of the single patient page
         
     Returns:
-        Dict[str, Any]: Dictionary containing parsed patient data, or empty dict if not a patient page
+        Dictionary containing parsed patient data, or empty dict if not a patient page
     """
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
@@ -1027,11 +1027,11 @@ def convert_to_fhir_patient(patient_data: Dict[str, Any], request) -> Dict[str, 
     """Convert patient data to FHIR Patient resource format.
     
     Args:
-        patient_data (Dict[str, Any]): Patient data from parse_single_patient_data
+        patient_data: Patient data from parse_single_patient_data
         request: The HTTP request object to get the host
         
     Returns:
-        Dict[str, Any]: FHIR Patient resource
+        FHIR Patient resource
     """
     # Parse patient name if available - first part is family name, rest are given names
     name_parts = patient_data.get("patient_name", "").split()
@@ -1112,10 +1112,10 @@ def parse_multiple_patients_data(html_content: str) -> List[Dict[str, Any]]:
     Extracts patient names, CNP, and codes from search results page with multiple patients.
     
     Args:
-        html_content (str): HTML content of the search results page
+        html_content: HTML content of the search results page
         
     Returns:
-        List[Dict[str, Any]]: List of dictionaries containing patient data (name, CNP, code only)
+        List of dictionaries containing patient data (name, CNP, code only)
     """
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
@@ -1187,10 +1187,10 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
     Extracts patient information and medical data from checkout HTML content.
     
     Args:
-        html_content (str): HTML content of the checkout page
+        html_content: HTML content of the checkout page
         
     Returns:
-        Dict[str, Any]: Dictionary containing parsed checkout data
+        Dictionary containing parsed checkout data
     """
     import re
     from bs4 import BeautifulSoup
@@ -1264,7 +1264,7 @@ async def fhir_patient_read(request):
                  and optional X-Username and X-Password headers for authentication
         
     Returns:
-        web.Response: JSON response with patient data or error information
+        JSON response with patient data or error information
     """
     patient_id = request.match_info.get('id')
     logger.info(f"GET /fhir/Patient/{patient_id} endpoint accessed")
@@ -1359,7 +1359,7 @@ async def fhir_encounter_read(request):
                  and optional X-Username and X-Password headers for authentication
         
     Returns:
-        web.Response: JSON response with encounter data or error information
+        JSON response with encounter data or error information
     """
     encounter_id = request.query.get('identifier')
     logger.info(f"GET /fhir/Encounter endpoint accessed with identifier: {encounter_id}")
@@ -1494,10 +1494,10 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
     from the analyses HTML page.
     
     Args:
-        html_content (str): HTML content of the analyses page
+        html_content: HTML content of the analyses page
         
     Returns:
-        Dict[str, Any]: Dictionary containing patient name, patient code, and list of analyses
+        Dictionary containing patient name, patient code, and list of analyses
     """
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
@@ -1641,7 +1641,7 @@ async def fhir_observation_search(request):
                  and optional X-Username and X-Password headers for authentication
         
     Returns:
-        web.Response: JSON response with observations data or error information
+        JSON response with observations data or error information
     """
     patient_id = request.query.get('patient')
     logger.info(f"GET /fhir/Observation endpoint accessed for patient: {patient_id}")
@@ -1751,7 +1751,7 @@ async def fhir_observation_read(request):
                  and optional X-Username and X-Password headers for authentication
         
     Returns:
-        web.Response: JSON response with observation data or error information
+        JSON response with observation data or error information
     """
     observation_id = request.match_info.get('id')
     logger.info(f"GET /fhir/Observation/{observation_id} endpoint accessed")
@@ -1852,10 +1852,10 @@ def parse_cnp(cnp: str) -> Dict[str, Any]:
     Extracts gender, birth date, county, and other information from a valid CNP.
     
     Args:
-        cnp (str): The CNP to parse
+        cnp: The CNP to parse
         
     Returns:
-        Dict[str, Any]: Dictionary with parsed data including:
+        Dictionary with parsed data including:
             - valid: bool - whether the CNP is valid
             - gender: str - male/female
             - birth_date: str - ISO format date (YYYY-MM-DD)
@@ -1965,10 +1965,10 @@ def validate_cnp(cnp: str) -> bool:
     - Control digit using checksum algorithm
     
     Args:
-        cnp (str): The CNP to validate
+        cnp: The CNP to validate
         
     Returns:
-        bool: True if CNP is valid, False otherwise
+        True if CNP is valid, False otherwise
     """
     parsed_data = parse_cnp(cnp)
     return parsed_data.get("valid", False)
@@ -1982,7 +1982,7 @@ async def fhir_cnp_validate(request):
         request: The incoming HTTP request with 'id' query parameter for CNP
         
     Returns:
-        web.Response: JSON response with validation result and parsed data
+        JSON response with validation result and parsed data
     """
     logger.info("GET /fhir/ValueSet/cnp endpoint accessed")
     
@@ -2030,10 +2030,10 @@ def markdown_to_html(markdown_text: str) -> str:
     - Ordered lists (1. item, 2. item, etc.)
     
     Args:
-        markdown_text (str): Markdown text to convert
+        markdown_text: Markdown text to convert
         
     Returns:
-        str: HTML representation of the markdown
+        HTML representation of the markdown
     """
     import re
     
@@ -2082,7 +2082,7 @@ async def fhir_markdown_to_html(request):
         request: The incoming HTTP request with JSON body containing 'text' field
         
     Returns:
-        web.Response: JSON response with HTML content
+        JSON response with HTML content
     """
     logger.info("POST /fhir/md2html endpoint accessed")
     
@@ -2113,7 +2113,7 @@ async def fhir_analysis_types(request):
         request: The incoming HTTP request
         
     Returns:
-        web.Response: JSON response with CodeSystem resource
+        JSON response with CodeSystem resource
     """
     logger.info("GET /fhir/CodeSystem/analysis-types endpoint accessed")
     
@@ -2154,7 +2154,7 @@ async def fhir_specification(request):
         request: The incoming HTTP request
         
     Returns:
-        web.Response: JSON response with OpenAPI specification
+        JSON response with OpenAPI specification
     """
     logger.info("GET /fhir/spec endpoint accessed")
     
@@ -3082,7 +3082,7 @@ async def fhir_diagnostic_report_read(request):
                  and optional X-Username and X-Password headers for authentication
         
     Returns:
-        web.Response: JSON response with diagnostic report data or error information
+        JSON response with diagnostic report data or error information
     """
     report_id = request.query.get('identifier')
     logger.info(f"GET /fhir/DiagnosticReport endpoint accessed with identifier: {report_id}")
@@ -3244,7 +3244,7 @@ async def init_app():
     Sets up routes and application lifecycle handlers.
     
     Returns:
-        web.Application: Configured web application
+        Configured web application
     """
     logger.info("Initializing web application")
     app = web.Application()
