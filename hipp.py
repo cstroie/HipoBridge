@@ -284,10 +284,19 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
             post_headers = HEADERS.copy()
             post_headers.pop("Content-Type", None)  # Remove Content-Type if present
             # When sending form data, let aiohttp set the Content-Type automatically
-            # Pass data as form data (aiohttp will handle encoding)
-            async with session.post(url, data=data, headers=post_headers) as response:
-                response_text = await _handle_response_encoding(response)
-                logger.debug(f"POST response status: {response.status}")
+            # Use FormData to avoid conflicts
+            if data:
+                from aiohttp import FormData
+                form_data = FormData()
+                for key, value in data.items():
+                    form_data.add_field(key, value)
+                async with session.post(url, data=form_data, headers=post_headers) as response:
+                    response_text = await _handle_response_encoding(response)
+                    logger.debug(f"POST response status: {response.status}")
+            else:
+                async with session.post(url, headers=post_headers) as response:
+                    response_text = await _handle_response_encoding(response)
+                    logger.debug(f"POST response status: {response.status}")
         
         # Check if we got redirected to login page (session expired)
         if is_login_page(response_text):
