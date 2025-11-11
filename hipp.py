@@ -981,6 +981,18 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
                 if 'DG.PREZUMTIV:' in td_text:
                     report_data["presumptive_diagnosis"] = td_text.split('DG.PREZUMTIV:', 1)[1].strip()
         
+        # Extract referring physician (TRIMIS DE: MEDIC)
+        # Look for the table cell containing this label
+        referring_label = soup.find(string=re.compile(r'TRIMIS DE:\s*MEDIC', re.IGNORECASE))
+        if referring_label:
+            # Find the parent td element
+            parent_td = referring_label.find_parent('td')
+            if parent_td:
+                # Extract text content from the same td and clean it
+                # Remove the label part and get the rest
+                td_text = parent_td.get_text(separator=' ', strip=True)
+                if 'TRIMIS DE: MEDIC' in td_text:
+                    report_data["referring_physician"] = td_text.split('TRIMIS DE: MEDIC', 1)[1].strip()
 
         print(report_data)
 
