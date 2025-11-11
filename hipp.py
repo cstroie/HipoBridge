@@ -3359,11 +3359,14 @@ async def fhir_diagnostic_report_read(request):
                                 "reference": f"Observation/{report_id}-{i}"
                             })
                         
-                        # Add conclusion from the first report result
+                        # Add full report text from the first report result
                         if parsed_data["reports"]:
                             first_report = parsed_data["reports"][0]
                             if first_report.get("result"):
-                                fhir_report["conclusion"] = first_report["result"]
+                                fhir_report["presentedForm"] = [{
+                                    "contentType": "text/plain",
+                                    "data": first_report["result"]
+                                }]
                     
                     # Add media references placeholder
                     fhir_report["media"] = []
