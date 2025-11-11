@@ -2780,7 +2780,6 @@ async def fhir_diagnostic_report_read(request):
                     
                     # Add media references placeholder
                     fhir_report["media"] = []
-                    print(fhir_report)
                     
                     return web.json_response(fhir_report)
                 
