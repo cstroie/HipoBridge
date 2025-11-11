@@ -1427,16 +1427,16 @@ async def fhir_encounter_read(request):
         }, status=500)
 
 def parse_analyses_data(html_content: str) -> Dict[str, Any]:
-    """Parse HTML analyses content and extract report IDs, analysis types, and patient name.
+    """Parse HTML analyses content and extract report IDs, analysis types, patient name, and patient code.
     
-    Extracts patient name and list of analyses with their types and report IDs
+    Extracts patient name, patient code, and list of analyses with their types and report IDs
     from the analyses HTML page.
     
     Args:
         html_content (str): HTML content of the analyses page
         
     Returns:
-        Dict[str, Any]: Dictionary containing patient name and list of analyses
+        Dict[str, Any]: Dictionary containing patient name, patient code, and list of analyses
     """
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
@@ -1445,18 +1445,24 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
         title = soup.find('title')
         if not title or 'Cereri de Laborator' not in title.get_text():
             logger.warning("Page is not a laboratory requests page")
-            return {"patient_name": "", "analyses": []}
+            return {"patient_name": "", "patient_code": "", "analyses": []}
         
         # Initialize result
         result = {
             "patient_name": "",
+            "patient_code": "",
             "analyses": []
         }
         
-        # Extract patient name from the link pattern
+        # Extract patient name and code from the link pattern
         patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id=\d+'))
         if patient_link:
             result["patient_name"] = patient_link.get_text().strip()
+            # Extract patient code from href
+            href = patient_link.get('href', '')
+            code_match = re.search(r'id=(\d+)', href)
+            if code_match:
+                result["patient_code"] = code_match.group(1)
         
         # Find all links to analysis reports
         report_links = soup.find_all('a', href=re.compile(r'../analyse/Reports/analyseFile\.asp\?id=\d+'))
@@ -1517,7 +1523,7 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
         return result
     except Exception as e:
         logger.error(f"Error parsing analyses data: {e}")
-        return {"patient_name": "", "analyses": []}
+        return {"patient_name": "", "patient_code": "", "analyses": []}
 
 async def fhir_observation_search(request):
     """Retrieve list of observations for a patient by ID.
