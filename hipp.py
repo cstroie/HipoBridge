@@ -643,11 +643,6 @@ async def fhir_patient_search(request):
             }
             return web.json_response(bundle)
         
-        # If we have patient data with an error, return that error
-        if patient_data and patient_data.get("error"):
-            logger.warning(f"Patient searching error: {patient_data['error']}")
-            return create_error_response(patient_data["error"], 404)
-        
         # If neither parser worked, return an error
         logger.warning("Unable to parse patient search results")
         # Log a snippet of the response for debugging
