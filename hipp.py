@@ -1577,26 +1577,7 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
                     else:
                         analysis_data["type"] = "unknown"
                 else:
-                    # If we didn't find the type in the standard format, try to infer from the text
-                    type_text_lower = type_text.lower()
-                    found_type = "unknown"
-                    # Check each known analysis type
-                    for analysis_type in ANALYSIS_TYPES:
-                        if analysis_type in type_text_lower:
-                            found_type = analysis_type
-                            break
-                        # Check for alternative names
-                        elif analysis_type == "radio" and ('radiologie' in type_text_lower):
-                            found_type = "radio"
-                            break
-                        elif analysis_type == "lab" and ('laborator' in type_text_lower):
-                            found_type = "lab"
-                            break
-                        elif analysis_type == "eco" and ('ecografie' in type_text_lower):
-                            found_type = "eco"
-                            break
-                    
-                    analysis_data["type"] = found_type
+                    analysis_data["type"] = "unknown"
                 
                 # Cell 7: Requesting doctor
                 doctor_text = cells[7].get_text().strip()
