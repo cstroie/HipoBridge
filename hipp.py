@@ -964,6 +964,7 @@ def parse_single_patient_data(html_content: str) -> Dict[str, Any]:
         
     Returns:
         Dictionary containing parsed patient data, or empty dict if not a patient page
+        Returns {"error": "Invalid patient code"} if patient name is empty
     """
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
@@ -978,6 +979,11 @@ def parse_single_patient_data(html_content: str) -> Dict[str, Any]:
         patient_name = ""
         if navbar_div:
             patient_name = navbar_div.get_text().strip()
+        
+        # If patient name is empty or null, the patient code is invalid
+        if not patient_name:
+            logger.warning("Patient name is empty, invalid patient code")
+            return {"error": "Invalid patient code"}
         
         # Extract patient ID (CNP) from text input after 'CNP:'
         patient_id = ""
