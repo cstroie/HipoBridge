@@ -960,6 +960,11 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
                 else:
                     report_data["referral_reason"] = referral_text
         
+        # Extract presumptive diagnosis (DG.PREZUMTIV)
+        presumptive_match = re.search(r'DG\.PREZUMTIV:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
+        if presumptive_match:
+            report_data["presumptive_diagnosis"] = presumptive_match.group(1).strip()
+        
         return report_data
     except Exception as e:
         logger.error(f"Error parsing report data: {e}")
