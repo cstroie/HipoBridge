@@ -15,7 +15,7 @@ from datetime import datetime
 # Configure logging
 logging.basicConfig(
     level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s | %(levelname)8s | %(message)s'
 )
 logger = logging.getLogger('HippoBridge')
 
@@ -31,7 +31,7 @@ HYP_PASS = os.getenv("HYP_PASS")
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.5",
+    "Accept-Language": "ro-RO,ro;q=0.5",
     "Accept-Encoding": "gzip, deflate",
     "Connection": "keep-alive",
 }
