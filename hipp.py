@@ -1136,18 +1136,6 @@ async def patient_handler(request):
     username = request.headers.get("X-Username")
     password = request.headers.get("X-Password")
     
-    # Get patient ID from query string
-    patient_id = request.query.get('id')
-    
-    if not patient_id:
-        logger.warning("No patient ID provided")
-        return web.json_response({
-            "status": "error",
-            "message": "Patient ID is required"
-        }, status=400)
-    
-    logger.info(f"Retrieving patient with ID: {patient_id}")
-    
     try:
         session = await get_session()
         
@@ -1421,13 +1409,6 @@ async def analyses_handler(request):
     # Get credentials from request headers (optional)
     username = request.headers.get("X-Username")
     password = request.headers.get("X-Password")
-    
-    if not patient_id:
-        logger.warning("No patient ID provided")
-        return web.json_response({
-            "status": "error",
-            "message": "Patient ID is required"
-        }, status=400)
     
     if not patient_id:
         logger.warning("No patient ID provided")
@@ -2520,13 +2501,6 @@ async def report_handler(request):
     # Get credentials from request headers (optional)
     username = request.headers.get("X-Username")
     password = request.headers.get("X-Password")
-    
-    if not report_id:
-        logger.warning("No report ID provided")
-        return web.json_response({
-            "status": "error",
-            "message": "Report ID is required"
-        }, status=400)
     
     if not report_id:
         logger.warning("No report ID provided")
