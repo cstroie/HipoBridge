@@ -989,8 +989,6 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
         
         if performer_name:
             report_data["performer"] = performer_name
-        
-        print(report_data)
 
         return report_data
     except Exception as e:
@@ -3244,7 +3242,7 @@ async def fhir_diagnostic_report_read(request):
     Returns:
         JSON response with diagnostic report data or error information
     """
-    report_id = request.query.get('identifier')
+    report_id = request.match_info.get('id')
     logger.info(f"GET /fhir/DiagnosticReport endpoint accessed with identifier: {report_id}")
     
     # Get credentials from request headers (optional)
@@ -3341,7 +3339,7 @@ async def fhir_diagnostic_report_read(request):
                     
                     # Add effective date if available
                     if parsed_data.get("datetime"):
-                        fhir_report["effectiveDateTime"] = parsed_data["datetime"]
+                        fhir_report["effectiveDateTime"] = parsed_data["datetime"].isoformat()
                     
                     # Add performer if available
                     if parsed_data.get("performer"):
@@ -3382,7 +3380,7 @@ async def fhir_diagnostic_report_read(request):
                 # Construct the full URL for the redirect
                 if location.startswith("/"):
                     # Relative path from root
-                    current_url = f"http://192.168.3.230{location}"
+                    current_url = f"http://{request.host}{location}"
                 elif location.startswith("http"):
                     # Full URL
                     current_url = location
@@ -3419,7 +3417,7 @@ async def init_app():
     # FHIR-compatible endpoints
     app.router.add_get('/fhir/Patient', fhir_patient_search)
     app.router.add_get('/fhir/Patient/{id}', fhir_patient_read)
-    app.router.add_get('/fhir/DiagnosticReport', fhir_diagnostic_report_read)
+    app.router.add_get('/fhir/DiagnosticReport/{id}', fhir_diagnostic_report_read)
     app.router.add_get('/fhir/Encounter', fhir_encounter_read)
     app.router.add_get('/fhir/Observation', fhir_observation_search)
     app.router.add_get('/fhir/Observation/{id}', fhir_observation_read)
