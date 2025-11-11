@@ -83,6 +83,27 @@ session: Optional[aiohttp.ClientSession] = None
 cnp_cache: Dict[str, str] = {}
 cache_max_size = 1000  # Maximum number of entries to cache
 
+def create_error_response(message: str, status_code: int = 400, details: Dict[str, Any] = None) -> web.Response:
+    """Create a standardized error response.
+    
+    Args:
+        message (str): Error message
+        status_code (int): HTTP status code (default: 400)
+        details (Dict[str, Any], optional): Additional error details
+        
+    Returns:
+        web.Response: Standardized JSON error response
+    """
+    response_data = {
+        "status": "error",
+        "message": message
+    }
+    
+    if details:
+        response_data["details"] = details
+    
+    return web.json_response(response_data, status=status_code)
+
 async def get_session():
     global session
     if session is None or session.closed:
@@ -249,10 +270,7 @@ async def fhir_login(request):
         
         if not username or not password:
             logger.warning("Username or password not provided")
-            return web.json_response({
-                "status": "error",
-                "message": "Username and password are required"
-            }, status=400)
+            return create_error_response("Username and password are required")
         
         # Attempt login with provided credentials
         login_success = await login_if_needed(username, password)
@@ -265,23 +283,14 @@ async def fhir_login(request):
             })
         else:
             logger.error("Login failed via API endpoint")
-            return web.json_response({
-                "status": "error",
-                "message": "Login failed"
-            }, status=401)
+            return create_error_response("Login failed", 401)
             
     except json.JSONDecodeError:
         logger.warning("Invalid JSON data received for login")
-        return web.json_response({
-            "status": "error",
-            "message": "Invalid JSON data"
-        }, status=400)
+        return create_error_response("Invalid JSON data")
     except Exception as e:
         logger.error(f"Login endpoint failed with exception: {e}")
-        return web.json_response({
-            "status": "error",
-            "message": str(e)
-        }, status=500)
+        return create_error_response(str(e), 500)
 
 async def make_authenticated_request(session, url, method="GET", data=None, username=None, password=None):
     """Make an authenticated request to the Hipocrate service with automatic login handling.
@@ -307,10 +316,7 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
         login_success = await login_if_needed(username, password)
         if not login_success:
             logger.error(f"Failed to login for request to {url}")
-            return None, False, web.json_response({
-                "status": "error",
-                "message": "Authentication failed"
-            }, status=401)
+            return None, False, create_error_response("Authentication failed", 401)
         
         # Make the request
         if method == "GET":
@@ -369,24 +375,15 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
                 
                 if is_login_page(response_text):
                     logger.error("Login failed after retry")
-                    return None, False, web.json_response({
-                        "status": "error",
-                        "message": "Authentication failed after retry"
-                    }, status=401)
+                    return None, False, create_error_response("Authentication failed after retry", 401)
             else:
                 logger.error("Re-login failed")
-                return None, False, web.json_response({
-                    "status": "error",
-                    "message": "Authentication failed"
-                }, status=401)
+                return None, False, create_error_response("Authentication failed", 401)
         
         return response_text, True, None
     except Exception as e:
         logger.error(f"Request to {url} failed with exception: {e}")
-        return None, False, web.json_response({
-            "status": "error",
-            "message": str(e)
-        }, status=500)
+        return None, False, create_error_response(str(e), 500)
 
 async def _handle_response_encoding(response):
     """Handle response encoding for the Hipocrate service.
@@ -433,10 +430,7 @@ async def fhir_patient_search(request):
     
     if not search_term:
         logger.warning("No search term provided")
-        return web.json_response({
-            "status": "error",
-            "message": "Search term is required"
-        }, status=400)
+        return create_error_response("Search term is required")
     
     try:
         session = await get_session()
@@ -597,18 +591,15 @@ async def fhir_patient_search(request):
         
         # If neither parser worked, return an error
         logger.warning("Unable to parse patient search results")
-        return web.json_response({
-            "status": "error",
-            "message": "Unable to parse patient search results",
-            "type": "parse_error"
-        }, status=500)
+        return create_error_response(
+            "Unable to parse patient search results", 
+            500, 
+            {"type": "parse_error"}
+        )
             
     except Exception as e:
         logger.error(f"Patient search failed with exception: {e}")
-        return web.json_response({
-            "status": "error",
-            "message": str(e)
-        }, status=500)
+        return create_error_response(str(e), 500)
 
 def html_to_markdown(html_content: str) -> str:
     """Convert HTML content to clean markdown text.
@@ -1239,10 +1230,7 @@ async def fhir_patient_read(request):
     
     if not patient_id:
         logger.warning("No patient ID provided")
-        return web.json_response({
-            "status": "error",
-            "message": "Patient ID is required"
-        }, status=400)
+        return create_error_response("Patient ID is required")
     
     logger.info(f"Retrieving patient with ID: {patient_id}")
     
@@ -1317,10 +1305,7 @@ async def fhir_patient_read(request):
             
     except Exception as e:
         logger.error(f"Patient retrieval failed with exception: {e}")
-        return web.json_response({
-            "status": "error",
-            "message": str(e)
-        }, status=500)
+        return create_error_response(str(e), 500)
 
 async def fhir_encounter_read(request):
     """Retrieve encounter information by ID.
@@ -1340,10 +1325,7 @@ async def fhir_encounter_read(request):
     
     if not encounter_id:
         logger.warning("No encounter ID provided")
-        return web.json_response({
-            "status": "error",
-            "message": "Encounter ID is required"
-        }, status=400)
+        return create_error_response("Encounter ID is required")
     
     logger.info(f"Retrieving encounter with ID: {encounter_id}")
     
@@ -1462,10 +1444,7 @@ async def fhir_encounter_read(request):
             
     except Exception as e:
         logger.error(f"Encounter retrieval failed with exception: {e}")
-        return web.json_response({
-            "status": "error",
-            "message": str(e)
-        }, status=500)
+        return create_error_response(str(e), 500)
 
 def parse_analyses_data(html_content: str) -> Dict[str, Any]:
     """Parse HTML analyses content and extract analysis IDs, analysis types, patient name, and patient code.
@@ -1632,10 +1611,7 @@ async def fhir_observation_search(request):
     
     if not patient_id:
         logger.warning("No patient ID provided")
-        return web.json_response({
-            "status": "error",
-            "message": "Patient ID is required"
-        }, status=400)
+        return create_error_response("Patient ID is required")
     
     # Get optional parameters
     analysis_type = request.query.get('type')
@@ -1722,10 +1698,7 @@ async def fhir_observation_search(request):
             
     except Exception as e:
         logger.error(f"Analyses list retrieval failed with exception: {e}")
-        return web.json_response({
-            "status": "error",
-            "message": str(e)
-        }, status=500)
+        return create_error_response(str(e), 500)
 
 async def fhir_observation_read(request):
     """Retrieve a single observation by ID.
@@ -1748,10 +1721,7 @@ async def fhir_observation_read(request):
     
     if not observation_id:
         logger.warning("No observation ID provided")
-        return web.json_response({
-            "status": "error",
-            "message": "Observation ID is required"
-        }, status=400)
+        return create_error_response("Observation ID is required")
     
     logger.info(f"Retrieving observation with ID: {observation_id}")
     
@@ -1833,10 +1803,7 @@ async def fhir_observation_read(request):
             
     except Exception as e:
         logger.error(f"Observation retrieval failed with exception: {e}")
-        return web.json_response({
-            "status": "error",
-            "message": str(e)
-        }, status=500)
+        return create_error_response(str(e), 500)
 
 def parse_cnp(cnp: str) -> Dict[str, Any]:
     """Parse a Romanian CNP (Personal Numerical Code) and extract meaningful data.
@@ -1983,10 +1950,7 @@ async def fhir_cnp_validate(request):
     
     if not cnp:
         logger.warning("No CNP provided")
-        return web.json_response({
-            "status": "error",
-            "message": "CNP is required"
-        }, status=400)
+        return create_error_response("CNP is required")
     
     logger.info(f"Validating CNP: {cnp}")
     
@@ -2094,16 +2058,10 @@ async def fhir_markdown_to_html(request):
         })
     except json.JSONDecodeError:
         logger.warning("Invalid JSON data received for markdown conversion")
-        return web.json_response({
-            "status": "error",
-            "message": "Invalid JSON data"
-        }, status=400)
+        return create_error_response("Invalid JSON data")
     except Exception as e:
         logger.error(f"Markdown conversion failed: {e}")
-        return web.json_response({
-            "status": "error",
-            "message": str(e)
-        }, status=500)
+        return create_error_response(str(e), 500)
 
 async def fhir_analysis_types(request):
     """Serve the analysis types terminology.
@@ -3211,10 +3169,7 @@ async def fhir_diagnostic_report_read(request):
                 location = response.headers.get("Location")
                 if not location:
                     logger.error("302 redirect without Location header")
-                    return web.json_response({
-                        "status": "error",
-                        "message": "Redirect without location header"
-                    }, status=500)
+                    return create_error_response("Redirect without location header", 500)
                 
                 # Construct the full URL for the redirect
                 if location.startswith("/"):
@@ -3233,10 +3188,7 @@ async def fhir_diagnostic_report_read(request):
         
         # If we've exceeded the maximum redirects
         logger.error(f"Exceeded maximum redirects ({max_redirects}) while retrieving report")
-        return web.json_response({
-            "status": "error",
-            "message": f"Exceeded maximum redirects ({max_redirects})"
-        }, status=500)
+        return create_error_response(f"Exceeded maximum redirects ({max_redirects})", 500)
             
     except Exception as e:
         logger.error(f"Report retrieval failed with exception: {e}")
