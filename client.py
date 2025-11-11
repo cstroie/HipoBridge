@@ -122,43 +122,34 @@ async def search_patients(session: aiohttp.ClientSession, search_term: str, fhir
     try:
         async with session.get(f"{BASE_URL}/fhir/Patient?q={search_term}", headers=headers) as response:
             if response.status == 200:
-                content_type = response.headers.get("Content-Type", "")
-                if "application/fhir+json" in content_type:
-                    data = await response.json()
-                    # Handle FHIR response
-                    if data.get("resourceType") == "Bundle":
-                        print(f"Patient search successful! Found {data.get('total', 0)} patients (FHIR Bundle)")
-                        entries = data.get("entry", [])
-                        for i, entry in enumerate(entries, 1):
-                            patient = entry.get("resource", {})
-                            patient_id = patient.get("id", "N/A")
-                            names = patient.get("name", [])
-                            display_name = "Unknown"
-                            if names:
-                                name = names[0]
-                                given = " ".join(name.get("given", []))
-                                family = name.get("family", "")
-                                display_name = f"{given} {family}".strip() or "Unknown"
-                            print(f"  {i}. {display_name} (ID: {patient_id})")
-                    elif data.get("resourceType") == "Patient":
-                        print("Patient search successful! Found single patient (FHIR Patient)")
-                        names = data.get("name", [])
+                data = await response.json()
+                # Handle FHIR response
+                if data.get("resourceType") == "Bundle":
+                    print(f"Patient search successful! Found {data.get('total', 0)} patients (FHIR Bundle)")
+                    entries = data.get("entry", [])
+                    for i, entry in enumerate(entries, 1):
+                        patient = entry.get("resource", {})
+                        patient_id = patient.get("id", "N/A")
+                        names = patient.get("name", [])
                         display_name = "Unknown"
                         if names:
                             name = names[0]
                             given = " ".join(name.get("given", []))
                             family = name.get("family", "")
                             display_name = f"{given} {family}".strip() or "Unknown"
-                        patient_id = data.get("id", "N/A")
-                        print(f"  Patient: {display_name} (ID: {patient_id})")
-                    return True
-                else:
-                    data = await response.json()
-                    if not data.get("status") == "success":
-                        print(f"Patient search failed: {data.get('message', 'No message')}")
-                        return False
-                result_type = data.get("type", "raw")
-                print(f"Patient search successful! (type: {result_type})")
+                        print(f"  {i}. {display_name} (ID: {patient_id})")
+                elif data.get("resourceType") == "Patient":
+                    print("Patient search successful! Found single patient (FHIR Patient)")
+                    names = data.get("name", [])
+                    display_name = "Unknown"
+                    if names:
+                        name = names[0]
+                        given = " ".join(name.get("given", []))
+                        family = name.get("family", "")
+                        display_name = f"{given} {family}".strip() or "Unknown"
+                    patient_id = data.get("id", "N/A")
+                    print(f"  Patient: {display_name} (ID: {patient_id})")
+                return True
             else:
                 data = await response.json()
                 print(f"Patient search failed: {data.get('message', 'No message')}")
@@ -166,46 +157,6 @@ async def search_patients(session: aiohttp.ClientSession, search_term: str, fhir
     except Exception as e:
         print(f"Patient search failed: {str(e)}")
         return False
-    
-    # Handle non-FHIR response
-    result_type = data.get("type", "raw")
-    print(f"Patient search successful! (type: {result_type})")
-    
-    if result_type == "single_patient":
-        patient_data = data.get("data", {})
-        print(f"Found single patient: {patient_data.get('patient_name', 'Unknown')}")
-        if patient_data.get('patient_id'):
-            print(f"  Patient ID (CNP): {patient_data['patient_id']}")
-        if patient_data.get('patient_code'):
-            print(f"  Patient Code: {patient_data['patient_code']}")
-        if patient_data.get('presentations'):
-            presentations = patient_data['presentations']
-            print(f"  Presentations ({len(presentations)} found):")
-            for i, pres_id in enumerate(presentations, 1):
-                print(f"    {i}. {pres_id}")
-        if patient_data.get('checkins'):
-            checkins = patient_data['checkins']
-            print(f"  Checkins ({len(checkins)} found):")
-            for i, checkin_id in enumerate(checkins, 1):
-                print(f"    {i}. {checkin_id}")
-        if patient_data.get('checkouts'):
-            checkouts = patient_data['checkouts']
-            print(f"  Checkouts ({len(checkouts)} found):")
-            for i, checkout_id in enumerate(checkouts, 1):
-                print(f"    {i}. {checkout_id}")
-        return True
-    elif result_type == "multiple_patients":
-        patients = data.get("data", [])
-        print(f"Found {len(patients)} patients:")
-        for i, patient in enumerate(patients, 1):
-            print(f"  {i}. {patient.get('patient_name', 'Unknown')} (Code: {patient.get('patient_code', 'N/A')})")
-        return True
-    else:
-        # Save raw response to file for inspection
-        with open("patient_search_results.html", "w") as f:
-            f.write(data.get("data", ""))
-        print("Results saved to patient_search_results.html")
-        return True
 
 async def get_report(session: aiohttp.ClientSession, report_id: str) -> bool:
     """Retrieve a report by ID using the FHIR API.
@@ -224,44 +175,57 @@ async def get_report(session: aiohttp.ClientSession, report_id: str) -> bool:
     
     data, success = await _make_api_request(session, "GET", f"{BASE_URL}/fhir/DiagnosticReport?identifier={report_id}")
     
-    if not success or data.get("status") != "success":
-        print(f"Report retrieval failed: {data.get('message', 'No message')}")
+    if not success:
+        print(f"Report retrieval failed")
         return False
     
-    print(f"Report retrieval successful! (followed {data.get('redirects_followed', 0)} redirects)")
+    print("Report retrieval successful!")
     
-    # Display parsed data if available
-    print("\n--- Parsed Report Data ---")
-    if data.get("patient_name"):
-        print(f"Patient Name: {data['patient_name']}")
-    if data.get("age"):
-        print(f"Age: {data['age']}")
-    if data.get("gender"):
-        print(f"Gender: {data['gender']}")
-    if data.get("patient_id"):
-        print(f"Patient ID (CNP): {data['patient_id']}")
-    if data.get("patient_code"):
-        print(f"Patient Code: {data['patient_code']}")
-    if data.get("sample_datetime"):
-        print(f"Sample Date/Time: {data['sample_datetime']}")
-    if data.get("examination"):
-        print(f"Examination: {data['examination']}")
+    # Display FHIR DiagnosticReport data
+    print("\n--- Diagnostic Report Data ---")
+    if data.get("id"):
+        print(f"Report ID: {data['id']}")
+    if data.get("status"):
+        print(f"Status: {data['status']}")
+    if data.get("effectiveDateTime"):
+        print(f"Effective Date/Time: {data['effectiveDateTime']}")
     
-    # Handle multiple reports
-    reports = data.get("reports", [])
-    if reports:
-        print(f"\nReports ({len(reports)} found):")
-        for i, report in enumerate(reports, 1):
-            investigation = report.get("investigation", '')
-            print(f"\nReport {i}: {report['investigation']}")
-            if report.get("result"):
-                print(f"{report['result']}")
-    elif data.get("result"):
-        # Fallback to single result if reports list is empty
-        print(f"Result: {data['result']}")
+    # Display code information
+    if data.get("code"):
+        code = data["code"]
+        if code.get("text"):
+            print(f"Report Type: {code['text']}")
+        elif code.get("coding"):
+            coding = code["coding"][0] if code["coding"] else {}
+            if coding.get("display"):
+                print(f"Report Type: {coding['display']}")
     
-    if data.get("examiner"):
-        print(f"\nExaminer: {data['examiner']}")
+    # Display subject (patient) reference
+    if data.get("subject"):
+        subject = data["subject"]
+        if subject.get("reference"):
+            print(f"Patient Reference: {subject['reference']}")
+    
+    # Display performer information
+    if data.get("performer"):
+        performers = data["performer"]
+        if performers:
+            performer = performers[0]
+            if performer.get("display"):
+                print(f"Performer: {performer['display']}")
+    
+    # Display conclusion
+    if data.get("conclusion"):
+        print(f"\nConclusion: {data['conclusion']}")
+    
+    # Display results
+    if data.get("result"):
+        results = data["result"]
+        print(f"\nResults ({len(results)} found):")
+        for i, result in enumerate(results, 1):
+            if result.get("reference"):
+                print(f"  {i}. {result['reference']}")
+    
     print("--------------------------")
     
     return True
@@ -283,28 +247,79 @@ async def get_checkout(session: aiohttp.ClientSession, checkout_id: str) -> bool
     
     data, success = await _make_api_request(session, "GET", f"{BASE_URL}/fhir/Encounter?identifier={checkout_id}")
     
-    if not success or data.get("status") != "success":
-        print(f"Checkout retrieval failed: {data.get('message', 'No message')}")
+    if not success:
+        print(f"Checkout retrieval failed")
         return False
     
     print("Checkout retrieval successful!")
     
-    # Display parsed data if available
-    print("\n--- Parsed Checkout Data ---")
-    if data.get("patient_name"):
-        print(f"Patient Name: {data['patient_name']}")
-    if data.get("patient_id"):
-        print(f"Patient ID: {data['patient_id']}")
-    if data.get("admission_diagnostic"):
-        print(f"Admission Diagnostic: {data['admission_diagnostic']}")
-    if data.get("epicrisis"):
-        print(f"Epicrisis: {data['epicrisis']}")
-    if data.get("diagnostic"):
-        print(f"Diagnostic: {data['diagnostic']}")
-    if data.get("surgery"):
-        print(f"Surgery: {data['surgery']}")
-    if data.get("recommendations"):
-        print(f"Recommendations: {data['recommendations']}")
+    # Display FHIR Encounter data
+    print("\n--- Encounter Data ---")
+    if data.get("id"):
+        print(f"Encounter ID: {data['id']}")
+    if data.get("status"):
+        print(f"Status: {data['status']}")
+    
+    # Display class information
+    if data.get("class"):
+        encounter_class = data["class"]
+        if encounter_class.get("display"):
+            print(f"Class: {encounter_class['display']}")
+    
+    # Display type information
+    if data.get("type"):
+        types = data["type"]
+        if types:
+            encounter_type = types[0]
+            if encounter_type.get("coding"):
+                coding = encounter_type["coding"][0] if encounter_type["coding"] else {}
+                if coding.get("display"):
+                    print(f"Type: {coding['display']}")
+    
+    # Display subject (patient) reference
+    if data.get("subject"):
+        subject = data["subject"]
+        if subject.get("reference"):
+            print(f"Patient Reference: {subject['reference']}")
+    
+    # Display participant (performer) information
+    if data.get("participant"):
+        participants = data["participant"]
+        for participant in participants:
+            if participant.get("individual"):
+                individual = participant["individual"]
+                if individual.get("display"):
+                    print(f"Participant: {individual['display']}")
+    
+    # Display reason (admission diagnostic)
+    if data.get("reasonCode"):
+        reasons = data["reasonCode"]
+        for reason in reasons:
+            if reason.get("text"):
+                print(f"Reason: {reason['text']}")
+    
+    # Display diagnosis
+    if data.get("diagnosis"):
+        diagnoses = data["diagnosis"]
+        for diagnosis in diagnoses:
+            if diagnosis.get("condition"):
+                condition = diagnosis["condition"]
+                if condition.get("display"):
+                    print(f"Diagnosis: {condition['display']}")
+    
+    # Display text (epicrisis)
+    if data.get("text"):
+        text = data["text"]
+        if text.get("div"):
+            print(f"Text: {text['div']}")
+    
+    # Display notes
+    if data.get("note"):
+        notes = data["note"]
+        for note in notes:
+            if note.get("text"):
+                print(f"Note: {note['text']}")
+    
     print("--------------------------")
     
     return True
@@ -330,7 +345,7 @@ async def get_patient_code_from_cnp(session: aiohttp.ClientSession, cnp: str) ->
     # First validate the CNP
     data, success = await _make_api_request(session, "GET", f"{BASE_URL}/fhir/ValueSet/cnp?id={cnp}")
     
-    if not success or data.get("status") != "success" or not data.get("valid"):
+    if not success or not data.get("valid"):
         print(f"CNP {cnp} is not valid")
         return None
     
@@ -339,14 +354,27 @@ async def get_patient_code_from_cnp(session: aiohttp.ClientSession, cnp: str) ->
     # Search for the patient using the CNP
     data, success = await _make_api_request(session, "GET", f"{BASE_URL}/fhir/Patient?q={cnp}")
     
-    if not success or data.get("status") != "success":
-        print(f"Patient search failed: {data.get('message', 'No message')}")
+    if not success:
+        print(f"Patient search failed")
         return None
     
-    result_type = data.get("type")
-    if result_type == "single_patient":
-        patient_data = data.get("data", {})
-        patient_code = patient_data.get("patient_code")
+    # Handle FHIR response
+    if data.get("resourceType") == "Bundle":
+        entries = data.get("entry", [])
+        if entries:
+            # Use the first patient's code
+            patient = entries[0].get("resource", {})
+            patient_code = patient.get("id")
+            if patient_code:
+                print(f"Found patient code: {patient_code} (first of {len(entries)} matches)")
+                # Cache the result
+                if len(cnp_cache) < cache_max_size:
+                    cnp_cache[cnp] = patient_code
+                return patient_code
+        print("No patient code found in search results")
+        return None
+    elif data.get("resourceType") == "Patient":
+        patient_code = data.get("id")
         if patient_code:
             print(f"Found patient code: {patient_code}")
             # Cache the result
@@ -356,19 +384,6 @@ async def get_patient_code_from_cnp(session: aiohttp.ClientSession, cnp: str) ->
         else:
             print("Patient code not found in search results")
             return None
-    elif result_type == "multiple_patients":
-        patients = data.get("data", [])
-        if patients:
-            # Use the first patient's code
-            patient_code = patients[0].get("patient_code")
-            if patient_code:
-                print(f"Found patient code: {patient_code} (first of {len(patients)} matches)")
-                # Cache the result
-                if len(cnp_cache) < cache_max_size:
-                    cnp_cache[cnp] = patient_code
-                return patient_code
-        print("No patient code found in search results")
-        return None
     else:
         print("Unexpected search result type")
         return None
@@ -391,30 +406,30 @@ async def search_patient_code_by_partial_cnp(session: aiohttp.ClientSession, par
     # Search for the patient using the partial CNP
     data, success = await _make_api_request(session, "GET", f"{BASE_URL}/fhir/Patient?q={partial_cnp}")
     
-    if not success or data.get("status") != "success":
-        print(f"Patient search failed: {data.get('message', 'No message')}")
+    if not success:
+        print(f"Patient search failed")
         return None
     
-    result_type = data.get("type")
-    if result_type == "single_patient":
-        patient_data = data.get("data", {})
-        patient_code = patient_data.get("patient_code")
+    # Handle FHIR response
+    if data.get("resourceType") == "Bundle":
+        entries = data.get("entry", [])
+        if entries:
+            # Use the first patient's code
+            patient = entries[0].get("resource", {})
+            patient_code = patient.get("id")
+            if patient_code:
+                print(f"Found patient code: {patient_code} (first of {len(entries)} matches)")
+                return patient_code
+        print("No patient code found in search results")
+        return None
+    elif data.get("resourceType") == "Patient":
+        patient_code = data.get("id")
         if patient_code:
             print(f"Found patient code: {patient_code}")
             return patient_code
         else:
             print("Patient code not found in search results")
             return None
-    elif result_type == "multiple_patients":
-        patients = data.get("data", [])
-        if patients:
-            # Use the first patient's code
-            patient_code = patients[0].get("patient_code")
-            if patient_code:
-                print(f"Found patient code: {patient_code} (first of {len(patients)} matches)")
-                return patient_code
-        print("No patient code found in search results")
-        return None
     else:
         print("Unexpected search result type")
         return None
@@ -458,15 +473,61 @@ async def get_patient(session: aiohttp.ClientSession, patient_id: str) -> bool:
     
     data, success = await _make_api_request(session, "GET", f"{BASE_URL}/fhir/Patient/{patient_id}")
     
-    if not success or data.get("status") != "success":
-        print(f"Patient retrieval failed: {data.get('message', 'No message')}")
+    if not success:
+        print(f"Patient retrieval failed")
         return False
     
     print("Patient retrieval successful!")
     
-    # Display associated checkout and checkin IDs
-    checkout_ids = data.get("checkout_ids", [])
-    checkin_ids = data.get("checkin_ids", [])
+    # Display FHIR Patient data
+    print("\n--- Patient Data ---")
+    if data.get("id"):
+        print(f"Patient ID: {data['id']}")
+    
+    # Display identifiers
+    if data.get("identifier"):
+        identifiers = data["identifier"]
+        for identifier in identifiers:
+            if identifier.get("system") and identifier.get("value"):
+                system = identifier["system"]
+                value = identifier["value"]
+                if "cnp" in system:
+                    print(f"CNP: {value}")
+                elif "patient-code" in system:
+                    print(f"Patient Code: {value}")
+                else:
+                    print(f"Identifier ({system}): {value}")
+    
+    # Display name
+    if data.get("name"):
+        names = data["name"]
+        for name in names:
+            if name.get("given") and name.get("family"):
+                given = " ".join(name["given"])
+                family = name["family"]
+                print(f"Name: {given} {family}")
+    
+    # Display gender
+    if data.get("gender"):
+        print(f"Gender: {data['gender']}")
+    
+    # Display birth date
+    if data.get("birthDate"):
+        print(f"Birth Date: {data['birthDate']}")
+    
+    # Display extensions (checkin/checkout IDs)
+    checkin_ids = []
+    checkout_ids = []
+    if data.get("extension"):
+        extensions = data["extension"]
+        for extension in extensions:
+            if extension.get("url") and extension.get("valueString"):
+                url = extension["url"]
+                value = extension["valueString"]
+                if "checkin-ids" in url:
+                    checkin_ids = value.split(",") if value else []
+                elif "checkout-ids" in url:
+                    checkout_ids = value.split(",") if value else []
     
     if checkout_ids:
         print(f"\nCheckout IDs ({len(checkout_ids)} found):")
@@ -481,6 +542,8 @@ async def get_patient(session: aiohttp.ClientSession, patient_id: str) -> bool:
             print(f"  {i}. {checkin_id}")
     else:
         print("\nNo checkin IDs found")
+    
+    print("--------------------------")
     
     return True
 
@@ -539,38 +602,42 @@ async def get_analyses(session: aiohttp.ClientSession, patient_id: str, analysis
     
     data, success = await _make_api_request(session, "GET", url)
     
-    if not success or data.get("status") != "success":
-        print(f"Analyses retrieval failed: {data.get('message', 'No message')}")
+    if not success:
+        print(f"Analyses retrieval failed")
         return False
     
     print("Analyses retrieval successful!")
     
-    # Display patient name and analyses
-    patient_name = data.get("patient_name", "")
-    if patient_name:
-        print(f"Patient: {patient_name}")
-    
-    analyses = data.get("analyses", [])
-    
-    if analyses:
-        print(f"\nAnalyses ({len(analyses)} found):")
+    # Handle FHIR Bundle of Observations
+    if data.get("resourceType") == "Bundle":
+        entries = data.get("entry", [])
+        print(f"\nAnalyses ({len(entries)} found):")
+        
         imaging_analyses = []
-        for i, analysis in enumerate(analyses, 1):
-            analysis_type = analysis.get('type', 'unknown')
-            print(f"  {i}. ID: {analysis.get('report_id', 'N/A')} - Type: {analysis_type}")
+        for i, entry in enumerate(entries, 1):
+            observation = entry.get("resource", {})
+            observation_id = observation.get("id", "N/A")
+            
+            # Extract analysis type from code
+            analysis_type = "unknown"
+            if observation.get("code"):
+                code = observation["code"]
+                if code.get("coding"):
+                    coding = code["coding"][0] if code["coding"] else {}
+                    analysis_type = coding.get("code", "unknown")
+            
+            print(f"  {i}. ID: {observation_id} - Type: {analysis_type}")
             
             # Check if this is an imaging analysis that needs report retrieval
             if analysis_type in ['radio', 'ct', 'irm', 'eco']:
-                imaging_analyses.append(analysis)
+                imaging_analyses.append(observation_id)
         
         # Retrieve reports for imaging analyses
         if imaging_analyses:
             print(f"\nRetrieving reports for {len(imaging_analyses)} imaging analyses:")
-            for analysis in imaging_analyses:
-                report_id = analysis.get('report_id')
-                analysis_type = analysis.get('type')
-                print(f"\n--- Report for {analysis_type.upper()} (ID: {report_id}) ---")
-                await get_report(session, report_id)
+            for observation_id in imaging_analyses:
+                print(f"\n--- Report for Observation {observation_id} ---")
+                await get_report(session, observation_id)
     else:
         print("\nNo analyses found")
     
@@ -592,8 +659,8 @@ async def validate_cnp(session: aiohttp.ClientSession, cnp: str) -> bool:
     
     data, success = await _make_api_request(session, "GET", f"{BASE_URL}/fhir/ValueSet/cnp?id={cnp}")
     
-    if not success or data.get("status") != "success":
-        print(f"CNP validation failed: {data.get('message', 'No message')}")
+    if not success:
+        print(f"CNP validation failed")
         return False
     
     is_valid = data.get("valid", False)
