@@ -2531,7 +2531,7 @@ async def fhir_specification(request):
                             "name": "type",
                             "in": "query",
                             "required": False,
-                            "description": "Analysis type to filter by (e.g., radio, ct, irm, eco, lab)",
+                            "description": "Analysis type to filter by (e.g., radio, ct, irm, eco, lab, lac, lii, rads, apa)",
                             "schema": {
                                 "type": "string"
                             }
@@ -2622,6 +2622,103 @@ async def fhir_specification(request):
                     }
                 }
             },
+            "/fhir/Observation/{id}": {
+                "get": {
+                    "summary": "Get a single observation",
+                    "description": "Retrieve a single observation by ID as FHIR Observation resource",
+                    "parameters": [
+                        {
+                            "name": "id",
+                            "in": "path",
+                            "required": True,
+                            "description": "Observation ID",
+                            "schema": {
+                                "type": "string"
+                            }
+                        },
+                        {
+                            "name": "X-Username",
+                            "in": "header",
+                            "required": False,
+                            "description": "Username for authentication",
+                            "schema": {
+                                "type": "string"
+                            }
+                        },
+                        {
+                            "name": "X-Password",
+                            "in": "header",
+                            "required": False,
+                            "description": "Password for authentication",
+                            "schema": {
+                                "type": "string"
+                            }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Observation as FHIR Observation resource",
+                            "content": {
+                                "application/fhir+json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "resourceType": {
+                                                "type": "string",
+                                                "example": "Observation"
+                                            },
+                                            "id": {
+                                                "type": "string"
+                                            },
+                                            "status": {
+                                                "type": "string"
+                                            },
+                                            "category": {
+                                                "type": "array"
+                                            },
+                                            "code": {
+                                                "type": "object"
+                                            },
+                                            "subject": {
+                                                "type": "object"
+                                            },
+                                            "effectiveDateTime": {
+                                                "type": "string"
+                                            },
+                                            "performer": {
+                                                "type": "array"
+                                            },
+                                            "note": {
+                                                "type": "array"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "400": {
+                            "description": "Missing observation ID",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "status": {
+                                                "type": "string",
+                                                "example": "error"
+                                            },
+                                            "message": {
+                                                "type": "string",
+                                                "example": "Observation ID is required"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/fhir/DiagnosticReport": {
                 "get": {
                     "summary": "Get analysis report",
@@ -2673,6 +2770,9 @@ async def fhir_specification(request):
                                             "status": {
                                                 "type": "string"
                                             },
+                                            "category": {
+                                                "type": "array"
+                                            },
                                             "code": {
                                                 "type": "object"
                                             },
@@ -2690,6 +2790,9 @@ async def fhir_specification(request):
                                             },
                                             "conclusion": {
                                                 "type": "string"
+                                            },
+                                            "media": {
+                                                "type": "array"
                                             }
                                         }
                                     }
@@ -2825,7 +2928,7 @@ async def fhir_specification(request):
             "/fhir/ValueSet/cnp": {
                 "get": {
                     "summary": "Validate CNP",
-                    "description": "Validate a Romanian Personal Numerical Code (CNP)",
+                    "description": "Validate a Romanian Personal Numerical Code (CNP) and return detailed information",
                     "parameters": [
                         {
                             "name": "id",
@@ -2839,7 +2942,7 @@ async def fhir_specification(request):
                     ],
                     "responses": {
                         "200": {
-                            "description": "CNP validation result",
+                            "description": "CNP validation result with detailed information",
                             "content": {
                                 "application/json": {
                                     "schema": {
@@ -2854,6 +2957,24 @@ async def fhir_specification(request):
                                             },
                                             "valid": {
                                                 "type": "boolean"
+                                            },
+                                            "gender": {
+                                                "type": "string"
+                                            },
+                                            "birth_date": {
+                                                "type": "string"
+                                            },
+                                            "county_code": {
+                                                "type": "integer"
+                                            },
+                                            "county_name": {
+                                                "type": "string"
+                                            },
+                                            "serial": {
+                                                "type": "string"
+                                            },
+                                            "control_digit": {
+                                                "type": "integer"
                                             }
                                         }
                                     }
@@ -2874,6 +2995,69 @@ async def fhir_specification(request):
                                             "message": {
                                                 "type": "string",
                                                 "example": "CNP is required"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/fhir/CodeSystem/analysis-types": {
+                "get": {
+                    "summary": "Get analysis types",
+                    "description": "Retrieve the FHIR CodeSystem resource defining the analysis types used in the hospital system",
+                    "responses": {
+                        "200": {
+                            "description": "Analysis types as FHIR CodeSystem resource",
+                            "content": {
+                                "application/fhir+json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "resourceType": {
+                                                "type": "string",
+                                                "example": "CodeSystem"
+                                            },
+                                            "id": {
+                                                "type": "string"
+                                            },
+                                            "url": {
+                                                "type": "string"
+                                            },
+                                            "version": {
+                                                "type": "string"
+                                            },
+                                            "name": {
+                                                "type": "string"
+                                            },
+                                            "title": {
+                                                "type": "string"
+                                            },
+                                            "status": {
+                                                "type": "string"
+                                            },
+                                            "experimental": {
+                                                "type": "boolean"
+                                            },
+                                            "date": {
+                                                "type": "string"
+                                            },
+                                            "publisher": {
+                                                "type": "string"
+                                            },
+                                            "description": {
+                                                "type": "string"
+                                            },
+                                            "caseSensitive": {
+                                                "type": "boolean"
+                                            },
+                                            "content": {
+                                                "type": "string"
+                                            },
+                                            "concept": {
+                                                "type": "array"
                                             }
                                         }
                                     }
