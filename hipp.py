@@ -1514,10 +1514,10 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
         return {"patient_name": "", "analyses": []}
 
 async def fhir_observation_search(request):
-    """Retrieve all observations for a patient by ID.
+    """Retrieve list of observations for a patient by ID.
     
-    Gets all observations for a specific patient from the Hipocrate service
-    and parses the data into structured format.
+    Gets a list of observations for a specific patient from the Hipocrate service
+    without fetching detailed data for each observation.
     
     Args:
         request: The incoming HTTP request with 'patient' query parameter for patient ID
@@ -1545,7 +1545,7 @@ async def fhir_observation_search(request):
     datetime_filter = request.query.get('dt')
     full_data = request.query.get('full', 'no').lower() == 'yes'
     
-    logger.info(f"Retrieving analyses for patient with ID: {patient_id}")
+    logger.info(f"Retrieving analyses list for patient with ID: {patient_id}")
     
     try:
         session = await get_session()
@@ -1564,7 +1564,7 @@ async def fhir_observation_search(request):
         if not success:
             return error_response
         
-        logger.info("Analyses retrieval completed successfully")
+        logger.info("Analyses list retrieval completed successfully")
         # Parse the analyses data to extract report IDs, types, and patient name
         parsed_data = parse_analyses_data(response_text)
         
@@ -1573,62 +1573,7 @@ async def fhir_observation_search(request):
         if analysis_type:
             analyses = [a for a in analyses if a["type"] == analysis_type]
         
-        # Filter analyses by datetime if specified
-        if datetime_filter and analyses:
-            # For datetime filtering, we need to get report details to check dates
-            filtered_analyses = []
-            try:
-                from datetime import datetime as dt, timedelta
-                
-                # Parse the filter datetime
-                filter_dt = dt.fromisoformat(datetime_filter)
-                # Define the time window (up to 6 hours later)
-                max_dt = filter_dt + timedelta(hours=6)
-                
-                # Check each analysis
-                for analysis in analyses:
-                    # Get report details to extract datetime
-                    report_url = f"{SERVICE_URL}/analyse/Reports/analyseFile.asp?id={analysis['report_id']}"
-                    report_text, success, _ = await make_authenticated_request(
-                        session, report_url, "GET", None, username, password
-                    )
-                    
-                    if success:
-                        # Parse report to get datetime
-                        report_data = parse_report_data(report_text)
-                        report_datetime_str = report_data.get("sample_datetime")
-                        
-                        if report_datetime_str:
-                            # Try to parse the report datetime
-                            try:
-                                # Handle common date formats
-                                if re.match(r'\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}', report_datetime_str):
-                                    report_dt = dt.strptime(report_datetime_str, '%d/%m/%Y %H:%M:%S')
-                                elif re.match(r'\d{2}/\d{2}/\d{4}', report_datetime_str):
-                                    report_dt = dt.strptime(report_datetime_str, '%d/%m/%Y')
-                                else:
-                                    # Try ISO format
-                                    report_dt = dt.fromisoformat(report_datetime_str)
-                                
-                                # Check if report is within the time window
-                                if filter_dt <= report_dt <= max_dt:
-                                    filtered_analyses.append(analysis)
-                            except ValueError:
-                                # If we can't parse the datetime, include the analysis
-                                filtered_analyses.append(analysis)
-                        else:
-                            # If no datetime in report, include the analysis
-                            filtered_analyses.append(analysis)
-                    else:
-                        # If we can't get report details, include the analysis
-                        filtered_analyses.append(analysis)
-                
-                analyses = filtered_analyses
-            except Exception as e:
-                logger.error(f"Error filtering analyses by datetime: {e}")
-                # If datetime filtering fails, return unfiltered analyses
-        
-        # Create FHIR Bundle of Observation resources
+        # Create FHIR Bundle of Observation resources (minimal data only)
         bundle = {
             "resourceType": "Bundle",
             "type": "searchset",
@@ -1637,12 +1582,6 @@ async def fhir_observation_search(request):
         }
         
         for analysis in analyses:
-            # Get report details to extract observation data
-            report_url = f"{SERVICE_URL}/analyse/Reports/analyseFile.asp?id={analysis['report_id']}"
-            report_text, success, _ = await make_authenticated_request(
-                session, report_url, "GET", None, username, password
-            )
-            
             fhir_observation = {
                 "resourceType": "Observation",
                 "id": analysis["report_id"],
@@ -1676,33 +1615,6 @@ async def fhir_observation_search(request):
                 }
             }
             
-            # Add report data if available
-            if success:
-                report_data = parse_report_data(report_text)
-                
-                # Add effective datetime if available
-                if report_data.get("sample_datetime"):
-                    fhir_observation["effectiveDateTime"] = report_data["sample_datetime"]
-                
-                # Add performer if available
-                if report_data.get("examiner"):
-                    fhir_observation["performer"] = [
-                        {
-                            "display": report_data["examiner"]
-                        }
-                    ]
-                
-                # Add value/comment if available
-                if report_data.get("reports"):
-                    # For now, add the first report result as a comment
-                    first_report = report_data["reports"][0] if report_data["reports"] else None
-                    if first_report and first_report.get("result"):
-                        fhir_observation["note"] = [
-                            {
-                                "text": first_report["result"]
-                            }
-                        ]
-            
             bundle["entry"].append({
                 "resource": fhir_observation
             })
@@ -1710,7 +1622,118 @@ async def fhir_observation_search(request):
         return web.json_response(bundle)
             
     except Exception as e:
-        logger.error(f"Analyses retrieval failed with exception: {e}")
+        logger.error(f"Analyses list retrieval failed with exception: {e}")
+        return web.json_response({
+            "status": "error",
+            "message": str(e)
+        }, status=500)
+
+async def fhir_observation_read(request):
+    """Retrieve a single observation by ID.
+    
+    Gets detailed information for a specific observation from the Hipocrate service.
+    
+    Args:
+        request: The incoming HTTP request with 'id' path parameter for observation ID
+                 and optional X-Username and X-Password headers for authentication
+        
+    Returns:
+        web.Response: JSON response with observation data or error information
+    """
+    observation_id = request.match_info.get('id')
+    logger.info(f"GET /fhir/Observation/{observation_id} endpoint accessed")
+    
+    # Get credentials from request headers (optional)
+    username = request.headers.get("X-Username")
+    password = request.headers.get("X-Password")
+    
+    if not observation_id:
+        logger.warning("No observation ID provided")
+        return web.json_response({
+            "status": "error",
+            "message": "Observation ID is required"
+        }, status=400)
+    
+    logger.info(f"Retrieving observation with ID: {observation_id}")
+    
+    try:
+        session = await get_session()
+        
+        # Get patient ID from query parameter or derive it
+        patient_id = request.query.get('patient', '')
+        
+        # Get report details to extract observation data
+        report_url = f"{SERVICE_URL}/analyse/Reports/analyseFile.asp?id={observation_id}"
+        report_text, success, error_response = await make_authenticated_request(
+            session, report_url, "GET", None, username, password
+        )
+        
+        if not success:
+            return error_response
+        
+        # Parse report to get observation data
+        report_data = parse_report_data(report_text)
+        
+        fhir_observation = {
+            "resourceType": "Observation",
+            "id": observation_id,
+            "meta": {
+                "lastUpdated": datetime.now().isoformat()
+            },
+            "status": "final",
+            "category": [
+                {
+                    "coding": [
+                        {
+                            "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                            "code": "imaging",
+                            "display": "Imaging"
+                        }
+                    ]
+                }
+            ],
+            "code": {
+                "coding": [
+                    {
+                        "system": f"http://{request.host}/fhir/CodeSystem/analysis-types",
+                        "code": "unknown",  # Will be updated based on report data
+                        "display": "Analysis"
+                    }
+                ],
+                "text": report_data.get("examination", "Analysis")
+            },
+            "subject": {
+                "reference": f"Patient/{report_data.get('patient_code', patient_id)}"
+            }
+        }
+        
+        # Add effective datetime if available
+        if report_data.get("sample_datetime"):
+            fhir_observation["effectiveDateTime"] = report_data["sample_datetime"]
+        
+        # Add performer if available
+        if report_data.get("examiner"):
+            fhir_observation["performer"] = [
+                {
+                    "display": report_data["examiner"]
+                }
+            ]
+        
+        # Add value/comment if available
+        if report_data.get("reports"):
+            # For now, add the first report result as a comment
+            first_report = report_data["reports"][0] if report_data["reports"] else None
+            if first_report and first_report.get("result"):
+                fhir_observation["note"] = [
+                    {
+                        "text": first_report["result"]
+                    }
+                ]
+        
+        return web.json_response(fhir_observation)
+            
+    except Exception as e:
+        logger.error(f"Observation retrieval failed with exception: {e}")
         return web.json_response({
             "status": "error",
             "message": str(e)
@@ -2993,6 +3016,7 @@ async def init_app():
     app.router.add_get('/fhir/DiagnosticReport', fhir_diagnostic_report_read)
     app.router.add_get('/fhir/Encounter', fhir_encounter_read)
     app.router.add_get('/fhir/Observation', fhir_observation_search)
+    app.router.add_get('/fhir/Observation/{id}', fhir_observation_read)
     app.router.add_get('/fhir/ValueSet/cnp', fhir_cnp_validate)
     app.router.add_post('/fhir/login', fhir_login)
     app.router.add_post('/fhir/md2html', fhir_markdown_to_html)
