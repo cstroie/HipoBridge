@@ -390,12 +390,6 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
             cookies = session.cookie_jar.filter_cookies(URL(SERVICE_URL))
             logger.debug(f"Using {len(cookies)} cookies for request to {url}")
         
-        # First ensure we're logged in
-        login_success = await login_if_needed(username, password)
-        if not login_success:
-            logger.error(f"Failed to login for request to {url}")
-            return None, False, create_error_response("Authentication failed", 401)
-        
         # Make the request
         if method == "GET":
             logger.debug(f"Making GET request to: {url}")
@@ -407,7 +401,7 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
             # For POST requests, we need to be careful about Content-Type headers
             # Create a copy of headers without Content-Type to avoid conflicts
             post_headers = HEADERS.copy()
-            post_headers.pop("Content-Type", None)  # Remove Content-Type if present
+            post_headers.pop("Content-Type", None)
             # When sending form data, let aiohttp set the Content-Type automatically
             if data:
                 async with session.post(url, data=data, headers=post_headers) as response:
@@ -431,7 +425,7 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
                 else:  # POST
                     # For retry POST requests, also remove Content-Type from headers
                     post_headers = HEADERS.copy()
-                    post_headers.pop("Content-Type", None)  # Remove Content-Type if present
+                    post_headers.pop("Content-Type", None)
                     if data:
                         async with session.post(url, data=data, headers=post_headers) as retry_response:
                             response_text = await _handle_response_encoding(retry_response)
