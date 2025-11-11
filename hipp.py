@@ -1658,7 +1658,7 @@ async def fhir_observation_search(request):
                 "code": {
                     "coding": [
                         {
-                            "system": "http://hospital-system/analysis-types",
+                            "system": f"http://127.0.0.1:{PORT}/fhir/CodeSystem/analysis-types",
                             "code": analysis["type"],
                             "display": analysis["type"].upper()
                         }
