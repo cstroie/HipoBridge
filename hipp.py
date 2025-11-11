@@ -580,7 +580,7 @@ async def fhir_patient_search(request):
         
         # Try to parse as single patient page first
         patient_data = parse_patient_data(response_text)
-        if patient_data and patient_data.get("patient_name"):
+        if patient_data and patient_data.get("patient_name") and not patient_data.get("error"):
             fhir_patient = convert_to_fhir_patient(patient_data, request)
             return web.json_response(fhir_patient)
         
@@ -622,7 +622,7 @@ async def fhir_patient_search(request):
                 # Add CNP if available
                 if patient.get("patient_cnp"):
                     fhir_patient["identifier"].append({
-                        "system": "http://hospital-system/cnp",
+                        "system": f"http://{request.host}/fhir/NamingSystem/cnp",
                         "value": patient.get("patient_cnp", "")
                     })
                 
@@ -643,8 +643,14 @@ async def fhir_patient_search(request):
             }
             return web.json_response(bundle)
         
+        # If we have patient data with an error, return that error
+        if patient_data and patient_data.get("error"):
+            logger.warning(f"Patient data parsing error: {patient_data['error']}")
+            return create_error_response(patient_data["error"], 404)
+        
         # If neither parser worked, return an error
         logger.warning("Unable to parse patient search results")
+        logger.debug(f"Response text snippet: {response_text[:500]}...")  # Log snippet for debugging
         return create_error_response(
             "Unable to parse patient search results", 
             500, 
