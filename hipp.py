@@ -1231,8 +1231,15 @@ async def checkout_handler(request):
     Returns:
         web.Response: JSON response with checkout data or error information
     """
-    checkout_id = request.query.get('identifier')
-    logger.info(f"GET /fhir/Encounter endpoint accessed with identifier: {checkout_id}")
+    # Determine if this is a FHIR endpoint call
+    is_fhir = request.path.startswith('/fhir/')
+    
+    if is_fhir:
+        checkout_id = request.query.get('identifier')
+        logger.info(f"GET /fhir/Encounter endpoint accessed with identifier: {checkout_id}")
+    else:
+        checkout_id = request.query.get('id')
+        logger.info("GET /api/checkout endpoint accessed")
     
     if not checkout_id:
         logger.warning("No checkout ID provided")
@@ -1246,18 +1253,6 @@ async def checkout_handler(request):
     # Get credentials from request headers (optional)
     username = request.headers.get("X-Username")
     password = request.headers.get("X-Password")
-    
-    # Get checkout ID from query string
-    checkout_id = request.query.get('id')
-    
-    if not checkout_id:
-        logger.warning("No checkout ID provided")
-        return web.json_response({
-            "status": "error",
-            "message": "Checkout ID is required"
-        }, status=400)
-    
-    logger.info(f"Retrieving checkout with ID: {checkout_id}")
     
     try:
         session = await get_session()
