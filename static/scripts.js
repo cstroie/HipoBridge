@@ -363,8 +363,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 // For imaging analyses, fetch and display report content
                 if (['radio', 'ct', 'irm', 'eco', 'lac', 'lii', 'rads'].includes(analysisType)) {
                     try {
-                        // Fetch report data using FHIR API
-                        const reportResponse = await fetch(`/fhir/DiagnosticReport?identifier=${observation.id}`);
+                        // Fetch report data using FHIR API - now using the observation ID directly
+                        const reportResponse = await fetch(`/fhir/DiagnosticReport/${observation.id}`);
                         
                         if (reportResponse.ok) {
                             const reportData = await reportResponse.json();
@@ -381,9 +381,23 @@ document.addEventListener('DOMContentLoaded', function() {
                                 cardContent += `</div>`;
                             }
                             
-                            // Add report content to the card
+                            // Add report content to the card - now using presentedForm or conclusion
                             cardContent += `<div class="report-preview">`;
-                            if (reportData.conclusion) {
+                            if (reportData.presentedForm && reportData.presentedForm.length > 0) {
+                                // Use the first presentedForm entry
+                                const form = reportData.presentedForm[0];
+                                if (form.contentType === 'text/plain' && form.data) {
+                                    cardContent += `<pre>${form.data}</pre>`;
+                                } else if (form.contentType === 'text/html' && form.data) {
+                                    // Decode base64 if needed
+                                    try {
+                                        const decoded = atob(form.data);
+                                        cardContent += `<div>${decoded}</div>`;
+                                    } catch (e) {
+                                        cardContent += `<div>${form.data}</div>`;
+                                    }
+                                }
+                            } else if (reportData.conclusion) {
                                 try {
                                     const htmlResult = await convertMarkdownToHtml(reportData.conclusion);
                                     cardContent += `<div>${htmlResult}</div>`;
