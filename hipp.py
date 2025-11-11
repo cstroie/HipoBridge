@@ -1572,10 +1572,10 @@ async def fhir_observation_search(request):
             # For datetime filtering, we need to get report details to check dates
             filtered_analyses = []
             try:
-                from datetime import datetime, timedelta
+                from datetime import datetime as dt, timedelta
                 
                 # Parse the filter datetime
-                filter_dt = datetime.fromisoformat(datetime_filter)
+                filter_dt = dt.fromisoformat(datetime_filter)
                 # Define the time window (up to 6 hours later)
                 max_dt = filter_dt + timedelta(hours=6)
                 
@@ -1597,12 +1597,12 @@ async def fhir_observation_search(request):
                             try:
                                 # Handle common date formats
                                 if re.match(r'\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}', report_datetime_str):
-                                    report_dt = datetime.strptime(report_datetime_str, '%d/%m/%Y %H:%M:%S')
+                                    report_dt = dt.strptime(report_datetime_str, '%d/%m/%Y %H:%M:%S')
                                 elif re.match(r'\d{2}/\d{2}/\d{4}', report_datetime_str):
-                                    report_dt = datetime.strptime(report_datetime_str, '%d/%m/%Y')
+                                    report_dt = dt.strptime(report_datetime_str, '%d/%m/%Y')
                                 else:
                                     # Try ISO format
-                                    report_dt = datetime.fromisoformat(report_datetime_str)
+                                    report_dt = dt.fromisoformat(report_datetime_str)
                                 
                                 # Check if report is within the time window
                                 if filter_dt <= report_dt <= max_dt:
