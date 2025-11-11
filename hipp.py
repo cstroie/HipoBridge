@@ -1921,6 +1921,23 @@ async def fhir_observation_read(request):
                 }
             ]
         
+        # Add patient gender and birth date if available
+        if report_data.get("gender"):
+            fhir_observation["extension"] = [
+                {
+                    "url": "http://hl7.org/fhir/StructureDefinition/patient-gender",
+                    "valueCode": report_data["gender"].lower()
+                }
+            ]
+        
+        if report_data.get("birth_date"):
+            if "extension" not in fhir_observation:
+                fhir_observation["extension"] = []
+            fhir_observation["extension"].append({
+                "url": "http://hl7.org/fhir/StructureDefinition/patient-birthDate",
+                "valueDate": report_data["birth_date"]
+            })
+        
         # Add value/comment if available
         if report_data.get("reports"):
             # For now, add the first report result as a comment
