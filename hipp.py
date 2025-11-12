@@ -1390,6 +1390,22 @@ def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dic
             series["instance"].append(instance)
             fhir_imaging_study["series"].append(series)
     
+    # Add reason for study if referral information is available
+    if report_data.get("referral_reason") or report_data.get("referral_code"):
+        reason_text = ""
+        if report_data.get("referral_code"):
+            reason_text += f"Code: {report_data['referral_code']}"
+        if report_data.get("referral_reason"):
+            if reason_text:
+                reason_text += " - "
+            reason_text += report_data["referral_reason"]
+        
+        fhir_imaging_study["reason"] = [
+            {
+                "text": reason_text
+            }
+        ]
+    
     # Add additional information as extensions
     extensions = []
     
@@ -1406,7 +1422,7 @@ def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dic
             "valueString": report_data["gender"]
         })
     
-    # Add referral information if available
+    # Add referral information as extensions
     if report_data.get("referral_reason"):
         extensions.append({
             "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/referral-reason",
