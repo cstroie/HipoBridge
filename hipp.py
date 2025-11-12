@@ -440,12 +440,6 @@ async def patient_search(request):
                 fhir_patient = {
                     "resourceType": "Patient",
                     "id": patient.get("patient_id", ""),
-                    "identifier": [
-                        {
-                            "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-id",
-                            "value": patient.get("patient_id", "")
-                        }
-                    ],
                     "name": [
                         {
                             "use": "official",
@@ -717,12 +711,7 @@ def convert_patient_to_fhir(patient_data: Dict[str, Any], request) -> Dict[str, 
         "meta": {
             "lastUpdated": datetime.now().isoformat()
         },
-        "identifier": [
-            {
-                "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-id",
-                "value": patient_data.get("patient_id", "")
-            }
-        ],
+        "identifier": [],
         "active": True,
         "name": [
             {
@@ -773,18 +762,26 @@ def convert_patient_to_fhir(patient_data: Dict[str, Any], request) -> Dict[str, 
             "valueString": patient_data["height"]
         })
     
+    # Add CNP as identifier if available
+    if patient_data.get("patient_cnp", None):
+        fhir_patient["identifier"].append({
+            "use": "official",
+            "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-cnp",
+            "value": patient_data["patient_cnp"]
+        })
+    
     # Add CID if available
     if patient_data.get("cid", None):
-        fhir_patient["extension"].append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/patient-cid",
-            "valueString": patient_data["cid"]
+        fhir_patient["identifier"].append({
+            "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-cid",
+            "value": patient_data["cid"]
         })
     
     # Add MCP if available
     if patient_data.get("mcp", None):
-        fhir_patient["extension"].append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/patient-mcp",
-            "valueString": patient_data["mcp"]
+        fhir_patient["identifier"].append({
+            "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-mcp",
+            "value": patient_data["mcp"]
         })
 
     # Add extensions for encounter/admission/discharge IDs
@@ -802,13 +799,6 @@ def convert_patient_to_fhir(patient_data: Dict[str, Any], request) -> Dict[str, 
         fhir_patient["extension"].append({
             "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/discharge-ids",
             "valueString": ",".join(patient_data["discharges"])
-        })
-    
-    # Add CNP as additional identifier if available
-    if patient_data.get("patient_cnp", None):
-        fhir_patient["identifier"].append({
-            "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-cnp",
-            "value": patient_data["patient_cnp"]
         })
     
     # Return the FHIR Patient resource
@@ -1605,7 +1595,7 @@ async def observation_search(request):
             "entry": []
         }
         
-        for analysis in analyses:
+        for analysisaa in analyses:
             fhir_observation = {
                 "resourceType": "Observation",
                 "id": analysis["analysis_id"],
@@ -1869,8 +1859,11 @@ async def fhir_encounter_read(request):
         
     Returns:
         JSON response with encounter data or error information
+
+    See:
+        https://build.fhir.org/encounter.html
     """
-    encounter_id = request.query.get('identifier')
+    encounter_id = request.match_info.get('id')
     logger.info(f"GET /fhir/Encounter endpoint accessed with identifier: {encounter_id}")
     
     if not encounter_id:
@@ -1894,6 +1887,7 @@ async def fhir_encounter_read(request):
             session, checkout_url, "GET", None, username, password
         )
         duration = (datetime.now() - start_time).total_seconds()
+
         # Check for errors in the response
         if not success:
             return error_response
@@ -1906,15 +1900,7 @@ async def fhir_encounter_read(request):
         fhir_encounter = {
             "resourceType": "Encounter",
             "id": encounter_id,
-            "meta": {
-                "lastUpdated": datetime.now().isoformat()
-            },
-            "status": "finished",
-            "class": {
-                "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
-                "code": "IMP",
-                "display": "inpatient encounter"
-            },
+            "status": "discharged",
             "type": [
                 {
                     "coding": [
@@ -2770,7 +2756,7 @@ async def init_app():
     app.router.add_get('/fhir/Patient/{id}', patient)
     app.router.add_get('/fhir/DiagnosticReport/{id}', diagnostic_report)
     app.router.add_get('/fhir/ImagingStudy/{id}', imaging_study)
-    app.router.add_get('/fhir/Encounter', fhir_encounter_read)
+    app.router.add_get('/fhir/Encounter/{id}', fhir_encounter_read)
     app.router.add_get('/fhir/Observation', observation_search)
     app.router.add_get('/fhir/Observation/{id}', observation)
     app.router.add_get('/fhir/ValueSet/cnp', serve_validate_cnp)
