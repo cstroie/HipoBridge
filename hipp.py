@@ -445,57 +445,42 @@ def parse_patient_data(html_content: str) -> Dict[str, Any]:
             "patient_name": patient_name_from_navbar,
         }
         
+        # Inner function to extract data from input elements
+        def patient_data_from(data_key: str, input_id: str) -> None:
+            input_element = soup.find('input', id=input_id)
+            if input_element:
+                patient_data[data_key] = input_element.get('value', '').strip()
+        
         # Extract patient name from input elements
-        family_input = soup.find('input', id='strNume', type='text')
-        if family_input:
-            patient_data["family_name"] = family_input.get('value', '').strip()
+        patient_data_from("family_name", "strNume")
+        patient_data_from("given_name", "strPrenume")
         
-        given_input = soup.find('input', id='strPrenume', type='text')
-        if given_input:
-            patient_data["given_name"] = given_input.get('value', '').strip()
-        
-        if family_input and given_input:
-            patient_data["patient_name"] = f"{patient_data.get('family_name', '')} {patient_data.get('given_name', '')}".strip()
+        if patient_data.get("family_name") and patient_data.get("given_name"):
+            patient_data["patient_name"] = f"{patient_data['family_name']} {patient_data['given_name']}".strip()
         
         # Extract patient ID (CNP) from input element with id "strCNP"
-        cnp_input = soup.find('input', id='strCNP', type='text')
-        if cnp_input:
-            patient_data["patient_cnp"] = cnp_input.get('value', '').strip()
+        patient_data_from("patient_cnp", "strCNP")
         
         # Extract patient id from hidden input with id "hdnCodeID"
-        id_input = soup.find('input', id='hdnCodeID', type='hidden')
-        if id_input:
-            patient_data["patient_id"] = id_input.get('value', '').strip()
+        patient_data_from("patient_id", "hdnCodeID")
         
         # Extract CID
-        cid_input = soup.find('input', id='strCID', type='text')
-        if cid_input:
-            patient_data["cid"] = cid_input.get('value', '').strip()
+        patient_data_from("cid", "strCID")
         
         # Extract phone
-        phone_input = soup.find('input', id='strTelefon', type='text')
-        if phone_input:
-            patient_data["phone"] = phone_input.get('value', '').strip()
+        patient_data_from("phone", "strTelefon")
         
         # Extract email
-        email_input = soup.find('input', id='strEmail', type='text')
-        if email_input:
-            patient_data["email"] = email_input.get('value', '').strip()
+        patient_data_from("email", "strEmail")
         
         # Extract weight
-        weight_input = soup.find('input', id='strGreutate', type='text')
-        if weight_input:
-            patient_data["weight"] = weight_input.get('value', '').strip()
+        patient_data_from("weight", "strGreutate")
         
         # Extract height
-        height_input = soup.find('input', id='strInaltime', type='text')
-        if height_input:
-            patient_data["height"] = height_input.get('value', '').strip()
+        patient_data_from("height", "strInaltime")
         
         # Extract MCP
-        mcp_input = soup.find('input', id='strmcp', type='text')
-        if mcp_input:
-            patient_data["mcp"] = mcp_input.get('value', '').strip()
+        patient_data_from("mcp", "strmcp")
         
         # Extract address from SELECT with id strDomLegal_LocId
         address_select = soup.find('select', id='strDomLegal_LocId')
