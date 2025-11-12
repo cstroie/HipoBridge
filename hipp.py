@@ -1309,6 +1309,14 @@ def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dic
         "series": []
     }
     
+    # Add modality if available
+    if report_data.get("modality"):
+        fhir_imaging_study["modality"] = {
+            "system": "http://dicom.nema.org/resources/ontology/DCM",
+            "code": report_data["modality"].upper(),
+            "display": report_data["modality"].upper()
+        }
+    
     # Add patient information if available
     if report_data.get("patient_name"):
         fhir_imaging_study["identifier"] = [{
