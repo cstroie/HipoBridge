@@ -122,23 +122,23 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Get the most recent checkout epicrisis using FHIR API
             let epicrisisData = null;
-            if (patientData.checkouts && patientData.checkouts.length > 0) {
+            if (patientData.discharges && patientData.discharges.length > 0) {
                 showToast('Loading epicrisis data...', 'success');
-                // Get the most recent checkout (first in the list)
-                const checkoutId = patientData.checkouts[0];
+                // Get the most recent discharge (first in the list)
+                const dischargeId = patientData.discharges[0];
                 try {
-                    const checkoutResponse = await fetch(`/fhir/Encounter?identifier=${checkoutId}`);
+                    const dischargeResponse = await fetch(`/fhir/Encounter?identifier=${dischargeId}`);
                     
-                    if (checkoutResponse.ok) {
-                        const checkoutData = await checkoutResponse.json();
+                    if (dischargeResponse.ok) {
+                        const dischargeData = await dischargeResponse.json();
                         epicrisisData = {
-                            epicrisis: checkoutData.text ? checkoutData.text.div : '',
-                            date: checkoutData.period ? checkoutData.period.start : '',
-                            checkout_id: checkoutId
+                            epicrisis: dischargeData.text ? dischargeData.text.div : '',
+                            date: dischargeData.period ? dischargeData.period.start : '',
+                            discharge_id: dischargeId
                         };
                     }
                 } catch (err) {
-                    console.error('Error fetching checkout data:', err);
+                    console.error('Error fetching discharge data:', err);
                 }
             }
             
