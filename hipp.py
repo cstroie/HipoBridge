@@ -197,7 +197,7 @@ async def patient_read(request):
         # For FHIR endpoint, we need to get patient details first
         patient_data = parse_patient_data(response_text)
         if patient_data and patient_data.get("patient_id") and not patient_data.get("error"):
-            fhir_patient = convert_to_fhir_patient(patient_data, request)
+            fhir_patient = convert_patient_to_fhir(patient_data, request)
             return web.json_response(fhir_patient)
         else:
             if patient_data and 'error' in patient_data:
@@ -324,20 +324,20 @@ async def patient_search(request):
             session, search_url, "POST", search_data, username, password
         )
         duration = (datetime.now() - start_time).total_seconds()
+
         # Check for errors in the response
         if not success:
             return error_response
         logger.info(f"Patient search completed in {duration:.2f} seconds")
-        
+
         ## Try to parse as single patient page first
         patient_data = parse_patient_data(response_text)
         if patient_data and patient_data.get("patient_id") and not patient_data.get("error"):
-            fhir_patient = convert_to_fhir_patient(patient_data, request)
+            fhir_patient = convert_patient_to_fhir(patient_data, request)
             return web.json_response(fhir_patient)
-        
+
         # Try to parse as multiple patients page
         multiple_patients_data = parse_multiple_patients_data(response_text)
-
         if multiple_patients_data and len(multiple_patients_data) > 0:
             # Convert multiple patients to FHIR Bundle
             bundle = {
@@ -346,13 +346,12 @@ async def patient_search(request):
                 "total": len(multiple_patients_data),
                 "entry": []
             }
-            
             for patient in multiple_patients_data:
                 # Create minimal FHIR patient resource for each
                 name_parts = patient.get("patient_name", "").split()
                 family_name = name_parts[0] if len(name_parts) > 0 else ""
                 given_names = name_parts[1:] if len(name_parts) > 1 else []
-                
+                # Create FHIR Patient resource
                 fhir_patient = {
                     "resourceType": "Patient",
                     "id": patient.get("patient_id", ""),
@@ -381,8 +380,9 @@ async def patient_search(request):
                     "resource": fhir_patient
                 })
             return web.json_response(bundle)
-        
+
         # Check if we're on a "no results" page
+        # TODO This is not working
         if "nu a fost gasit" in response_text.lower() or "no results" in response_text.lower():
             # Return empty FHIR Bundle
             bundle = {
@@ -392,7 +392,7 @@ async def patient_search(request):
                 "entry": []
             }
             return web.json_response(bundle)
-        
+
         # If neither parser worked, return an error
         logger.warning("Unable to parse patient search results")
         # Log a snippet of the response for debugging
@@ -402,7 +402,7 @@ async def patient_search(request):
             500, 
             {"type": "parse_error"}
         )
-            
+
     except Exception as e:
         logger.error(f"Patient search failed with exception: {e}")
         return create_error_response(str(e), 500)
@@ -420,6 +420,15 @@ def parse_patient_data(html_content: str) -> Dict[str, Any]:
         Dictionary containing parsed patient data, or empty dict if not a patient page
         Returns {"error": "Invalid patient id"} if patient name is empty
     """
+    # Initialize empty patient data dictionary
+    patient_data = {}
+
+    # Inner function to extract data from input elements
+    def patient_data_from(data_key: str, input_id: str) -> None:
+        input_element = soup.find('input', id=input_id)
+        if input_element:
+            patient_data[data_key] = input_element.get('value', '').strip()
+
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
         
@@ -440,16 +449,8 @@ def parse_patient_data(html_content: str) -> Dict[str, Any]:
             logger.warning("Patient name from navbar is empty, invalid patient id")
             return {"error": "Invalid patient id"}
         
-        # Patient data
-        patient_data = {
-            "patient_name": patient_name_from_navbar,
-        }
-        
-        # Inner function to extract data from input elements
-        def patient_data_from(data_key: str, input_id: str) -> None:
-            input_element = soup.find('input', id=input_id)
-            if input_element:
-                patient_data[data_key] = input_element.get('value', '').strip()
+        # Patient name
+        patient_data["patient_name"] = patient_name_from_navbar
         
         # Extract patient name from input elements
         patient_data_from("family_name", "strNume")
@@ -545,7 +546,59 @@ def parse_patient_data(html_content: str) -> Dict[str, Any]:
         logger.error(f"Error parsing patient data: {e}")
         return {}
 
-def convert_to_fhir_patient(patient_data: Dict[str, Any], request) -> Dict[str, Any]:
+def parse_multiple_patients_data(html_content: str) -> List[Dict[str, Any]]:
+    """Parse HTML content for multiple patient search results and extract patient data.
+    
+    Extracts patient names, CNP, and ids from search results page with multiple patients.
+    
+    Args:
+        html_content: HTML content of the search results page
+        
+    Returns:
+        List of dictionaries containing patient data (name, ID only)
+    """
+    # Initialize empty list for patients
+    patients = []
+
+    try:
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Check if this is a search results page by looking for 'Fisier' in title
+        if not is_expected_page(soup, 'Fisier'):
+            # Log snippet of response for debugging
+            #logger.debug(f"Response text snippet: {html_content[:200]}...")
+            # Return empty list if not expected page
+            return patients
+
+        # Find all links with the pattern javascript:Edit('patient_id')
+        for link in soup.find_all('a', href=re.compile(r"javascript:Edit\('([^']+)'\);")):
+            # Extract patient id from href
+            href = link.get('href')
+            id_match = re.search(r"javascript:Edit\('([^']+)'\);", href)
+            if not id_match:
+                continue
+            patient_id = id_match.group(1)
+
+            # Extract patient name from the link text
+            patient_name = link.get_text().strip().upper()
+            if patient_name == patient_id:
+                # If name is same as id, skip this entry (the data is duplicated in Hipocrate)
+                continue
+
+            # Add patient data to list
+            patient_data = {
+                "patient_name": patient_name,
+                "patient_id": patient_id
+            }
+            patients.append(patient_data)
+        # Return the list of patients
+        return patients
+
+    except Exception as e:
+        logger.error(f"Error parsing multiple patients data: {e}")
+        return patients
+
+def convert_patient_to_fhir(patient_data: Dict[str, Any], request) -> Dict[str, Any]:
     """Convert patient data to FHIR Patient resource format.
     
     Args:
@@ -568,18 +621,6 @@ def convert_to_fhir_patient(patient_data: Dict[str, Any], request) -> Dict[str, 
     # Use already extracted gender and birth date if available
     gender = patient_data.get("sex", "unknown")
     birth_date = patient_data.get("birth_date", "")
-    
-    # Fallback to deriving from CNP if gender/birth date are not available
-    cnp = patient_data.get("patient_cnp", "")
-    if (not gender or gender == "unknown") and cnp:
-        parsed_cnp = parse_cnp(cnp)
-        if parsed_cnp.get("valid"):
-            gender = parsed_cnp.get("gender", "unknown")
-    
-    if not birth_date and cnp:
-        parsed_cnp = parse_cnp(cnp)
-        if parsed_cnp.get("valid"):
-            birth_date = parsed_cnp.get("birth_date", "")
     
     # Create FHIR Patient resource
     fhir_patient = {
@@ -609,20 +650,20 @@ def convert_to_fhir_patient(patient_data: Dict[str, Any], request) -> Dict[str, 
     }
 
     # Add telecom information if available
-    if patient_data.get("phone"):
+    if patient_data.get("phone", None):
         fhir_patient["telecom"].append({
             "system": "phone",
             "value": patient_data["phone"]
         })
     
-    if patient_data.get("email"):
+    if patient_data.get("email", None):
         fhir_patient["telecom"].append({
             "system": "email",
             "value": patient_data["email"]
         })
 
     # Add address information if available
-    if patient_data.get("address"):
+    if patient_data.get("address", None):
         fhir_patient["address"].append({
             "text": patient_data["address"]
         })
@@ -630,29 +671,29 @@ def convert_to_fhir_patient(patient_data: Dict[str, Any], request) -> Dict[str, 
     # Add extensions for additional patient data
     fhir_patient["extension"] = []
     
+    # Add weight if available
+    if patient_data.get("weight", None):
+        fhir_patient["extension"].append({
+            "url": "http://hl7.org/fhir/us/vitals/StructureDefinition/body-weight",
+            "valueString": patient_data["weight"]
+        })
+    
+    # Add height if available
+    if patient_data.get("height", None):
+        fhir_patient["extension"].append({
+            "url": "http://hl7.org/fhir/us/vitals/StructureDefinition/height",
+            "valueString": patient_data["height"]
+        })
+    
     # Add CID if available
-    if patient_data.get("cid"):
+    if patient_data.get("cid", None):
         fhir_patient["extension"].append({
             "url": f"http://{request.host}/fhir/StructureDefinition/patient-cid",
             "valueString": patient_data["cid"]
         })
     
-    # Add weight if available
-    if patient_data.get("weight"):
-        fhir_patient["extension"].append({
-            "url": f"http://{request.host}/fhir/StructureDefinition/patient-weight",
-            "valueString": patient_data["weight"]
-        })
-    
-    # Add height if available
-    if patient_data.get("height"):
-        fhir_patient["extension"].append({
-            "url": f"http://{request.host}/fhir/StructureDefinition/patient-height",
-            "valueString": patient_data["height"]
-        })
-    
     # Add MCP if available
-    if patient_data.get("mcp"):
+    if patient_data.get("mcp", None):
         fhir_patient["extension"].append({
             "url": f"http://{request.host}/fhir/StructureDefinition/patient-mcp",
             "valueString": patient_data["mcp"]
@@ -676,65 +717,14 @@ def convert_to_fhir_patient(patient_data: Dict[str, Any], request) -> Dict[str, 
         })
     
     # Add CNP as additional identifier if available
-    if cnp:
+    if patient_data.get("cnp", None):
         fhir_patient["identifier"].append({
             "system": f"http://{request.host}/fhir/NamingSystem/patient-cnp",
-            "value": cnp
+            "value": patient_data["cnp"]
         })
     
     # Return the FHIR Patient resource
     return fhir_patient
-
-def parse_multiple_patients_data(html_content: str) -> List[Dict[str, Any]]:
-    """Parse HTML content for multiple patient search results and extract patient data.
-    
-    Extracts patient names, CNP, and ids from search results page with multiple patients.
-    
-    Args:
-        html_content: HTML content of the search results page
-        
-    Returns:
-        List of dictionaries containing patient data (name, ID only)
-    """
-    try:
-        soup = BeautifulSoup(html_content, 'html.parser')
-        
-        # Check if this is a search results page by looking for 'Fisier' in title
-        if not is_expected_page(soup, 'Fisier'):
-            # Log snippet of response for debugging
-            #logger.debug(f"Response text snippet: {html_content[:200]}...")
-            # Return empty list if not expected page
-            return []
-
-        # Find all links with the pattern javascript:Edit('patient_id')
-        patients_links = soup.find_all('a', href=re.compile(r"javascript:Edit\('([^']+)'\);"))    
-        patients = []
-
-        for link in patients_links:
-            # Extract patient id from href
-            href = link.get('href')
-            id_match = re.search(r"javascript:Edit\('([^']+)'\);", href)
-            if not id_match:
-                continue
-            patient_id = id_match.group(1)
-            
-            # Extract patient name from the link text
-            patient_name = link.get_text().strip().upper()
-            if patient_name == patient_id:
-                # If name is same as id, skip this entry
-                continue
-
-            # Add patient data to list
-            patient_data = {
-                "patient_name": patient_name,
-                "patient_id": patient_id
-            }
-            patients.append(patient_data)
-        
-        return patients
-    except Exception as e:
-        logger.error(f"Error parsing multiple patients data: {e}")
-        return []
 
 
 
