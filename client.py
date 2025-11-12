@@ -173,7 +173,7 @@ async def get_report(session: aiohttp.ClientSession, report_id: str) -> bool:
     """
     print(f"Retrieving report with ID: {report_id}")
     
-    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/fhir/DiagnosticReport?identifier={report_id}")
+    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/fhir/DiagnosticReport/{report_id}")
     
     if not success:
         print(f"Report retrieval failed")
@@ -225,6 +225,106 @@ async def get_report(session: aiohttp.ClientSession, report_id: str) -> bool:
         for i, result in enumerate(results, 1):
             if result.get("reference"):
                 print(f"  {i}. {result['reference']}")
+    
+    print("--------------------------")
+    
+    return True
+
+
+async def get_imaging_study(session: aiohttp.ClientSession, study_id: str) -> bool:
+    """Retrieve an imaging study by ID using the FHIR API.
+    
+    Gets an imaging study from the HippoBridge service and displays the parsed data.
+    Returns FHIR ImagingStudy resource.
+    
+    Args:
+        session (aiohttp.ClientSession): The HTTP session to use for the request
+        study_id (str): The ID of the imaging study to retrieve
+        
+    Returns:
+        bool: True if retrieval was successful, False otherwise
+    """
+    print(f"Retrieving imaging study with ID: {study_id}")
+    
+    data, success = await _make_api_request(session, "GET", f"{BASE_URL}/fhir/ImagingStudy/{study_id}")
+    
+    if not success:
+        print(f"Imaging study retrieval failed")
+        return False
+    
+    print("Imaging study retrieval successful!")
+    
+    # Display FHIR ImagingStudy data
+    print("\n--- Imaging Study Data ---")
+    if data.get("id"):
+        print(f"Study ID: {data['id']}")
+    if data.get("status"):
+        print(f"Status: {data['status']}")
+    if data.get("started"):
+        print(f"Started: {data['started']}")
+    
+    # Display modality information
+    if data.get("modality"):
+        modality = data["modality"]
+        if modality.get("display"):
+            print(f"Modality: {modality['display']}")
+        elif modality.get("code"):
+            print(f"Modality: {modality['code']}")
+    
+    # Display subject (patient) reference
+    if data.get("subject"):
+        subject = data["subject"]
+        if subject.get("reference"):
+            print(f"Patient Reference: {subject['reference']}")
+    
+    # Display description
+    if data.get("description"):
+        print(f"Description: {data['description']}")
+    
+    # Display performer information
+    if data.get("performer"):
+        performers = data["performer"]
+        print(f"\nPerformers ({len(performers)} found):")
+        for i, performer in enumerate(performers, 1):
+            if performer.get("actor") and performer["actor"].get("display"):
+                print(f"  {i}. {performer['actor']['display']}")
+    
+    # Display referrer information
+    if data.get("referrer"):
+        referrer = data["referrer"]
+        if referrer.get("display"):
+            print(f"Referrer: {referrer['display']}")
+    
+    # Display reason
+    if data.get("reason"):
+        reasons = data["reason"]
+        print(f"\nReasons ({len(reasons)} found):")
+        for i, reason in enumerate(reasons, 1):
+            if reason.get("text"):
+                print(f"  {i}. {reason['text']}")
+    
+    # Display note
+    if data.get("note"):
+        notes = data["note"]
+        print(f"\nNotes ({len(notes)} found):")
+        for i, note in enumerate(notes, 1):
+            if note.get("text"):
+                print(f"  {i}. {note['text']}")
+    
+    # Display series information
+    if data.get("series"):
+        series_list = data["series"]
+        print(f"\nSeries ({len(series_list)} found):")
+        for i, series in enumerate(series_list, 1):
+            print(f"  {i}. Series Number: {series.get('number', 'N/A')}")
+            if series.get("description"):
+                print(f"      Description: {series['description']}")
+            if series.get("modality"):
+                modality = series["modality"]
+                if modality.get("display"):
+                    print(f"      Modality: {modality['display']}")
+                elif modality.get("code"):
+                    print(f"      Modality: {modality['code']}")
     
     print("--------------------------")
     
@@ -682,6 +782,7 @@ async def main():
     parser.add_argument("--search", "-s", help="Search term for patient search")
     parser.add_argument("--fhir", "-f", action="store_true", help="Return results in FHIR format")
     parser.add_argument("--report", "-r", help="Report ID to retrieve")
+    parser.add_argument("--imaging-study", "-i", help="Imaging study ID to retrieve")
     parser.add_argument("--checkout", "-o", help="Checkout ID to retrieve")
     parser.add_argument("--patient", "-p", help="Patient ID to retrieve")
     parser.add_argument("--analyses", "-a", help="Patient ID to retrieve analyses for")
@@ -695,8 +796,8 @@ async def main():
     username = args.username or os.getenv("HYP_USER")
     password = args.password or os.getenv("HYP_PASS")
     
-    if not args.search and not args.report and not args.checkout and not args.patient and not args.analyses and not args.cnp:
-        print("Error: Either search term, report ID, checkout ID, patient ID, analyses ID, or CNP is required")
+    if not args.search and not args.report and not args.imaging_study and not args.checkout and not args.patient and not args.analyses and not args.cnp:
+        print("Error: Either search term, report ID, imaging study ID, checkout ID, patient ID, analyses ID, or CNP is required")
         parser.print_help()
         return 1
     
@@ -723,6 +824,13 @@ async def main():
             report_success = await get_report(session, args.report)
             if not report_success:
                 print("Failed to retrieve report")
+                return 1
+        
+        # Retrieve imaging study if requested
+        if args.imaging_study:
+            imaging_study_success = await get_imaging_study(session, args.imaging_study)
+            if not imaging_study_success:
+                print("Failed to retrieve imaging study")
                 return 1
         
         # Retrieve checkout if requested
