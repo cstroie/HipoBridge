@@ -1317,6 +1317,13 @@ def convert_report_to_diagnostic_report(report_data: Dict[str, Any], request) ->
     # Add media references placeholder
     fhir_report["media"] = []
     
+    # Add reference to ImagingStudy with the same ID
+    fhir_report["imagingStudy"] = [
+        {
+            "reference": f"ImagingStudy/{report_data['report_id']}"
+        }
+    ]
+    
     # Return the FHIR Patient resource
     return fhir_report
 
