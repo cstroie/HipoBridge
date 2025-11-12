@@ -1120,7 +1120,7 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
         report_data["examination"] = extract_field_from_td(soup, r'EXAMINARE EFECTUATA:')
         
         # Extract modality from examination text
-        examination_text = report_data["examination"].upper() if report_data["examination"] else ""
+        examination_text = report_data["examination"].lower() if report_data["examination"] else ""
         modality_mapping = {
             'CR': 'CR',    # Computed Radiography
             'US': 'US',    # Ultrasound
@@ -1137,7 +1137,7 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
                 break
         
         # Special case: if "TOMOGRAFIA" is in the examination text, set modality to CT
-        if "TOMOGRAFIA" in examination_text:
+        if "tomografia" in examination_text:
             report_data["modality"] = "CT"
         
         report_data["referral_reason"] = extract_field_from_td(soup, r'DIAGNOSTIC DE TRIMITERE:')
