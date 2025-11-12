@@ -343,6 +343,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (observation.code && observation.code.coding && observation.code.coding.length > 0) {
                     analysisType = observation.code.coding[0].code || 'unknown';
                 }
+                // Extract display text from observation display
+                let analysisText = 'analysis';
+                if (observation.code && observation.code.coding && observation.code.coding.length > 0) {
+                    analysisText = observation.code.coding[0].display || 'analysis';
+                }
                 
                 // Display analyses with imaging types 'radio', 'ct', 'irm', 'eco', 'lac', 'lii', 'rads'
                 if (!['radio', 'ct', 'irm', 'eco', 'lac', 'lii', 'rads'].includes(analysisType)) {
@@ -355,7 +360,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Start building the card content
                 let cardContent = `
                     <header>
-                        <h4>Analysis #${observation.id} ${analysisType}</h4>
+                        <h4>${analysisText} report #${observation.id}</h4>
                     </header>
                     <main>
                 `;
@@ -392,6 +397,9 @@ document.addEventListener('DOMContentLoaded', function() {
                                 const form = reportData.presentedForm[0];
                                 if (form.contentType === 'text/plain' && form.data) {
                                     cardContent += `<pre>${form.data}</pre>`;
+                                } else if (form.contentType === 'text/markdown' && form.data) {
+                                    const htmlResult = await convertMarkdownToHtml(reportData.conclusion);
+                                    cardContent += `<div>${htmlResult}</div>`;
                                 } else if (form.contentType === 'text/html' && form.data) {
                                     // Decode base64 if needed
                                     try {
