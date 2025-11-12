@@ -60,31 +60,6 @@ DEFAULT_CONFIG = {
     }
 }
 
-def load_config():
-    """Load configuration from hipp.cfg and local.cfg (if exists).
-    
-    Returns:
-        dict: Configuration dictionary with merged settings
-    """
-    config = configparser.ConfigParser()
-    
-    # Read default config
-    config.read_dict(DEFAULT_CONFIG)
-    
-    # Load main config file
-    if os.path.exists('hipp.cfg'):
-        logger.info("Loading hipp.cfg configuration")
-        config.read('hipp.cfg')
-    else:
-        logger.info("hipp.cfg not found, using default configuration")
-    
-    # Load local config if exists (will override hipp.cfg)
-    if os.path.exists('local.cfg'):
-        logger.info("Loading local.cfg configuration (overrides hipp.cfg)")
-        config.read('local.cfg')
-    
-    return config
-
 # Load configuration
 config = load_config()
 
@@ -153,38 +128,9 @@ session: Optional[aiohttp.ClientSession] = None
 cnp_cache: Dict[str, str] = {}
 cache_max_size = 1000  # Maximum number of entries to cache
 
-def create_error_response(message: str, status_code: int = 400, details: Dict[str, Any] = None) -> web.Response:
-    """Create a standardized error response.
-    
-    Args:
-        message: Error message
-        status_code: HTTP status code (default: 400)
-        details: Additional error details
-        
-    Returns:
-        Standardized JSON error response
-    """
-    response_data = {
-        "status": "error",
-        "message": message
-    }
-    
-    if details:
-        response_data["details"] = details
-    
-    return web.json_response(response_data, status=status_code)
 
-async def get_session():
-    global session
-    if session is None or session.closed:
-        logger.debug("Creating new aiohttp ClientSession with cookie support")
-        # Create session with automatic cookie handling
-        session = aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(unsafe=True))
-    else:
-        logger.debug("Reusing existing aiohttp ClientSession")
-    return session
 
-async def root_handler(request):
+async def serve_web_page(request):
     """Handle requests to the root endpoint.
     
     Returns a web page with a CNP input form and analysis functionality.
@@ -203,263 +149,67 @@ async def root_handler(request):
     
     return web.Response(text=html_content, content_type='text/html')
 
-def is_login_page(content: str) -> bool:
-    """Detect if the provided content is a login page.
+async def patient_read(request):
+    """Retrieve patient information by ID.
     
-    Checks for 'Identificare' in the HTML title to determine if we're on the login page.
-    
-    Args:
-        content: HTML content to check
-        
-    Returns:
-        True if content appears to be a login page, False otherwise
-    """
-    # Parse the HTML content to extract the title
-    try:
-        soup = BeautifulSoup(content, 'html.parser')
-        title = soup.find('title')
-        is_login = title and 'Identificare' in title.get_text()
-    except Exception:
-        # Fallback to simple string check if parsing fails
-        is_login = "Username" in content and "Password" in content
-    # Log detection result
-    if is_login:
-        logger.debug("Detected login page")
-    return is_login
-
-async def login_if_needed(username: str = None, password: str = None) -> bool:
-    """Attempt to login to the Hipocrate service if needed.
-    
-    Checks if we're currently on the login page, and if so, performs login
-    using the provided or environment credentials.
+    Gets patient information from the Hipocrate service and extracts
+    associated admission and discharge IDs.
     
     Args:
-        username: Username for login. Defaults to environment variable.
-        password: Password for login. Defaults to environment variable.
+        request: The incoming HTTP request with 'id' query parameter for patient ID
+                 and optional X-Username and X-Password headers for authentication
         
     Returns:
-        True if login was successful or not needed, False otherwise
+        JSON response with patient data or error information
     """
-    logger.info("Attempting login if needed")
+    patient_id = request.match_info.get('id')
+    logger.info(f"GET /fhir/Patient/{patient_id} endpoint accessed")
     
-    # Use provided credentials or fallback to environment variables
-    user = username or HYP_USER
-    pwd = password or HYP_PASS
+    if not patient_id:
+        logger.warning("No patient ID provided")
+        return create_error_response("Patient ID is required (not CNP)")
     
-    if not user or not pwd:
-        logger.warning("Username or password not set, skipping login")
-        return False
+    logger.info(f"Retrieving patient with ID: {patient_id}")
+    
+    # Get credentials from request headers (optional)
+    username = request.headers.get("X-Username")
+    password = request.headers.get("X-Password")
     
     try:
+        # Get aiohttp session
         session = await get_session()
         
-        # First, check if we're already logged in by accessing main.asp
-        main_url = f"{SERVICE_URL}/main.asp"
-        logger.debug(f"Checking if already logged in by accessing: {main_url}")
-        async with session.get(main_url, headers=HEADERS) as main_response:
-            # Handle encoding properly - the service may not be using UTF-8
-            try:
-                main_text = await main_response.text()
-            except UnicodeDecodeError:
-                # If UTF-8 fails, try to get raw bytes and decode with latin-1 or windows-1252
-                raw_data = await main_response.read()
-                try:
-                    main_text = raw_data.decode('windows-1252')
-                except UnicodeDecodeError:
-                    main_text = raw_data.decode('latin-1')
-            logger.debug(f"Main page response status: {main_response.status}")
-            
-            # If we're not on the login page, we're already logged in
-            if not is_login_page(main_text):
-                logger.info("Already logged in, skipping login")
-                return True
+        # Make request to the patient endpoint
+        patient_url = f"{SERVICE_URL}/Pacient/edit.asp?id={patient_id}"
         
-        # If we're on the login page, proceed with login
-        logger.info("Not logged in, proceeding with login")
-        
-        # First, access the default.asp page to get initial cookies
-        default_url = f"{SERVICE_URL}/default.asp"
-        logger.debug(f"Accessing default page to get cookies: {default_url}")
-        async with session.get(default_url, headers=HEADERS) as default_response:
-            logger.debug(f"Default page response status: {default_response.status}")
-            
-        # Prepare login data to match browser submission
-        login_data = {
-            "id_recuperare_pwd_2": "",
-            "strUser": user,
-            "strPwd": pwd,
-            "cboLang": "ro"
-        }
-        
-        # Add referer header for the login request
-        login_headers = HEADERS.copy()
-        login_headers["Referer"] = default_url
-        
-        # Use the correct login endpoint
-        login_url = f"{SERVICE_URL}/security/logon.asp"
-        logger.debug(f"Submitting login form to {login_url}")
-        # Submit login form
-        async with session.post(
-            login_url, 
-            data=login_data, 
-            headers=login_headers
-        ) as login_response:
-            response_text = await login_response.text()
-            logger.debug(f"Login response status: {login_response.status}")
-            
-            # Log cookie information
-            if session.cookie_jar:
-                cookies = session.cookie_jar.filter_cookies(URL(SERVICE_URL))
-                logger.debug(f"Session cookies after login: {len(cookies)} cookies")
-        
-        # Check if login was successful (redirect to main.asp or not on login page)
-        if login_response.status == 302 and "main.asp" in login_response.headers.get("Location", ""):
-            logger.info("Login successful: redirected to main.asp")
-            return True
-        elif not is_login_page(response_text):
-            logger.info("Login successful: not on login page")
-            return True
-        else:
-            logger.warning("Login failed: still on login page")
-        return False
-    except Exception as e:
-        logger.error(f"Login failed with exception: {e}")
-        return False
+        # Make the authenticated request
+        start_time = datetime.now()
+        response_text, success, error_response = await make_authenticated_request(
+            session, patient_url, "GET", None, username, password
+        )
+        duration = (datetime.now() - start_time).total_seconds()
 
-
-async def fhir_login(request):
-    """Handle explicit login requests.
-    
-    Performs login to the Hipocrate service using credentials provided in the request body.
-    
-    Args:
-        request: The incoming HTTP request with JSON body containing username and password
+        # Check for errors in the response
+        if not success:
+            return error_response
+        logger.info(f"Patient info retrieved in {duration:.2f} seconds")
         
-    Returns:
-        JSON response indicating login success or failure
-    """
-    logger.info("POST /fhir/login endpoint accessed")
-    
-    try:
-        # Get credentials from request body
-        data = await request.json()
-        username = data.get("username")
-        password = data.get("password")
-        
-        if not username or not password:
-            logger.warning("Username or password not provided")
-            return create_error_response("Username and password are required")
-        
-        # Attempt login with provided credentials
-        login_success = await login_if_needed(username, password)
-        
-        if login_success:
-            logger.info("Login successful via API endpoint")
-            return web.json_response({
-                "status": "success",
-                "message": "Login successful"
-            })
+        # For FHIR endpoint, we need to get patient details first
+        patient_data = parse_patient_data(response_text)
+        if patient_data and patient_data.get("patient_id") and not patient_data.get("error"):
+            fhir_patient = convert_to_fhir_patient(patient_data, request)
+            return web.json_response(fhir_patient)
         else:
-            logger.error("Login failed via API endpoint")
-            return create_error_response("Login failed", 401)
+            if patient_data and 'error' in patient_data:
+                return create_error_response(patient_data['error'], 404)
+            # Return an error if we couldn't read patient data
+            return create_error_response("Unable to read patient data", 500)
             
-    except json.JSONDecodeError:
-        logger.warning("Invalid JSON data received for login")
-        return create_error_response("Invalid JSON data")
     except Exception as e:
-        logger.error(f"Login endpoint failed with exception: {e}")
+        logger.error(f"Patient retrieval failed with exception: {e}")
         return create_error_response(str(e), 500)
 
-async def make_authenticated_request(session, url, method="GET", data=None, username=None, password=None):
-    """Make an authenticated request to the Hipocrate service with automatic login handling.
-    
-    Args:
-        session: The aiohttp session to use
-        url: The URL to request
-        method: HTTP method ("GET" or "POST")
-        data: Data to send with POST requests
-        username: Username for login if needed
-        password: Password for login if needed
-        
-    Returns:
-        Tuple of (response_text, success, error_response) where success is boolean
-    """
-    
-    async def _make_request(use_retry_headers=False):
-        """Helper function to make a request with proper headers."""
-        if method == "GET":
-            logger.debug(f"Making GET request to: {url}")
-            async with session.get(url, headers=HEADERS) as response:
-                response_text = await handle_response_encoding(response)
-                logger.debug(f"GET response status: {response.status}")
-        else:  # POST
-            logger.debug(f"Making POST request to: {url}")
-            # For POST requests, we need to be careful about Content-Type headers
-            # Create a copy of headers without Content-Type to avoid conflicts
-            post_headers = HEADERS.copy()
-            if use_retry_headers or method == "POST":
-                post_headers.pop("Content-Type", None)
-            # When sending form data, let aiohttp set the Content-Type automatically
-            if data:
-                async with session.post(url, data=data, headers=post_headers) as response:
-                    response_text = await handle_response_encoding(response)
-                    logger.debug(f"POST response status: {response.status}")
-            else:
-                async with session.post(url, headers=post_headers) as response:
-                    response_text = await handle_response_encoding(response)
-                    logger.debug(f"POST response status: {response.status}")
-        return response_text
-    
-    try:
-        # Log current cookies before request
-        if session.cookie_jar:
-            cookies = session.cookie_jar.filter_cookies(URL(SERVICE_URL))
-            logger.debug(f"Using {len(cookies)} cookies for request to {url}")
-        
-        # Make the initial request
-        response_text = await _make_request()
-        
-        # Check if we got redirected to login page (session expired)
-        if is_login_page(response_text):
-            logger.warning(f"Session expired during request to {url}, attempting re-login")
-            login_success = await login_if_needed(username, password)
-            if login_success:
-                # Retry the request with special headers for POST
-                response_text = await _make_request(use_retry_headers=True)
-                # Check again if still on login page
-                if is_login_page(response_text):
-                    logger.error("Login failed after retry")
-                    return None, False, create_error_response("Authentication failed after retry", 401)
-            else:
-                logger.error("Re-login failed")
-                return None, False, create_error_response("Authentication failed", 401)
-        # If we reach here, we have a valid response
-        return response_text, True, None
-    except Exception as e:
-        logger.error(f"Request to {url} failed with exception: {e}")
-        return None, False, create_error_response(str(e), 500)
-
-async def handle_response_encoding(response):
-    """Handle response encoding for the Hipocrate service.
-    
-    Args:
-        response: The aiohttp response object
-        
-    Returns:
-        Decoded response text
-    """
-    try:
-        response_text = await response.text()
-    except UnicodeDecodeError:
-        # If UTF-8 fails, try to get raw bytes and decode with latin-1 or windows-1252
-        raw_data = await response.read()
-        try:
-            response_text = raw_data.decode('windows-1252')
-        except UnicodeDecodeError:
-            response_text = raw_data.decode('latin-1')
-    return response_text
-
-async def fhir_patient_search(request):
+async def patient_search(request):
     """Search for patients by name or other criteria.
     
     Performs a patient search on the Hipocrate service using the provided search term.
@@ -487,6 +237,7 @@ async def fhir_patient_search(request):
         return create_error_response("Search term is required")
     
     try:
+        # Get aiohttp session
         session = await get_session()
         
         # Determine search type based on input
@@ -655,358 +406,6 @@ async def fhir_patient_search(request):
     except Exception as e:
         logger.error(f"Patient search failed with exception: {e}")
         return create_error_response(str(e), 500)
-
-def html_to_markdown(html_content: str) -> str:
-    """Convert HTML content to clean markdown text.
-    
-    Processes HTML content by removing unnecessary tags, converting formatting
-    elements to markdown syntax, and normalizing whitespace.
-    
-    Args:
-        html_content: HTML content to convert
-        
-    Returns:
-        Clean markdown text
-    """
-    
-    try:
-        # First convert HTML entities to their characters
-        html_content = html.unescape(html_content)
-        
-        soup = BeautifulSoup(html_content, 'html.parser')
-        
-        # Remove XML namespace declarations and processing instructions
-        for ns_decl in soup.find_all(re.compile(r'^\?xml')):
-            ns_decl.decompose()
-        
-        # Remove Microsoft Office specific tags
-        for tag in soup.find_all(['o:p', 'xml:namespace']):
-            tag.decompose()
-        
-        # Remove wrapping <b> tags that might enclose the entire content
-        # Check if there's a single <b> tag that contains everything
-        body_content = soup.find('body')
-        if body_content:
-            content_children = list(body_content.children)
-            if len(content_children) == 1 and content_children[0].name == 'b':
-                # If the only child is a <b> tag, unwrap it
-                content_children[0].unwrap()
-        else:
-            # If no body tag, check if the soup itself has a single <b> child
-            root_children = list(soup.children)
-            # Filter out text nodes that are only whitespace
-            element_children = [child for child in root_children if hasattr(child, 'name') and child.name]
-            if len(element_children) == 1 and element_children[0].name == 'b':
-                # If the only element child is a <b> tag, unwrap it
-                element_children[0].unwrap()
-        
-        # Convert common HTML elements to markdown
-        # Headings
-        for tag in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
-            level = int(tag.name[1])
-            tag.insert_before('#' * level + ' ')
-            tag.insert_after('\n\n')
-            tag.unwrap()
-        
-        # Paragraphs
-        for p in soup.find_all('p'):
-            p.insert_after('\n\n')
-            p.unwrap()
-        
-        # Line breaks
-        for br in soup.find_all('br'):
-            br.replace_with('\n')
-        
-        # Bold (but skip if it's a wrapper tag)
-        for b in soup.find_all(['b', 'strong']):
-            # Check if this is a wrapper tag (contains all other content)
-            parent_children = list(b.parent.children)
-            # Filter out text nodes that are only whitespace
-            element_children = [child for child in parent_children if hasattr(child, 'name') and child.name]
-            
-            # Skip if this is a wrapper tag (only child element in parent)
-            is_wrapper = (b.parent.name == 'body' or b.parent == soup) and len(element_children) == 1
-            if not is_wrapper:
-                b.insert_before('**')
-                b.insert_after('**')
-            b.unwrap()
-        
-        # Italic
-        for i in soup.find_all(['i', 'em']):
-            i.insert_before('*')
-            i.insert_after('*')
-            i.unwrap()
-        
-        # Underline (convert to italic as markdown doesn't have underline)
-        for u in soup.find_all('u'):
-            u.insert_before('*')
-            u.insert_after('*')
-            u.unwrap()
-        
-        # Remove excessive whitespace and HTML entities
-        text = soup.get_text()
-        # Decode HTML entities
-        text = html.unescape(text)
-        # Remove various forms of non-breaking spaces
-        text = text.replace('\xa0', ' ')  # &nbsp; character entity
-        text = text.replace('&nbsp;', ' ')
-        text = text.replace('&amp;nbsp;', ' ')
-        # Normalize whitespace
-        text = re.sub(r'[ \t]+', ' ', text)
-        text = re.sub(r'\n\s*\n', '\n\n', text)
-        text = text.strip()
-        
-        return text
-    except Exception as e:
-        # If parsing fails, return cleaned text
-        # Decode HTML entities
-        cleaned_text = html.unescape(html_content)
-        # Remove various forms of non-breaking spaces
-        cleaned_text = cleaned_text.replace('\xa0', ' ')  # &nbsp; character entity
-        cleaned_text = cleaned_text.replace('&nbsp;', ' ')
-        cleaned_text = cleaned_text.replace('&amp;nbsp;', ' ')
-        return re.sub(r'\s+', ' ', cleaned_text.strip())
-
-def get_textarea_content_after_label(soup: 'BeautifulSoup', label_regex: str) -> str:
-    """Get content of first textarea after a label matching the given regex.
-    
-    Searches for a label matching the regex pattern and returns the content
-    of the first textarea element that follows it.
-    
-    Args:
-        soup: Parsed HTML content
-        label_regex: Regular expression pattern to match label text
-        
-    Returns:
-        Content of the textarea converted to markdown, or empty string if not found
-    """
-    import re
-    
-    try:
-        # Find elements with text matching the label regex
-        label_elements = soup.find_all(string=re.compile(label_regex, re.IGNORECASE))
-        if label_elements:
-            # Get the parent element which should contain the label
-            parent = label_elements[0].parent
-            if parent:
-                # Find the next textarea sibling
-                textarea = parent.find_next('textarea')
-                if textarea:
-                    return html_to_markdown(str(textarea))
-        return ""
-    except Exception as e:
-        logger.error(f"Error extracting textarea content after label '{label_regex}': {e}")
-        return ""
-
-def parse_report_data(html_content: str) -> Dict[str, Any]:
-    """Parse HTML report content and extract structured data.
-    
-    Extracts patient information, examination details, and report results
-    from HTML report content.
-    
-    Args:
-        html_content: HTML content of the report
-        
-    Returns:
-        Dictionary containing parsed report data
-    """
-    
-    def extract_field_from_td(soup: BeautifulSoup, label_regex: str) -> str:
-        """Extract field data from a table cell containing a label.
-        
-        Args:
-            soup: BeautifulSoup object of the parsed HTML content
-            label_regex: Regular expression pattern to match label text
-            
-        Returns:
-            Extracted field content or empty string if not found
-        """
-        try:
-            # Look for the table cell containing this label
-            label_element = soup.find(string=re.compile(label_regex, re.IGNORECASE))
-            if label_element:
-                # Find the parent td element
-                parent_td = label_element.find_parent('td')
-                if parent_td:
-                    # Extract text content from the same td and clean it
-                    # Remove the label part and get the rest
-                    td_text = parent_td.get_text(separator=' ', strip=True)
-                    # Find the label in the text and extract everything after it
-                    match = re.search(label_regex, td_text, re.IGNORECASE)
-                    if match:
-                        # Get the position after the matched label
-                        label_end = match.end()
-                        # Extract the content after the label
-                        content = td_text[label_end:].strip()
-                        return content
-            return ""
-        except Exception as e:
-            logger.error(f"Error extracting field with label '{label_regex}': {e}")
-            return ""
-
-    try:
-        # First convert HTML entities to their characters
-        html_content = html.unescape(html_content)
-        
-        soup = BeautifulSoup(html_content, 'html.parser')
-        
-        # Initialize result dictionary
-        report_data = {
-            "patient_name": "",
-            "age": "",
-            "gender": "",
-            "patient_cnp": "",
-            "patient_id": "",
-            "datetime": "",
-            "date": "",
-            "time": "",
-            "examination": "",
-            "reports": [],
-            "performer": ""
-        }
-        
-        # Extract text content for pattern matching
-        text_content = soup.get_text()
-        
-        # Extract patient name
-        name_match = re.search(r'(?:Nume:|PACIENT:)\s*([^\n\r<>&]+?)(?:\s+VARSTA:|\s+SEX:|\s+C\.N\.P:|\s+COD\s+PACIENT:)', text_content, re.IGNORECASE)
-        if name_match:
-            report_data["patient_name"] = re.sub(r'\s+', ' ', name_match.group(1).strip())
-        else:
-            # Fallback pattern if the above doesn't match
-            name_match = re.search(r'(?:Nume:|PACIENT:)\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
-            if name_match:
-                report_data["patient_name"] = re.sub(r'\s+', ' ', name_match.group(1).strip())
-        
-        # Extract age
-        age_match = re.search(r'Varsta:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
-        if age_match:
-            report_data["age"] = re.sub(r'\s+', ' ', age_match.group(1).strip())
-        
-        # Extract gender
-        gender_match = re.search(r'Sex:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
-        if gender_match:
-            report_data["gender"] = re.sub(r'\s+', ' ', gender_match.group(1).strip())
-        
-        # Extract patient CNP
-        cnp_match = re.search(r'C\.N\.P:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
-        if cnp_match:
-            report_data["patient_cnp"] = re.sub(r'\s+', ' ', cnp_match.group(1).strip())
-        
-        # Extract patient code
-        code_match = re.search(r'Cod pacient:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
-        if code_match:
-            report_data["patient_id"] = re.sub(r'\s+', ' ', code_match.group(1).strip())
-        
-        # Extract sample date and time
-        datetime_match = re.search(r'(?:Data si ora recoltarii:|Data investigatiei:)\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
-        if datetime_match:
-            datetime_str = re.sub(r'\s+', ' ', datetime_match.group(1).strip())
-            # Try to parse date and time
-            try:
-                # Handle common date formats
-                if re.match(r'\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}', datetime_str):
-                    dt = datetime.strptime(datetime_str, '%d/%m/%Y %H:%M:%S')
-                elif re.match(r'\d{2}/\d{2}/\d{4}', datetime_str):
-                    dt = datetime.strptime(datetime_str, '%d/%m/%Y')
-            except ValueError:
-                # If parsing fails, leave date/time fields empty
-                pass
-            report_data["datetime"] = dt.isoformat()
-        
-        # Extract fields using the helper function
-        report_data["examination"] = extract_field_from_td(soup, r'EXAMINARE EFECTUATA:')
-        report_data["referral_reason"] = extract_field_from_td(soup, r'DIAGNOSTIC DE TRIMITERE:')
-        report_data["presumptive_diagnosis"] = extract_field_from_td(soup, r'DG\.PREZUMTIV:')
-        report_data["special_indications"] = extract_field_from_td(soup, r'INDICATII SPECIALE:')
-        report_data["referring_physician"] = extract_field_from_td(soup, r'TRIMIS DE:\s*MEDIC')
-        
-        # Parse referral code and reason if we have referral data
-        if report_data["referral_reason"]:
-            # Split into code and text - first part numeric is the code, rest is the reason
-            parts = report_data["referral_reason"].split(' ', 1)
-            if parts:
-                # Check if first part is numeric (the code)
-                if parts[0].isdigit():
-                    report_data["referral_code"] = parts[0]
-                    report_data["referral_reason"] = parts[1].strip() if len(parts) > 1 else ""
-        
-        # Extract multiple reports
-        # Find all elements with text starting with "REZULTAT:"
-        result_elements = soup.find_all(string=re.compile(r'^REZULTAT:', re.IGNORECASE))
-        
-        for result_element in result_elements:
-            try:
-                # The investigation name is the text after "REZULTAT:" in the element
-                element_text = result_element.get_text()
-                investigation_match = re.search(r'REZULTAT:\s*(.*?)(?:\s*$)', element_text, re.IGNORECASE)
-                investigation_name = ""
-                if investigation_match:
-                    investigation_name = investigation_match.group(1).strip()
-                
-                # Find the next div sibling which contains the actual result
-                result_div = result_element.find_next('div')
-                result_content = ""
-                if result_div:
-                    # Check if the div contains only a single <b> tag as its child
-                    div_children = list(result_div.children)
-                    # Filter out text nodes that contain only whitespace
-                    element_children = [child for child in div_children if hasattr(child, 'name') and child.name]
-                    
-                    if len(element_children) == 1 and element_children[0].name == 'b':
-                        # If the only child is a <b> tag, use its content directly
-                        result_content = html_to_markdown(str(element_children[0]))
-                    else:
-                        # Otherwise, process the entire div
-                        result_content = html_to_markdown(str(result_div))
-                
-                # Add to reports list
-                report_data["reports"].append({
-                    "investigation": investigation_name,
-                    "result": result_content
-                })
-            except Exception as e:
-                logger.error(f"Error parsing individual report: {e}")
-                continue
-        
-        # Extract performer (MEDIC, or Medic validator:)
-        # Handle both plain text and HTML formatted performer names
-        performer_patterns = [
-            r'(?:MEDIC,|Medic validator:)\s*([^\n\r<>&]+)',
-            r'(?:MEDIC,|Medic validator:)\s*<b[^>]*>([^<]+)</b>',
-            r'(?:MEDIC,|Medic validator:)[^>]*>\s*([^\n\r<>&]+)'
-        ]
-        
-        performer_name = ""
-        for pattern in performer_patterns:
-            performer_match = re.search(pattern, html_content, re.IGNORECASE)
-            if performer_match:
-                performer_name = performer_match.group(1).strip()
-                # Clean up HTML entities and extra whitespace
-                performer_name = html.unescape(performer_name)
-                performer_name = re.sub(r'\s+', ' ', performer_name)
-                break
-        
-        if performer_name:
-            report_data["performer"] = performer_name
-
-        return report_data
-    except Exception as e:
-        logger.error(f"Error parsing report data: {e}")
-        return {}
-
-def is_expected_page(soup: BeautifulSoup, expected_title_text: str) -> bool:
-    """Check if the parsed HTML content is the expected page by looking for specific text in the title.
-    
-    Args:
-        soup: BeautifulSoup object of the parsed HTML content
-        expected_title_text: Text that should be present in the page title
-        
-    Returns:
-        True if the page title contains the expected text, False otherwise
-    """
-    title = soup.find('title')
-    return title and expected_title_text in title.get_text()
 
 def parse_patient_data(html_content: str) -> Dict[str, Any]:
     """Parse HTML content for a single patient page and extract patient data.
@@ -1352,6 +751,603 @@ def parse_multiple_patients_data(html_content: str) -> List[Dict[str, Any]]:
         logger.error(f"Error parsing multiple patients data: {e}")
         return []
 
+
+
+def is_login_page(content: str) -> bool:
+    """Detect if the provided content is a login page.
+    
+    Checks for 'Identificare' in the HTML title to determine if we're on the login page.
+    
+    Args:
+        content: HTML content to check
+        
+    Returns:
+        True if content appears to be a login page, False otherwise
+    """
+    # Parse the HTML content to extract the title
+    try:
+        soup = BeautifulSoup(content, 'html.parser')
+        title = soup.find('title')
+        is_login = title and 'Identificare' in title.get_text()
+    except Exception:
+        # Fallback to simple string check if parsing fails
+        is_login = "Username" in content and "Password" in content
+    # Log detection result
+    if is_login:
+        logger.debug("Detected login page")
+    return is_login
+
+async def login_if_needed(username: str = None, password: str = None) -> bool:
+    """Attempt to login to the Hipocrate service if needed.
+    
+    Checks if we're currently on the login page, and if so, performs login
+    using the provided or environment credentials.
+    
+    Args:
+        username: Username for login. Defaults to environment variable.
+        password: Password for login. Defaults to environment variable.
+        
+    Returns:
+        True if login was successful or not needed, False otherwise
+    """
+    logger.info("Attempting login if needed")
+    
+    # Use provided credentials or fallback to environment variables
+    user = username or HYP_USER
+    pwd = password or HYP_PASS
+    
+    if not user or not pwd:
+        logger.warning("Username or password not set, skipping login")
+        return False
+    
+    try:
+        session = await get_session()
+        
+        # First, check if we're already logged in by accessing main.asp
+        main_url = f"{SERVICE_URL}/main.asp"
+        logger.debug(f"Checking if already logged in by accessing: {main_url}")
+        async with session.get(main_url, headers=HEADERS) as main_response:
+            # Handle encoding properly - the service may not be using UTF-8
+            try:
+                main_text = await main_response.text()
+            except UnicodeDecodeError:
+                # If UTF-8 fails, try to get raw bytes and decode with latin-1 or windows-1252
+                raw_data = await main_response.read()
+                try:
+                    main_text = raw_data.decode('windows-1252')
+                except UnicodeDecodeError:
+                    main_text = raw_data.decode('latin-1')
+            logger.debug(f"Main page response status: {main_response.status}")
+            
+            # If we're not on the login page, we're already logged in
+            if not is_login_page(main_text):
+                logger.info("Already logged in, skipping login")
+                return True
+        
+        # If we're on the login page, proceed with login
+        logger.info("Not logged in, proceeding with login")
+        
+        # First, access the default.asp page to get initial cookies
+        default_url = f"{SERVICE_URL}/default.asp"
+        logger.debug(f"Accessing default page to get cookies: {default_url}")
+        async with session.get(default_url, headers=HEADERS) as default_response:
+            logger.debug(f"Default page response status: {default_response.status}")
+            
+        # Prepare login data to match browser submission
+        login_data = {
+            "id_recuperare_pwd_2": "",
+            "strUser": user,
+            "strPwd": pwd,
+            "cboLang": "ro"
+        }
+        
+        # Add referer header for the login request
+        login_headers = HEADERS.copy()
+        login_headers["Referer"] = default_url
+        
+        # Use the correct login endpoint
+        login_url = f"{SERVICE_URL}/security/logon.asp"
+        logger.debug(f"Submitting login form to {login_url}")
+        # Submit login form
+        async with session.post(
+            login_url, 
+            data=login_data, 
+            headers=login_headers
+        ) as login_response:
+            response_text = await login_response.text()
+            logger.debug(f"Login response status: {login_response.status}")
+            
+            # Log cookie information
+            if session.cookie_jar:
+                cookies = session.cookie_jar.filter_cookies(URL(SERVICE_URL))
+                logger.debug(f"Session cookies after login: {len(cookies)} cookies")
+        
+        # Check if login was successful (redirect to main.asp or not on login page)
+        if login_response.status == 302 and "main.asp" in login_response.headers.get("Location", ""):
+            logger.info("Login successful: redirected to main.asp")
+            return True
+        elif not is_login_page(response_text):
+            logger.info("Login successful: not on login page")
+            return True
+        else:
+            logger.warning("Login failed: still on login page")
+        return False
+    except Exception as e:
+        logger.error(f"Login failed with exception: {e}")
+        return False
+
+
+async def fhir_login(request):
+    """Handle explicit login requests.
+    
+    Performs login to the Hipocrate service using credentials provided in the request body.
+    
+    Args:
+        request: The incoming HTTP request with JSON body containing username and password
+        
+    Returns:
+        JSON response indicating login success or failure
+    """
+    logger.info("POST /fhir/login endpoint accessed")
+    
+    try:
+        # Get credentials from request body
+        data = await request.json()
+        username = data.get("username")
+        password = data.get("password")
+        
+        if not username or not password:
+            logger.warning("Username or password not provided")
+            return create_error_response("Username and password are required")
+        
+        # Attempt login with provided credentials
+        login_success = await login_if_needed(username, password)
+        
+        if login_success:
+            logger.info("Login successful via API endpoint")
+            return web.json_response({
+                "status": "success",
+                "message": "Login successful"
+            })
+        else:
+            logger.error("Login failed via API endpoint")
+            return create_error_response("Login failed", 401)
+            
+    except json.JSONDecodeError:
+        logger.warning("Invalid JSON data received for login")
+        return create_error_response("Invalid JSON data")
+    except Exception as e:
+        logger.error(f"Login endpoint failed with exception: {e}")
+        return create_error_response(str(e), 500)
+
+async def make_authenticated_request(session, url, method="GET", data=None, username=None, password=None):
+    """Make an authenticated request to the Hipocrate service with automatic login handling.
+    
+    Args:
+        session: The aiohttp session to use
+        url: The URL to request
+        method: HTTP method ("GET" or "POST")
+        data: Data to send with POST requests
+        username: Username for login if needed
+        password: Password for login if needed
+        
+    Returns:
+        Tuple of (response_text, success, error_response) where success is boolean
+    """
+    
+    async def _make_request(use_retry_headers=False):
+        """Helper function to make a request with proper headers."""
+        if method == "GET":
+            logger.debug(f"Making GET request to: {url}")
+            async with session.get(url, headers=HEADERS) as response:
+                response_text = await handle_response_encoding(response)
+                logger.debug(f"GET response status: {response.status}")
+        else:  # POST
+            logger.debug(f"Making POST request to: {url}")
+            # For POST requests, we need to be careful about Content-Type headers
+            # Create a copy of headers without Content-Type to avoid conflicts
+            post_headers = HEADERS.copy()
+            if use_retry_headers or method == "POST":
+                post_headers.pop("Content-Type", None)
+            # When sending form data, let aiohttp set the Content-Type automatically
+            if data:
+                async with session.post(url, data=data, headers=post_headers) as response:
+                    response_text = await handle_response_encoding(response)
+                    logger.debug(f"POST response status: {response.status}")
+            else:
+                async with session.post(url, headers=post_headers) as response:
+                    response_text = await handle_response_encoding(response)
+                    logger.debug(f"POST response status: {response.status}")
+        return response_text
+    
+    try:
+        # Log current cookies before request
+        if session.cookie_jar:
+            cookies = session.cookie_jar.filter_cookies(URL(SERVICE_URL))
+            logger.debug(f"Using {len(cookies)} cookies for request to {url}")
+        
+        # Make the initial request
+        response_text = await _make_request()
+        
+        # Check if we got redirected to login page (session expired)
+        if is_login_page(response_text):
+            logger.warning(f"Session expired during request to {url}, attempting re-login")
+            login_success = await login_if_needed(username, password)
+            if login_success:
+                # Retry the request with special headers for POST
+                response_text = await _make_request(use_retry_headers=True)
+                # Check again if still on login page
+                if is_login_page(response_text):
+                    logger.error("Login failed after retry")
+                    return None, False, create_error_response("Authentication failed after retry", 401)
+            else:
+                logger.error("Re-login failed")
+                return None, False, create_error_response("Authentication failed", 401)
+        # If we reach here, we have a valid response
+        return response_text, True, None
+    except Exception as e:
+        logger.error(f"Request to {url} failed with exception: {e}")
+        return None, False, create_error_response(str(e), 500)
+
+async def handle_response_encoding(response):
+    """Handle response encoding for the Hipocrate service.
+    
+    Args:
+        response: The aiohttp response object
+        
+    Returns:
+        Decoded response text
+    """
+    try:
+        response_text = await response.text()
+    except UnicodeDecodeError:
+        # If UTF-8 fails, try to get raw bytes and decode with latin-1 or windows-1252
+        raw_data = await response.read()
+        try:
+            response_text = raw_data.decode('windows-1252')
+        except UnicodeDecodeError:
+            response_text = raw_data.decode('latin-1')
+    return response_text
+
+def html_to_markdown(html_content: str) -> str:
+    """Convert HTML content to clean markdown text.
+    
+    Processes HTML content by removing unnecessary tags, converting formatting
+    elements to markdown syntax, and normalizing whitespace.
+    
+    Args:
+        html_content: HTML content to convert
+        
+    Returns:
+        Clean markdown text
+    """
+    
+    try:
+        # First convert HTML entities to their characters
+        html_content = html.unescape(html_content)
+        
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Remove XML namespace declarations and processing instructions
+        for ns_decl in soup.find_all(re.compile(r'^\?xml')):
+            ns_decl.decompose()
+        
+        # Remove Microsoft Office specific tags
+        for tag in soup.find_all(['o:p', 'xml:namespace']):
+            tag.decompose()
+        
+        # Remove wrapping <b> tags that might enclose the entire content
+        # Check if there's a single <b> tag that contains everything
+        body_content = soup.find('body')
+        if body_content:
+            content_children = list(body_content.children)
+            if len(content_children) == 1 and content_children[0].name == 'b':
+                # If the only child is a <b> tag, unwrap it
+                content_children[0].unwrap()
+        else:
+            # If no body tag, check if the soup itself has a single <b> child
+            root_children = list(soup.children)
+            # Filter out text nodes that are only whitespace
+            element_children = [child for child in root_children if hasattr(child, 'name') and child.name]
+            if len(element_children) == 1 and element_children[0].name == 'b':
+                # If the only element child is a <b> tag, unwrap it
+                element_children[0].unwrap()
+        
+        # Convert common HTML elements to markdown
+        # Headings
+        for tag in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
+            level = int(tag.name[1])
+            tag.insert_before('#' * level + ' ')
+            tag.insert_after('\n\n')
+            tag.unwrap()
+        
+        # Paragraphs
+        for p in soup.find_all('p'):
+            p.insert_after('\n\n')
+            p.unwrap()
+        
+        # Line breaks
+        for br in soup.find_all('br'):
+            br.replace_with('\n')
+        
+        # Bold (but skip if it's a wrapper tag)
+        for b in soup.find_all(['b', 'strong']):
+            # Check if this is a wrapper tag (contains all other content)
+            parent_children = list(b.parent.children)
+            # Filter out text nodes that are only whitespace
+            element_children = [child for child in parent_children if hasattr(child, 'name') and child.name]
+            
+            # Skip if this is a wrapper tag (only child element in parent)
+            is_wrapper = (b.parent.name == 'body' or b.parent == soup) and len(element_children) == 1
+            if not is_wrapper:
+                b.insert_before('**')
+                b.insert_after('**')
+            b.unwrap()
+        
+        # Italic
+        for i in soup.find_all(['i', 'em']):
+            i.insert_before('*')
+            i.insert_after('*')
+            i.unwrap()
+        
+        # Underline (convert to italic as markdown doesn't have underline)
+        for u in soup.find_all('u'):
+            u.insert_before('*')
+            u.insert_after('*')
+            u.unwrap()
+        
+        # Remove excessive whitespace and HTML entities
+        text = soup.get_text()
+        # Decode HTML entities
+        text = html.unescape(text)
+        # Remove various forms of non-breaking spaces
+        text = text.replace('\xa0', ' ')  # &nbsp; character entity
+        text = text.replace('&nbsp;', ' ')
+        text = text.replace('&amp;nbsp;', ' ')
+        # Normalize whitespace
+        text = re.sub(r'[ \t]+', ' ', text)
+        text = re.sub(r'\n\s*\n', '\n\n', text)
+        text = text.strip()
+        
+        return text
+    except Exception as e:
+        # If parsing fails, return cleaned text
+        # Decode HTML entities
+        cleaned_text = html.unescape(html_content)
+        # Remove various forms of non-breaking spaces
+        cleaned_text = cleaned_text.replace('\xa0', ' ')  # &nbsp; character entity
+        cleaned_text = cleaned_text.replace('&nbsp;', ' ')
+        cleaned_text = cleaned_text.replace('&amp;nbsp;', ' ')
+        return re.sub(r'\s+', ' ', cleaned_text.strip())
+
+def get_textarea_content_after_label(soup: 'BeautifulSoup', label_regex: str) -> str:
+    """Get content of first textarea after a label matching the given regex.
+    
+    Searches for a label matching the regex pattern and returns the content
+    of the first textarea element that follows it.
+    
+    Args:
+        soup: Parsed HTML content
+        label_regex: Regular expression pattern to match label text
+        
+    Returns:
+        Content of the textarea converted to markdown, or empty string if not found
+    """
+    import re
+    
+    try:
+        # Find elements with text matching the label regex
+        label_elements = soup.find_all(string=re.compile(label_regex, re.IGNORECASE))
+        if label_elements:
+            # Get the parent element which should contain the label
+            parent = label_elements[0].parent
+            if parent:
+                # Find the next textarea sibling
+                textarea = parent.find_next('textarea')
+                if textarea:
+                    return html_to_markdown(str(textarea))
+        return ""
+    except Exception as e:
+        logger.error(f"Error extracting textarea content after label '{label_regex}': {e}")
+        return ""
+
+def parse_report_data(html_content: str) -> Dict[str, Any]:
+    """Parse HTML report content and extract structured data.
+    
+    Extracts patient information, examination details, and report results
+    from HTML report content.
+    
+    Args:
+        html_content: HTML content of the report
+        
+    Returns:
+        Dictionary containing parsed report data
+    """
+    
+    def extract_field_from_td(soup: BeautifulSoup, label_regex: str) -> str:
+        """Extract field data from a table cell containing a label.
+        
+        Args:
+            soup: BeautifulSoup object of the parsed HTML content
+            label_regex: Regular expression pattern to match label text
+            
+        Returns:
+            Extracted field content or empty string if not found
+        """
+        try:
+            # Look for the table cell containing this label
+            label_element = soup.find(string=re.compile(label_regex, re.IGNORECASE))
+            if label_element:
+                # Find the parent td element
+                parent_td = label_element.find_parent('td')
+                if parent_td:
+                    # Extract text content from the same td and clean it
+                    # Remove the label part and get the rest
+                    td_text = parent_td.get_text(separator=' ', strip=True)
+                    # Find the label in the text and extract everything after it
+                    match = re.search(label_regex, td_text, re.IGNORECASE)
+                    if match:
+                        # Get the position after the matched label
+                        label_end = match.end()
+                        # Extract the content after the label
+                        content = td_text[label_end:].strip()
+                        return content
+            return ""
+        except Exception as e:
+            logger.error(f"Error extracting field with label '{label_regex}': {e}")
+            return ""
+
+    try:
+        # First convert HTML entities to their characters
+        html_content = html.unescape(html_content)
+        
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Initialize result dictionary
+        report_data = {
+            "patient_name": "",
+            "age": "",
+            "gender": "",
+            "patient_cnp": "",
+            "patient_id": "",
+            "datetime": "",
+            "date": "",
+            "time": "",
+            "examination": "",
+            "reports": [],
+            "performer": ""
+        }
+        
+        # Extract text content for pattern matching
+        text_content = soup.get_text()
+        
+        # Extract patient name
+        name_match = re.search(r'(?:Nume:|PACIENT:)\s*([^\n\r<>&]+?)(?:\s+VARSTA:|\s+SEX:|\s+C\.N\.P:|\s+COD\s+PACIENT:)', text_content, re.IGNORECASE)
+        if name_match:
+            report_data["patient_name"] = re.sub(r'\s+', ' ', name_match.group(1).strip())
+        else:
+            # Fallback pattern if the above doesn't match
+            name_match = re.search(r'(?:Nume:|PACIENT:)\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
+            if name_match:
+                report_data["patient_name"] = re.sub(r'\s+', ' ', name_match.group(1).strip())
+        
+        # Extract age
+        age_match = re.search(r'Varsta:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
+        if age_match:
+            report_data["age"] = re.sub(r'\s+', ' ', age_match.group(1).strip())
+        
+        # Extract gender
+        gender_match = re.search(r'Sex:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
+        if gender_match:
+            report_data["gender"] = re.sub(r'\s+', ' ', gender_match.group(1).strip())
+        
+        # Extract patient CNP
+        cnp_match = re.search(r'C\.N\.P:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
+        if cnp_match:
+            report_data["patient_cnp"] = re.sub(r'\s+', ' ', cnp_match.group(1).strip())
+        
+        # Extract patient code
+        code_match = re.search(r'Cod pacient:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
+        if code_match:
+            report_data["patient_id"] = re.sub(r'\s+', ' ', code_match.group(1).strip())
+        
+        # Extract sample date and time
+        datetime_match = re.search(r'(?:Data si ora recoltarii:|Data investigatiei:)\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
+        if datetime_match:
+            datetime_str = re.sub(r'\s+', ' ', datetime_match.group(1).strip())
+            # Try to parse date and time
+            try:
+                # Handle common date formats
+                if re.match(r'\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}', datetime_str):
+                    dt = datetime.strptime(datetime_str, '%d/%m/%Y %H:%M:%S')
+                elif re.match(r'\d{2}/\d{2}/\d{4}', datetime_str):
+                    dt = datetime.strptime(datetime_str, '%d/%m/%Y')
+            except ValueError:
+                # If parsing fails, leave date/time fields empty
+                pass
+            report_data["datetime"] = dt.isoformat()
+        
+        # Extract fields using the helper function
+        report_data["examination"] = extract_field_from_td(soup, r'EXAMINARE EFECTUATA:')
+        report_data["referral_reason"] = extract_field_from_td(soup, r'DIAGNOSTIC DE TRIMITERE:')
+        report_data["presumptive_diagnosis"] = extract_field_from_td(soup, r'DG\.PREZUMTIV:')
+        report_data["special_indications"] = extract_field_from_td(soup, r'INDICATII SPECIALE:')
+        report_data["referring_physician"] = extract_field_from_td(soup, r'TRIMIS DE:\s*MEDIC')
+        
+        # Parse referral code and reason if we have referral data
+        if report_data["referral_reason"]:
+            # Split into code and text - first part numeric is the code, rest is the reason
+            parts = report_data["referral_reason"].split(' ', 1)
+            if parts:
+                # Check if first part is numeric (the code)
+                if parts[0].isdigit():
+                    report_data["referral_code"] = parts[0]
+                    report_data["referral_reason"] = parts[1].strip() if len(parts) > 1 else ""
+        
+        # Extract multiple reports
+        # Find all elements with text starting with "REZULTAT:"
+        result_elements = soup.find_all(string=re.compile(r'^REZULTAT:', re.IGNORECASE))
+        
+        for result_element in result_elements:
+            try:
+                # The investigation name is the text after "REZULTAT:" in the element
+                element_text = result_element.get_text()
+                investigation_match = re.search(r'REZULTAT:\s*(.*?)(?:\s*$)', element_text, re.IGNORECASE)
+                investigation_name = ""
+                if investigation_match:
+                    investigation_name = investigation_match.group(1).strip()
+                
+                # Find the next div sibling which contains the actual result
+                result_div = result_element.find_next('div')
+                result_content = ""
+                if result_div:
+                    # Check if the div contains only a single <b> tag as its child
+                    div_children = list(result_div.children)
+                    # Filter out text nodes that contain only whitespace
+                    element_children = [child for child in div_children if hasattr(child, 'name') and child.name]
+                    
+                    if len(element_children) == 1 and element_children[0].name == 'b':
+                        # If the only child is a <b> tag, use its content directly
+                        result_content = html_to_markdown(str(element_children[0]))
+                    else:
+                        # Otherwise, process the entire div
+                        result_content = html_to_markdown(str(result_div))
+                
+                # Add to reports list
+                report_data["reports"].append({
+                    "investigation": investigation_name,
+                    "result": result_content
+                })
+            except Exception as e:
+                logger.error(f"Error parsing individual report: {e}")
+                continue
+        
+        # Extract performer (MEDIC, or Medic validator:)
+        # Handle both plain text and HTML formatted performer names
+        performer_patterns = [
+            r'(?:MEDIC,|Medic validator:)\s*([^\n\r<>&]+)',
+            r'(?:MEDIC,|Medic validator:)\s*<b[^>]*>([^<]+)</b>',
+            r'(?:MEDIC,|Medic validator:)[^>]*>\s*([^\n\r<>&]+)'
+        ]
+        
+        performer_name = ""
+        for pattern in performer_patterns:
+            performer_match = re.search(pattern, html_content, re.IGNORECASE)
+            if performer_match:
+                performer_name = performer_match.group(1).strip()
+                # Clean up HTML entities and extra whitespace
+                performer_name = html.unescape(performer_name)
+                performer_name = re.sub(r'\s+', ' ', performer_name)
+                break
+        
+        if performer_name:
+            report_data["performer"] = performer_name
+
+        return report_data
+    except Exception as e:
+        logger.error(f"Error parsing report data: {e}")
+        return {}
+
 def parse_checkout_data(html_content: str) -> Dict[str, Any]:
     """Parse HTML checkout content and extract structured data.
     
@@ -1423,64 +1419,6 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Error parsing checkout data: {e}")
         return {}
-
-async def fhir_patient_read(request):
-    """Retrieve patient information by ID.
-    
-    Gets patient information from the Hipocrate service and extracts
-    associated admission and discharge IDs.
-    
-    Args:
-        request: The incoming HTTP request with 'id' query parameter for patient ID
-                 and optional X-Username and X-Password headers for authentication
-        
-    Returns:
-        JSON response with patient data or error information
-    """
-    patient_id = request.match_info.get('id')
-    logger.info(f"GET /fhir/Patient/{patient_id} endpoint accessed")
-    
-    if not patient_id:
-        logger.warning("No patient ID provided")
-        return create_error_response("Patient ID is required (not CNP)")
-    
-    logger.info(f"Retrieving patient with ID: {patient_id}")
-    
-    # Get credentials from request headers (optional)
-    username = request.headers.get("X-Username")
-    password = request.headers.get("X-Password")
-    
-    try:
-        session = await get_session()
-        
-        # Make request to the patient endpoint
-        patient_url = f"{SERVICE_URL}/Pacient/edit.asp?id={patient_id}"
-        
-        # Make the authenticated request
-        start_time = datetime.now()
-        response_text, success, error_response = await make_authenticated_request(
-            session, patient_url, "GET", None, username, password
-        )
-        duration = (datetime.now() - start_time).total_seconds()
-        # Check for errors in the response
-        if not success:
-            return error_response
-        logger.info(f"Patient info retrieved in {duration:.2f} seconds")
-        
-        # For FHIR endpoint, we need to get patient details first
-        patient_data = parse_patient_data(response_text)
-        if patient_data and patient_data.get("patient_id") and not patient_data.get("error"):
-            fhir_patient = convert_to_fhir_patient(patient_data, request)
-            return web.json_response(fhir_patient)
-        else:
-            if patient_data and 'error' in patient_data:
-                return create_error_response(patient_data['error'], 404)
-            # Return an error if we couldn't read patient data
-            return create_error_response("Unable to read patient data", 500)
-            
-    except Exception as e:
-        logger.error(f"Patient retrieval failed with exception: {e}")
-        return create_error_response(str(e), 500)
 
 async def fhir_encounter_read(request):
     """Retrieve encounter information by ID.
@@ -3339,7 +3277,7 @@ async def fhir_diagnostic_report_read(request):
                     
                     # Add effective date if available
                     if parsed_data.get("datetime"):
-                        fhir_report["effectiveDateTime"] = parsed_data["datetime"].isoformat()
+                        fhir_report["effectiveDateTime"] = parsed_data["datetime"] #.isoformat()
                     
                     # Add performer if available
                     if parsed_data.get("performer"):
@@ -3466,36 +3404,76 @@ async def fhir_diagnostic_report_read(request):
             "message": str(e)
         }, status=500)
 
-async def init_app():
-    """Initialize the web application.
+
+
+def is_expected_page(soup: BeautifulSoup, expected_title_text: str) -> bool:
+    """Check if the parsed HTML content is the expected page by looking for specific text in the title.
     
-    Sets up routes and application lifecycle handlers.
+    Args:
+        soup: BeautifulSoup object of the parsed HTML content
+        expected_title_text: Text that should be present in the page title
+        
+    Returns:
+        True if the page title contains the expected text, False otherwise
+    """
+    title = soup.find('title')
+    return title and expected_title_text in title.get_text()
+
+def create_error_response(message: str, status_code: int = 400, details: Dict[str, Any] = None) -> web.Response:
+    """Create a standardized error response.
+    
+    Args:
+        message: Error message
+        status_code: HTTP status code (default: 400)
+        details: Additional error details
+        
+    Returns:
+        Standardized JSON error response
+    """
+    response_data = {
+        "status": "error",
+        "message": message
+    }
+    
+    if details:
+        response_data["details"] = details
+    
+    return web.json_response(response_data, status=status_code)
+
+async def get_session():
+    global session
+    if session is None or session.closed:
+        logger.debug("Creating new aiohttp ClientSession with cookie support")
+        # Create session with automatic cookie handling
+        session = aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(unsafe=True))
+    else:
+        logger.debug("Reusing existing aiohttp ClientSession")
+    return session
+
+def load_config():
+    """Load configuration from hipp.cfg and local.cfg (if exists).
     
     Returns:
-        Configured web application
+        dict: Configuration dictionary with merged settings
     """
-    logger.info("Initializing web application")
-    app = web.Application()
-    app.router.add_get('/', root_handler)
-    # FHIR-compatible endpoints
-    app.router.add_get('/fhir/Patient', fhir_patient_search)
-    app.router.add_get('/fhir/Patient/{id}', fhir_patient_read)
-    app.router.add_get('/fhir/DiagnosticReport/{id}', fhir_diagnostic_report_read)
-    app.router.add_get('/fhir/Encounter', fhir_encounter_read)
-    app.router.add_get('/fhir/Observation', fhir_observation_search)
-    app.router.add_get('/fhir/Observation/{id}', fhir_observation_read)
-    app.router.add_get('/fhir/ValueSet/cnp', fhir_cnp_validate)
-    app.router.add_post('/fhir/login', fhir_login)
-    app.router.add_post('/fhir/md2html', fhir_markdown_to_html)
-    app.router.add_get('/fhir/CodeSystem/analysis-types', fhir_analysis_types)
-    app.router.add_get('/fhir/spec', fhir_specification)
-    app.router.add_static('/static/', path='static', name='static')
+    config = configparser.ConfigParser()
     
-    # Setup startup and cleanup
-    app.on_startup.append(on_startup)
-    app.on_cleanup.append(on_cleanup)
+    # Read default config
+    config.read_dict(DEFAULT_CONFIG)
     
-    return app
+    # Load main config file
+    if os.path.exists('hipp.cfg'):
+        logger.info("Loading hipp.cfg configuration")
+        config.read('hipp.cfg')
+    else:
+        logger.info("hipp.cfg not found, using default configuration")
+    
+    # Load local config if exists (will override hipp.cfg)
+    if os.path.exists('local.cfg'):
+        logger.info("Loading local.cfg configuration (overrides hipp.cfg)")
+        config.read('local.cfg')
+    
+    return config
 
 async def on_startup(app):
     """Handle application startup.
@@ -3521,6 +3499,37 @@ async def on_cleanup(app):
     if session and not session.closed:
         logger.debug("Closing aiohttp ClientSession")
         await session.close()
+
+async def init_app():
+    """Initialize the web application.
+    
+    Sets up routes and application lifecycle handlers.
+    
+    Returns:
+        Configured web application
+    """
+    logger.info("Initializing web application")
+    app = web.Application()
+    app.router.add_get('/', serve_web_page)
+    # FHIR-compatible endpoints
+    app.router.add_get('/fhir/Patient', patient_search)
+    app.router.add_get('/fhir/Patient/{id}', patient_read)
+    app.router.add_get('/fhir/DiagnosticReport/{id}', fhir_diagnostic_report_read)
+    app.router.add_get('/fhir/Encounter', fhir_encounter_read)
+    app.router.add_get('/fhir/Observation', fhir_observation_search)
+    app.router.add_get('/fhir/Observation/{id}', fhir_observation_read)
+    app.router.add_get('/fhir/ValueSet/cnp', fhir_cnp_validate)
+    app.router.add_post('/fhir/login', fhir_login)
+    app.router.add_post('/fhir/md2html', fhir_markdown_to_html)
+    app.router.add_get('/fhir/CodeSystem/analysis-types', fhir_analysis_types)
+    app.router.add_get('/fhir/spec', fhir_specification)
+    app.router.add_static('/static/', path='static', name='static')
+    
+    # Setup startup and cleanup
+    app.on_startup.append(on_startup)
+    app.on_cleanup.append(on_cleanup)
+    
+    return app
 
 if __name__ == "__main__":
     logger.info(f"Starting HippoBridge server on {HOST}:{PORT}")
