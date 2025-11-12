@@ -1595,7 +1595,7 @@ async def observation_search(request):
             "entry": []
         }
         
-        for analysisaa in analyses:
+        for analysis in analyses:
             fhir_observation = {
                 "resourceType": "Observation",
                 "id": analysis["analysis_id"],
