@@ -809,10 +809,6 @@ async def diagnostic_report(request):
     report_id = request.match_info.get('id')
     logger.info(f"GET /fhir/DiagnosticReport endpoint accessed with identifier: {report_id}")
     
-    # Check if ImagingStudy format is requested
-    _format = request.query.get('_format')
-    is_imaging_study = _format == 'imagingstudy'
-    
     # Get credentials from request headers (optional)
     username = request.headers.get("X-Username")
     password = request.headers.get("X-Password")
@@ -823,10 +819,6 @@ async def diagnostic_report(request):
     
     logger.info(f"Retrieving report with ID: {report_id}")
     
-    # Get credentials from request headers (optional)
-    username = request.headers.get("X-Username")
-    password = request.headers.get("X-Password")
-
     try:
         # Get aiohttp session
         session = await get_session()
@@ -866,13 +858,9 @@ async def diagnostic_report(request):
                     if report_data and report_data["reports"]:
                         report_data["report_id"] = report_id
                         
-                        # Return ImagingStudy if requested, otherwise DiagnosticReport
-                        if is_imaging_study:
-                            fhir_imaging_study = convert_report_to_imaging_study(report_data, request)
-                            return web.json_response(fhir_imaging_study)
-                        else:
-                            fhir_report = convert_report_to_diagnostic_report(report_data, request)
-                            return web.json_response(fhir_report)
+                        # Return DiagnosticReport
+                        fhir_report = convert_report_to_diagnostic_report(report_data, request)
+                        return web.json_response(fhir_report)
                     else:
                         logger.warning("No report data found in the retrieved report")
                         return create_error_response("No report data found", 404)
@@ -904,6 +892,108 @@ async def diagnostic_report(request):
             
     except Exception as e:
         logger.error(f"Report retrieval failed with exception: {e}")
+        return create_error_response(str(e), 500)
+
+
+async def imaging_study(request):
+    """Retrieve an imaging study by ID, following redirect chains.
+    
+    Gets an imaging study from the Hipocrate service, following any redirects to
+    retrieve the final report data, then parses it into structured format.
+    
+    Args:
+        request: The incoming HTTP request with 'identifier' query parameter for study ID
+                 and optional X-Username and X-Password headers for authentication
+        
+    Returns:
+        JSON response with imaging study data or error information
+    """
+    study_id = request.match_info.get('id')
+    logger.info(f"GET /fhir/ImagingStudy endpoint accessed with identifier: {study_id}")
+    
+    # Get credentials from request headers (optional)
+    username = request.headers.get("X-Username")
+    password = request.headers.get("X-Password")
+    
+    if not study_id:
+        logger.warning("No study ID provided")
+        return create_error_response("Study ID is required")
+    
+    logger.info(f"Retrieving imaging study with ID: {study_id}")
+    
+    try:
+        # Get aiohttp session
+        session = await get_session()
+
+        # Make request to the report endpoint (same endpoint as diagnostic reports)
+        report_url = f"{SERVICE_URL}/analyse/Reports/analyseFile.asp?id={study_id}"
+        
+        # Follow up to 5 redirects to get the final report data
+        redirect_count = 0
+        max_redirects = 5
+        current_url = report_url
+        
+        while redirect_count < max_redirects:
+            # Make the authenticated request
+            start_time = datetime.now()
+            response_text, success, error_response = await make_authenticated_request(
+                session, current_url, "GET", None, username, password
+            )
+            duration = (datetime.now() - start_time).total_seconds()
+
+            # Check for errors in the response
+            if not success:
+                return error_response
+            logger.info(f"Imaging study retrieved in {duration:.2f} seconds")
+
+            # Check if this is the final response (not a redirect)
+            # We need to make a direct request to check the status code
+            async with session.get(current_url, headers=HEADERS) as response:
+                logger.debug(f"Imaging study request response status: {response.status}")
+                
+                # If we get the final data (not a redirect), break the loop
+                if response.status != 302:
+                    logger.info(f"Imaging study retrieval completed successfully after {redirect_count} redirects")
+                    
+                    # Parse the report data
+                    report_data = parse_report_data(response_text)
+                    if report_data and report_data["reports"]:
+                        report_data["report_id"] = study_id
+                        
+                        # Return ImagingStudy
+                        fhir_imaging_study = convert_report_to_imaging_study(report_data, request)
+                        return web.json_response(fhir_imaging_study)
+                    else:
+                        logger.warning("No report data found in the retrieved imaging study")
+                        return create_error_response("No report data found", 404)
+                
+                # Handle 302 redirect
+                location = response.headers.get("Location")
+                if not location:
+                    logger.error("302 redirect without Location header")
+                    return create_error_response("Redirect without location header", 500)
+                
+                # Construct the full URL for the redirect
+                if location.startswith("/"):
+                    # Relative path from root
+                    current_url = f"{request.scheme}://{request.host}{location}"
+                elif location.startswith("http"):
+                    # Full URL
+                    current_url = location
+                else:
+                    # Relative path from current directory
+                    base_path = "/".join(current_url.split("/")[:-1])
+                    current_url = f"{base_path}/{location}"
+                
+                logger.debug(f"Following redirect #{redirect_count + 1} to: {current_url}")
+                redirect_count += 1
+        
+        # If we've exceeded the maximum redirects
+        logger.error(f"Exceeded maximum redirects ({max_redirects}) while retrieving imaging study")
+        return create_error_response(f"Exceeded maximum redirects ({max_redirects})", 500)
+            
+    except Exception as e:
+        logger.error(f"Imaging study retrieval failed with exception: {e}")
         return create_error_response(str(e), 500)
 
 def parse_report_data(html_content: str) -> Dict[str, Any]:
@@ -2669,7 +2759,7 @@ async def init_app():
     app.router.add_get('/fhir/Patient', patient_search)
     app.router.add_get('/fhir/Patient/{id}', patient)
     app.router.add_get('/fhir/DiagnosticReport/{id}', diagnostic_report)
-    app.router.add_get('/fhir/ImagingStudy/{id}', diagnostic_report)
+    app.router.add_get('/fhir/ImagingStudy/{id}', imaging_study)
     app.router.add_get('/fhir/Encounter', fhir_encounter_read)
     app.router.add_get('/fhir/Observation', fhir_observation_search)
     app.router.add_get('/fhir/Observation/{id}', fhir_observation_read)
