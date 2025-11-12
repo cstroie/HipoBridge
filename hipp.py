@@ -1346,6 +1346,12 @@ def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dic
             }
         ]
     
+    # Add referrer if referring physician is available
+    if report_data.get("referring_physician"):
+        fhir_imaging_study["referrer"] = {
+            "display": report_data["referring_physician"]
+        }
+    
     # Add series for each report
     if report_data.get("reports"):
         for i, report in enumerate(report_data["reports"]):
