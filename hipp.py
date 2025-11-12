@@ -1414,19 +1414,9 @@ def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dic
             }
         ]
     
-    # Add additional information as extensions
-    extensions = []
-
+    # Add description if special _indications are available
     if report_data.get("special_indications"):
-        extensions.append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/special-indications",
-            "valueString": report_data["special_indications"]
-        })
-
-    
-    # Add extensions to the imaging study if any were added
-    if extensions:
-        fhir_imaging_study["extension"] = extensions
+        fhir_imaging_study["description"] = report_data["presumptive_diagnosis"]
     
     return fhir_imaging_study
 
