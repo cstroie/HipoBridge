@@ -60,14 +60,6 @@ DEFAULT_CONFIG = {
     }
 }
 
-# Load configuration
-config = load_config()
-
-# Configuration values
-SERVICE_URL = config.get('hipocrate', 'service_url')
-PORT = config.getint('server', 'port')
-HOST = config.get('server', 'host')
-
 # Get credentials from environment variables (fallback)
 HYP_USER = os.getenv("HYP_USER")
 HYP_PASS = os.getenv("HYP_PASS")
@@ -3506,6 +3498,16 @@ async def init_app():
     
     return app
 
+
+# Load configuration
+config = load_config()
+
+# Configuration values
+SERVICE_URL = config.get('hipocrate', 'service_url')
+PORT = config.getint('server', 'port')
+HOST = config.get('server', 'host')
+
+# Run the application
 if __name__ == "__main__":
     logger.info(f"Starting HippoBridge server on {HOST}:{PORT}")
     app = init_app()
