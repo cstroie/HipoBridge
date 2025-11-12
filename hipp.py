@@ -1964,6 +1964,7 @@ async def fhir_encounter_read(request):
             fhir_encounter["diagnosis"] = [
                 {
                     "condition": {
+                        "reference": f"Condition/admission-{encounter_id}",
                         "display": parsed_data["admission_diagnostic"]
                     },
                     "use": {
@@ -1985,6 +1986,7 @@ async def fhir_encounter_read(request):
             fhir_encounter["diagnosis"].append(
                 {
                     "condition": {
+                        "reference": f"Condition/discharge-{encounter_id}",
                         "display": parsed_data["diagnostic"]
                     },
                     "use": {
