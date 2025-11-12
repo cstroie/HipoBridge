@@ -894,7 +894,6 @@ async def diagnostic_report(request):
         logger.error(f"Report retrieval failed with exception: {e}")
         return create_error_response(str(e), 500)
 
-
 async def imaging_study(request):
     """Retrieve an imaging study by ID, following redirect chains.
     
@@ -1375,7 +1374,6 @@ def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dic
                 "started": report_data["datetime"].isoformat() if report_data.get("datetime") else datetime.now().isoformat(),
                 "instance": []
             }
-            
             # Use the study modality for the series if available, otherwise default to OT
             series_modality = report_data.get("modality", "OT")
             series["modality"] = {
@@ -1383,27 +1381,7 @@ def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dic
                 "code": series_modality.upper(),
                 "display": series_modality.upper()
             }
-            
-            # Add instance for the report content
-            instance = {
-                "uid": f"urn:oid:1.2.840.99999999.2.{report_data['report_id']}.{i+1}.1",
-                "sopClass": {
-                    "system": "http://dicom.nema.org/medical/dicom/current/output/chtml/part04/sect_B.5.html",
-                    "code": "1.2.840.10008.5.1.4.1.1.104.1",  # PDF storage
-                    "display": "Encapsulated PDF Storage"
-                },
-                "number": 1,
-                "title": report.get("investigation", f"Report {i+1}")
-            }
-            
-            # Add content as attachment if available
-            if report.get("result"):
-                instance["content"] = {
-                    "contentType": "text/plain",
-                    "data": report["result"]
-                }
-            
-            series["instance"].append(instance)
+            # Add the instance 
             fhir_imaging_study["series"].append(series)
     
     # Add reason for study if referral information is available
@@ -1435,6 +1413,245 @@ def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dic
         fhir_imaging_study["description"] = report_data["presumptive_diagnosis"]
     
     return fhir_imaging_study
+
+
+async def observation_search(request):
+    """Retrieve list of observations for a patient by ID.
+    
+    Gets a list of observations for a specific patient from the Hipocrate service
+    without fetching detailed data for each observation.
+    
+    Args:
+        request: The incoming HTTP request with 'patient' query parameter for patient ID
+                 and optional X-Username and X-Password headers for authentication
+        
+    Returns:
+        JSON response with observations data or error information
+    """
+    patient_id = request.query.get('patient')
+    logger.info(f"GET /fhir/Observation endpoint accessed for patient: {patient_id}")
+    
+    # Get credentials from request headers (optional)
+    username = request.headers.get("X-Username")
+    password = request.headers.get("X-Password")
+    
+    if not patient_id:
+        logger.warning("No patient ID provided")
+        return create_error_response("Patient ID is required")
+    
+    # Get optional parameters
+    analysis_type = request.query.get('type')
+    full_data = request.query.get('full', 'no').lower() == 'yes'
+    
+    logger.info(f"Retrieving analyses list for patient with ID: {patient_id}")
+    
+    try:
+        session = await get_session()
+        
+        # Make request to the analyses endpoint
+        analyses_url = f"{SERVICE_URL}/pacient/analyses.asp?type=PA&pacid={patient_id}"
+        
+        # Add full=yes parameter if requested
+        if full_data:
+            analyses_url += "&full=yes"
+        
+        # Make the authenticated request
+        start_time = datetime.now()
+        response_text, success, error_response = await make_authenticated_request(
+            session, analyses_url, "GET", None, username, password
+        )
+        duration = (datetime.now() - start_time).total_seconds()
+        # Check for errors in the response
+        if not success:
+            return error_response
+        
+        logger.info(f"Analyses list retrieval completed successfully in {duration:.2f} seconds")
+        # Parse the analyses data to extract report IDs, types, and patient name
+        parsed_data = parse_analyses_data(response_text)
+        
+        # Filter analyses by type if specified
+        analyses = parsed_data["analyses"]
+        if analysis_type:
+            analyses = [a for a in analyses if a["type"] == analysis_type]
+        
+        # Create FHIR Bundle of Observation resources (minimal data only)
+        bundle = {
+            "resourceType": "Bundle",
+            "type": "searchset",
+            "total": len(analyses),
+            "entry": []
+        }
+        
+        for analysis in analyses:
+            fhir_observation = {
+                "resourceType": "Observation",
+                "id": analysis["analysis_id"],
+                "meta": {
+                    "lastUpdated": analysis["datetime"].isoformat() if "datetime" in analysis and analysis["datetime"] else datetime.now().isoformat()
+                },
+                "status": "final",
+                "category": [
+                    {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                                "code": "laboratory" if analysis["type"] == "lab" else "imaging",
+                                "display": "Laboratory" if analysis["type"] == "lab" else "Imaging"
+                            }
+                        ]
+                    }
+                ],
+                "code": {
+                    "coding": [
+                        {
+                            "system": f"{request.scheme}://{request.host}/fhir/CodeSystem/analysis-types",
+                            "code": analysis["type"],
+                            "display": ANALYSIS_TYPES[analysis["type"]]["display"]
+                        }
+                    ],
+                    "text": ANALYSIS_TYPES[analysis["type"]]["definition"]
+                },
+                "subject": {
+                    "reference": f"Patient/{patient_id}"
+                }
+            }
+            
+            bundle["entry"].append({
+                "resource": fhir_observation
+            })
+        
+        return web.json_response(bundle)
+            
+    except Exception as e:
+        logger.error(f"Analyses list retrieval failed with exception: {e}")
+        return create_error_response(str(e), 500)
+
+async def observation(request):
+    """Retrieve a single observation by ID.
+    
+    Gets detailed information for a specific observation from the Hipocrate service.
+    
+    Args:
+        request: The incoming HTTP request with 'id' path parameter for observation ID
+                 and optional X-Username and X-Password headers for authentication
+        
+    Returns:
+        JSON response with observation data or error information
+    """
+    observation_id = request.match_info.get('id')
+    logger.info(f"GET /fhir/Observation/{observation_id} endpoint accessed")
+    
+    # Get credentials from request headers (optional)
+    username = request.headers.get("X-Username")
+    password = request.headers.get("X-Password")
+    
+    if not observation_id:
+        logger.warning("No observation ID provided")
+        return create_error_response("Observation ID is required")
+    
+    logger.info(f"Retrieving observation with ID: {observation_id}")
+    
+    try:
+        #
+        session = await get_session()
+        
+        # Get report details to extract observation data
+        report_url = f"{SERVICE_URL}/analyse/Reports/analyseFile.asp?id={observation_id}"
+
+        # Make the authenticated request
+        start_time = datetime.now()
+        report_text, success, error_response = await make_authenticated_request(
+            session, report_url, "GET", None, username, password
+        )
+        duration = (datetime.now() - start_time).total_seconds()
+        
+        # Check for errors in the response
+        if not success:
+            return error_response
+        
+        logger.info(f"Report retrieved in {duration:.2f} seconds")
+        
+        # Parse report to get observation data
+        report_data = parse_report_data(report_text)
+        
+        fhir_observation = {
+            "resourceType": "Observation",
+            "id": observation_id,
+            "meta": {
+                "lastUpdated": datetime.now().isoformat()
+            },
+            "status": "final",
+            "category": [
+                {
+                    "coding": [
+                        {
+                            "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                            "code": "imaging",
+                            "display": "Imaging"
+                        }
+                    ]
+                }
+            ],
+            "code": {
+                "coding": [
+                    {
+                        "system": f"{request.scheme}://{request.host}/fhir/CodeSystem/analysis-types",
+                        "code": "unknown",  # Will be updated based on report data
+                        "display": "Analysis"
+                    }
+                ],
+                "text": report_data.get("examination", "Analysis")
+            },
+            "subject": {
+                "reference": f"Patient/{report_data.get('patient_id', "")}"
+            }
+        }
+        
+        # Add effective datetime if available
+        if report_data.get("datetime"):
+            fhir_observation["effectiveDateTime"] = report_data["datetime"]
+        
+        # Add performer if available
+        if report_data.get("performer"):
+            fhir_observation["performer"] = [
+                {
+                    "display": report_data["performer"]
+                }
+            ]
+        
+        # Add patient gender and birth date if available
+        if report_data.get("gender"):
+            fhir_observation["extension"] = [
+                {
+                    "url": "http://hl7.org/fhir/StructureDefinition/patient-gender",
+                    "valueCode": report_data["gender"].lower()
+                }
+            ]
+        
+        if report_data.get("birth_date"):
+            if "extension" not in fhir_observation:
+                fhir_observation["extension"] = []
+            fhir_observation["extension"].append({
+                "url": "http://hl7.org/fhir/StructureDefinition/patient-birthDate",
+                "valueDate": report_data["birth_date"]
+            })
+        
+        # Add value/comment if available
+        if report_data.get("reports"):
+            # For now, add the first report result as a comment
+            first_report = report_data["reports"][0] if report_data["reports"] else None
+            if first_report and first_report.get("result"):
+                fhir_observation["note"] = [
+                    {
+                        "text": first_report["result"]
+                    }
+                ]
+        
+        return web.json_response(fhir_observation)
+            
+    except Exception as e:
+        logger.error(f"Observation retrieval failed with exception: {e}")
+        return create_error_response(str(e), 500)
 
 
 
@@ -1792,245 +2009,6 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Error parsing analyses data: {e}")
         return {"patient_name": "", "patient_id": "", "analyses": []}
-
-async def fhir_observation_search(request):
-    """Retrieve list of observations for a patient by ID.
-    
-    Gets a list of observations for a specific patient from the Hipocrate service
-    without fetching detailed data for each observation.
-    
-    Args:
-        request: The incoming HTTP request with 'patient' query parameter for patient ID
-                 and optional X-Username and X-Password headers for authentication
-        
-    Returns:
-        JSON response with observations data or error information
-    """
-    patient_id = request.query.get('patient')
-    logger.info(f"GET /fhir/Observation endpoint accessed for patient: {patient_id}")
-    
-    # Get credentials from request headers (optional)
-    username = request.headers.get("X-Username")
-    password = request.headers.get("X-Password")
-    
-    if not patient_id:
-        logger.warning("No patient ID provided")
-        return create_error_response("Patient ID is required")
-    
-    # Get optional parameters
-    analysis_type = request.query.get('type')
-    full_data = request.query.get('full', 'no').lower() == 'yes'
-    
-    logger.info(f"Retrieving analyses list for patient with ID: {patient_id}")
-    
-    try:
-        session = await get_session()
-        
-        # Make request to the analyses endpoint
-        analyses_url = f"{SERVICE_URL}/pacient/analyses.asp?type=PA&pacid={patient_id}"
-        
-        # Add full=yes parameter if requested
-        if full_data:
-            analyses_url += "&full=yes"
-        
-        # Make the authenticated request
-        start_time = datetime.now()
-        response_text, success, error_response = await make_authenticated_request(
-            session, analyses_url, "GET", None, username, password
-        )
-        duration = (datetime.now() - start_time).total_seconds()
-        # Check for errors in the response
-        if not success:
-            return error_response
-        
-        logger.info(f"Analyses list retrieval completed successfully in {duration:.2f} seconds")
-        # Parse the analyses data to extract report IDs, types, and patient name
-        parsed_data = parse_analyses_data(response_text)
-        
-        # Filter analyses by type if specified
-        analyses = parsed_data["analyses"]
-        if analysis_type:
-            analyses = [a for a in analyses if a["type"] == analysis_type]
-        
-        # Create FHIR Bundle of Observation resources (minimal data only)
-        bundle = {
-            "resourceType": "Bundle",
-            "type": "searchset",
-            "total": len(analyses),
-            "entry": []
-        }
-        
-        for analysis in analyses:
-            fhir_observation = {
-                "resourceType": "Observation",
-                "id": analysis["analysis_id"],
-                "meta": {
-                    "lastUpdated": analysis["datetime"].isoformat() if "datetime" in analysis and analysis["datetime"] else datetime.now().isoformat()
-                },
-                "status": "final",
-                "category": [
-                    {
-                        "coding": [
-                            {
-                                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
-                                "code": "laboratory" if analysis["type"] == "lab" else "imaging",
-                                "display": "Laboratory" if analysis["type"] == "lab" else "Imaging"
-                            }
-                        ]
-                    }
-                ],
-                "code": {
-                    "coding": [
-                        {
-                            "system": f"{request.scheme}://{request.host}/fhir/CodeSystem/analysis-types",
-                            "code": analysis["type"],
-                            "display": ANALYSIS_TYPES[analysis["type"]]["display"]
-                        }
-                    ],
-                    "text": ANALYSIS_TYPES[analysis["type"]]["definition"]
-                },
-                "subject": {
-                    "reference": f"Patient/{patient_id}"
-                }
-            }
-            
-            bundle["entry"].append({
-                "resource": fhir_observation
-            })
-        
-        return web.json_response(bundle)
-            
-    except Exception as e:
-        logger.error(f"Analyses list retrieval failed with exception: {e}")
-        return create_error_response(str(e), 500)
-
-async def fhir_observation_read(request):
-    """Retrieve a single observation by ID.
-    
-    Gets detailed information for a specific observation from the Hipocrate service.
-    
-    Args:
-        request: The incoming HTTP request with 'id' path parameter for observation ID
-                 and optional X-Username and X-Password headers for authentication
-        
-    Returns:
-        JSON response with observation data or error information
-    """
-    observation_id = request.match_info.get('id')
-    logger.info(f"GET /fhir/Observation/{observation_id} endpoint accessed")
-    
-    # Get credentials from request headers (optional)
-    username = request.headers.get("X-Username")
-    password = request.headers.get("X-Password")
-    
-    if not observation_id:
-        logger.warning("No observation ID provided")
-        return create_error_response("Observation ID is required")
-    
-    logger.info(f"Retrieving observation with ID: {observation_id}")
-    
-    try:
-        session = await get_session()
-        
-        # Get patient ID from query parameter or derive it
-        patient_id = request.query.get('patient', '')
-        
-        # Get report details to extract observation data
-        report_url = f"{SERVICE_URL}/analyse/Reports/analyseFile.asp?id={observation_id}"
-
-        # Make the authenticated request
-        start_time = datetime.now()
-        report_text, success, error_response = await make_authenticated_request(
-            session, report_url, "GET", None, username, password
-        )
-        duration = (datetime.now() - start_time).total_seconds()
-        # Check for errors in the response
-        if not success:
-            return error_response
-        
-        logger.info(f"Report retrieved in {duration:.2f} seconds")
-        
-        # Parse report to get observation data
-        report_data = parse_report_data(report_text)
-        
-        fhir_observation = {
-            "resourceType": "Observation",
-            "id": observation_id,
-            "meta": {
-                "lastUpdated": datetime.now().isoformat()
-            },
-            "status": "final",
-            "category": [
-                {
-                    "coding": [
-                        {
-                            "system": "http://terminology.hl7.org/CodeSystem/observation-category",
-                            "code": "imaging",
-                            "display": "Imaging"
-                        }
-                    ]
-                }
-            ],
-            "code": {
-                "coding": [
-                    {
-                        "system": f"{request.scheme}://{request.host}/fhir/CodeSystem/analysis-types",
-                        "code": "unknown",  # Will be updated based on report data
-                        "display": "Analysis"
-                    }
-                ],
-                "text": report_data.get("examination", "Analysis")
-            },
-            "subject": {
-                "reference": f"Patient/{report_data.get('patient_id', patient_id)}"
-            }
-        }
-        
-        # Add effective datetime if available
-        if report_data.get("datetime"):
-            fhir_observation["effectiveDateTime"] = report_data["datetime"]
-        
-        # Add performer if available
-        if report_data.get("performer"):
-            fhir_observation["performer"] = [
-                {
-                    "display": report_data["performer"]
-                }
-            ]
-        
-        # Add patient gender and birth date if available
-        if report_data.get("gender"):
-            fhir_observation["extension"] = [
-                {
-                    "url": "http://hl7.org/fhir/StructureDefinition/patient-gender",
-                    "valueCode": report_data["gender"].lower()
-                }
-            ]
-        
-        if report_data.get("birth_date"):
-            if "extension" not in fhir_observation:
-                fhir_observation["extension"] = []
-            fhir_observation["extension"].append({
-                "url": "http://hl7.org/fhir/StructureDefinition/patient-birthDate",
-                "valueDate": report_data["birth_date"]
-            })
-        
-        # Add value/comment if available
-        if report_data.get("reports"):
-            # For now, add the first report result as a comment
-            first_report = report_data["reports"][0] if report_data["reports"] else None
-            if first_report and first_report.get("result"):
-                fhir_observation["note"] = [
-                    {
-                        "text": first_report["result"]
-                    }
-                ]
-        
-        return web.json_response(fhir_observation)
-            
-    except Exception as e:
-        logger.error(f"Observation retrieval failed with exception: {e}")
-        return create_error_response(str(e), 500)
 
 
 async def serve_analysis_types(request):
@@ -2805,8 +2783,8 @@ async def init_app():
     app.router.add_get('/fhir/DiagnosticReport/{id}', diagnostic_report)
     app.router.add_get('/fhir/ImagingStudy/{id}', imaging_study)
     app.router.add_get('/fhir/Encounter', fhir_encounter_read)
-    app.router.add_get('/fhir/Observation', fhir_observation_search)
-    app.router.add_get('/fhir/Observation/{id}', fhir_observation_read)
+    app.router.add_get('/fhir/Observation', observation_search)
+    app.router.add_get('/fhir/Observation/{id}', observation)
     app.router.add_get('/fhir/ValueSet/cnp', serve_validate_cnp)
     app.router.add_post('/fhir/login', serve_login)
     app.router.add_post('/fhir/md2html', serve_md2html)
