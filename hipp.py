@@ -1406,15 +1406,17 @@ def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dic
             }
         ]
     
+    # Add note if presumptive diagnosis is available
+    if report_data.get("presumptive_diagnosis"):
+        fhir_imaging_study["note"] = [
+            {
+                "text": report_data["presumptive_diagnosis"]
+            }
+        ]
+    
     # Add additional information as extensions
     extensions = []
 
-    if report_data.get("presumptive_diagnosis"):
-        extensions.append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/presumptive-diagnosis",
-            "valueString": report_data["presumptive_diagnosis"]
-        })
-    
     if report_data.get("special_indications"):
         extensions.append({
             "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/special-indications",
