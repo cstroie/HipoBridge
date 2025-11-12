@@ -1201,17 +1201,6 @@ def convert_report_to_diagnostic_report(report_data: Dict[str, Any], request) ->
             "lastUpdated": report_data["datetime"].isoformat()
         },
         "status": "final",
-        "category": [
-            {
-                "coding": [
-                    {
-                        "system": "http://terminology.hl7.org/CodeSystem/v2-0074",
-                        "code": "RAD",
-                        "display": "Radiology"
-                    }
-                ]
-            }
-        ],
         "code": {
             "coding": [
                 {
@@ -1224,13 +1213,27 @@ def convert_report_to_diagnostic_report(report_data: Dict[str, Any], request) ->
         },
         "subject": {
             "reference": f"Patient/{report_data.get('patient_id', '')}"
-        }
+        },
+        "basedOn": {
+            "reference": f"ServiceRequest/{report_data.get('report_id')}"
+        },
+        "imagingStudy": {
+            "reference": f"ImagingStudy/{report_data['report_id']}"
+        },
+
     }
     
     # Add effective date if available
     if report_data.get("datetime"):
         fhir_report["effectiveDateTime"] = report_data["datetime"].isoformat()
     
+    # Add reference to ImagingStudy with the same ID
+    fhir_report["imagingStudy"] = [
+        {
+            "reference": f"ImagingStudy/{report_data['report_id']}"
+        }
+    ]
+
     # Add performer if available
     if report_data.get("performer"):
         fhir_report["performer"] = [
@@ -1330,13 +1333,6 @@ def convert_report_to_diagnostic_report(report_data: Dict[str, Any], request) ->
     # Add media references placeholder
     fhir_report["media"] = []
     
-    # Add reference to ImagingStudy with the same ID
-    fhir_report["imagingStudy"] = [
-        {
-            "reference": f"ImagingStudy/{report_data['report_id']}"
-        }
-    ]
-    
     # Return the FHIR Patient resource
     return fhir_report
 
@@ -1361,6 +1357,9 @@ def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dic
         "status": "available",
         "subject": {
             "reference": f"Patient/{report_data.get('patient_id', '')}"
+        },
+        "basedOn": {
+            "reference": f"ServiceRequest/{report_data.get('report_id')}"
         },
         "started": report_data["datetime"].isoformat() if report_data.get("datetime") else datetime.now().isoformat(),
         "series": []
@@ -1394,25 +1393,6 @@ def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dic
                 }
             }
         ]
-    
-    # Add interpreter if available (as resultsInterpreter)
-    if report_data.get("interpreter"):
-        if "performer" not in fhir_imaging_study:
-            fhir_imaging_study["performer"] = []
-        fhir_imaging_study["performer"].append({
-            "actor": {
-                "display": report_data["interpreter"]
-            },
-            "function": {
-                "coding": [
-                    {
-                        "system": "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
-                        "code": "INTPR",
-                        "display": "Interpreter"
-                    }
-                ]
-            }
-        })
     
     # Add series for each report
     if report_data.get("reports"):
