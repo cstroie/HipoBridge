@@ -1552,7 +1552,7 @@ async def observation(request):
     logger.info(f"Retrieving observation with ID: {observation_id}")
     
     try:
-        #
+        # Get aiohttp session
         session = await get_session()
         
         # Get report details to extract observation data
@@ -1581,29 +1581,18 @@ async def observation(request):
                 "lastUpdated": datetime.now().isoformat()
             },
             "status": "final",
-            "category": [
-                {
-                    "coding": [
-                        {
-                            "system": "http://terminology.hl7.org/CodeSystem/observation-category",
-                            "code": "imaging",
-                            "display": "Imaging"
-                        }
-                    ]
-                }
-            ],
             "code": {
                 "coding": [
                     {
                         "system": f"{request.scheme}://{request.host}/fhir/CodeSystem/analysis-types",
-                        "code": "unknown",  # Will be updated based on report data
+                        "code": "unknown", 
                         "display": "Analysis"
                     }
                 ],
                 "text": report_data.get("examination", "Analysis")
             },
             "subject": {
-                "reference": f"Patient/{report_data.get('patient_id', "")}"
+                "reference": f"Patient/{report_data.get('patient_id', '')}"
             }
         }
         
