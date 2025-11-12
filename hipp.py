@@ -1144,6 +1144,14 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
         if "radiografia" in examination_text:
             report_data["modality"] = "CR"
         
+        # Special case: if "ultrasonografia" is in the examination text, set modality to US
+        if "ultrasonografia" in examination_text:
+            report_data["modality"] = "US"
+        
+        # Special case: if "rezonanta" is in the examination text, set modality to MR
+        if "rezonanta" in examination_text:
+            report_data["modality"] = "MR"
+        
         report_data["referral_reason"] = extract_field_from_td(soup, r'DIAGNOSTIC DE TRIMITERE:')
         report_data["presumptive_diagnosis"] = extract_field_from_td(soup, r'DG\.PREZUMTIV:')
         report_data["special_indications"] = extract_field_from_td(soup, r'INDICATII SPECIALE:')
