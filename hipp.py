@@ -1346,6 +1346,35 @@ def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dic
         "series": []
     }
     
+    # Add patient information if available
+    if report_data.get("patient_name"):
+        fhir_imaging_study["identifier"] = [{
+            "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-name",
+            "value": report_data["patient_name"]
+        }]
+    
+    if report_data.get("patient_cnp"):
+        if "identifier" not in fhir_imaging_study:
+            fhir_imaging_study["identifier"] = []
+        fhir_imaging_study["identifier"].append({
+            "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-cnp",
+            "value": report_data["patient_cnp"]
+        })
+    
+    # Add description from examination
+    if report_data.get("examination"):
+        fhir_imaging_study["description"] = report_data["examination"]
+    
+    # Add performer if available
+    if report_data.get("performer"):
+        fhir_imaging_study["performer"] = [
+            {
+                "actor": {
+                    "display": report_data["performer"]
+                }
+            }
+        ]
+    
     # Add series for each report
     if report_data.get("reports"):
         for i, report in enumerate(report_data["reports"]):
@@ -1373,22 +1402,67 @@ def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dic
                 "number": 1,
                 "title": report.get("investigation", f"Report {i+1}")
             }
+            
+            # Add content as attachment if available
+            if report.get("result"):
+                instance["content"] = {
+                    "contentType": "text/plain",
+                    "data": report["result"]
+                }
+            
             series["instance"].append(instance)
             fhir_imaging_study["series"].append(series)
     
-    # Add performer if available
-    if report_data.get("performer"):
-        fhir_imaging_study["performer"] = [
-            {
-                "actor": {
-                    "display": report_data["performer"]
-                }
-            }
-        ]
+    # Add additional information as extensions
+    extensions = []
     
-    # Add description from examination
-    if report_data.get("examination"):
-        fhir_imaging_study["description"] = report_data["examination"]
+    # Add patient details if available
+    if report_data.get("age"):
+        extensions.append({
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/patient-age",
+            "valueString": report_data["age"]
+        })
+    
+    if report_data.get("gender"):
+        extensions.append({
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/patient-gender",
+            "valueString": report_data["gender"]
+        })
+    
+    # Add referral information if available
+    if report_data.get("referral_reason"):
+        extensions.append({
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/referral-reason",
+            "valueString": report_data["referral_reason"]
+        })
+    
+    if report_data.get("referral_code"):
+        extensions.append({
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/referral-code",
+            "valueString": report_data["referral_code"]
+        })
+    
+    if report_data.get("presumptive_diagnosis"):
+        extensions.append({
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/presumptive-diagnosis",
+            "valueString": report_data["presumptive_diagnosis"]
+        })
+    
+    if report_data.get("special_indications"):
+        extensions.append({
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/special-indications",
+            "valueString": report_data["special_indications"]
+        })
+    
+    if report_data.get("referring_physician"):
+        extensions.append({
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/referring-physician",
+            "valueString": report_data["referring_physician"]
+        })
+    
+    # Add extensions to the imaging study if any were added
+    if extensions:
+        fhir_imaging_study["extension"] = extensions
     
     return fhir_imaging_study
 
