@@ -1960,8 +1960,29 @@ async def fhir_encounter_read(request):
             ]
         
         # Add diagnosis if available
-        if parsed_data.get("diagnostic"):
+        if parsed_data.get("admission_diagnostic"):
             fhir_encounter["diagnosis"] = [
+                {
+                    "condition": {
+                        "display": parsed_data["admission_diagnostic"]
+                    },
+                    "use": {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/diagnosis-role",
+                                "code": "AD",
+                                "display": "Admission diagnosis"
+                            }
+                        ]
+                    }
+                }
+            ]
+        
+        # Add discharge diagnosis if available
+        if parsed_data.get("diagnostic"):
+            if "diagnosis" not in fhir_encounter:
+                fhir_encounter["diagnosis"] = []
+            fhir_encounter["diagnosis"].append(
                 {
                     "condition": {
                         "display": parsed_data["diagnostic"]
@@ -1976,7 +1997,7 @@ async def fhir_encounter_read(request):
                         ]
                     }
                 }
-            ]
+            )
         
         return web.json_response(fhir_encounter)
             
