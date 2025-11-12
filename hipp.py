@@ -1023,12 +1023,13 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
         "performer": ""
     }
 
-    def extract_field_from_td(soup: BeautifulSoup, label_regex: str) -> str:
+    def extract_field_from_td(soup: BeautifulSoup, label_regex: str, stop_at: str = None) -> str:
         """Extract field data from a table cell containing a label.
         
         Args:
             soup: BeautifulSoup object of the parsed HTML content
             label_regex: Regular expression pattern to match label text
+            stop_at: Optional string pattern to stop extraction at
             
         Returns:
             Extracted field content or empty string if not found
@@ -1050,6 +1051,13 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
                         label_end = match.end()
                         # Extract the content after the label
                         content = td_text[label_end:].strip()
+                        
+                        # If stop_at pattern is provided, truncate content at that point
+                        if stop_at:
+                            stop_match = re.search(stop_at, content, re.IGNORECASE)
+                            if stop_match:
+                                content = content[:stop_match.start()].strip()
+                        
                         return content
             return ""
         except Exception as e:
@@ -1139,7 +1147,7 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
         report_data["referral_reason"] = extract_field_from_td(soup, r'DIAGNOSTIC DE TRIMITERE:')
         report_data["presumptive_diagnosis"] = extract_field_from_td(soup, r'DG\.PREZUMTIV:')
         report_data["special_indications"] = extract_field_from_td(soup, r'INDICATII SPECIALE:')
-        report_data["referring_physician"] = extract_field_from_td(soup, r'TRIMIS DE:\s*MEDIC')
+        report_data["referring_physician"] = extract_field_from_td(soup, r'TRIMIS DE:\s*MEDIC', stop_at=r'SECTIA')
         
         # Parse referral code and reason if we have referral data
         if report_data["referral_reason"]:
