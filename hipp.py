@@ -1239,6 +1239,14 @@ def convert_report_to_diagnostic_report(report_data: Dict[str, Any], request) ->
             }
         ]
     
+    # Add results interpreter if available
+    if report_data.get("interpreter"):
+        fhir_report["resultsInterpreter"] = [
+            {
+                "display": report_data["interpreter"]
+            }
+        ]
+    
     # Add results if available
     if report_data.get("reports"):
         fhir_report["result"] = []
@@ -1386,6 +1394,25 @@ def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dic
                 }
             }
         ]
+    
+    # Add interpreter if available (as resultsInterpreter)
+    if report_data.get("interpreter"):
+        if "performer" not in fhir_imaging_study:
+            fhir_imaging_study["performer"] = []
+        fhir_imaging_study["performer"].append({
+            "actor": {
+                "display": report_data["interpreter"]
+            },
+            "function": {
+                "coding": [
+                    {
+                        "system": "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
+                        "code": "INTPR",
+                        "display": "Interpreter"
+                    }
+                ]
+            }
+        })
     
     # Add series for each report
     if report_data.get("reports"):
