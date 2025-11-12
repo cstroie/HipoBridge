@@ -1095,7 +1095,7 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
         if code_match:
             report_data["patient_id"] = re.sub(r'\s+', ' ', code_match.group(1).strip())
         
-        # Extract sample date and time
+        # Extract date and time
         datetime_match = re.search(r'(?:Data si ora recoltarii:|Data investigatiei:)\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
         if datetime_match:
             datetime_str = re.sub(r'\s+', ' ', datetime_match.group(1).strip())
@@ -1110,6 +1110,11 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
                 # If parsing fails, leave date/time fields empty
                 pass
             report_data["datetime"] = dt
+
+        # Extract performer (Efectuata de catre:)
+        performer_match = re.search(r'(?:Efectuata de catre:)\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
+        if performer_match:
+            report_data["performer"] = re.sub(r'\s+', ' ', performer_match.group(1).strip())
         
         # Extract fields using the helper function
         report_data["examination"] = extract_field_from_td(soup, r'EXAMINARE EFECTUATA:')
@@ -1162,24 +1167,24 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
                 logger.error(f"Error parsing individual report: {e}")
                 continue
         
-        # Extract performer (MEDIC, or Medic validator:)
-        # Handle both plain text and HTML formatted performer names
-        performer_patterns = [
+        # Extract interpreter (MEDIC, or Medic validator:)
+        # Handle both plain text and HTML formatted interpreter names
+        interpreter_patterns = [
             r'(?:MEDIC,|Medic validator:)\s*([^\n\r<>&]+)',
             r'(?:MEDIC,|Medic validator:)\s*<b[^>]*>([^<]+)</b>',
             r'(?:MEDIC,|Medic validator:)[^>]*>\s*([^\n\r<>&]+)'
         ]
-        performer_name = ""
-        for pattern in performer_patterns:
-            performer_match = re.search(pattern, html_content, re.IGNORECASE)
-            if performer_match:
-                performer_name = performer_match.group(1).strip()
+        interpreter_name = ""
+        for pattern in interpreter_patterns:
+            interpreter_match = re.search(pattern, html_content, re.IGNORECASE)
+            if interpreter_match:
+                interpreter_name = interpreter_match.group(1).strip()
                 # Clean up HTML entities and extra whitespace
-                performer_name = html.unescape(performer_name)
-                performer_name = re.sub(r'\s+', ' ', performer_name)
+                interpreter_name = html.unescape(interpreter_name)
+                interpreter_name = re.sub(r'\s+', ' ', interpreter_name)
                 break
-        if performer_name:
-            report_data["performer"] = performer_name
+        if performerinterpreter_name_name:
+            report_data["interpreter"] = interpreter_name
         # Return the parsed report data
         return report_data
     
