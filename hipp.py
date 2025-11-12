@@ -349,7 +349,7 @@ async def patient_search(request):
                     "id": patient.get("patient_id", ""),
                     "identifier": [
                         {
-                            "system": f"http://{request.host}/fhir/NamingSystem/patient-id",
+                            "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-id",
                             "value": patient.get("patient_id", "")
                         }
                     ],
@@ -364,7 +364,7 @@ async def patient_search(request):
                 # Add CNP if available
                 if patient.get("patient_cnp"):
                     fhir_patient["identifier"].append({
-                        "system": f"http://{request.host}/fhir/NamingSystem/patient-cnp",
+                        "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-cnp",
                         "value": patient.get("patient_cnp", "")
                     })
                 # Add entry to bundle
@@ -623,7 +623,7 @@ def convert_patient_to_fhir(patient_data: Dict[str, Any], request) -> Dict[str, 
         },
         "identifier": [
             {
-                "system": f"http://{request.host}/fhir/NamingSystem/patient-id",
+                "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-id",
                 "value": patient_data.get("patient_id", "")
             }
         ],
@@ -680,38 +680,38 @@ def convert_patient_to_fhir(patient_data: Dict[str, Any], request) -> Dict[str, 
     # Add CID if available
     if patient_data.get("cid", None):
         fhir_patient["extension"].append({
-            "url": f"http://{request.host}/fhir/StructureDefinition/patient-cid",
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/patient-cid",
             "valueString": patient_data["cid"]
         })
     
     # Add MCP if available
     if patient_data.get("mcp", None):
         fhir_patient["extension"].append({
-            "url": f"http://{request.host}/fhir/StructureDefinition/patient-mcp",
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/patient-mcp",
             "valueString": patient_data["mcp"]
         })
 
     # Add extensions for encounter/admission/discharge IDs
     if "encounters" in patient_data:
         fhir_patient["extension"].append({
-            "url": f"http://{request.host}/fhir/StructureDefinition/encounter-ids",
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/encounter-ids",
             "valueString": ",".join(patient_data["encounters"])
         })
     if "admissions" in patient_data:
         fhir_patient["extension"].append({
-            "url": f"http://{request.host}/fhir/StructureDefinition/admission-ids",
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/admission-ids",
             "valueString": ",".join(patient_data["admissions"])
         })
     if "discharges" in patient_data:
         fhir_patient["extension"].append({
-            "url": f"http://{request.host}/fhir/StructureDefinition/discharge-ids",
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/discharge-ids",
             "valueString": ",".join(patient_data["discharges"])
         })
     
     # Add CNP as additional identifier if available
     if patient_data.get("cnp", None):
         fhir_patient["identifier"].append({
-            "system": f"http://{request.host}/fhir/NamingSystem/patient-cnp",
+            "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-cnp",
             "value": patient_data["cnp"]
         })
     
@@ -1759,7 +1759,7 @@ async def fhir_observation_search(request):
                 "code": {
                     "coding": [
                         {
-                            "system": f"http://{request.host}/fhir/CodeSystem/analysis-types",
+                            "system": f"{request.scheme}://{request.host}/fhir/CodeSystem/analysis-types",
                             "code": analysis["type"],
                             "display": ANALYSIS_TYPES[analysis["type"]]["display"]
                         }
@@ -1851,7 +1851,7 @@ async def fhir_observation_read(request):
             "code": {
                 "coding": [
                     {
-                        "system": f"http://{request.host}/fhir/CodeSystem/analysis-types",
+                        "system": f"{request.scheme}://{request.host}/fhir/CodeSystem/analysis-types",
                         "code": "unknown",  # Will be updated based on report data
                         "display": "Analysis"
                     }
@@ -2192,7 +2192,7 @@ async def fhir_analysis_types(request):
     code_system = {
         "resourceType": "CodeSystem",
         "id": "analysis-types",
-        "url": f"http://{request.host}/fhir/CodeSystem/analysis-types",
+        "url": f"{request.scheme}://{request.host}/fhir/CodeSystem/analysis-types",
         "version": "1.0.0",
         "name": "HospitalAnalysisTypes",
         "title": "Hospital Analysis Types",
@@ -2225,7 +2225,7 @@ async def fhir_specification(request):
         with open('spec.json', 'r') as f:
             spec = json.load(f)
         # Update the server URL with the current PORT
-        spec["servers"][0]["url"] = f"http://localhost:{PORT}"
+        spec["servers"][0]["url"] = f"{request.scheme}://{request.host}" 
         return web.json_response(spec)
     except FileNotFoundError:
         logger.error("spec.json file not found")
@@ -2330,7 +2330,7 @@ async def fhir_diagnostic_report_read(request):
                         "code": {
                             "coding": [
                                 {
-                                    "system": f"http://{request.host}/fhir/CodeSystem/report-types",
+                                    "system": f"{request.scheme}://{request.host}/fhir/CodeSystem/report-types",
                                     "code": "imaging-report",
                                     "display": "Imaging Report"
                                 }
@@ -2377,56 +2377,56 @@ async def fhir_diagnostic_report_read(request):
                     # Add patient details if available
                     if parsed_data.get("patient_name"):
                         extensions.append({
-                            "url": f"http://{request.host}/fhir/StructureDefinition/patient-name",
+                            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/patient-name",
                             "valueString": parsed_data["patient_name"]
                         })
                     
                     if parsed_data.get("age"):
                         extensions.append({
-                            "url": f"http://{request.host}/fhir/StructureDefinition/patient-age",
+                            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/patient-age",
                             "valueString": parsed_data["age"]
                         })
                     
                     if parsed_data.get("gender"):
                         extensions.append({
-                            "url": f"http://{request.host}/fhir/StructureDefinition/patient-gender",
+                            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/patient-gender",
                             "valueString": parsed_data["gender"]
                         })
                     
                     if parsed_data.get("patient_cnp"):
                         extensions.append({
-                            "url": f"http://{request.host}/fhir/StructureDefinition/patient-cnp",
+                            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/patient-cnp",
                             "valueString": parsed_data["patient_cnp"]
                         })
                     
                     # Add examination details if available
                     if parsed_data.get("referral_reason"):
                         extensions.append({
-                            "url": f"http://{request.host}/fhir/StructureDefinition/referral-reason",
+                            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/referral-reason",
                             "valueString": parsed_data["referral_reason"]
                         })
                     
                     if parsed_data.get("referral_code"):
                         extensions.append({
-                            "url": f"http://{request.host}/fhir/StructureDefinition/referral-code",
+                            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/referral-code",
                             "valueString": parsed_data["referral_code"]
                         })
                     
                     if parsed_data.get("presumptive_diagnosis"):
                         extensions.append({
-                            "url": f"http://{request.host}/fhir/StructureDefinition/presumptive-diagnosis",
+                            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/presumptive-diagnosis",
                             "valueString": parsed_data["presumptive_diagnosis"]
                         })
                     
                     if parsed_data.get("special_indications"):
                         extensions.append({
-                            "url": f"http://{request.host}/fhir/StructureDefinition/special-indications",
+                            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/special-indications",
                             "valueString": parsed_data["special_indications"]
                         })
                     
                     if parsed_data.get("referring_physician"):
                         extensions.append({
-                            "url": f"http://{request.host}/fhir/StructureDefinition/referring-physician",
+                            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/referring-physician",
                             "valueString": parsed_data["referring_physician"]
                         })
                     
@@ -2448,7 +2448,7 @@ async def fhir_diagnostic_report_read(request):
                 # Construct the full URL for the redirect
                 if location.startswith("/"):
                     # Relative path from root
-                    current_url = f"http://{request.host}{location}"
+                    current_url = f"{request.scheme}://{request.host}{location}"
                 elif location.startswith("http"):
                     # Full URL
                     current_url = location
