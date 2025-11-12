@@ -378,6 +378,10 @@ document.addEventListener('DOMContentLoaded', function() {
                                 if (reportData.performer && reportData.performer.length > 0) {
                                     cardContent += `<p><strong>Performer:</strong> ${reportData.performer[0].display || ''}</p>`;
                                 }
+                                // Add interpreter if available
+                                if (reportData.resultsInterpreter && reportData.resultsInterpreter.length > 0) {
+                                    cardContent += `<p><strong>Interpreter:</strong> ${reportData.resultsInterpreter[0].display || ''}</p>`;
+                                }
                                 cardContent += `</div>`;
                             }
                             
@@ -407,6 +411,16 @@ document.addEventListener('DOMContentLoaded', function() {
                                 }
                             }
                             cardContent += `</div>`;
+                            
+                            // Add link to ImagingStudy if available
+                            if (reportData.imagingStudy) {
+                                const studyId = reportData.imagingStudy.reference.split('/')[1];
+                                cardContent += `<div class="imaging-study-link">
+                                    <a href="#" onclick="viewImagingStudy('${studyId}', '${observation.id}'); return false;">
+                                        View Imaging Study #${studyId}
+                                    </a>
+                                </div>`;
+                            }
                         }
                     } catch (err) {
                         console.error('Error fetching report data:', err);
@@ -434,69 +448,99 @@ document.addEventListener('DOMContentLoaded', function() {
         results.style.display = 'block';
     }
     
-    function displayReportModal(reportData, reportId, reportType) {
+    // Function to view imaging study
+    async function viewImagingStudy(studyId, reportId) {
+        try {
+            // Fetch imaging study data using FHIR API
+            const studyResponse = await fetch(`/fhir/ImagingStudy/${studyId}`);
+            
+            if (studyResponse.ok) {
+                const studyData = await studyResponse.json();
+                displayImagingStudyModal(studyData, studyId, reportId);
+            } else {
+                console.error('Error fetching imaging study data');
+            }
+        } catch (err) {
+            console.error('Error fetching imaging study:', err);
+        }
+    }
+    
+    // Function to display imaging study in a modal
+    function displayImagingStudyModal(studyData, studyId, reportId) {
         // Use PicoCSS modal
         const modal = document.createElement('dialog');
-        modal.id = 'reportModal';
+        modal.id = 'imagingStudyModal';
         modal.className = 'modal';
         
         let content = `
             <article>
                 <header>
-                    <h2>${reportType.toUpperCase()} Report #${reportId}</h2>
+                    <h2>Imaging Study #${studyId}</h2>
                     <button class="close" aria-label="Close" rel="prev"></button>
                 </header>
                 <main>
         `;
         
-        // Patient information
-        content += `<div class="report-section">`;
-        content += `<h3>`;
-        content += `${reportData.patient_name}`;
-        if (reportData.gender) {
-            content += `, ${reportData.gender}`;
-        }
-        if (reportData.age) {
-            content += `, ${reportData.age}`;
-        }
-        content += `</h3>`;
+        // Study metadata
+        content += `<div class="study-section">`;
+        content += `<h3>Study Information</h3>`;
         
-        if (reportData.patient_id) {
-            content += `<p><strong>CNP:</strong> ${reportData.patient_id}</p>`;
+        if (studyData.started) {
+            content += `<p><strong>Started:</strong> ${studyData.started}</p>`;
         }
-        if (reportData.patient_code) {
-            content += `<p><strong>Patient Code:</strong> ${reportData.patient_code}</p>`;
+        
+        if (studyData.modality) {
+            content += `<p><strong>Modality:</strong> ${studyData.modality.display || studyData.modality.code || 'N/A'}</p>`;
         }
-        if (reportData.sample_datetime) {
-            content += `<p><strong>Date/Time:</strong> ${reportData.sample_datetime}</p>`;
+        
+        if (studyData.description) {
+            content += `<p><strong>Description:</strong> ${studyData.description}</p>`;
+        }
+        
+        // Performer information
+        if (studyData.performer && studyData.performer.length > 0) {
+            content += `<p><strong>Performer:</strong> ${studyData.performer[0].actor?.display || 'N/A'}</p>`;
+        }
+        
+        // Referrer information
+        if (studyData.referrer) {
+            content += `<p><strong>Referrer:</strong> ${studyData.referrer.display || 'N/A'}</p>`;
+        }
+        
+        // Reason information
+        if (studyData.reason && studyData.reason.length > 0) {
+            content += `<p><strong>Reason:</strong> ${studyData.reason[0].text || 'N/A'}</p>`;
+        }
+        
+        // Note information
+        if (studyData.note && studyData.note.length > 0) {
+            content += `<p><strong>Note:</strong> ${studyData.note[0].text || 'N/A'}</p>`;
         }
         
         content += `</div>`;
         
-        // Report results
-        if (reportData.reports && reportData.reports.length > 0) {
-            content += `<section class="report-section">`;
-            content += `<h3>Results</h3>`;
+        // Series information
+        if (studyData.series && studyData.series.length > 0) {
+            content += `<section class="study-section">`;
+            content += `<h3>Series</h3>`;
+            content += `<ul>`;
             
-            reportData.reports.forEach((report, index) => {
-                content += `<p><strong>${index + 1}: ${report.investigation || 'N/A'}</strong></p>`;
-                content += `<pre style="white-space: pre-wrap; background: var(--muted-background-color); padding: 0.75rem; border-radius: var(--border-radius);">${report.result || 'No result data'}</pre>`;
+            studyData.series.forEach((series, index) => {
+                content += `<li><strong>Series ${series.number || index + 1}:</strong> ${series.description || 'N/A'}`;
+                if (series.modality) {
+                    content += ` (Modality: ${series.modality.display || series.modality.code || 'N/A'})`;
+                }
+                content += `</li>`;
             });
             
-            content += `</section>`;
-        } else if (reportData.result) {
-            content += `<section class="report-section">`;
-            content += `<h3>Result</h3>`;
-            content += `<pre style="white-space: pre-wrap; background: var(--muted-background-color); padding: 0.75rem; border-radius: var(--border-radius);">${reportData.result}</pre>`;
+            content += `</ul>`;
             content += `</section>`;
         }
         
-        // Examiner information
-        if (reportData.examiner) {
-            content += `<section class="report-section">`;
-            content += `<p><strong>Examiner:</strong> ${reportData.examiner}</p>`;
-            content += `</section>`;
-        }
+        // Link back to report
+        content += `<section class="study-section">`;
+        content += `<p><a href="#" onclick="closeImagingStudyModal(); return false;">Back to Report #${reportId}</a></p>`;
+        content += `</section>`;
         
         content += `
                 </main>
@@ -520,4 +564,16 @@ document.addEventListener('DOMContentLoaded', function() {
         // Show modal
         modal.showModal();
     }
+    
+    // Function to close imaging study modal
+    function closeImagingStudyModal() {
+        const modal = document.getElementById('imagingStudyModal');
+        if (modal) {
+            modal.remove();
+        }
+    }
+    
+    // Make functions available globally
+    window.viewImagingStudy = viewImagingStudy;
+    window.closeImagingStudyModal = closeImagingStudyModal;
 });
