@@ -1139,7 +1139,7 @@ def convert_report_to_fhir(report_data: Dict[str, Any], request) -> Dict[str, An
         fhir_report["result"] = []
         for i, report in enumerate(report_data["reports"]):
             fhir_report["result"].append({
-                "reference": f"Observation/{report_data["report_id"]}-{i+1}"
+                "reference": f"Observation/{report_data['report_id']}-{i+1}"
             })
         
         # Add full report text from the first report result
