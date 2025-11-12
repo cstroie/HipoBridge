@@ -871,7 +871,7 @@ async def diagnostic_report(request):
                             fhir_imaging_study = convert_report_to_imaging_study(report_data, request)
                             return web.json_response(fhir_imaging_study)
                         else:
-                            fhir_report = convert_report_to_fhir(report_data, request)
+                            fhir_report = convert_report_to_diagnostic_report(report_data, request)
                             return web.json_response(fhir_report)
                     else:
                         logger.warning("No report data found in the retrieved report")
@@ -1097,7 +1097,7 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
         logger.error(f"Error parsing report data: {e}")
         return {}
 
-def convert_report_to_fhir(report_data: Dict[str, Any], request) -> Dict[str, Any]:
+def convert_report_to_diagnostic_report(report_data: Dict[str, Any], request) -> Dict[str, Any]:
     # Create enhanced FHIR DiagnosticReport resource
     fhir_report = {
         "resourceType": "DiagnosticReport",
