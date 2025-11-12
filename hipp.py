@@ -493,6 +493,9 @@ def parse_patient_data(html_content: str) -> Dict[str, Any]:
             patient_data[data_key] = input_element.get('value', '').strip()
 
     try:
+        # First convert HTML entities to their characters
+        html_content = html.unescape(html_content)
+
         soup = BeautifulSoup(html_content, 'html.parser')
         
         # Check if this is a single patient page by looking for 'Date pasaportale' in title
@@ -790,7 +793,7 @@ def convert_patient_to_fhir(patient_data: Dict[str, Any], request) -> Dict[str, 
     return fhir_patient
 
 
-async def fhir_diagnostic_report_read(request):
+async def diagnostic_report_read(request):
     """Retrieve a diagnostic report by ID, following redirect chains.
     
     Gets a diagnostic report from the Hipocrate service, following any redirects to
@@ -812,28 +815,20 @@ async def fhir_diagnostic_report_read(request):
     
     if not report_id:
         logger.warning("No report ID provided")
-        return web.json_response({
-            "status": "error",
-            "message": "Report ID is required"
-        }, status=400)
+        return create_error_response("Report ID is required")
     
     logger.info(f"Retrieving report with ID: {report_id}")
     
+    # Get credentials from request headers (optional)
+    username = request.headers.get("X-Username")
+    password = request.headers.get("X-Password")
+
     try:
+        # Get aiohttp session
         session = await get_session()
-        
-        # First ensure we're logged in
-        login_success = await login_if_needed(username, password)
-        if not login_success:
-            logger.error("Failed to login for report retrieval")
-            return web.json_response({
-                "status": "error",
-                "message": "Authentication failed"
-            }, status=401)
-        
-        # Make initial request to the report endpoint
+
+        # Make request to the report endpoint
         report_url = f"{SERVICE_URL}/analyse/Reports/analyseFile.asp?id={report_id}"
-        logger.debug(f"Making report request to: {report_url}")
         
         # Follow up to 5 redirects to get the final report data
         redirect_count = 0
@@ -847,6 +842,7 @@ async def fhir_diagnostic_report_read(request):
                 session, current_url, "GET", None, username, password
             )
             duration = (datetime.now() - start_time).total_seconds()
+
             # Check for errors in the response
             if not success:
                 return error_response
@@ -862,138 +858,14 @@ async def fhir_diagnostic_report_read(request):
                     logger.info(f"Report retrieval completed successfully after {redirect_count} redirects")
                     
                     # Parse the report data
-                    parsed_data = parse_report_data(response_text)
-                    
-                    # Create enhanced FHIR DiagnosticReport resource
-                    fhir_report = {
-                        "resourceType": "DiagnosticReport",
-                        "id": report_id,
-                        "meta": {
-                            "lastUpdated": datetime.now().isoformat()
-                        },
-                        "status": "final",
-                        "category": [
-                            {
-                                "coding": [
-                                    {
-                                        "system": "http://terminology.hl7.org/CodeSystem/v2-0074",
-                                        "code": "RAD",
-                                        "display": "Radiology"
-                                    }
-                                ]
-                            }
-                        ],
-                        "code": {
-                            "coding": [
-                                {
-                                    "system": f"{request.scheme}://{request.host}/fhir/CodeSystem/report-types",
-                                    "code": "imaging-report",
-                                    "display": "Imaging Report"
-                                }
-                            ],
-                            "text": parsed_data.get("examination", "Imaging Report")
-                        },
-                        "subject": {
-                            "reference": f"Patient/{parsed_data.get('patient_id', '')}"
-                        }
-                    }
-                    
-                    # Add effective date if available
-                    if parsed_data.get("datetime"):
-                        fhir_report["effectiveDateTime"] = parsed_data["datetime"] #.isoformat()
-                    
-                    # Add performer if available
-                    if parsed_data.get("performer"):
-                        fhir_report["performer"] = [
-                            {
-                                "display": parsed_data["performer"]
-                            }
-                        ]
-                    
-                    # Add results if available
-                    if parsed_data.get("reports"):
-                        fhir_report["result"] = []
-                        for i, report in enumerate(parsed_data["reports"]):
-                            fhir_report["result"].append({
-                                "reference": f"Observation/{report_id}-{i}"
-                            })
-                        
-                        # Add full report text from the first report result
-                        if parsed_data["reports"]:
-                            first_report = parsed_data["reports"][0]
-                            if first_report.get("result"):
-                                fhir_report["presentedForm"] = [{
-                                    "contentType": "text/plain",
-                                    "data": first_report["result"]
-                                }]
-                    
-                    # Add additional data as extensions if available
-                    extensions = []
-                    
-                    # Add patient details if available
-                    if parsed_data.get("patient_name"):
-                        extensions.append({
-                            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/patient-name",
-                            "valueString": parsed_data["patient_name"]
-                        })
-                    
-                    if parsed_data.get("age"):
-                        extensions.append({
-                            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/patient-age",
-                            "valueString": parsed_data["age"]
-                        })
-                    
-                    if parsed_data.get("gender"):
-                        extensions.append({
-                            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/patient-gender",
-                            "valueString": parsed_data["gender"]
-                        })
-                    
-                    if parsed_data.get("patient_cnp"):
-                        extensions.append({
-                            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/patient-cnp",
-                            "valueString": parsed_data["patient_cnp"]
-                        })
-                    
-                    # Add examination details if available
-                    if parsed_data.get("referral_reason"):
-                        extensions.append({
-                            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/referral-reason",
-                            "valueString": parsed_data["referral_reason"]
-                        })
-                    
-                    if parsed_data.get("referral_code"):
-                        extensions.append({
-                            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/referral-code",
-                            "valueString": parsed_data["referral_code"]
-                        })
-                    
-                    if parsed_data.get("presumptive_diagnosis"):
-                        extensions.append({
-                            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/presumptive-diagnosis",
-                            "valueString": parsed_data["presumptive_diagnosis"]
-                        })
-                    
-                    if parsed_data.get("special_indications"):
-                        extensions.append({
-                            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/special-indications",
-                            "valueString": parsed_data["special_indications"]
-                        })
-                    
-                    if parsed_data.get("referring_physician"):
-                        extensions.append({
-                            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/referring-physician",
-                            "valueString": parsed_data["referring_physician"]
-                        })
-                    
-                    # Add extensions to the report if any were added
-                    if extensions:
-                        fhir_report["extension"] = extensions
-                    
-                    # Add media references placeholder
-                    fhir_report["media"] = []
-                    
-                    return web.json_response(fhir_report)
+                    report_data = parse_report_data(response_text)
+                    if report_data and report_data["reports"]:
+                        report_data["report_id"] = report_id
+                        fhir_report = convert_report_to_fhir(report_data, request)
+                        return web.json_response(fhir_report)
+                    else:
+                        logger.warning("No report data found in the retrieved report")
+                        return create_error_response("No report data found", 404)
                 
                 # Handle 302 redirect
                 location = response.headers.get("Location")
@@ -1022,42 +894,7 @@ async def fhir_diagnostic_report_read(request):
             
     except Exception as e:
         logger.error(f"Report retrieval failed with exception: {e}")
-        return web.json_response({
-            "status": "error",
-            "message": str(e)
-        }, status=500)
-
-
-def get_textarea_content_after_label(soup: 'BeautifulSoup', label_regex: str) -> str:
-    """Get content of first textarea after a label matching the given regex.
-    
-    Searches for a label matching the regex pattern and returns the content
-    of the first textarea element that follows it.
-    
-    Args:
-        soup: Parsed HTML content
-        label_regex: Regular expression pattern to match label text
-        
-    Returns:
-        Content of the textarea converted to markdown, or empty string if not found
-    """
-    import re
-    
-    try:
-        # Find elements with text matching the label regex
-        label_elements = soup.find_all(string=re.compile(label_regex, re.IGNORECASE))
-        if label_elements:
-            # Get the parent element which should contain the label
-            parent = label_elements[0].parent
-            if parent:
-                # Find the next textarea sibling
-                textarea = parent.find_next('textarea')
-                if textarea:
-                    return html_to_markdown(str(textarea))
-        return ""
-    except Exception as e:
-        logger.error(f"Error extracting textarea content after label '{label_regex}': {e}")
-        return ""
+        return create_error_response(str(e), 500)
 
 def parse_report_data(html_content: str) -> Dict[str, Any]:
     """Parse HTML report content and extract structured data.
@@ -1071,7 +908,21 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
     Returns:
         Dictionary containing parsed report data
     """
-    
+    # Initialize report data dictionary
+    report_data = {
+        "patient_name": "",
+        "age": "",
+        "gender": "",
+        "patient_cnp": "",
+        "patient_id": "",
+        "datetime": "",
+        "date": "",
+        "time": "",
+        "examination": "",
+        "reports": [],
+        "performer": ""
+    }
+
     def extract_field_from_td(soup: BeautifulSoup, label_regex: str) -> str:
         """Extract field data from a table cell containing a label.
         
@@ -1110,21 +961,6 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
         html_content = html.unescape(html_content)
         
         soup = BeautifulSoup(html_content, 'html.parser')
-        
-        # Initialize result dictionary
-        report_data = {
-            "patient_name": "",
-            "age": "",
-            "gender": "",
-            "patient_cnp": "",
-            "patient_id": "",
-            "datetime": "",
-            "date": "",
-            "time": "",
-            "examination": "",
-            "reports": [],
-            "performer": ""
-        }
         
         # Extract text content for pattern matching
         text_content = soup.get_text()
@@ -1173,7 +1009,7 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
             except ValueError:
                 # If parsing fails, leave date/time fields empty
                 pass
-            report_data["datetime"] = dt.isoformat()
+            report_data["datetime"] = dt
         
         # Extract fields using the helper function
         report_data["examination"] = extract_field_from_td(soup, r'EXAMINARE EFECTUATA:')
@@ -1192,11 +1028,8 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
                     report_data["referral_code"] = parts[0]
                     report_data["referral_reason"] = parts[1].strip() if len(parts) > 1 else ""
         
-        # Extract multiple reports
-        # Find all elements with text starting with "REZULTAT:"
-        result_elements = soup.find_all(string=re.compile(r'^REZULTAT:', re.IGNORECASE))
-        
-        for result_element in result_elements:
+        # Extract multiple reports: find all elements with text starting with "REZULTAT:"
+        for result_element in soup.find_all(string=re.compile(r'^REZULTAT:', re.IGNORECASE)):
             try:
                 # The investigation name is the text after "REZULTAT:" in the element
                 element_text = result_element.get_text()
@@ -1213,7 +1046,6 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
                     div_children = list(result_div.children)
                     # Filter out text nodes that contain only whitespace
                     element_children = [child for child in div_children if hasattr(child, 'name') and child.name]
-                    
                     if len(element_children) == 1 and element_children[0].name == 'b':
                         # If the only child is a <b> tag, use its content directly
                         result_content = html_to_markdown(str(element_children[0]))
@@ -1237,7 +1069,6 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
             r'(?:MEDIC,|Medic validator:)\s*<b[^>]*>([^<]+)</b>',
             r'(?:MEDIC,|Medic validator:)[^>]*>\s*([^\n\r<>&]+)'
         ]
-        
         performer_name = ""
         for pattern in performer_patterns:
             performer_match = re.search(pattern, html_content, re.IGNORECASE)
@@ -1247,14 +1078,149 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
                 performer_name = html.unescape(performer_name)
                 performer_name = re.sub(r'\s+', ' ', performer_name)
                 break
-        
         if performer_name:
             report_data["performer"] = performer_name
-
+        # Return the parsed report data
         return report_data
+    
     except Exception as e:
         logger.error(f"Error parsing report data: {e}")
         return {}
+
+def convert_report_to_fhir(report_data: Dict[str, Any], request) -> Dict[str, Any]:
+    # Create enhanced FHIR DiagnosticReport resource
+    fhir_report = {
+        "resourceType": "DiagnosticReport",
+        "id": report_data["report_id"],
+        "meta": {
+            "lastUpdated": report_data["datetime"].isoformat()
+        },
+        "status": "final",
+        "category": [
+            {
+                "coding": [
+                    {
+                        "system": "http://terminology.hl7.org/CodeSystem/v2-0074",
+                        "code": "RAD",
+                        "display": "Radiology"
+                    }
+                ]
+            }
+        ],
+        "code": {
+            "coding": [
+                {
+                    "system": f"{request.scheme}://{request.host}/fhir/CodeSystem/report-types",
+                    "code": "imaging-report",
+                    "display": "Imaging Report"
+                }
+            ],
+            "text": report_data.get("examination", "Imaging Report")
+        },
+        "subject": {
+            "reference": f"Patient/{report_data.get('patient_id', '')}"
+        }
+    }
+    
+    # Add effective date if available
+    if report_data.get("datetime"):
+        fhir_report["effectiveDateTime"] = report_data["datetime"].isoformat()
+    
+    # Add performer if available
+    if report_data.get("performer"):
+        fhir_report["performer"] = [
+            {
+                "display": report_data["performer"]
+            }
+        ]
+    
+    # Add results if available
+    if report_data.get("reports"):
+        fhir_report["result"] = []
+        for i, report in enumerate(report_data["reports"]):
+            fhir_report["result"].append({
+                "reference": f"Observation/{report_data["report_id"]}-{i+1}"
+            })
+        
+        # Add full report text from the first report result
+        if report_data["reports"]:
+            first_report = report_data["reports"][0]
+            if first_report.get("result"):
+                fhir_report["presentedForm"] = [{
+                    "contentType": "text/plain",
+                    "data": first_report["result"]
+                }]
+    
+    # Add additional data as extensions if available
+    extensions = []
+    
+    # Add patient details if available
+    if report_data.get("patient_name"):
+        extensions.append({
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/patient-name",
+            "valueString": report_data["patient_name"]
+        })
+    
+    if report_data.get("age"):
+        extensions.append({
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/patient-age",
+            "valueString": report_data["age"]
+        })
+    
+    if report_data.get("gender"):
+        extensions.append({
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/patient-gender",
+            "valueString": report_data["gender"]
+        })
+    
+    if report_data.get("patient_cnp"):
+        extensions.append({
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/patient-cnp",
+            "valueString": report_data["patient_cnp"]
+        })
+    
+    # Add examination details if available
+    if report_data.get("referral_reason"):
+        extensions.append({
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/referral-reason",
+            "valueString": report_data["referral_reason"]
+        })
+    
+    if report_data.get("referral_code"):
+        extensions.append({
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/referral-code",
+            "valueString": report_data["referral_code"]
+        })
+    
+    if report_data.get("presumptive_diagnosis"):
+        extensions.append({
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/presumptive-diagnosis",
+            "valueString": report_data["presumptive_diagnosis"]
+        })
+    
+    if report_data.get("special_indications"):
+        extensions.append({
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/special-indications",
+            "valueString": report_data["special_indications"]
+        })
+    
+    if report_data.get("referring_physician"):
+        extensions.append({
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/referring-physician",
+            "valueString": report_data["referring_physician"]
+        })
+    
+    # Add extensions to the report if any were added
+    if extensions:
+        fhir_report["extension"] = extensions
+    
+    # Add media references placeholder
+    fhir_report["media"] = []
+    
+    # Return the FHIR Patient resource
+    return fhir_report
+
+
 
 def parse_checkout_data(html_content: str) -> Dict[str, Any]:
     """Parse HTML checkout content and extract structured data.
@@ -2480,6 +2446,37 @@ async def serve_web_page(request):
     return web.Response(text=html_content, content_type='text/html')
 
 
+def get_textarea_content_after_label(soup: 'BeautifulSoup', label_regex: str) -> str:
+    """Get content of first textarea after a label matching the given regex.
+    
+    Searches for a label matching the regex pattern and returns the content
+    of the first textarea element that follows it.
+    
+    Args:
+        soup: Parsed HTML content
+        label_regex: Regular expression pattern to match label text
+        
+    Returns:
+        Content of the textarea converted to markdown, or empty string if not found
+    """
+    import re
+    
+    try:
+        # Find elements with text matching the label regex
+        label_elements = soup.find_all(string=re.compile(label_regex, re.IGNORECASE))
+        if label_elements:
+            # Get the parent element which should contain the label
+            parent = label_elements[0].parent
+            if parent:
+                # Find the next textarea sibling
+                textarea = parent.find_next('textarea')
+                if textarea:
+                    return html_to_markdown(str(textarea))
+        return ""
+    except Exception as e:
+        logger.error(f"Error extracting textarea content after label '{label_regex}': {e}")
+        return ""
+
 
 def is_expected_page(soup: BeautifulSoup, expected_title_text: str) -> bool:
     """Check if the parsed HTML content is the expected page by looking for specific text in the title.
@@ -2589,7 +2586,7 @@ async def init_app():
     # FHIR-compatible endpoints
     app.router.add_get('/fhir/Patient', patient_search)
     app.router.add_get('/fhir/Patient/{id}', patient_read)
-    app.router.add_get('/fhir/DiagnosticReport/{id}', fhir_diagnostic_report_read)
+    app.router.add_get('/fhir/DiagnosticReport/{id}', diagnostic_report_read)
     app.router.add_get('/fhir/Encounter', fhir_encounter_read)
     app.router.add_get('/fhir/Observation', fhir_observation_search)
     app.router.add_get('/fhir/Observation/{id}', fhir_observation_read)
