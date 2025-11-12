@@ -1118,6 +1118,24 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
         
         # Extract fields using the helper function
         report_data["examination"] = extract_field_from_td(soup, r'EXAMINARE EFECTUATA:')
+        
+        # Extract modality from examination text
+        examination_text = report_data["examination"].upper() if report_data["examination"] else ""
+        modality_mapping = {
+            'CR': 'CR',    # Computed Radiography
+            'US': 'US',    # Ultrasound
+            'CT': 'CT',    # Computed Tomography
+            'MR': 'MR',    # Magnetic Resonance
+            'XA': 'XA',    # X-Ray Angiography
+            'RF': 'RF'     # Radio Fluoroscopy
+        }
+        
+        # Check if any modality code is in the examination text
+        for key, modality in modality_mapping.items():
+            if key in examination_text:
+                report_data["modality"] = modality
+                break
+        
         report_data["referral_reason"] = extract_field_from_td(soup, r'DIAGNOSTIC DE TRIMITERE:')
         report_data["presumptive_diagnosis"] = extract_field_from_td(soup, r'DG\.PREZUMTIV:')
         report_data["special_indications"] = extract_field_from_td(soup, r'INDICATII SPECIALE:')
