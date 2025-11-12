@@ -809,6 +809,10 @@ async def diagnostic_report(request):
     report_id = request.match_info.get('id')
     logger.info(f"GET /fhir/DiagnosticReport endpoint accessed with identifier: {report_id}")
     
+    # Check if ImagingStudy format is requested
+    _format = request.query.get('_format')
+    is_imaging_study = _format == 'imagingstudy'
+    
     # Get credentials from request headers (optional)
     username = request.headers.get("X-Username")
     password = request.headers.get("X-Password")
@@ -861,8 +865,14 @@ async def diagnostic_report(request):
                     report_data = parse_report_data(response_text)
                     if report_data and report_data["reports"]:
                         report_data["report_id"] = report_id
-                        fhir_report = convert_report_to_fhir(report_data, request)
-                        return web.json_response(fhir_report)
+                        
+                        # Return ImagingStudy if requested, otherwise DiagnosticReport
+                        if is_imaging_study:
+                            fhir_imaging_study = convert_report_to_imaging_study(report_data, request)
+                            return web.json_response(fhir_imaging_study)
+                        else:
+                            fhir_report = convert_report_to_fhir(report_data, request)
+                            return web.json_response(fhir_report)
                     else:
                         logger.warning("No report data found in the retrieved report")
                         return create_error_response("No report data found", 404)
@@ -1219,6 +1229,78 @@ def convert_report_to_fhir(report_data: Dict[str, Any], request) -> Dict[str, An
     
     # Return the FHIR Patient resource
     return fhir_report
+
+
+def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dict[str, Any]:
+    """Convert report data to FHIR ImagingStudy resource format.
+    
+    Args:
+        report_data: Report data from parse_report_data
+        request: The HTTP request object to get the host
+        
+    Returns:
+        FHIR ImagingStudy resource
+    """
+    # Create FHIR ImagingStudy resource
+    fhir_imaging_study = {
+        "resourceType": "ImagingStudy",
+        "id": report_data["report_id"],
+        "meta": {
+            "lastUpdated": report_data["datetime"].isoformat() if report_data.get("datetime") else datetime.now().isoformat()
+        },
+        "status": "available",
+        "subject": {
+            "reference": f"Patient/{report_data.get('patient_id', '')}"
+        },
+        "started": report_data["datetime"].isoformat() if report_data.get("datetime") else datetime.now().isoformat(),
+        "series": []
+    }
+    
+    # Add series for each report
+    if report_data.get("reports"):
+        for i, report in enumerate(report_data["reports"]):
+            series = {
+                "uid": f"urn:oid:1.2.840.99999999.1.{report_data['report_id']}.{i+1}",
+                "number": i+1,
+                "modality": {
+                    "system": "http://dicom.nema.org/resources/ontology/DCM",
+                    "code": "OT",  # Other
+                    "display": "Other"
+                },
+                "description": report.get("investigation", "Imaging Study"),
+                "started": report_data["datetime"].isoformat() if report_data.get("datetime") else datetime.now().isoformat(),
+                "instance": []
+            }
+            
+            # Add instance for the report content
+            instance = {
+                "uid": f"urn:oid:1.2.840.99999999.2.{report_data['report_id']}.{i+1}.1",
+                "sopClass": {
+                    "system": "http://dicom.nema.org/medical/dicom/current/output/chtml/part04/sect_B.5.html",
+                    "code": "1.2.840.10008.5.1.4.1.1.104.1",  # PDF storage
+                    "display": "Encapsulated PDF Storage"
+                },
+                "number": 1,
+                "title": report.get("investigation", f"Report {i+1}")
+            }
+            series["instance"].append(instance)
+            fhir_imaging_study["series"].append(series)
+    
+    # Add performer if available
+    if report_data.get("performer"):
+        fhir_imaging_study["performer"] = [
+            {
+                "actor": {
+                    "display": report_data["performer"]
+                }
+            }
+        ]
+    
+    # Add description from examination
+    if report_data.get("examination"):
+        fhir_imaging_study["description"] = report_data["examination"]
+    
+    return fhir_imaging_study
 
 
 
