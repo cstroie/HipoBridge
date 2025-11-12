@@ -212,7 +212,7 @@ async def handle_response_encoding(response):
     return response_text
 
 
-async def patient_read(request):
+async def patient(request):
     """Retrieve patient information by ID.
     
     Gets patient information from the Hipocrate service and extracts
@@ -793,7 +793,7 @@ def convert_patient_to_fhir(patient_data: Dict[str, Any], request) -> Dict[str, 
     return fhir_patient
 
 
-async def diagnostic_report_read(request):
+async def diagnostic_report(request):
     """Retrieve a diagnostic report by ID, following redirect chains.
     
     Gets a diagnostic report from the Hipocrate service, following any redirects to
@@ -2585,8 +2585,8 @@ async def init_app():
     app.router.add_get('/', serve_web_page)
     # FHIR-compatible endpoints
     app.router.add_get('/fhir/Patient', patient_search)
-    app.router.add_get('/fhir/Patient/{id}', patient_read)
-    app.router.add_get('/fhir/DiagnosticReport/{id}', diagnostic_report_read)
+    app.router.add_get('/fhir/Patient/{id}', patient)
+    app.router.add_get('/fhir/DiagnosticReport/{id}', diagnostic_report)
     app.router.add_get('/fhir/Encounter', fhir_encounter_read)
     app.router.add_get('/fhir/Observation', fhir_observation_search)
     app.router.add_get('/fhir/Observation/{id}', fhir_observation_read)
