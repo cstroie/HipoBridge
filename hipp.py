@@ -1376,6 +1376,14 @@ def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dic
                 "instance": []
             }
             
+            # Use the study modality for the series if available, otherwise default to OT
+            series_modality = report_data.get("modality", "OT")
+            series["modality"] = {
+                "system": "http://dicom.nema.org/resources/ontology/DCM",
+                "code": series_modality.upper(),
+                "display": series_modality.upper()
+            }
+            
             # Add instance for the report content
             instance = {
                 "uid": f"urn:oid:1.2.840.99999999.2.{report_data['report_id']}.{i+1}.1",
