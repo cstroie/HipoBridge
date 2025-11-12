@@ -822,7 +822,7 @@ async def diagnostic_report(request):
     retrieve the final report data, then parses it into structured format.
     
     Args:
-        request: The incoming HTTP request with 'identifier' query parameter for report ID
+        request: The incoming HTTP request with 'id' path parameter for report ID
                  and optional X-Username and X-Password headers for authentication
         
     Returns:
@@ -923,7 +923,7 @@ async def imaging_study(request):
     retrieve the final report data, then parses it into structured format.
     
     Args:
-        request: The incoming HTTP request with 'identifier' query parameter for study ID
+        request: The incoming HTTP request with 'id' path parameter for study ID
                  and optional X-Username and X-Password headers for authentication
         
     Returns:
