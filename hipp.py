@@ -1408,33 +1408,7 @@ def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dic
     
     # Add additional information as extensions
     extensions = []
-    
-    # Add patient details if available
-    if report_data.get("age"):
-        extensions.append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/patient-age",
-            "valueString": report_data["age"]
-        })
-    
-    if report_data.get("gender"):
-        extensions.append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/patient-gender",
-            "valueString": report_data["gender"]
-        })
-    
-    # Add referral information as extensions
-    if report_data.get("referral_reason"):
-        extensions.append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/referral-reason",
-            "valueString": report_data["referral_reason"]
-        })
-    
-    if report_data.get("referral_code"):
-        extensions.append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/referral-code",
-            "valueString": report_data["referral_code"]
-        })
-    
+
     if report_data.get("presumptive_diagnosis"):
         extensions.append({
             "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/presumptive-diagnosis",
@@ -1446,12 +1420,7 @@ def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dic
             "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/special-indications",
             "valueString": report_data["special_indications"]
         })
-    
-    if report_data.get("referring_physician"):
-        extensions.append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/referring-physician",
-            "valueString": report_data["referring_physician"]
-        })
+
     
     # Add extensions to the imaging study if any were added
     if extensions:
