@@ -1947,10 +1947,10 @@ async def fhir_encounter_read(request):
         
         # Add text summary if epicrisis exists
         if parsed_data.get("epicrisis"):
-            fhir_encounter["text"] = {
-                "status": "generated",
-                "div": f"<div xmlns=\"http://www.w3.org/1999/xhtml\">{parsed_data['epicrisis']}</div>"
-            }
+            #fhir_encounter["text"] = {
+            #    "status": "generated",
+            #    "div": f"<div xmlns=\"http://www.w3.org/1999/xhtml\">{parsed_data['epicrisis']}</div>"
+            #}
             
             # Also add as a note
             fhir_encounter["note"] = [
