@@ -120,6 +120,10 @@ session: Optional[aiohttp.ClientSession] = None
 cnp_cache: Dict[str, str] = {}
 cache_max_size = 1000  # Maximum number of entries to cache
 
+# Simple in-memory cache for HTTP responses
+response_cache: Dict[str, str] = {}
+response_cache_max_size = 10  # Maximum number of entries to cache
+
 
 
 async def make_authenticated_request(session, url, method="GET", data=None, username=None, password=None):
@@ -136,6 +140,11 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
     Returns:
         Tuple of (response_text, success, error_response) where success is boolean
     """
+    
+    # Check if we have a cached response for GET requests
+    if method == "GET" and url in response_cache:
+        logger.debug(f"Using cached response for: {url}")
+        return response_cache[url], True, None
     
     async def _make_request(use_retry_headers=False):
         """Helper function to make a request with proper headers."""
@@ -185,6 +194,19 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
             else:
                 logger.error("Re-login failed")
                 return None, False, create_error_response("Authentication failed", 401)
+        
+        # Cache the response for GET requests
+        if method == "GET":
+            # If cache is at max size, remove the oldest entry
+            if len(response_cache) >= response_cache_max_size:
+                # Remove the first (oldest) entry
+                oldest_key = next(iter(response_cache))
+                del response_cache[oldest_key]
+            
+            # Add the new entry
+            response_cache[url] = response_text
+            logger.debug(f"Cached response for: {url}")
+        
         # If we reach here, we have a valid response
         return response_text, True, None
     except Exception as e:
