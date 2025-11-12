@@ -1183,7 +1183,7 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
                 interpreter_name = html.unescape(interpreter_name)
                 interpreter_name = re.sub(r'\s+', ' ', interpreter_name)
                 break
-        if performerinterpreter_name_name:
+        if interpreter_name:
             report_data["interpreter"] = interpreter_name
         # Return the parsed report data
         return report_data
