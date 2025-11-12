@@ -1437,117 +1437,6 @@ def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dic
     return fhir_imaging_study
 
 
-async def observation_search(request):
-    """Retrieve list of observations for a patient by ID.
-    
-    Gets a list of observations for a specific patient from the Hipocrate service
-    without fetching detailed data for each observation.
-    
-    Args:
-        request: The incoming HTTP request with 'patient' query parameter for patient ID
-                 and optional X-Username and X-Password headers for authentication
-        
-    Returns:
-        JSON response with observations data or error information
-    """
-    patient_id = request.query.get('patient')
-    logger.info(f"GET /fhir/Observation endpoint accessed for patient: {patient_id}")
-    
-    # Get credentials from request headers (optional)
-    username = request.headers.get("X-Username")
-    password = request.headers.get("X-Password")
-    
-    if not patient_id:
-        logger.warning("No patient ID provided")
-        return create_error_response("Patient ID is required")
-    
-    # Get optional parameters
-    analysis_type = request.query.get('type')
-    full_data = request.query.get('full', 'no').lower() == 'yes'
-    
-    logger.info(f"Retrieving analyses list for patient with ID: {patient_id}")
-    
-    try:
-        session = await get_session()
-        
-        # Make request to the analyses endpoint
-        analyses_url = f"{SERVICE_URL}/pacient/analyses.asp?type=PA&pacid={patient_id}"
-        
-        # Add full=yes parameter if requested
-        if full_data:
-            analyses_url += "&full=yes"
-        
-        # Make the authenticated request
-        start_time = datetime.now()
-        response_text, success, error_response = await make_authenticated_request(
-            session, analyses_url, "GET", None, username, password
-        )
-        duration = (datetime.now() - start_time).total_seconds()
-        # Check for errors in the response
-        if not success:
-            return error_response
-        
-        logger.info(f"Analyses list retrieval completed successfully in {duration:.2f} seconds")
-        # Parse the analyses data to extract report IDs, types, and patient name
-        parsed_data = parse_analyses_data(response_text)
-        
-        # Filter analyses by type if specified
-        analyses = parsed_data["analyses"]
-        if analysis_type:
-            analyses = [a for a in analyses if a["type"] == analysis_type]
-        
-        # Create FHIR Bundle of Observation resources (minimal data only)
-        bundle = {
-            "resourceType": "Bundle",
-            "type": "searchset",
-            "total": len(analyses),
-            "entry": []
-        }
-        
-        for analysis in analyses:
-            fhir_observation = {
-                "resourceType": "Observation",
-                "id": analysis["analysis_id"],
-                "meta": {
-                    "lastUpdated": analysis["datetime"].isoformat() if "datetime" in analysis and analysis["datetime"] else datetime.now().isoformat()
-                },
-                "status": "final",
-                "category": [
-                    {
-                        "coding": [
-                            {
-                                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
-                                "code": "laboratory" if analysis["type"] == "lab" else "imaging",
-                                "display": "Laboratory" if analysis["type"] == "lab" else "Imaging"
-                            }
-                        ]
-                    }
-                ],
-                "code": {
-                    "coding": [
-                        {
-                            "system": f"{request.scheme}://{request.host}/fhir/CodeSystem/analysis-types",
-                            "code": analysis["type"],
-                            "display": ANALYSIS_TYPES[analysis["type"]]["display"]
-                        }
-                    ],
-                    "text": ANALYSIS_TYPES[analysis["type"]]["definition"]
-                },
-                "subject": {
-                    "reference": f"Patient/{patient_id}"
-                }
-            }
-            
-            bundle["entry"].append({
-                "resource": fhir_observation
-            })
-        
-        return web.json_response(bundle)
-            
-    except Exception as e:
-        logger.error(f"Analyses list retrieval failed with exception: {e}")
-        return create_error_response(str(e), 500)
-
 async def observation(request):
     """Retrieve a single observation by ID.
     
@@ -1599,9 +1488,6 @@ async def observation(request):
         fhir_observation = {
             "resourceType": "Observation",
             "id": observation_id,
-            "meta": {
-                "lastUpdated": datetime.now().isoformat()
-            },
             "status": "final",
             "code": {
                 "coding": [
@@ -1615,12 +1501,15 @@ async def observation(request):
             },
             "subject": {
                 "reference": f"Patient/{report_data.get('patient_id', '')}"
-            }
+            },
+            "basedOn": {
+                "reference": f"ServiceRequest/{report_data.get('report_id')}"
+            },
         }
-        
+
         # Add effective datetime if available
         if report_data.get("datetime"):
-            fhir_observation["effectiveDateTime"] = report_data["datetime"]
+            fhir_observation["effectiveDateTime"] = report_data["datetime"].isoformat()
         
         # Add performer if available
         if report_data.get("performer"):
@@ -1629,40 +1518,270 @@ async def observation(request):
                     "display": report_data["performer"]
                 }
             ]
-        
-        # Add patient gender and birth date if available
-        if report_data.get("gender"):
-            fhir_observation["extension"] = [
-                {
-                    "url": "http://hl7.org/fhir/StructureDefinition/patient-gender",
-                    "valueCode": report_data["gender"].lower()
-                }
-            ]
-        
-        if report_data.get("birth_date"):
-            if "extension" not in fhir_observation:
-                fhir_observation["extension"] = []
-            fhir_observation["extension"].append({
-                "url": "http://hl7.org/fhir/StructureDefinition/patient-birthDate",
-                "valueDate": report_data["birth_date"]
-            })
-        
+
         # Add value/comment if available
         if report_data.get("reports"):
-            # For now, add the first report result as a comment
-            first_report = report_data["reports"][0] if report_data["reports"] else None
-            if first_report and first_report.get("result"):
-                fhir_observation["note"] = [
+            fhir_observation["note"] = []
+            for report in report_data["reports"]:
+                fhir_observation["note"].append(
                     {
-                        "text": first_report["result"]
+                        "contentType": "text/plain",
+                        "data": report["result"]
                     }
-                ]
+                )
         
         return web.json_response(fhir_observation)
             
     except Exception as e:
         logger.error(f"Observation retrieval failed with exception: {e}")
         return create_error_response(str(e), 500)
+
+async def observation_search(request):
+    """Retrieve list of observations for a patient by ID.
+    
+    Gets a list of observations for a specific patient from the Hipocrate service
+    without fetching detailed data for each observation.
+    
+    Args:
+        request: The incoming HTTP request with 'patient' query parameter for patient ID
+                 and optional X-Username and X-Password headers for authentication
+        
+    Returns:
+        JSON response with observations data or error information
+    """
+    patient_id = request.query.get('patient')
+    logger.info(f"GET /fhir/Observation endpoint accessed for patient: {patient_id}")
+    
+    # Get credentials from request headers (optional)
+    username = request.headers.get("X-Username")
+    password = request.headers.get("X-Password")
+    
+    if not patient_id:
+        logger.warning("No patient ID provided")
+        return create_error_response("Patient ID is required")
+    
+    # Get optional parameters
+    analysis_type = request.query.get('type')
+    full_data = request.query.get('full', 'no').lower() == 'yes'
+    
+    logger.info(f"Retrieving analyses list for patient with ID: {patient_id}")
+    
+    try:
+        # Get aiohttp session
+        session = await get_session()
+        
+        # Make request to the analyses endpoint
+        analyses_url = f"{SERVICE_URL}/pacient/analyses.asp?type=PA&pacid={patient_id}"
+        
+        # Add full=yes parameter if requested
+        if full_data:
+            analyses_url += "&full=yes"
+        
+        # Make the authenticated request
+        start_time = datetime.now()
+        response_text, success, error_response = await make_authenticated_request(
+            session, analyses_url, "GET", None, username, password
+        )
+        duration = (datetime.now() - start_time).total_seconds()
+
+        # Check for errors in the response
+        if not success:
+            return error_response
+        
+        logger.info(f"Analyses list retrieval completed successfully in {duration:.2f} seconds")
+        # Parse the analyses data to extract report IDs, types, and patient name
+        parsed_data = parse_analyses_data(response_text)
+        
+        # Filter analyses by type if specified
+        analyses = parsed_data["analyses"]
+        if analysis_type:
+            analyses = [a for a in analyses if a["type"] == analysis_type]
+        
+        # Create FHIR Bundle of Observation resources (minimal data only)
+        bundle = {
+            "resourceType": "Bundle",
+            "type": "searchset",
+            "total": len(analyses),
+            "entry": []
+        }
+        
+        for analysis in analyses:
+            fhir_observation = {
+                "resourceType": "Observation",
+                "id": analysis["analysis_id"],
+                "status": "final",
+                "code": {
+                    "coding": [
+                        {
+                            "system": f"{request.scheme}://{request.host}/fhir/CodeSystem/analysis-types",
+                            "code": analysis["type"],
+                            "display": ANALYSIS_TYPES[analysis["type"]]["display"]
+                        }
+                    ],
+                    "text": ANALYSIS_TYPES[analysis["type"]]["definition"]
+                },
+                "subject": {
+                    "reference": f"Patient/{patient_id}"
+                },
+                "basedOn": {
+                    "reference": f"ServiceRequest/{analysis.get('analysis_id')}"
+                },
+            }
+
+            # Add effective datetime if available
+            if analysis.get("datetime"):
+                fhir_observation["effectiveDateTime"] = analysis["datetime"].isoformat()
+            
+            bundle["entry"].append({
+                "resource": fhir_observation
+            })
+        
+        return web.json_response(bundle)
+            
+    except Exception as e:
+        logger.error(f"Analyses list retrieval failed with exception: {e}")
+        return create_error_response(str(e), 500)
+
+def parse_analyses_data(html_content: str) -> Dict[str, Any]:
+    """Parse HTML analyses content and extract analysis IDs, analysis types, patient name, and patient id.
+    
+    Extracts patient name, patient id, and list of analyses with their types and analysis IDs
+    from the analyses HTML page.
+    
+    Args:
+        html_content: HTML content of the analyses page
+        
+    Returns:
+        Dictionary containing patient name, patient id, and list of analyses
+    """
+    try:
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Check if this is the correct page by looking for 'Cereri de Laborator' in title
+        if not is_expected_page(soup, 'Cereri de Laborator'):
+            logger.warning("Page is not a laboratory requests page")
+            return {"patient_name": "", "patient_id": "", "analyses": []}
+        
+        # Initialize result
+        result = {
+            "patient_name": "",
+            "patient_id": "",
+            "analyses": []
+        }
+        
+        # Extract patient name and id from the link pattern
+        patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id=\d+'))
+        if patient_link:
+            result["patient_name"] = patient_link.get_text().strip()
+            # Extract patient id from href
+            href = patient_link.get('href', '')
+            code_match = re.search(r'id=(\d+)', href)
+            if code_match:
+                result["patient_id"] = code_match.group(1)
+        
+        # Extract CNP from table (next TD after 'CNP:')
+        cnp_cells = soup.find_all('td', string=re.compile(r'CNP:', re.IGNORECASE))
+        for cnp_cell in cnp_cells:
+            next_td = cnp_cell.find_next('td')
+            if next_td:
+                cnp_text = next_td.get_text().strip()
+                if cnp_text and cnp_text.isdigit() and len(cnp_text) == 13:
+                    result["patient_cnp"] = cnp_text
+                    break
+        
+        # Find all links to analysis
+        for link in soup.find_all('a', href=re.compile(r'../analyse/Reports/analyseFile\.asp\?id=\d+')):
+            # Extract analysis ID
+            href = link.get('href', '')
+            id_match = re.search(r'id=(\d+)', href)
+            if not id_match:
+                continue
+            
+            analysis_id = id_match.group(1)
+            
+            # Find the parent table row
+            parent_row = link.find_parent('tr')
+            if not parent_row:
+                # If no parent row, just add the ID without type
+                result["analyses"].append({
+                    "analysis_id": analysis_id,
+                    "type": "unknown"
+                })
+                continue
+            
+            # Extract information from table cells
+            analysis_data = {
+                "analysis_id": analysis_id,
+                "type": "unknown"
+            }
+            
+            cells = parent_row.find_all('td')
+            if len(cells) >= 8:
+                # Cell 0: Checkbox (ignore)
+                # Cell 1: Report link (already processed)
+                # Cell 2: Barcode (ignore)
+                # Cell 3: Checkin code
+                checkin_link = cells[3].find('a', href=re.compile(r'/files/checkin\.asp\?id=\d+'))
+                if checkin_link:
+                    checkin_href = checkin_link.get('href', '')
+                    checkin_match = re.search(r'id=(\d+)', checkin_href)
+                    if checkin_match:
+                        analysis_data["admission"] = checkin_match.group(1)
+                
+                # Cell 4: Date
+                date_text = cells[4].get_text().strip()
+                if date_text:
+                    analysis_data["date"] = date_text
+                    # Try to parse the date string into a proper datetime object
+                    try:
+                        # Handle common date formats like "07 Nov 2025 10:29:00"
+                        # Create a mapping for Romanian month abbreviations to English ones
+                        month_mapping = {
+                            'Ian': 'Jan', 'Mai': 'May', 'Iun': 'Jun', 'Iul': 'Jul'
+                        }
+                        
+                        # Replace Romanian month abbreviations with English ones
+                        formatted_date = date_text
+                        for ro_month, en_month in month_mapping.items():
+                            formatted_date = formatted_date.replace(ro_month, en_month)
+                        
+                        # Parse the datetime using strptime
+                        analysis_data["datetime"] = datetime.strptime(formatted_date, '%d %b %Y %H:%M:%S')
+                    except Exception as e:
+                        logger.debug(f"Could not parse datetime from string '{date_text}': {e}")
+                        # Keep the original string if parsing fails
+                
+                # Cell 5: Priority
+                priority_text = cells[5].get_text().strip()
+                if priority_text:
+                    analysis_data["priority"] = priority_text
+                
+                # Cell 6: Analysis type
+                type_text = cells[6].get_text().strip()
+                # Look for pattern like 'XXXX-Radio', 'XXXX-lab', etc.
+                type_match = re.search(r'\d{4}-(\w+)', type_text)
+                if type_match:
+                    extracted_type = type_match.group(1).lower()
+                    # Check if the extracted type is in our known analysis types
+                    if extracted_type in ANALYSIS_TYPES:
+                        analysis_data["type"] = extracted_type
+                    else:
+                        analysis_data["type"] = "unknown"
+                else:
+                    analysis_data["type"] = "unknown"
+                
+                # Cell 7: Requesting doctor
+                doctor_text = cells[7].get_text().strip()
+                if doctor_text:
+                    analysis_data["requesting_doctor"] = doctor_text
+            # Append the analysis data to the result list
+            result["analyses"].append(analysis_data)
+        # Return the parsed result
+        return result
+    
+    except Exception as e:
+        logger.error(f"Error parsing analyses data: {e}")
+        return {"patient_name": "", "patient_id": "", "analyses": []}
 
 
 
@@ -1878,148 +1997,6 @@ async def fhir_encounter_read(request):
     except Exception as e:
         logger.error(f"Encounter retrieval failed with exception: {e}")
         return create_error_response(str(e), 500)
-
-def parse_analyses_data(html_content: str) -> Dict[str, Any]:
-    """Parse HTML analyses content and extract analysis IDs, analysis types, patient name, and patient id.
-    
-    Extracts patient name, patient id, and list of analyses with their types and analysis IDs
-    from the analyses HTML page.
-    
-    Args:
-        html_content: HTML content of the analyses page
-        
-    Returns:
-        Dictionary containing patient name, patient id, and list of analyses
-    """
-    try:
-        soup = BeautifulSoup(html_content, 'html.parser')
-        
-        # Check if this is the correct page by looking for 'Cereri de Laborator' in title
-        if not is_expected_page(soup, 'Cereri de Laborator'):
-            logger.warning("Page is not a laboratory requests page")
-            return {"patient_name": "", "patient_id": "", "analyses": []}
-        
-        # Initialize result
-        result = {
-            "patient_name": "",
-            "patient_id": "",
-            "analyses": []
-        }
-        
-        # Extract patient name and id from the link pattern
-        patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id=\d+'))
-        if patient_link:
-            result["patient_name"] = patient_link.get_text().strip()
-            # Extract patient id from href
-            href = patient_link.get('href', '')
-            code_match = re.search(r'id=(\d+)', href)
-            if code_match:
-                result["patient_id"] = code_match.group(1)
-        
-        # Extract CNP from table (next TD after 'CNP:')
-        cnp_cells = soup.find_all('td', string=re.compile(r'CNP:', re.IGNORECASE))
-        for cnp_cell in cnp_cells:
-            next_td = cnp_cell.find_next('td')
-            if next_td:
-                cnp_text = next_td.get_text().strip()
-                if cnp_text and cnp_text.isdigit() and len(cnp_text) == 13:
-                    result["patient_cnp"] = cnp_text
-                    break
-        
-        # Find all links to analysis analysis
-        analysis_links = soup.find_all('a', href=re.compile(r'../analyse/Reports/analyseFile\.asp\?id=\d+'))
-        
-        for link in analysis_links:
-            # Extract analysis ID
-            href = link.get('href', '')
-            id_match = re.search(r'id=(\d+)', href)
-            if not id_match:
-                continue
-            
-            analysis_id = id_match.group(1)
-            
-            # Find the parent table row
-            parent_row = link.find_parent('tr')
-            if not parent_row:
-                # If no parent row, just add the ID without type
-                result["analyses"].append({
-                    "analysis_id": analysis_id,
-                    "type": "unknown"
-                })
-                continue
-            
-            # Extract information from table cells
-            analysis_data = {
-                "analysis_id": analysis_id,
-                "type": "unknown"
-            }
-            
-            cells = parent_row.find_all('td')
-            if len(cells) >= 8:
-                # Cell 0: Checkbox (ignore)
-                # Cell 1: Report link (already processed)
-                # Cell 2: Barcode (ignore)
-                # Cell 3: Checkin code
-                checkin_link = cells[3].find('a', href=re.compile(r'/files/checkin\.asp\?id=\d+'))
-                if checkin_link:
-                    checkin_href = checkin_link.get('href', '')
-                    checkin_match = re.search(r'id=(\d+)', checkin_href)
-                    if checkin_match:
-                        analysis_data["admission"] = checkin_match.group(1)
-                
-                # Cell 4: Date
-                date_text = cells[4].get_text().strip()
-                if date_text:
-                    analysis_data["date"] = date_text
-                    # Try to parse the date string into a proper datetime object
-                    try:
-                        # Handle common date formats like "07 Nov 2025 10:29:00"
-                        # Create a mapping for Romanian month abbreviations to English ones
-                        month_mapping = {
-                            'Ian': 'Jan', 'Mai': 'May', 'Iun': 'Jun', 'Iul': 'Jul'
-                        }
-                        
-                        # Replace Romanian month abbreviations with English ones
-                        formatted_date = date_text
-                        for ro_month, en_month in month_mapping.items():
-                            formatted_date = formatted_date.replace(ro_month, en_month)
-                        
-                        # Parse the datetime using strptime
-                        analysis_data["datetime"] = datetime.strptime(formatted_date, '%d %b %Y %H:%M:%S')
-                    except Exception as e:
-                        logger.debug(f"Could not parse datetime from string '{date_text}': {e}")
-                        # Keep the original string if parsing fails
-                
-                # Cell 5: Priority
-                priority_text = cells[5].get_text().strip()
-                if priority_text:
-                    analysis_data["priority"] = priority_text
-                
-                # Cell 6: Analysis type
-                type_text = cells[6].get_text().strip()
-                # Look for pattern like 'XXXX-Radio', 'XXXX-lab', etc.
-                type_match = re.search(r'\d{4}-(\w+)', type_text)
-                if type_match:
-                    extracted_type = type_match.group(1).lower()
-                    # Check if the extracted type is in our known analysis types
-                    if extracted_type in ANALYSIS_TYPES:
-                        analysis_data["type"] = extracted_type
-                    else:
-                        analysis_data["type"] = "unknown"
-                else:
-                    analysis_data["type"] = "unknown"
-                
-                # Cell 7: Requesting doctor
-                doctor_text = cells[7].get_text().strip()
-                if doctor_text:
-                    analysis_data["requesting_doctor"] = doctor_text
-            
-            result["analyses"].append(analysis_data)
-        
-        return result
-    except Exception as e:
-        logger.error(f"Error parsing analyses data: {e}")
-        return {"patient_name": "", "patient_id": "", "analyses": []}
 
 
 async def serve_analysis_types(request):
