@@ -666,6 +666,100 @@
                 }
             }
         },
+        "/fhir/ImagingStudy": {
+            "get": {
+                "summary": "Get imaging study",
+                "description": "Retrieve an imaging study by ID as FHIR ImagingStudy resource",
+                "parameters": [
+                    {
+                        "name": "identifier",
+                        "in": "query",
+                        "required": true,
+                        "description": "Study ID",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "X-Username",
+                        "in": "header",
+                        "required": false,
+                        "description": "Username for authentication",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "X-Password",
+                        "in": "header",
+                        "required": false,
+                        "description": "Password for authentication",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Imaging study as FHIR ImagingStudy resource",
+                        "content": {
+                            "application/fhir+json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "resourceType": {
+                                            "type": "string",
+                                            "example": "ImagingStudy"
+                                        },
+                                        "id": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "string"
+                                        },
+                                        "subject": {
+                                            "type": "object"
+                                        },
+                                        "started": {
+                                            "type": "string"
+                                        },
+                                        "series": {
+                                            "type": "array"
+                                        },
+                                        "performer": {
+                                            "type": "array"
+                                        },
+                                        "description": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Missing study ID",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Study ID is required"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/fhir/Encounter": {
             "get": {
                 "summary": "Get checkout information",

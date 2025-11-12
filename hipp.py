@@ -2669,6 +2669,7 @@ async def init_app():
     app.router.add_get('/fhir/Patient', patient_search)
     app.router.add_get('/fhir/Patient/{id}', patient)
     app.router.add_get('/fhir/DiagnosticReport/{id}', diagnostic_report)
+    app.router.add_get('/fhir/ImagingStudy/{id}', diagnostic_report)  # Reuse the same handler
     app.router.add_get('/fhir/Encounter', fhir_encounter_read)
     app.router.add_get('/fhir/Observation', fhir_observation_search)
     app.router.add_get('/fhir/Observation/{id}', fhir_observation_read)
