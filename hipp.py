@@ -1122,12 +1122,12 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
         # Extract modality from examination text
         examination_text = report_data["examination"].lower() if report_data["examination"] else ""
         modality_mapping = {
-            'CR': 'CR',    # Computed Radiography
-            'US': 'US',    # Ultrasound
-            'CT': 'CT',    # Computed Tomography
-            'MR': 'MR',    # Magnetic Resonance
-            'XA': 'XA',    # X-Ray Angiography
-            'RF': 'RF'     # Radio Fluoroscopy
+            'radiografia': 'CR',    # Computed Radiography
+            'ultrasonografia': 'US',    # Ultrasound
+            'tomografia': 'CT',    # Computed Tomography
+            'rezonanta': 'MR',    # Magnetic Resonance
+            'angiografia': 'XA',    # X-Ray Angiography
+            'cisto': 'RF'     # Radio Fluoroscopy
         }
         
         # Check if any modality code is in the examination text
@@ -1135,22 +1135,6 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
             if key in examination_text:
                 report_data["modality"] = modality
                 break
-        
-        # Special case: if "TOMOGRAFIA" is in the examination text, set modality to CT
-        if "tomografia" in examination_text:
-            report_data["modality"] = "CT"
-        
-        # Special case: if "radiografia" is in the examination text, set modality to CR
-        if "radiografia" in examination_text:
-            report_data["modality"] = "CR"
-        
-        # Special case: if "ultrasonografia" is in the examination text, set modality to US
-        if "ultrasonografia" in examination_text:
-            report_data["modality"] = "US"
-        
-        # Special case: if "rezonanta" is in the examination text, set modality to MR
-        if "rezonanta" in examination_text:
-            report_data["modality"] = "MR"
         
         report_data["referral_reason"] = extract_field_from_td(soup, r'DIAGNOSTIC DE TRIMITERE:')
         report_data["presumptive_diagnosis"] = extract_field_from_td(soup, r'DG\.PREZUMTIV:')
