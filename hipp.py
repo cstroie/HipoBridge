@@ -805,10 +805,10 @@ def convert_patient_to_fhir(patient_data: Dict[str, Any], request) -> Dict[str, 
         })
     
     # Add CNP as additional identifier if available
-    if patient_data.get("cnp", None):
+    if patient_data.get("patient_cnp", None):
         fhir_patient["identifier"].append({
             "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-cnp",
-            "value": patient_data["cnp"]
+            "value": patient_data["patient_cnp"]
         })
     
     # Return the FHIR Patient resource
