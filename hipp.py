@@ -1197,9 +1197,6 @@ def convert_report_to_diagnostic_report(report_data: Dict[str, Any], request) ->
     fhir_report = {
         "resourceType": "DiagnosticReport",
         "id": report_data["report_id"],
-        "meta": {
-            "lastUpdated": report_data["datetime"].isoformat()
-        },
         "status": "final",
         "code": {
             "coding": [
@@ -1226,13 +1223,6 @@ def convert_report_to_diagnostic_report(report_data: Dict[str, Any], request) ->
     # Add effective date if available
     if report_data.get("datetime"):
         fhir_report["effectiveDateTime"] = report_data["datetime"].isoformat()
-    
-    # Add reference to ImagingStudy with the same ID
-    fhir_report["imagingStudy"] = [
-        {
-            "reference": f"ImagingStudy/{report_data['report_id']}"
-        }
-    ]
 
     # Add performer if available
     if report_data.get("performer"):
@@ -1252,84 +1242,23 @@ def convert_report_to_diagnostic_report(report_data: Dict[str, Any], request) ->
     
     # Add results if available
     if report_data.get("reports"):
-        fhir_report["result"] = []
-        for i, report in enumerate(report_data["reports"]):
-            fhir_report["result"].append({
-                "reference": f"Observation/{report_data['report_id']}-{i+1}"
-            })
+        fhir_report["result"] = [
+            {
+                "reference": f"Observation/{report_data['report_id']}"
+            }
+        ]
         
         # Add full report text from the first report result
-        if report_data["reports"]:
-            first_report = report_data["reports"][0]
-            if first_report.get("result"):
-                fhir_report["presentedForm"] = [{
+        fhir_report["presentedForm"] = []
+        for report in report_data["reports"]:
+            fhir_report["presentedForm"].append(
+                {
                     "contentType": "text/plain",
-                    "data": first_report["result"]
-                }]
-    
-    # Add additional data as extensions if available
-    extensions = []
-    
-    # Add patient details if available
-    if report_data.get("patient_name"):
-        extensions.append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/patient-name",
-            "valueString": report_data["patient_name"]
-        })
-    
-    if report_data.get("age"):
-        extensions.append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/patient-age",
-            "valueString": report_data["age"]
-        })
-    
-    if report_data.get("gender"):
-        extensions.append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/patient-gender",
-            "valueString": report_data["gender"]
-        })
-    
-    if report_data.get("patient_cnp"):
-        extensions.append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/patient-cnp",
-            "valueString": report_data["patient_cnp"]
-        })
-    
-    # Add examination details if available
-    if report_data.get("referral_reason"):
-        extensions.append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/referral-reason",
-            "valueString": report_data["referral_reason"]
-        })
-    
-    if report_data.get("referral_code"):
-        extensions.append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/referral-code",
-            "valueString": report_data["referral_code"]
-        })
-    
-    if report_data.get("presumptive_diagnosis"):
-        extensions.append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/presumptive-diagnosis",
-            "valueString": report_data["presumptive_diagnosis"]
-        })
-    
-    if report_data.get("special_indications"):
-        extensions.append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/special-indications",
-            "valueString": report_data["special_indications"]
-        })
-    
-    if report_data.get("referring_physician"):
-        extensions.append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/referring-physician",
-            "valueString": report_data["referring_physician"]
-        })
-    
-    # Add extensions to the report if any were added
-    if extensions:
-        fhir_report["extension"] = extensions
-    
+                    "data": report["result"]
+                }
+            )
+        fhir_report["conclusion"] = ""
+
     # Add media references placeholder
     fhir_report["media"] = []
     
@@ -1351,9 +1280,6 @@ def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dic
     fhir_imaging_study = {
         "resourceType": "ImagingStudy",
         "id": report_data["report_id"],
-        "meta": {
-            "lastUpdated": report_data["datetime"].isoformat() if report_data.get("datetime") else datetime.now().isoformat()
-        },
         "status": "available",
         "subject": {
             "reference": f"Patient/{report_data.get('patient_id', '')}"
