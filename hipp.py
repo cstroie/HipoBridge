@@ -2143,33 +2143,27 @@ def is_login_page(content: str) -> bool:
         logger.debug("Detected login page")
     return is_login
 
-async def login_if_needed(username: str = None, password: str = None) -> bool:
+async def login_if_needed(session, username: str, password: str) -> bool:
     """Attempt to login to the Hipocrate service if needed.
     
     Checks if we're currently on the login page, and if so, performs login
-    using the provided or environment credentials.
+    using the provided credentials.
     
     Args:
-        username: Username for login. Defaults to environment variable.
-        password: Password for login. Defaults to environment variable.
+        session: The aiohttp session to use
+        username: Username for login
+        password: Password for login
         
     Returns:
         True if login was successful or not needed, False otherwise
     """
     logger.info("Attempting login if needed")
     
-    # Use provided credentials or fallback to environment variables
-    user = username or HYP_USER
-    pwd = password or HYP_PASS
-    
-    if not user or not pwd:
+    if not username or not password:
         logger.warning("Username or password not set, skipping login")
         return False
     
     try:
-        # Get aiohttp session
-        session = await get_session()
-        
         # First, check if we're already logged in by accessing main.asp
         main_url = f"{SERVICE_URL}/main.asp"
         logger.debug(f"Checking if already logged in by accessing: {main_url}")
@@ -2203,8 +2197,8 @@ async def login_if_needed(username: str = None, password: str = None) -> bool:
         # Prepare login data to match browser submission
         login_data = {
             "id_recuperare_pwd_2": "",
-            "strUser": user,
-            "strPwd": pwd,
+            "strUser": username,
+            "strPwd": password,
             "cboLang": "ro"
         }
         
