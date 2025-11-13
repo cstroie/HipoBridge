@@ -590,8 +590,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 analysisCard.innerHTML = cardContent;
                 analysesGrid.appendChild(analysisCard);
                 
-                // Scroll to the newly added report
-                analysisCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                // Remove automatic scrolling to the newly added report
             }
             
             // Check if we actually added any cards
@@ -662,8 +661,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                         epicrisisSection.style.display = 'block';
                         
-                        // Scroll to the epicrisis section
-                        epicrisisSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        // Remove automatic scrolling to the epicrisis section
                         
                         showToast(`Valid epicrisis data loaded for checkout ${checkoutId}`, 'success');
                         break; // Found a valid epicrisis, stop searching
