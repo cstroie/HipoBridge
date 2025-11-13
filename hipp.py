@@ -2429,8 +2429,14 @@ def markdown_to_html(markdown_text: str) -> str:
     paragraphs = html.split('\n\n')
     html = '\n'.join([f'<p>{p}</p>' if not p.startswith(('<h', '<ul', '<ol')) else p for p in paragraphs if p.strip()])
     
-    # Line breaks (single newlines within paragraphs)
-    html = html.replace('\n', '<br>')
+    # Line breaks (single newlines within paragraphs, but not within lists)
+    # Split by list elements to avoid adding <br> within <li> elements
+    parts = re.split(r'(<(?:ul|ol|li)[^>]*>.*?</(?:ul|ol|li)>)', html, flags=re.DOTALL)
+    for i, part in enumerate(parts):
+        # Only add <br> tags outside of list elements
+        if not re.match(r'^<(?:ul|ol|li)[^>]*>.*</(?:ul|ol|li)>$', part.strip()):
+            parts[i] = part.replace('\n', '<br>')
+    html = ''.join(parts)
     
     return html
 
