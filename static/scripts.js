@@ -608,7 +608,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 analysisCard.innerHTML = cardContent;
                 analysesGrid.appendChild(analysisCard);
                 
-                // Remove automatic scrolling to the newly added report
+                // Force UI update to display the report immediately
+                await new Promise(resolve => setTimeout(resolve, 0));
             }
             
             // Check if we actually added any cards
@@ -679,7 +680,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                         epicrisisSection.style.display = 'block';
                         
-                        // Remove automatic scrolling to the epicrisis section
+                        // Force UI update to display the epicrisis immediately
+                        await new Promise(resolve => setTimeout(resolve, 0));
                         
                         showToast(`Valid epicrisis data loaded for checkout ${checkoutId}`, 'success');
                         break; // Found a valid epicrisis, stop searching
