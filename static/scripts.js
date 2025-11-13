@@ -508,7 +508,11 @@ document.addEventListener('DOMContentLoaded', function() {
                             if (reportData.effectiveDateTime || (reportData.performer && reportData.performer.length > 0)) {
                                 cardContent += `<div class="report-meta">`;
                                 if (reportData.effectiveDateTime) {
-                                    cardContent += `<p><strong>Date/Time:</strong> ${reportData.effectiveDateTime}</p>`;
+                                    // Parse ISO datetime and format it nicely
+                                    const dateTime = new Date(reportData.effectiveDateTime);
+                                    const formattedDate = dateTime.toLocaleDateString('en-GB');
+                                    const formattedTime = dateTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                                    cardContent += `<p><strong>Date/Time:</strong> ${formattedDate} ${formattedTime}</p>`;
                                 }
                                 if (reportData.performer && reportData.performer.length > 0) {
                                     cardContent += `<p><strong>Performer:</strong> ${reportData.performer[0].display || ''}</p>`;
@@ -642,7 +646,11 @@ document.addEventListener('DOMContentLoaded', function() {
                             // Display date if available
                             const dateElement = document.getElementById('epicrisisDate');
                             if (encounterData.period && encounterData.period.start) {
-                                dateElement.textContent = `Date: ${encounterData.period.start}`;
+                                // Parse ISO datetime and format it nicely
+                                const dateTime = new Date(encounterData.period.start);
+                                const formattedDate = dateTime.toLocaleDateString('en-GB');
+                                const formattedTime = dateTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                                dateElement.textContent = `Date: ${formattedDate} ${formattedTime}`;
                                 dateElement.style.display = 'block';
                             } else {
                                 dateElement.style.display = 'none';
