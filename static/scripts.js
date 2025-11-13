@@ -365,20 +365,26 @@ document.addEventListener('DOMContentLoaded', function() {
                             // Add report content to the card - now using presentedForm or conclusion
                             cardContent += `<div class="report-preview">`;
                             if (reportData.presentedForm && reportData.presentedForm.length > 0) {
-                                // Use the first presentedForm entry
-                                const form = reportData.presentedForm[0];
-                                if (form.contentType === 'text/plain' && form.data) {
-                                    cardContent += `<pre>${form.data}</pre>`;
-                                } else if (form.contentType === 'text/markdown' && form.data) {
-                                    const htmlResult = await convertMarkdownToHtml(reportData.conclusion);
-                                    cardContent += `<div>${htmlResult}</div>`;
-                                } else if (form.contentType === 'text/html' && form.data) {
-                                    // Decode base64 if needed
-                                    try {
-                                        const decoded = atob(form.data);
-                                        cardContent += `<div>${decoded}</div>`;
-                                    } catch (e) {
-                                        cardContent += `<div>${form.data}</div>`;
+                                // Process all presentedForm entries
+                                for (const form of reportData.presentedForm) {
+                                    if (form.contentType === 'text/plain' && form.data) {
+                                        cardContent += `<pre>${form.data}</pre>`;
+                                    } else if (form.contentType === 'text/markdown' && form.data) {
+                                        try {
+                                            const htmlResult = await convertMarkdownToHtml(atob(form.data));
+                                            cardContent += `<div>${htmlResult}</div>`;
+                                        } catch (err) {
+                                            console.error('Error converting markdown:', err);
+                                            cardContent += `<pre>${form.data}</pre>`;
+                                        }
+                                    } else if (form.contentType === 'text/html' && form.data) {
+                                        // Decode base64 if needed
+                                        try {
+                                            const decoded = atob(form.data);
+                                            cardContent += `<div>${decoded}</div>`;
+                                        } catch (e) {
+                                            cardContent += `<div>${form.data}</div>`;
+                                        }
                                     }
                                 }
                             } else if (reportData.conclusion) {
