@@ -49,7 +49,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
     
-                showToast('Valid CNP detected. Retrieving patient information...', 'success');
+                showToast('Valid CNP, retrieving patient information...', 'success');
             } else if (isPartialCNPFormat) {
                 showToast('Searching for patient with partial CNP...', 'success');
             } else {
@@ -58,7 +58,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // Search for patient using FHIR API
-            showToast('Searching patient database...', 'success');
             const searchResponse = await fetch(`/fhir/Patient?q=${encodeURIComponent(cnp)}`);
             
             if (!searchResponse.ok) {
@@ -98,34 +97,33 @@ document.addEventListener('DOMContentLoaded', function() {
                     patientData = firstPatient;
                 }
             } else {
-                showError('No patient found with this search term.');
+                showToast('No patient found with this search term.', 'error');
                 return;
             }
             
             if (!patientCode || !patientData) {
                 console.error('Failed to retrieve patient data:', { patientCode, patientData });
-                showError('Failed to retrieve patient data.');
+                showToast('Failed to retrieve patient data.', 'error');
                 return;
             }
             
-            showToast('Patient information retrieved successfully. Loading analyses...', 'success');
+            showToast('Patient information retrieved successfully', 'success');
             
             // Get analyses using FHIR API
-            showToast('Loading patient analyses...', 'success');
+            showToast('Loading diagnostic reports...', 'success');
             const analysesResponse = await fetch(`/fhir/Observation?patient=${patientCode}`);
             
             if (!analysesResponse.ok) {
-                showToast(`Error loading analyses: HTTP ${analysesResponse.status}`, 'error');
+                showToast(`Error loading diagnostic reports`, 'error');
                 throw new Error(`HTTP error! status: ${analysesResponse.status}`);
             }
             
             const analysesData = await analysesResponse.json();
-            showToast('Patient analyses loaded successfully', 'success');
+            showToast('Patient diagnostic reports loaded successfully', 'success');
             
             // Get the most recent checkout epicrisis using FHIR API
             let epicrisisData = null;
             if (patientData.discharges && patientData.discharges.length > 0) {
-                showToast('Loading epicrisis data...', 'success');
                 // Get the most recent discharge (first in the list)
                 const dischargeId = patientData.discharges[0];
                 try {
@@ -141,7 +139,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         };
                         showToast(`Epicrisis data loaded for discharge ${dischargeId}`, 'success');
                     } else {
-                        showToast(`Error loading epicrisis data for discharge ${dischargeId}: HTTP ${dischargeResponse.status}`, 'error');
+                        showToast(`Error loading epicrisis data for discharge ${dischargeId}`, 'error');
                     }
                 } catch (err) {
                     console.error('Error fetching discharge data:', err);
@@ -151,11 +149,11 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Display all data
             await displayPatientData(patientData, analysesData, epicrisisData);
-            showToast('Analysis complete!', 'success');
+            showToast('Analysis loading complete', 'success');
             
         } catch (err) {
             console.error('Error:', err);
-            showError('An error occurred while analyzing the patient data. Please try again.');
+            showToast('An error occurred while analyzing the patient data', 'error');
         } finally {
             hideLoading();
         }
@@ -342,7 +340,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (['radio', 'ct', 'irm', 'eco', 'lac', 'lii', 'rads'].includes(analysisType)) {
                     try {
                         // Fetch report data using FHIR API - now using the observation ID directly
-                        showToast(`Loading report data for observation ${observation.id}...`, 'success');
                         const reportResponse = await fetch(`/fhir/DiagnosticReport/${observation.id}`);
                         
                         if (reportResponse.ok) {
@@ -405,7 +402,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 </div>`;
                             }
                         } else {
-                            showToast(`Error loading report data for observation ${observation.id}: HTTP ${reportResponse.status}`, 'error');
+                            showToast(`Error loading report data for observation ${observation.id}`, 'error');
                         }
                     } catch (err) {
                         console.error('Error fetching report data:', err);
@@ -438,7 +435,6 @@ document.addEventListener('DOMContentLoaded', function() {
     async function viewImagingStudy(studyId, reportId) {
         try {
             // Fetch imaging study data using FHIR API
-            showToast(`Loading imaging study ${studyId}...`, 'success');
             const studyResponse = await fetch(`/fhir/ImagingStudy/${studyId}`);
             
             if (studyResponse.ok) {
@@ -447,7 +443,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 showToast(`Imaging study ${studyId} loaded successfully`, 'success');
             } else {
                 console.error('Error fetching imaging study data');
-                showToast(`Error loading imaging study ${studyId}: HTTP ${studyResponse.status}`, 'error');
+                showToast(`Error loading imaging study ${studyId}`, 'error');
             }
         } catch (err) {
             console.error('Error fetching imaging study:', err);
