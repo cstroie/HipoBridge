@@ -36,48 +36,40 @@
             </hgroup>
             <main>
                 <div class="grid">
-                    <div class="card patient-card">
-                        <h3>Personal Details</h3>
-                        <div class="patient-details-grid">
-                            <div class="detail-item">
-                                <span class="detail-label">Name:</span>
-                                <span id="patientName" class="detail-value">-</span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="detail-label">Patient Code:</span>
-                                <span id="patientCode" class="detail-value">-</span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="detail-label">CNP:</span>
-                                <span id="patientCnp" class="detail-value">-</span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="detail-label">Gender:</span>
-                                <span id="patientGender" class="detail-value">-</span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="detail-label">Birth Date:</span>
-                                <span id="patientBirthDate" class="detail-value">-</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card patient-card">
-                        <h3>Contact Information</h3>
-                        <div class="patient-details-grid">
-                            <div class="detail-item">
-                                <span class="detail-label">Phone:</span>
-                                <span id="patientPhone" class="detail-value">-</span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="detail-label">Email:</span>
-                                <span id="patientEmail" class="detail-value">-</span>
-                            </div>
-                            <div class="detail-item full-width">
-                                <span class="detail-label">Address:</span>
-                                <span id="patientAddress" class="detail-value">-</span>
-                            </div>
-                        </div>
-                    </div>
+                    <article>
+                        <strong>Name</strong>
+                        <span id="patientName"></span>
+                    </article>
+                    <article>
+                        <strong>Patient Code</strong>
+                        <span id="patientCode"></span>
+                    </article>
+                    <article>
+                        <strong>CNP</strong>
+                        <span id="patientCnp"></span>
+                    </article>
+                    <article>
+                        <strong>Gender</strong>
+                        <span id="patientGender"></span>
+                    </article>
+                </div>
+                <div class="grid">
+                    <article>
+                        <strong>Birth Date</strong>
+                        <span id="patientBirthDate"></span>
+                    </article>
+                    <article>
+                        <strong>Phone</strong>
+                        <span id="patientPhone"></span>
+                    </article>
+                    <article>
+                        <strong>Email</strong>
+                        <span id="patientEmail"></span>
+                    </article>
+                    <article>
+                        <strong>Address</strong>
+                        <span id="patientAddress"></span>
+                    </article>
                 </div>
             </main>
         </article>
@@ -97,27 +89,19 @@
                 </main>
                 
                 <footer class="grid">
-                    <div class="card patient-card">
-                        <h3>Medical History</h3>
-                        <div class="patient-details-grid">
-                            <div class="detail-item">
-                                <span class="detail-label">Presentations:</span>
-                                <span id="presentationsCount" class="detail-value">0</span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="detail-label">Checkins:</span>
-                                <span id="checkinsCount" class="detail-value">0</span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="detail-label">Checkouts:</span>
-                                <span id="checkoutsCount" class="detail-value">0</span>
-                            </div>
-                            <div class="detail-item full-width" id="checkoutIdsContainer">
-                                <span class="detail-label">Checkout IDs:</span>
-                                <span id="checkoutIdsList" class="detail-value"></span>
-                            </div>
-                        </div>
-                    </div>
+                        <article>
+                            <strong>Presentations</strong>
+                            <span id="presentationsCount">0</span>
+                        </article>
+                        <article>
+                            <strong>Checkins</strong>
+                            <span id="checkinsCount">0</span>
+                        </article>
+                        <article>
+                            <strong>Checkouts</strong>
+                            <span id="checkoutsCount">0</span>
+                            <div id="checkoutIdsList" style="margin-top: 0.5rem; font-size: 0.9em;"></div>
+                        </article>
                 </footer>
 
     </main>
