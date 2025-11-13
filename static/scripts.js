@@ -145,9 +145,16 @@ document.addEventListener('DOMContentLoaded', function() {
                             encounterData = checkoutData.entry[0].resource;
                         }
                         
-                        if (encounterData.text && encounterData.text.div) {
+                        // Extract epicrisis from notes array
+                        let epicrisisText = '';
+                        if (encounterData.note && Array.isArray(encounterData.note)) {
+                            // Concatenate all note texts
+                            epicrisisText = encounterData.note.map(note => note.text || '').join('\n\n');
+                        }
+                        
+                        if (epicrisisText) {
                             epicrisisData = {
-                                epicrisis: encounterData.text.div,
+                                epicrisis: epicrisisText,
                                 date: encounterData.period ? encounterData.period.start : '',
                                 checkout_id: checkoutId
                             };
