@@ -1292,10 +1292,14 @@ def convert_report_to_diagnostic_report(report_data: Dict[str, Any], request) ->
         # Add full report text from the first report result
         fhir_report["presentedForm"] = []
         for report in report_data["reports"]:
+            # Convert HTML to markdown and encode in base64
+            markdown_content = html_to_markdown(report["result"])
+            import base64
+            encoded_content = base64.b64encode(markdown_content.encode('utf-8')).decode('utf-8')
             fhir_report["presentedForm"].append(
                 {
-                    "contentType": "text/plain",
-                    "data": report["result"]
+                    "contentType": "text/markdown",
+                    "data": encoded_content
                 }
             )
         fhir_report["conclusion"] = ""
