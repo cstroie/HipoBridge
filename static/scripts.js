@@ -184,7 +184,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Display patient data first
             await displayPatientData(patientData, analysesData, epicrisisData);
             
-            // Load and display reports and epicrisis progressively
+            // Load and display reports first, then epicrisis
             await loadAndDisplayReports(analysesData, patientData);
             await loadAndDisplayEpicrisis(patientData);
             
