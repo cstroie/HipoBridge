@@ -2791,13 +2791,10 @@ def load_config():
 async def on_startup(app):
     """Handle application startup.
     
-    Initializes the HTTP session.
-    
     Args:
         app: The web application
     """
     logger.info("Application startup")
-    await get_session()
 
 async def on_cleanup(app):
     """Handle application cleanup.
