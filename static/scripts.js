@@ -119,9 +119,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const analysesData = await analysesResponse.json();
             showToast('Patient diagnostic reports loaded successfully', 'success');
             
-            // Get the most recent checkout epicrisis using FHIR API
+            // Get the most recent valid checkout epicrisis using FHIR API
             let epicrisisData = null;
-            // Extract checkout IDs from patient extensions
+            // Extract all checkout IDs from patient extensions
             let checkoutIds = [];
             if (patientData.extension) {
                 const dischargeExt = patientData.extension.find(ext => ext.url && ext.url.includes('discharge-ids'));
@@ -130,21 +130,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
-            if (checkoutIds.length > 0) {
-                // Get the most recent checkout (first in the list)
-                const checkoutId = checkoutIds[0];
+            // Try to fetch epicrisis data for each checkout ID until we find a valid one
+            for (const checkoutId of checkoutIds) {
                 try {
                     showToast(`Loading epicrisis data for checkout ${checkoutId}...`, 'success');
                     const checkoutResponse = await fetch(`/fhir/Encounter?identifier=${checkoutId}`);
                     
                     if (checkoutResponse.ok) {
                         const checkoutData = await checkoutResponse.json();
-                        epicrisisData = {
-                            epicrisis: checkoutData.text ? checkoutData.text.div : '',
-                            date: checkoutData.period ? checkoutData.period.start : '',
-                            checkout_id: checkoutId
-                        };
-                        showToast(`Epicrisis data loaded for checkout ${checkoutId}`, 'success');
+                        // Check if this checkout has valid epicrisis data
+                        if (checkoutData.text && checkoutData.text.div) {
+                            epicrisisData = {
+                                epicrisis: checkoutData.text.div,
+                                date: checkoutData.period ? checkoutData.period.start : '',
+                                checkout_id: checkoutId
+                            };
+                            showToast(`Valid epicrisis data loaded for checkout ${checkoutId}`, 'success');
+                            break; // Found a valid epicrisis, stop searching
+                        } else {
+                            showToast(`No epicrisis data found for checkout ${checkoutId}`, 'error');
+                        }
                     } else {
                         showToast(`Error loading epicrisis data for checkout ${checkoutId}`, 'error');
                     }
