@@ -1259,7 +1259,11 @@ def convert_report_to_diagnostic_report(report_data: Dict[str, Any], request) ->
     
     # Add effective date if available
     if report_data.get("datetime"):
-        fhir_report["effectiveDateTime"] = report_data["datetime"].isoformat()
+        # Ensure datetime is in proper ISO format
+        if isinstance(report_data["datetime"], datetime):
+            fhir_report["effectiveDateTime"] = report_data["datetime"].isoformat()
+        else:
+            fhir_report["effectiveDateTime"] = report_data["datetime"]
 
     # Add performer if available
     if report_data.get("performer"):
