@@ -122,7 +122,9 @@ cache_max_size = 1000  # Maximum number of entries to cache
 
 # Simple in-memory cache for HTTP responses
 response_cache: Dict[str, str] = {}
+response_cache_timestamps: Dict[str, datetime] = {}
 response_cache_max_size = 10  # Maximum number of entries to cache
+CACHE_TIMEOUT = 10 * 60  # 10 minutes in seconds
 
 
 
@@ -143,8 +145,17 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
     
     # Check if we have a cached response for GET requests
     if method == "GET" and url in response_cache:
-        logger.debug(f"Using cached response for: {url}")
-        return response_cache[url], True, None
+        # Check if cache entry is still valid (less than 10 minutes old)
+        if url in response_cache_timestamps:
+            cache_age = (datetime.now() - response_cache_timestamps[url]).total_seconds()
+            if cache_age < CACHE_TIMEOUT:
+                logger.debug(f"Using cached response for: {url} (age: {cache_age:.1f}s)")
+                return response_cache[url], True, None
+            else:
+                # Cache entry expired, remove it
+                del response_cache[url]
+                del response_cache_timestamps[url]
+                logger.debug(f"Expired cache entry removed for: {url}")
     
     async def _make_request(use_retry_headers=False):
         """Helper function to make a request with proper headers."""
@@ -202,9 +213,12 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
                 # Remove the first (oldest) entry
                 oldest_key = next(iter(response_cache))
                 del response_cache[oldest_key]
+                if oldest_key in response_cache_timestamps:
+                    del response_cache_timestamps[oldest_key]
             
-            # Add the new entry
+            # Add the new entry with timestamp
             response_cache[url] = response_text
+            response_cache_timestamps[url] = datetime.now()
             logger.debug(f"Cached response for: {url}")
         
         # If we reach here, we have a valid response
