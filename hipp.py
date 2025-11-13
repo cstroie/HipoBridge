@@ -2719,6 +2719,23 @@ async def get_user_session(username: str):
         logger.debug(f"Reusing existing aiohttp ClientSession for user {username}")
     return user_sessions[username]
 
+def require_auth(handler):
+    """Decorator to require basic authentication for endpoints."""
+    async def wrapper(request):
+        # Get credentials from basic auth
+        auth = get_basic_auth(request)
+        if not auth:
+            return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
+        
+        username, password = auth
+        
+        # Add credentials to request for use in handler
+        request.auth_credentials = (username, password)
+        
+        return await handler(request)
+    
+    return wrapper
+
 def get_basic_auth(request):
     """Extract basic auth credentials from request.
     
@@ -2739,23 +2756,6 @@ def get_basic_auth(request):
         return (username, password)
     except Exception:
         return None
-
-def require_auth(handler):
-    """Decorator to require basic authentication for endpoints."""
-    async def wrapper(request):
-        # Get credentials from basic auth
-        auth = get_basic_auth(request)
-        if not auth:
-            return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
-        
-        username, password = auth
-        
-        # Add credentials to request for use in handler
-        request.auth_credentials = (username, password)
-        
-        return await handler(request)
-    
-    return wrapper
 
 def load_config():
     """Load configuration from hipp.cfg and local.cfg (if exists).
