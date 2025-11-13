@@ -521,7 +521,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             }
                             
                             // Add report content to the card - now using presentedForm or conclusion
-                            cardContent += `<div class="report-preview">`;
+                            cardContent += `<div class="report-preview" id="report-${observation.id}">`;
                             if (reportData.presentedForm && reportData.presentedForm.length > 0) {
                                 // Process all presentedForm entries
                                 for (const form of reportData.presentedForm) {
@@ -585,6 +585,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 analysisCard.innerHTML = cardContent;
                 analysesGrid.appendChild(analysisCard);
+                
+                // Scroll to the newly added report
+                analysisCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }
             
             // Check if we actually added any cards
@@ -650,6 +653,9 @@ document.addEventListener('DOMContentLoaded', function() {
                             document.getElementById('epicrisisDate').style.display = 'none';
                         }
                         epicrisisSection.style.display = 'block';
+                        
+                        // Scroll to the epicrisis section
+                        epicrisisSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                         
                         showToast(`Valid epicrisis data loaded for checkout ${checkoutId}`, 'success');
                         break; // Found a valid epicrisis, stop searching
