@@ -247,6 +247,7 @@ async def handle_response_encoding(response):
     return response_text
 
 
+@require_auth
 async def patient(request):
     """Retrieve patient information by ID.
     
@@ -269,12 +270,8 @@ async def patient(request):
     
     logger.info(f"Retrieving patient with ID: {patient_id}")
     
-    # Get credentials from basic auth
-    auth = get_basic_auth(request)
-    if not auth:
-        return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
-    
-    username, password = auth
+    # Get credentials from request (added by decorator)
+    username, password = request.auth_credentials
     
     try:
         # Get user-specific aiohttp session
@@ -310,6 +307,7 @@ async def patient(request):
         logger.error(f"Patient retrieval failed with exception: {e}")
         return create_error_response(str(e), 500)
 
+@require_auth
 async def patient_search(request):
     """Search for patients by name or other criteria.
     
@@ -326,12 +324,8 @@ async def patient_search(request):
     """
     logger.info("GET /fhir/Patient endpoint accessed")
     
-    # Get credentials from basic auth
-    auth = get_basic_auth(request)
-    if not auth:
-        return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
-    
-    username, password = auth
+    # Get credentials from request (added by decorator)
+    username, password = request.auth_credentials
     
     # Get search parameter from query string
     search_term = request.query.get('q', '')
@@ -824,6 +818,7 @@ def convert_patient_to_fhir(patient_data: Dict[str, Any], request) -> Dict[str, 
     return fhir_patient
 
 
+@require_auth
 async def diagnostic_report(request):
     """Retrieve a diagnostic report by ID, following redirect chains.
     
@@ -840,12 +835,8 @@ async def diagnostic_report(request):
     report_id = request.match_info.get('id')
     logger.info(f"GET /fhir/DiagnosticReport endpoint accessed with identifier: {report_id}")
     
-    # Get credentials from basic auth
-    auth = get_basic_auth(request)
-    if not auth:
-        return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
-    
-    username, password = auth
+    # Get credentials from request (added by decorator)
+    username, password = request.auth_credentials
     
     if not report_id:
         logger.warning("No report ID provided")
@@ -928,6 +919,7 @@ async def diagnostic_report(request):
         logger.error(f"Report retrieval failed with exception: {e}")
         return create_error_response(str(e), 500)
 
+@require_auth
 async def imaging_study(request):
     """Retrieve an imaging study by ID, following redirect chains.
     
@@ -944,12 +936,8 @@ async def imaging_study(request):
     study_id = request.match_info.get('id')
     logger.info(f"GET /fhir/ImagingStudy endpoint accessed with identifier: {study_id}")
     
-    # Get credentials from basic auth
-    auth = get_basic_auth(request)
-    if not auth:
-        return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
-    
-    username, password = auth
+    # Get credentials from request (added by decorator)
+    username, password = request.auth_credentials
     
     if not study_id:
         logger.warning("No study ID provided")
@@ -1460,6 +1448,7 @@ def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dic
     return fhir_imaging_study
 
 
+@require_auth
 async def observation(request):
     """Retrieve a single observation by ID.
     
@@ -1475,12 +1464,8 @@ async def observation(request):
     observation_id = request.match_info.get('id')
     logger.info(f"GET /fhir/Observation/{observation_id} endpoint accessed")
     
-    # Get credentials from basic auth
-    auth = get_basic_auth(request)
-    if not auth:
-        return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
-    
-    username, password = auth
+    # Get credentials from request (added by decorator)
+    username, password = request.auth_credentials
     
     if not observation_id:
         logger.warning("No observation ID provided")
@@ -1562,6 +1547,7 @@ async def observation(request):
         logger.error(f"Observation retrieval failed with exception: {e}")
         return create_error_response(str(e), 500)
 
+@require_auth
 async def observation_search(request):
     """Retrieve list of observations for a patient by ID.
     
@@ -1578,12 +1564,8 @@ async def observation_search(request):
     patient_id = request.query.get('patient')
     logger.info(f"GET /fhir/Observation endpoint accessed for patient: {patient_id}")
     
-    # Get credentials from basic auth
-    auth = get_basic_auth(request)
-    if not auth:
-        return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
-    
-    username, password = auth
+    # Get credentials from request (added by decorator)
+    username, password = request.auth_credentials
     
     if not patient_id:
         logger.warning("No patient ID provided")
@@ -1886,6 +1868,7 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
         logger.error(f"Error parsing checkout data: {e}")
         return {}
 
+@require_auth
 async def fhir_encounter_read(request):
     """Retrieve encounter information by ID.
     
@@ -1911,12 +1894,8 @@ async def fhir_encounter_read(request):
     
     logger.info(f"Retrieving encounter with ID: {encounter_id}")
     
-    # Get credentials from basic auth
-    auth = get_basic_auth(request)
-    if not auth:
-        return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
-    
-    username, password = auth
+    # Get credentials from request (added by decorator)
+    username, password = request.auth_credentials
     
     try:
         session = await get_user_session(username)
@@ -2571,6 +2550,7 @@ def validate_cnp(cnp: str) -> bool:
     parsed_data = parse_cnp(cnp)
     return parsed_data.get("valid", False)
 
+@require_auth
 async def serve_validate_cnp(request):
     """Validate a Romanian CNP (Personal Numerical Code).
     
@@ -2617,6 +2597,7 @@ async def serve_validate_cnp(request):
 
 
 
+@require_auth
 async def serve_web_page(request):
     """Handle requests to the root endpoint.
     
@@ -2631,12 +2612,8 @@ async def serve_web_page(request):
     """
     logger.info("Root endpoint accessed")
     
-    # Get credentials from basic auth
-    auth = get_basic_auth(request)
-    if not auth:
-        return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
-    
-    username, password = auth
+    # Get credentials from request (added by decorator)
+    username, password = request.auth_credentials
     
     # Try to login with provided credentials
     session = await get_user_session(username)
@@ -2762,6 +2739,23 @@ def get_basic_auth(request):
         return (username, password)
     except Exception:
         return None
+
+def require_auth(handler):
+    """Decorator to require basic authentication for endpoints."""
+    async def wrapper(request):
+        # Get credentials from basic auth
+        auth = get_basic_auth(request)
+        if not auth:
+            return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
+        
+        username, password = auth
+        
+        # Add credentials to request for use in handler
+        request.auth_credentials = (username, password)
+        
+        return await handler(request)
+    
+    return wrapper
 
 def load_config():
     """Load configuration from hipp.cfg and local.cfg (if exists).
