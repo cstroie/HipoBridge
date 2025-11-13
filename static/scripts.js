@@ -21,15 +21,15 @@ document.addEventListener('DOMContentLoaded', function() {
         // Check if it's a CNP format (13 digits) or partial CNP (digits followed by *)
         const isCNPFormat = /^\d{13}$/.test(cnp);
         const isPartialCNPFormat = /^\d+\*$/.test(cnp);
-        
+            
         // Show loading state
         showLoading();
         hideError();
         results.style.display = 'none';
-        
+            
         // Notify user of search start
         showToast('Starting patient search...', 'success');
-        
+            
         try {
             // Determine search type and notify user
             if (isCNPFormat) {
@@ -38,18 +38,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 try {
                     const cnpResponse = await fetch(`/fhir/ValueSet/cnp?id=${cnp}`);
                     const cnpData = await cnpResponse.json();
-        
+            
                     if (!cnpData.valid) {
-                        showError('Invalid CNP. Please check the number and try again.');
-                        return;
+                        showToast('CNP is not valid, but proceeding with search...', 'error');
+                    } else {
+                        showToast('Valid CNP, retrieving patient information...', 'success');
                     }
                 } catch (err) {
                     console.error('Error validating CNP:', err);
-                    showError('Error validating CNP. Please try again.');
-                    return;
+                    showToast('Error validating CNP, but proceeding with search...', 'error');
                 }
-    
-                showToast('Valid CNP, retrieving patient information...', 'success');
             } else if (isPartialCNPFormat) {
                 showToast('Searching for patient with partial CNP...', 'success');
             } else {
