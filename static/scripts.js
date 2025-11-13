@@ -134,7 +134,7 @@ document.addEventListener('DOMContentLoaded', function() {
             for (const checkoutId of checkoutIds) {
                 try {
                     showToast(`Loading epicrisis data for checkout ${checkoutId}...`, 'success');
-                    const checkoutResponse = await fetch(`/fhir/Encounter?identifier=${checkoutId}`);
+                    const checkoutResponse = await fetch(`/fhir/Encounter/${checkoutId}`);
                     
                     if (checkoutResponse.ok) {
                         const checkoutData = await checkoutResponse.json();
@@ -157,7 +157,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             showToast(`No epicrisis data found for checkout ${checkoutId}`, 'error');
                         }
                     } else {
-                        showToast(`Error loading epicrisis data for checkout ${checkoutId}: ${checkoutResponse.status}`, 'error');
+                        showToast(`Not found epicrisis data for checkout ${checkoutId}`, 'error');
                     }
                 } catch (err) {
                     console.error('Error fetching checkout data:', err);
