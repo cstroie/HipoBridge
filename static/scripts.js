@@ -210,6 +210,7 @@ document.addEventListener('DOMContentLoaded', function() {
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
             animation: slideIn 0.3s, fadeOut 0.5s 2.5s forwards;
             max-width: 300px;
+            font-size: 14px;
         `;
         
         // Add CSS for animations
