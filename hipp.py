@@ -126,6 +126,21 @@ CACHE_TIMEOUT = 10 * 60  # 10 minutes in seconds
 user_sessions: Dict[str, aiohttp.ClientSession] = {}
 
 
+def require_auth(handler):
+    """Decorator to require basic authentication for endpoints."""
+    async def wrapper(request):
+        # Get credentials from basic auth
+        auth = get_basic_auth(request)
+        if not auth:
+            return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
+        # Extract username and password
+        username, password = auth
+        # Add credentials to request for use in handler
+        request.auth_credentials = (username, password)
+        # Call the original handler
+        return await handler(request)
+    # End of wrapper function
+    return wrapper
 
 async def make_authenticated_request(session, url, method="GET", data=None, username=None, password=None):
     """Make an authenticated request to the Hipocrate service with automatic login handling.
@@ -2808,23 +2823,6 @@ async def init_app():
     
     return app
 
-
-def require_auth(handler):
-    """Decorator to require basic authentication for endpoints."""
-    async def wrapper(request):
-        # Get credentials from basic auth
-        auth = get_basic_auth(request)
-        if not auth:
-            return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
-        
-        username, password = auth
-        
-        # Add credentials to request for use in handler
-        request.auth_credentials = (username, password)
-        
-        return await handler(request)
-    
-    return wrapper
 
 def get_basic_auth(request):
     """Extract basic auth credentials from request.
