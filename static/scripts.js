@@ -172,8 +172,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
-            // Display all data
+            // Display patient data first
             await displayPatientData(patientData, analysesData, epicrisisData);
+            
+            // Load and display reports and epicrisis progressively
+            await loadAndDisplayReports(analysesData, patientData);
+            await loadAndDisplayEpicrisis(patientData);
+            
             showToast('Analysis loading complete', 'success');
             
         } catch (err) {
@@ -308,175 +313,12 @@ document.addEventListener('DOMContentLoaded', function() {
             checkoutIdsList.innerHTML = '';
         }
         
-        // Display epicrisis if available
-        const epicrisisSection = document.getElementById('epicrisisSection');
-        if (epicrisisData && epicrisisData.epicrisis) {
-            // Convert markdown to HTML for epicrisis
-            try {
-                const htmlContent = await convertMarkdownToHtml(epicrisisData.epicrisis);
-                document.getElementById('epicrisisContent').innerHTML = htmlContent;
-                
-                // Display date if available
-                const dateElement = document.getElementById('epicrisisDate');
-                if (epicrisisData.date) {
-                    dateElement.textContent = `Date: ${epicrisisData.date}`;
-                    dateElement.style.display = 'block';
-                } else {
-                    dateElement.style.display = 'none';
-                }
-            } catch (err) {
-                console.error('Error converting epicrisis markdown:', err);
-                document.getElementById('epicrisisContent').textContent = epicrisisData.epicrisis;
-                document.getElementById('epicrisisDate').style.display = 'none';
-            }
-            epicrisisSection.style.display = 'block';
-        } else {
-            epicrisisSection.style.display = 'none';
-        }
+        // Initialize sections but keep them hidden until data is loaded
+        document.getElementById('epicrisisSection').style.display = 'none';
+        document.getElementById('analysesGrid').innerHTML = '';
+        document.getElementById('noAnalyses').style.display = 'none';
         
-        // Display analyses
-        const analysesGrid = document.getElementById('analysesGrid');
-        const noAnalyses = document.getElementById('noAnalyses');
-        
-        // Check if we have a FHIR Bundle of Observations
-        if (analysesData.resourceType === "Bundle" && analysesData.entry && analysesData.entry.length > 0) {
-            noAnalyses.style.display = 'none';
-            analysesGrid.innerHTML = '';
-            
-            // Process each observation - only display imaging analyses
-            for (const entry of analysesData.entry) {
-                const observation = entry.resource;
-                
-                // Extract type from observation code
-                let analysisType = 'unknown';
-                if (observation.code && observation.code.coding && observation.code.coding.length > 0) {
-                    analysisType = observation.code.coding[0].code || 'unknown';
-                }
-                // Extract display text from observation display
-                let analysisText = 'analysis';
-                if (observation.code && observation.code.coding && observation.code.coding.length > 0) {
-                    analysisText = observation.code.coding[0].display || 'analysis';
-                }
-                
-                // Display analyses with imaging types 'radio', 'ct', 'irm', 'eco', 'lac', 'lii', 'rads'
-                if (!['radio', 'ct', 'irm', 'eco', 'lac', 'lii', 'rads'].includes(analysisType)) {
-                    continue;
-                }
-                
-                const analysisCard = document.createElement('article');
-                analysisCard.className = `analysis-card ${analysisType}`;
-                
-                // Start building the card content
-                let cardContent = `
-                    <header>
-                        <h4>${analysisText} report #${observation.id}</h4>
-                    </header>
-                    <main>
-                `;
-                
-                // For imaging analyses, fetch and display report content
-                if (['radio', 'ct', 'irm', 'eco', 'lac', 'lii', 'rads'].includes(analysisType)) {
-                    try {
-                        // Fetch report data using FHIR API - now using the observation ID directly
-                        const reportResponse = await fetch(`/fhir/DiagnosticReport/${observation.id}`);
-                        
-                        if (reportResponse.ok) {
-                            const reportData = await reportResponse.json();
-                            showToast(`Report data loaded for observation ${observation.id}`, 'success');
-                            
-                            // Add report metadata (date/time and performer) if available
-                            if (reportData.effectiveDateTime || (reportData.performer && reportData.performer.length > 0)) {
-                                cardContent += `<div class="report-meta">`;
-                                if (reportData.effectiveDateTime) {
-                                    cardContent += `<p><strong>Date/Time:</strong> ${reportData.effectiveDateTime}</p>`;
-                                }
-                                if (reportData.performer && reportData.performer.length > 0) {
-                                    cardContent += `<p><strong>Performer:</strong> ${reportData.performer[0].display || ''}</p>`;
-                                }
-                                // Add interpreter if available
-                                if (reportData.resultsInterpreter && reportData.resultsInterpreter.length > 0) {
-                                    cardContent += `<p><strong>Interpreter:</strong> ${reportData.resultsInterpreter[0].display || ''}</p>`;
-                                }
-                                cardContent += `</div>`;
-                            }
-                            
-                            // Add report content to the card - now using presentedForm or conclusion
-                            cardContent += `<div class="report-preview">`;
-                            if (reportData.presentedForm && reportData.presentedForm.length > 0) {
-                                // Process all presentedForm entries
-                                for (const form of reportData.presentedForm) {
-                                    // Add a header for each result
-                                    if (form.title) {
-                                        cardContent += `<h5>${form.title}</h5>`;
-                                    }
-                                    
-                                    if (form.contentType === 'text/plain' && form.data) {
-                                        cardContent += `<pre>${form.data}</pre>`;
-                                    } else if (form.contentType === 'text/markdown' && form.data) {
-                                        try {
-                                            const htmlResult = await convertMarkdownToHtml(atob(form.data));
-                                            cardContent += `<div>${htmlResult}</div>`;
-                                        } catch (err) {
-                                            console.error('Error converting markdown:', err);
-                                            cardContent += `<pre>${form.data}</pre>`;
-                                        }
-                                    } else if (form.contentType === 'text/html' && form.data) {
-                                        // Decode base64 if needed
-                                        try {
-                                            const decoded = atob(form.data);
-                                            cardContent += `<div>${decoded}</div>`;
-                                        } catch (e) {
-                                            cardContent += `<div>${form.data}</div>`;
-                                        }
-                                    }
-                                }
-                            } else if (reportData.conclusion) {
-                                try {
-                                    const htmlResult = await convertMarkdownToHtml(reportData.conclusion);
-                                    cardContent += `<div>${htmlResult}</div>`;
-                                } catch (err) {
-                                    console.error('Error converting report markdown:', err);
-                                    cardContent += `<p>${reportData.conclusion}</p>`;
-                                }
-                            }
-                            cardContent += `</div>`;
-                            
-                            // Add link to ImagingStudy if available
-                            if (reportData.imagingStudy) {
-                                const studyId = reportData.imagingStudy.reference.split('/')[1];
-                                cardContent += `<div class="imaging-study-link">
-                                    <a href="#" onclick="viewImagingStudy('${studyId}', '${observation.id}'); return false;">
-                                        View Imaging Study #${studyId}
-                                    </a>
-                                </div>`;
-                            }
-                        } else {
-                            showToast(`Error loading report data for observation ${observation.id}`, 'error');
-                        }
-                    } catch (err) {
-                        console.error('Error fetching report data:', err);
-                        showToast(`Error loading report data for observation ${observation.id}`, 'error');
-                    }
-                }
-                
-                cardContent += `
-                    </main>
-                `;
-                
-                analysisCard.innerHTML = cardContent;
-                analysesGrid.appendChild(analysisCard);
-            }
-            
-            // Check if we actually added any cards
-            if (analysesGrid.children.length === 0) {
-                noAnalyses.style.display = 'block';
-            }
-        } else {
-            noAnalyses.style.display = 'block';
-            analysesGrid.innerHTML = '';
-        }
-        
-        // Show results
+        // Show results container
         results.style.display = 'block';
     }
     
@@ -611,4 +453,216 @@ document.addEventListener('DOMContentLoaded', function() {
     // Make functions available globally
     window.viewImagingStudy = viewImagingStudy;
     window.closeImagingStudyModal = closeImagingStudyModal;
+    
+    // Function to load and display reports progressively
+    async function loadAndDisplayReports(analysesData, patientData) {
+        const analysesGrid = document.getElementById('analysesGrid');
+        const noAnalyses = document.getElementById('noAnalyses');
+        
+        // Check if we have a FHIR Bundle of Observations
+        if (analysesData.resourceType === "Bundle" && analysesData.entry && analysesData.entry.length > 0) {
+            noAnalyses.style.display = 'none';
+            
+            // Process each observation - only display imaging analyses
+            for (const entry of analysesData.entry) {
+                const observation = entry.resource;
+                
+                // Extract type from observation code
+                let analysisType = 'unknown';
+                if (observation.code && observation.code.coding && observation.code.coding.length > 0) {
+                    analysisType = observation.code.coding[0].code || 'unknown';
+                }
+                // Extract display text from observation display
+                let analysisText = 'analysis';
+                if (observation.code && observation.code.coding && observation.code.coding.length > 0) {
+                    analysisText = observation.code.coding[0].display || 'analysis';
+                }
+                
+                // Display analyses with imaging types 'radio', 'ct', 'irm', 'eco', 'lac', 'lii', 'rads'
+                if (!['radio', 'ct', 'irm', 'eco', 'lac', 'lii', 'rads'].includes(analysisType)) {
+                    continue;
+                }
+                
+                const analysisCard = document.createElement('article');
+                analysisCard.className = `analysis-card ${analysisType}`;
+                
+                // Start building the card content
+                let cardContent = `
+                    <header>
+                        <h4>${analysisText} report #${observation.id}</h4>
+                    </header>
+                    <main>
+                `;
+                
+                // For imaging analyses, fetch and display report content
+                if (['radio', 'ct', 'irm', 'eco', 'lac', 'lii', 'rads'].includes(analysisType)) {
+                    try {
+                        // Fetch report data using FHIR API - now using the observation ID directly
+                        const reportResponse = await fetch(`/fhir/DiagnosticReport/${observation.id}`);
+                        
+                        if (reportResponse.ok) {
+                            const reportData = await reportResponse.json();
+                            showToast(`Report data loaded for observation ${observation.id}`, 'success');
+                            
+                            // Add report metadata (date/time and performer) if available
+                            if (reportData.effectiveDateTime || (reportData.performer && reportData.performer.length > 0)) {
+                                cardContent += `<div class="report-meta">`;
+                                if (reportData.effectiveDateTime) {
+                                    cardContent += `<p><strong>Date/Time:</strong> ${reportData.effectiveDateTime}</p>`;
+                                }
+                                if (reportData.performer && reportData.performer.length > 0) {
+                                    cardContent += `<p><strong>Performer:</strong> ${reportData.performer[0].display || ''}</p>`;
+                                }
+                                // Add interpreter if available
+                                if (reportData.resultsInterpreter && reportData.resultsInterpreter.length > 0) {
+                                    cardContent += `<p><strong>Interpreter:</strong> ${reportData.resultsInterpreter[0].display || ''}</p>`;
+                                }
+                                cardContent += `</div>`;
+                            }
+                            
+                            // Add report content to the card - now using presentedForm or conclusion
+                            cardContent += `<div class="report-preview">`;
+                            if (reportData.presentedForm && reportData.presentedForm.length > 0) {
+                                // Process all presentedForm entries
+                                for (const form of reportData.presentedForm) {
+                                    // Add a header for each result
+                                    if (form.title) {
+                                        cardContent += `<h5>${form.title}</h5>`;
+                                    }
+                                    
+                                    if (form.contentType === 'text/plain' && form.data) {
+                                        cardContent += `<pre>${form.data}</pre>`;
+                                    } else if (form.contentType === 'text/markdown' && form.data) {
+                                        try {
+                                            const htmlResult = await convertMarkdownToHtml(atob(form.data));
+                                            cardContent += `<div>${htmlResult}</div>`;
+                                        } catch (err) {
+                                            console.error('Error converting markdown:', err);
+                                            cardContent += `<pre>${form.data}</pre>`;
+                                        }
+                                    } else if (form.contentType === 'text/html' && form.data) {
+                                        // Decode base64 if needed
+                                        try {
+                                            const decoded = atob(form.data);
+                                            cardContent += `<div>${decoded}</div>`;
+                                        } catch (e) {
+                                            cardContent += `<div>${form.data}</div>`;
+                                        }
+                                    }
+                                }
+                            } else if (reportData.conclusion) {
+                                try {
+                                    const htmlResult = await convertMarkdownToHtml(reportData.conclusion);
+                                    cardContent += `<div>${htmlResult}</div>`;
+                                } catch (err) {
+                                    console.error('Error converting report markdown:', err);
+                                    cardContent += `<p>${reportData.conclusion}</p>`;
+                                }
+                            }
+                            cardContent += `</div>`;
+                            
+                            // Add link to ImagingStudy if available
+                            if (reportData.imagingStudy) {
+                                const studyId = reportData.imagingStudy.reference.split('/')[1];
+                                cardContent += `<div class="imaging-study-link">
+                                    <a href="#" onclick="viewImagingStudy('${studyId}', '${observation.id}'); return false;">
+                                        View Imaging Study #${studyId}
+                                    </a>
+                                </div>`;
+                            }
+                        } else {
+                            showToast(`Error loading report data for observation ${observation.id}`, 'error');
+                        }
+                    } catch (err) {
+                        console.error('Error fetching report data:', err);
+                        showToast(`Error loading report data for observation ${observation.id}`, 'error');
+                    }
+                }
+                
+                cardContent += `
+                    </main>
+                `;
+                
+                analysisCard.innerHTML = cardContent;
+                analysesGrid.appendChild(analysisCard);
+            }
+            
+            // Check if we actually added any cards
+            if (analysesGrid.children.length === 0) {
+                noAnalyses.style.display = 'block';
+            }
+        } else {
+            noAnalyses.style.display = 'block';
+        }
+    }
+    
+    // Function to load and display epicrisis progressively
+    async function loadAndDisplayEpicrisis(patientData) {
+        // Extract all checkout IDs from patient extensions
+        let checkoutIds = [];
+        if (patientData.extension) {
+            const dischargeExt = patientData.extension.find(ext => ext.url && ext.url.includes('discharge-ids'));
+            if (dischargeExt && dischargeExt.valueString) {
+                checkoutIds = dischargeExt.valueString.split(',').filter(id => id.trim());
+            }
+        }
+        
+        // Try to fetch epicrisis data for each checkout ID until we find a valid one
+        for (const checkoutId of checkoutIds) {
+            try {
+                showToast(`Loading epicrisis data for checkout ${checkoutId}...`, 'success');
+                const checkoutResponse = await fetch(`/fhir/Encounter/${checkoutId}`);
+                
+                if (checkoutResponse.ok) {
+                    const checkoutData = await checkoutResponse.json();
+                    // Check if this checkout has valid epicrisis data
+                    // Handle both single resource and Bundle responses
+                    let encounterData = checkoutData;
+                    if (checkoutData.resourceType === "Bundle" && checkoutData.entry && checkoutData.entry.length > 0) {
+                        encounterData = checkoutData.entry[0].resource;
+                    }
+                    
+                    // Extract epicrisis from notes array
+                    let epicrisisText = '';
+                    if (encounterData.note && Array.isArray(encounterData.note)) {
+                        // Concatenate all note texts
+                        epicrisisText = encounterData.note.map(note => note.text || '').join('\n\n');
+                    }
+                    
+                    if (epicrisisText) {
+                        // Display epicrisis immediately
+                        const epicrisisSection = document.getElementById('epicrisisSection');
+                        try {
+                            const htmlContent = await convertMarkdownToHtml(epicrisisText);
+                            document.getElementById('epicrisisContent').innerHTML = htmlContent;
+                            
+                            // Display date if available
+                            const dateElement = document.getElementById('epicrisisDate');
+                            if (encounterData.period && encounterData.period.start) {
+                                dateElement.textContent = `Date: ${encounterData.period.start}`;
+                                dateElement.style.display = 'block';
+                            } else {
+                                dateElement.style.display = 'none';
+                            }
+                        } catch (err) {
+                            console.error('Error converting epicrisis markdown:', err);
+                            document.getElementById('epicrisisContent').textContent = epicrisisText;
+                            document.getElementById('epicrisisDate').style.display = 'none';
+                        }
+                        epicrisisSection.style.display = 'block';
+                        
+                        showToast(`Valid epicrisis data loaded for checkout ${checkoutId}`, 'success');
+                        break; // Found a valid epicrisis, stop searching
+                    } else {
+                        showToast(`No epicrisis data found for checkout ${checkoutId}`, 'error');
+                    }
+                } else {
+                    showToast(`Not found epicrisis data for checkout ${checkoutId}`, 'error');
+                }
+            } catch (err) {
+                console.error('Error fetching checkout data:', err);
+                showToast(`Error loading epicrisis data for checkout ${checkoutId}`, 'error');
+            }
+        }
+    }
 });
