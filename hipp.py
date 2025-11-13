@@ -2719,44 +2719,6 @@ async def get_user_session(username: str):
         logger.debug(f"Reusing existing aiohttp ClientSession for user {username}")
     return user_sessions[username]
 
-def require_auth(handler):
-    """Decorator to require basic authentication for endpoints."""
-    async def wrapper(request):
-        # Get credentials from basic auth
-        auth = get_basic_auth(request)
-        if not auth:
-            return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
-        
-        username, password = auth
-        
-        # Add credentials to request for use in handler
-        request.auth_credentials = (username, password)
-        
-        return await handler(request)
-    
-    return wrapper
-
-def get_basic_auth(request):
-    """Extract basic auth credentials from request.
-    
-    Args:
-        request: The incoming HTTP request
-        
-    Returns:
-        Tuple of (username, password) or None if not found
-    """
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Basic '):
-        return None
-    
-    try:
-        encoded_credentials = auth_header.split(' ', 1)[1]
-        decoded_credentials = base64.b64decode(encoded_credentials).decode('utf-8')
-        username, password = decoded_credentials.split(':', 1)
-        return (username, password)
-    except Exception:
-        return None
-
 def load_config():
     """Load configuration from hipp.cfg and local.cfg (if exists).
     
@@ -2846,6 +2808,44 @@ async def init_app():
     
     return app
 
+
+def require_auth(handler):
+    """Decorator to require basic authentication for endpoints."""
+    async def wrapper(request):
+        # Get credentials from basic auth
+        auth = get_basic_auth(request)
+        if not auth:
+            return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
+        
+        username, password = auth
+        
+        # Add credentials to request for use in handler
+        request.auth_credentials = (username, password)
+        
+        return await handler(request)
+    
+    return wrapper
+
+def get_basic_auth(request):
+    """Extract basic auth credentials from request.
+    
+    Args:
+        request: The incoming HTTP request
+        
+    Returns:
+        Tuple of (username, password) or None if not found
+    """
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Basic '):
+        return None
+    
+    try:
+        encoded_credentials = auth_header.split(' ', 1)[1]
+        decoded_credentials = base64.b64decode(encoded_credentials).decode('utf-8')
+        username, password = decoded_credentials.split(':', 1)
+        return (username, password)
+    except Exception:
+        return None
 
 # Load configuration
 config = load_config()
