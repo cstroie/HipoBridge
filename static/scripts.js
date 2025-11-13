@@ -365,6 +365,11 @@ document.addEventListener('DOMContentLoaded', function() {
                             if (reportData.presentedForm && reportData.presentedForm.length > 0) {
                                 // Process all presentedForm entries
                                 for (const form of reportData.presentedForm) {
+                                    // Add a header for each result
+                                    if (form.title) {
+                                        cardContent += `<h5>${form.title}</h5>`;
+                                    }
+                                    
                                     if (form.contentType === 'text/plain' && form.data) {
                                         cardContent += `<pre>${form.data}</pre>`;
                                     } else if (form.contentType === 'text/markdown' && form.data) {
