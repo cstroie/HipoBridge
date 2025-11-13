@@ -266,8 +266,9 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('patientAddress').textContent = 'N/A';
         }
         
-        // Extract encounter/admission/discharge counts from extensions
+        // Extract encounter/admission/discharge counts and IDs from extensions
         let encounterCount = 0, admissionCount = 0, dischargeCount = 0;
+        let checkoutIds = [];
         if (patientData.extension) {
             const encounterExt = patientData.extension.find(ext => ext.url && ext.url.includes('encounter-ids'));
             const admissionExt = patientData.extension.find(ext => ext.url && ext.url.includes('admission-ids'));
@@ -275,12 +276,24 @@ document.addEventListener('DOMContentLoaded', function() {
             
             encounterCount = encounterExt ? encounterExt.valueString.split(',').filter(id => id).length : 0;
             admissionCount = admissionExt ? admissionExt.valueString.split(',').filter(id => id).length : 0;
-            dischargeCount = dischargeExt ? dischargeExt.valueString.split(',').filter(id => id).length : 0;
+            
+            if (dischargeExt) {
+                checkoutIds = dischargeExt.valueString.split(',').filter(id => id);
+                dischargeCount = checkoutIds.length;
+            }
         }
         
         document.getElementById('presentationsCount').textContent = encounterCount;
         document.getElementById('checkinsCount').textContent = admissionCount;
         document.getElementById('checkoutsCount').textContent = dischargeCount;
+        
+        // Display checkout IDs list
+        const checkoutIdsList = document.getElementById('checkoutIdsList');
+        if (checkoutIds.length > 0) {
+            checkoutIdsList.innerHTML = `<strong>IDs:</strong> ${checkoutIds.join(', ')}`;
+        } else {
+            checkoutIdsList.innerHTML = '';
+        }
         
         // Display epicrisis if available
         const epicrisisSection = document.getElementById('epicrisisSection');
