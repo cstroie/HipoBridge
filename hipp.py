@@ -30,7 +30,7 @@ Version: 1.0.0
 import os
 import asyncio
 import aiohttp
-from aiohttp import web
+from aiohttp import web, BasicAuth
 from yarl import URL
 from typing import Dict, Any, Optional, List
 import json
@@ -38,8 +38,9 @@ import logging
 import re
 from bs4 import BeautifulSoup
 import html
-from datetime import datetime
+from datetime import datetime, timedelta
 import configparser
+import base64
 
 
 # Configure logging
@@ -60,9 +61,6 @@ DEFAULT_CONFIG = {
     }
 }
 
-# Get credentials from environment variables (fallback)
-HYP_USER = os.getenv("HYP_USER")
-HYP_PASS = os.getenv("HYP_PASS")
 
 # Headers for compatibility with Hipocrate service
 HEADERS = {
@@ -113,8 +111,6 @@ ANALYSIS_TYPES = {
     }
 }
 
-# Global session
-session: Optional[aiohttp.ClientSession] = None
 
 # Simple in-memory cache for CNP to patient code mappings
 cnp_cache: Dict[str, str] = {}
@@ -125,6 +121,9 @@ response_cache: Dict[str, str] = {}
 response_cache_timestamps: Dict[str, datetime] = {}
 response_cache_max_size = 10  # Maximum number of entries to cache
 CACHE_TIMEOUT = 10 * 60  # 10 minutes in seconds
+
+# Session cache per user
+user_sessions: Dict[str, aiohttp.ClientSession] = {}
 
 
 
@@ -194,7 +193,7 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
         # Check if we got redirected to login page (session expired)
         if is_login_page(response_text):
             logger.warning(f"Session expired during request to {url}, attempting re-login")
-            login_success = await login_if_needed(username, password)
+            login_success = await login_if_needed(session, username, password)
             if login_success:
                 # Retry the request with special headers for POST
                 response_text = await _make_request(use_retry_headers=True)
@@ -256,7 +255,7 @@ async def patient(request):
     
     Args:
         request: The incoming HTTP request with 'id' query parameter for patient ID
-                 and optional X-Username and X-Password headers for authentication
+                 and basic auth credentials for authentication
         
     Returns:
         JSON response with patient data or error information
@@ -270,13 +269,16 @@ async def patient(request):
     
     logger.info(f"Retrieving patient with ID: {patient_id}")
     
-    # Get credentials from request headers (optional)
-    username = request.headers.get("X-Username")
-    password = request.headers.get("X-Password")
+    # Get credentials from basic auth
+    auth = get_basic_auth(request)
+    if not auth:
+        return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
+    
+    username, password = auth
     
     try:
-        # Get aiohttp session
-        session = await get_session()
+        # Get user-specific aiohttp session
+        session = await get_user_session(username)
         
         # Make request to the patient endpoint
         patient_url = f"{SERVICE_URL}/Pacient/edit.asp?id={patient_id}"
@@ -317,16 +319,19 @@ async def patient_search(request):
     
     Args:
         request: The incoming HTTP request with 'q' query parameter for search term
-                 and optional X-Username and X-Password headers for authentication
+                 and basic auth credentials for authentication
         
     Returns:
         JSON response with search results or error information
     """
     logger.info("GET /fhir/Patient endpoint accessed")
     
-    # Get credentials from request headers (optional)
-    username = request.headers.get("X-Username")
-    password = request.headers.get("X-Password")
+    # Get credentials from basic auth
+    auth = get_basic_auth(request)
+    if not auth:
+        return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
+    
+    username, password = auth
     
     # Get search parameter from query string
     search_term = request.query.get('q', '')
@@ -336,8 +341,8 @@ async def patient_search(request):
         return create_error_response("Search term is required")
     
     try:
-        # Get aiohttp session
-        session = await get_session()
+        # Get user-specific aiohttp session
+        session = await get_user_session(username)
         
         # Determine search type based on input
         search_type = "name"  # default
@@ -827,7 +832,7 @@ async def diagnostic_report(request):
     
     Args:
         request: The incoming HTTP request with 'id' path parameter for report ID
-                 and optional X-Username and X-Password headers for authentication
+                 and basic auth credentials for authentication
         
     Returns:
         JSON response with diagnostic report data or error information
@@ -835,9 +840,12 @@ async def diagnostic_report(request):
     report_id = request.match_info.get('id')
     logger.info(f"GET /fhir/DiagnosticReport endpoint accessed with identifier: {report_id}")
     
-    # Get credentials from request headers (optional)
-    username = request.headers.get("X-Username")
-    password = request.headers.get("X-Password")
+    # Get credentials from basic auth
+    auth = get_basic_auth(request)
+    if not auth:
+        return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
+    
+    username, password = auth
     
     if not report_id:
         logger.warning("No report ID provided")
@@ -846,8 +854,8 @@ async def diagnostic_report(request):
     logger.info(f"Retrieving report with ID: {report_id}")
     
     try:
-        # Get aiohttp session
-        session = await get_session()
+        # Get user-specific aiohttp session
+        session = await get_user_session(username)
 
         # Make request to the report endpoint
         report_url = f"{SERVICE_URL}/analyse/Reports/analyseFile.asp?id={report_id}"
@@ -928,7 +936,7 @@ async def imaging_study(request):
     
     Args:
         request: The incoming HTTP request with 'id' path parameter for study ID
-                 and optional X-Username and X-Password headers for authentication
+                 and basic auth credentials for authentication
         
     Returns:
         JSON response with imaging study data or error information
@@ -936,9 +944,12 @@ async def imaging_study(request):
     study_id = request.match_info.get('id')
     logger.info(f"GET /fhir/ImagingStudy endpoint accessed with identifier: {study_id}")
     
-    # Get credentials from request headers (optional)
-    username = request.headers.get("X-Username")
-    password = request.headers.get("X-Password")
+    # Get credentials from basic auth
+    auth = get_basic_auth(request)
+    if not auth:
+        return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
+    
+    username, password = auth
     
     if not study_id:
         logger.warning("No study ID provided")
@@ -947,8 +958,8 @@ async def imaging_study(request):
     logger.info(f"Retrieving imaging study with ID: {study_id}")
     
     try:
-        # Get aiohttp session
-        session = await get_session()
+        # Get user-specific aiohttp session
+        session = await get_user_session(username)
 
         # Make request to the report endpoint (same endpoint as diagnostic reports)
         report_url = f"{SERVICE_URL}/analyse/Reports/analyseFile.asp?id={study_id}"
@@ -1456,7 +1467,7 @@ async def observation(request):
     
     Args:
         request: The incoming HTTP request with 'id' path parameter for observation ID
-                 and optional X-Username and X-Password headers for authentication
+                 and basic auth credentials for authentication
         
     Returns:
         JSON response with observation data or error information
@@ -1464,9 +1475,12 @@ async def observation(request):
     observation_id = request.match_info.get('id')
     logger.info(f"GET /fhir/Observation/{observation_id} endpoint accessed")
     
-    # Get credentials from request headers (optional)
-    username = request.headers.get("X-Username")
-    password = request.headers.get("X-Password")
+    # Get credentials from basic auth
+    auth = get_basic_auth(request)
+    if not auth:
+        return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
+    
+    username, password = auth
     
     if not observation_id:
         logger.warning("No observation ID provided")
@@ -1475,8 +1489,8 @@ async def observation(request):
     logger.info(f"Retrieving observation with ID: {observation_id}")
     
     try:
-        # Get aiohttp session
-        session = await get_session()
+        # Get user-specific aiohttp session
+        session = await get_user_session(username)
         
         # Get report details to extract observation data
         report_url = f"{SERVICE_URL}/analyse/Reports/analyseFile.asp?id={observation_id}"
@@ -1556,7 +1570,7 @@ async def observation_search(request):
     
     Args:
         request: The incoming HTTP request with 'patient' query parameter for patient ID
-                 and optional X-Username and X-Password headers for authentication
+                 and basic auth credentials for authentication
         
     Returns:
         JSON response with observations data or error information
@@ -1564,9 +1578,12 @@ async def observation_search(request):
     patient_id = request.query.get('patient')
     logger.info(f"GET /fhir/Observation endpoint accessed for patient: {patient_id}")
     
-    # Get credentials from request headers (optional)
-    username = request.headers.get("X-Username")
-    password = request.headers.get("X-Password")
+    # Get credentials from basic auth
+    auth = get_basic_auth(request)
+    if not auth:
+        return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
+    
+    username, password = auth
     
     if not patient_id:
         logger.warning("No patient ID provided")
@@ -1579,8 +1596,8 @@ async def observation_search(request):
     logger.info(f"Retrieving analyses list for patient with ID: {patient_id}")
     
     try:
-        # Get aiohttp session
-        session = await get_session()
+        # Get user-specific aiohttp session
+        session = await get_user_session(username)
         
         # Make request to the analyses endpoint
         analyses_url = f"{SERVICE_URL}/pacient/analyses.asp?type=PA&pacid={patient_id}"
@@ -1877,7 +1894,7 @@ async def fhir_encounter_read(request):
     
     Args:
         request: The incoming HTTP request with 'identifier' query parameter for encounter ID
-                 and optional X-Username and X-Password headers for authentication
+                 and basic auth credentials for authentication
         
     Returns:
         JSON response with encounter data or error information
@@ -1894,12 +1911,15 @@ async def fhir_encounter_read(request):
     
     logger.info(f"Retrieving encounter with ID: {encounter_id}")
     
-    # Get credentials from request headers (optional)
-    username = request.headers.get("X-Username")
-    password = request.headers.get("X-Password")
+    # Get credentials from basic auth
+    auth = get_basic_auth(request)
+    if not auth:
+        return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
+    
+    username, password = auth
     
     try:
-        session = await get_session()
+        session = await get_user_session(username)
         
         # Make request to the checkout endpoint
         checkout_url = f"{SERVICE_URL}/files/checkout.asp?id={encounter_id}"
@@ -2223,48 +2243,6 @@ async def login_if_needed(username: str = None, password: str = None) -> bool:
         logger.error(f"Login failed with exception: {e}")
         return False
 
-async def serve_login(request):
-    """Handle explicit login requests.
-    
-    Performs login to the Hipocrate service using credentials provided in the request body.
-    
-    Args:
-        request: The incoming HTTP request with JSON body containing username and password
-        
-    Returns:
-        JSON response indicating login success or failure
-    """
-    logger.info("POST /fhir/login endpoint accessed")
-    
-    try:
-        # Get credentials from request body
-        data = await request.json()
-        username = data.get("username")
-        password = data.get("password")
-        
-        if not username or not password:
-            logger.warning("Username or password not provided")
-            return create_error_response("Username and password are required")
-        
-        # Attempt login with provided credentials
-        login_success = await login_if_needed(username, password)
-        
-        if login_success:
-            logger.info("Login successful via API endpoint")
-            return web.json_response({
-                "status": "success",
-                "message": "Login successful"
-            })
-        else:
-            logger.error("Login failed via API endpoint")
-            return create_error_response("Login failed", 401)
-            
-    except json.JSONDecodeError:
-        logger.warning("Invalid JSON data received for login")
-        return create_error_response("Invalid JSON data")
-    except Exception as e:
-        logger.error(f"Login endpoint failed with exception: {e}")
-        return create_error_response(str(e), 500)
 
 
 def html_to_markdown(html_content: str) -> str:
@@ -2649,20 +2627,42 @@ async def serve_web_page(request):
     """Handle requests to the root endpoint.
     
     Returns a web page with a CNP input form and analysis functionality.
+    Requires basic authentication.
     
     Args:
         request: The incoming HTTP request
         
     Returns:
-        HTML response with the web interface
+        HTML response with the web interface or 401 if not authenticated
     """
     logger.info("Root endpoint accessed")
+    
+    # Get credentials from basic auth
+    auth = get_basic_auth(request)
+    if not auth:
+        return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
+    
+    username, password = auth
+    
+    # Try to login with provided credentials
+    session = await get_user_session(username)
+    login_success = await login_if_needed(session, username, password)
+    
+    if not login_success:
+        return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
+    
+    # Set cookie with 30-minute expiration
+    response = web.StreamResponse()
+    response.set_cookie('auth_user', username, max_age=1800, httponly=True)
     
     # Serve the external HTML file
     with open('static/main.html', 'r') as f:
         html_content = f.read()
     
-    return web.Response(text=html_content, content_type='text/html')
+    response.content_type = 'text/html'
+    await response.prepare(request)
+    await response.write(html_content.encode('utf-8'))
+    return response
 
 
 def get_textarea_content_after_label(soup: 'BeautifulSoup', label_regex: str) -> str:
@@ -2731,15 +2731,43 @@ def create_error_response(message: str, status_code: int = 400, details: Dict[st
     
     return web.json_response(response_data, status=status_code)
 
-async def get_session():
-    global session
-    if session is None or session.closed:
-        logger.debug("Creating new aiohttp ClientSession with cookie support")
+async def get_user_session(username: str):
+    """Get or create a user-specific session.
+    
+    Args:
+        username: Username to get session for
+        
+    Returns:
+        aiohttp.ClientSession for the user
+    """
+    if username not in user_sessions or user_sessions[username].closed:
+        logger.debug(f"Creating new aiohttp ClientSession for user {username} with cookie support")
         # Create session with automatic cookie handling
-        session = aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(unsafe=True))
+        user_sessions[username] = aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(unsafe=True))
     else:
-        logger.debug("Reusing existing aiohttp ClientSession")
-    return session
+        logger.debug(f"Reusing existing aiohttp ClientSession for user {username}")
+    return user_sessions[username]
+
+def get_basic_auth(request):
+    """Extract basic auth credentials from request.
+    
+    Args:
+        request: The incoming HTTP request
+        
+    Returns:
+        Tuple of (username, password) or None if not found
+    """
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Basic '):
+        return None
+    
+    try:
+        encoded_credentials = auth_header.split(' ', 1)[1]
+        decoded_credentials = base64.b64decode(encoded_credentials).decode('utf-8')
+        username, password = decoded_credentials.split(':', 1)
+        return (username, password)
+    except Exception:
+        return None
 
 def load_config():
     """Load configuration from hipp.cfg and local.cfg (if exists).
@@ -2780,16 +2808,27 @@ async def on_startup(app):
 async def on_cleanup(app):
     """Handle application cleanup.
     
-    Closes the HTTP session.
+    Closes all user HTTP sessions.
     
     Args:
         app: The web application
     """
     logger.info("Application cleanup")
-    global session
-    if session and not session.closed:
-        logger.debug("Closing aiohttp ClientSession")
-        await session.close()
+    for username, session in user_sessions.items():
+        if session and not session.closed:
+            logger.debug(f"Closing aiohttp ClientSession for user {username}")
+            await session.close()
+
+async def auth_middleware(app, handler):
+    """Authentication middleware that skips static files."""
+    async def middleware_handler(request):
+        # Skip authentication for static files
+        if request.path.startswith('/static/'):
+            return await handler(request)
+        
+        return await handler(request)
+    
+    return middleware_handler
 
 async def init_app():
     """Initialize the web application.
@@ -2800,7 +2839,7 @@ async def init_app():
         Configured web application
     """
     logger.info("Initializing web application")
-    app = web.Application()
+    app = web.Application(middlewares=[auth_middleware])
     app.router.add_get('/', serve_web_page)
     # FHIR-compatible endpoints
     app.router.add_get('/fhir/Patient', patient_search)
@@ -2811,7 +2850,6 @@ async def init_app():
     app.router.add_get('/fhir/Observation', observation_search)
     app.router.add_get('/fhir/Observation/{id}', observation)
     app.router.add_get('/fhir/ValueSet/cnp', serve_validate_cnp)
-    app.router.add_post('/fhir/login', serve_login)
     app.router.add_post('/fhir/md2html', serve_md2html)
     app.router.add_get('/fhir/CodeSystem/analysis-types', serve_analysis_types)
     app.router.add_get('/fhir/spec', serve_spec)

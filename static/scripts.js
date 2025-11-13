@@ -59,6 +59,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const searchResponse = await fetch(`/fhir/Patient?q=${encodeURIComponent(cnp)}`);
             
             if (!searchResponse.ok) {
+                if (searchResponse.status === 401) {
+                    showToast('Authentication required. Please refresh the page and enter your credentials.', 'error');
+                }
                 throw new Error(`HTTP error! status: ${searchResponse.status}`);
             }
             
@@ -112,6 +115,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const analysesResponse = await fetch(`/fhir/Observation?patient=${patientCode}`);
             
             if (!analysesResponse.ok) {
+                if (analysesResponse.status === 401) {
+                    showToast('Authentication required. Please refresh the page and enter your credentials.', 'error');
+                }
                 showToast(`Error loading diagnostic reports`, 'error');
                 throw new Error(`HTTP error! status: ${analysesResponse.status}`);
             }
@@ -164,6 +170,9 @@ document.addEventListener('DOMContentLoaded', function() {
                             showToast(`No epicrisis data found for checkout ${checkoutId}`, 'error');
                         }
                     } else {
+                        if (checkoutResponse.status === 401) {
+                            showToast('Authentication required. Please refresh the page and enter your credentials.', 'error');
+                        }
                         showToast(`Not found epicrisis data for checkout ${checkoutId}`, 'error');
                     }
                 } catch (err) {
@@ -241,6 +250,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 body: JSON.stringify({ text: markdownText })
             });
+            
+            if (response.status === 401) {
+                showToast('Authentication required. Please refresh the page and enter your credentials.', 'error');
+                throw new Error('Authentication required');
+            }
+            
             const data = await response.json();
             if (data.status === 'success') {
                 return data.html;
@@ -333,6 +348,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 displayImagingStudyModal(studyData, studyId, reportId);
                 showToast(`Imaging study ${studyId} loaded successfully`, 'success');
             } else {
+                if (studyResponse.status === 401) {
+                    showToast('Authentication required. Please refresh the page and enter your credentials.', 'error');
+                }
                 console.error('Error fetching imaging study data');
                 showToast(`Error loading imaging study ${studyId}`, 'error');
             }
