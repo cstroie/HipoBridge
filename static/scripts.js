@@ -139,10 +139,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (checkoutResponse.ok) {
                         const checkoutData = await checkoutResponse.json();
                         // Check if this checkout has valid epicrisis data
-                        if (checkoutData.text && checkoutData.text.div) {
+                        // Handle both single resource and Bundle responses
+                        let encounterData = checkoutData;
+                        if (checkoutData.resourceType === "Bundle" && checkoutData.entry && checkoutData.entry.length > 0) {
+                            encounterData = checkoutData.entry[0].resource;
+                        }
+                        
+                        if (encounterData.text && encounterData.text.div) {
                             epicrisisData = {
-                                epicrisis: checkoutData.text.div,
-                                date: checkoutData.period ? checkoutData.period.start : '',
+                                epicrisis: encounterData.text.div,
+                                date: encounterData.period ? encounterData.period.start : '',
                                 checkout_id: checkoutId
                             };
                             showToast(`Valid epicrisis data loaded for checkout ${checkoutId}`, 'success');
@@ -151,7 +157,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             showToast(`No epicrisis data found for checkout ${checkoutId}`, 'error');
                         }
                     } else {
-                        showToast(`Error loading epicrisis data for checkout ${checkoutId}`, 'error');
+                        showToast(`Error loading epicrisis data for checkout ${checkoutId}: ${checkoutResponse.status}`, 'error');
                     }
                 } catch (err) {
                     console.error('Error fetching checkout data:', err);
