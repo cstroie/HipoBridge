@@ -13,79 +13,73 @@
         <p>Medical Patient Data Analyzer</p>
     </header>
     <main>
-        <section>
+        <article>
             <hgroup>
                 <h2>Patient Analysis</h2>
                 <p>Enter a 13-digit Romanian CNP, patient code, or partial CNP (ending with *) to retrieve patient information and medical analyses.</p>
             </hgroup>
             
             <form id="cnpForm">
-                <div class="grid">
-                    <div>
-                        <label for="cnpInput">Patient Identifier:</label>
-                        <input type="text" id="cnpInput" name="cnp" placeholder="e.g., 1234567890123, 1234567*, patient code, or patient name" required>
-                    </div>
+                <label for="cnpInput">Patient Identifier:</label>
+                <div class="group">
+                    <input type="text" id="cnpInput" name="cnp" placeholder="e.g., 1234567890123, 1234567*, patient code, or patient name" required>
+                    <button type="submit" id="analyzeBtn">Retrieve Patient Data</button>
                 </div>
-                <button type="submit" id="analyzeBtn">Retrieve Patient Data</button>
             </form>
-            
-            
             <div class="error" id="error"></div>
             <div class="success" id="success"></div>
-            
-        </section>
-            <article class="results" id="results" style="display: none;">
-                <hgroup>
-                    <h2>Patient Information</h2>
-                    <p>Patient ID: <span id="patientId"></span></p>
-                </hgroup>
-                
-                <header>
-                    <div class="grid">
-                        <article>
-                            <strong>Name</strong>
-                            <span id="patientName"></span>
-                        </article>
-                        <article>
-                            <strong>Patient Code</strong>
-                            <span id="patientCode"></span>
-                        </article>
-                        <article>
-                            <strong>CNP</strong>
-                            <span id="patientCnp"></span>
-                        </article>
-                        <article>
-                            <strong>Gender</strong>
-                            <span id="patientGender"></span>
-                        </article>
-                    </div>
-                    <div class="grid">
-                        <article>
-                            <strong>Birth Date</strong>
-                            <span id="patientBirthDate"></span>
-                        </article>
-                        <article>
-                            <strong>Phone</strong>
-                            <span id="patientPhone"></span>
-                        </article>
-                        <article>
-                            <strong>Email</strong>
-                            <span id="patientEmail"></span>
-                        </article>
-                        <article>
-                            <strong>Address</strong>
-                            <span id="patientAddress"></span>
-                        </article>
-                    </div>
-                </header>
-                
-                <article id="epicrisisSection" style="display: none;">
-                    <header>
-                        <h3>Most Recent Epicrisis</h3>
-                        <p id="epicrisisDate"></p>
-                    </header>
-                    <div id="epicrisisContent" style="background: var(--muted-background-color); padding: 0.75rem; border-radius: var(--border-radius);"></div>
-                </article>
+        </article>
+        <article class="results" id="results" style="display: none;">
+            <hgroup>
+                <h2>Patient Information</h2>
+                <p>Patient ID: <span id="patientId"></span></p>
+            </hgroup>
+            <main>
+                <div class="grid">
+                    <article>
+                        <strong>Name</strong>
+                        <span id="patientName"></span>
+                    </article>
+                    <article>
+                        <strong>Patient Code</strong>
+                        <span id="patientCode"></span>
+                    </article>
+                    <article>
+                        <strong>CNP</strong>
+                        <span id="patientCnp"></span>
+                    </article>
+                    <article>
+                        <strong>Gender</strong>
+                        <span id="patientGender"></span>
+                    </article>
+                </div>
+                <div class="grid">
+                    <article>
+                        <strong>Birth Date</strong>
+                        <span id="patientBirthDate"></span>
+                    </article>
+                    <article>
+                        <strong>Phone</strong>
+                        <span id="patientPhone"></span>
+                    </article>
+                    <article>
+                        <strong>Email</strong>
+                        <span id="patientEmail"></span>
+                    </article>
+                    <article>
+                        <strong>Address</strong>
+                        <span id="patientAddress"></span>
+                    </article>
+                </div>
+            </main>
+        </article>
+        <article id="epicrisisSection" style="display: none;">
+            <header>
+                <h3>Most Recent Epicrisis</h3>
+                <p id="epicrisisDate"></p>
+            </header>
+            <main id="epicrisisContent" style="background: var(--muted-background-color); padding: 0.75rem; border-radius: var(--border-radius);"></main>
+        </article>
                 
                 <main id="analysesContainer">
                         <div class="no-data" id="noAnalyses">
@@ -109,7 +103,7 @@
                             <div id="checkoutIdsList" style="margin-top: 0.5rem; font-size: 0.9em;"></div>
                         </article>
                 </footer>
-            </article>
+
     </main>
 
     <script src="/static/scripts.js"></script>
