@@ -556,20 +556,14 @@ document.addEventListener('DOMContentLoaded', function() {
                                         cardContent += `<pre>${form.data}</pre>`;
                                     } else if (form.contentType === 'text/markdown' && form.data) {
                                         try {
-                                            const htmlResult = await convertMarkdownToHtml(atob(form.data));
+                                            const htmlResult = await convertMarkdownToHtml(form.data);
                                             cardContent += `<div>${htmlResult}</div>`;
                                         } catch (err) {
                                             console.error('Error converting markdown:', err);
                                             cardContent += `<pre>${form.data}</pre>`;
                                         }
                                     } else if (form.contentType === 'text/html' && form.data) {
-                                        // Decode base64 if needed
-                                        try {
-                                            const decoded = atob(form.data);
-                                            cardContent += `<div>${decoded}</div>`;
-                                        } catch (e) {
-                                            cardContent += `<div>${form.data}</div>`;
-                                        }
+                                        cardContent += `<div>${form.data}</div>`;
                                     }
                                 }
                             } else if (reportData.conclusion) {
