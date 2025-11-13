@@ -121,27 +121,36 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Get the most recent checkout epicrisis using FHIR API
             let epicrisisData = null;
-            if (patientData.discharges && patientData.discharges.length > 0) {
-                // Get the most recent discharge (first in the list)
-                const dischargeId = patientData.discharges[0];
+            // Extract checkout IDs from patient extensions
+            let checkoutIds = [];
+            if (patientData.extension) {
+                const dischargeExt = patientData.extension.find(ext => ext.url && ext.url.includes('discharge-ids'));
+                if (dischargeExt && dischargeExt.valueString) {
+                    checkoutIds = dischargeExt.valueString.split(',').filter(id => id.trim());
+                }
+            }
+            
+            if (checkoutIds.length > 0) {
+                // Get the most recent checkout (first in the list)
+                const checkoutId = checkoutIds[0];
                 try {
-                    showToast(`Loading epicrisis data for discharge ${dischargeId}...`, 'success');
-                    const dischargeResponse = await fetch(`/fhir/Encounter?identifier=${dischargeId}`);
+                    showToast(`Loading epicrisis data for checkout ${checkoutId}...`, 'success');
+                    const checkoutResponse = await fetch(`/fhir/Encounter?identifier=${checkoutId}`);
                     
-                    if (dischargeResponse.ok) {
-                        const dischargeData = await dischargeResponse.json();
+                    if (checkoutResponse.ok) {
+                        const checkoutData = await checkoutResponse.json();
                         epicrisisData = {
-                            epicrisis: dischargeData.text ? dischargeData.text.div : '',
-                            date: dischargeData.period ? dischargeData.period.start : '',
-                            discharge_id: dischargeId
+                            epicrisis: checkoutData.text ? checkoutData.text.div : '',
+                            date: checkoutData.period ? checkoutData.period.start : '',
+                            checkout_id: checkoutId
                         };
-                        showToast(`Epicrisis data loaded for discharge ${dischargeId}`, 'success');
+                        showToast(`Epicrisis data loaded for checkout ${checkoutId}`, 'success');
                     } else {
-                        showToast(`Error loading epicrisis data for discharge ${dischargeId}`, 'error');
+                        showToast(`Error loading epicrisis data for checkout ${checkoutId}`, 'error');
                     }
                 } catch (err) {
-                    console.error('Error fetching discharge data:', err);
-                    showToast(`Error loading epicrisis data for discharge ${dischargeId}`, 'error');
+                    console.error('Error fetching checkout data:', err);
+                    showToast(`Error loading epicrisis data for checkout ${checkoutId}`, 'error');
                 }
             }
             
