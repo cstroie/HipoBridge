@@ -335,6 +335,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Show results container
         results.style.display = 'block';
+        
+        // Force UI update to ensure patient card is displayed immediately
+        await new Promise(resolve => setTimeout(resolve, 0));
     }
     
     // Function to view imaging study
