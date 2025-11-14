@@ -119,8 +119,8 @@ cache_max_size = 1000  # Maximum number of entries to cache
 # Simple in-memory cache for HTTP responses
 response_cache: Dict[str, str] = {}
 response_cache_timestamps: Dict[str, datetime] = {}
-response_cache_max_size = 10  # Maximum number of entries to cache
-CACHE_TIMEOUT = 10 * 60  # 10 minutes in seconds
+response_cache_max_size = 50  # Maximum number of entries to cache
+CACHE_TIMEOUT = 5 * 60  # 5 minutes in seconds
 
 # Session cache per user
 user_sessions: Dict[str, aiohttp.ClientSession] = {}
