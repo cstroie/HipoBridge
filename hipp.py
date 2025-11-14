@@ -2393,13 +2393,15 @@ def markdown_to_html(markdown_text: str) -> str:
     paragraphs = html.split('\n\n')
     html = '\n'.join([f'<p>{p}</p>' if not p.startswith(('<h', '<ul', '<ol')) else p for p in paragraphs if p.strip()])
     
-    # Line breaks (single newlines within paragraphs, but not within lists)
-    # Split by list elements to avoid adding <br> within <li> elements
-    parts = re.split(r'(<(?:ul|ol|li)[^>]*>.*?</(?:ul|ol|li)>)', html, flags=re.DOTALL)
+    # Line breaks (single newlines within paragraphs, but not between block elements)
+    # Split by block elements to avoid adding <br> between them
+    parts = re.split(r'(<(?:h[1-6]|ul|ol|li|p)[^>]*>.*?</(?:h[1-6]|ul|ol|li|p)>)', html, flags=re.DOTALL)
     for i, part in enumerate(parts):
-        # Only add <br> tags outside of list elements
-        if not re.match(r'^<(?:ul|ol|li)[^>]*>.*</(?:ul|ol|li)>$', part.strip()):
-            parts[i] = part.replace('\n', '<br>')
+        # Only add <br> tags within paragraph content (not between block elements)
+        if not re.match(r'^<(?:h[1-6]|ul|ol|li|p)[^>]*>.*</(?:h[1-6]|ul|ol|li|p)>$', part.strip()):
+            # Replace single newlines with <br> but preserve paragraph breaks
+            part = re.sub(r'([^\n])\n([^\n])', r'\1<br>\2', part)
+            parts[i] = part
     html = ''.join(parts)
     
     return html
