@@ -24,6 +24,16 @@
     color: var(--muted-color);
 }
 
+#noAnalyses {
+    text-align: center;
+    padding: 2rem;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    margin: 1rem 0;
+    display: none;
+}
+
 /* Toast notifications */
 .toast-container {
     position: fixed;
