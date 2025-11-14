@@ -221,6 +221,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Hide results container
         results.style.display = 'none';
         
+        // Hide analyses container
+        document.getElementById('analysesContainer').style.display = 'none';
+        
         // Clear patient data
         document.getElementById('patientId').textContent = '';
         document.getElementById('patientName').textContent = '';
@@ -381,6 +384,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Show results container
         results.style.display = 'block';
+        
+        // Show analyses container
+        document.getElementById('analysesContainer').style.display = 'block';
         
         // Force UI update to ensure patient card is displayed immediately
         await new Promise(resolve => setTimeout(resolve, 0));
