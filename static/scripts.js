@@ -9,6 +9,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // Hide results container on page load
     results.style.display = 'none';
     
+    // Hide "No analyses found" message on page load
+    const noAnalyses = document.getElementById('noAnalyses');
+    if (noAnalyses) {
+        noAnalyses.style.display = 'none';
+    }
+    
     // Form submission handler
     form.addEventListener('submit', async function(e) {
         e.preventDefault();
