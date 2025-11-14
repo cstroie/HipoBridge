@@ -6,6 +6,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const errorDiv = document.getElementById('error');
     const results = document.getElementById('results');
     
+    // Hide results container on page load
+    results.style.display = 'none';
+    
     // Form submission handler
     form.addEventListener('submit', async function(e) {
         e.preventDefault();
@@ -22,10 +25,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const isCNPFormat = /^\d{13}$/.test(cnp);
         const isPartialCNPFormat = /^\d+\*$/.test(cnp);
             
+        // Clear previous results
+        clearResults();
+        
         // Show loading state
         showLoading();
         hideError();
-        results.style.display = 'none';
             
         // Notify user of search start
         showToast('Starting patient search...', 'success');
@@ -204,6 +209,41 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function hideLoading() {
         analyzeBtn.disabled = false;
+    }
+    
+    function clearResults() {
+        // Hide results container
+        results.style.display = 'none';
+        
+        // Clear patient data
+        document.getElementById('patientId').textContent = '';
+        document.getElementById('patientName').textContent = '';
+        document.getElementById('patientCode').textContent = '';
+        document.getElementById('patientCnp').textContent = '';
+        document.getElementById('patientGender').textContent = '';
+        document.getElementById('patientBirthDate').textContent = '';
+        document.getElementById('patientPhone').textContent = '';
+        document.getElementById('patientEmail').textContent = '';
+        document.getElementById('patientAddress').textContent = '';
+        document.getElementById('presentationsCount').textContent = '0';
+        document.getElementById('checkinsCount').textContent = '0';
+        document.getElementById('checkoutsCount').textContent = '0';
+        document.getElementById('checkoutIdsList').innerHTML = '';
+        
+        // Clear analyses
+        document.getElementById('analysesGrid').innerHTML = '';
+        document.getElementById('noAnalyses').style.display = 'none';
+        
+        // Clear epicrisis
+        document.getElementById('epicrisisContent').innerHTML = '';
+        document.getElementById('epicrisisDate').style.display = 'none';
+        document.getElementById('epicrisisSection').style.display = 'none';
+        
+        // Clear any existing toasts
+        const toastContainer = document.getElementById('toast-container');
+        if (toastContainer) {
+            toastContainer.innerHTML = '';
+        }
     }
     
     function showError(message) {
