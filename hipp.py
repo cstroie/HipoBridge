@@ -1665,15 +1665,32 @@ async def observation_search(request):
             # Parse the datetime string to match against analysis datetimes
             try:
                 target_dt = datetime.fromisoformat(exam_datetime.replace('Z', '+00:00'))
-                # Create a date range from one day earlier to one day after
-                start_dt = target_dt - timedelta(hours=24)
-                end_dt = target_dt + timedelta(hours=24)
+                # Start with a date range from one day earlier to one day after
+                hours_range = 24
+                max_attempts = 3
                 
-                filtered_analyses = []
-                for a in analyses:
-                    if "datetime" in a and start_dt <= a["datetime"] <= end_dt:
-                        filtered_analyses.append(a)
-                analyses = filtered_analyses
+                for attempt in range(max_attempts):
+                    start_dt = target_dt - timedelta(hours=hours_range)
+                    end_dt = target_dt + timedelta(hours=hours_range)
+                    
+                    filtered_analyses = []
+                    for a in analyses:
+                        if "datetime" in a and start_dt <= a["datetime"] <= end_dt:
+                            filtered_analyses.append(a)
+                    
+                    # If we found exactly one observation, return it
+                    if len(filtered_analyses) == 1:
+                        analyses = filtered_analyses
+                        break
+                    # If we found multiple observations, reduce the time range and try again
+                    elif len(filtered_analyses) > 1 and attempt < max_attempts - 1:
+                        hours_range = hours_range / 2
+                        continue
+                    # If no observations or on final attempt, return what we found
+                    else:
+                        analyses = filtered_analyses
+                        break
+                        
             except ValueError:
                 logger.warning(f"Invalid datetime format: {exam_datetime}")
         
