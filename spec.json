@@ -23,29 +23,105 @@
                 }
             }
         },
-        "/health": {
+        "/fhir/Metadata": {
             "get": {
-                "summary": "Health check",
-                "description": "Returns the health status of the API",
+                "summary": "FHIR Capability Statement",
+                "description": "Returns the FHIR capability statement for this server",
                 "responses": {
                     "200": {
-                        "description": "Service is healthy",
+                        "description": "FHIR CapabilityStatement resource",
                         "content": {
-                            "application/json": {
+                            "application/fhir+json": {
                                 "schema": {
                                     "type": "object",
                                     "properties": {
-                                        "status": {
+                                        "resourceType": {
                                             "type": "string",
-                                            "example": "healthy"
+                                            "example": "CapabilityStatement"
                                         },
-                                        "timestamp": {
+                                        "id": {
+                                            "type": "string"
+                                        },
+                                        "version": {
+                                            "type": "string"
+                                        },
+                                        "name": {
+                                            "type": "string"
+                                        },
+                                        "title": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "string"
+                                        },
+                                        "experimental": {
+                                            "type": "boolean"
+                                        },
+                                        "date": {
                                             "type": "string",
                                             "format": "date-time"
                                         },
-                                        "service": {
-                                            "type": "string",
-                                            "example": "HippoBridge"
+                                        "publisher": {
+                                            "type": "string"
+                                        },
+                                        "description": {
+                                            "type": "string"
+                                        },
+                                        "kind": {
+                                            "type": "string"
+                                        },
+                                        "software": {
+                                            "type": "object",
+                                            "properties": {
+                                                "name": {
+                                                    "type": "string"
+                                                },
+                                                "version": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        },
+                                        "fhirVersion": {
+                                            "type": "string"
+                                        },
+                                        "format": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "rest": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "mode": {
+                                                        "type": "string"
+                                                    },
+                                                    "resource": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "type": {
+                                                                    "type": "string"
+                                                                },
+                                                                "interaction": {
+                                                                    "type": "array",
+                                                                    "items": {
+                                                                        "type": "object",
+                                                                        "properties": {
+                                                                            "code": {
+                                                                                "type": "string"
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }

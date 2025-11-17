@@ -2833,6 +2833,7 @@ async def init_app():
     app.router.add_post('/fhir/md2html', serve_md2html)
     app.router.add_get('/fhir/CodeSystem/analysis-types', serve_analysis_types)
     app.router.add_get('/fhir/spec', serve_spec)
+    app.router.add_get('/fhir/Metadata', serve_metadata)
     app.router.add_static('/static/', path='static', name='static')
     
     # Setup startup and cleanup
