@@ -1628,8 +1628,8 @@ async def observation_search(request):
             try:
                 target_dt = datetime.fromisoformat(exam_datetime.replace('Z', '+00:00'))
                 # Create a date range from one day earlier to one day after
-                start_dt = target_dt - timedelta(days=1)
-                end_dt = target_dt + timedelta(days=1)
+                start_dt = target_dt - timedelta(hours=24)
+                end_dt = target_dt + timedelta(hours=24)
                 
                 filtered_analyses = []
                 for a in analyses:
