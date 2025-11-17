@@ -1328,7 +1328,10 @@ def convert_report_to_diagnostic_report(report_data: Dict[str, Any], request) ->
                     "data": markdown_content
                 }
             )
-        fhir_report["conclusion"] = ""
+        
+        # Add the first report's result text to conclusion
+        first_report_result = report_data["reports"][0]["result"] if report_data["reports"] else ""
+        fhir_report["conclusion"] = html_to_markdown(first_report_result)
 
     # Add media references placeholder
     fhir_report["media"] = []
