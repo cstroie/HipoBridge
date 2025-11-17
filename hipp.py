@@ -2129,6 +2129,83 @@ async def serve_spec(request):
         return create_error_response("Error parsing specification file", 500)
 
 
+async def serve_metadata(request):
+    """Serve the FHIR capability statement.
+    
+    Returns the FHIR capability statement as a metadata endpoint.
+    
+    Args:
+        request: The incoming HTTP request
+        
+    Returns:
+        JSON response with FHIR capability statement
+    """
+    logger.info("GET /fhir/Metadata endpoint accessed")
+    
+    # Create a basic FHIR CapabilityStatement
+    capability_statement = {
+        "resourceType": "CapabilityStatement",
+        "id": "hippobridge-fhir-capability-statement",
+        "url": f"{request.scheme}://{request.host}/fhir/Metadata",
+        "version": "1.0.0",
+        "name": "HippoBridgeFHIRCapabilityStatement",
+        "title": "HippoBridge FHIR Capability Statement",
+        "status": "active",
+        "experimental": False,
+        "date": datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
+        "publisher": "HippoBridge",
+        "description": "This is the FHIR capability statement for the HippoBridge FHIR API",
+        "kind": "instance",
+        "software": {
+            "name": "HippoBridge",
+            "version": "1.0.0"
+        },
+        "fhirVersion": "4.0.1",
+        "format": ["application/fhir+json", "application/json"],
+        "rest": [
+            {
+                "mode": "server",
+                "resource": [
+                    {
+                        "type": "Patient",
+                        "interaction": [
+                            {"code": "read"},
+                            {"code": "search-type"}
+                        ]
+                    },
+                    {
+                        "type": "Observation",
+                        "interaction": [
+                            {"code": "read"},
+                            {"code": "search-type"}
+                        ]
+                    },
+                    {
+                        "type": "DiagnosticReport",
+                        "interaction": [
+                            {"code": "read"}
+                        ]
+                    },
+                    {
+                        "type": "ImagingStudy",
+                        "interaction": [
+                            {"code": "read"}
+                        ]
+                    },
+                    {
+                        "type": "Encounter",
+                        "interaction": [
+                            {"code": "read"}
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+    
+    return web.json_response(capability_statement)
+
+
 def is_login_page(content: str) -> bool:
     """Detect if the provided content is a login page.
     
