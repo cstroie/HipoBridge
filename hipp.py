@@ -1586,6 +1586,7 @@ async def observation_search(request):
     
     # Get optional parameters
     analysis_type = request.query.get('type')
+    exam_datetime = request.query.get('dt')
     full_data = request.query.get('full', 'no').lower() == 'yes'
     
     logger.info(f"Retrieving analyses list for patient with ID: {patient_id}")
@@ -1620,6 +1621,19 @@ async def observation_search(request):
         analyses = parsed_data["analyses"]
         if analysis_type:
             analyses = [a for a in analyses if a["type"] == analysis_type]
+        
+        # Filter analyses by datetime if specified
+        if exam_datetime:
+            # Parse the datetime string to match against analysis datetimes
+            try:
+                target_dt = datetime.fromisoformat(exam_datetime.replace('Z', '+00:00'))
+                filtered_analyses = []
+                for a in analyses:
+                    if "datetime" in a and a["datetime"] == target_dt:
+                        filtered_analyses.append(a)
+                analyses = filtered_analyses
+            except ValueError:
+                logger.warning(f"Invalid datetime format: {exam_datetime}")
         
         # Create FHIR Bundle of Observation resources (minimal data only)
         bundle = {
