@@ -1144,6 +1144,7 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
         
         # Extract date and time
         datetime_match = re.search(r'(?:Data si ora recoltarii:|Data investigatiei:)\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
+        dt = None  # Initialize dt variable
         if datetime_match:
             datetime_str = re.sub(r'\s+', ' ', datetime_match.group(1).strip())
             # Try to parse date and time
@@ -1156,7 +1157,7 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
             except ValueError:
                 # If parsing fails, leave date/time fields empty
                 pass
-            report_data["datetime"] = dt
+        report_data["datetime"] = dt
 
         # Extract performer (Efectuata de catre:)
         performer_match = re.search(r'(?:Efectuata de catre:)\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
