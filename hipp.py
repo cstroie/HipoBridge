@@ -1627,9 +1627,13 @@ async def observation_search(request):
             # Parse the datetime string to match against analysis datetimes
             try:
                 target_dt = datetime.fromisoformat(exam_datetime.replace('Z', '+00:00'))
+                # Create a date range from one day earlier to one day after
+                start_dt = target_dt - timedelta(days=1)
+                end_dt = target_dt + timedelta(days=1)
+                
                 filtered_analyses = []
                 for a in analyses:
-                    if "datetime" in a and a["datetime"] == target_dt:
+                    if "datetime" in a and start_dt <= a["datetime"] <= end_dt:
                         filtered_analyses.append(a)
                 analyses = filtered_analyses
             except ValueError:
