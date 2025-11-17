@@ -1336,6 +1336,40 @@ def convert_report_to_diagnostic_report(report_data: Dict[str, Any], request) ->
     # Add media references placeholder
     fhir_report["media"] = []
     
+    # Add extensions for referer and reason code/text if available
+    extensions = []
+    
+    # Add referer if available
+    if report_data.get("referring_physician"):
+        extensions.append({
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/diagnostic-report-referer",
+            "valueString": report_data["referring_physician"]
+        })
+    
+    # Add reason code and text if available
+    if report_data.get("referral_code") or report_data.get("referral_reason"):
+        reason_extension = {
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/diagnostic-report-reason",
+            "extension": []
+        }
+        
+        if report_data.get("referral_code"):
+            reason_extension["extension"].append({
+                "url": "code",
+                "valueString": report_data["referral_code"]
+            })
+        
+        if report_data.get("referral_reason"):
+            reason_extension["extension"].append({
+                "url": "text",
+                "valueString": report_data["referral_reason"]
+            })
+        
+        extensions.append(reason_extension)
+    
+    if extensions:
+        fhir_report["extension"] = extensions
+    
     # Return the FHIR Patient resource
     return fhir_report
 
