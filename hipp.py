@@ -1585,7 +1585,7 @@ async def observation_search(request):
         return create_error_response("Patient ID is required")
     
     # Get optional parameters
-    analysis_type = request.query.get('type')
+    exam_type = request.query.get('type')
     exam_datetime = request.query.get('dt')
     full_data = request.query.get('full', 'no').lower() == 'yes'
     
@@ -1619,8 +1619,8 @@ async def observation_search(request):
         
         # Filter analyses by type if specified
         analyses = parsed_data["analyses"]
-        if analysis_type:
-            analyses = [a for a in analyses if a["type"] == analysis_type]
+        if exam_type:
+            analyses = [a for a in analyses if a["type"] == exam_type]
         
         # Filter analyses by datetime if specified
         if exam_datetime:
