@@ -2121,7 +2121,16 @@ def parse_request_data(html_content: str) -> Dict[str, Any]:
         for diagnosis_element in diagnosis_elements:
             b_tag = diagnosis_element.find('b')
             if b_tag:
-                request_data["diagnosis"] = b_tag.get_text().strip()
+                diagnosis_text = b_tag.get_text().strip()
+                request_data["diagnosis"] = diagnosis_text
+                # Try to extract ICD-10 code from the diagnosis text
+                # Format is usually "CODE Description" or just "Description"
+                diagnosis_match = re.match(r'^(\d{3,4})\s+(.+)$', diagnosis_text)
+                if diagnosis_match:
+                    request_data["diagnosis_code"] = diagnosis_match.group(1)
+                    request_data["diagnosis_display"] = diagnosis_match.group(2)
+                else:
+                    request_data["diagnosis_display"] = diagnosis_text
             break
         
         # Extract comments (clinical and lab)
@@ -2214,6 +2223,15 @@ def convert_request_to_service_request(request_data: Dict[str, Any], http_reques
         fhir_service_request["reasonCode"] = [
             {
                 "text": request_data["diagnosis"]
+            }
+        ]
+    
+    # Add supporting info for diagnosis if code is available
+    if request_data.get("diagnosis_code"):
+        fhir_service_request["supportingInfo"] = [
+            {
+                "reference": f"Condition/{request_data['request_id']}-diagnosis",
+                "display": f"{request_data['diagnosis_code']} - {request_data['diagnosis_display']}"
             }
         ]
     
