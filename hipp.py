@@ -2121,6 +2121,7 @@ def parse_request_data(html_content: str) -> Dict[str, Any]:
             else:
                 # If no code found, use the entire diagnosis as display text
                 request_data["diagnosis_display"] = diagnosis
+        print(diagnosis)
         
         # Extract comments (clinical and lab)
         # Find the table with comments headers
