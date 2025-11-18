@@ -2177,6 +2177,10 @@ def convert_request_to_service_request(request_data: Dict[str, Any], http_reques
         }
     }
     
+    # Add patient name to subject if available
+    if request_data.get("patient_name"):
+        fhir_service_request["subject"]["display"] = request_data["patient_name"]
+    
     # Add requester if available (requesting doctor)
     if request_data.get("physician"):
         fhir_service_request["requester"] = {
