@@ -2101,15 +2101,15 @@ def parse_request_data(html_content: str) -> Dict[str, Any]:
                 request_data["physician"] = physician_match.group(1).strip()
             break
         
-        # Extract request datetime
-        physician_elements = soup.find_all(string=re.compile(r'DR\.', re.IGNORECASE))
-        for physician_element in physician_elements:
-            parent = physician_element.parent
+        # Extract request datetime (Data si ora cererii)
+        datetime_elements = soup.find_all(string=re.compile(r'Data si ora cererii:', re.IGNORECASE))
+        for datetime_element in datetime_elements:
+            parent = datetime_element.parent
             if parent:
-                text_content = parent.get_text()
-                datetime_match = re.search(r'DR\.[^<]+-\s*([^<]+)', text_content, re.IGNORECASE)
-                if datetime_match:
-                    request_data["request_datetime"] = datetime_match.group(1).strip()
+                # Find the next <b> tag which contains the datetime
+                b_tag = parent.find_next('b')
+                if b_tag:
+                    request_data["request_datetime"] = b_tag.get_text().strip()
                 break
         
         # Extract diagnosis
