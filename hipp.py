@@ -1217,38 +1217,39 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
         logger.error(f"Error parsing report data: {e}")
         return {}
 
-def extract_field_from_td(soup: BeautifulSoup, label_regex: str, stop_at: str = None) -> str:
-    """Extract field data from a table cell containing a label.
+def extract_field_from_element(soup: BeautifulSoup, label_regex: str, element_tag: str = 'td', stop_at: str = None) -> str:
+    """Extract field data from an element containing a label.
     
     Args:
         soup: BeautifulSoup object of the parsed HTML content
         label_regex: Regular expression pattern to match label text
+        element_tag: HTML tag name to search for (default: 'td')
         stop_at: Optional string pattern to stop extraction at
         
     Returns:
         Extracted field content or empty string if not found
     """
     try:
-        # Look for the table cell containing this label
+        # Look for the element containing this label
         label_element = soup.find(string=re.compile(label_regex, re.IGNORECASE))
         if label_element:
-            # Check if we are already at the td element or find the parent td element
-            if label_element.name == 'td':
-                parent_td = label_element
+            # Check if we are already at the specified element or find the parent element
+            if label_element.name == element_tag:
+                parent_element = label_element
             else:
-                parent_td = label_element.find_parent('td')
+                parent_element = label_element.find_parent(element_tag)
             
-            if parent_td:
-                # Extract text content from the same td and clean it
+            if parent_element:
+                # Extract text content from the same element and clean it
                 # Remove the label part and get the rest
-                td_text = parent_td.get_text(separator=' ', strip=True)
+                element_text = parent_element.get_text(separator=' ', strip=True)
                 # Find the label in the text and extract everything after it
-                match = re.search(label_regex, td_text, re.IGNORECASE)
+                match = re.search(label_regex, element_text, re.IGNORECASE)
                 if match:
                     # Get the position after the matched label
                     label_end = match.end()
                     # Extract the content after the label
-                    content = td_text[label_end:].strip()
+                    content = element_text[label_end:].strip()
                     
                     # If stop_at pattern is provided, truncate content at that point
                     if stop_at:
@@ -1261,6 +1262,19 @@ def extract_field_from_td(soup: BeautifulSoup, label_regex: str, stop_at: str = 
     except Exception as e:
         logger.error(f"Error extracting field with label '{label_regex}': {e}")
         return ""
+
+def extract_field_from_td(soup: BeautifulSoup, label_regex: str, stop_at: str = None) -> str:
+    """Extract field data from a table cell containing a label.
+    
+    Args:
+        soup: BeautifulSoup object of the parsed HTML content
+        label_regex: Regular expression pattern to match label text
+        stop_at: Optional string pattern to stop extraction at
+        
+    Returns:
+        Extracted field content or empty string if not found
+    """
+    return extract_field_from_element(soup, label_regex, 'td', stop_at)
 
 def convert_report_to_diagnostic_report(report_data: Dict[str, Any], request) -> Dict[str, Any]:
     # Create enhanced FHIR DiagnosticReport resource
