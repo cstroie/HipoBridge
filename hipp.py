@@ -2202,13 +2202,9 @@ def convert_request_to_service_request(request_data: Dict[str, Any], http_reques
             }
         ]
     
-    # Add note for clinical comments
+    # Add description for clinical comments
     if request_data.get("clinical_comments"):
-        if "note" not in fhir_service_request:
-            fhir_service_request["note"] = []
-        fhir_service_request["note"].append({
-            "text": f"Clinical Comments: {request_data['clinical_comments']}"
-        })
+        fhir_service_request["description"] = request_data["clinical_comments"]
     
     # Add note for lab comments
     if request_data.get("lab_comments"):
