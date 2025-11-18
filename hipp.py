@@ -2193,7 +2193,7 @@ def convert_request_to_service_request(request_data: Dict[str, Any], http_reques
         }
     }
     
-    # Add requester if available
+    # Add requester if available (requesting doctor)
     if request_data.get("physician"):
         fhir_service_request["requester"] = {
             "display": request_data["physician"]
