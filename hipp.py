@@ -2003,6 +2003,10 @@ async def service_request(request):
         # Parse the service request data
         parsed_data = parse_request_data(response_text)
         
+        # Ensure the service request ID from URL is included in parsed data
+        if "request_id" not in parsed_data or not parsed_data["request_id"]:
+            parsed_data["request_id"] = service_request_id
+        
         # Create FHIR ServiceRequest resource
         fhir_service_request = convert_request_to_service_request(parsed_data, request)
         
