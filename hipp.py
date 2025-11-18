@@ -1811,8 +1811,6 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
             if not analysis_id:
                 continue
             
-            analysis_id = id_match.group(1)
-            
             # Find the parent table row
             parent_row = link.find_parent('tr')
             if not parent_row:
