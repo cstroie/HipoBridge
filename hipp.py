@@ -2231,7 +2231,7 @@ def convert_request_to_service_request(request_data: Dict[str, Any], http_reques
         if "note" not in fhir_service_request:
             fhir_service_request["note"] = []
         fhir_service_request["note"].append({
-            "text": f"Laboratory Comments: {request_data['lab_comments']}"
+            "text": request_data['lab_comments']
         })
     
     # Add order details for procedures
