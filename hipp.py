@@ -2213,9 +2213,14 @@ def convert_request_to_service_request(request_data: Dict[str, Any], http_reques
             }
         ]
     
-    # Add description for clinical comments
+    # Add clinical comments as reason reference to Condition
     if request_data.get("clinical_comments"):
-        fhir_service_request["description"] = request_data["clinical_comments"]
+        fhir_service_request["reasonReference"] = [
+            {
+                "reference": f"Condition/{request_data['request_id']}",
+                "display": request_data["clinical_comments"]
+            }
+        ]
     
     # Add note for lab comments
     if request_data.get("lab_comments"):
