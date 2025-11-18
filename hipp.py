@@ -1955,6 +1955,288 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
         return {}
 
 @require_auth
+async def service_request(request):
+    """Retrieve service request information by ID.
+    
+    Gets service request information from the Hipocrate service and parses
+    the medical data into structured format.
+    
+    Args:
+        request: The incoming HTTP request with 'id' path parameter for service request ID
+                 and basic auth credentials for authentication
+        
+    Returns:
+        JSON response with service request data or error information
+
+    See:
+        https://build.fhir.org/servicerequest.html
+    """
+    service_request_id = request.match_info.get('id')
+    logger.info(f"GET /fhir/ServiceRequest/{service_request_id} endpoint accessed")
+    
+    if not service_request_id:
+        logger.warning("No service request ID provided")
+        return create_error_response("Service request ID is required")
+    
+    logger.info(f"Retrieving service request with ID: {service_request_id}")
+    
+    # Get credentials from request (added by decorator)
+    username, password = request.auth_credentials
+    
+    try:
+        session = await get_user_session(username)
+        
+        # Make request to the service request endpoint
+        request_url = f"{SERVICE_URL}/Analyse/LabRequest/buletinRecoltari.asp?id={service_request_id}"
+        # Make the authenticated request
+        start_time = datetime.now()
+        response_text, success, error_response = await make_authenticated_request(
+            session, request_url, "GET", None, username, password
+        )
+        duration = (datetime.now() - start_time).total_seconds()
+
+        # Check for errors in the response
+        if not success:
+            return error_response
+        
+        logger.info(f"Service request retrieval completed successfully in {duration:.2f} seconds")
+        # Parse the service request data
+        parsed_data = parse_request_data(response_text)
+        
+        # Create FHIR ServiceRequest resource
+        fhir_service_request = convert_request_to_service_request(parsed_data, request)
+        
+        return web.json_response(fhir_service_request)
+            
+    except Exception as e:
+        logger.error(f"Service request retrieval failed with exception: {e}")
+        return create_error_response(str(e), 500)
+
+
+def parse_request_data(html_content: str) -> Dict[str, Any]:
+    """Parse HTML service request content and extract structured data.
+    
+    Extracts patient information and medical data from service request HTML content.
+    
+    Args:
+        html_content: HTML content of the service request page
+        
+    Returns:
+        Dictionary containing parsed service request data
+    """
+    try:
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Initialize result dictionary
+        request_data = {
+            "patient_name": "",
+            "patient_cnp": "",
+            "patient_id": "",
+            "request_id": "",
+            "department": "",
+            "physician": "",
+            "request_datetime": "",
+            "diagnosis": "",
+            "clinical_comments": "",
+            "lab_comments": "",
+            "procedures": [],
+            "status": "active"
+        }
+        
+        # Extract patient name
+        name_elements = soup.find_all('td', string=re.compile(r'Nume Pacient:', re.IGNORECASE))
+        for name_element in name_elements:
+            next_td = name_element.find_next('td')
+            if next_td:
+                request_data["patient_name"] = next_td.get_text().strip()
+                # Extract font content if present
+                font_tag = next_td.find('font')
+                if font_tag:
+                    request_data["patient_name"] = font_tag.get_text().strip()
+                break
+        
+        # Extract patient CNP
+        cnp_elements = soup.find_all('td', string=re.compile(r'CNP:', re.IGNORECASE))
+        for cnp_element in cnp_elements:
+            next_td = cnp_element.find_next('td')
+            if next_td:
+                request_data["patient_cnp"] = next_td.get_text().strip()
+                break
+        
+        # Extract patient ID (NFO)
+        nfo_elements = soup.find_all('td', string=re.compile(r'NFO:', re.IGNORECASE))
+        for nfo_element in nfo_elements:
+            next_td = nfo_element.find_next('td')
+            if next_td:
+                request_data["patient_id"] = next_td.get_text().strip()
+                break
+        
+        # Extract request ID (Cod Buletin)
+        code_elements = soup.find_all('td', string=re.compile(r'Cod Buletin:', re.IGNORECASE))
+        for code_element in code_elements:
+            next_td = code_element.find_next('td')
+            if next_td:
+                # Extract from <b><u> tags
+                b_tag = next_td.find('b')
+                if b_tag:
+                    u_tag = b_tag.find('u')
+                    if u_tag:
+                        request_data["request_id"] = u_tag.get_text().strip()
+                break
+        
+        # Extract department and physician
+        section_elements = soup.find_all('td', string=re.compile(r'SECTIA:', re.IGNORECASE))
+        for section_element in section_elements:
+            # Get the section name
+            b_tag = section_element.find('b')
+            if b_tag:
+                u_tag = b_tag.find('u')
+                if u_tag:
+                    request_data["department"] = u_tag.get_text().strip()
+            
+            # Get physician name
+            physician_text = section_element.get_text()
+            physician_match = re.search(r'Medicul:\s*([^<]+)', physician_text, re.IGNORECASE)
+            if physician_match:
+                request_data["physician"] = physician_match.group(1).strip()
+            break
+        
+        # Extract request datetime
+        physician_elements = soup.find_all(string=re.compile(r'DR\.', re.IGNORECASE))
+        for physician_element in physician_elements:
+            parent = physician_element.parent
+            if parent:
+                text_content = parent.get_text()
+                datetime_match = re.search(r'DR\.[^<]+-\s*([^<]+)', text_content, re.IGNORECASE)
+                if datetime_match:
+                    request_data["request_datetime"] = datetime_match.group(1).strip()
+                break
+        
+        # Extract diagnosis
+        diagnosis_elements = soup.find_all('td', string=re.compile(r'Diagnostic:', re.IGNORECASE))
+        for diagnosis_element in diagnosis_elements:
+            b_tag = diagnosis_element.find('b')
+            if b_tag:
+                request_data["diagnosis"] = b_tag.get_text().strip()
+            break
+        
+        # Extract comments (clinical and lab)
+        # Find the table with comments headers
+        comment_headers = soup.find_all('td', class_='tdnplus', string=re.compile(r'Comentariile', re.IGNORECASE))
+        if len(comment_headers) >= 2:
+            # Get the next row which contains the actual comments
+            comment_row = comment_headers[0].parent.find_next_sibling('tr')
+            if comment_row:
+                comment_tds = comment_row.find_all('td', class_='tdn')
+                if len(comment_tds) >= 2:
+                    request_data["clinical_comments"] = comment_tds[0].get_text().strip()
+                    request_data["lab_comments"] = comment_tds[1].get_text().strip()
+        
+        # Extract procedures from the table
+        procedure_rows = soup.find_all('tr')
+        for row in procedure_rows:
+            cells = row.find_all('td')
+            if len(cells) >= 3:
+                # Check if this is a procedure row (has numbering in first cell)
+                first_cell_text = cells[0].get_text().strip()
+                if first_cell_text and first_cell_text.isdigit():
+                    procedure_text = cells[1].get_text().strip()
+                    if procedure_text:
+                        request_data["procedures"].append({
+                            "code": first_cell_text,
+                            "description": procedure_text
+                        })
+        
+        return request_data
+    except Exception as e:
+        logger.error(f"Error parsing service request data: {e}")
+        return {}
+
+
+def convert_request_to_service_request(request_data: Dict[str, Any], http_request) -> Dict[str, Any]:
+    """Convert parsed request data to FHIR ServiceRequest resource format.
+    
+    Args:
+        request_data: Parsed request data from parse_request_data
+        http_request: The HTTP request object to get the host
+        
+    Returns:
+        FHIR ServiceRequest resource
+    """
+    # Create FHIR ServiceRequest resource
+    fhir_service_request = {
+        "resourceType": "ServiceRequest",
+        "id": request_data.get("request_id", ""),
+        "status": request_data.get("status", "active"),
+        "intent": "order",
+        "priority": "routine",
+        "code": {
+            "coding": [
+                {
+                    "system": f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/service-types",
+                    "code": "imaging-study",
+                    "display": "Imaging Study"
+                }
+            ],
+            "text": "Imaging Study Request"
+        },
+        "subject": {
+            "reference": f"Patient/{request_data.get('patient_id', '')}"
+        }
+    }
+    
+    # Add requester if available
+    if request_data.get("physician"):
+        fhir_service_request["requester"] = {
+            "display": request_data["physician"]
+        }
+    
+    # Add encounter if we can derive it
+    # In this case, we might link to the checkin if we had that ID
+    
+    # Add reason code if diagnosis is available
+    if request_data.get("diagnosis"):
+        fhir_service_request["reasonCode"] = [
+            {
+                "text": request_data["diagnosis"]
+            }
+        ]
+    
+    # Add note for clinical comments
+    if request_data.get("clinical_comments"):
+        if "note" not in fhir_service_request:
+            fhir_service_request["note"] = []
+        fhir_service_request["note"].append({
+            "text": f"Clinical Comments: {request_data['clinical_comments']}"
+        })
+    
+    # Add note for lab comments
+    if request_data.get("lab_comments"):
+        if "note" not in fhir_service_request:
+            fhir_service_request["note"] = []
+        fhir_service_request["note"].append({
+            "text": f"Laboratory Comments: {request_data['lab_comments']}"
+        })
+    
+    # Add order details for procedures
+    if request_data.get("procedures"):
+        fhir_service_request["orderDetail"] = []
+        for procedure in request_data["procedures"]:
+            fhir_service_request["orderDetail"].append({
+                "coding": [
+                    {
+                        "system": f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/procedure-codes",
+                        "code": f"procedure-{procedure['code']}",
+                        "display": procedure["description"]
+                    }
+                ],
+                "text": procedure["description"]
+            })
+    
+    return fhir_service_request
+
+
+@require_auth
 async def fhir_encounter_read(request):
     """Retrieve encounter information by ID.
     
@@ -2961,6 +3243,7 @@ async def init_app():
     app.router.add_get('/fhir/Encounter/{id}', fhir_encounter_read)
     app.router.add_get('/fhir/Observation', observation_search)
     app.router.add_get('/fhir/Observation/{id}', observation)
+    app.router.add_get('/fhir/ServiceRequest/{id}', service_request)
     app.router.add_get('/fhir/ValueSet/cnp', serve_validate_cnp)
     app.router.add_post('/fhir/md2html', serve_md2html)
     app.router.add_get('/fhir/CodeSystem/analysis-types', serve_analysis_types)
