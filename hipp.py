@@ -2147,6 +2147,14 @@ def parse_request_data(html_content: str) -> Dict[str, Any]:
                             "description": procedure_text
                         })
         
+        # Extract admission ID from the "Back" link
+        back_link = soup.find('a', class_='lnk', href=re.compile(r'checkin\.asp\?id='))
+        if back_link:
+            href = back_link.get('href', '')
+            id_match = re.search(r'id=(\d+)', href)
+            if id_match:
+                request_data["admission_id"] = id_match.group(1)
+        
         return request_data
     except Exception as e:
         logger.error(f"Error parsing service request data: {e}")
@@ -2192,7 +2200,10 @@ def convert_request_to_service_request(request_data: Dict[str, Any], http_reques
         }
     
     # Add encounter if we can derive it
-    # In this case, we might link to the checkin if we had that ID
+    if request_data.get("admission_id"):
+        fhir_service_request["encounter"] = {
+            "reference": f"Encounter/{request_data['admission_id']}"
+        }
     
     # Add reason code if diagnosis is available
     if request_data.get("diagnosis"):
