@@ -2096,7 +2096,7 @@ def parse_request_data(html_content: str) -> Dict[str, Any]:
             
             # Get physician name
             physician_text = section_element.get_text()
-            physician_match = re.search(r'Medicul:\s*([^<]+)', physician_text, re.IGNORECASE)
+            physician_match = re.search(r'Medicul:\s*([^<\n\r]+)', physician_text, re.IGNORECASE)
             if physician_match:
                 request_data["physician"] = physician_match.group(1).strip()
             break
