@@ -2091,21 +2091,17 @@ def parse_request_data(html_content: str) -> Dict[str, Any]:
                 break
         
         # Extract diagnosis
-        diagnosis_elements = soup.find_all('td', string=re.compile(r'Diagnostic:', re.IGNORECASE))
-        for diagnosis_element in diagnosis_elements:
-            b_tag = diagnosis_element.find('b')
-            if b_tag:
-                diagnosis_text = b_tag.get_text().strip()
-                request_data["diagnosis"] = diagnosis_text
-                # Try to extract ICD-10 code from the diagnosis text
-                # Format is usually "CODE Description" or just "Description"
-                diagnosis_match = re.match(r'^(\d{3,4})\s+(.+)$', diagnosis_text)
-                if diagnosis_match:
-                    request_data["diagnosis_code"] = diagnosis_match.group(1)
-                    request_data["diagnosis_display"] = diagnosis_match.group(2)
-                else:
-                    request_data["diagnosis_display"] = diagnosis_text
-            break
+        diagnosis = extract_field_from_td(soup, r'Diagnostic:')
+        if diagnosis:
+            request_data["diagnosis"] = diagnosis
+            # Try to extract ICD-10 code from the diagnosis text
+            # Format is usually "CODE Description" or just "Description"
+            diagnosis_match = re.match(r'^(\d{3,4})\s+(.+)$', diagnosis)
+            if diagnosis_match:
+                request_data["diagnosis_code"] = diagnosis_match.group(1)
+                request_data["diagnosis_display"] = diagnosis_match.group(2)
+            else:
+                request_data["diagnosis_display"] = diagnosis
         
         # Extract comments (clinical and lab)
         # Find the table with comments headers
