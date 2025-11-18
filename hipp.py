@@ -2059,8 +2059,8 @@ def parse_request_data(html_content: str) -> Dict[str, Any]:
             "physician": "",
             "request_datetime": "",
             "diagnosis": "",
-            "clinical_comments": "",
-            "lab_comments": "",
+            "reason": "",
+            "note": "",
             "procedures": [],
             "status": "active"
         }
@@ -2131,7 +2131,7 @@ def parse_request_data(html_content: str) -> Dict[str, Any]:
             else:
                 # If no code found, use the entire diagnosis as display text
                 request_data["diagnosis_display"] = diagnosis
-        
+
         # Extract comments (clinical and lab)
         # Find the table with comments headers
         comment_headers = soup.find_all('td', class_='tdnplus', string=re.compile(r'Comentariile', re.IGNORECASE))
@@ -2141,8 +2141,8 @@ def parse_request_data(html_content: str) -> Dict[str, Any]:
             if comment_row:
                 comment_tds = comment_row.find_all('td', class_='tdn')
                 if len(comment_tds) >= 2:
-                    request_data["clinical_comments"] = comment_tds[0].get_text().strip()
-                    request_data["lab_comments"] = comment_tds[1].get_text().strip()
+                    request_data["reason"] = comment_tds[0].get_text().strip()
+                    request_data["note"] = comment_tds[1].get_text().strip()
         
         # Extract procedures from the table
         procedure_rows = soup.find_all('tr')
@@ -2167,6 +2167,8 @@ def parse_request_data(html_content: str) -> Dict[str, Any]:
             if id_match:
                 request_data["admission_id"] = id_match.group(1)
         
+        logger.debug(request_data)
+
         return request_data
     except Exception as e:
         logger.error(f"Error parsing service request data: {e}")
