@@ -2050,14 +2050,6 @@ def parse_request_data(html_content: str) -> Dict[str, Any]:
         # Extract patient name
         patient_name = extract_field_from_td(soup, r'Nume Pacient:')
         if patient_name:
-            # Check if there's a font tag within the patient name field
-            name_element = soup.find(string=re.compile(r'Nume Pacient:', re.IGNORECASE))
-            if name_element:
-                parent_td = name_element.find_parent('td')
-                if parent_td:
-                    font_tag = parent_td.find('font')
-                    if font_tag:
-                        patient_name = font_tag.get_text().strip()
             request_data["patient_name"] = patient_name
         
         # Extract patient CNP
