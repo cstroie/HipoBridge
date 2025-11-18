@@ -1232,8 +1232,12 @@ def extract_field_from_td(soup: BeautifulSoup, label_regex: str, stop_at: str = 
         # Look for the table cell containing this label
         label_element = soup.find(string=re.compile(label_regex, re.IGNORECASE))
         if label_element:
-            # Find the parent td element
-            parent_td = label_element.find_parent('td')
+            # Check if we are already at the td element or find the parent td element
+            if label_element.name == 'td':
+                parent_td = label_element
+            else:
+                parent_td = label_element.find_parent('td')
+            
             if parent_td:
                 # Extract text content from the same td and clean it
                 # Remove the label part and get the rest
