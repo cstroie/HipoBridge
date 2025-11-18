@@ -2109,7 +2109,17 @@ def parse_request_data(html_content: str) -> Dict[str, Any]:
                 break
         
         # Extract diagnosis
+        # First try the standard approach
         diagnosis = extract_field_from_td(soup, r'Diagnostic:')
+        if not diagnosis:
+            # Try to find diagnosis in td with specific styling
+            diagnosis_elements = soup.find_all('td', string=re.compile(r'Diagnostic:', re.IGNORECASE))
+            for diag_element in diagnosis_elements:
+                b_tag = diag_element.find('b')
+                if b_tag:
+                    diagnosis = b_tag.get_text().strip()
+                    break
+        
         if diagnosis:
             request_data["diagnosis"] = diagnosis
             # Try to extract ICD-10 code from the diagnosis text
@@ -2121,7 +2131,6 @@ def parse_request_data(html_content: str) -> Dict[str, Any]:
             else:
                 # If no code found, use the entire diagnosis as display text
                 request_data["diagnosis_display"] = diagnosis
-        print(diagnosis)
         
         # Extract comments (clinical and lab)
         # Find the table with comments headers
