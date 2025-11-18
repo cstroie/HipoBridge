@@ -625,30 +625,27 @@ def parse_patient_data(html_content: str) -> Dict[str, Any]:
         if encounter_links:
             patient_data["encounters"] = []
         for link in encounter_links:
-            href = link.get('href', '')
-            id_match = re.search(r'id=([^&"]+)', href)
-            if id_match:
-                patient_data["encounters"].append(id_match.group(1))
+            encounter_id = extract_id_from_link(link)
+            if encounter_id:
+                patient_data["encounters"].append(encounter_id)
         
         # Extract admissions / checkins
         admission_links = soup.find_all('a', href=re.compile(r'../files/checkin\.asp\?id='))
         if admission_links:
             patient_data["admissions"] = []
         for link in admission_links:
-            href = link.get('href', '')
-            id_match = re.search(r'id=([^&"]+)', href)
-            if id_match:
-                patient_data["admissions"].append(id_match.group(1))
+            admission_id = extract_id_from_link(link)
+            if admission_id:
+                patient_data["admissions"].append(admission_id)
         
         # Extract discharges / checkouts
         discharge_links = soup.find_all('a', href=re.compile(r'../files/checkout\.asp\?id='))
         if discharge_links:
             patient_data["discharges"] = []
         for link in discharge_links:
-            href = link.get('href', '')
-            id_match = re.search(r'id=([^&"]+)', href)
-            if id_match:
-                patient_data["discharges"].append(id_match.group(1))
+            discharge_id = extract_id_from_link(link)
+            if discharge_id:
+                patient_data["discharges"].append(discharge_id)
         
         # Return the extracted patient data
         return patient_data
@@ -683,11 +680,9 @@ def parse_multiple_patients_data(html_content: str) -> List[Dict[str, Any]]:
         # Find all links with the pattern javascript:Edit('patient_id')
         for link in soup.find_all('a', href=re.compile(r"javascript:Edit\('([^']+)'\);")):
             # Extract patient id from href
-            href = link.get('href')
-            id_match = re.search(r"javascript:Edit\('([^']+)'\);", href)
-            if not id_match:
+            patient_id = extract_id_from_link(link, r"javascript:Edit\('([^']+)'\);")
+            if not patient_id:
                 continue
-            patient_id = id_match.group(1)
 
             # Extract patient name from the link text
             patient_name = link.get_text().strip().upper()
