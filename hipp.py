@@ -2056,15 +2056,7 @@ def parse_request_data(html_content: str) -> Dict[str, Any]:
         patient_cnp = extract_field_from_td(soup, r'CNP:')
         if patient_cnp:
             request_data["patient_cnp"] = patient_cnp
-        
-        # Extract patient ID (NFO)
-        nfo_elements = soup.find_all('td', string=re.compile(r'NFO:', re.IGNORECASE))
-        for nfo_element in nfo_elements:
-            next_td = nfo_element.find_next('td')
-            if next_td:
-                request_data["patient_id"] = next_td.get_text().strip()
-                break
-        
+                
         # Extract request ID (Cod Buletin)
         code_elements = soup.find_all('td', string=re.compile(r'Cod Buletin:', re.IGNORECASE))
         for code_element in code_elements:
