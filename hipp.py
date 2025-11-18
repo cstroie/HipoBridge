@@ -2095,12 +2095,13 @@ def parse_request_data(html_content: str) -> Dict[str, Any]:
         if diagnosis:
             request_data["diagnosis"] = diagnosis
             # Try to extract ICD-10 code from the diagnosis text
-            # Format is usually "CODE Description" or just "Description"
+            # Format is usually "CODE Description"
             diagnosis_match = re.match(r'^(\d{3,4})\s+(.+)$', diagnosis)
             if diagnosis_match:
                 request_data["diagnosis_code"] = diagnosis_match.group(1)
                 request_data["diagnosis_display"] = diagnosis_match.group(2)
             else:
+                # If no code found, use the entire diagnosis as display text
                 request_data["diagnosis_display"] = diagnosis
         
         # Extract comments (clinical and lab)
