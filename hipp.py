@@ -1807,9 +1807,8 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
         # Find all links to analysis
         for link in soup.find_all('a', href=re.compile(r'../analyse/Reports/analyseFile\.asp\?id=\d+')):
             # Extract analysis ID
-            href = link.get('href', '')
-            id_match = re.search(r'id=(\d+)', href)
-            if not id_match:
+            analysis_id = extract_id_from_link(link, r'id=(\d+)')
+            if not analysis_id:
                 continue
             
             analysis_id = id_match.group(1)
@@ -1934,10 +1933,9 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
         if patient_link:
             checkout_data["patient_name"] = patient_link.get_text().strip()
             # Extract patient ID from href
-            href = patient_link.get('href', '')
-            id_match = re.search(r'id=([^&"]+)', href)
-            if id_match:
-                checkout_data["patient_id"] = id_match.group(1).strip()
+            patient_id = extract_id_from_link(patient_link)
+            if patient_id:
+                checkout_data["patient_id"] = patient_id.strip()
         
         # Extract patient id (Cod pacient)
         code_elements = soup.find_all('td', string=re.compile(r'Cod pacient\s*:', re.IGNORECASE))
@@ -2162,10 +2160,9 @@ def parse_request_data(html_content: str) -> Dict[str, Any]:
         # Extract admission ID from the "Back" link
         back_link = soup.find('a', class_='lnk', href=re.compile(r'checkin\.asp\?id='))
         if back_link:
-            href = back_link.get('href', '')
-            id_match = re.search(r'id=(\d+)', href)
-            if id_match:
-                request_data["admission_id"] = id_match.group(1)
+            admission_id = extract_id_from_link(back_link, r'id=(\d+)')
+            if admission_id:
+                request_data["admission_id"] = admission_id
         
         logger.debug(request_data)
 
@@ -3296,6 +3293,25 @@ async def init_app():
     
     return app
 
+
+def extract_id_from_link(link_element, id_pattern: str = r'id=([^&"]+)') -> Optional[str]:
+    """Extract ID from a link element's href attribute.
+    
+    Args:
+        link_element: BeautifulSoup element with href attribute
+        id_pattern: Regex pattern to extract ID from href (default: r'id=([^&"]+)')
+        
+    Returns:
+        Extracted ID string or None if not found
+    """
+    if not link_element:
+        return None
+    
+    href = link_element.get('href', '')
+    id_match = re.search(id_pattern, href)
+    if id_match:
+        return id_match.group(1)
+    return None
 
 def get_basic_auth(request):
     """Extract basic auth credentials from request.
