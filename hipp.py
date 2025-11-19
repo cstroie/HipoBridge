@@ -2200,25 +2200,25 @@ def convert_request_to_service_request(request_data: Dict[str, Any], http_reques
         }
     
     # Add reason code if reason (clinical comments) is available
-    if request_data.get("reason"):
-        fhir_service_request["reasonCode"] = [
+    if request_data.get("diagnosis"):
+        fhir_service_request["reason"] = [
             {
-                "text": request_data["reason"]
-            }
+                "identifier": code,
+                "display": desc
+            } for code, desc in request_data["diagnosis"].items()
         ]
-    
+
+    # Add reason reference if clinical comments are available
+    if request_data.get("reason"):
+        fhir_service_request["supportingInfo"] = [{
+            "display": f"{request_data['reason']}"
+        }]
+
     # Add note for clinical and lab comments
-    notes = []
-    if request_data.get("reason"):  # Clinical comments
-        notes.append({
-            "text": f"Clinical Comments: {request_data['reason']}"
-        })
-    if request_data.get("note"):  # Lab comments
-        notes.append({
-            "text": f"Lab Comments: {request_data['note']}"
-        })
-    if notes:
-        fhir_service_request["note"] = notes
+    if request_data.get("note"):
+        fhir_service_request["note"] = [{
+            "text": f"{request_data['note']}"
+        }]
     
     # Add order details for procedures
     if request_data.get("procedures"):
