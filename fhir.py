@@ -238,6 +238,21 @@ class Practitioner(FHIRObject):
         super().__init__(data)
 
 
+class OrderDetail(FHIRObject):
+    def __init__(self,
+                 parameterFocusCodeableConcept: Optional[Dict[str, Any]] = None,
+                 parameterFocusReference: Optional[Dict[str, Any]] = None,
+                 parameterFocusCanonical: Optional[str] = None,
+                 parameter: Optional[List[Dict[str, Any]]] = None):
+        data = {
+            "parameterFocusCodeableConcept": parameterFocusCodeableConcept,  # The context of the order details by reference
+            "parameterFocusReference": parameterFocusReference,              # The context of the order details by reference
+            "parameterFocusCanonical": parameterFocusCanonical,              # The context of the order details by reference
+            "parameter": parameter                                           # The parameter details for the service being requested
+        }
+        super().__init__(data)
+
+
 class ServiceRequest(FHIRObject):
     def __init__(self,
                  identifier: Optional[List[Dict[str, Any]]] = None,
