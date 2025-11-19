@@ -46,10 +46,10 @@ class Coding(FHIRObject):
     def __init__(self, system: Optional[str] = None, version: Optional[str] = None, code: Optional[str] = None, 
                  display: Optional[str] = None, userSelected: Optional[bool] = None):
         data = {
-            "system": system,           # Identity of the terminology system
-            "version": version,         # Version of the system - if relevant
-            "code": code,               # Symbol in syntax defined by the system
-            "display": display,         # Representation defined by the system
+            "system": system,             # Identity of the terminology system
+            "version": version,           # Version of the system - if relevant
+            "code": code,                 # Symbol in syntax defined by the system
+            "display": display,           # Representation defined by the system
             "userSelected": userSelected  # If this coding was chosen directly by the user
         }
         super().__init__(data)
@@ -59,7 +59,7 @@ class CodeableConcept(FHIRObject):
     def __init__(self, coding: Optional[List[Dict[str, Any]]] = None, text: Optional[str] = None):
         data = {
             "coding": coding,           # Code defined by a terminology system
-            "text": text               # Plain text representation of the concept
+            "text": text                # Plain text representation of the concept
         }
         super().__init__(data)
 
