@@ -448,3 +448,14 @@ class Procedure(FHIRObject):
         }
         super().__init__(data)
 
+
+class Performer(FHIRObject):
+    def __init__(self,
+                 function: Optional[Dict[str, Any]] = None,
+                 actor: Optional[Dict[str, Any]] = None):
+        data = {
+            "function": function,     # Type of performance
+            "actor": actor            # Who performed imaging study
+        }
+        super().__init__(data)
+
