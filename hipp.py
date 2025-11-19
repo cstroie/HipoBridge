@@ -122,8 +122,8 @@ cache_max_size = 1000  # Maximum number of entries to cache
 # Simple in-memory cache for HTTP responses
 response_cache: Dict[str, str] = {}
 response_cache_timestamps: Dict[str, datetime] = {}
-response_cache_max_size = 50  # Maximum number of entries to cache
-CACHE_TIMEOUT = 5 * 60  # 5 minutes in seconds
+response_cache_max_size = 100  # Maximum number of entries to cache
+CACHE_TIMEOUT = 10 * 60  # 10 minutes in seconds
 
 # Session cache per user
 user_sessions: Dict[str, aiohttp.ClientSession] = {}
@@ -250,20 +250,6 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
         Tuple of (response_text, success, error_response) where success is boolean
     """
     
-    # Check if we have a cached response for GET requests
-    if method == "GET" and url in response_cache:
-        # Check if cache entry is still valid (less than 10 minutes old)
-        if url in response_cache_timestamps:
-            cache_age = (datetime.now() - response_cache_timestamps[url]).total_seconds()
-            if cache_age < CACHE_TIMEOUT:
-                logger.debug(f"Using cached response for: {url} (age: {cache_age:.1f}s)")
-                return response_cache[url], True, None
-            else:
-                # Cache entry expired, remove it
-                del response_cache[url]
-                del response_cache_timestamps[url]
-                logger.debug(f"Expired cache entry removed for: {url}")
-    
     async def _make_request(use_retry_headers=False):
         """Helper function to make a request with proper headers."""
         if method == "GET":
@@ -288,6 +274,20 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
                     response_text = await handle_response_encoding(response)
                     logger.debug(f"POST response status: {response.status}")
         return response_text
+    
+    # Check if we have a cached response for GET requests
+    if method == "GET" and url in response_cache:
+        # Check if cache entry is still valid (less than 10 minutes old)
+        if url in response_cache_timestamps:
+            cache_age = (datetime.now() - response_cache_timestamps[url]).total_seconds()
+            if cache_age < CACHE_TIMEOUT:
+                logger.debug(f"Using cached response for: {url} (age: {cache_age:.1f}s)")
+                return response_cache[url], True, None
+            else:
+                # Cache entry expired, remove it
+                del response_cache[url]
+                del response_cache_timestamps[url]
+                logger.debug(f"Expired cache entry removed for: {url}")
     
     try:
         # Log current cookies before request
