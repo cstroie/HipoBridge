@@ -2162,6 +2162,14 @@ def convert_request_to_service_request(request_data: Dict[str, Any], http_reques
     Returns:
         FHIR ServiceRequest resource
     """
+    # Create FHIR ServiceRequest resource using the FHIR class
+    fhir_service_request = FHIRServiceRequest(
+        id=request_data.get("request_id", ""),
+        status=request_data.get("status", "active"),
+        intent="order",
+        priority="routine"
+    )
+    
     # Create codeable concept for the service type
     code = CodeableConcept(
         coding=[{
@@ -2171,6 +2179,7 @@ def convert_request_to_service_request(request_data: Dict[str, Any], http_reques
         }],
         text="Imaging Study Request"
     )
+    fhir_service_request["code"] = code.to_dict()
     
     # Create subject reference
     subject = Reference(
@@ -2180,51 +2189,43 @@ def convert_request_to_service_request(request_data: Dict[str, Any], http_reques
     # Add patient name to subject if available
     if request_data.get("patient_name"):
         subject["display"] = request_data["patient_name"]
-    
-    # Prepare parameters for ServiceRequest
-    params = {
-        "id": request_data.get("request_id", ""),
-        "status": request_data.get("status", "active"),
-        "intent": "order",
-        "priority": "routine",
-        "code": code.to_dict(),
-        "subject": subject.to_dict()
-    }
+    fhir_service_request["subject"] = subject.to_dict()
     
     # Add requester if available (requesting doctor)
     if request_data.get("physician"):
-        params["requester"] = Reference(display=request_data["physician"]).to_dict()
+        fhir_service_request["requester"] = Reference(display=request_data["physician"]).to_dict()
     
     # Add encounter if we can derive it
     if request_data.get("admission_id"):
-        params["encounter"] = Reference(
+        fhir_service_request["encounter"] = Reference(
             reference=f"Encounter/{request_data['admission_id']}"
         ).to_dict()
     
     # Add reason code if reason (clinical comments) is available
     if request_data.get("diagnosis"):
-        params["reason"] = []
+        reasons = []
         for code, desc in request_data["diagnosis"].items():
-            params["reason"].append({
+            reasons.append({
                 "identifier": code,
                 "display": desc
             })
+        fhir_service_request["reason"] = reasons
 
     # Add reason reference if clinical comments are available
     if request_data.get("reason"):
-        params["supportingInfo"] = [{
+        fhir_service_request["supportingInfo"] = [{
             "display": f"{request_data['reason']}"
         }]
 
     # Add note for clinical and lab comments
     if request_data.get("note"):
-        params["note"] = [{
+        fhir_service_request["note"] = [{
             "text": f"{request_data['note']}"
         }]
     
     # Add order details for procedures
     if request_data.get("procedures"):
-        params["orderDetail"] = []
+        order_details = []
         for code, description in request_data["procedures"].items():
             order_detail = CodeableConcept(
                 coding=[{
@@ -2234,14 +2235,12 @@ def convert_request_to_service_request(request_data: Dict[str, Any], http_reques
                 }],
                 text=description
             )
-            params["orderDetail"].append(order_detail.to_dict())
+            order_details.append(order_detail.to_dict())
+        fhir_service_request["orderDetail"] = order_details
     
     # Add authoredOn if request datetime is available
     if request_data.get("request_datetime"):
-        params["authoredOn"] = request_data["request_datetime"]
-    
-    # Create FHIR ServiceRequest resource using the FHIR class
-    fhir_service_request = FHIRServiceRequest(**params)
+        fhir_service_request["authoredOn"] = request_data["request_datetime"]
     
     return fhir_service_request.to_dict()
 
