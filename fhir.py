@@ -116,3 +116,24 @@ class Period(FHIRObject):
         }
         super().__init__(data)
 
+
+class Address(FHIRObject):
+    def __init__(self, use: Optional[str] = None, type: Optional[str] = None,
+                 text: Optional[str] = None, line: Optional[List[str]] = None,
+                 city: Optional[str] = None, district: Optional[str] = None,
+                 state: Optional[str] = None, postalCode: Optional[str] = None,
+                 country: Optional[str] = None, period: Optional[Dict[str, Any]] = None):
+        data = {
+            "use": use,                 # home | work | temp | old | billing - purpose of this address
+            "type": type,               # postal | physical | both
+            "text": text,               # Text representation of the address
+            "line": line,               # Street name, number, direction & P.O. Box etc.
+            "city": city,               # Name of city, town etc.
+            "district": district,       # District name (aka county)
+            "state": state,             # Sub-unit of country (abbreviations ok)
+            "postalCode": postalCode,   # Postal code for area
+            "country": country,         # Country (e.g. may be ISO 3166 2 or 3 letter code)
+            "period": period            # Time period when address was/is in use
+        }
+        super().__init__(data)
+
