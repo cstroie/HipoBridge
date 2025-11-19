@@ -2062,7 +2062,7 @@ def convert_to_service_request(html_content: str, service_request_id: str, http_
             id=service_request_id,
             status="active",
             intent="order",
-            priority="routine"
+            priority="urgent" if "~URGENTA~" in html_content else "routine"
         )
         
         # Extract patient name
