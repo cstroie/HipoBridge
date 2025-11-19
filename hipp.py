@@ -192,7 +192,7 @@ def extract_field_from_td(soup: BeautifulSoup, label_regex: str, stop_at: str = 
     return extract_text_after_label(soup, label_regex, 'td', stop_at)
 
 
-def extract_id_from_link(link_element, id_pattern: str = r'id=(\d+)') -> Optional[str]:
+def extract_id_from_link(link_element, id_pattern: str = r'id=([^&"]+)') -> Optional[str]:
     """Extract ID from a link element's href attribute.
     
     Args:
