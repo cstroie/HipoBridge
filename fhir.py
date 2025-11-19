@@ -555,3 +555,62 @@ class ImagingStudy(FHIRObject):
         }
         super().__init__(data)
 
+
+class DiagnosticReport(FHIRObject):
+    def __init__(self,
+                 identifier: Optional[List[Dict[str, Any]]] = None,
+                 basedOn: Optional[List[Dict[str, Any]]] = None,
+                 status: Optional[str] = None,
+                 category: Optional[List[Dict[str, Any]]] = None,
+                 code: Optional[Dict[str, Any]] = None,
+                 subject: Optional[Dict[str, Any]] = None,
+                 relatesTo: Optional[List[Dict[str, Any]]] = None,
+                 encounter: Optional[Dict[str, Any]] = None,
+                 effectiveDateTime: Optional[str] = None,
+                 effectivePeriod: Optional[Dict[str, Any]] = None,
+                 issued: Optional[str] = None,
+                 procedure: Optional[List[Dict[str, Any]]] = None,
+                 performer: Optional[List[Dict[str, Any]]] = None,
+                 resultsInterpreter: Optional[List[Dict[str, Any]]] = None,
+                 specimen: Optional[List[Dict[str, Any]]] = None,
+                 result: Optional[List[Dict[str, Any]]] = None,
+                 note: Optional[List[Dict[str, Any]]] = None,
+                 study: Optional[List[Dict[str, Any]]] = None,
+                 supportingInfo: Optional[List[Dict[str, Any]]] = None,
+                 composition: Optional[Dict[str, Any]] = None,
+                 conclusion: Optional[str] = None,
+                 conclusionCode: Optional[List[Dict[str, Any]]] = None,
+                 recomendation: Optional[List[Dict[str, Any]]] = None,
+                 presentedForm: Optional[List[Dict[str, Any]]] = None,
+                 communication: Optional[List[Dict[str, Any]]] = None,
+                 comparison: Optional[Dict[str, Any]] = None):
+        data = {
+            "identifier": identifier,             # Business identifier for report
+            "basedOn": basedOn,                   # What was requested
+            "status": status,                     # registered | partial | preliminary | modified | final | amended | corrected | appended | cancelled | entered-in-error | unknown
+            "category": category,                 # Service category
+            "code": code,                         # Name/Code for this diagnostic report
+            "subject": subject,                   # The subject of the report - usually, but not always, the patient
+            "relatesTo": relatesTo,               # Related DiagnosticReports
+            "encounter": encounter,               # Encounter associated with the DiagnosticReport
+            "effectiveDateTime": effectiveDateTime,  # Clinically relevant time/time-period for the results
+            "effectivePeriod": effectivePeriod,   # Clinically relevant time/time-period for the results
+            "issued": issued,                     # DateTime this version was made
+            "procedure": procedure,               # The performed procedure(s) from which the report was produced
+            "performer": performer,               # Responsible Diagnostic Service
+            "resultsInterpreter": resultsInterpreter,  # Who analyzed and reported the conclusions and interpretations
+            "specimen": specimen,                 # Specimens this report is based on
+            "result": result,                     # Observations
+            "note": note,                         # Comments about the diagnostic report
+            "study": study,                       # Reference to full details of an analysis associated with the diagnostic report
+            "supportingInfo": supportingInfo,     # Additional information supporting the diagnostic report
+            "composition": composition,           # Reference to a Composition resource for the DiagnosticReport structure
+            "conclusion": conclusion,             # Clinical conclusion (interpretation) of test results
+            "conclusionCode": conclusionCode,     # Codes and/or references for the clinical conclusion of test results
+            "recomendation": recomendation,       # Recommendations based on findings and interpretations
+            "presentedForm": presentedForm,       # Entire report as issued
+            "communication": communication,       # Communication initiated during the reporting process
+            "comparison": comparison              # Prior data and findings for comparison
+        }
+        super().__init__(data)
+
