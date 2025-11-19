@@ -504,6 +504,17 @@ class Series(FHIRObject):
         super().__init__(data)
 
 
+class SupportingInfo(FHIRObject):
+    def __init__(self,
+                 type: Optional[Dict[str, Any]] = None,
+                 reference: Optional[Dict[str, Any]] = None):
+        data = {
+            "type": type,                         # Supporting information role code
+            "reference": reference                # Supporting information reference
+        }
+        super().__init__(data)
+
+
 class ImagingStudy(FHIRObject):
     def __init__(self,
                  identifier: Optional[List[Dict[str, Any]]] = None,
