@@ -237,3 +237,82 @@ class Practitioner(FHIRObject):
         }
         super().__init__(data)
 
+
+class ServiceRequest(FHIRObject):
+    def __init__(self,
+                 identifier: Optional[List[Dict[str, Any]]] = None,
+                 basedOn: Optional[List[Dict[str, Any]]] = None,
+                 replaces: Optional[List[Dict[str, Any]]] = None,
+                 requisition: Optional[Dict[str, Any]] = None,
+                 status: Optional[str] = None,
+                 statusReason: Optional[List[Dict[str, Any]]] = None,
+                 intent: Optional[str] = None,
+                 category: Optional[List[Dict[str, Any]]] = None,
+                 priority: Optional[str] = None,
+                 doNotPerform: Optional[bool] = None,
+                 code: Optional[Dict[str, Any]] = None,
+                 orderDetail: Optional[List[Dict[str, Any]]] = None,
+                 quantityQuantity: Optional[Dict[str, Any]] = None,
+                 quantityRatio: Optional[Dict[str, Any]] = None,
+                 quantityRange: Optional[Dict[str, Any]] = None,
+                 subject: Optional[Dict[str, Any]] = None,
+                 focus: Optional[List[Dict[str, Any]]] = None,
+                 encounter: Optional[Dict[str, Any]] = None,
+                 occurrenceDateTime: Optional[str] = None,
+                 occurrencePeriod: Optional[Dict[str, Any]] = None,
+                 occurrenceTiming: Optional[Dict[str, Any]] = None,
+                 asNeeded: Optional[bool] = None,
+                 asNeededFor: Optional[List[Dict[str, Any]]] = None,
+                 authoredOn: Optional[str] = None,
+                 requester: Optional[Dict[str, Any]] = None,
+                 performerType: Optional[Dict[str, Any]] = None,
+                 performer: Optional[List[Dict[str, Any]]] = None,
+                 location: Optional[List[Dict[str, Any]]] = None,
+                 reason: Optional[List[Dict[str, Any]]] = None,
+                 insurance: Optional[List[Dict[str, Any]]] = None,
+                 supportingInfo: Optional[List[Dict[str, Any]]] = None,
+                 specimen: Optional[List[Dict[str, Any]]] = None,
+                 bodyStructure: Optional[Dict[str, Any]] = None,
+                 note: Optional[List[Dict[str, Any]]] = None,
+                 patientInstruction: Optional[List[Dict[str, Any]]] = None,
+                 relevantHistory: Optional[List[Dict[str, Any]]] = None):
+        data = {
+            "identifier": identifier,                           # Identifiers assigned to this order
+            "basedOn": basedOn,                                 # What request fulfills
+            "replaces": replaces,                               # What request replaces
+            "requisition": requisition,                         # Composite Request ID
+            "status": status,                                   # draft | active | on-hold | entered-in-error | ended | completed | revoked | unknown
+            "statusReason": statusReason,                       # Reason for current status
+            "intent": intent,                                   # proposal | solicit-offer | offer-response | plan | directive | order | original-order | reflex-order | filler-order | instance-order | option
+            "category": category,                               # Classification of service
+            "priority": priority,                               # routine | urgent | asap | stat
+            "doNotPerform": doNotPerform,                       # True if service/procedure should not be performed
+            "code": code,                                       # What is being requested/ordered
+            "orderDetail": orderDetail,                         # Additional information about the request
+            "quantityQuantity": quantityQuantity,               # Service amount
+            "quantityRatio": quantityRatio,                     # Service amount
+            "quantityRange": quantityRange,                     # Service amount
+            "subject": subject,                                 # Individual or Entity the service is ordered for
+            "focus": focus,                                     # What the service request is about, when it is not about the subject of record
+            "encounter": encounter,                             # Encounter in which the request was created
+            "occurrenceDateTime": occurrenceDateTime,           # When service should occur
+            "occurrencePeriod": occurrencePeriod,               # When service should occur
+            "occurrenceTiming": occurrenceTiming,               # When service should occur
+            "asNeeded": asNeeded,                               # Perform the service "as needed"
+            "asNeededFor": asNeededFor,                         # Specified criteria for the service
+            "authoredOn": authoredOn,                           # Date request signed
+            "requester": requester,                             # Who/what is requesting service
+            "performerType": performerType,                     # Performer role
+            "performer": performer,                             # Requested performer
+            "location": location,                               # Requested location
+            "reason": reason,                                   # Reason or indication for requesting the service
+            "insurance": insurance,                             # Associated insurance coverage
+            "supportingInfo": supportingInfo,                   # Additional clinical information
+            "specimen": specimen,                               # Procedure Samples
+            "bodyStructure": bodyStructure,                     # BodyStructure-based location on the body
+            "note": note,                                       # Comments
+            "patientInstruction": patientInstruction,           # Patient or consumer-oriented instructions
+            "relevantHistory": relevantHistory                  # Request provenance
+        }
+        super().__init__(data)
+
