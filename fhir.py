@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 from collections.abc import MutableMapping
 
 
-class FHIRObject(MutableMapping):
+class Resource(MutableMapping):
     def __init__(self, data):
         # Filter out None values
         self.data = {k: v for k, v in data.items() if v is not None}
@@ -31,7 +31,7 @@ class FHIRObject(MutableMapping):
         """Convert to dict, excluding None values"""
         return {k: v for k, v in self.data.items() if v is not None}
 
-class CodeableReference(FHIRObject):
+class CodeableReference(Resource):
     def __init__(self, reference: Optional[str] = None, type: Optional[str] = None, identifier: Optional[Dict[str, Any]] = None, display: Optional[str] = None):
         data = {
             "reference": reference,     # Literal reference, Relative, internal or absolute URL
@@ -42,7 +42,7 @@ class CodeableReference(FHIRObject):
         super().__init__(data)
 
 
-class Coding(FHIRObject):
+class Coding(Resource):
     def __init__(self, system: Optional[str] = None, version: Optional[str] = None, code: Optional[str] = None, 
                  display: Optional[str] = None, userSelected: Optional[bool] = None):
         data = {
@@ -55,7 +55,7 @@ class Coding(FHIRObject):
         super().__init__(data)
 
 
-class CodeableConcept(FHIRObject):
+class CodeableConcept(Resource):
     def __init__(self, coding: Optional[List[Dict[str, Any]]] = None, text: Optional[str] = None):
         data = {
             "coding": coding,           # Code defined by a terminology system
@@ -64,7 +64,7 @@ class CodeableConcept(FHIRObject):
         super().__init__(data)
 
 
-class Identifier(FHIRObject):
+class Identifier(Resource):
     def __init__(self, use: Optional[str] = None, type: Optional[Dict[str, Any]] = None, 
                  system: Optional[str] = None, value: Optional[str] = None,
                  period: Optional[Dict[str, Any]] = None, assigner: Optional[Dict[str, Any]] = None):
@@ -79,7 +79,7 @@ class Identifier(FHIRObject):
         super().__init__(data)
 
 
-class HumanName(FHIRObject):
+class HumanName(Resource):
     def __init__(self, use: Optional[str] = None, text: Optional[str] = None, 
                  family: Optional[str] = None, given: Optional[List[str]] = None,
                  prefix: Optional[List[str]] = None, suffix: Optional[List[str]] = None,
@@ -96,7 +96,7 @@ class HumanName(FHIRObject):
         super().__init__(data)
 
 
-class Reference(FHIRObject):
+class Reference(Resource):
     def __init__(self, reference: Optional[str] = None, type: Optional[str] = None,
                  identifier: Optional[Dict[str, Any]] = None, display: Optional[str] = None):
         data = {
@@ -108,7 +108,7 @@ class Reference(FHIRObject):
         super().__init__(data)
 
 
-class Period(FHIRObject):
+class Period(Resource):
     def __init__(self, start: Optional[str] = None, end: Optional[str] = None):
         data = {
             "start": start,             # Starting time with inclusive boundary
@@ -117,7 +117,7 @@ class Period(FHIRObject):
         super().__init__(data)
 
 
-class Address(FHIRObject):
+class Address(Resource):
     def __init__(self, use: Optional[str] = None, type: Optional[str] = None,
                  text: Optional[str] = None, line: Optional[List[str]] = None,
                  city: Optional[str] = None, district: Optional[str] = None,
@@ -138,7 +138,7 @@ class Address(FHIRObject):
         super().__init__(data)
 
 
-class ContactPoint(FHIRObject):
+class ContactPoint(Resource):
     def __init__(self, system: Optional[str] = None, value: Optional[str] = None,
                  use: Optional[str] = None, rank: Optional[int] = None,
                  period: Optional[Dict[str, Any]] = None):
@@ -152,7 +152,7 @@ class ContactPoint(FHIRObject):
         super().__init__(data)
 
 
-class Annotation(FHIRObject):
+class Annotation(Resource):
     def __init__(self, authorReference: Optional[Dict[str, Any]] = None, authorString: Optional[str] = None,
                  time: Optional[str] = None, text: Optional[str] = None):
         data = {
@@ -164,7 +164,7 @@ class Annotation(FHIRObject):
         super().__init__(data)
 
 
-class Patient(FHIRObject):
+class Patient(Resource):
     def __init__(self, 
                  identifier: Optional[List[Dict[str, Any]]] = None,
                  active: Optional[bool] = None,
@@ -207,7 +207,7 @@ class Patient(FHIRObject):
         super().__init__(data)
 
 
-class Practitioner(FHIRObject):
+class Practitioner(Resource):
     def __init__(self,
                  identifier: Optional[List[Dict[str, Any]]] = None,
                  active: Optional[bool] = None,
@@ -238,7 +238,7 @@ class Practitioner(FHIRObject):
         super().__init__(data)
 
 
-class OrderDetail(FHIRObject):
+class OrderDetail(Resource):
     def __init__(self,
                  parameterFocusCodeableConcept: Optional[Dict[str, Any]] = None,
                  parameterFocusReference: Optional[Dict[str, Any]] = None,
@@ -253,7 +253,7 @@ class OrderDetail(FHIRObject):
         super().__init__(data)
 
 
-class ServiceRequest(FHIRObject):
+class ServiceRequest(Resource):
     def __init__(self,
                  identifier: Optional[List[Dict[str, Any]]] = None,
                  basedOn: Optional[List[Dict[str, Any]]] = None,
@@ -332,7 +332,7 @@ class ServiceRequest(FHIRObject):
         super().__init__(data)
 
 
-class Condition(FHIRObject):
+class Condition(Resource):
     def __init__(self,
                  identifier: Optional[List[Dict[str, Any]]] = None,
                  clinicalStatus: Optional[Dict[str, Any]] = None,
@@ -391,7 +391,7 @@ class Condition(FHIRObject):
         super().__init__(data)
 
 
-class Procedure(FHIRObject):
+class Procedure(Resource):
     def __init__(self,
                  identifier: Optional[List[Dict[str, Any]]] = None,
                  basedOn: Optional[List[Dict[str, Any]]] = None,
@@ -464,7 +464,7 @@ class Procedure(FHIRObject):
         super().__init__(data)
 
 
-class Performer(FHIRObject):
+class Performer(Resource):
     def __init__(self,
                  function: Optional[Dict[str, Any]] = None,
                  actor: Optional[Dict[str, Any]] = None):
@@ -475,7 +475,7 @@ class Performer(FHIRObject):
         super().__init__(data)
 
 
-class SOPInstance(FHIRObject):
+class SOPInstance(Resource):
     def __init__(self,
                  uid: Optional[str] = None,
                  sopClass: Optional[str] = None,
@@ -490,7 +490,7 @@ class SOPInstance(FHIRObject):
         super().__init__(data)
 
 
-class Series(FHIRObject):
+class Series(Resource):
     def __init__(self,
                  uid: Optional[str] = None,
                  number: Optional[int] = None,
@@ -519,7 +519,7 @@ class Series(FHIRObject):
         super().__init__(data)
 
 
-class SupportingInfo(FHIRObject):
+class SupportingInfo(Resource):
     def __init__(self,
                  type: Optional[Dict[str, Any]] = None,
                  reference: Optional[Dict[str, Any]] = None):
@@ -530,7 +530,7 @@ class SupportingInfo(FHIRObject):
         super().__init__(data)
 
 
-class ImagingStudy(FHIRObject):
+class ImagingStudy(Resource):
     def __init__(self,
                  identifier: Optional[List[Dict[str, Any]]] = None,
                  status: Optional[str] = None,
@@ -571,7 +571,7 @@ class ImagingStudy(FHIRObject):
         super().__init__(data)
 
 
-class DiagnosticReport(FHIRObject):
+class DiagnosticReport(Resource):
     def __init__(self,
                  identifier: Optional[List[Dict[str, Any]]] = None,
                  basedOn: Optional[List[Dict[str, Any]]] = None,
