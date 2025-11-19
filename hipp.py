@@ -2117,7 +2117,14 @@ def parse_request_data(html_content: str) -> Dict[str, Any]:
         # Extract request datetime (Data si ora cererii)
         request_datetime = extract_text_after_label(soup, r'Data si ora cererii:', stop_at=r'Receptionat')
         if request_datetime:
-            request_data["request_datetime"] = request_datetime
+            # Parse the datetime using our parse_date_time function
+            parsed_dt = parse_date_time(request_datetime)
+            if parsed_dt:
+                # Convert to ISO format
+                request_data["request_datetime"] = parsed_dt.isoformat()
+            else:
+                # If parsing fails, keep the original string
+                request_data["request_datetime"] = request_datetime
                 
         # Extract diagnosis (Data si ora cererii)
         diagnosis = extract_text_after_label(soup, r'Diagnostic:', 'td')
