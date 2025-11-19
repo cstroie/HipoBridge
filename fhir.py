@@ -151,3 +151,15 @@ class ContactPoint(FHIRObject):
         }
         super().__init__(data)
 
+
+class Annotation(FHIRObject):
+    def __init__(self, authorReference: Optional[Dict[str, Any]] = None, authorString: Optional[str] = None,
+                 time: Optional[str] = None, text: Optional[str] = None):
+        data = {
+            "authorReference": authorReference,  # Individual responsible for the annotation
+            "authorString": authorString,        # Individual responsible for the annotation
+            "time": time,                        # When the annotation was made
+            "text": text                         # The annotation - text content (as markdown)
+        }
+        super().__init__(data)
+
