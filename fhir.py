@@ -163,3 +163,46 @@ class Annotation(FHIRObject):
         }
         super().__init__(data)
 
+
+class Patient(FHIRObject):
+    def __init__(self, 
+                 identifier: Optional[List[Dict[str, Any]]] = None,
+                 active: Optional[bool] = None,
+                 name: Optional[List[Dict[str, Any]]] = None,
+                 telecom: Optional[List[Dict[str, Any]]] = None,
+                 gender: Optional[str] = None,
+                 birthDate: Optional[str] = None,
+                 deceasedBoolean: Optional[bool] = None,
+                 deceasedDateTime: Optional[str] = None,
+                 address: Optional[List[Dict[str, Any]]] = None,
+                 maritalStatus: Optional[Dict[str, Any]] = None,
+                 multipleBirthBoolean: Optional[bool] = None,
+                 multipleBirthInteger: Optional[int] = None,
+                 photo: Optional[List[Dict[str, Any]]] = None,
+                 contact: Optional[List[Dict[str, Any]]] = None,
+                 communication: Optional[List[Dict[str, Any]]] = None,
+                 generalPractitioner: Optional[List[Dict[str, Any]]] = None,
+                 managingOrganization: Optional[Dict[str, Any]] = None,
+                 link: Optional[List[Dict[str, Any]]] = None):
+        data = {
+            "identifier": identifier,                           # An identifier for this patient
+            "active": active,                                   # Whether this patient's record is in active use
+            "name": name,                                       # A name associated with the patient
+            "telecom": telecom,                                 # A contact detail for the individual
+            "gender": gender,                                   # male | female | other | unknown
+            "birthDate": birthDate,                             # The date of birth for the individual
+            "deceasedBoolean": deceasedBoolean,                 # Indicates if the individual is deceased
+            "deceasedDateTime": deceasedDateTime,               # Indicates when the individual died
+            "address": address,                                 # An address for the individual
+            "maritalStatus": maritalStatus,                     # Marital (civil) status of a patient
+            "multipleBirthBoolean": multipleBirthBoolean,       # Whether patient is part of a multiple birth
+            "multipleBirthInteger": multipleBirthInteger,       # Whether patient is part of a multiple birth
+            "photo": photo,                                     # Image of the patient
+            "contact": contact,                                 # A contact party for the patient
+            "communication": communication,                     # A language which may be used to communicate with the patient
+            "generalPractitioner": generalPractitioner,         # Patient's nominated primary care provider
+            "managingOrganization": managingOrganization,       # Organization that is the custodian of the patient record
+            "link": link                                        # Link to another patient resource
+        }
+        super().__init__(data)
+
