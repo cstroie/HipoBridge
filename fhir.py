@@ -112,7 +112,7 @@ class Period(FHIRObject):
     def __init__(self, start: Optional[str] = None, end: Optional[str] = None):
         data = {
             "start": start,             # Starting time with inclusive boundary
-            "end": end                  # End time with inclusive boundary, If missing, it means no end was known
+            "end": end                  # End time with inclusive boundary, if not ongoing
         }
         super().__init__(data)
 
