@@ -245,7 +245,7 @@ class FHIRObject(MutableMapping):
         """Convert to dict, excluding None values"""
         return {k: v for k, v in self.data.items() if v is not None}
 
-class Reference(FHIRObject):
+class CodeableReference(FHIRObject):
     def __init__(self, reference: Optional[str] = None, type: Optional[str] = None, identifier: Optional[Dict[str, Any]] = None, display: Optional[str] = None):
         data = {
             "reference": reference,     # Literal reference, Relative, internal or absolute URL
