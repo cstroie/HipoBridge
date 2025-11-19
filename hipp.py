@@ -43,7 +43,7 @@ import configparser
 import base64
 
 # Import FHIR classes
-from fhir import ServiceRequest as FHIRServiceRequest, CodeableConcept, Coding, Reference, CodeableReference, Condition
+from fhir import ServiceRequest as FHIRServiceRequest, CodeableConcept, Coding, Reference, CodeableReference, Condition, Patient as FHIRPatient
 
 
 # Configure logging
@@ -810,67 +810,92 @@ def convert_patient_to_fhir(patient_data: Dict[str, Any], request) -> Dict[str, 
     gender = patient_data.get("sex", "unknown")
     birth_date = patient_data.get("birth_date", "")
     
-    # Create FHIR Patient resource
-    fhir_patient = {
-        "resourceType": "Patient",
-        "id": patient_data.get("patient_id", ""),
-        "meta": {
-            "lastUpdated": datetime.now().isoformat()
-        },
-        "identifier": [],
-        "active": True,
-        "name": [
-            {
-                "use": "official",
-                "family": family_name,
-                "given": given_names
-            }
-        ],
-        "gender": gender,
-        "birthDate": birth_date,
-        "telecom": [],
-        "address": []
+    # Create FHIR Patient resource using the FHIR class
+    fhir_patient = FHIRPatient(
+        id=patient_data.get("patient_id", ""),
+        active=True,
+        gender=gender,
+        birthDate=birth_date
+    )
+    
+    # Add name
+    name = {
+        "use": "official",
+        "family": family_name,
+        "given": given_names
     }
-
+    fhir_patient["name"] = [name]
+    
     # Add telecom information if available
+    telecom = []
     if patient_data.get("phone", None):
-        fhir_patient["telecom"].append({
+        telecom.append({
             "system": "phone",
             "value": patient_data["phone"]
         })
     
     if patient_data.get("email", None):
-        fhir_patient["telecom"].append({
+        telecom.append({
             "system": "email",
             "value": patient_data["email"]
         })
+    
+    if telecom:
+        fhir_patient["telecom"] = telecom
 
     # Add address information if available
+    address = []
     if patient_data.get("address", None):
-        fhir_patient["address"].append({
+        address.append({
             "text": patient_data["address"]
         })
+    
+    if address:
+        fhir_patient["address"] = address
 
     # Add extensions for additional patient data
-    fhir_patient["extension"] = []
+    extensions = []
     
     # Add weight if available
     if patient_data.get("weight", None):
-        fhir_patient["extension"].append({
+        extensions.append({
             "url": "http://hl7.org/fhir/us/vitals/StructureDefinition/body-weight",
             "valueString": patient_data["weight"]
         })
     
     # Add height if available
     if patient_data.get("height", None):
-        fhir_patient["extension"].append({
+        extensions.append({
             "url": "http://hl7.org/fhir/us/vitals/StructureDefinition/height",
             "valueString": patient_data["height"]
         })
     
+    # Add extensions for encounter/admission/discharge IDs
+    if "encounters" in patient_data:
+        extensions.append({
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/encounter-ids",
+            "valueString": ",".join(patient_data["encounters"])
+        })
+    if "admissions" in patient_data:
+        extensions.append({
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/admission-ids",
+            "valueString": ",".join(patient_data["admissions"])
+        })
+    if "discharges" in patient_data:
+        extensions.append({
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/discharge-ids",
+            "valueString": ",".join(patient_data["discharges"])
+        })
+    
+    if extensions:
+        fhir_patient["extension"] = extensions
+    
+    # Add identifiers
+    identifiers = []
+    
     # Add CNP as identifier if available
     if patient_data.get("patient_cnp", None):
-        fhir_patient["identifier"].append({
+        identifiers.append({
             "use": "official",
             "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-cnp",
             "value": patient_data["patient_cnp"]
@@ -878,37 +903,23 @@ def convert_patient_to_fhir(patient_data: Dict[str, Any], request) -> Dict[str, 
     
     # Add CID if available
     if patient_data.get("cid", None):
-        fhir_patient["identifier"].append({
+        identifiers.append({
             "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-cid",
             "value": patient_data["cid"]
         })
     
     # Add MCP if available
     if patient_data.get("mcp", None):
-        fhir_patient["identifier"].append({
+        identifiers.append({
             "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-mcp",
             "value": patient_data["mcp"]
         })
-
-    # Add extensions for encounter/admission/discharge IDs
-    if "encounters" in patient_data:
-        fhir_patient["extension"].append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/encounter-ids",
-            "valueString": ",".join(patient_data["encounters"])
-        })
-    if "admissions" in patient_data:
-        fhir_patient["extension"].append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/admission-ids",
-            "valueString": ",".join(patient_data["admissions"])
-        })
-    if "discharges" in patient_data:
-        fhir_patient["extension"].append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/discharge-ids",
-            "valueString": ",".join(patient_data["discharges"])
-        })
     
-    # Return the FHIR Patient resource
-    return fhir_patient
+    if identifiers:
+        fhir_patient["identifier"] = identifiers
+    
+    # Return the FHIR Patient resource as dict
+    return fhir_patient.to_dict()
 
 
 @require_auth
