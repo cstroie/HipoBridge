@@ -2169,12 +2169,9 @@ def parse_request_data(html_content: str) -> Dict[str, Any]:
         
         # Extract admission ID from the "Back" link
         # It might be checkin or checkup. We look for checkin for now.
-        pattern = r'/checkin\.asp\?id=(\d+)'
-        link_element = soup.find('a', href=re.compile(pattern))
-        if link_element:
-            admission_id = extract_id_from_link(link_element, pattern)
-            if admission_id:
-                request_data["admission_id"] = admission_id
+        admission_ids = extract_ids_from_links(soup, r'/checkin\.asp\?id=([^&"]+)')
+        if admission_ids:
+            request_data["admission_id"] = admission_ids[0]
         
         logger.debug(request_data)
 
