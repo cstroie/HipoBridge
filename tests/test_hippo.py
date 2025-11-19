@@ -14,6 +14,7 @@ from tests.analyses import test_analyses_endpoint_missing_id
 from tests.reports import test_report_endpoint_missing_id
 from tests.checkout import test_checkout_endpoint_missing_id
 from tests.cnp import test_cnp_validation_endpoint, test_cnp_validation_missing_id
+from tests.extractors import test_extract_text_after_label_basic, test_extract_text_after_label_with_element_tag, test_extract_text_after_label_with_stop_at, test_extract_text_after_label_not_found, test_extract_text_after_label_case_insensitive
 
 # Configuration
 BASE_URL = "http://localhost:44660"
@@ -38,7 +39,12 @@ async def run_all_tests() -> None:
             test_report_endpoint_missing_id,
             test_checkout_endpoint_missing_id,
             test_cnp_validation_endpoint,
-            test_cnp_validation_missing_id
+            test_cnp_validation_missing_id,
+            test_extract_text_after_label_basic,
+            test_extract_text_after_label_with_element_tag,
+            test_extract_text_after_label_with_stop_at,
+            test_extract_text_after_label_not_found,
+            test_extract_text_after_label_case_insensitive
         ]
         
         results = []
