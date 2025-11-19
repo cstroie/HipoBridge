@@ -459,3 +459,18 @@ class Performer(FHIRObject):
         }
         super().__init__(data)
 
+
+class SOPInstance(FHIRObject):
+    def __init__(self,
+                 uid: Optional[str] = None,
+                 sopClass: Optional[str] = None,
+                 number: Optional[int] = None,
+                 title: Optional[str] = None):
+        data = {
+            "uid": uid,               # DICOM SOP Instance UID
+            "sopClass": sopClass,     # DICOM class type
+            "number": number,         # The number of this instance in the series
+            "title": title            # Name or title of the instance
+        }
+        super().__init__(data)
+
