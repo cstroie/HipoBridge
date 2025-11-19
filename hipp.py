@@ -278,6 +278,21 @@ class CodeableConcept(FHIRObject):
         super().__init__(data)
 
 
+class Identifier(FHIRObject):
+    def __init__(self, use: Optional[str] = None, type: Optional[Dict[str, Any]] = None, 
+                 system: Optional[str] = None, value: Optional[str] = None,
+                 period: Optional[Dict[str, Any]] = None, assigner: Optional[Dict[str, Any]] = None):
+        data = {
+            "use": use,                 # usual | official | temp | secondary | old (If known)
+            "type": type,               # Description of identifier
+            "system": system,           # The namespace for the identifier value
+            "value": value,             # The value that is unique
+            "period": period,           # Time period when id is/was valid for use
+            "assigner": assigner        # Organization that issued id (may be just text)
+        }
+        super().__init__(data)
+
+
 
 
 
