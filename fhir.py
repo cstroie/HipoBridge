@@ -474,3 +474,32 @@ class SOPInstance(FHIRObject):
         }
         super().__init__(data)
 
+
+class Series(FHIRObject):
+    def __init__(self,
+                 uid: Optional[str] = None,
+                 number: Optional[int] = None,
+                 modality: Optional[Dict[str, Any]] = None,
+                 description: Optional[str] = None,
+                 numberOfInstances: Optional[int] = None,
+                 endpoint: Optional[List[Dict[str, Any]]] = None,
+                 bodySite: Optional[Dict[str, Any]] = None,
+                 specimen: Optional[List[Dict[str, Any]]] = None,
+                 started: Optional[str] = None,
+                 performer: Optional[List[Dict[str, Any]]] = None,
+                 instance: Optional[List[Dict[str, Any]]] = None):
+        data = {
+            "uid": uid,                           # DICOM Series Instance UID
+            "number": number,                     # Numeric identifier of this series
+            "modality": modality,                 # The modality used for this series
+            "description": description,           # Series Description or Classification
+            "numberOfInstances": numberOfInstances,  # Number of Series Related Instances
+            "endpoint": endpoint,                 # Series access endpoint
+            "bodySite": bodySite,                 # Body part examined
+            "specimen": specimen,                 # Specimen imaged
+            "started": started,                   # When the series started
+            "performer": performer,               # Who performed the series
+            "instance": instance                  # A single SOP instance from the series
+        }
+        super().__init__(data)
+
