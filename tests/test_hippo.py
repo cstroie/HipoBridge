@@ -7,13 +7,13 @@ import aiohttp
 import os
 
 # Import test functions from separate modules
-from tests.test_root import test_root_endpoint
-from tests.test_auth import test_login_endpoint_success, test_login_endpoint_missing_credentials, test_login_endpoint_invalid_json
-from tests.test_patients import test_patient_search_endpoint, test_invalid_patient_search, test_patient_endpoint_missing_id
-from tests.test_analyses import test_analyses_endpoint_missing_id
-from tests.test_reports import test_report_endpoint_missing_id
-from tests.test_checkout import test_checkout_endpoint_missing_id
-from tests.test_cnp import test_cnp_validation_endpoint, test_cnp_validation_missing_id
+from tests.root import test_root_endpoint
+from tests.auth import test_login_endpoint_success, test_login_endpoint_missing_credentials, test_login_endpoint_invalid_json
+from tests.patients import test_patient_search_endpoint, test_invalid_patient_search, test_patient_endpoint_missing_id
+from tests.analyses import test_analyses_endpoint_missing_id
+from tests.reports import test_report_endpoint_missing_id
+from tests.checkout import test_checkout_endpoint_missing_id
+from tests.cnp import test_cnp_validation_endpoint, test_cnp_validation_missing_id
 
 # Configuration
 BASE_URL = "http://localhost:44660"
