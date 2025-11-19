@@ -2107,16 +2107,24 @@ def convert_to_service_request(html_content: str, service_request_id: str, http_
             # Format is usually "CODE Description"
             diagnosis_match = re.match(r'^(\d{3,4})\s+(.+)$', diagnosis)
             if diagnosis_match:
-                fhir_service_request["reason"] = [{
-                    "identifier": diagnosis_match.group(1),
-                    "display": diagnosis_match.group(2)
-                }]
+                reason_reference = CodeableReference(
+                    concept={
+                        "coding": [{
+                            "system": f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/icd-10",
+                            "code": diagnosis_match.group(1),
+                            "display": diagnosis_match.group(2)
+                        }]
+                    }
+                )
+                fhir_service_request["reason"] = [reason_reference]
             else:
                 # If no code found, use the entire diagnosis as display text
-                fhir_service_request["reason"] = [{
-                    "identifier": "text",
-                    "display": diagnosis
-                }]
+                reason_reference = CodeableReference(
+                    concept={
+                        "text": diagnosis
+                    }
+                )
+                fhir_service_request["reason"] = [reason_reference]
 
         # Extract comments (clinical and lab)
         # Find the table with comments headers
