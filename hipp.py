@@ -210,7 +210,16 @@ def extract_id_from_link(link_element, id_pattern: str = r'id=(\d+)') -> Optiona
             return id_match.group(1)
     return None
 
-def extract_ids_from_links(soup: BeautifulSoup, id_pattern: str = r'id=(\d+)') -> List[str]:
+def extract_ids_from_links(soup: BeautifulSoup, id_pattern: str = r'id=([^&"]+)') -> List[str]:
+    """Extract IDs from multiple link elements' href attributes.
+    
+    Args:
+        soup: BeautifulSoup object of the parsed HTML content
+        id_pattern: Regex pattern to extract ID from href (default: r'id=([^&"]+)')
+        
+    Returns:
+        List of extracted ID strings
+    """
     ids_list = []
     for item in soup.find_all('a', href=re.compile(id_pattern)):
         href = item.get('href', '')
