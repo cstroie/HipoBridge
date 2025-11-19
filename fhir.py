@@ -206,3 +206,34 @@ class Patient(FHIRObject):
         }
         super().__init__(data)
 
+
+class Practitioner(FHIRObject):
+    def __init__(self,
+                 identifier: Optional[List[Dict[str, Any]]] = None,
+                 active: Optional[bool] = None,
+                 name: Optional[List[Dict[str, Any]]] = None,
+                 telecom: Optional[List[Dict[str, Any]]] = None,
+                 gender: Optional[str] = None,
+                 birthDate: Optional[str] = None,
+                 deceasedBoolean: Optional[bool] = None,
+                 deceasedDateTime: Optional[str] = None,
+                 address: Optional[List[Dict[str, Any]]] = None,
+                 photo: Optional[List[Dict[str, Any]]] = None,
+                 qualification: Optional[List[Dict[str, Any]]] = None,
+                 communication: Optional[List[Dict[str, Any]]] = None):
+        data = {
+            "identifier": identifier,                           # An identifier for the person as this agent
+            "active": active,                                   # Whether this practitioner's record is in active use
+            "name": name,                                       # The name(s) associated with the practitioner
+            "telecom": telecom,                                 # A contact detail for the practitioner (that apply to all roles)
+            "gender": gender,                                   # male | female | other | unknown
+            "birthDate": birthDate,                             # The date  on which the practitioner was born
+            "deceasedBoolean": deceasedBoolean,                 # Indicates if the practitioner is deceased or not
+            "deceasedDateTime": deceasedDateTime,               # Indicates if the practitioner is deceased or not
+            "address": address,                                 # Address(es) of the practitioner that are not role specific (typically home address)
+            "photo": photo,                                     # Image of the person
+            "qualification": qualification,                     # Qualifications, certifications, accreditations, licenses, training, etc.
+            "communication": communication                      # A language which may be used to communicate with the practitioner
+        }
+        super().__init__(data)
+
