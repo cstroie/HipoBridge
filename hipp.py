@@ -115,10 +115,6 @@ ANALYSIS_TYPES = {
 }
 
 
-# Simple in-memory cache for CNP to patient code mappings
-cnp_cache: Dict[str, str] = {}
-cache_max_size = 1000  # Maximum number of entries to cache
-
 class URLCache:
     """Simple in-memory cache for HTTP responses with LRU eviction and timeout."""
     
@@ -155,7 +151,7 @@ class URLCache:
                 del self.timestamps[url]
                 logger.debug(f"Expired cache entry removed for: {url}")
                 return None
-        
+        # Return cached response
         logger.debug(f"Using cached response for: {url} (age: {(datetime.now() - self.timestamps[url]).total_seconds():.1f}s)")
         return self.cache[url]
     
@@ -173,20 +169,33 @@ class URLCache:
             del self.cache[oldest_key]
             if oldest_key in self.timestamps:
                 del self.timestamps[oldest_key]
-        
         # Add the new entry with timestamp
         self.cache[url] = response_text
         self.timestamps[url] = datetime.now()
         logger.debug(f"Cached response for: {url}")
     
-    def clear(self) -> None:
-        """Clear all cached entries."""
-        self.cache.clear()
-        self.timestamps.clear()
+    def clear(self, url: str = None) -> None:
+        """Clear cache entries.
+        
+        Args:
+            url: Specific URL to clear from cache, or None to clear all
+        """
+        if url:
+            if url in self.cache:
+                del self.cache[url]
+            if url in self.timestamps:
+                del self.timestamps[url]
+        else:
+            self.cache.clear()
+            self.timestamps.clear()
 
 
 # Simple in-memory cache for HTTP responses
 url_cache = URLCache(max_size=100, timeout=10 * 60)  # 10 minutes timeout
+
+# Simple in-memory cache for CNP to patient code mappings
+cnp_cache: Dict[str, str] = {}
+cache_max_size = 1000  # Maximum number of entries to cache
 
 # Session cache per user
 user_sessions: Dict[str, aiohttp.ClientSession] = {}
@@ -336,7 +345,7 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
                 async with session.post(url, headers=post_headers) as response:
                     response_text = await handle_response_encoding(response)
                     logger.debug(f"POST response status: {response.status}")
-        return response_text
+        return html.unescape(response_text)
     
     # Check if we have a cached response for GET requests
     if method == "GET":
@@ -410,13 +419,11 @@ async def patient(request):
     Returns:
         JSON response with patient data or error information
     """
+    # Get patient ID from request path
     patient_id = request.match_info.get('id')
-    logger.info(f"GET /fhir/Patient/{patient_id} endpoint accessed")
-    
+    logger.info(f"Retrieving patient with ID: {patient_id}")
     if not patient_id:
         return create_error_response("Patient ID is required (not CNP)")
-    
-    logger.info(f"Retrieving patient with ID: {patient_id}")
     
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
@@ -440,12 +447,15 @@ async def patient(request):
             return error_response
         logger.info(f"Patient info retrieved in {duration:.2f} seconds")
         
-        # For FHIR endpoint, we need to get patient details first
+        # Get patient details
         patient_data = parse_patient_data(response_text)
         if patient_data and patient_data.get("patient_id") and not patient_data.get("error"):
             fhir_patient = convert_patient_to_fhir(patient_data, request)
             return web.json_response(fhir_patient)
         else:
+            # Remove the cached response if patient not found
+            url_cache.clear(patient_url)
+            # Return specific error if patient not found
             if patient_data and 'error' in patient_data:
                 return create_error_response(patient_data['error'], 404)
             # Return an error if we couldn't read patient data
@@ -469,16 +479,14 @@ async def patient_search(request):
     Returns:
         JSON response with search results or error information
     """
-    logger.info("GET /fhir/Patient endpoint accessed")
+    # Get search parameter from query string
+    search_term = request.query.get('q', '')
+    logger.info(f"Searching for patients with term: {search_term}")
+    if not search_term:
+        return create_error_response("Search term is required")
     
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
-    
-    # Get search parameter from query string
-    search_term = request.query.get('q', '')
-    
-    if not search_term:
-        return create_error_response("Search term is required")
     
     try:
         # Get user-specific aiohttp session
@@ -486,8 +494,6 @@ async def patient_search(request):
         
         # Determine search type based on input
         search_type = "name"  # default
-        actual_search_term = search_term
-        cnp_value = ""
         
         # Check if search term is numeric
         if search_term.isdigit():
@@ -511,24 +517,21 @@ async def patient_search(request):
                 prefix = search_term[:-1]
                 if prefix.isdigit() and len(prefix) < 13:
                     search_type = "partial_cnp"
-                    actual_search_term = search_term  # Keep the asterisk for Hipocrate
                     logger.info(f"Performing partial CNP search for: {search_term}")
                 else:
                     # Not a valid partial CNP, treat as name search
                     search_type = "name"
-                    actual_search_term = search_term
                     logger.info(f"Searching for patients by name: {search_term}")
             else:
                 # Not numeric, treat as name search
                 search_type = "name"
-                actual_search_term = search_term
                 logger.info(f"Searching for patients by name: {search_term}")
         
         # Prepare full search data as captured in the POST request
         search_data = {
             "hdnSearchType": "1",
             "pageNo": "1",
-            "strDescription": actual_search_term if search_type in ["name", "code", "cnp", "partial_cnp"] else "",
+            "strDescription": search_term if search_type in ["name", "code", "cnp", "partial_cnp"] else "",
             "strLastName": "",
             "strFirstName": "",
             "strCodePres": "",
@@ -590,15 +593,14 @@ async def patient_search(request):
                 "total": len(multiple_patients_data),
                 "entry": []
             }
-            for patient in multiple_patients_data:
+            for patient_id, patient_name in multiple_patients_data.items():
                 # Create minimal FHIR patient resource for each
-                name_parts = patient.get("patient_name", "").split()
-                family_name = name_parts[0] if len(name_parts) > 0 else ""
-                given_names = name_parts[1:] if len(name_parts) > 1 else []
+                family_name = patient_name[0] if len(patient_name) > 0 else ""
+                given_names = patient_name[1:] if len(patient_name) > 1 else []
                 # Create FHIR Patient resource
                 fhir_patient = {
                     "resourceType": "Patient",
-                    "id": patient.get("patient_id", ""),
+                    "id": patient.get("patient_id", patient_id),
                     "name": [
                         {
                             "use": "official",
@@ -635,7 +637,7 @@ async def patient_search(request):
         return create_error_response(
             "Unable to parse patient search results", 
             500, 
-            {"text": response_text[:200] + "..."}
+            {"text": response_text[:300] + "..."}
         )
 
     except Exception as e:
@@ -658,67 +660,60 @@ def parse_patient_data(html_content: str) -> Dict[str, Any]:
     patient_data = {}
 
     # Inner function to extract data from input elements
-    def patient_data_from(data_key: str, input_id: str) -> None:
+    def get_data_from(data_key: str, input_id: str) -> None:
         input_element = soup.find('input', id=input_id)
         if input_element:
             patient_data[data_key] = input_element.get('value', '').strip()
 
     try:
-        # First convert HTML entities to their characters
-        html_content = html.unescape(html_content)
-
+        # Parse HTML content with BeautifulSoup
         soup = BeautifulSoup(html_content, 'html.parser')
         
         # Check if this is a single patient page by looking for 'Date pasaportale' in title
         if not is_expected_page(soup, 'Date pasaportale'):
             # Log snnippet of response for debugging
-            #logger.debug(f"Response text snippet: {html_content[:200]}...")
-            return {"error": "Backend returned an unexpected page"}
+            return create_error_response("Backend returned an unexpected page", 500, {"text": html_content[:200] + "..."})
         
         # Check if there is patient data on page by getting the name from the div with id "div_navbar"
         navbar_div = soup.find('div', id='div_navbar')
         if not navbar_div:
-            logger.warning("No navbar div found, invalid patient id")
-            return {"error": "Invalid patient id"}
-        
+            return create_error_response("Invalid patient id", 404)
         patient_name_from_navbar = navbar_div.get_text().strip()
         if not patient_name_from_navbar:
-            logger.warning("Patient name from navbar is empty, invalid patient id")
-            return {"error": "Invalid patient id"}
+            return create_error_response("Patient name from navbar is empty, invalid patient id", 404)
         
         # Patient name
         patient_data["patient_name"] = patient_name_from_navbar
         
         # Extract patient name from input elements
-        patient_data_from("family_name", "strNume")
-        patient_data_from("given_name", "strPrenume")
-        
+        get_data_from("family_name", "strNume")
+        get_data_from("given_name", "strPrenume")
         if patient_data.get("family_name") and patient_data.get("given_name"):
             patient_data["patient_name"] = f"{patient_data['family_name']} {patient_data['given_name']}".strip()
         
-        # Extract patient ID (CNP) from input element with id "strCNP"
-        patient_data_from("patient_cnp", "strCNP")
+        # Extract patient CNP from input element with id "strCNP"
+        get_data_from("patient_cnp", "strCNP")
         
         # Extract patient id from hidden input with id "hdnCodeID"
-        patient_data_from("patient_id", "hdnCodeID")
+        get_data_from("patient_id", "hdnCodeID")
         
         # Extract CID
-        patient_data_from("cid", "strCID")
+        get_data_from("cid", "strCID")
         
         # Extract phone
-        patient_data_from("phone", "strTelefon")
+        get_data_from("phone", "strTelefon")
         
         # Extract email
-        patient_data_from("email", "strEmail")
+        get_data_from("email", "strEmail")
         
         # Extract weight
-        patient_data_from("weight", "strGreutate")
+        get_data_from("weight", "strGreutate")
         
         # Extract height
-        patient_data_from("height", "strInaltime")
+        get_data_from("height", "strInaltime")
         
         # Extract MCP
-        patient_data_from("mcp", "strmcp")
+        get_data_from("mcp", "strmcp")
         
         # Extract address from SELECT with id strDomLegal_LocId
         address_select = soup.find('select', id='strDomLegal_LocId')
@@ -748,31 +743,19 @@ def parse_patient_data(html_content: str) -> Dict[str, Any]:
                         pass  # Keep birth_date empty if parsing fails
         
         # Extract encounters / presentations
-        encounter_links = soup.find_all('a', href=re.compile(r'../files/presentation\.asp\?id='))
-        if encounter_links:
-            patient_data["encounters"] = []
-        for link in encounter_links:
-            encounter_id = extract_id_from_link(link)
-            if encounter_id:
-                patient_data["encounters"].append(encounter_id)
+        encounter_ids = extract_ids_from_links(soup, r'../files/presentation\.asp\?id=(\d+)')
+        if encounter_ids:
+            patient_data["encounters"] = encounter_ids
         
         # Extract admissions / checkins
-        admission_links = soup.find_all('a', href=re.compile(r'../files/checkin\.asp\?id='))
-        if admission_links:
-            patient_data["admissions"] = []
-        for link in admission_links:
-            admission_id = extract_id_from_link(link)
-            if admission_id:
-                patient_data["admissions"].append(admission_id)
+        admission_ids = extract_ids_from_links(soup, r'../files/checkin\.asp\?id=(\d+)')
+        if admission_ids:
+            patient_data["admissions"] = admission_ids
         
         # Extract discharges / checkouts
-        discharge_links = soup.find_all('a', href=re.compile(r'../files/checkout\.asp\?id='))
-        if discharge_links:
-            patient_data["discharges"] = []
-        for link in discharge_links:
-            discharge_id = extract_id_from_link(link)
-            if discharge_id:
-                patient_data["discharges"].append(discharge_id)
+        discharge_ids = extract_ids_from_links(soup, r'../files/checkout\.asp\?id=(\d+)')
+        if discharge_ids:
+            patient_data["discharges"] = discharge_ids
         
         # Return the extracted patient data
         return patient_data
@@ -780,7 +763,7 @@ def parse_patient_data(html_content: str) -> Dict[str, Any]:
         logger.error(f"Error parsing patient data: {e}")
         return {}
 
-def parse_multiple_patients_data(html_content: str) -> List[Dict[str, Any]]:
+def parse_multiple_patients_data(html_content: str) -> Dict[str, Any]:
     """Parse HTML content for multiple patient search results and extract patient data.
     
     Extracts patient names, CNP, and ids from search results page with multiple patients.
@@ -792,9 +775,10 @@ def parse_multiple_patients_data(html_content: str) -> List[Dict[str, Any]]:
         List of dictionaries containing patient data (name, ID only)
     """
     # Initialize empty list for patients
-    patients = []
+    patients = {}
 
     try:
+        # Parse HTML content with BeautifulSoup
         soup = BeautifulSoup(html_content, 'html.parser')
         
         # Check if this is a search results page by looking for 'Fisier' in title
@@ -805,9 +789,10 @@ def parse_multiple_patients_data(html_content: str) -> List[Dict[str, Any]]:
             return patients
 
         # Find all links with the pattern javascript:Edit('patient_id')
-        for link in soup.find_all('a', href=re.compile(r"javascript:Edit\('([^']+)'\);")):
+        pattern = r"javascript:Edit\('([^']+)'\);"
+        for link in soup.find_all('a', href=re.compile(pattern)):
             # Extract patient id from href
-            patient_id = extract_id_from_link(link, r"javascript:Edit\('([^']+)'\);")
+            patient_id = extract_id_from_link(link, pattern)
             if not patient_id:
                 continue
 
@@ -818,11 +803,7 @@ def parse_multiple_patients_data(html_content: str) -> List[Dict[str, Any]]:
                 continue
 
             # Add patient data to list
-            patient_data = {
-                "patient_name": patient_name,
-                "patient_id": patient_id
-            }
-            patients.append(patient_data)
+            patients[patient_id] = patient_name
         # Return the list of patients
         return patients
 
@@ -1186,9 +1167,7 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
     }
 
     try:
-        # First convert HTML entities to their characters
-        html_content = html.unescape(html_content)
-        
+        # Parse HTML content with BeautifulSoup
         soup = BeautifulSoup(html_content, 'html.parser')
         
         # Extract text content for pattern matching
@@ -2728,9 +2707,7 @@ def html_to_markdown(html_content: str) -> str:
     """
     
     try:
-        # First convert HTML entities to their characters
-        html_content = html.unescape(html_content)
-        
+        # Parse the HTML content
         soup = BeautifulSoup(html_content, 'html.parser')
         
         # Remove XML namespace declarations and processing instructions
