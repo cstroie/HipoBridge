@@ -64,6 +64,15 @@ class CodeableConcept(Resource):
         super().__init__(data)
 
 
+class CodeableReference(Resource):
+    def __init__(self, concept: Optional[Dict[str, Any]] = None, reference: Optional[Dict[str, Any]] = None):
+        data = {
+            "concept": concept,         # Reference to a concept (by class)
+            "reference": reference      # Reference to a resource (by instance)
+        }
+        super().__init__(data)
+
+
 class Identifier(Resource):
     def __init__(self, use: Optional[str] = None, type: Optional[Dict[str, Any]] = None, 
                  system: Optional[str] = None, value: Optional[str] = None,
