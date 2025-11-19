@@ -203,18 +203,16 @@ def extract_id_from_link(link_element, id_pattern: str = r'id=(\d+)') -> Optiona
         Extracted ID string or None if not found
     """
     # Ensure link_element is valid
-    if not link_element:
-        return None
-    # Get href attribute
-    href = link_element.get('href', '')
-    id_match = re.search(id_pattern, href)
-    if id_match:
-        return id_match.group(1)
+    if link_element:
+        href = link_element.get('href', '')
+        id_match = re.search(id_pattern, href)
+        if id_match:
+            return id_match.group(1)
     return None
 
-def extract_ids_from_links(soup: BeautifulSoup, pattern: str = r'id=(\d+)', id_pattern: str = r'id=(\d+)') -> List[str]:
+def extract_ids_from_links(soup: BeautifulSoup, id_pattern: str = r'id=(\d+)') -> List[str]:
     ids_list = []
-    for item in soup.find_all('a', href=re.compile(pattern)):
+    for item in soup.find_all('a', href=re.compile(id_pattern)):
         href = item.get('href', '')
         id_match = re.search(id_pattern, href)
         if id_match:
