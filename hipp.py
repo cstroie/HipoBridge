@@ -2201,52 +2201,63 @@ def convert_request_to_service_request(request_data: Dict[str, Any], http_reques
     
     # Add reason code if diagnosis is available
     if request_data.get("diagnosis"):
-        fhir_service_request["reasonCode"] = [
-            {
-                "text": request_data["diagnosis"]
-            }
-        ]
+        # Handle different diagnosis formats
+        diagnosis_value = request_data["diagnosis"]
+        if isinstance(diagnosis_value, dict):
+            # If it's a dict, it might contain ICD codes
+            diagnosis_text = ""
+            for key, value in diagnosis_value.items():
+                if key == "text":
+                    diagnosis_text = value
+                else:
+                    # This is likely an ICD code
+                    diagnosis_text = f"{key} {value}"
+                    break
+            if diagnosis_text:
+                fhir_service_request["reasonCode"] = [
+                    {
+                        "text": diagnosis_text
+                    }
+                ]
+        else:
+            # If it's a string, use it directly
+            fhir_service_request["reasonCode"] = [
+                {
+                    "text": str(diagnosis_value)
+                }
+            ]
     
-    # Add supporting info for diagnosis if code is available
-    if request_data.get("diagnosis_code"):
-        fhir_service_request["supportingInfo"] = [
-            {
-                "reference": f"Condition/{request_data['request_id']}-diagnosis",
-                "display": f"{request_data['diagnosis_code']} - {request_data['diagnosis_display']}"
-            }
-        ]
-    
-    # Add clinical comments as reason reference to Condition
-    if request_data.get("clinical_comments"):
-        fhir_service_request["reasonReference"] = [
-            {
-                "reference": f"Condition/{request_data['request_id']}",
-                "display": request_data["clinical_comments"]
-            }
-        ]
-    
-    # Add note for lab comments
-    if request_data.get("lab_comments"):
-        if "note" not in fhir_service_request:
-            fhir_service_request["note"] = []
-        fhir_service_request["note"].append({
-            "text": request_data['lab_comments']
+    # Add note for clinical and lab comments
+    notes = []
+    if request_data.get("reason"):  # Clinical comments
+        notes.append({
+            "text": f"Clinical Comments: {request_data['reason']}"
         })
+    if request_data.get("note"):  # Lab comments
+        notes.append({
+            "text": f"Lab Comments: {request_data['note']}"
+        })
+    if notes:
+        fhir_service_request["note"] = notes
     
     # Add order details for procedures
     if request_data.get("procedures"):
         fhir_service_request["orderDetail"] = []
-        for procedure in request_data["procedures"]:
+        for code, description in request_data["procedures"].items():
             fhir_service_request["orderDetail"].append({
                 "coding": [
                     {
                         "system": f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/procedure-codes",
-                        "code": f"procedure-{procedure['code']}",
-                        "display": procedure["description"]
+                        "code": f"procedure-{code}",
+                        "display": description
                     }
                 ],
-                "text": procedure["description"]
+                "text": description
             })
+    
+    # Add authoredOn if request datetime is available
+    if request_data.get("request_datetime"):
+        fhir_service_request["authoredOn"] = request_data["request_datetime"]
     
     return fhir_service_request
 
