@@ -503,3 +503,44 @@ class Series(FHIRObject):
         }
         super().__init__(data)
 
+
+class ImagingStudy(FHIRObject):
+    def __init__(self,
+                 identifier: Optional[List[Dict[str, Any]]] = None,
+                 status: Optional[str] = None,
+                 modality: Optional[List[Dict[str, Any]]] = None,
+                 subject: Optional[Dict[str, Any]] = None,
+                 encounter: Optional[Dict[str, Any]] = None,
+                 started: Optional[str] = None,
+                 basedOn: Optional[List[Dict[str, Any]]] = None,
+                 procedure: Optional[List[Dict[str, Any]]] = None,
+                 referrer: Optional[Dict[str, Any]] = None,
+                 endpoint: Optional[List[Dict[str, Any]]] = None,
+                 location: Optional[Dict[str, Any]] = None,
+                 reason: Optional[List[Dict[str, Any]]] = None,
+                 note: Optional[List[Dict[str, Any]]] = None,
+                 description: Optional[str] = None,
+                 numberOfSeries: Optional[int] = None,
+                 numberOfInstances: Optional[int] = None,
+                 series: Optional[List[Dict[str, Any]]] = None):
+        data = {
+            "identifier": identifier,             # Business identifier for imaging study
+            "status": status,                     # registered | available | cancelled | entered-in-error | unknown | inactive
+            "modality": modality,                 # The distinct values for series' modalities
+            "subject": subject,                   # Who or what is the subject of the study
+            "encounter": encounter,               # Encounter with which this imaging study is associated
+            "started": started,                   # When the study was started
+            "basedOn": basedOn,                   # Fulfills plan or order
+            "procedure": procedure,               # Imaging performed procedure(s)
+            "referrer": referrer,                 # Referring physician
+            "endpoint": endpoint,                 # Study access endpoint
+            "location": location,                 # Where imaging study occurred
+            "reason": reason,                     # Why was imaging study performed?
+            "note": note,                         # Comments made about the imaging study
+            "description": description,           # Study Description or Classification
+            "numberOfSeries": numberOfSeries,     # Number of Study Related Series
+            "numberOfInstances": numberOfInstances,  # Number of Study Related Instances
+            "series": series                      # The set of Series belonging to the study
+        }
+        super().__init__(data)
+
