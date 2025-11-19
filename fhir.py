@@ -31,17 +31,6 @@ class Resource(MutableMapping):
         """Convert to dict, excluding None values"""
         return {k: v for k, v in self.data.items() if v is not None}
 
-class CodeableReference(Resource):
-    def __init__(self, reference: Optional[str] = None, type: Optional[str] = None, identifier: Optional[Dict[str, Any]] = None, display: Optional[str] = None):
-        data = {
-            "reference": reference,     # Literal reference, Relative, internal or absolute URL
-            "type": type,               # Type the reference refers to (e.g. "Patient") - must be a resource in resources
-            "identifier": identifier,   # Logical reference, when literal reference is not known
-            "display": display          # Text alternative for the resource
-        }
-        super().__init__(data)
-
-
 class Coding(Resource):
     def __init__(self, system: Optional[str] = None, version: Optional[str] = None, code: Optional[str] = None, 
                  display: Optional[str] = None, userSelected: Optional[bool] = None):
@@ -60,15 +49,6 @@ class CodeableConcept(Resource):
         data = {
             "coding": coding,           # Code defined by a terminology system
             "text": text                # Plain text representation of the concept
-        }
-        super().__init__(data)
-
-
-class CodeableReference(Resource):
-    def __init__(self, concept: Optional[Dict[str, Any]] = None, reference: Optional[Dict[str, Any]] = None):
-        data = {
-            "concept": concept,         # Reference to a concept (by class)
-            "reference": reference      # Reference to a resource (by instance)
         }
         super().__init__(data)
 
