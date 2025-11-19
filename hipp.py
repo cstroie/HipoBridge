@@ -192,6 +192,36 @@ def extract_field_from_td(soup: BeautifulSoup, label_regex: str, stop_at: str = 
     return extract_text_after_label(soup, label_regex, 'td', stop_at)
 
 
+def extract_id_from_link(link_element, id_pattern: str = r'id=(\d+)') -> Optional[str]:
+    """Extract ID from a link element's href attribute.
+    
+    Args:
+        link_element: BeautifulSoup element with href attribute
+        id_pattern: Regex pattern to extract ID from href (default: r'id=([^&"]+)')
+        
+    Returns:
+        Extracted ID string or None if not found
+    """
+    # Ensure link_element is valid
+    if not link_element:
+        return None
+    # Get href attribute
+    href = link_element.get('href', '')
+    id_match = re.search(id_pattern, href)
+    if id_match:
+        return id_match.group(1)
+    return None
+
+def extract_ids_from_links(soup: BeautifulSoup, id_pattern: str = r'id=(\d+)') -> List[str]:
+    ids_list = []
+    for item in soup.find_all('a', href=re.compile(pattern)):
+        href = item.get('href', '')
+        id_match = re.search(id_pattern, href)
+        if id_match:
+            ids_list.append(id_match.group(1))
+    return ids_list
+
+
 
 
 
@@ -2138,9 +2168,11 @@ def parse_request_data(html_content: str) -> Dict[str, Any]:
                         })
         
         # Extract admission ID from the "Back" link
-        back_link = soup.find('a', class_='lnk', href=re.compile(r'checkin\.asp\?id='))
-        if back_link:
-            admission_id = extract_id_from_link(back_link, r'id=(\d+)')
+        # It might be checkin or checkup. We look for checkin for now.
+        pattern = r'/checkin\.asp\?id=(\d+)'
+        link_element = soup.find('a', href=re.compile(pattern))
+        if link_element:
+            admission_id = extract_id_from_link(link_element, pattern)
             if admission_id:
                 request_data["admission_id"] = admission_id
         
@@ -3272,26 +3304,6 @@ async def init_app():
     app.on_cleanup.append(on_cleanup)
     
     return app
-
-
-def extract_id_from_link(link_element, id_pattern: str = r'id=([^&"]+)') -> Optional[str]:
-    """Extract ID from a link element's href attribute.
-    
-    Args:
-        link_element: BeautifulSoup element with href attribute
-        id_pattern: Regex pattern to extract ID from href (default: r'id=([^&"]+)')
-        
-    Returns:
-        Extracted ID string or None if not found
-    """
-    if not link_element:
-        return None
-    
-    href = link_element.get('href', '')
-    id_match = re.search(id_pattern, href)
-    if id_match:
-        return id_match.group(1)
-    return None
 
 def get_basic_auth(request):
     """Extract basic auth credentials from request.
