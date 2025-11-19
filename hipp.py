@@ -178,20 +178,6 @@ def extract_text_after_label(soup: BeautifulSoup, label_regex: str, element_tag:
         logger.error(f"Error extracting field with label '{label_regex}': {e}")
         return ""
 
-def extract_field_from_td(soup: BeautifulSoup, label_regex: str, stop_at: str = None) -> str:
-    """Extract field data from a table cell containing a label.
-    
-    Args:
-        soup: BeautifulSoup object of the parsed HTML content
-        label_regex: Regular expression pattern to match label text
-        stop_at: Optional string pattern to stop extraction at
-        
-    Returns:
-        Extracted field content or empty string if not found
-    """
-    return extract_text_after_label(soup, label_regex, 'td', stop_at)
-
-
 def extract_id_from_link(link_element, id_pattern: str = r'id=([^&"]+)') -> Optional[str]:
     """Extract ID from a link element's href attribute.
     
@@ -1225,7 +1211,7 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
             report_data["performer"] = re.sub(r'\s+', ' ', performer_match.group(1).strip())
         
         # Extract fields using the helper function
-        report_data["examination"] = extract_field_from_td(soup, r'EXAMINARE EFECTUATA:')
+        report_data["examination"] = extract_text_after_label(soup, r'EXAMINARE EFECTUATA:', 'td')
         
         # Extract modality from examination text
         examination_text = report_data["examination"].lower() if report_data["examination"] else ""
@@ -1244,10 +1230,10 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
                 report_data["modality"] = modality
                 break
         
-        report_data["referral_reason"] = extract_field_from_td(soup, r'DIAGNOSTIC DE TRIMITERE:')
-        report_data["presumptive_diagnosis"] = extract_field_from_td(soup, r'DG\.PREZUMTIV:')
-        report_data["special_indications"] = extract_field_from_td(soup, r'INDICATII SPECIALE:')
-        report_data["referring_physician"] = extract_field_from_td(soup, r'TRIMIS DE:\s*MEDIC', stop_at=r'SECTIA')
+        report_data["referral_reason"] = extract_text_after_label(soup, r'DIAGNOSTIC DE TRIMITERE:', 'td')
+        report_data["presumptive_diagnosis"] = extract_text_after_label(soup, r'DG\.PREZUMTIV:', 'td')
+        report_data["special_indications"] = extract_text_after_label(soup, r'INDICATII SPECIALE:', 'td')
+        report_data["referring_physician"] = extract_text_after_label(soup, r'TRIMIS DE:\s*MEDIC', 'td', stop_at=r'SECTIA')
         
         # Parse referral code and reason if we have referral data
         if report_data["referral_reason"]:
