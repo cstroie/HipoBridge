@@ -95,3 +95,15 @@ class HumanName(FHIRObject):
         }
         super().__init__(data)
 
+
+class Reference(FHIRObject):
+    def __init__(self, reference: Optional[str] = None, type: Optional[str] = None,
+                 identifier: Optional[Dict[str, Any]] = None, display: Optional[str] = None):
+        data = {
+            "reference": reference,     # Literal reference, Relative, internal or absolute URL
+            "type": type,               # Type the reference refers to (e.g. "Patient") - must be a resource in resources
+            "identifier": identifier,   # Logical reference, when literal reference is not known
+            "display": display          # Text alternative for the resource
+        }
+        super().__init__(data)
+
