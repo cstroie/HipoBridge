@@ -173,6 +173,7 @@ class Annotation(Resource):
 
 class Patient(Resource):
     def __init__(self, 
+                 id: Optional[str] = None,
                  identifier: Optional[List[Dict[str, Any]]] = None,
                  active: Optional[bool] = None,
                  name: Optional[List[Dict[str, Any]]] = None,
@@ -192,6 +193,7 @@ class Patient(Resource):
                  managingOrganization: Optional[Dict[str, Any]] = None,
                  link: Optional[List[Dict[str, Any]]] = None):
         data = {
+            "id": id,                                           # Logical id of this artifact
             "identifier": identifier,                           # An identifier for this patient
             "active": active,                                   # Whether this patient's record is in active use
             "name": name,                                       # A name associated with the patient
