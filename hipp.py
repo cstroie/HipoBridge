@@ -43,7 +43,7 @@ import configparser
 import base64
 
 # Import FHIR classes
-from fhir import ServiceRequest as FHIRServiceRequest, CodeableConcept, Coding, Reference, CodeableReference
+from fhir import ServiceRequest as FHIRServiceRequest, CodeableConcept, Coding, Reference, CodeableReference, Condition
 
 
 # Configure logging
