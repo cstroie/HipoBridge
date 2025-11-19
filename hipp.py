@@ -269,6 +269,15 @@ class Coding(FHIRObject):
         super().__init__(data)
 
 
+class CodeableConcept(FHIRObject):
+    def __init__(self, coding: Optional[List[Dict[str, Any]]] = None, text: Optional[str] = None):
+        data = {
+            "coding": coding,           # Code defined by a terminology system
+            "text": text               # Plain text representation of the concept
+        }
+        super().__init__(data)
+
+
 
 
 
