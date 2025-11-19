@@ -2199,33 +2199,13 @@ def convert_request_to_service_request(request_data: Dict[str, Any], http_reques
             "reference": f"Encounter/{request_data['admission_id']}"
         }
     
-    # Add reason code if diagnosis is available
-    if request_data.get("diagnosis"):
-        # Handle different diagnosis formats
-        diagnosis_value = request_data["diagnosis"]
-        if isinstance(diagnosis_value, dict):
-            # If it's a dict, it might contain ICD codes
-            diagnosis_text = ""
-            for key, value in diagnosis_value.items():
-                if key == "text":
-                    diagnosis_text = value
-                else:
-                    # This is likely an ICD code
-                    diagnosis_text = f"{key} {value}"
-                    break
-            if diagnosis_text:
-                fhir_service_request["reasonCode"] = [
-                    {
-                        "text": diagnosis_text
-                    }
-                ]
-        else:
-            # If it's a string, use it directly
-            fhir_service_request["reasonCode"] = [
-                {
-                    "text": str(diagnosis_value)
-                }
-            ]
+    # Add reason code if reason (clinical comments) is available
+    if request_data.get("reason"):
+        fhir_service_request["reasonCode"] = [
+            {
+                "text": request_data["reason"]
+            }
+        ]
     
     # Add note for clinical and lab comments
     notes = []
