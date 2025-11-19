@@ -137,3 +137,17 @@ class Address(FHIRObject):
         }
         super().__init__(data)
 
+
+class ContactPoint(FHIRObject):
+    def __init__(self, system: Optional[str] = None, value: Optional[str] = None,
+                 use: Optional[str] = None, rank: Optional[int] = None,
+                 period: Optional[Dict[str, Any]] = None):
+        data = {
+            "system": system,           # phone | fax | email | pager | url | sms | other
+            "value": value,             # The actual contact point details
+            "use": use,                 # home | work | temp | old | mobile - purpose of this contact point
+            "rank": rank,               # Specify preferred order of use (1 = highest)
+            "period": period            # Time period when the contact point was/is in use
+        }
+        super().__init__(data)
+
