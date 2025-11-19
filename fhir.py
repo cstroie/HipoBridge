@@ -316,3 +316,62 @@ class ServiceRequest(FHIRObject):
         }
         super().__init__(data)
 
+
+class Condition(FHIRObject):
+    def __init__(self,
+                 identifier: Optional[List[Dict[str, Any]]] = None,
+                 clinicalStatus: Optional[Dict[str, Any]] = None,
+                 verificationStatus: Optional[Dict[str, Any]] = None,
+                 category: Optional[List[Dict[str, Any]]] = None,
+                 severity: Optional[Dict[str, Any]] = None,
+                 code: Optional[Dict[str, Any]] = None,
+                 bodySite: Optional[List[Dict[str, Any]]] = None,
+                 bodyStructure: Optional[Dict[str, Any]] = None,
+                 subject: Optional[Dict[str, Any]] = None,
+                 encounter: Optional[Dict[str, Any]] = None,
+                 onsetDateTime: Optional[str] = None,
+                 onsetAge: Optional[Dict[str, Any]] = None,
+                 onsetPeriod: Optional[Dict[str, Any]] = None,
+                 onsetRange: Optional[Dict[str, Any]] = None,
+                 onsetString: Optional[str] = None,
+                 abatementDateTime: Optional[str] = None,
+                 abatementAge: Optional[Dict[str, Any]] = None,
+                 abatementPeriod: Optional[Dict[str, Any]] = None,
+                 abatementRange: Optional[Dict[str, Any]] = None,
+                 abatementString: Optional[str] = None,
+                 recordedDate: Optional[str] = None,
+                 recorder: Optional[Dict[str, Any]] = None,
+                 asserter: Optional[Dict[str, Any]] = None,
+                 stage: Optional[List[Dict[str, Any]]] = None,
+                 evidence: Optional[List[Dict[str, Any]]] = None,
+                 note: Optional[List[Dict[str, Any]]] = None):
+        data = {
+            "identifier": identifier,                           # External Ids for this condition
+            "clinicalStatus": clinicalStatus,                   # active | recurrence | relapse | inactive | remission | resolved | unknown
+            "verificationStatus": verificationStatus,           # unconfirmed | provisional | differential | confirmed | refuted | entered-in-error
+            "category": category,                               # problem-list-item | encounter-diagnosis
+            "severity": severity,                               # Subjective severity of condition
+            "code": code,                                       # Identification of the condition, problem or diagnosis
+            "bodySite": bodySite,                               # Anatomical location, if relevant
+            "bodyStructure": bodyStructure,                     # Anatomical body structure
+            "subject": subject,                                 # Who has the condition?
+            "encounter": encounter,                             # The Encounter during which this Condition was created
+            "onsetDateTime": onsetDateTime,                     # Estimated or actual date, date-time, or age
+            "onsetAge": onsetAge,                               # Estimated or actual date, date-time, or age
+            "onsetPeriod": onsetPeriod,                         # Estimated or actual date, date-time, or age
+            "onsetRange": onsetRange,                           # Estimated or actual date, date-time, or age
+            "onsetString": onsetString,                         # Estimated or actual date, date-time, or age
+            "abatementDateTime": abatementDateTime,             # When in resolution/remission
+            "abatementAge": abatementAge,                       # When in resolution/remission
+            "abatementPeriod": abatementPeriod,                 # When in resolution/remission
+            "abatementRange": abatementRange,                   # When in resolution/remission
+            "abatementString": abatementString,                 # When in resolution/remission
+            "recordedDate": recordedDate,                       # Date condition was first recorded
+            "recorder": recorder,                               # Who recorded the condition
+            "asserter": asserter,                               # Person or device that asserts this condition
+            "stage": stage,                                     # Stage/grade, usually assessed formally
+            "evidence": evidence,                               # Supporting evidence for the condition
+            "note": note                                        # Additional information about the Condition
+        }
+        super().__init__(data)
+
