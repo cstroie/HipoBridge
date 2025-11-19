@@ -2019,114 +2019,133 @@ async def service_request(request):
             return error_response
         
         logger.info(f"Service request retrieval completed successfully in {duration:.2f} seconds")
-        # Parse the service request data
-        parsed_data = parse_request_data(response_text)
         
-        # Ensure the service request ID from URL is included in parsed data
-        if "request_id" not in parsed_data or not parsed_data["request_id"]:
-            parsed_data["request_id"] = service_request_id
-        
-        # Create FHIR ServiceRequest resource
-        fhir_service_request = convert_request_to_service_request(parsed_data, request)
+        # Create FHIR ServiceRequest resource directly from HTML content
+        fhir_service_request = convert_to_service_request(response_text, service_request_id, request)
         
         return web.json_response(fhir_service_request)
             
     except Exception as e:
         return create_error_response("Service request retrieval failed", 500, {"exception": str(e)})
 
-def parse_request_data(html_content: str) -> Dict[str, Any]:
-    """Parse HTML service request content and extract structured data.
+def convert_to_service_request(html_content: str, service_request_id: str, http_request) -> Dict[str, Any]:
+    """Convert HTML service request content directly to FHIR ServiceRequest resource.
     
-    Extracts patient information and medical data from service request HTML content.
+    Extracts patient information and medical data from service request HTML content
+    and converts it directly to a FHIR ServiceRequest resource.
     
     Args:
         html_content: HTML content of the service request page
+        service_request_id: The ID of the service request
+        http_request: The HTTP request object to get the host
         
     Returns:
-        Dictionary containing parsed service request data
+        FHIR ServiceRequest resource
     """
     try:
         # Parse HTML content
         soup = BeautifulSoup(html_content, 'html.parser')
         
-        # Initialize result dictionary
-        request_data = {
-            "patient_name": "",
-            "patient_cnp": "",
-            "patient_id": "",
-            "barcode": "",
-            "department": "",
-            "physician": "",
-            "diagnosis": {},
-            "reason": "",
-            "note": "",
-            "procedures": {},
-            "request_datetime": "",
-            "status": "active"
-        }
+        # Create FHIR ServiceRequest resource using the FHIR class
+        fhir_service_request = FHIRServiceRequest(
+            id=service_request_id,
+            status="active",
+            intent="order",
+            priority="routine"
+        )
         
         # Extract patient name
         patient_name = extract_text_after_label(soup, r'Nume Pacient:')
-        if patient_name:
-            request_data["patient_name"] = patient_name
         
-        # Extract patient CNP
-        patient_cnp = extract_text_after_label(soup, r'CNP:')
-        if patient_cnp:
-            request_data["patient_cnp"] = patient_cnp
-                
-        # Extract identifier (Cod Buletin)
-        barcode = extract_text_after_label(soup, r'Cod Buletin:')
-        if barcode:
-            request_data["barcode"] = barcode
-                
-        # Extract department
-        department = extract_text_after_label(soup, r'SECTIA:', stop_at=r'-')
-        if department:
-            request_data["department"] = department
-                
+        # Extract patient ID
+        patient_id = ""
+        # Try to extract patient ID from various possible locations
+        patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id='))
+        if patient_link:
+            patient_id = extract_id_from_link(patient_link)
+        
+        # Create subject reference
+        subject = Reference(
+            reference=f"Patient/{patient_id}"
+        )
+        
+        # Add patient name to subject if available
+        if patient_name:
+            subject["display"] = patient_name
+        fhir_service_request["subject"] = subject.to_dict()
+        
+        # Create codeable concept for the service type
+        code = CodeableConcept(
+            coding=[{
+                "system": f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/service-types",
+                "code": "imaging-study",
+                "display": "Imaging Study"
+            }],
+            text="Imaging Study Request"
+        )
+        fhir_service_request["code"] = code.to_dict()
+        
         # Extract physician
         physician = extract_text_after_label(soup, r'Medicul:', stop_at=r'-')
+        # Add requester if available (requesting doctor)
         if physician:
-            request_data["physician"] = physician
-                
-        # Extract request datetime (Data si ora cererii)
-        request_datetime = extract_text_after_label(soup, r'Data si ora cererii:', stop_at=r'Receptionat')
-        if request_datetime:
-            # Parse the datetime using our parse_date_time function
-            parsed_dt = parse_date_time(request_datetime)
-            if parsed_dt:
-                # Convert to ISO format
-                request_data["request_datetime"] = parsed_dt.isoformat()
-            else:
-                # If parsing fails, keep the original string
-                request_data["request_datetime"] = request_datetime
-                
-        # Extract diagnosis (Data si ora cererii)
+            fhir_service_request["requester"] = Reference(display=physician).to_dict()
+        
+        # Extract admission ID from the "Back" link
+        admission_ids = extract_ids_from_links(soup, r'/checkin\.asp\?id=([^&"]+)')
+        # Add encounter if we can derive it
+        if admission_ids:
+            fhir_service_request["encounter"] = Reference(
+                reference=f"Encounter/{admission_ids[0]}"
+            ).to_dict()
+        
+        # Extract diagnosis
         diagnosis = extract_text_after_label(soup, r'Diagnostic:', 'td')
+        # Add reason code if diagnosis is available
         if diagnosis:
             # Try to extract ICD-10 code from the diagnosis text
             # Format is usually "CODE Description"
             diagnosis_match = re.match(r'^(\d{3,4})\s+(.+)$', diagnosis)
             if diagnosis_match:
-                request_data["diagnosis"][diagnosis_match.group(1)] = diagnosis_match.group(2)
+                fhir_service_request["reason"] = [{
+                    "identifier": diagnosis_match.group(1),
+                    "display": diagnosis_match.group(2)
+                }]
             else:
                 # If no code found, use the entire diagnosis as display text
-                request_data["diagnosis"]["text"] = diagnosis
+                fhir_service_request["reason"] = [{
+                    "identifier": "text",
+                    "display": diagnosis
+                }]
 
         # Extract comments (clinical and lab)
         # Find the table with comments headers
         comment_headers = soup.find_all('td', class_='tdnplus', string=re.compile(r'Comentariile', re.IGNORECASE))
+        reason_text = ""
+        note_text = ""
         if len(comment_headers) >= 2:
             # Get the next row which contains the actual comments
             comment_row = comment_headers[0].parent.find_next_sibling('tr')
             if comment_row:
                 comment_tds = comment_row.find_all('td', class_='tdn')
                 if len(comment_tds) >= 2:
-                    request_data["reason"] = comment_tds[0].get_text().strip()
-                    request_data["note"] = comment_tds[1].get_text().strip()
+                    reason_text = comment_tds[0].get_text().strip()
+                    note_text = comment_tds[1].get_text().strip()
+        
+        # Add reason reference if clinical comments are available
+        if reason_text:
+            fhir_service_request["supportingInfo"] = [{
+                "display": reason_text
+            }]
+
+        # Add note for lab comments
+        if note_text:
+            fhir_service_request["note"] = [{
+                "text": note_text
+            }]
         
         # Extract procedures from the table
+        procedures = {}
         procedure_rows = soup.find_all('tr')
         for row in procedure_rows:
             cells = row.find_all('td')
@@ -2136,113 +2155,40 @@ def parse_request_data(html_content: str) -> Dict[str, Any]:
                 if first_cell_text and first_cell_text.isdigit():
                     procedure_text = cells[1].get_text().strip()
                     if procedure_text:
-                        request_data["procedures"][first_cell_text] = procedure_text
+                        procedures[first_cell_text] = procedure_text
         
-        # Extract admission ID from the "Back" link
-        # It might be checkin or checkup. We look for checkin for now.
-        admission_ids = extract_ids_from_links(soup, r'/checkin\.asp\?id=([^&"]+)')
-        if admission_ids:
-            request_data["admission_id"] = admission_ids[0]
+        # Add order details for procedures
+        if procedures:
+            order_details = []
+            for code, description in procedures.items():
+                order_detail = CodeableConcept(
+                    coding=[{
+                        "system": f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/procedure-codes",
+                        "code": f"procedure-{code}",
+                        "display": description
+                    }],
+                    text=description
+                )
+                order_details.append(order_detail.to_dict())
+            fhir_service_request["orderDetail"] = order_details
         
-        logger.debug(request_data)
-
-        return request_data
+        # Extract request datetime (Data si ora cererii)
+        request_datetime = extract_text_after_label(soup, r'Data si ora cererii:', stop_at=r'Receptionat')
+        # Add authoredOn if request datetime is available
+        if request_datetime:
+            # Parse the datetime using our parse_date_time function
+            parsed_dt = parse_date_time(request_datetime)
+            if parsed_dt:
+                # Convert to ISO format
+                fhir_service_request["authoredOn"] = parsed_dt.isoformat()
+            else:
+                # If parsing fails, keep the original string
+                fhir_service_request["authoredOn"] = request_datetime
+        
+        return fhir_service_request.to_dict()
     except Exception as e:
-        logger.error(f"Error parsing service request data: {e}")
+        logger.error(f"Error converting service request data: {e}")
         return {}
-
-
-def convert_request_to_service_request(request_data: Dict[str, Any], http_request) -> Dict[str, Any]:
-    """Convert parsed request data to FHIR ServiceRequest resource format.
-    
-    Args:
-        request_data: Parsed request data from parse_request_data
-        http_request: The HTTP request object to get the host
-        
-    Returns:
-        FHIR ServiceRequest resource
-    """
-    # Create FHIR ServiceRequest resource using the FHIR class
-    fhir_service_request = FHIRServiceRequest(
-        id=request_data.get("request_id", ""),
-        status=request_data.get("status", "active"),
-        intent="order",
-        priority="routine"
-    )
-    
-    # Create codeable concept for the service type
-    code = CodeableConcept(
-        coding=[{
-            "system": f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/service-types",
-            "code": "imaging-study",
-            "display": "Imaging Study"
-        }],
-        text="Imaging Study Request"
-    )
-    fhir_service_request["code"] = code.to_dict()
-    
-    # Create subject reference
-    subject = Reference(
-        reference=f"Patient/{request_data.get('patient_id', '')}"
-    )
-    
-    # Add patient name to subject if available
-    if request_data.get("patient_name"):
-        subject["display"] = request_data["patient_name"]
-    fhir_service_request["subject"] = subject.to_dict()
-    
-    # Add requester if available (requesting doctor)
-    if request_data.get("physician"):
-        fhir_service_request["requester"] = Reference(display=request_data["physician"]).to_dict()
-    
-    # Add encounter if we can derive it
-    if request_data.get("admission_id"):
-        fhir_service_request["encounter"] = Reference(
-            reference=f"Encounter/{request_data['admission_id']}"
-        ).to_dict()
-    
-    # Add reason code if reason (clinical comments) is available
-    if request_data.get("diagnosis"):
-        reasons = []
-        for code, desc in request_data["diagnosis"].items():
-            reasons.append({
-                "identifier": code,
-                "display": desc
-            })
-        fhir_service_request["reason"] = reasons
-
-    # Add reason reference if clinical comments are available
-    if request_data.get("reason"):
-        fhir_service_request["supportingInfo"] = [{
-            "display": f"{request_data['reason']}"
-        }]
-
-    # Add note for clinical and lab comments
-    if request_data.get("note"):
-        fhir_service_request["note"] = [{
-            "text": f"{request_data['note']}"
-        }]
-    
-    # Add order details for procedures
-    if request_data.get("procedures"):
-        order_details = []
-        for code, description in request_data["procedures"].items():
-            order_detail = CodeableConcept(
-                coding=[{
-                    "system": f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/procedure-codes",
-                    "code": f"procedure-{code}",
-                    "display": description
-                }],
-                text=description
-            )
-            order_details.append(order_detail.to_dict())
-        fhir_service_request["orderDetail"] = order_details
-    
-    # Add authoredOn if request datetime is available
-    if request_data.get("request_datetime"):
-        fhir_service_request["authoredOn"] = request_data["request_datetime"]
-    
-    return fhir_service_request.to_dict()
 
 
 @require_auth
