@@ -306,11 +306,9 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
                 response_text = await _make_request(use_retry_headers=True)
                 # Check again if still on login page
                 if is_login_page(response_text):
-                    logger.error("Login failed after retry")
                     return None, False, create_error_response("Authentication failed after retry", 401)
             else:
-                logger.error("Re-login failed")
-                return None, False, create_error_response("Authentication failed", 401)
+                return None, False, create_error_response("Re-authentication failed", 401)
         
         # Cache the response for GET requests
         if method == "GET":
@@ -330,8 +328,7 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
         # If we reach here, we have a valid response
         return response_text, True, None
     except Exception as e:
-        logger.error(f"Request to {url} failed with exception: {e}")
-        return None, False, create_error_response(str(e), 500)
+        return None, False, create_error_response(str(e), 500, {"URL": url})
 
 async def handle_response_encoding(response):
     """Handle response encoding for the Hipocrate service.
@@ -372,7 +369,6 @@ async def patient(request):
     logger.info(f"GET /fhir/Patient/{patient_id} endpoint accessed")
     
     if not patient_id:
-        logger.warning("No patient ID provided")
         return create_error_response("Patient ID is required (not CNP)")
     
     logger.info(f"Retrieving patient with ID: {patient_id}")
@@ -411,8 +407,7 @@ async def patient(request):
             return create_error_response("Unable to read patient data", 500)
             
     except Exception as e:
-        logger.error(f"Patient retrieval failed with exception: {e}")
-        return create_error_response(str(e), 500)
+        return create_error_response("Patient retrieval failed", 500, {"exception": str(e)})
 
 @require_auth
 async def patient_search(request):
@@ -438,7 +433,6 @@ async def patient_search(request):
     search_term = request.query.get('q', '')
     
     if not search_term:
-        logger.warning("No search term provided")
         return create_error_response("Search term is required")
     
     try:
@@ -592,19 +586,15 @@ async def patient_search(request):
             }
             return web.json_response(bundle)
 
-        # If neither parser worked, return an error
-        logger.warning("Unable to parse patient search results")
         # Log a snippet of the response for debugging
-        logger.debug(f"Response text snippet: {response_text[:200]}...")
         return create_error_response(
             "Unable to parse patient search results", 
             500, 
-            {"type": "parse_error"}
+            {"text": response_text[:200] + "..."}
         )
 
     except Exception as e:
-        logger.error(f"Patient search failed with exception: {e}")
-        return create_error_response(str(e), 500)
+        return create_error_response("Patient search failed", 500, {"exception": str(e)})
 
 def parse_patient_data(html_content: str) -> Dict[str, Any]:
     """Parse HTML content for a single patient page and extract patient data.
@@ -941,7 +931,6 @@ async def diagnostic_report(request):
     username, password = request.auth_credentials
     
     if not report_id:
-        logger.warning("No report ID provided")
         return create_error_response("Report ID is required")
     
     logger.info(f"Retrieving report with ID: {report_id}")
@@ -989,13 +978,11 @@ async def diagnostic_report(request):
                         fhir_report = convert_report_to_diagnostic_report(report_data, request)
                         return web.json_response(fhir_report)
                     else:
-                        logger.warning("No report data found in the retrieved report")
-                        return create_error_response("No report data found", 404)
+                        return create_error_response("No report data found in the retrieved report", 404)
                 
                 # Handle 302 redirect
                 location = response.headers.get("Location")
                 if not location:
-                    logger.error("302 redirect without Location header")
                     return create_error_response("Redirect without location header", 500)
                 
                 # Construct the full URL for the redirect
@@ -1014,12 +1001,10 @@ async def diagnostic_report(request):
                 redirect_count += 1
         
         # If we've exceeded the maximum redirects
-        logger.error(f"Exceeded maximum redirects ({max_redirects}) while retrieving report")
         return create_error_response(f"Exceeded maximum redirects ({max_redirects})", 500)
             
     except Exception as e:
-        logger.error(f"Report retrieval failed with exception: {e}")
-        return create_error_response(str(e), 500)
+        return create_error_response("Report retrieval failed", 500, {"exception": str(e)})
 
 @require_auth
 async def imaging_study(request):
@@ -1042,7 +1027,6 @@ async def imaging_study(request):
     username, password = request.auth_credentials
     
     if not study_id:
-        logger.warning("No study ID provided")
         return create_error_response("Study ID is required")
     
     logger.info(f"Retrieving imaging study with ID: {study_id}")
@@ -1090,13 +1074,11 @@ async def imaging_study(request):
                         fhir_imaging_study = convert_report_to_imaging_study(report_data, request)
                         return web.json_response(fhir_imaging_study)
                     else:
-                        logger.warning("No report data found in the retrieved imaging study")
-                        return create_error_response("No report data found", 404)
+                        return create_error_response("No report data found in the retrieved imaging study", 404)
                 
                 # Handle 302 redirect
                 location = response.headers.get("Location")
                 if not location:
-                    logger.error("302 redirect without Location header")
                     return create_error_response("Redirect without location header", 500)
                 
                 # Construct the full URL for the redirect
@@ -1115,12 +1097,10 @@ async def imaging_study(request):
                 redirect_count += 1
         
         # If we've exceeded the maximum redirects
-        logger.error(f"Exceeded maximum redirects ({max_redirects}) while retrieving imaging study")
         return create_error_response(f"Exceeded maximum redirects ({max_redirects})", 500)
             
     except Exception as e:
-        logger.error(f"Imaging study retrieval failed with exception: {e}")
-        return create_error_response(str(e), 500)
+        return create_error_response("Imaging study retrieval failed", 500, {"exception": str(e)})
 
 def parse_report_data(html_content: str) -> Dict[str, Any]:
     """Parse HTML report content and extract structured data.
@@ -1565,7 +1545,6 @@ async def observation(request):
     username, password = request.auth_credentials
     
     if not observation_id:
-        logger.warning("No observation ID provided")
         return create_error_response("Observation ID is required")
     
     logger.info(f"Retrieving observation with ID: {observation_id}")
@@ -1641,8 +1620,7 @@ async def observation(request):
         return web.json_response(fhir_observation)
             
     except Exception as e:
-        logger.error(f"Observation retrieval failed with exception: {e}")
-        return create_error_response(str(e), 500)
+        return create_error_response("Observation retrieval failed", 500, {"exception": str(e)})
 
 @require_auth
 async def observation_search(request):
@@ -1665,7 +1643,6 @@ async def observation_search(request):
     username, password = request.auth_credentials
     
     if not patient_id:
-        logger.warning("No patient ID provided")
         return create_error_response("Patient ID is required")
     
     # Get optional parameters
@@ -1782,8 +1759,7 @@ async def observation_search(request):
         return web.json_response(bundle)
             
     except Exception as e:
-        logger.error(f"Analyses list retrieval failed with exception: {e}")
-        return create_error_response(str(e), 500)
+        return create_error_response("Analyses list retrieval failed", 500, {"exception": str(e)})
 
 def parse_analyses_data(html_content: str) -> Dict[str, Any]:
     """Parse HTML analyses content and extract analysis IDs, analysis types, patient name, and patient id.
@@ -2013,11 +1989,11 @@ async def service_request(request):
     See:
         https://build.fhir.org/servicerequest.html
     """
+    # Extract service request ID from path
     service_request_id = request.match_info.get('id')
     logger.info(f"GET /fhir/ServiceRequest/{service_request_id} endpoint accessed")
     
     if not service_request_id:
-        logger.warning("No service request ID provided")
         return create_error_response("Service request ID is required")
     
     logger.info(f"Retrieving service request with ID: {service_request_id}")
@@ -2055,9 +2031,7 @@ async def service_request(request):
         return web.json_response(fhir_service_request)
             
     except Exception as e:
-        logger.error(f"Service request retrieval failed with exception: {e}")
-        return create_error_response(str(e), 500)
-
+        return create_error_response("Service request retrieval failed", 500, {"exception": str(e)})
 
 def parse_request_data(html_content: str) -> Dict[str, Any]:
     """Parse HTML service request content and extract structured data.
@@ -2071,6 +2045,7 @@ def parse_request_data(html_content: str) -> Dict[str, Any]:
         Dictionary containing parsed service request data
     """
     try:
+        # Parse HTML content
         soup = BeautifulSoup(html_content, 'html.parser')
         
         # Initialize result dictionary
@@ -2081,11 +2056,11 @@ def parse_request_data(html_content: str) -> Dict[str, Any]:
             "barcode": "",
             "department": "",
             "physician": "",
-            "request_datetime": "",
-            "diagnosis": "",
+            "diagnosis": {},
             "reason": "",
             "note": "",
-            "procedures": [],
+            "procedures": {},
+            "request_datetime": "",
             "status": "active"
         }
         
@@ -2129,16 +2104,14 @@ def parse_request_data(html_content: str) -> Dict[str, Any]:
         # Extract diagnosis (Data si ora cererii)
         diagnosis = extract_text_after_label(soup, r'Diagnostic:', 'td')
         if diagnosis:
-            request_data["diagnosis"] = diagnosis
             # Try to extract ICD-10 code from the diagnosis text
             # Format is usually "CODE Description"
             diagnosis_match = re.match(r'^(\d{3,4})\s+(.+)$', diagnosis)
             if diagnosis_match:
-                request_data["diagnosis_code"] = diagnosis_match.group(1)
-                request_data["diagnosis_display"] = diagnosis_match.group(2)
+                request_data["diagnosis"][diagnosis_match.group(1)] = diagnosis_match.group(2)
             else:
                 # If no code found, use the entire diagnosis as display text
-                request_data["diagnosis_display"] = diagnosis
+                request_data["diagnosis"]["text"] = diagnosis
 
         # Extract comments (clinical and lab)
         # Find the table with comments headers
@@ -2162,10 +2135,7 @@ def parse_request_data(html_content: str) -> Dict[str, Any]:
                 if first_cell_text and first_cell_text.isdigit():
                     procedure_text = cells[1].get_text().strip()
                     if procedure_text:
-                        request_data["procedures"].append({
-                            "code": first_cell_text,
-                            "description": procedure_text
-                        })
+                        request_data["procedures"][first_cell_text] = procedure_text
         
         # Extract admission ID from the "Back" link
         # It might be checkin or checkup. We look for checkin for now.
@@ -2302,7 +2272,6 @@ async def fhir_encounter_read(request):
     logger.info(f"GET /fhir/Encounter endpoint accessed with identifier: {encounter_id}")
     
     if not encounter_id:
-        logger.warning("No encounter ID provided")
         return create_error_response("Encounter ID is required")
     
     logger.info(f"Retrieving encounter with ID: {encounter_id}")
@@ -2438,8 +2407,7 @@ async def fhir_encounter_read(request):
         return web.json_response(fhir_encounter)
             
     except Exception as e:
-        logger.error(f"Encounter retrieval failed with exception: {e}")
-        return create_error_response(str(e), 500)
+        return create_error_response("Encounter retrieval failed", 500, {"exception": str(e)})
 
 
 async def serve_analysis_types(request):
@@ -2504,10 +2472,8 @@ async def serve_spec(request):
         spec["servers"][0]["url"] = f"{request.scheme}://{request.host}" 
         return web.json_response(spec)
     except FileNotFoundError:
-        logger.error("spec.json file not found")
         return create_error_response("Specification file not found", 500)
     except json.JSONDecodeError as e:
-        logger.error(f"Error parsing spec.json: {e}")
         return create_error_response("Error parsing specification file", 500)
 
 
@@ -2955,11 +2921,9 @@ async def serve_md2html(request):
             "html": html_content
         })
     except json.JSONDecodeError:
-        logger.warning("Invalid JSON data received for markdown conversion")
         return create_error_response("Invalid JSON data")
     except Exception as e:
-        logger.error(f"Markdown conversion failed: {e}")
-        return create_error_response(str(e), 500)
+        return create_error_response("Markdown conversion failed", 500, {"exception": str(e)})
 
 
 def parse_cnp(cnp: str) -> Dict[str, Any]:
@@ -3107,7 +3071,6 @@ async def serve_validate_cnp(request):
     cnp = request.query.get('id')
     
     if not cnp:
-        logger.warning("No CNP provided")
         return create_error_response("CNP is required")
     
     logger.info(f"Validating CNP: {cnp}")
@@ -3231,14 +3194,19 @@ def create_error_response(message: str, status_code: int = 400, details: Dict[st
     Returns:
         Standardized JSON error response
     """
+    if status_code >= 500:
+        logger.error(f"{message}")
+    else: 
+        logger.warning(f"{message}")
+    # Build response data
     response_data = {
         "status": "error",
         "message": message
     }
-    
+    # Include additional details if provided
     if details:
         response_data["details"] = details
-    
+    # Return JSON response with appropriate status code
     return web.json_response(response_data, status=status_code)
 
 async def get_user_session(username: str):
