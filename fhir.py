@@ -375,3 +375,76 @@ class Condition(FHIRObject):
         }
         super().__init__(data)
 
+
+class Procedure(FHIRObject):
+    def __init__(self,
+                 identifier: Optional[List[Dict[str, Any]]] = None,
+                 basedOn: Optional[List[Dict[str, Any]]] = None,
+                 partOf: Optional[List[Dict[str, Any]]] = None,
+                 status: Optional[str] = None,
+                 statusReason: Optional[Dict[str, Any]] = None,
+                 category: Optional[List[Dict[str, Any]]] = None,
+                 code: Optional[Dict[str, Any]] = None,
+                 subject: Optional[Dict[str, Any]] = None,
+                 focus: Optional[Dict[str, Any]] = None,
+                 encounter: Optional[Dict[str, Any]] = None,
+                 occurrenceDateTime: Optional[str] = None,
+                 occurrencePeriod: Optional[Dict[str, Any]] = None,
+                 occurrenceString: Optional[str] = None,
+                 occurrenceAge: Optional[Dict[str, Any]] = None,
+                 occurrenceRange: Optional[Dict[str, Any]] = None,
+                 occurrenceTiming: Optional[Dict[str, Any]] = None,
+                 recorded: Optional[str] = None,
+                 recorder: Optional[Dict[str, Any]] = None,
+                 reportedBoolean: Optional[bool] = None,
+                 reportedReference: Optional[Dict[str, Any]] = None,
+                 performer: Optional[List[Dict[str, Any]]] = None,
+                 location: Optional[Dict[str, Any]] = None,
+                 reason: Optional[List[Dict[str, Any]]] = None,
+                 bodySite: Optional[List[Dict[str, Any]]] = None,
+                 bodyStructure: Optional[Dict[str, Any]] = None,
+                 outcome: Optional[List[Dict[str, Any]]] = None,
+                 report: Optional[List[Dict[str, Any]]] = None,
+                 complication: Optional[List[Dict[str, Any]]] = None,
+                 followUp: Optional[List[Dict[str, Any]]] = None,
+                 note: Optional[List[Dict[str, Any]]] = None,
+                 focalDevice: Optional[List[Dict[str, Any]]] = None,
+                 used: Optional[List[Dict[str, Any]]] = None,
+                 supportingInfo: Optional[List[Dict[str, Any]]] = None):
+        data = {
+            "identifier": identifier,                           # External Identifiers for this procedure
+            "basedOn": basedOn,                                 # A request for this procedure
+            "partOf": partOf,                                   # Part of referenced event
+            "status": status,                                   # preparation | in-progress | not-done | on-hold | stopped | completed | entered-in-error | unknown
+            "statusReason": statusReason,                       # Reason for current status
+            "category": category,                               # Classification of the procedure
+            "code": code,                                       # Identification of the procedure
+            "subject": subject,                                 # Individual or entity the procedure was performed on
+            "focus": focus,                                     # Who is the target of the procedure when it is not the subject of record only
+            "encounter": encounter,                             # The Encounter during which this Procedure was created
+            "occurrenceDateTime": occurrenceDateTime,           # When the procedure occurred or is occurring
+            "occurrencePeriod": occurrencePeriod,               # When the procedure occurred or is occurring
+            "occurrenceString": occurrenceString,               # When the procedure occurred or is occurring
+            "occurrenceAge": occurrenceAge,                     # When the procedure occurred or is occurring
+            "occurrenceRange": occurrenceRange,                 # When the procedure occurred or is occurring
+            "occurrenceTiming": occurrenceTiming,               # When the procedure occurred or is occurring
+            "recorded": recorded,                               # When the procedure was first captured in the subject's record
+            "recorder": recorder,                               # Who recorded the procedure
+            "reportedBoolean": reportedBoolean,                 # Reported rather than primary record
+            "reportedReference": reportedReference,             # Reported rather than primary record
+            "performer": performer,                             # Who performed the procedure and what they did
+            "location": location,                               # Where the procedure happened
+            "reason": reason,                                   # The justification that the procedure was performed
+            "bodySite": bodySite,                               # Target body sites
+            "bodyStructure": bodyStructure,                     # Target body structure
+            "outcome": outcome,                                 # The result of procedure
+            "report": report,                                   # Any report resulting from the procedure
+            "complication": complication,                       # Complication following the procedure
+            "followUp": followUp,                               # Instructions for follow up
+            "note": note,                                       # Additional information about the procedure
+            "focalDevice": focalDevice,                         # Manipulated, implanted, or removed device
+            "used": used,                                       # Items used during procedure
+            "supportingInfo": supportingInfo                    # Extra information relevant to the procedure
+        }
+        super().__init__(data)
+
