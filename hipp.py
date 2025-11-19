@@ -2072,7 +2072,7 @@ def convert_to_service_request(html_content: str, service_request_id: str, http_
         # Add patient name to subject if available
         if patient_name:
             subject["display"] = patient_name
-        fhir_service_request["subject"] = subject.to_dict()
+        fhir_service_request["subject"] = subject
         
         # Create codeable concept for the service type
         code = CodeableConcept(
@@ -2083,13 +2083,13 @@ def convert_to_service_request(html_content: str, service_request_id: str, http_
             }],
             text="Imaging Study Request"
         )
-        fhir_service_request["code"] = code.to_dict()
+        fhir_service_request["code"] = code
         
         # Extract physician
         physician = extract_text_after_label(soup, r'Medicul:', stop_at=r'-')
         # Add requester if available (requesting doctor)
         if physician:
-            fhir_service_request["requester"] = Reference(display=physician).to_dict()
+            fhir_service_request["requester"] = Reference(display=physician)
         
         # Extract admission ID from the "Back" link
         admission_ids = extract_ids_from_links(soup, r'/checkin\.asp\?id=([^&"]+)')
@@ -2097,7 +2097,7 @@ def convert_to_service_request(html_content: str, service_request_id: str, http_
         if admission_ids:
             fhir_service_request["encounter"] = Reference(
                 reference=f"Encounter/{admission_ids[0]}"
-            ).to_dict()
+            )
         
         # Extract diagnosis
         diagnosis = extract_text_after_label(soup, r'Diagnostic:', 'td')
@@ -2169,7 +2169,7 @@ def convert_to_service_request(html_content: str, service_request_id: str, http_
                     }],
                     text=description
                 )
-                order_details.append(order_detail.to_dict())
+                order_details.append(order_detail)
             fhir_service_request["orderDetail"] = order_details
         
         # Extract request datetime (Data si ora cererii)
