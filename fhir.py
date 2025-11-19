@@ -193,6 +193,7 @@ class Patient(Resource):
                  managingOrganization: Optional[Dict[str, Any]] = None,
                  link: Optional[List[Dict[str, Any]]] = None):
         data = {
+            "resourceType": "Patient",                          # Resource type
             "id": id,                                           # Logical id of this artifact
             "identifier": identifier,                           # An identifier for this patient
             "active": active,                                   # Whether this patient's record is in active use
@@ -302,6 +303,7 @@ class ServiceRequest(Resource):
                  patientInstruction: Optional[List[Dict[str, Any]]] = None,
                  relevantHistory: Optional[List[Dict[str, Any]]] = None):
         data = {
+            "resourceType": "ServiceRequest",                   # Resource type
             "id": id,                                           # Logical id of this artifact
             "identifier": identifier,                           # Identifiers assigned to this order
             "basedOn": basedOn,                                 # What request fulfills
@@ -372,6 +374,7 @@ class Condition(Resource):
                  evidence: Optional[List[Dict[str, Any]]] = None,
                  note: Optional[List[Dict[str, Any]]] = None):
         data = {
+            "resourceType": "Condition",                        # Resource type
             "identifier": identifier,                           # External Ids for this condition
             "clinicalStatus": clinicalStatus,                   # active | recurrence | relapse | inactive | remission | resolved | unknown
             "verificationStatus": verificationStatus,           # unconfirmed | provisional | differential | confirmed | refuted | entered-in-error
@@ -561,6 +564,7 @@ class ImagingStudy(Resource):
                  numberOfInstances: Optional[int] = None,
                  series: Optional[List[Dict[str, Any]]] = None):
         data = {
+            "resourceType": "ImagingStudy",       # Resource type
             "identifier": identifier,             # Business identifier for imaging study
             "status": status,                     # registered | available | cancelled | entered-in-error | unknown | inactive
             "modality": modality,                 # The distinct values for series' modalities
@@ -611,6 +615,7 @@ class DiagnosticReport(Resource):
                  communication: Optional[List[Dict[str, Any]]] = None,
                  comparison: Optional[Dict[str, Any]] = None):
         data = {
+            "resourceType": "DiagnosticReport",   # Resource type
             "identifier": identifier,             # Business identifier for report
             "basedOn": basedOn,                   # What was requested
             "status": status,                     # registered | partial | preliminary | modified | final | amended | corrected | appended | cancelled | entered-in-error | unknown
