@@ -119,11 +119,74 @@ ANALYSIS_TYPES = {
 cnp_cache: Dict[str, str] = {}
 cache_max_size = 1000  # Maximum number of entries to cache
 
+class URLCache:
+    """Simple in-memory cache for HTTP responses with LRU eviction and timeout."""
+    
+    def __init__(self, max_size: int = 100, timeout: int = 600):
+        """Initialize the cache.
+        
+        Args:
+            max_size: Maximum number of entries to cache
+            timeout: Cache timeout in seconds (default: 10 minutes)
+        """
+        self.max_size = max_size
+        self.timeout = timeout
+        self.cache: Dict[str, str] = {}
+        self.timestamps: Dict[str, datetime] = {}
+    
+    def get(self, url: str) -> Optional[str]:
+        """Get cached response for URL if exists and not expired.
+        
+        Args:
+            url: URL to lookup
+            
+        Returns:
+            Cached response text or None if not found or expired
+        """
+        if url not in self.cache:
+            return None
+            
+        # Check if cache entry is still valid
+        if url in self.timestamps:
+            cache_age = (datetime.now() - self.timestamps[url]).total_seconds()
+            if cache_age >= self.timeout:
+                # Cache entry expired, remove it
+                del self.cache[url]
+                del self.timestamps[url]
+                logger.debug(f"Expired cache entry removed for: {url}")
+                return None
+        
+        logger.debug(f"Using cached response for: {url} (age: {(datetime.now() - self.timestamps[url]).total_seconds():.1f}s)")
+        return self.cache[url]
+    
+    def put(self, url: str, response_text: str) -> None:
+        """Add response to cache, evicting oldest entry if needed.
+        
+        Args:
+            url: URL key
+            response_text: Response text to cache
+        """
+        # If cache is at max size, remove the oldest entry
+        if len(self.cache) >= self.max_size:
+            # Remove the first (oldest) entry
+            oldest_key = next(iter(self.cache))
+            del self.cache[oldest_key]
+            if oldest_key in self.timestamps:
+                del self.timestamps[oldest_key]
+        
+        # Add the new entry with timestamp
+        self.cache[url] = response_text
+        self.timestamps[url] = datetime.now()
+        logger.debug(f"Cached response for: {url}")
+    
+    def clear(self) -> None:
+        """Clear all cached entries."""
+        self.cache.clear()
+        self.timestamps.clear()
+
+
 # Simple in-memory cache for HTTP responses
-response_cache: Dict[str, str] = {}
-response_cache_timestamps: Dict[str, datetime] = {}
-response_cache_max_size = 100  # Maximum number of entries to cache
-CACHE_TIMEOUT = 10 * 60  # 10 minutes in seconds
+url_cache = URLCache(max_size=100, timeout=10 * 60)  # 10 minutes timeout
 
 # Session cache per user
 user_sessions: Dict[str, aiohttp.ClientSession] = {}
@@ -276,18 +339,10 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
         return response_text
     
     # Check if we have a cached response for GET requests
-    if method == "GET" and url in response_cache:
-        # Check if cache entry is still valid (less than 10 minutes old)
-        if url in response_cache_timestamps:
-            cache_age = (datetime.now() - response_cache_timestamps[url]).total_seconds()
-            if cache_age < CACHE_TIMEOUT:
-                logger.debug(f"Using cached response for: {url} (age: {cache_age:.1f}s)")
-                return response_cache[url], True, None
-            else:
-                # Cache entry expired, remove it
-                del response_cache[url]
-                del response_cache_timestamps[url]
-                logger.debug(f"Expired cache entry removed for: {url}")
+    if method == "GET":
+        cached_response = url_cache.get(url)
+        if cached_response is not None:
+            return cached_response, True, None
     
     try:
         # Log current cookies before request
@@ -313,18 +368,7 @@ async def make_authenticated_request(session, url, method="GET", data=None, user
         
         # Cache the response for GET requests
         if method == "GET":
-            # If cache is at max size, remove the oldest entry
-            if len(response_cache) >= response_cache_max_size:
-                # Remove the first (oldest) entry
-                oldest_key = next(iter(response_cache))
-                del response_cache[oldest_key]
-                if oldest_key in response_cache_timestamps:
-                    del response_cache_timestamps[oldest_key]
-            
-            # Add the new entry with timestamp
-            response_cache[url] = response_text
-            response_cache_timestamps[url] = datetime.now()
-            logger.debug(f"Cached response for: {url}")
+            url_cache.put(url, response_text)
         
         # If we reach here, we have a valid response
         return response_text, True, None
