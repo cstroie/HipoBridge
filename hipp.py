@@ -293,6 +293,23 @@ class Identifier(FHIRObject):
         super().__init__(data)
 
 
+class HumanName(FHIRObject):
+    def __init__(self, use: Optional[str] = None, text: Optional[str] = None, 
+                 family: Optional[str] = None, given: Optional[List[str]] = None,
+                 prefix: Optional[List[str]] = None, suffix: Optional[List[str]] = None,
+                 period: Optional[Dict[str, Any]] = None):
+        data = {
+            "use": use,                 # usual | official | temp | nickname | anonymous | old | maiden
+            "text": text,               # Text representation of the full name
+            "family": family,           # Family name (often called 'Surname')
+            "given": given,             # Given names (not always 'first'). Includes middle names
+            "prefix": prefix,           # Parts that come before the name
+            "suffix": suffix,           # Parts that come after the name
+            "period": period            # Time period when name was/is in use
+        }
+        super().__init__(data)
+
+
 
 
 
