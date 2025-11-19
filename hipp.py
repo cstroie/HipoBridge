@@ -212,7 +212,7 @@ def extract_id_from_link(link_element, id_pattern: str = r'id=(\d+)') -> Optiona
         return id_match.group(1)
     return None
 
-def extract_ids_from_links(soup: BeautifulSoup, id_pattern: str = r'id=(\d+)') -> List[str]:
+def extract_ids_from_links(soup: BeautifulSoup, pattern: str = r'id=(\d+)', id_pattern: str = r'id=(\d+)') -> List[str]:
     ids_list = []
     for item in soup.find_all('a', href=re.compile(pattern)):
         href = item.get('href', '')
