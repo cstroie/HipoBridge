@@ -125,9 +125,8 @@ CACHE_TIMEOUT = 5 * 60  # 5 minutes in seconds
 # Session cache per user
 user_sessions: Dict[str, aiohttp.ClientSession] = {}
 
-#############################################################################
 # Extractors
-#############################################################################
+# ###########################################################################
 
 def extract_text_after_label(soup: BeautifulSoup, label_regex: str, element_tag: str = None, stop_at: str = None) -> str:
     """Extract field data from an element containing a label.
@@ -213,6 +212,48 @@ def extract_ids_from_links(soup: BeautifulSoup, id_pattern: str = r'id=([^&"]+)'
         if id_match:
             ids_list.append(id_match.group(1))
     return ids_list
+
+
+
+# Generators
+# ############################################################################
+
+from collections.abc import MutableMapping
+
+class FHIRObject(MutableMapping):
+    def __init__(self, data):
+        # Filter out None values
+        self.data = {k: v for k, v in data.items() if v is not None}
+    
+    def __getitem__(self, key):
+        return self.data[key]
+    
+    def __setitem__(self, key, value):
+        self.data[key] = value
+    
+    def __delitem__(self, key):
+        del self.data[key]
+    
+    def __iter__(self):
+        # Filter out None values when iterating
+        return (k for k in self.data if self.data[k] is not None)
+    
+    def __len__(self):
+        return sum(1 for k in self.data if self.data[k] is not None)
+    
+    def to_dict(self):
+        """Convert to dict, excluding None values"""
+        return {k: v for k, v in self.data.items() if v is not None}
+
+class Reference(FHIRObject):
+    def __init__(self, reference: Optional[str] = None, type: Optional[str] = None, identifier: Optional[Dict[str, Any]] = None, display: Optional[str] = None):
+        data = {
+            "reference": reference,     # Literal reference, Relative, internal or absolute URL
+            "type": type,               # Type the reference refers to (e.g. "Patient") - must be a resource in resources
+            "identifier": identifier,   # Logical reference, when literal reference is not known
+            "display": display          # Text alternative for the resource
+        }
+        super().__init__(data)
 
 
 
