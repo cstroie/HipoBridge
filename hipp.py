@@ -36,7 +36,7 @@ from typing import Dict, Any, Optional, List
 import json
 import logging
 import re
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Comment
 import html
 from datetime import datetime, timedelta
 import configparser
@@ -143,9 +143,11 @@ def extract_text_after_label(soup: BeautifulSoup, label_regex: str, element_tag:
     """
     try:
         # Look for the element containing this label
-        label_element = soup.find(string=re.compile(label_regex, re.IGNORECASE))
-        # If found, get its parent element or specified container
-        if label_element:
+        for label_element in soup.find_all(string=re.compile(label_regex, re.IGNORECASE)):
+            # Check if this is a comment
+            if isinstance(label_element, Comment):
+                continue
+            # Determine the container element to extract text from
             if element_tag is None:
                 container_element = label_element.parent
             else:
@@ -2065,60 +2067,37 @@ def parse_request_data(html_content: str) -> Dict[str, Any]:
         }
         
         # Extract patient name
-        patient_name = extract_field_from_td(soup, r'Nume Pacient:')
+        patient_name = extract_text_after_label(soup, r'Nume Pacient:')
         if patient_name:
             request_data["patient_name"] = patient_name
         
         # Extract patient CNP
-        patient_cnp = extract_field_from_td(soup, r'CNP:')
+        patient_cnp = extract_text_after_label(soup, r'CNP:')
         if patient_cnp:
             request_data["patient_cnp"] = patient_cnp
                 
-        # Extract request ID (Cod Buletin)
-        identifier = extract_field_from_td(soup, r'Cod Buletin:')
-        if identifier:
-            request_data["identifier"] = identifier
-        
-        # Extract department and physician
-        section_elements = soup.find_all('td', string=re.compile(r'SECTIA:', re.IGNORECASE))
-        for section_element in section_elements:
-            # Get the section name
-            b_tag = section_element.find('b')
-            if b_tag:
-                u_tag = b_tag.find('u')
-                if u_tag:
-                    request_data["department"] = u_tag.get_text().strip()
-            
-            # Get physician name
-            physician_text = section_element.get_text()
-            physician_match = re.search(r'Medicul:\s*([^<\n\r]+)', physician_text, re.IGNORECASE)
-            if physician_match:
-                request_data["physician"] = physician_match.group(1).strip()
-            break
-        
+        # Extract identifier (Cod Buletin)
+        request_id = extract_text_after_label(soup, r'Cod Buletin:')
+        if request_id:
+            request_data["request_id"] = request_id
+                
+        # Extract department
+        department = extract_text_after_label(soup, r'SECTIA:', stop_at=r'-')
+        if department:
+            request_data["department"] = department
+                
+        # Extract physician
+        physician = extract_text_after_label(soup, r'Medicul:', stop_at=r'-')
+        if physician:
+            request_data["physician"] = physician
+                
         # Extract request datetime (Data si ora cererii)
-        datetime_elements = soup.find_all(string=re.compile(r'Data si ora cererii:', re.IGNORECASE))
-        for datetime_element in datetime_elements:
-            parent = datetime_element.parent
-            if parent:
-                # Find the next <b> tag which contains the datetime
-                b_tag = parent.find_next('b')
-                if b_tag:
-                    request_data["request_datetime"] = b_tag.get_text().strip()
-                break
-        
-        # Extract diagnosis
-        # First try the standard approach
-        diagnosis = extract_field_from_td(soup, r'Diagnostic:')
-        if not diagnosis:
-            # Try to find diagnosis in td with specific styling
-            diagnosis_elements = soup.find_all('td', string=re.compile(r'Diagnostic:', re.IGNORECASE))
-            for diag_element in diagnosis_elements:
-                b_tag = diag_element.find('b')
-                if b_tag:
-                    diagnosis = b_tag.get_text().strip()
-                    break
-        
+        request_datetime = extract_text_after_label(soup, r'Data si ora cererii:', stop_at=r'Receptionat')
+        if request_datetime:
+            request_data["request_datetime"] = request_datetime
+                
+        # Extract diagnosis (Data si ora cererii)
+        diagnosis = extract_text_after_label(soup, r'Diagnostic:', 'td')
         if diagnosis:
             request_data["diagnosis"] = diagnosis
             # Try to extract ICD-10 code from the diagnosis text
