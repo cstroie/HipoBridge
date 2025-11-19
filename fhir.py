@@ -255,6 +255,7 @@ class OrderDetail(Resource):
 
 class ServiceRequest(Resource):
     def __init__(self,
+                 id: Optional[str] = None,
                  identifier: Optional[List[Dict[str, Any]]] = None,
                  basedOn: Optional[List[Dict[str, Any]]] = None,
                  replaces: Optional[List[Dict[str, Any]]] = None,
@@ -292,6 +293,7 @@ class ServiceRequest(Resource):
                  patientInstruction: Optional[List[Dict[str, Any]]] = None,
                  relevantHistory: Optional[List[Dict[str, Any]]] = None):
         data = {
+            "id": id,                                           # Logical id of this artifact
             "identifier": identifier,                           # Identifiers assigned to this order
             "basedOn": basedOn,                                 # What request fulfills
             "replaces": replaces,                               # What request replaces
