@@ -28,8 +28,17 @@ class Resource(MutableMapping):
         return sum(1 for k in self.data if self.data[k] is not None)
     
     def to_dict(self):
-        """Convert to dict, excluding None values"""
-        return {k: v for k, v in self.data.items() if v is not None}
+        """Convert to dict, recursively converting Resource objects to dicts"""
+        result = {}
+        for k, v in self.data.items():
+            if v is not None:
+                if isinstance(v, Resource):
+                    result[k] = v.to_dict()
+                elif isinstance(v, list):
+                    result[k] = [item.to_dict() if isinstance(item, Resource) else item for item in v]
+                else:
+                    result[k] = v
+        return result
 
 class Coding(Resource):
     def __init__(self, system: Optional[str] = None, version: Optional[str] = None, code: Optional[str] = None, 
