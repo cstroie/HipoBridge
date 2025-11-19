@@ -147,7 +147,7 @@ def extract_text_after_label(soup: BeautifulSoup, label_regex: str, element_tag:
         # If found, get its parent element or specified container
         if label_element:
             if element_tag is None:
-                container_element = label_element
+                container_element = label_element.parent
             else:
                 container_element = label_element.find_parent(element_tag)
             # If no container found, return empty

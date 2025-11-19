@@ -8,11 +8,6 @@ import os
 from bs4 import BeautifulSoup
 from hipp import extract_text_after_label
 
-# Configuration
-BASE_URL = "http://localhost:44660"
-HYP_USER = os.getenv("HYP_USER")
-HYP_PASS = os.getenv("HYP_PASS")
-
 async def test_extract_text_after_label_basic(session: aiohttp.ClientSession) -> bool:
     """Test basic functionality of extract_text_after_label function"""
     print("Testing extract_text_after_label basic functionality...")
@@ -175,7 +170,7 @@ async def test_extract_text_with_bold_tag(session: aiohttp.ClientSession) -> boo
         soup = BeautifulSoup(html_content, 'html.parser')
         
         # Test extracting diagnostic
-        result = extract_text_after_label(soup, r'Diagnostic:')
+        result = extract_text_after_label(soup, r'Diagnostic:', 'td')
         expected = "Otita supurata"
         if result == expected:
             print(f"  ✓ Extracted '{result}' correctly from bold tag format")
@@ -202,7 +197,7 @@ async def test_extract_text_with_bold_and_underline_tags(session: aiohttp.Client
         soup = BeautifulSoup(html_content, 'html.parser')
         
         # Test extracting diagnostic
-        result = extract_text_after_label(soup, r'Diagnostic:')
+        result = extract_text_after_label(soup, r'Diagnostic:', 'td')
         expected = "Otita supurata"
         if result == expected:
             print(f"  ✓ Extracted '{result}' correctly from bold and underline tags")
@@ -229,7 +224,7 @@ async def test_extract_text_with_whitespace(session: aiohttp.ClientSession) -> b
         soup = BeautifulSoup(html_content, 'html.parser')
         
         # Test extracting diagnostic
-        result = extract_text_after_label(soup, r'Diagnostic:')
+        result = extract_text_after_label(soup, r'Diagnostic:', 'td')
         expected = "Otita supurata"
         if result == expected:
             print(f"  ✓ Extracted '{result}' correctly with whitespace handling")
