@@ -159,3 +159,84 @@ async def test_extract_text_after_label_case_insensitive(session: aiohttp.Client
     except Exception as e:
         print(f"  ✗ Test failed with exception: {e}")
         return False
+
+async def test_extract_text_with_bold_tag(session: aiohttp.ClientSession) -> bool:
+    """Test extract_text_after_label with bold tag format"""
+    print("Testing extract_text_after_label with bold tag format...")
+    try:
+        # Create HTML with diagnostic in bold tag
+        html_content = """
+        <html>
+        <body>
+            <td>Diagnostic: <b>Otita supurata</b></td>
+        </body>
+        </html>
+        """
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Test extracting diagnostic
+        result = extract_text_after_label(soup, r'Diagnostic:')
+        expected = "Otita supurata"
+        if result == expected:
+            print(f"  ✓ Extracted '{result}' correctly from bold tag format")
+            return True
+        else:
+            print(f"  ✗ Expected '{expected}', got '{result}'")
+            return False
+    except Exception as e:
+        print(f"  ✗ Test failed with exception: {e}")
+        return False
+
+async def test_extract_text_with_bold_and_underline_tags(session: aiohttp.ClientSession) -> bool:
+    """Test extract_text_after_label with bold and underline tags"""
+    print("Testing extract_text_after_label with bold and underline tags...")
+    try:
+        # Create HTML with diagnostic in bold and underline tags
+        html_content = """
+        <html>
+        <body>
+            <td><b>Diagnostic: </b><u>Otita supurata</u></td>
+        </body>
+        </html>
+        """
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Test extracting diagnostic
+        result = extract_text_after_label(soup, r'Diagnostic:')
+        expected = "Otita supurata"
+        if result == expected:
+            print(f"  ✓ Extracted '{result}' correctly from bold and underline tags")
+            return True
+        else:
+            print(f"  ✗ Expected '{expected}', got '{result}'")
+            return False
+    except Exception as e:
+        print(f"  ✗ Test failed with exception: {e}")
+        return False
+
+async def test_extract_text_with_whitespace(session: aiohttp.ClientSession) -> bool:
+    """Test extract_text_after_label with extra whitespace"""
+    print("Testing extract_text_after_label with extra whitespace...")
+    try:
+        # Create HTML with diagnostic and extra whitespace
+        html_content = """
+        <html>
+        <body>
+            <td><b>Diagnostic: </b>   Otita supurata</td>
+        </body>
+        </html>
+        """
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Test extracting diagnostic
+        result = extract_text_after_label(soup, r'Diagnostic:')
+        expected = "Otita supurata"
+        if result == expected:
+            print(f"  ✓ Extracted '{result}' correctly with whitespace handling")
+            return True
+        else:
+            print(f"  ✗ Expected '{expected}', got '{result}'")
+            return False
+    except Exception as e:
+        print(f"  ✗ Test failed with exception: {e}")
+        return False
