@@ -2078,7 +2078,7 @@ def parse_request_data(html_content: str) -> Dict[str, Any]:
             "patient_name": "",
             "patient_cnp": "",
             "patient_id": "",
-            "request_id": "",
+            "barcode": "",
             "department": "",
             "physician": "",
             "request_datetime": "",
@@ -2100,9 +2100,9 @@ def parse_request_data(html_content: str) -> Dict[str, Any]:
             request_data["patient_cnp"] = patient_cnp
                 
         # Extract identifier (Cod Buletin)
-        request_id = extract_text_after_label(soup, r'Cod Buletin:')
-        if request_id:
-            request_data["request_id"] = request_id
+        barcode = extract_text_after_label(soup, r'Cod Buletin:')
+        if barcode:
+            request_data["barcode"] = barcode
                 
         # Extract department
         department = extract_text_after_label(soup, r'SECTIA:', stop_at=r'-')
