@@ -215,12 +215,6 @@ def extract_ids_from_links(soup: BeautifulSoup, id_pattern: str = r'id=([^&"]+)'
 
 
 
-# Generators
-# ############################################################################
-
-
-
-
 
 def require_auth(handler):
     """Decorator to require basic authentication for endpoints."""
