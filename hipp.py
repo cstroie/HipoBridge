@@ -2311,18 +2311,15 @@ async def service_request(request):
         
         # Make request to the service request endpoint
         request_url = f"{SERVICE_URL}/Analyse/LabRequest/buletinRecoltari.asp?id={service_request_id}"
-        # Make the authenticated request
-        start_time = datetime.now()
-        response_text, success, error_response = await hipocrate_client.make_authenticated_request(
-            session, request_url, "GET", None, username, password
+        
+        # Use the get_page method from HipocrateClient to retrieve the page
+        response_text, success, error_response = await hipocrate_client.get_page(
+            session, request_url, username, password
         )
-        duration = (datetime.now() - start_time).total_seconds()
 
         # Check for errors in the response
         if not success:
             return error_response
-        
-        logger.info(f"Service request retrieval completed successfully in {duration:.2f} seconds")
         
         # Create FHIR ServiceRequest resource directly from HTML content
         fhir_service_request = convert_to_service_request(response_text, service_request_id, request)
