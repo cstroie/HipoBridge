@@ -1326,7 +1326,9 @@ async def diagnostic_report(request):
             return error_response
 
         # Return DiagnosticReport
-        fhir_response = convert_report_to_diagnostic_report(response_text, request)
+        report_data = parse_report_data(response_text)
+        report_data['report_id'] = id
+        fhir_response = convert_report_to_diagnostic_report(report_data, request)
         return web.json_response(fhir_response)
             
     except Exception as e:
@@ -1370,7 +1372,9 @@ async def imaging_study(request):
             return error_response
 
         # Return ImagingStudy
-        fhir_response = convert_report_to_imaging_study(response_text, request)
+        report_data = parse_report_data(response_text)
+        report_data['report_id'] = id
+        fhir_response = convert_report_to_imaging_study(report_data, request)
         return web.json_response(fhir_response)
             
     except Exception as e:
@@ -1607,7 +1611,7 @@ def convert_report_to_diagnostic_report(report_data: Dict[str, Any], request) ->
                 "display": report_data["interpreter"]
             }
         ]
-    
+
     # Add results if available
     if report_data.get("reports"):
         fhir_report["result"] = [
@@ -1833,7 +1837,9 @@ async def observation(request):
             return error_response
 
         # Return Observation
-        fhir_response = convert_report_to_observation(response_text, request)
+        report_data = parse_report_data(response_text)
+        report_data['report_id'] = id
+        fhir_response = convert_report_to_observation(report_data, request)
         return web.json_response(fhir_response)
             
     except Exception as e:
