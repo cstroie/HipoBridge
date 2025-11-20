@@ -380,6 +380,74 @@ class HipocrateClient:
                 response_text = raw_data.decode('latin-1')
         return response_text
     
+    async def get_page(self, session, url, username=None, password=None, max_redirects=5):
+        """Abstract method to retrieve a page from the Hipocrate service, following redirects.
+        
+        This method handles the common pattern of making authenticated requests with
+        redirect following, which can be reused by derived classes.
+        
+        Args:
+            session: The aiohttp session to use
+            url: The URL to request
+            username: Username for login if needed
+            password: Password for login if needed
+            max_redirects: Maximum number of redirects to follow (default: 5)
+            
+        Returns:
+            Tuple of (response_text, success, error_response) where success is boolean
+        """
+        # Follow up to max_redirects redirects to get the final page data
+        redirect_count = 0
+        current_url = url
+        
+        while redirect_count < max_redirects:
+            # Make the authenticated request
+            start_time = datetime.now()
+            response_text, success, error_response = await self.make_authenticated_request(
+                session, current_url, "GET", None, username, password
+            )
+            duration = (datetime.now() - start_time).total_seconds()
+
+            # Check for errors in the response
+            if not success:
+                return None, False, error_response
+            logger.info(f"Page retrieved in {duration:.2f} seconds")
+
+            # Check if this is the final response (not a redirect)
+            # We need to make a direct request to check the status code
+            async with session.get(current_url, headers=self.headers) as response:
+                logger.debug(f"Page request response status: {response.status}")
+                
+                # If we get the final data (not a redirect), break the loop
+                if response.status != 302:
+                    logger.info(f"Page retrieval completed successfully after {redirect_count} redirects")
+                    return response_text, True, None
+                
+                # Handle 302 redirect
+                location = response.headers.get("Location")
+                if not location:
+                    return None, False, create_error_response("Redirect without location header", 500)
+                
+                # Construct the full URL for the redirect
+                if location.startswith("/"):
+                    # Relative path from root - need to extract scheme and host from current_url
+                    parsed_url = URL(current_url)
+                    base_url = f"{parsed_url.scheme}://{parsed_url.host}"
+                    current_url = f"{base_url}{location}"
+                elif location.startswith("http"):
+                    # Full URL
+                    current_url = location
+                else:
+                    # Relative path from current directory
+                    base_path = "/".join(current_url.split("/")[:-1])
+                    current_url = f"{base_path}/{location}"
+                
+                logger.debug(f"Following redirect #{redirect_count + 1} to: {current_url}")
+                redirect_count += 1
+        
+        # If we've exceeded the maximum redirects
+        return None, False, create_error_response(f"Exceeded maximum redirects ({max_redirects})", 500)
+
     async def make_authenticated_request(self, session, url, method="GET", data=None, username=None, password=None):
         """Make an authenticated request to the Hipocrate service with automatic login handling.
         
