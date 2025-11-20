@@ -200,6 +200,152 @@ cache_max_size = 1000  # Maximum number of entries to cache
 # Session cache per user
 user_sessions: Dict[str, aiohttp.ClientSession] = {}
 
+
+class HipocrateClient:
+    """Client for interacting with the Hipocrate medical system."""
+    
+    def __init__(self, service_url: str):
+        """Initialize the Hipocrate client.
+        
+        Args:
+            service_url: Base URL of the Hipocrate service
+        """
+        self.service_url = service_url
+        self.headers = HEADERS.copy()
+    
+    async def _make_request(self, session, url, method="GET", data=None):
+        """Make an authenticated request to the Hipocrate service.
+        
+        Args:
+            session: The aiohttp session to use
+            url: The URL to request
+            method: HTTP method ("GET" or "POST")
+            data: Data to send with POST requests
+            
+        Returns:
+            Tuple of (response_text, success, error_response) where success is boolean
+        """
+        return await make_authenticated_request(session, url, method, data)
+    
+    async def get_patient(self, session, patient_id: str, username: str, password: str):
+        """Retrieve patient information by ID.
+        
+        Args:
+            session: The aiohttp session to use
+            patient_id: Patient ID to retrieve
+            username: Username for authentication
+            password: Password for authentication
+            
+        Returns:
+            Tuple of (response_text, success, error_response)
+        """
+        patient_url = f"{self.service_url}/Pacient/edit.asp?id={patient_id}"
+        return await self._make_request(session, patient_url, "GET", None)
+    
+    async def search_patients(self, session, search_term: str, username: str, password: str):
+        """Search for patients by name or other criteria.
+        
+        Args:
+            session: The aiohttp session to use
+            search_term: Search term to use
+            username: Username for authentication
+            password: Password for authentication
+            
+        Returns:
+            Tuple of (response_text, success, error_response)
+        """
+        search_data = {
+            "hdnSearchType": "1",
+            "pageNo": "1",
+            "strDescription": search_term,
+            "strLastName": "",
+            "strFirstName": "",
+            "strCodePres": "",
+            "strCNP": "",
+            "strSDate": "",
+            "strEDate": "",
+            "strProfessionID": "",
+            "strSex": "",
+            "strReference": "",
+            "selSection": "0",
+            "selDoctor": "",
+            "intDiagnosisP": "",
+            "DiagnosisP": "",
+            "intDiagnosisPDRG": "",
+            "DiagnosisPDRG": "",
+            "searchWhat": "PA",
+            "strShowLastFile": "1",
+            "strCheckedIn": "-1",
+            "strCODQR": "",
+            "btnCODQR": "IMPORTA COD QR",
+            "btnCODQRClear": "STERGE COD QR",
+            "hdnQRSave": "",
+            "IdQR": ""
+        }
+        
+        search_url = f"{self.service_url}/files/search.asp?what=PA"
+        return await self._make_request(session, search_url, "POST", search_data)
+    
+    async def get_report(self, session, report_id: str, username: str, password: str):
+        """Retrieve a diagnostic report by ID.
+        
+        Args:
+            session: The aiohttp session to use
+            report_id: Report ID to retrieve
+            username: Username for authentication
+            password: Password for authentication
+            
+        Returns:
+            Tuple of (response_text, success, error_response)
+        """
+        report_url = f"{self.service_url}/analyse/Reports/analyseFile.asp?id={report_id}"
+        return await self._make_request(session, report_url, "GET", None)
+    
+    async def get_analyses(self, session, patient_id: str, username: str, password: str):
+        """Retrieve list of analyses for a patient.
+        
+        Args:
+            session: The aiohttp session to use
+            patient_id: Patient ID to retrieve analyses for
+            username: Username for authentication
+            password: Password for authentication
+            
+        Returns:
+            Tuple of (response_text, success, error_response)
+        """
+        analyses_url = f"{self.service_url}/pacient/analyses.asp?type=PA&pacid={patient_id}"
+        return await self._make_request(session, analyses_url, "GET", None)
+    
+    async def get_checkout(self, session, checkout_id: str, username: str, password: str):
+        """Retrieve encounter information by ID.
+        
+        Args:
+            session: The aiohttp session to use
+            checkout_id: Checkout/encounter ID to retrieve
+            username: Username for authentication
+            password: Password for authentication
+            
+        Returns:
+            Tuple of (response_text, success, error_response)
+        """
+        checkout_url = f"{self.service_url}/files/checkout.asp?id={checkout_id}"
+        return await self._make_request(session, checkout_url, "GET", None)
+    
+    async def get_service_request(self, session, request_id: str, username: str, password: str):
+        """Retrieve service request information by ID.
+        
+        Args:
+            session: The aiohttp session to use
+            request_id: Service request ID to retrieve
+            username: Username for authentication
+            password: Password for authentication
+            
+        Returns:
+            Tuple of (response_text, success, error_response)
+        """
+        request_url = f"{self.service_url}/Analyse/LabRequest/buletinRecoltari.asp?id={request_id}"
+        return await self._make_request(session, request_url, "GET", None)
+
 # Extractors
 # ###########################################################################
 
