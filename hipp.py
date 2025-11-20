@@ -231,6 +231,10 @@ class UserSessionManager:
                 await session.close()
 
 
+# Global user session manager instance
+user_session_manager = UserSessionManager()
+
+
 class HipocrateClient:
     """Client for interacting with the Hipocrate medical system."""
     
@@ -245,7 +249,6 @@ class HipocrateClient:
         self.url_cache = URLCache(max_size=100, timeout=10 * 60)
         self.username = None
         self.password = None
-        self.session_manager = UserSessionManager()
     
     def set_credentials(self, username: str, password: str):
         """Set the username and password for authentication.
@@ -266,7 +269,7 @@ class HipocrateClient:
         Returns:
             aiohttp.ClientSession for the user
         """
-        return await self.session_manager.get_user_session(username)
+        return await user_session_manager.get_user_session(username)
     
     async def get_authenticated_session(self, username: str, password: str):
         """Get an authenticated session for the user.
@@ -284,7 +287,7 @@ class HipocrateClient:
     
     async def close_all_sessions(self):
         """Close all user sessions."""
-        await self.session_manager.close_all_sessions()
+        await user_session_manager.close_all_sessions()
     
     def get_cached_response(self, url: str) -> Optional[str]:
         """Get cached response for URL if exists and not expired.
