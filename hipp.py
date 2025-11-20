@@ -1727,7 +1727,7 @@ def parse_report(html_content: str) -> Dict[str, Any]:
         "diagnosis": "",
         "clinical_comments": "",
         "lab_comments": "",
-        "procedures": {},
+        "procedures": [],
         "request_datetime": "",
         "is_urgent": "~URGENTA~" in html_content
     }
@@ -1799,47 +1799,39 @@ def parse_report(html_content: str) -> Dict[str, Any]:
             else:
                 # If parsing fails, keep the original string
                 report_data["validation_datetime"] = validation_datetime
-
-        # Extract multiple reports: find table rows where first cell contains "Rezultat"
-        report_data["reports"] = []
-        for row in soup.find_all('tr'):
-            cells = row.find_all('td')
-            if len(cells) >= 2:
-                if cells[0].get_text(strip=True).lower() == "rezultat":
-                    # Extract investigation name from the first cell
-                    investigation_name = "" #first_cell_text.replace("Rezultat", "").strip(": ")
-                    # Filter out text nodes that contain only whitespace
-                    subelements = [child for child in cells[1] if hasattr(child, 'name') and child.name]
-                    if len(subelements) == 1 and subelements[0].name == 'b':
-                        # If the only child is a <b> tag, use its content directly
-                        result_content = html_to_markdown(str(subelements[0]))
-                    else:
-                        # Otherwise, process the entire div
-                        result_content = html_to_markdown(str(cells[1]))
-
-                    
-                    # Add to reports list
-                    report_data["reports"].append({
-                        "investigation": investigation_name,
-                        "result": result_content
-                    })
-
-
-        # Find all input elements with name="strAnalyseExec"
-        str_analyse_exec_inputs = soup.find_all('input', {'name': 'strAnalyseExec'})
-        report_data["str_analyse_exec_values"] = [input_elem.get('value', '') for input_elem in str_analyse_exec_inputs]
         
         # For each strAnalyseExec input, find the parent 'td' and extract examination name from first 'b' element
-        procedures = []
-        for input_elem in str_analyse_exec_inputs:
+        for input_elem in soup.find_all('input', {'name': 'strAnalyseExec'}):
             parent_td = input_elem.find_parent('td')
             if parent_td:
                 first_b = parent_td.find('b')
-                if first_b:
-                    procedure = {"title" : first_b.get_text(strip=True)}
-                    procedures.append(procedure)
-        report_data["procedures"] = procedures
-
+                # Find the 'table' parent and then the 'center' sibling
+                parent_table = parent_td.find_parent('table')
+                container = parent_table.find_next_sibling('center')
+                procedure_result = None
+                # In 'center' there is another table.
+                # The rows containing 'rezultat' in first 'td' have the result in second 'td'
+                for row in container.find_all('tr'):
+                    cells = row.find_all('td')
+                    if len(cells) >= 2:
+                        if cells[0].get_text(strip=True).lower() == "rezultat":
+                            # Filter out text nodes that contain only whitespace
+                            subelements = [child for child in cells[1] if hasattr(child, 'name') and child.name]
+                            if len(subelements) == 1 and subelements[0].name == 'b':
+                                # If the only child is a <b> tag, use its content directly
+                                procedure_result = html_to_markdown(str(subelements[0]))
+                            else:
+                                # Otherwise, process the entire div
+                                procedure_result = html_to_markdown(str(cells[1]))
+                # Append the procedure if the data is valid
+                if first_b and procedure_result:
+                    procedure = {
+                        "title" : first_b.get_text(strip=True),
+                        "result": procedure_result,
+                        "type": "",
+                        "region": ""
+                        }
+                    report_data["procedures"].append(procedure)
 
         # Return the parsed report data
         return report_data
