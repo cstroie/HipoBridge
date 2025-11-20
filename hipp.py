@@ -876,7 +876,7 @@ async def get_patient(request):
         # Get patient details
         patient_data = parse_patient_data(response_text)
         if patient_data and patient_data.get("patient_id") and not patient_data.get("error"):
-            fhir_patient = convert_patient_to_fhir(patient_data, request)
+            fhir_patient = create_fhir_patient(patient_data, request)
             return web.json_response(fhir_patient)
         else:
             # Remove the cached response if patient not found
@@ -997,7 +997,7 @@ async def search_patient(request):
         ## Try to parse as single patient page first
         patient_data = parse_patient_data(response_text)
         if patient_data and patient_data.get("patient_id") and not patient_data.get("error"):
-            fhir_patient = convert_patient_to_fhir(patient_data, request)
+            fhir_patient = create_fhir_patient(patient_data, request)
             return web.json_response(fhir_patient)
 
         # Try to parse as multiple patients page
@@ -1223,7 +1223,7 @@ def parse_multiple_patients_data(html_content: str) -> Dict[str, Any]:
         logger.error(f"Error parsing multiple patients data: {e}")
         return patients
 
-def convert_patient_to_fhir(patient_data: Dict[str, Any], request) -> Dict[str, Any]:
+def create_fhir_patient(patient_data: Dict[str, Any], request) -> Dict[str, Any]:
     """Convert patient data to FHIR Patient resource format.
 
     Args:
@@ -1399,7 +1399,7 @@ async def get_diagnostic_report(request):
         # Return DiagnosticReport
         report_data = parse_report_data(response_text)
         report_data['report_id'] = id
-        fhir_response = convert_report_to_diagnostic_report(report_data, request)
+        fhir_response = create_fhir_diagnostic_report(report_data, request)
         return web.json_response(fhir_response)
 
     except Exception as e:
@@ -1445,7 +1445,7 @@ async def get_imaging_study(request):
         # Return ImagingStudy
         report_data = parse_report_data(response_text)
         report_data['report_id'] = id
-        fhir_response = convert_report_to_imaging_study(report_data, request)
+        fhir_response = create_fhir_imaging_study(report_data, request)
         return web.json_response(fhir_response)
 
     except Exception as e:
@@ -1767,7 +1767,7 @@ def parse_report(html_content: str) -> Dict[str, Any]:
         logger.error(f"Error parsing report data: {e}")
         return {}
 
-def convert_report_to_diagnostic_report(report_data: Dict[str, Any], request) -> Dict[str, Any]:
+def create_fhir_diagnostic_report(report_data: Dict[str, Any], request) -> Dict[str, Any]:
     # Create enhanced FHIR DiagnosticReport resource
     fhir_report = {
         "resourceType": "DiagnosticReport",
@@ -1883,7 +1883,7 @@ def convert_report_to_diagnostic_report(report_data: Dict[str, Any], request) ->
     # Return the FHIR Patient resource
     return fhir_report
 
-def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dict[str, Any]:
+def create_fhir_imaging_study(report_data: Dict[str, Any], request) -> Dict[str, Any]:
     """Convert report data to FHIR ImagingStudy resource format.
 
     Args:
@@ -2046,13 +2046,13 @@ async def get_observation(request):
         # Return Observation
         report_data = parse_report(response_text)
         report_data['report_id'] = id
-        fhir_response = convert_report_to_observation(report_data, request)
+        fhir_response = create_fhir_observation(report_data, request)
         return web.json_response(fhir_response)
 
     except Exception as e:
         return create_error_response("Observation retrieval failed", 500, {"exception": str(e)})
 
-def convert_report_to_observation(report_data: Dict[str, Any], request) -> Dict[str, Any]:
+def create_fhir_observation(report_data: Dict[str, Any], request) -> Dict[str, Any]:
     """Convert report data to FHIR ImagingStudy resource format.
 
     Args:
@@ -2494,13 +2494,13 @@ async def get_service_request(request):
             return error_response
 
         # Create FHIR ServiceRequest resource directly from HTML content
-        fhir_response = convert_to_service_request(response_text, id, request)
+        fhir_response = create_fhir_service_request(response_text, id, request)
         return web.json_response(fhir_response)
 
     except Exception as e:
         return create_error_response("Service request retrieval failed", 500, {"exception": str(e)})
 
-def convert_to_service_request(html_content: str, service_request_id: str, http_request) -> Dict[str, Any]:
+def create_fhir_service_request(html_content: str, service_request_id: str, http_request) -> Dict[str, Any]:
     """Convert HTML service request content directly to FHIR ServiceRequest resource.
 
     Extracts patient information and medical data from service request HTML content
@@ -2705,14 +2705,14 @@ async def get_encounter(request):
         parsed_data = parse_checkout_data(response_text)
 
         # Convert parsed data to FHIR Encounter resource
-        fhir_response = convert_data_to_encounter(parsed_data, id, request)
+        fhir_response = create_fhir_encounter(parsed_data, id, request)
         return web.json_response(fhir_response)
 
     except Exception as e:
         return create_error_response("Encounter retrieval failed", 500, {"exception": str(e)})
 
 
-def convert_data_to_encounter(parsed_data: Dict[str, Any], encounter_id: str, request) -> Dict[str, Any]:
+def create_fhir_encounter(parsed_data: Dict[str, Any], encounter_id: str, request) -> Dict[str, Any]:
     """Convert parsed checkout data to FHIR Encounter resource.
 
     Args:
