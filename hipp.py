@@ -212,8 +212,35 @@ class HipocrateClient:
         """
         self.service_url = service_url
         self.headers = HEADERS.copy()
+        self.url_cache = URLCache(max_size=100, timeout=10 * 60)  # 10 minutes timeout
     
-
+    def get_cached_response(self, url: str) -> Optional[str]:
+        """Get cached response for URL if exists and not expired.
+        
+        Args:
+            url: URL to lookup
+            
+        Returns:
+            Cached response text or None if not found or expired
+        """
+        return self.url_cache.get(url)
+    
+    def cache_response(self, url: str, response_text: str) -> None:
+        """Add response to cache.
+        
+        Args:
+            url: URL key
+            response_text: Response text to cache
+        """
+        self.url_cache.put(url, response_text)
+    
+    def clear_cache(self, url: str = None) -> None:
+        """Clear cache entries.
+        
+        Args:
+            url: Specific URL to clear from cache, or None to clear all
+        """
+        self.url_cache.clear(url)
 
 
 
