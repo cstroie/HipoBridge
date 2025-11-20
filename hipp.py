@@ -213,6 +213,18 @@ class HipocrateClient:
         self.service_url = service_url
         self.headers = HEADERS.copy()
         self.url_cache = URLCache(max_size=100, timeout=10 * 60)
+        self.username = None
+        self.password = None
+    
+    def set_credentials(self, username: str, password: str):
+        """Set the username and password for authentication.
+        
+        Args:
+            username: Username for Hipocrate service
+            password: Password for Hipocrate service
+        """
+        self.username = username
+        self.password = password
     
     def get_cached_response(self, url: str) -> Optional[str]:
         """Get cached response for URL if exists and not expired.
