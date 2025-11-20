@@ -1718,6 +1718,10 @@ def parse_report(html_content: str) -> Dict[str, Any]:
         # Parse HTML content with BeautifulSoup
         soup = BeautifulSoup(html_content, 'html.parser')
 
+        # Extract tabular data from table with id="D1" for debugging
+        debug_table_data = extract_tabular_data(soup, "D1", "id")
+        print(f"DEBUG: Table D1 data: {debug_table_data}")
+
         # Extract patient name from the table with patient data
         patient_name = extract_text_after_label(soup, r'Nume:', 'td')
         if patient_name:
