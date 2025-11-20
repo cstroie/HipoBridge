@@ -242,6 +242,26 @@ class HipocrateClient:
         """
         self.url_cache.clear(url)
     
+    async def handle_response_encoding(self, response):
+        """Handle response encoding for the Hipocrate service.
+        
+        Args:
+            response: The aiohttp response object
+            
+        Returns:
+            Decoded response text
+        """
+        try:
+            response_text = await response.text()
+        except UnicodeDecodeError:
+            # If UTF-8 fails, try to get raw bytes and decode with latin-1 or windows-1252
+            raw_data = await response.read()
+            try:
+                response_text = raw_data.decode('windows-1252')
+            except UnicodeDecodeError:
+                response_text = raw_data.decode('latin-1')
+        return response_text
+    
     async def make_authenticated_request(self, session, url, method="GET", data=None, username=None, password=None):
         """Make an authenticated request to the Hipocrate service with automatic login handling.
         
@@ -262,7 +282,7 @@ class HipocrateClient:
             if method == "GET":
                 logger.debug(f"Making GET request to: {url}")
                 async with session.get(url, headers=self.headers) as response:
-                    response_text = await handle_response_encoding(response)
+                    response_text = await self.handle_response_encoding(response)
                     logger.debug(f"GET response status: {response.status}")
             else:  # POST
                 logger.debug(f"Making POST request to: {url}")
@@ -274,11 +294,11 @@ class HipocrateClient:
                 # When sending form data, let aiohttp set the Content-Type automatically
                 if data:
                     async with session.post(url, data=data, headers=post_headers) as response:
-                        response_text = await handle_response_encoding(response)
+                        response_text = await self.handle_response_encoding(response)
                         logger.debug(f"POST response status: {response.status}")
                 else:
                     async with session.post(url, headers=post_headers) as response:
-                        response_text = await handle_response_encoding(response)
+                        response_text = await self.handle_response_encoding(response)
                         logger.debug(f"POST response status: {response.status}")
             return html.unescape(response_text)
         
@@ -431,25 +451,6 @@ def require_auth(handler):
     return wrapper
 
 
-async def handle_response_encoding(response):
-    """Handle response encoding for the Hipocrate service.
-    
-    Args:
-        response: The aiohttp response object
-        
-    Returns:
-        Decoded response text
-    """
-    try:
-        response_text = await response.text()
-    except UnicodeDecodeError:
-        # If UTF-8 fails, try to get raw bytes and decode with latin-1 or windows-1252
-        raw_data = await response.read()
-        try:
-            response_text = raw_data.decode('windows-1252')
-        except UnicodeDecodeError:
-            response_text = raw_data.decode('latin-1')
-    return response_text
 
 
 @require_auth
