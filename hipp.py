@@ -1828,6 +1828,16 @@ def parse_report(html_content: str) -> Dict[str, Any]:
         # Find all input elements with name="strAnalyseExec"
         str_analyse_exec_inputs = soup.find_all('input', {'name': 'strAnalyseExec'})
         report_data["str_analyse_exec_values"] = [input_elem.get('value', '') for input_elem in str_analyse_exec_inputs]
+        
+        # For each strAnalyseExec input, find the parent 'td' and extract examination name from first 'b' element
+        examination_names = []
+        for input_elem in str_analyse_exec_inputs:
+            parent_td = input_elem.find_parent('td')
+            if parent_td:
+                first_b = parent_td.find('b')
+                if first_b:
+                    examination_names.append(first_b.get_text(strip=True))
+        report_data["examination_names"] = examination_names
 
 
         # Return the parsed report data
