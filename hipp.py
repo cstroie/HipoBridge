@@ -1630,6 +1630,179 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
         logger.error(f"Error parsing report data: {e}")
         return {}
 
+def parse_report(html_content: str) -> Dict[str, Any]:
+    """Parse HTML report content and extract structured data from report.html format.
+
+    Extracts patient information, examination details, and report results
+    from HTML report content in the specific format shown in report.html.
+
+    Args:
+        html_content: HTML content of the report
+
+    Returns:
+        Dictionary containing parsed report data
+    """
+    # Initialize report data dictionary
+    report_data = {
+        "patient_name": "",
+        "age": "",
+        "gender": "",
+        "patient_cnp": "",
+        "patient_id": "",
+        "datetime": None,
+        "examination": "",
+        "reports": [],
+        "performer": "",
+        "validator": "",
+        "validation_datetime": "",
+        "request_code": ""
+    }
+
+    try:
+        # Parse HTML content with BeautifulSoup
+        soup = BeautifulSoup(html_content, 'html.parser')
+
+        # Extract patient name from the table with patient data
+        name_cell = soup.find('td', string=re.compile(r'Nume:', re.IGNORECASE))
+        if name_cell:
+            name_value = name_cell.find_next('b')
+            if name_value:
+                report_data["patient_name"] = name_value.get_text().strip()
+
+        # Extract age from the table with patient data
+        age_cell = soup.find('td', string=re.compile(r'Varsta:', re.IGNORECASE))
+        if age_cell:
+            age_text = age_cell.get_text()
+            age_match = re.search(r'Varsta:\s*([^\s]+)', age_text, re.IGNORECASE)
+            if age_match:
+                report_data["age"] = age_match.group(1).strip()
+
+        # Extract gender from the table with patient data
+        gender_cell = soup.find('td', string=re.compile(r'Sex:', re.IGNORECASE))
+        if gender_cell:
+            gender_text = gender_cell.get_text()
+            gender_match = re.search(r'Sex:\s*([^\s]+)', gender_text, re.IGNORECASE)
+            if gender_match:
+                report_data["gender"] = gender_match.group(1).strip()
+
+        # Extract patient CNP from the table with patient data
+        cnp_cell = soup.find('td', string=re.compile(r'C\.N\.P:', re.IGNORECASE))
+        if cnp_cell:
+            cnp_value = cnp_cell.find_next('b')
+            if cnp_value:
+                report_data["patient_cnp"] = cnp_value.get_text().strip()
+
+        # Extract patient code from the table with patient data
+        code_cell = soup.find('td', string=re.compile(r'Cod pacient:', re.IGNORECASE))
+        if code_cell:
+            code_value = code_cell.find_next('b')
+            if code_value:
+                report_data["patient_id"] = code_value.get_text().strip()
+
+        # Extract request code
+        req_code_cell = soup.find('td', string=re.compile(r'Cod cerere:', re.IGNORECASE))
+        if req_code_cell:
+            req_code_value = req_code_cell.find('b')
+            if req_code_value:
+                report_data["request_code"] = req_code_value.get_text().strip()
+
+        # Extract date and time of collection
+        datetime_text = extract_text_after_label(soup, r'Data si ora recoltarii:')
+        if datetime_text:
+            # Try to parse the datetime
+            try:
+                # Handle format like "17 Nov 2025 13:24:00"
+                # Create a mapping for Romanian month abbreviations to English ones
+                month_mapping = {
+                    'Ian': 'Jan', 'Mai': 'May', 'Iun': 'Jun', 'Iul': 'Jul',
+                    'Aug': 'Aug', 'Sep': 'Sep', 'Oct': 'Oct', 'Nov': 'Nov', 'Dec': 'Dec'
+                }
+                
+                # Replace Romanian month abbreviations with English ones
+                formatted_date = datetime_text
+                for ro_month, en_month in month_mapping.items():
+                    formatted_date = formatted_date.replace(ro_month, en_month)
+                
+                # Parse the datetime using strptime
+                dt = datetime.strptime(formatted_date, '%d %b %Y %H:%M:%S')
+                report_data["datetime"] = dt
+            except Exception:
+                # If parsing fails, keep the original string
+                report_data["datetime"] = datetime_text
+
+        # Extract performer (validator) from the domain section
+        validator_match = re.search(r'Validat de\s*:\s*([^&]+)', html_content, re.IGNORECASE)
+        if validator_match:
+            report_data["validator"] = validator_match.group(1).strip()
+
+        # Extract validation datetime
+        validation_datetime_match = re.search(r'Data si ora validarii:\s*&nbsp;([^<]+)', html_content, re.IGNORECASE)
+        if validation_datetime_match:
+            validation_datetime_str = validation_datetime_match.group(1).strip()
+            # Try to parse the datetime
+            try:
+                # Handle format like "17 Nov 2025 14:13"
+                # Create a mapping for Romanian month abbreviations to English ones
+                month_mapping = {
+                    'Ian': 'Jan', 'Mai': 'May', 'Iun': 'Jun', 'Iul': 'Jul',
+                    'Aug': 'Aug', 'Sep': 'Sep', 'Oct': 'Oct', 'Nov': 'Nov', 'Dec': 'Dec'
+                }
+                
+                # Replace Romanian month abbreviations with English ones
+                formatted_date = validation_datetime_str
+                for ro_month, en_month in month_mapping.items():
+                    formatted_date = formatted_date.replace(ro_month, en_month)
+                
+                # Parse the datetime using strptime
+                dt = datetime.strptime(formatted_date, '%d %b %Y %H:%M')
+                report_data["validation_datetime"] = dt
+            except Exception:
+                # If parsing fails, keep the original string
+                report_data["validation_datetime"] = validation_datetime_str
+
+        # Extract examination type from the domain header
+        domain_header = soup.find('td', class_='tdnplusleft')
+        if domain_header:
+            # Extract the text before the validator information
+            header_text = domain_header.get_text()
+            # Remove the validator part if present
+            header_text = re.sub(r'\s*- Validat de.*$', '', header_text, flags=re.IGNORECASE)
+            report_data["examination"] = header_text.strip()
+
+        # Extract reports (results)
+        # Find all table rows with results
+        result_rows = soup.find_all('tr')
+        for row in result_rows:
+            cells = row.find_all('td')
+            if len(cells) >= 3:
+                # Check if this looks like a result row (has analysis name in first cell)
+                first_cell = cells[0]
+                if first_cell and first_cell.find('b'):
+                    analysis_name = first_cell.get_text().strip()
+                    # Skip header rows
+                    if 'ANALIZE' in analysis_name.upper() or 'REZULTATE' in analysis_name.upper():
+                        continue
+                    
+                    # Extract result from second cell
+                    result_cell = cells[1]
+                    result_content = ""
+                    if result_cell:
+                        # Get all text content from the cell
+                        result_content = result_cell.get_text().strip()
+                    
+                    # Add to reports list
+                    report_data["reports"].append({
+                        "investigation": analysis_name,
+                        "result": result_content
+                    })
+
+        # Return the parsed report data
+        return report_data
+
+    except Exception as e:
+        logger.error(f"Error parsing report data: {e}")
+        return {}
+
 def convert_report_to_diagnostic_report(report_data: Dict[str, Any], request) -> Dict[str, Any]:
     # Create enhanced FHIR DiagnosticReport resource
     fhir_report = {
