@@ -197,7 +197,7 @@ class URLCache:
 
 
 # Simple in-memory cache for HTTP responses
-url_cache = URLCache(max_size=100, timeout=10 * 60)  # 10 minutes timeout
+url_cache = URLCache(max_size=100, timeout=10 * 60)
 
 # Simple in-memory cache for CNP to patient code mappings
 cnp_cache: Dict[str, str] = {}
@@ -670,9 +670,6 @@ class HipocrateClient:
             return response_text, True, None
         except Exception as e:
             return None, False, create_error_response(str(e), 500, {"URL": url})
-
-# Global client instance
-hipocrate_client = None
 
 
 # Extractors
@@ -3388,17 +3385,25 @@ async def on_cleanup(app):
         app: The web application
     """
     logger.info("Application cleanup")
-    await hipocrate_client.close_all_sessions()
+    await user_session_manager.close_all_sessions()
 
 async def auth_middleware(app, handler):
-    """Authentication middleware that skips static files."""
+    """Authentication middleware that skips static files.
+    
+    Args:
+        app: The web application
+        handler: The request handler
+
+    Returns:
+        Middleware handler
+    """
     async def middleware_handler(request):
         # Skip authentication for static files
         if request.path.startswith('/static/'):
             return await handler(request)
-
+        # Apply authentication for other requests
         return await handler(request)
-
+    # Return the middleware handler
     return middleware_handler
 
 async def init_app():
@@ -3409,11 +3414,7 @@ async def init_app():
     Returns:
         Configured web application
     """
-    global hipocrate_client
     logger.info("Initializing web application")
-
-    # Initialize the global Hipocrate client
-    hipocrate_client = HipocrateClient(SERVICE_URL)
 
     app = web.Application(middlewares=[auth_middleware])
     app.router.add_get('/', serve_web_page)
