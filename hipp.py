@@ -1715,7 +1715,7 @@ def parse_report(html_content: str) -> Dict[str, Any]:
         "patient_gender": "",
         "patient_cnp": "",
         "patient_id": "",
-                    "physician": "",
+        "physician": "",
 
         "examination": "",
         "reports": [],
@@ -1723,13 +1723,13 @@ def parse_report(html_content: str) -> Dict[str, Any]:
         "validator": "",
         "validation_datetime": "",
         "barcode": "",
-            "admission_id": "",
-            "diagnosis": "",
-            "clinical_comments": "",
-            "lab_comments": "",
-            "procedures": {},
-            "request_datetime": "",
-            "is_urgent": "~URGENTA~" in html_content
+        "admission_id": "",
+        "diagnosis": "",
+        "clinical_comments": "",
+        "lab_comments": "",
+        "procedures": {},
+        "request_datetime": "",
+        "is_urgent": "~URGENTA~" in html_content
     }
 
     # Inner function to extract data from input elements
@@ -1743,6 +1743,10 @@ def parse_report(html_content: str) -> Dict[str, Any]:
     try:
         # Parse HTML content with BeautifulSoup
         soup = BeautifulSoup(html_content, 'html.parser')
+
+        # Find all input elements with name="strAnalyseExec"
+        str_analyse_exec_inputs = soup.find_all('input', {'name': 'strAnalyseExec'})
+        report_data["str_analyse_exec_values"] = [input_elem.get('value', '') for input_elem in str_analyse_exec_inputs]
 
         # Extract tabular data from table with id="D1" for debugging
         #debug_table_data = extract_tabular_data(soup, "D1", "id")
