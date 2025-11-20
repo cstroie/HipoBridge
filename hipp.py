@@ -792,6 +792,61 @@ def extract_textarea_after_label(soup: 'BeautifulSoup', label_regex: str) -> str
         logger.error(f"Error extracting textarea content after label '{label_regex}': {e}")
         return ""
 
+def extract_tabular_data(soup: BeautifulSoup, identifier: str, identifier_type: str = "text") -> List[List[str]]:
+    """Extract tabular data from an HTML table identified by text, id, or class.
+
+    Args:
+        soup: BeautifulSoup object of the parsed HTML content
+        identifier: The text, id, or class to identify the table
+        identifier_type: Type of identifier - "text", "id", or "class" (default: "text")
+
+    Returns:
+        List of rows, each row being a list of cell contents as plain text
+    """
+    try:
+        # Find the table based on the identifier type
+        table = None
+        if identifier_type == "text":
+            # Look for a table that contains the specified text
+            text_elements = soup.find_all(string=re.compile(re.escape(identifier), re.IGNORECASE))
+            for element in text_elements:
+                # Check if the text is in a table header or cell
+                parent = element.find_parent(['th', 'td', 'table'])
+                if parent and parent.name == 'table':
+                    table = parent
+                    break
+                elif parent:
+                    # Find the containing table
+                    table = parent.find_parent('table')
+                    if table:
+                        break
+        elif identifier_type == "id":
+            table = soup.find('table', id=identifier)
+        elif identifier_type == "class":
+            table = soup.find('table', class_=identifier)
+        
+        # If no table found, return empty list
+        if not table:
+            logger.debug(f"No table found with {identifier_type}: {identifier}")
+            return []
+        
+        # Extract rows and cells
+        rows = []
+        for row in table.find_all('tr'):
+            cells = []
+            for cell in row.find_all(['td', 'th']):
+                cell_text = cell.get_text(separator=' ', strip=True)
+                cells.append(cell_text)
+            # Only add non-empty rows
+            if cells:
+                rows.append(cells)
+        
+        logger.debug(f"Extracted {len(rows)} rows from table")
+        return rows
+        
+    except Exception as e:
+        logger.error(f"Error extracting tabular data: {e}")
+        return []
 
 # Authentication helpers
 # ###########################################################################
