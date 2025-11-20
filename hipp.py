@@ -2307,7 +2307,7 @@ async def service_request(request):
     username, password = request.auth_credentials
     
     try:
-        session = await get_user_session(username)
+        session = await hipocrate_client.get_user_session(username)
         
         # Make request to the service request endpoint
         request_url = f"{SERVICE_URL}/Analyse/LabRequest/buletinRecoltari.asp?id={service_request_id}"
@@ -2522,7 +2522,7 @@ async def fhir_encounter_read(request):
     username, password = request.auth_credentials
     
     try:
-        session = await get_user_session(username)
+        session = await hipocrate_client.get_user_session(username)
         
         # Make request to the checkout endpoint
         checkout_url = f"{SERVICE_URL}/files/checkout.asp?id={encounter_id}"
