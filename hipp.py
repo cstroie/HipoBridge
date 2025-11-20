@@ -739,7 +739,7 @@ async def patient(request):
     
     try:
         # Get user-specific aiohttp session
-        session = await hipocrate_client.get_user_session(username)
+        session = await user_session_manager.get_user_session(username)
         
         # Make request to the patient endpoint
         patient_url = f"{SERVICE_URL}/Pacient/edit.asp?id={patient_id}"
@@ -799,7 +799,7 @@ async def patient_search(request):
     
     try:
         # Get user-specific aiohttp session
-        session = await hipocrate_client.get_user_session(username)
+        session = await user_session_manager.get_user_session(username)
         
         # Determine search type based on input
         search_type = "name"  # default
@@ -1283,7 +1283,7 @@ async def diagnostic_report(request):
     
     try:
         # Get user-specific aiohttp session
-        session = await hipocrate_client.get_user_session(username)
+        session = await user_session_manager.get_user_session(username)
 
         # Make request to the report endpoint
         report_url = f"{SERVICE_URL}/analyse/Reports/analyseFile.asp?id={report_id}"
@@ -1379,7 +1379,7 @@ async def imaging_study(request):
     
     try:
         # Get user-specific aiohttp session
-        session = await hipocrate_client.get_user_session(username)
+        session = await user_session_manager.get_user_session(username)
 
         # Make request to the report endpoint (same endpoint as diagnostic reports)
         report_url = f"{SERVICE_URL}/analyse/Reports/analyseFile.asp?id={study_id}"
@@ -1895,7 +1895,7 @@ async def observation(request):
     
     try:
         # Get user-specific aiohttp session
-        session = await hipocrate_client.get_user_session(username)
+        session = await user_session_manager.get_user_session(username)
         
         # Get report details to extract observation data
         report_url = f"{SERVICE_URL}/analyse/Reports/analyseFile.asp?id={observation_id}"
@@ -1998,7 +1998,7 @@ async def observation_search(request):
     
     try:
         # Get user-specific aiohttp session
-        session = await hipocrate_client.get_user_session(username)
+        session = await user_session_manager.get_user_session(username)
         
         # Make request to the analyses endpoint
         analyses_url = f"{SERVICE_URL}/pacient/analyses.asp?type=PA&pacid={patient_id}"
@@ -3277,7 +3277,7 @@ async def serve_web_page(request):
     username, password = request.auth_credentials
     
     # Try to login with provided credentials
-    session = await hipocrate_client.get_user_session(username)
+    session = await user_session_manager.get_user_session(username)
     login_success = await hipocrate_client.login_if_needed(session, username, password)
     
     if not login_success:
