@@ -242,6 +242,124 @@ class HipocrateClient:
         """
         self.url_cache.clear(url)
     
+    def is_login_page(self, content: str) -> bool:
+        """Detect if the provided content is a login page.
+        
+        Checks for 'Identificare' in the HTML title to determine if we're on the login page.
+        
+        Args:
+            content: HTML content to check
+            
+        Returns:
+            True if content appears to be a login page, False otherwise
+        """
+        # Parse the HTML content to extract the title
+        try:
+            soup = BeautifulSoup(content, 'html.parser')
+            title = soup.find('title')
+            is_login = title and 'Identificare' in title.get_text()
+        except Exception:
+            # Fallback to simple string check if parsing fails
+            is_login = "Username" in content and "Password" in content
+        # Log detection result
+        if is_login:
+            logger.debug("Detected login page")
+        return is_login
+    
+    async def login_if_needed(self, session, username: str, password: str) -> bool:
+        """Attempt to login to the Hipocrate service if needed.
+        
+        Checks if we're currently on the login page, and if so, performs login
+        using the provided credentials.
+        
+        Args:
+            session: The aiohttp session to use
+            username: Username for login
+            password: Password for login
+            
+        Returns:
+            True if login was successful or not needed, False otherwise
+        """
+        logger.info("Attempting login if needed")
+        
+        if not username or not password:
+            logger.warning("Username or password not set, skipping login")
+            return False
+        
+        try:
+            # First, check if we're already logged in by accessing main.asp
+            main_url = f"{self.service_url}/main.asp"
+            logger.debug(f"Checking if already logged in by accessing: {main_url}")
+            async with session.get(main_url, headers=self.headers) as main_response:
+                # Handle encoding properly - the service may not be using UTF-8
+                try:
+                    main_text = await self.handle_response_encoding(main_response)
+                except UnicodeDecodeError:
+                    # If UTF-8 fails, try to get raw bytes and decode with latin-1 or windows-1252
+                    raw_data = await main_response.read()
+                    try:
+                        main_text = raw_data.decode('windows-1252')
+                    except UnicodeDecodeError:
+                        main_text = raw_data.decode('latin-1')
+                logger.debug(f"Main page response status: {main_response.status}")
+                
+                # If we're not on the login page, we're already logged in
+                if not self.is_login_page(main_text):
+                    logger.info("Already logged in, skipping login")
+                    return True
+            
+            # If we're on the login page, proceed with login
+            logger.info("Not logged in, proceeding with login")
+            
+            # First, access the default.asp page to get initial cookies
+            default_url = f"{self.service_url}/default.asp"
+            logger.debug(f"Accessing default page to get cookies: {default_url}")
+            async with session.get(default_url, headers=self.headers) as default_response:
+                logger.debug(f"Default page response status: {default_response.status}")
+                
+            # Prepare login data to match browser submission
+            login_data = {
+                "id_recuperare_pwd_2": "",
+                "strUser": username,
+                "strPwd": password,
+                "cboLang": "ro"
+            }
+            
+            # Add referer header for the login request
+            login_headers = self.headers.copy()
+            login_headers["Referer"] = default_url
+            
+            # Use the correct login endpoint
+            login_url = f"{self.service_url}/security/logon.asp"
+            logger.debug(f"Submitting login form to {login_url}")
+            # Submit login form
+            async with session.post(
+                login_url, 
+                data=login_data, 
+                headers=login_headers
+            ) as login_response:
+                response_text = await self.handle_response_encoding(login_response)
+                logger.debug(f"Login response status: {login_response.status}")
+                
+                # Log cookie information
+                if session.cookie_jar:
+                    cookies = session.cookie_jar.filter_cookies(URL(self.service_url))
+                    logger.debug(f"Session cookies after login: {len(cookies)} cookies")
+            
+            # Check if login was successful (redirect to main.asp or not on login page)
+            if login_response.status == 302 and "main.asp" in login_response.headers.get("Location", ""):
+                logger.info("Login successful: redirected to main.asp")
+                return True
+            elif not self.is_login_page(response_text):
+                logger.info("Login successful: not on login page")
+                return True
+            else:
+                logger.warning("Login failed: still on login page")
+            return False
+        except Exception as e:
+            logger.error(f"Login failed with exception: {e}")
+            return False
+    
     async def handle_response_encoding(self, response):
         """Handle response encoding for the Hipocrate service.
         
@@ -318,14 +436,14 @@ class HipocrateClient:
             response_text = await _make_request()
             
             # Check if we got redirected to login page (session expired)
-            if is_login_page(response_text):
+            if self.is_login_page(response_text):
                 logger.warning(f"Session expired during request to {url}, attempting re-login")
-                login_success = await login_if_needed(session, username, password)
+                login_success = await self.login_if_needed(session, username, password)
                 if login_success:
                     # Retry the request with special headers for POST
                     response_text = await _make_request(use_retry_headers=True)
                     # Check again if still on login page
-                    if is_login_page(response_text):
+                    if self.is_login_page(response_text):
                         return None, False, create_error_response("Authentication failed after retry", 401)
                 else:
                     return None, False, create_error_response("Re-authentication failed", 401)
@@ -2574,123 +2692,6 @@ async def serve_metadata(request):
     return web.json_response(capability_statement)
 
 
-def is_login_page(content: str) -> bool:
-    """Detect if the provided content is a login page.
-    
-    Checks for 'Identificare' in the HTML title to determine if we're on the login page.
-    
-    Args:
-        content: HTML content to check
-        
-    Returns:
-        True if content appears to be a login page, False otherwise
-    """
-    # Parse the HTML content to extract the title
-    try:
-        soup = BeautifulSoup(content, 'html.parser')
-        title = soup.find('title')
-        is_login = title and 'Identificare' in title.get_text()
-    except Exception:
-        # Fallback to simple string check if parsing fails
-        is_login = "Username" in content and "Password" in content
-    # Log detection result
-    if is_login:
-        logger.debug("Detected login page")
-    return is_login
-
-async def login_if_needed(session, username: str, password: str) -> bool:
-    """Attempt to login to the Hipocrate service if needed.
-    
-    Checks if we're currently on the login page, and if so, performs login
-    using the provided credentials.
-    
-    Args:
-        session: The aiohttp session to use
-        username: Username for login
-        password: Password for login
-        
-    Returns:
-        True if login was successful or not needed, False otherwise
-    """
-    logger.info("Attempting login if needed")
-    
-    if not username or not password:
-        logger.warning("Username or password not set, skipping login")
-        return False
-    
-    try:
-        # First, check if we're already logged in by accessing main.asp
-        main_url = f"{SERVICE_URL}/main.asp"
-        logger.debug(f"Checking if already logged in by accessing: {main_url}")
-        async with session.get(main_url, headers=HEADERS) as main_response:
-            # Handle encoding properly - the service may not be using UTF-8
-            try:
-                main_text = await main_response.text()
-            except UnicodeDecodeError:
-                # If UTF-8 fails, try to get raw bytes and decode with latin-1 or windows-1252
-                raw_data = await main_response.read()
-                try:
-                    main_text = raw_data.decode('windows-1252')
-                except UnicodeDecodeError:
-                    main_text = raw_data.decode('latin-1')
-            logger.debug(f"Main page response status: {main_response.status}")
-            
-            # If we're not on the login page, we're already logged in
-            if not is_login_page(main_text):
-                logger.info("Already logged in, skipping login")
-                return True
-        
-        # If we're on the login page, proceed with login
-        logger.info("Not logged in, proceeding with login")
-        
-        # First, access the default.asp page to get initial cookies
-        default_url = f"{SERVICE_URL}/default.asp"
-        logger.debug(f"Accessing default page to get cookies: {default_url}")
-        async with session.get(default_url, headers=HEADERS) as default_response:
-            logger.debug(f"Default page response status: {default_response.status}")
-            
-        # Prepare login data to match browser submission
-        login_data = {
-            "id_recuperare_pwd_2": "",
-            "strUser": username,
-            "strPwd": password,
-            "cboLang": "ro"
-        }
-        
-        # Add referer header for the login request
-        login_headers = HEADERS.copy()
-        login_headers["Referer"] = default_url
-        
-        # Use the correct login endpoint
-        login_url = f"{SERVICE_URL}/security/logon.asp"
-        logger.debug(f"Submitting login form to {login_url}")
-        # Submit login form
-        async with session.post(
-            login_url, 
-            data=login_data, 
-            headers=login_headers
-        ) as login_response:
-            response_text = await login_response.text()
-            logger.debug(f"Login response status: {login_response.status}")
-            
-            # Log cookie information
-            if session.cookie_jar:
-                cookies = session.cookie_jar.filter_cookies(URL(SERVICE_URL))
-                logger.debug(f"Session cookies after login: {len(cookies)} cookies")
-        
-        # Check if login was successful (redirect to main.asp or not on login page)
-        if login_response.status == 302 and "main.asp" in login_response.headers.get("Location", ""):
-            logger.info("Login successful: redirected to main.asp")
-            return True
-        elif not is_login_page(response_text):
-            logger.info("Login successful: not on login page")
-            return True
-        else:
-            logger.warning("Login failed: still on login page")
-        return False
-    except Exception as e:
-        logger.error(f"Login failed with exception: {e}")
-        return False
 
 
 
