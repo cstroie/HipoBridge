@@ -2346,13 +2346,18 @@ async def service_request(request):
     username, password = request.auth_credentials
     
     try:
-        session = await user_session_manager.get_user_session(username)
+        # Create a new HipocrateClient instance with credentials
+        client = HipocrateClient(SERVICE_URL)
+        client.set_credentials(username, password)
+        
+        # Get session using the client's session manager
+        session = await client.get_user_session(username)
         
         # Make request to the service request endpoint
         request_url = f"{SERVICE_URL}/Analyse/LabRequest/buletinRecoltari.asp?id={service_request_id}"
         
-        # Use the get_page method from HipocrateClient to retrieve the page
-        response_text, success, error_response = await hipocrate_client.get_page(
+        # Use the get_page method from the new HipocrateClient instance to retrieve the page
+        response_text, success, error_response = await client.get_page(
             session, request_url, username, password
         )
 
