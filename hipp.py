@@ -319,8 +319,8 @@ class HipocrateClient:
         except Exception as e:
             return None, False, create_error_response(str(e), 500, {"URL": url})
 
-
-
+# Global client instance
+hipocrate_client = None
 
 
 # Extractors
@@ -484,7 +484,7 @@ async def patient(request):
         
         # Make the authenticated request
         start_time = datetime.now()
-        response_text, success, error_response = await make_authenticated_request(
+        response_text, success, error_response = await hipocrate_client.make_authenticated_request(
             session, patient_url, "GET", None, username, password
         )
         duration = (datetime.now() - start_time).total_seconds()
@@ -614,7 +614,7 @@ async def patient_search(request):
 
         # Make the authenticated request
         start_time = datetime.now()
-        response_text, success, error_response = await make_authenticated_request(
+        response_text, success, error_response = await hipocrate_client.make_authenticated_request(
             session, search_url, "POST", search_data, username, password
         )
         duration = (datetime.now() - start_time).total_seconds()
@@ -1034,7 +1034,7 @@ async def diagnostic_report(request):
         while redirect_count < max_redirects:
             # Make the authenticated request
             start_time = datetime.now()
-            response_text, success, error_response = await make_authenticated_request(
+            response_text, success, error_response = await hipocrate_client.make_authenticated_request(
                 session, current_url, "GET", None, username, password
             )
             duration = (datetime.now() - start_time).total_seconds()
@@ -1130,7 +1130,7 @@ async def imaging_study(request):
         while redirect_count < max_redirects:
             # Make the authenticated request
             start_time = datetime.now()
-            response_text, success, error_response = await make_authenticated_request(
+            response_text, success, error_response = await hipocrate_client.make_authenticated_request(
                 session, current_url, "GET", None, username, password
             )
             duration = (datetime.now() - start_time).total_seconds()
@@ -1640,7 +1640,7 @@ async def observation(request):
 
         # Make the authenticated request
         start_time = datetime.now()
-        report_text, success, error_response = await make_authenticated_request(
+        report_text, success, error_response = await hipocrate_client.make_authenticated_request(
             session, report_url, "GET", None, username, password
         )
         duration = (datetime.now() - start_time).total_seconds()
@@ -1747,7 +1747,7 @@ async def observation_search(request):
         
         # Make the authenticated request
         start_time = datetime.now()
-        response_text, success, error_response = await make_authenticated_request(
+        response_text, success, error_response = await hipocrate_client.make_authenticated_request(
             session, analyses_url, "GET", None, username, password
         )
         duration = (datetime.now() - start_time).total_seconds()
@@ -2090,7 +2090,7 @@ async def service_request(request):
         request_url = f"{SERVICE_URL}/Analyse/LabRequest/buletinRecoltari.asp?id={service_request_id}"
         # Make the authenticated request
         start_time = datetime.now()
-        response_text, success, error_response = await make_authenticated_request(
+        response_text, success, error_response = await hipocrate_client.make_authenticated_request(
             session, request_url, "GET", None, username, password
         )
         duration = (datetime.now() - start_time).total_seconds()
@@ -2305,7 +2305,7 @@ async def fhir_encounter_read(request):
         checkout_url = f"{SERVICE_URL}/files/checkout.asp?id={encounter_id}"
         # Make the authenticated request
         start_time = datetime.now()
-        response_text, success, error_response = await make_authenticated_request(
+        response_text, success, error_response = await hipocrate_client.make_authenticated_request(
             session, checkout_url, "GET", None, username, password
         )
         duration = (datetime.now() - start_time).total_seconds()
@@ -3309,7 +3309,12 @@ async def init_app():
     Returns:
         Configured web application
     """
+    global hipocrate_client
     logger.info("Initializing web application")
+    
+    # Initialize the global Hipocrate client
+    hipocrate_client = HipocrateClient(SERVICE_URL)
+    
     app = web.Application(middlewares=[auth_middleware])
     app.router.add_get('/', serve_web_page)
     # FHIR-compatible endpoints
