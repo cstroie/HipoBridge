@@ -174,8 +174,8 @@ class URLCache:
         self.timestamps[url] = datetime.now()
         logger.debug(f"Cached response for: {url}")
     
-    def clear(self, url: str = None) -> None:
-        """Clear cache entries.
+    def remove(self, url: str) -> None:
+        """Remove cache entries.
         
         Args:
             url: Specific URL to clear from cache, or None to clear all
@@ -185,9 +185,15 @@ class URLCache:
                 del self.cache[url]
             if url in self.timestamps:
                 del self.timestamps[url]
-        else:
-            self.cache.clear()
-            self.timestamps.clear()
+    
+    def clear(self) -> None:
+        """Clear cache entries.
+        
+        Args:
+            url: Specific URL to clear from cache, or None to clear all
+        """
+        self.cache.clear()
+        self.timestamps.clear()
 
 
 # Simple in-memory cache for HTTP responses
@@ -205,7 +211,7 @@ class UserSessionManager:
         """Initialize the user session manager."""
         self.user_sessions: Dict[str, aiohttp.ClientSession] = {}
     
-    async def get_user_session(self, username: str):
+    def get_user_session(self, username: str):
         """Get or create a user-specific session.
         
         Args:
@@ -246,11 +252,11 @@ class HipocrateClient:
         """
         self.service_url = service_url
         self.headers = HEADERS.copy()
-        self.url_cache = URLCache(max_size=100, timeout=10 * 60)
+        self.url_cache = url_cache
         self.username = username
         self.password = password
         # Get session using the client's session manager
-        self.session = self.get_user_session(username)
+        self.session = None
 
     def set_credentials(self, username: str, password: str):
         """Set the username and password for authentication.
@@ -261,8 +267,9 @@ class HipocrateClient:
         """
         self.username = username
         self.password = password
+
     
-    async def get_user_session(self, username: str):
+    def get_user_session(self, username: str):
         """Get or create a user-specific session.
         
         Args:
@@ -271,7 +278,7 @@ class HipocrateClient:
         Returns:
             aiohttp.ClientSession for the user
         """
-        return await user_session_manager.get_user_session(username)
+        return user_session_manager.get_user_session(username)
     
     async def get_authenticated_session(self, username: str, password: str):
         """Get an authenticated session for the user.
@@ -283,15 +290,16 @@ class HipocrateClient:
         Returns:
             Tuple of (session, success) where success is boolean
         """
-        session = await self.get_user_session(username)
+        session = self.get_user_session(username)
         login_success = await self.login_if_needed(session, username, password)
         return session, login_success
     
     async def close_all_sessions(self):
         """Close all user sessions."""
         await user_session_manager.close_all_sessions()
+
     
-    def get_cached_response(self, url: str) -> Optional[str]:
+    def cache_get(self, url: str) -> Optional[str]:
         """Get cached response for URL if exists and not expired.
         
         Args:
@@ -300,24 +308,33 @@ class HipocrateClient:
         Returns:
             Cached response text or None if not found or expired
         """
-        return self.url_cache.get(url)
+        return self.url_cache.get(self.get_full_url(url))
     
-    def cache_response(self, url: str, response_text: str) -> None:
+    def cache_put(self, url: str, response_text: str) -> None:
         """Add response to cache.
         
         Args:
             url: URL key
             response_text: Response text to cache
         """
-        self.url_cache.put(url, response_text)
+        self.url_cache.put(self.get_full_url(url), response_text)
     
-    def clear_cache(self, url: str = None) -> None:
+    def cache_remove(self, url: str):
+        """Remove cached response for URL.
+        
+        Args:
+            url: URL to lookup
+        """
+        return self.url_cache.remove(url)
+    
+    def cache_clear(self) -> None:
         """Clear cache entries.
         
         Args:
             url: Specific URL to clear from cache, or None to clear all
         """
-        self.url_cache.clear(url)
+        self.url_cache.clear()
+
     
     def is_login_page(self, content: str) -> bool:
         """Detect if the provided content is a login page.
@@ -457,6 +474,23 @@ class HipocrateClient:
                 response_text = raw_data.decode('latin-1')
         return response_text
     
+    def get_full_url(self, url: str) -> str:
+        """Construct full URL from service URL and relative path.
+        
+        Args:
+            url: Relative path
+        Returns:
+            Full URL string
+        """
+        # Construct the full URL if a relative path is provided
+        if url.startswith("http"):
+            full_url = url
+        elif url.startswith("/"): 
+            full_url = f'{self.service_url}{url}'
+        else:
+            full_url = f'{self.service_url}/{url}'
+        return full_url
+
     async def get_page(self, url, max_redirects=5):
         """Abstract method to retrieve a page from the Hipocrate service, following redirects.
         
@@ -471,12 +505,11 @@ class HipocrateClient:
             Tuple of (response_text, success, error_response) where success is boolean
         """
         # Construct the full URL if a relative path is provided
-        if url.startswith("http"):
-            current_url = url
-        elif url.startswith("/"): 
-            current_url = f'{self.service_url}{url}'
-        else:
-            current_url = f'{self.service_url}/{url}'
+        current_url = self.get_full_url(url)
+
+        # Get the session for the current user
+        if not self.session:
+            self.session = self.get_user_session(self.username)
         
         # Follow up to max_redirects redirects to get the final page data
         redirect_count = 0
@@ -484,7 +517,7 @@ class HipocrateClient:
             # Make the authenticated request
             start_time = datetime.now()
             response_text, success, error_response = await self.make_authenticated_request(
-                self.session, current_url, "GET", None, self.username, self.password
+                current_url, "GET", None, self.username, self.password
             )
             duration = (datetime.now() - start_time).total_seconds()
 
@@ -528,11 +561,10 @@ class HipocrateClient:
         # If we've exceeded the maximum redirects
         return None, False, create_error_response(f"Exceeded maximum redirects ({max_redirects})", 500)
 
-    async def make_authenticated_request(self, session, url, method="GET", data=None, username=None, password=None):
+    async def make_authenticated_request(self, url, method="GET", data=None, username=None, password=None):
         """Make an authenticated request to the Hipocrate service with automatic login handling.
         
         Args:
-            session: The aiohttp session to use
             url: The URL to request
             method: HTTP method ("GET" or "POST")
             data: Data to send with POST requests
@@ -547,7 +579,7 @@ class HipocrateClient:
             """Helper function to make a request with proper headers."""
             if method == "GET":
                 logger.debug(f"Making GET request to: {url}")
-                async with session.get(url, headers=self.headers) as response:
+                async with self.session.get(url, headers=self.headers) as response:
                     response_text = await self.handle_response_encoding(response)
                     logger.debug(f"GET response status: {response.status}")
             else:  # POST
@@ -559,25 +591,25 @@ class HipocrateClient:
                     post_headers.pop("Content-Type", None)
                 # When sending form data, let aiohttp set the Content-Type automatically
                 if data:
-                    async with session.post(url, data=data, headers=post_headers) as response:
+                    async with self.session.post(url, data=data, headers=post_headers) as response:
                         response_text = await self.handle_response_encoding(response)
                         logger.debug(f"POST response status: {response.status}")
                 else:
-                    async with session.post(url, headers=post_headers) as response:
+                    async with self.session.post(url, headers=post_headers) as response:
                         response_text = await self.handle_response_encoding(response)
                         logger.debug(f"POST response status: {response.status}")
             return html.unescape(response_text)
         
         # Check if we have a cached response for GET requests
         if method == "GET":
-            cached_response = self.url_cache.get(url)
+            cached_response = self.cache_get(url)
             if cached_response is not None:
                 return cached_response, True, None
         
         try:
             # Log current cookies before request
-            if session.cookie_jar:
-                cookies = session.cookie_jar.filter_cookies(URL(self.service_url))
+            if self.session.cookie_jar:
+                cookies = self.session.cookie_jar.filter_cookies(URL(self.service_url))
                 logger.debug(f"Using {len(cookies)} cookies for request to {url}")
             
             # Make the initial request
@@ -586,7 +618,7 @@ class HipocrateClient:
             # Check if we got redirected to login page (session expired)
             if self.is_login_page(response_text):
                 logger.warning(f"Session expired during request to {url}, attempting re-login")
-                login_success = await self.login_if_needed(session, username, password)
+                login_success = await self.login_if_needed(self.session, username, password)
                 if login_success:
                     # Retry the request with special headers for POST
                     response_text = await _make_request(use_retry_headers=True)
@@ -598,7 +630,7 @@ class HipocrateClient:
             
             # Cache the response for GET requests
             if method == "GET":
-                self.url_cache.put(url, response_text)
+                self.cache_put(url, response_text)
             
             # If we reach here, we have a valid response
             return response_text, True, None
@@ -734,32 +766,27 @@ async def patient(request):
         JSON response with patient data or error information
     """
     # Get patient ID from request path
-    patient_id = request.match_info.get('id')
-    logger.info(f"Retrieving patient with ID: {patient_id}")
-    if not patient_id:
-        return create_error_response("Patient ID is required (not CNP)")
+    id = request.match_info.get('id')
+    if not id:
+        return create_error_response("Patient ID is required")
+    logger.info(f"Retrieving patient with ID: {id}")
     
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
-    
+
+    # Create a new HipocrateClient instance with credentials
+    client = HipocrateClient(SERVICE_URL, username, password)
+
     try:
-        # Get user-specific aiohttp session
-        session = await user_session_manager.get_user_session(username)
-        
         # Make request to the patient endpoint
-        patient_url = f"{SERVICE_URL}/Pacient/edit.asp?id={patient_id}"
-        
-        # Make the authenticated request
-        start_time = datetime.now()
-        response_text, success, error_response = await hipocrate_client.make_authenticated_request(
-            session, patient_url, "GET", None, username, password
-        )
-        duration = (datetime.now() - start_time).total_seconds()
+        request_url = f"/Pacient/edit.asp?id={id}"
+
+        # Retrieve the page
+        response_text, success, error_response = await client.get_page(request_url)
 
         # Check for errors in the response
         if not success:
             return error_response
-        logger.info(f"Patient info retrieved in {duration:.2f} seconds")
         
         # Get patient details
         patient_data = parse_patient_data(response_text)
@@ -768,7 +795,7 @@ async def patient(request):
             return web.json_response(fhir_patient)
         else:
             # Remove the cached response if patient not found
-            url_cache.clear(patient_url)
+            client.cache_remove(request_url)
             # Return specific error if patient not found
             if patient_data and 'error' in patient_data:
                 return create_error_response(patient_data['error'], 404)
@@ -804,7 +831,7 @@ async def patient_search(request):
     
     try:
         # Get user-specific aiohttp session
-        session = await user_session_manager.get_user_session(username)
+        session = user_session_manager.get_user_session(username)
         
         # Determine search type based on input
         search_type = "name"  # default
@@ -1884,45 +1911,38 @@ async def observation_search(request):
     Returns:
         JSON response with observations data or error information
     """
+    # Extract patient ID from query parameters
     patient_id = request.query.get('patient')
-    logger.info(f"GET /fhir/Observation endpoint accessed for patient: {patient_id}")
+    if not patient_id:
+        return create_error_response("Patient ID is required")
+    logger.info(f"Retrieving analyses list for patient with ID: {patient_id}")
     
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
-    
-    if not patient_id:
-        return create_error_response("Patient ID is required")
+
+    # Create a new HipocrateClient instance with credentials
+    client = HipocrateClient(SERVICE_URL, username, password)
     
     # Get optional parameters
     exam_type = request.query.get('type')
+    exam_region = request.query.get('region')
     exam_datetime = request.query.get('dt')
     full_data = request.query.get('full', 'no').lower() == 'yes'
     
-    logger.info(f"Retrieving analyses list for patient with ID: {patient_id}")
-    
     try:
-        # Get user-specific aiohttp session
-        session = await user_session_manager.get_user_session(username)
-        
-        # Make request to the analyses endpoint
-        analyses_url = f"{SERVICE_URL}/pacient/analyses.asp?type=PA&pacid={patient_id}"
-        
+        # The analyses endpoint
+        request_url = f"/pacient/analyses.asp?type=PA&pacid={patient_id}"
         # Add full=yes parameter if requested
         if full_data:
-            analyses_url += "&full=yes"
-        
-        # Make the authenticated request
-        start_time = datetime.now()
-        response_text, success, error_response = await hipocrate_client.make_authenticated_request(
-            session, analyses_url, "GET", None, username, password
-        )
-        duration = (datetime.now() - start_time).total_seconds()
+            request_url += "&full=yes"
+
+        # Retrieve the page
+        response_text, success, error_response = await client.get_page(request_url)
 
         # Check for errors in the response
         if not success:
             return error_response
-        
-        logger.info(f"Analyses list retrieval completed successfully in {duration:.2f} seconds")
+
         # Parse the analyses data to extract report IDs, types, and patient name
         parsed_data = parse_analyses_data(response_text)
         
@@ -2457,7 +2477,7 @@ async def fhir_encounter_read(request):
     username, password = request.auth_credentials
     
     try:
-        session = await user_session_manager.get_user_session(username)
+        session = user_session_manager.get_user_session(username)
         
         # Make request to the checkout endpoint
         checkout_url = f"{SERVICE_URL}/files/checkout.asp?id={encounter_id}"
@@ -3176,7 +3196,7 @@ async def serve_web_page(request):
     username, password = request.auth_credentials
     
     # Try to login with provided credentials
-    session = await user_session_manager.get_user_session(username)
+    session = user_session_manager.get_user_session(username)
     login_success = await hipocrate_client.login_if_needed(session, username, password)
     
     if not login_success:
