@@ -2507,23 +2507,20 @@ async def get_encounter(request):
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
 
-    try:
-        session = user_session_manager.get_user_session(username)
+    # Create a new HipocrateClient instance with credentials
+    client = HipocrateClient(SERVICE_URL, username, password)
 
+    try:
         # Make request to the checkout endpoint
-        checkout_url = f"{SERVICE_URL}/files/checkout.asp?id={encounter_id}"
-        # Make the authenticated request
-        start_time = datetime.now()
-        response_text, success, error_response = await hipocrate_client.make_authenticated_request(
-            session, checkout_url, "GET", None, username, password
-        )
-        duration = (datetime.now() - start_time).total_seconds()
+        checkout_url = f"/files/checkout.asp?id={encounter_id}"
+        
+        # Use the get_page method from the new HipocrateClient instance to retrieve the page
+        response_text, success, error_response = await client.get_page(checkout_url)
 
         # Check for errors in the response
         if not success:
             return error_response
 
-        logger.info(f"Encounter retrieval completed successfully in {duration:.2f} seconds")
         # Parse the checkout data
         parsed_data = parse_checkout_data(response_text)
 
@@ -3227,8 +3224,8 @@ async def serve_web_page(request):
     username, password = request.auth_credentials
 
     # Try to login with provided credentials
-    session = user_session_manager.get_user_session(username)
-    login_success = await hipocrate_client.login_if_needed(session, username, password)
+    client = HipocrateClient(SERVICE_URL, username, password)
+    session, login_success = await client.get_authenticated_session(username, password)
 
     if not login_success:
         return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
@@ -3411,27 +3408,6 @@ async def init_app():
     app.on_cleanup.append(on_cleanup)
 
     return app
-
-def get_basic_auth(request):
-    """Extract basic auth credentials from request.
-
-    Args:
-        request: The incoming HTTP request
-
-    Returns:
-        Tuple of (username, password) or None if not found
-    """
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Basic '):
-        return None
-
-    try:
-        encoded_credentials = auth_header.split(' ', 1)[1]
-        decoded_credentials = base64.b64decode(encoded_credentials).decode('utf-8')
-        username, password = decoded_credentials.split(':', 1)
-        return (username, password)
-    except Exception:
-        return None
 
 # Load configuration
 config = load_config()
