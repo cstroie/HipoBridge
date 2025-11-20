@@ -198,6 +198,38 @@ cnp_cache: Dict[str, str] = {}
 cache_max_size = 1000  # Maximum number of entries to cache
 
 
+class UserSessionManager:
+    """Manager for user-specific HTTP sessions."""
+    
+    def __init__(self):
+        """Initialize the user session manager."""
+        self.user_sessions: Dict[str, aiohttp.ClientSession] = {}
+    
+    async def get_user_session(self, username: str):
+        """Get or create a user-specific session.
+        
+        Args:
+            username: Username to get session for
+            
+        Returns:
+            aiohttp.ClientSession for the user
+        """
+        if username not in self.user_sessions or self.user_sessions[username].closed:
+            logger.debug(f"Creating new aiohttp ClientSession for user {username} with cookie support")
+            # Create session with automatic cookie handling
+            self.user_sessions[username] = aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(unsafe=True))
+        else:
+            logger.debug(f"Reusing existing aiohttp ClientSession for user {username}")
+        return self.user_sessions[username]
+    
+    async def close_all_sessions(self):
+        """Close all user sessions."""
+        logger.info("Closing all user sessions")
+        for username, session in self.user_sessions.items():
+            if session and not session.closed:
+                logger.debug(f"Closing aiohttp ClientSession for user {username}")
+                await session.close()
+
 
 class HipocrateClient:
     """Client for interacting with the Hipocrate medical system."""
@@ -213,7 +245,7 @@ class HipocrateClient:
         self.url_cache = URLCache(max_size=100, timeout=10 * 60)
         self.username = None
         self.password = None
-        self.user_sessions: Dict[str, aiohttp.ClientSession] = {}
+        self.session_manager = UserSessionManager()
     
     def set_credentials(self, username: str, password: str):
         """Set the username and password for authentication.
@@ -234,13 +266,7 @@ class HipocrateClient:
         Returns:
             aiohttp.ClientSession for the user
         """
-        if username not in self.user_sessions or self.user_sessions[username].closed:
-            logger.debug(f"Creating new aiohttp ClientSession for user {username} with cookie support")
-            # Create session with automatic cookie handling
-            self.user_sessions[username] = aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(unsafe=True))
-        else:
-            logger.debug(f"Reusing existing aiohttp ClientSession for user {username}")
-        return self.user_sessions[username]
+        return await self.session_manager.get_user_session(username)
     
     async def get_authenticated_session(self, username: str, password: str):
         """Get an authenticated session for the user.
@@ -258,11 +284,7 @@ class HipocrateClient:
     
     async def close_all_sessions(self):
         """Close all user sessions."""
-        logger.info("Closing all user sessions")
-        for username, session in self.user_sessions.items():
-            if session and not session.closed:
-                logger.debug(f"Closing aiohttp ClientSession for user {username}")
-                await session.close()
+        await self.session_manager.close_all_sessions()
     
     def get_cached_response(self, url: str) -> Optional[str]:
         """Get cached response for URL if exists and not expired.
