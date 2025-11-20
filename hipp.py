@@ -1715,14 +1715,30 @@ def parse_report(html_content: str) -> Dict[str, Any]:
         "patient_gender": "",
         "patient_cnp": "",
         "patient_id": "",
-        "datetime": None,
+                    "physician": "",
+
         "examination": "",
         "reports": [],
         "performer": "",
         "validator": "",
         "validation_datetime": "",
-        "barcode": ""
+        "barcode": "",
+            "admission_id": "",
+            "diagnosis": "",
+            "clinical_comments": "",
+            "lab_comments": "",
+            "procedures": {},
+            "request_datetime": "",
+            "is_urgent": "~URGENTA~" in html_content
     }
+
+    # Inner function to extract data from input elements
+    def store_data(data_key: str, value: str) -> None:
+        if value:
+            if isinstance(value, str):
+                report_data[data_key] = value.strip()
+            else:
+                report_data[data_key] = value
 
     try:
         # Parse HTML content with BeautifulSoup
@@ -1733,51 +1749,40 @@ def parse_report(html_content: str) -> Dict[str, Any]:
         #print(f"DEBUG: Table D1 data: {debug_table_data}")
 
         # Extract patient name from the table with patient data
-        patient_name = extract_text_after_label(soup, r'Nume:', 'tr', stop_at=r'\[')
-        if patient_name:
-            report_data["patient_name"] = patient_name
+        store_data("patient_name", extract_text_after_label(soup, r'Nume:', 'tr', stop_at=r'\['))
 
         # Extract age
-        patient_age = extract_text_after_label(soup, r'Varsta:', 'tr')
-        if patient_age:
-            # Extract just the value part (first word)
-            report_data["patient_age"] = patient_age.split()[0] if patient_age.split() else patient_age
+        store_data("patient_age", extract_text_after_label(soup, r'Varsta:', 'tr'))
 
         # Extract gender
-        gender = extract_text_after_label(soup, r'Sex:', 'td')
-        if gender:
-            # Extract just the value part (first word)
-            report_data["gender"] = gender.split()[0] if gender.split() else gender
+        store_data("patient_gender", extract_text_after_label(soup, r'Sex:', 'td'))
 
         # Extract patient CNP from the table with patient data
         patient_cnp = extract_value_from_input(soup, id="strCNP")
-        if patient_cnp:
-            report_data["patient_cnp"] = patient_cnp
-            parsed_cnp = parse_cnp(patient_cnp)
-            if parsed_cnp.get("valid"):
-                report_data["sex"] = parsed_cnp.get("gender", "unknown")
-                report_data["birth_date"] = parsed_cnp.get("birth_date", "")
+        store_data("patient_cnp", patient_cnp)
+        parsed_cnp = parse_cnp(patient_cnp)
+        store_data("patient_gender", parsed_cnp.get("gender", ""))
+        store_data("birth_date", parsed_cnp.get("birth_date", ""))
+        store_data("patient_age", parsed_cnp.get("age", ""))
 
         # Extract patient code from the table with patient data
         patient_ids = extract_ids_from_links(soup, r'/pacient/edit\.asp\?id=(\d+)')
-        if patient_ids:
-            report_data["patient_id"] = patient_ids[0]
+        store_data("patient_id", patient_ids[0])
 
-        # Extract request code
-        barcode = extract_text_after_label(soup, r'Cod cerere:', 'tr')
-        if barcode:
-            report_data["barcode"] = barcode
+        # Extract physician
+        store_data("physician", extract_text_after_label(soup, r'Medic:', 'tr'))
 
-        # Extract date and time of collection
-        datetime_text = extract_text_after_label(soup, r'Data si ora recoltarii:')
-        if datetime_text:
-            # Try to parse the datetime using our existing function
-            dt = parse_date_time(datetime_text)
-            if dt:
-                report_data["datetime"] = dt
-            else:
-                # If parsing fails, keep the original string
-                report_data["datetime"] = datetime_text
+        # Extract requester and request date and time
+        req = extract_text_after_label(soup, r'Ceruta:', 'tr')
+        request_physician, request_datetime = req.split('-')
+        store_data("request_physician", request_physician)
+        # Try to parse the datetime
+        dt = parse_date_time(request_datetime)
+        if dt:
+            report_data["request_datetime"] = dt.isoformat()
+        else:
+            # If parsing fails, keep the original string
+            report_data["request_datetime"] = request_datetime
 
         # Extract performer (validator) from the domain section
         validator = extract_text_after_label(soup, r'Validat de:', 'td', stop_at=r'Data')
@@ -1785,53 +1790,17 @@ def parse_report(html_content: str) -> Dict[str, Any]:
             report_data["validator"] = validator
 
         # Extract validation datetime
-        validation_datetime = extract_text_after_label(soup, r'Data si ora validarii:', 'td')
+        validation_datetime = extract_value_from_input(soup, id="dataefectuarii")
         if validation_datetime:
-            # Try to parse the datetime using our existing function
+            # Try to parse the datetime
             dt = parse_date_time(validation_datetime)
             if dt:
-                report_data["validation_datetime"] = dt
+                report_data["validation_datetime"] = dt.isoformat()
             else:
                 # If parsing fails, keep the original string
                 report_data["validation_datetime"] = validation_datetime
 
-        # Extract examination type from the domain header
-        domain_header = soup.find('td', class_='tdnplusleft')
-        if domain_header:
-            # Extract the text before the validator information
-            header_text = domain_header.get_text()
-            # Remove the validator part if present
-            header_text = re.sub(r'\s*- Validat de.*$', '', header_text, flags=re.IGNORECASE)
-            report_data["examination"] = header_text.strip()
 
-        # Extract reports (results)
-        # Find all table rows with results
-        result_rows = soup.find_all('tr')
-        for row in result_rows:
-            cells = row.find_all('td')
-            if len(cells) >= 3:
-                # Check if this looks like a result row (has analysis name in first cell)
-                first_cell = cells[0]
-                if first_cell and first_cell.find('b'):
-                    analysis_name = first_cell.get_text().strip()
-                    # Skip header rows
-                    if 'ANALIZE' in analysis_name.upper() or 'REZULTATE' in analysis_name.upper():
-                        continue
-                    
-                    # Extract result from second cell
-                    result_cell = cells[1]
-                    result_content = ""
-                    if result_cell:
-                        # Get all text content from the cell
-                        result_content = result_cell.get_text().strip()
-                    
-                    # Add to reports list
-                    report_data["reports"].append({
-                        "investigation": analysis_name,
-                        "result": result_content
-                    })
-
-        print(report_data)
 
         # Return the parsed report data
         return report_data
