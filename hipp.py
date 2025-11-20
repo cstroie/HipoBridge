@@ -238,7 +238,7 @@ user_session_manager = UserSessionManager()
 class HipocrateClient:
     """Client for interacting with the Hipocrate medical system."""
     
-    def __init__(self, service_url: str):
+    def __init__(self, service_url: str, username: str = None, password: str = None):
         """Initialize the Hipocrate client.
         
         Args:
@@ -247,9 +247,11 @@ class HipocrateClient:
         self.service_url = service_url
         self.headers = HEADERS.copy()
         self.url_cache = URLCache(max_size=100, timeout=10 * 60)
-        self.username = None
-        self.password = None
-    
+        self.username = username
+        self.password = password
+        # Get session using the client's session manager
+        self.session = self.get_user_session(username)
+
     def set_credentials(self, username: str, password: str):
         """Set the username and password for authentication.
         
@@ -455,31 +457,34 @@ class HipocrateClient:
                 response_text = raw_data.decode('latin-1')
         return response_text
     
-    async def get_page(self, session, url, username=None, password=None, max_redirects=5):
+    async def get_page(self, url, max_redirects=5):
         """Abstract method to retrieve a page from the Hipocrate service, following redirects.
         
         This method handles the common pattern of making authenticated requests with
         redirect following, which can be reused by derived classes.
         
         Args:
-            session: The aiohttp session to use
             url: The URL to request
-            username: Username for login if needed
-            password: Password for login if needed
             max_redirects: Maximum number of redirects to follow (default: 5)
             
         Returns:
             Tuple of (response_text, success, error_response) where success is boolean
         """
+        # Construct the full URL if a relative path is provided
+        if url.startswith("http"):
+            current_url = url
+        elif url.startswith("/"): 
+            current_url = f'{self.service_url}{url}'
+        else:
+            current_url = f'{self.service_url}/{url}'
+        
         # Follow up to max_redirects redirects to get the final page data
         redirect_count = 0
-        current_url = url
-        
         while redirect_count < max_redirects:
             # Make the authenticated request
             start_time = datetime.now()
             response_text, success, error_response = await self.make_authenticated_request(
-                session, current_url, "GET", None, username, password
+                self.session, current_url, "GET", None, self.username, self.password
             )
             duration = (datetime.now() - start_time).total_seconds()
 
@@ -490,7 +495,7 @@ class HipocrateClient:
 
             # Check if this is the final response (not a redirect)
             # We need to make a direct request to check the status code
-            async with session.get(current_url, headers=self.headers) as response:
+            async with self.session.get(current_url, headers=self.headers) as response:
                 logger.debug(f"Page request response status: {response.status}")
                 
                 # If we get the final data (not a redirect), break the loop
@@ -1270,84 +1275,32 @@ async def diagnostic_report(request):
     Returns:
         JSON response with diagnostic report data or error information
     """
-    report_id = request.match_info.get('id')
-    logger.info(f"GET /fhir/DiagnosticReport endpoint accessed with identifier: {report_id}")
+    # Extract report ID from path
+    id = request.match_info.get('id')
+    if not id:
+        return create_error_response("Report ID is required")
+    logger.info(f"Retrieving report with ID: {id}")
     
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
-    
-    if not report_id:
-        return create_error_response("Report ID is required")
-    
-    logger.info(f"Retrieving report with ID: {report_id}")
-    
+
+    # Create a new HipocrateClient instance with credentials
+    client = HipocrateClient(SERVICE_URL, username, password)
+
     try:
-        # Get user-specific aiohttp session
-        session = await user_session_manager.get_user_session(username)
+        # The report endpoint
+        request_url = f"/analyse/Reports/analyseFile.asp?id={id}"
 
-        # Make request to the report endpoint
-        report_url = f"{SERVICE_URL}/analyse/Reports/analyseFile.asp?id={report_id}"
-        
-        # Follow up to 5 redirects to get the final report data
-        redirect_count = 0
-        max_redirects = 5
-        current_url = report_url
-        
-        while redirect_count < max_redirects:
-            # Make the authenticated request
-            start_time = datetime.now()
-            response_text, success, error_response = await hipocrate_client.make_authenticated_request(
-                session, current_url, "GET", None, username, password
-            )
-            duration = (datetime.now() - start_time).total_seconds()
+        # Retrieve the page
+        response_text, success, error_response = await client.get_page(request_url)
 
-            # Check for errors in the response
-            if not success:
-                return error_response
-            logger.info(f"Report retrieved in {duration:.2f} seconds")
+        # Check for errors in the response
+        if not success:
+            return error_response
 
-            # Check if this is the final response (not a redirect)
-            # We need to make a direct request to check the status code
-            async with session.get(current_url, headers=HEADERS) as response:
-                logger.debug(f"Report request response status: {response.status}")
-                
-                # If we get the final data (not a redirect), break the loop
-                if response.status != 302:
-                    logger.info(f"Report retrieval completed successfully after {redirect_count} redirects")
-                    
-                    # Parse the report data
-                    report_data = parse_report_data(response_text)
-                    if report_data and report_data["reports"]:
-                        report_data["report_id"] = report_id
-                        
-                        # Return DiagnosticReport
-                        fhir_report = convert_report_to_diagnostic_report(report_data, request)
-                        return web.json_response(fhir_report)
-                    else:
-                        return create_error_response("No report data found in the retrieved report", 404)
-                
-                # Handle 302 redirect
-                location = response.headers.get("Location")
-                if not location:
-                    return create_error_response("Redirect without location header", 500)
-                
-                # Construct the full URL for the redirect
-                if location.startswith("/"):
-                    # Relative path from root
-                    current_url = f"{request.scheme}://{request.host}{location}"
-                elif location.startswith("http"):
-                    # Full URL
-                    current_url = location
-                else:
-                    # Relative path from current directory
-                    base_path = "/".join(current_url.split("/")[:-1])
-                    current_url = f"{base_path}/{location}"
-                
-                logger.debug(f"Following redirect #{redirect_count + 1} to: {current_url}")
-                redirect_count += 1
-        
-        # If we've exceeded the maximum redirects
-        return create_error_response(f"Exceeded maximum redirects ({max_redirects})", 500)
+        # Return DiagnosticReport
+        fhir_response = convert_report_to_diagnostic_report(response_text, request)
+        return web.json_response(fhir_response)
             
     except Exception as e:
         return create_error_response("Report retrieval failed", 500, {"exception": str(e)})
@@ -1366,84 +1319,32 @@ async def imaging_study(request):
     Returns:
         JSON response with imaging study data or error information
     """
-    study_id = request.match_info.get('id')
-    logger.info(f"GET /fhir/ImagingStudy endpoint accessed with identifier: {study_id}")
+    # Extract study ID from path
+    id = request.match_info.get('id')
+    if not id:
+        return create_error_response("Study ID is required")
+    logger.info(f"Retrieving study with ID: {id}")
     
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
-    
-    if not study_id:
-        return create_error_response("Study ID is required")
-    
-    logger.info(f"Retrieving imaging study with ID: {study_id}")
+
+    # Create a new HipocrateClient instance with credentials
+    client = HipocrateClient(SERVICE_URL, username, password)
     
     try:
-        # Get user-specific aiohttp session
-        session = await user_session_manager.get_user_session(username)
+        # The study endpoint
+        request_url = f"/analyse/Reports/analyseFile.asp?id={id}"
 
-        # Make request to the report endpoint (same endpoint as diagnostic reports)
-        report_url = f"{SERVICE_URL}/analyse/Reports/analyseFile.asp?id={study_id}"
-        
-        # Follow up to 5 redirects to get the final report data
-        redirect_count = 0
-        max_redirects = 5
-        current_url = report_url
-        
-        while redirect_count < max_redirects:
-            # Make the authenticated request
-            start_time = datetime.now()
-            response_text, success, error_response = await hipocrate_client.make_authenticated_request(
-                session, current_url, "GET", None, username, password
-            )
-            duration = (datetime.now() - start_time).total_seconds()
+        # Retrieve the page
+        response_text, success, error_response = await client.get_page(request_url)
 
-            # Check for errors in the response
-            if not success:
-                return error_response
-            logger.info(f"Imaging study retrieved in {duration:.2f} seconds")
+        # Check for errors in the response
+        if not success:
+            return error_response
 
-            # Check if this is the final response (not a redirect)
-            # We need to make a direct request to check the status code
-            async with session.get(current_url, headers=HEADERS) as response:
-                logger.debug(f"Imaging study request response status: {response.status}")
-                
-                # If we get the final data (not a redirect), break the loop
-                if response.status != 302:
-                    logger.info(f"Imaging study retrieval completed successfully after {redirect_count} redirects")
-                    
-                    # Parse the report data
-                    report_data = parse_report_data(response_text)
-                    if report_data and report_data["reports"]:
-                        report_data["report_id"] = study_id
-                        
-                        # Return ImagingStudy
-                        fhir_imaging_study = convert_report_to_imaging_study(report_data, request)
-                        return web.json_response(fhir_imaging_study)
-                    else:
-                        return create_error_response("No report data found in the retrieved imaging study", 404)
-                
-                # Handle 302 redirect
-                location = response.headers.get("Location")
-                if not location:
-                    return create_error_response("Redirect without location header", 500)
-                
-                # Construct the full URL for the redirect
-                if location.startswith("/"):
-                    # Relative path from root
-                    current_url = f"{request.scheme}://{request.host}{location}"
-                elif location.startswith("http"):
-                    # Full URL
-                    current_url = location
-                else:
-                    # Relative path from current directory
-                    base_path = "/".join(current_url.split("/")[:-1])
-                    current_url = f"{base_path}/{location}"
-                
-                logger.debug(f"Following redirect #{redirect_count + 1} to: {current_url}")
-                redirect_count += 1
-        
-        # If we've exceeded the maximum redirects
-        return create_error_response(f"Exceeded maximum redirects ({max_redirects})", 500)
+        # Return ImagingStudy
+        fhir_response = convert_report_to_imaging_study(response_text, request)
+        return web.json_response(fhir_response)
             
     except Exception as e:
         return create_error_response("Imaging study retrieval failed", 500, {"exception": str(e)})
@@ -1868,7 +1769,6 @@ def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dic
     
     return fhir_imaging_study
 
-
 @require_auth
 async def observation(request):
     """Retrieve a single observation by ID.
@@ -1882,89 +1782,93 @@ async def observation(request):
     Returns:
         JSON response with observation data or error information
     """
-    observation_id = request.match_info.get('id')
-    logger.info(f"GET /fhir/Observation/{observation_id} endpoint accessed")
+    # Extract observation ID from path
+    id = request.match_info.get('id')
+    if not id:
+        return create_error_response("Observation ID is required")
+    logger.info(f"Retrieving observation with ID: {id}")
     
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
-    
-    if not observation_id:
-        return create_error_response("Observation ID is required")
-    
-    logger.info(f"Retrieving observation with ID: {observation_id}")
-    
-    try:
-        # Get user-specific aiohttp session
-        session = await user_session_manager.get_user_session(username)
-        
-        # Get report details to extract observation data
-        report_url = f"{SERVICE_URL}/analyse/Reports/analyseFile.asp?id={observation_id}"
 
-        # Make the authenticated request
-        start_time = datetime.now()
-        report_text, success, error_response = await hipocrate_client.make_authenticated_request(
-            session, report_url, "GET", None, username, password
-        )
-        duration = (datetime.now() - start_time).total_seconds()
-        
+    # Create a new HipocrateClient instance with credentials
+    client = HipocrateClient(SERVICE_URL, username, password)
+
+    try:
+        # The observation endpoint
+        request_url = f"/analyse/Reports/analyseFile.asp?id={id}"
+
+        # Retrieve the page
+        response_text, success, error_response = await client.get_page(request_url)
+
         # Check for errors in the response
         if not success:
             return error_response
-        
-        logger.info(f"Report retrieved in {duration:.2f} seconds")
-        
-        # Parse report to get observation data
-        report_data = parse_report_data(report_text)
-        
-        fhir_observation = {
-            "resourceType": "Observation",
-            "id": observation_id,
-            "status": "final",
-            "code": {
-                "coding": [
-                    {
-                        "system": f"{request.scheme}://{request.host}/fhir/CodeSystem/analysis-types",
-                        "code": "unknown", 
-                        "display": "Analysis"
-                    }
-                ],
-                "text": report_data.get("examination", "Analysis")
-            },
-            "subject": {
-                "reference": f"Patient/{report_data.get('patient_id', '')}"
-            },
-            "basedOn": {
-                "reference": f"ServiceRequest/{report_data.get('report_id')}"
-            },
-        }
 
-        # Add effective datetime if available
-        if report_data.get("datetime"):
-            fhir_observation["effectiveDateTime"] = report_data["datetime"].isoformat()
-        
-        # Add performer if available
-        if report_data.get("performer"):
-            fhir_observation["performer"] = [
-                {
-                    "display": report_data["performer"]
-                }
-            ]
-
-        # Add value/comment if available
-        if report_data.get("reports"):
-            fhir_observation["note"] = []
-            for report in report_data["reports"]:
-                fhir_observation["note"].append(
-                    {
-                        "contentType": "text/plain",
-                        "data": report["result"]
-                    }
-                )
-        
-        return web.json_response(fhir_observation)
+        # Return Observation
+        fhir_response = convert_report_to_observation(response_text, request)
+        return web.json_response(fhir_response)
             
     except Exception as e:
         return create_error_response("Observation retrieval failed", 500, {"exception": str(e)})
+
+def convert_report_to_observation(report_data: Dict[str, Any], request) -> Dict[str, Any]:
+    """Convert report data to FHIR ImagingStudy resource format.
+    
+    Args:
+        report_data: Report data from parse_report_data
+        request: The HTTP request object to get the host
+        
+    Returns:
+        FHIR ImagingStudy resource
+    """
+    # Create FHIR Observation resource        
+    fhir_observation = {
+        "resourceType": "Observation",
+        "id": report_data["report_id"],
+        "status": "final",
+        "code": {
+            "coding": [
+                {
+                    "system": f"{request.scheme}://{request.host}/fhir/CodeSystem/analysis-types",
+                    "code": "unknown", 
+                    "display": "Analysis"
+                }
+            ],
+            "text": report_data.get("examination", "Analysis")
+        },
+        "subject": {
+            "reference": f"Patient/{report_data.get('patient_id', '')}"
+        },
+        "basedOn": {
+            "reference": f"ServiceRequest/{report_data.get('report_id')}"
+        },
+    }
+
+    # Add effective datetime if available
+    if report_data.get("datetime"):
+        fhir_observation["effectiveDateTime"] = report_data["datetime"].isoformat()
+    
+    # Add performer if available
+    if report_data.get("performer"):
+        fhir_observation["performer"] = [
+            {
+                "display": report_data["performer"]
+            }
+        ]
+
+    # Add value/comment if available
+    if report_data.get("reports"):
+        fhir_observation["note"] = []
+        for report in report_data["reports"]:
+            fhir_observation["note"].append(
+                {
+                    "contentType": "text/plain",
+                    "data": report["result"]
+                }
+            )
+    
+    return fhir_observation
 
 @require_auth
 async def observation_search(request):
@@ -2334,41 +2238,31 @@ async def service_request(request):
         https://build.fhir.org/servicerequest.html
     """
     # Extract service request ID from path
-    service_request_id = request.match_info.get('id')
-    logger.info(f"GET /fhir/ServiceRequest/{service_request_id} endpoint accessed")
-    
-    if not service_request_id:
+    id = request.match_info.get('id')
+    if not id:
         return create_error_response("Service request ID is required")
-    
-    logger.info(f"Retrieving service request with ID: {service_request_id}")
+    logger.info(f"Retrieving service request with ID: {id}")
     
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
-    
+
+    # Create a new HipocrateClient instance with credentials
+    client = HipocrateClient(SERVICE_URL, username, password)
+
     try:
-        # Create a new HipocrateClient instance with credentials
-        client = HipocrateClient(SERVICE_URL)
-        client.set_credentials(username, password)
-        
-        # Get session using the client's session manager
-        session = await client.get_user_session(username)
-        
-        # Make request to the service request endpoint
-        request_url = f"{SERVICE_URL}/Analyse/LabRequest/buletinRecoltari.asp?id={service_request_id}"
+        # The service request endpoint
+        request_url = f"/Analyse/LabRequest/buletinRecoltari.asp?id={id}"
         
         # Use the get_page method from the new HipocrateClient instance to retrieve the page
-        response_text, success, error_response = await client.get_page(
-            session, request_url, username, password
-        )
+        response_text, success, error_response = await client.get_page(request_url)
 
         # Check for errors in the response
         if not success:
             return error_response
         
         # Create FHIR ServiceRequest resource directly from HTML content
-        fhir_service_request = convert_to_service_request(response_text, service_request_id, request)
-        
-        return web.json_response(fhir_service_request)
+        fhir_response = convert_to_service_request(response_text, id, request)
+        return web.json_response(fhir_response)
             
     except Exception as e:
         return create_error_response("Service request retrieval failed", 500, {"exception": str(e)})
