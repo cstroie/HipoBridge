@@ -1387,7 +1387,7 @@ async def get_diagnostic_report(request):
 
     try:
         # The report endpoint
-        request_url = f"/analyse/Reports/analyseFile_4212-lab.asp?fullpacient=yes&id={id}&section=4212-lab"
+        request_url = f"/analyse/Reports/analyseFile.asp?id={id}"
 
         # Retrieve the page
         response_text, success, error_response = await client.get_page(request_url)
@@ -1397,7 +1397,7 @@ async def get_diagnostic_report(request):
             return error_response
 
         # Return DiagnosticReport
-        report_data = parse_report(response_text)
+        report_data = parse_report_data(response_text)
         report_data['report_id'] = id
         fhir_response = convert_report_to_diagnostic_report(report_data, request)
         return web.json_response(fhir_response)
@@ -1707,7 +1707,7 @@ def parse_report(html_content: str) -> Dict[str, Any]:
                 report_data["datetime"] = datetime_text
 
         # Extract performer (validator) from the domain section
-        validator = extract_text_after_label(soup, r'Validat de*:', 'td', stop_at=r'Data')
+        validator = extract_text_after_label(soup, r'Validat de:', 'td', stop_at=r'Data')
         if validator:
             report_data["validator"] = validator
 
@@ -1757,6 +1757,8 @@ def parse_report(html_content: str) -> Dict[str, Any]:
                         "investigation": analysis_name,
                         "result": result_content
                     })
+
+        print(report_data)
 
         # Return the parsed report data
         return report_data
@@ -2031,7 +2033,8 @@ async def get_observation(request):
 
     try:
         # The observation endpoint
-        request_url = f"/analyse/Reports/analyseFile.asp?id={id}"
+        request_url = f"/analyse/Reports/analyseFile_4212-lab.asp?fullpacient=yes&id={id}&section=4212-lab"
+
 
         # Retrieve the page
         response_text, success, error_response = await client.get_page(request_url)
@@ -2041,7 +2044,7 @@ async def get_observation(request):
             return error_response
 
         # Return Observation
-        report_data = parse_report_data(response_text)
+        report_data = parse_report(response_text)
         report_data['report_id'] = id
         fhir_response = convert_report_to_observation(report_data, request)
         return web.json_response(fhir_response)
@@ -3010,11 +3013,16 @@ def parse_date_time(date_str: str) -> Optional[datetime]:
 
         # Parse time
         time_parts = time_part.split(':')
-        if len(time_parts) != 3:
+        if len(time_parts) == 2:
+            hour = int(time_parts[0])
+            minute = int(time_parts[1])
+            second = 0
+        elif len(time_parts) == 3:
+            hour = int(time_parts[0])
+            minute = int(time_parts[1])
+            second = int(time_parts[2])
+        else:
             return None
-        hour = int(time_parts[0])
-        minute = int(time_parts[1])
-        second = int(time_parts[2])
 
         # Create datetime object
         return datetime(year, month, day, hour, minute, second)
