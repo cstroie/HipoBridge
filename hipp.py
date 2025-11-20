@@ -766,6 +766,27 @@ def extract_ids_from_links(soup: BeautifulSoup, id_pattern: str = r'id=([^&"]+)'
 
 
 
+def get_basic_auth(request):
+    """Extract basic auth credentials from request.
+
+    Args:
+        request: The incoming HTTP request
+
+    Returns:
+        Tuple of (username, password) or None if not found
+    """
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Basic '):
+        return None
+
+    try:
+        encoded_credentials = auth_header.split(' ', 1)[1]
+        decoded_credentials = base64.b64decode(encoded_credentials).decode('utf-8')
+        username, password = decoded_credentials.split(':', 1)
+        return (username, password)
+    except Exception:
+        return None
+
 def require_auth(handler):
     """Decorator to require basic authentication for endpoints."""
     async def wrapper(request):
