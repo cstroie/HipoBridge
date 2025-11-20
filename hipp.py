@@ -197,8 +197,6 @@ url_cache = URLCache(max_size=100, timeout=10 * 60)  # 10 minutes timeout
 cnp_cache: Dict[str, str] = {}
 cache_max_size = 1000  # Maximum number of entries to cache
 
-# Session cache per user
-user_sessions: Dict[str, aiohttp.ClientSession] = {}
 
 
 class HipocrateClient:
@@ -215,6 +213,7 @@ class HipocrateClient:
         self.url_cache = URLCache(max_size=100, timeout=10 * 60)
         self.username = None
         self.password = None
+        self.user_sessions: Dict[str, aiohttp.ClientSession] = {}
     
     def set_credentials(self, username: str, password: str):
         """Set the username and password for authentication.
@@ -225,6 +224,31 @@ class HipocrateClient:
         """
         self.username = username
         self.password = password
+    
+    async def get_user_session(self, username: str):
+        """Get or create a user-specific session.
+        
+        Args:
+            username: Username to get session for
+            
+        Returns:
+            aiohttp.ClientSession for the user
+        """
+        if username not in self.user_sessions or self.user_sessions[username].closed:
+            logger.debug(f"Creating new aiohttp ClientSession for user {username} with cookie support")
+            # Create session with automatic cookie handling
+            self.user_sessions[username] = aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(unsafe=True))
+        else:
+            logger.debug(f"Reusing existing aiohttp ClientSession for user {username}")
+        return self.user_sessions[username]
+    
+    async def close_all_sessions(self):
+        """Close all user sessions."""
+        logger.info("Closing all user sessions")
+        for username, session in self.user_sessions.items():
+            if session and not session.closed:
+                logger.debug(f"Closing aiohttp ClientSession for user {username}")
+                await session.close()
     
     def get_cached_response(self, url: str) -> Optional[str]:
         """Get cached response for URL if exists and not expired.
@@ -676,7 +700,7 @@ async def patient(request):
     
     try:
         # Get user-specific aiohttp session
-        session = await get_user_session(username)
+        session = await hipocrate_client.get_user_session(username)
         
         # Make request to the patient endpoint
         patient_url = f"{SERVICE_URL}/Pacient/edit.asp?id={patient_id}"
@@ -736,7 +760,7 @@ async def patient_search(request):
     
     try:
         # Get user-specific aiohttp session
-        session = await get_user_session(username)
+        session = await hipocrate_client.get_user_session(username)
         
         # Determine search type based on input
         search_type = "name"  # default
@@ -1220,7 +1244,7 @@ async def diagnostic_report(request):
     
     try:
         # Get user-specific aiohttp session
-        session = await get_user_session(username)
+        session = await hipocrate_client.get_user_session(username)
 
         # Make request to the report endpoint
         report_url = f"{SERVICE_URL}/analyse/Reports/analyseFile.asp?id={report_id}"
@@ -1316,7 +1340,7 @@ async def imaging_study(request):
     
     try:
         # Get user-specific aiohttp session
-        session = await get_user_session(username)
+        session = await hipocrate_client.get_user_session(username)
 
         # Make request to the report endpoint (same endpoint as diagnostic reports)
         report_url = f"{SERVICE_URL}/analyse/Reports/analyseFile.asp?id={study_id}"
@@ -1832,7 +1856,7 @@ async def observation(request):
     
     try:
         # Get user-specific aiohttp session
-        session = await get_user_session(username)
+        session = await hipocrate_client.get_user_session(username)
         
         # Get report details to extract observation data
         report_url = f"{SERVICE_URL}/analyse/Reports/analyseFile.asp?id={observation_id}"
@@ -1935,7 +1959,7 @@ async def observation_search(request):
     
     try:
         # Get user-specific aiohttp session
-        session = await get_user_session(username)
+        session = await hipocrate_client.get_user_session(username)
         
         # Make request to the analyses endpoint
         analyses_url = f"{SERVICE_URL}/pacient/analyses.asp?type=PA&pacid={patient_id}"
@@ -3217,7 +3241,7 @@ async def serve_web_page(request):
     username, password = request.auth_credentials
     
     # Try to login with provided credentials
-    session = await get_user_session(username)
+    session = await hipocrate_client.get_user_session(username)
     login_success = await hipocrate_client.login_if_needed(session, username, password)
     
     if not login_success:
@@ -3308,22 +3332,6 @@ def create_error_response(message: str, status_code: int = 400, details: Dict[st
     # Return JSON response with appropriate status code
     return web.json_response(response_data, status=status_code)
 
-async def get_user_session(username: str):
-    """Get or create a user-specific session.
-    
-    Args:
-        username: Username to get session for
-        
-    Returns:
-        aiohttp.ClientSession for the user
-    """
-    if username not in user_sessions or user_sessions[username].closed:
-        logger.debug(f"Creating new aiohttp ClientSession for user {username} with cookie support")
-        # Create session with automatic cookie handling
-        user_sessions[username] = aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(unsafe=True))
-    else:
-        logger.debug(f"Reusing existing aiohttp ClientSession for user {username}")
-    return user_sessions[username]
 
 def load_config():
     """Load configuration from hipp.cfg and local.cfg (if exists).
@@ -3367,10 +3375,7 @@ async def on_cleanup(app):
         app: The web application
     """
     logger.info("Application cleanup")
-    for username, session in user_sessions.items():
-        if session and not session.closed:
-            logger.debug(f"Closing aiohttp ClientSession for user {username}")
-            await session.close()
+    await hipocrate_client.close_all_sessions()
 
 async def auth_middleware(app, handler):
     """Authentication middleware that skips static files."""
