@@ -3355,6 +3355,7 @@ def parse_cnp(cnp: str) -> Dict[str, Any]:
             - valid: bool - whether the CNP is valid
             - gender: str - male/female
             - birth_date: str - ISO format date (YYYY-MM-DD)
+            - age: int - patient age in years
             - county_code: int - county code
             - county_name: str - county name
             - serial: str - serial number
@@ -3440,10 +3441,18 @@ def parse_cnp(cnp: str) -> Dict[str, Any]:
     # Get county name
     county_name = county_names.get(county_code, "Unknown")
 
+    # Calculate age
+    today = datetime.today()
+    age = today.year - birth_date.year
+    # Adjust if birthday hasn't occurred this year
+    if (today.month, today.day) < (birth_date.month, birth_date.day):
+        age -= 1
+
     return {
         "valid": True,
         "gender": gender,
         "birth_date": birth_date.strftime('%Y-%m-%d'),
+        "age": age,
         "county_code": county_code,
         "county_name": county_name,
         "serial": serial,
