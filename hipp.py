@@ -761,6 +761,16 @@ def extract_ids_from_links(soup: BeautifulSoup, id_pattern: str = r'id=([^&"]+)'
             ids_list.append(id_match.group(1))
     return ids_list
 
+def extract_value_from_input(soup: 'BeautifulSoup', id: str = None, name: str = None) -> str:
+    if id:
+        input_element = soup.find('input', id=id)
+    elif name:
+        input_element = soup.find('input', name=name)
+    else:
+        return ""
+    if input_element:
+        return input_element.get('value', '').strip()
+
 def extract_textarea_after_label(soup: 'BeautifulSoup', label_regex: str) -> str:
     """Get content of first textarea after a label matching the given regex.
 
@@ -1701,8 +1711,8 @@ def parse_report(html_content: str) -> Dict[str, Any]:
     # Initialize report data dictionary
     report_data = {
         "patient_name": "",
-        "age": "",
-        "gender": "",
+        "patient_age": "",
+        "patient_gender": "",
         "patient_cnp": "",
         "patient_id": "",
         "datetime": None,
@@ -1719,19 +1729,19 @@ def parse_report(html_content: str) -> Dict[str, Any]:
         soup = BeautifulSoup(html_content, 'html.parser')
 
         # Extract tabular data from table with id="D1" for debugging
-        debug_table_data = extract_tabular_data(soup, "D1", "id")
-        print(f"DEBUG: Table D1 data: {debug_table_data}")
+        #debug_table_data = extract_tabular_data(soup, "D1", "id")
+        #print(f"DEBUG: Table D1 data: {debug_table_data}")
 
         # Extract patient name from the table with patient data
-        patient_name = extract_text_after_label(soup, r'Nume:', 'td')
+        patient_name = extract_text_after_label(soup, r'Nume:', 'tr', stop_at=r'\[')
         if patient_name:
             report_data["patient_name"] = patient_name
 
         # Extract age
-        age = extract_text_after_label(soup, r'Varsta:', 'td')
-        if age:
+        patient_age = extract_text_after_label(soup, r'Varsta:', 'tr')
+        if patient_age:
             # Extract just the value part (first word)
-            report_data["age"] = age.split()[0] if age.split() else age
+            report_data["patient_age"] = patient_age.split()[0] if patient_age.split() else patient_age
 
         # Extract gender
         gender = extract_text_after_label(soup, r'Sex:', 'td')
@@ -1740,17 +1750,21 @@ def parse_report(html_content: str) -> Dict[str, Any]:
             report_data["gender"] = gender.split()[0] if gender.split() else gender
 
         # Extract patient CNP from the table with patient data
-        patient_cnp = extract_text_after_label(soup, r'C\.N\.P:', 'td')
+        patient_cnp = extract_value_from_input(soup, id="strCNP")
         if patient_cnp:
             report_data["patient_cnp"] = patient_cnp
+            parsed_cnp = parse_cnp(patient_cnp)
+            if parsed_cnp.get("valid"):
+                report_data["sex"] = parsed_cnp.get("gender", "unknown")
+                report_data["birth_date"] = parsed_cnp.get("birth_date", "")
 
         # Extract patient code from the table with patient data
-        patient_id = extract_text_after_label(soup, r'Cod pacient:', 'td')
-        if patient_id:
-            report_data["patient_id"] = patient_id
+        patient_ids = extract_ids_from_links(soup, r'/pacient/edit\.asp\?id=(\d+)')
+        if patient_ids:
+            report_data["patient_id"] = patient_ids[0]
 
         # Extract request code
-        barcode = extract_text_after_label(soup, r'Cod cerere:', 'td')
+        barcode = extract_text_after_label(soup, r'Cod cerere:', 'tr')
         if barcode:
             report_data["barcode"] = barcode
 
@@ -2092,7 +2106,8 @@ async def get_observation(request):
 
     try:
         # The observation endpoint
-        request_url = f"/analyse/Reports/analyseFile_4212-lab.asp?fullpacient=yes&id={id}&section=4212-lab"
+        #request_url = f"/analyse/Reports/analyseFile_4212-lab.asp?fullpacient=yes&id={id}&section=4212-lab"
+        request_url = f"/analyse/labrequest/edit.asp?id={id}"
 
 
         # Retrieve the page
@@ -2105,8 +2120,9 @@ async def get_observation(request):
         # Return Observation
         report_data = parse_report(response_text)
         report_data['report_id'] = id
-        fhir_response = create_fhir_observation(report_data, request)
-        return web.json_response(fhir_response)
+        #fhir_response = create_fhir_observation(report_data, request)
+        #return web.json_response(fhir_response)
+        return web.json_response(report_data)
 
     except Exception as e:
         return create_error_response("Observation retrieval failed", 500, {"exception": str(e)})
