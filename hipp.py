@@ -3138,7 +3138,7 @@ async def serve_web_page(request):
     
     # Try to login with provided credentials
     session = await get_user_session(username)
-    login_success = await login_if_needed(session, username, password)
+    login_success = await hipocrate_client.login_if_needed(session, username, password)
     
     if not login_success:
         return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
