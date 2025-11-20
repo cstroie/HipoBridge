@@ -1800,6 +1800,29 @@ def parse_report(html_content: str) -> Dict[str, Any]:
                 # If parsing fails, keep the original string
                 report_data["validation_datetime"] = validation_datetime
 
+        # Extract multiple reports: find table rows where first cell contains "Rezultat"
+        report_data["reports"] = []
+        for row in soup.find_all('tr'):
+            cells = row.find_all('td')
+            if len(cells) >= 2:
+                if cells[0].get_text(strip=True).lower() == "rezultat":
+                    # Extract investigation name from the first cell
+                    investigation_name = "" #first_cell_text.replace("Rezultat", "").strip(": ")
+                    # Filter out text nodes that contain only whitespace
+                    subelements = [child for child in cells[1] if hasattr(child, 'name') and child.name]
+                    if len(subelements) == 1 and subelements[0].name == 'b':
+                        # If the only child is a <b> tag, use its content directly
+                        result_content = html_to_markdown(str(subelements[0]))
+                    else:
+                        # Otherwise, process the entire div
+                        result_content = html_to_markdown(str(cells[1]))
+
+                    
+                    # Add to reports list
+                    report_data["reports"].append({
+                        "investigation": investigation_name,
+                        "result": result_content
+                    })
 
 
         # Return the parsed report data
