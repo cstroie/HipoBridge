@@ -242,6 +242,20 @@ class HipocrateClient:
             logger.debug(f"Reusing existing aiohttp ClientSession for user {username}")
         return self.user_sessions[username]
     
+    async def get_authenticated_session(self, username: str, password: str):
+        """Get an authenticated session for the user.
+        
+        Args:
+            username: Username for authentication
+            password: Password for authentication
+            
+        Returns:
+            Tuple of (session, success) where success is boolean
+        """
+        session = await self.get_user_session(username)
+        login_success = await self.login_if_needed(session, username, password)
+        return session, login_success
+    
     async def close_all_sessions(self):
         """Close all user sessions."""
         logger.info("Closing all user sessions")
