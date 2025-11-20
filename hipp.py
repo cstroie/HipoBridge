@@ -2320,7 +2320,7 @@ async def get_service_request(request):
         # The service request endpoint
         request_url = f"/Analyse/LabRequest/buletinRecoltari.asp?id={id}"
 
-        # Use the get_page method from the new HipocrateClient instance to retrieve the page
+        # Retrieve the page
         response_text, success, error_response = await client.get_page(request_url)
 
         # Check for errors in the response
@@ -2512,13 +2512,11 @@ async def get_encounter(request):
     See:
         https://build.fhir.org/encounter.html
     """
-    encounter_id = request.match_info.get('id')
-    logger.info(f"GET /fhir/Encounter endpoint accessed with identifier: {encounter_id}")
-
-    if not encounter_id:
+    # Extract encounter ID from path
+    id = request.match_info.get('id')
+    if not id:
         return create_error_response("Encounter ID is required")
-
-    logger.info(f"Retrieving encounter with ID: {encounter_id}")
+    logger.info(f"Retrieving encounter with ID: {id}")
 
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
@@ -2527,10 +2525,10 @@ async def get_encounter(request):
     client = HipocrateClient(SERVICE_URL, username, password)
 
     try:
-        # Make request to the checkout endpoint
-        checkout_url = f"/files/checkout.asp?id={encounter_id}"
+        # The checkout endpoint
+        checkout_url = f"/files/checkout.asp?id={id}"
         
-        # Use the get_page method from the new HipocrateClient instance to retrieve the page
+        # Retrieve the page
         response_text, success, error_response = await client.get_page(checkout_url)
 
         # Check for errors in the response
@@ -2541,9 +2539,8 @@ async def get_encounter(request):
         parsed_data = parse_checkout_data(response_text)
 
         # Convert parsed data to FHIR Encounter resource
-        fhir_encounter = convert_data_to_encounter(parsed_data, encounter_id, request)
-        
-        return web.json_response(fhir_encounter)
+        fhir_response = convert_data_to_encounter(parsed_data, id, request)
+        return web.json_response(fhir_response)
 
     except Exception as e:
         return create_error_response("Encounter retrieval failed", 500, {"exception": str(e)})
