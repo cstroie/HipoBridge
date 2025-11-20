@@ -717,6 +717,7 @@ def extract_text_after_label(soup: BeautifulSoup, label_regex: str, element_tag:
                     if stop_match:
                         content = content[:stop_match.start()].strip()
                 # Return the cleaned content
+                logger.debug(f"Extracted content for label '{label_regex}': {content}")
                 return content
         # If label not found, return empty
         return ""
@@ -1386,7 +1387,7 @@ async def get_diagnostic_report(request):
 
     try:
         # The report endpoint
-        request_url = f"/analyse/Reports/analyseFile.asp?id={id}"
+        request_url = f"/analyse/Reports/analyseFile_4212-lab.asp?fullpacient=yes&id={id}&section=4212-lab"
 
         # Retrieve the page
         response_text, success, error_response = await client.get_page(request_url)
@@ -1396,7 +1397,7 @@ async def get_diagnostic_report(request):
             return error_response
 
         # Return DiagnosticReport
-        report_data = parse_report_data(response_text)
+        report_data = parse_report(response_text)
         report_data['report_id'] = id
         fhir_response = convert_report_to_diagnostic_report(report_data, request)
         return web.json_response(fhir_response)
@@ -1663,11 +1664,9 @@ def parse_report(html_content: str) -> Dict[str, Any]:
         soup = BeautifulSoup(html_content, 'html.parser')
 
         # Extract patient name from the table with patient data
-        name_cell = soup.find('td', string=re.compile(r'Nume:', re.IGNORECASE))
-        if name_cell:
-            name_value = name_cell.find_next('b')
-            if name_value:
-                report_data["patient_name"] = name_value.get_text().strip()
+        patient_name = extract_text_after_label(soup, r'Nume:', 'td')
+        if patient_name:
+            report_data["patient_name"] = patient_name
 
         # Extract age from the table with patient data
         age_cell = soup.find('td', string=re.compile(r'Varsta:', re.IGNORECASE))
