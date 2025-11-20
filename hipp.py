@@ -1744,10 +1744,6 @@ def parse_report(html_content: str) -> Dict[str, Any]:
         # Parse HTML content with BeautifulSoup
         soup = BeautifulSoup(html_content, 'html.parser')
 
-        # Find all input elements with name="strAnalyseExec"
-        str_analyse_exec_inputs = soup.find_all('input', {'name': 'strAnalyseExec'})
-        report_data["str_analyse_exec_values"] = [input_elem.get('value', '') for input_elem in str_analyse_exec_inputs]
-
         # Extract tabular data from table with id="D1" for debugging
         #debug_table_data = extract_tabular_data(soup, "D1", "id")
         #print(f"DEBUG: Table D1 data: {debug_table_data}")
@@ -1827,6 +1823,11 @@ def parse_report(html_content: str) -> Dict[str, Any]:
                         "investigation": investigation_name,
                         "result": result_content
                     })
+
+
+        # Find all input elements with name="strAnalyseExec"
+        str_analyse_exec_inputs = soup.find_all('input', {'name': 'strAnalyseExec'})
+        report_data["str_analyse_exec_values"] = [input_elem.get('value', '') for input_elem in str_analyse_exec_inputs]
 
 
         # Return the parsed report data
