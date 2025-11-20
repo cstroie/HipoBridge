@@ -1698,24 +1698,11 @@ def parse_report(html_content: str) -> Dict[str, Any]:
         # Extract date and time of collection
         datetime_text = extract_text_after_label(soup, r'Data si ora recoltarii:')
         if datetime_text:
-            # Try to parse the datetime
-            try:
-                # Handle format like "17 Nov 2025 13:24:00"
-                # Create a mapping for Romanian month abbreviations to English ones
-                month_mapping = {
-                    'Ian': 'Jan', 'Mai': 'May', 'Iun': 'Jun', 'Iul': 'Jul',
-                    'Aug': 'Aug', 'Sep': 'Sep', 'Oct': 'Oct', 'Nov': 'Nov', 'Dec': 'Dec'
-                }
-                
-                # Replace Romanian month abbreviations with English ones
-                formatted_date = datetime_text
-                for ro_month, en_month in month_mapping.items():
-                    formatted_date = formatted_date.replace(ro_month, en_month)
-                
-                # Parse the datetime using strptime
-                dt = datetime.strptime(formatted_date, '%d %b %Y %H:%M:%S')
+            # Try to parse the datetime using our existing function
+            dt = parse_date_time(datetime_text)
+            if dt:
                 report_data["datetime"] = dt
-            except Exception:
+            else:
                 # If parsing fails, keep the original string
                 report_data["datetime"] = datetime_text
 
@@ -1727,24 +1714,11 @@ def parse_report(html_content: str) -> Dict[str, Any]:
         # Extract validation datetime
         validation_datetime = extract_text_after_label(soup, r'Data si ora validarii:', 'td')
         if validation_datetime:
-            # Try to parse the datetime
-            try:
-                # Handle format like "17 Nov 2025 14:13"
-                # Create a mapping for Romanian month abbreviations to English ones
-                month_mapping = {
-                    'Ian': 'Jan', 'Mai': 'May', 'Iun': 'Jun', 'Iul': 'Jul',
-                    'Aug': 'Aug', 'Sep': 'Sep', 'Oct': 'Oct', 'Nov': 'Nov', 'Dec': 'Dec'
-                }
-                
-                # Replace Romanian month abbreviations with English ones
-                formatted_date = validation_datetime
-                for ro_month, en_month in month_mapping.items():
-                    formatted_date = formatted_date.replace(ro_month, en_month)
-                
-                # Parse the datetime using strptime
-                dt = datetime.strptime(formatted_date, '%d %b %Y %H:%M')
+            # Try to parse the datetime using our existing function
+            dt = parse_date_time(validation_datetime)
+            if dt:
                 report_data["validation_datetime"] = dt
-            except Exception:
+            else:
                 # If parsing fails, keep the original string
                 report_data["validation_datetime"] = validation_datetime
 
