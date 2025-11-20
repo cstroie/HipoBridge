@@ -1656,7 +1656,7 @@ def parse_report(html_content: str) -> Dict[str, Any]:
         "performer": "",
         "validator": "",
         "validation_datetime": "",
-        "request_code": ""
+        "barcode": ""
     }
 
     try:
@@ -1691,9 +1691,9 @@ def parse_report(html_content: str) -> Dict[str, Any]:
             report_data["patient_id"] = patient_id
 
         # Extract request code
-        request_code = extract_text_after_label(soup, r'Cod cerere:', 'td')
-        if request_code:
-            report_data["request_code"] = request_code
+        barcode = extract_text_after_label(soup, r'Cod cerere:', 'td')
+        if barcode:
+            report_data["barcode"] = barcode
 
         # Extract date and time of collection
         datetime_text = extract_text_after_label(soup, r'Data si ora recoltarii:')
@@ -1720,7 +1720,7 @@ def parse_report(html_content: str) -> Dict[str, Any]:
                 report_data["datetime"] = datetime_text
 
         # Extract performer (validator) from the domain section
-        validator = extract_text_after_label(soup, r'Validat de\s*:', 'td')
+        validator = extract_text_after_label(soup, r'Validat de*:', 'td', stop_at=r'Data')
         if validator:
             report_data["validator"] = validator
 
