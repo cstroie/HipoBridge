@@ -960,13 +960,14 @@ async def search_patient(request):
                 "entry": []
             }
             for patient_id, patient_name in multiple_patients_data.items():
-                # Create minimal FHIR patient resource for each
-                family_name = patient_name[0] if len(patient_name) > 0 else ""
-                given_names = patient_name[1:] if len(patient_name) > 1 else []
+                # Split patient name into family and given names
+                name_parts = patient_name.split()
+                family_name = name_parts[0] if len(name_parts) > 0 else ""
+                given_names = name_parts[1:] if len(name_parts) > 1 else []
                 # Create FHIR Patient resource
                 fhir_patient = {
                     "resourceType": "Patient",
-                    "id": patient.get("patient_id", patient_id),
+                    "id": patient_id,
                     "name": [
                         {
                             "use": "official",
@@ -975,12 +976,6 @@ async def search_patient(request):
                         }
                     ]
                 }
-                # Add CNP if available
-                if patient.get("patient_cnp"):
-                    fhir_patient["identifier"].append({
-                        "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-cnp",
-                        "value": patient.get("patient_cnp", "")
-                    })
                 # Add entry to bundle
                 bundle["entry"].append({
                     "resource": fhir_patient
