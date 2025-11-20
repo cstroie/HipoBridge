@@ -2540,115 +2540,132 @@ async def get_encounter(request):
         # Parse the checkout data
         parsed_data = parse_checkout_data(response_text)
 
-        # Create enhanced FHIR Encounter resource
-        fhir_encounter = {
-            "resourceType": "Encounter",
-            "id": encounter_id,
-            "status": "discharged",
-            "type": [
-                {
-                    "coding": [
-                        {
-                            "system": "http://snomed.info/sct",
-                            "code": "305056002",
-                            "display": "Admission to hospital"
-                        }
-                    ]
-                }
-            ],
-            "subject": {
-                "reference": f"Patient/{parsed_data.get('patient_id', '')}"
-            },
-            "participant": []
-        }
-
-        # Add performer if available
-        if parsed_data.get("performer"):
-            fhir_encounter["participant"].append({
-                "type": [
-                    {
-                        "coding": [
-                            {
-                                "system": "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
-                                "code": "ATND",
-                                "display": "attender"
-                            }
-                        ]
-                    }
-                ],
-                "individual": {
-                    "display": parsed_data["performer"]
-                }
-            })
-
-        # Add reason (admission diagnostic) if available
-        if parsed_data.get("admission_diagnostic"):
-            fhir_encounter["reasonCode"] = [
-                {
-                    "text": parsed_data["admission_diagnostic"]
-                }
-            ]
-
-        # Add text summary if epicrisis exists
-        if parsed_data.get("epicrisis"):
-            #fhir_encounter["text"] = {
-            #    "status": "generated",
-            #    "div": f"<div xmlns=\"http://www.w3.org/1999/xhtml\">{parsed_data['epicrisis']}</div>"
-            #}
-
-            # Also add as a note
-            fhir_encounter["note"] = [
-                {
-                    "text": parsed_data["epicrisis"]
-                }
-            ]
-
-        # Add diagnosis if available
-        if parsed_data.get("admission_diagnostic"):
-            fhir_encounter["diagnosis"] = [
-                {
-                    "condition": {
-                        "reference": f"Condition/admission-{encounter_id}",
-                        "display": parsed_data["admission_diagnostic"]
-                    },
-                    "use": {
-                        "coding": [
-                            {
-                                "system": "http://terminology.hl7.org/CodeSystem/diagnosis-role",
-                                "code": "AD",
-                                "display": "Admission diagnosis"
-                            }
-                        ]
-                    }
-                }
-            ]
-
-        # Add discharge diagnosis if available
-        if parsed_data.get("diagnostic"):
-            if "diagnosis" not in fhir_encounter:
-                fhir_encounter["diagnosis"] = []
-            fhir_encounter["diagnosis"].append(
-                {
-                    "condition": {
-                        "reference": f"Condition/discharge-{encounter_id}",
-                        "display": parsed_data["diagnostic"]
-                    },
-                    "use": {
-                        "coding": [
-                            {
-                                "system": "http://terminology.hl7.org/CodeSystem/diagnosis-role",
-                                "code": "DD",
-                                "display": "Discharge diagnosis"
-                            }
-                        ]
-                    }
-                }
-            )
-
+        # Convert parsed data to FHIR Encounter resource
+        fhir_encounter = convert_data_to_encounter(parsed_data, encounter_id, request)
+        
         return web.json_response(fhir_encounter)
 
     except Exception as e:
         return create_error_response("Encounter retrieval failed", 500, {"exception": str(e)})
+
+
+def convert_data_to_encounter(parsed_data: Dict[str, Any], encounter_id: str, request) -> Dict[str, Any]:
+    """Convert parsed checkout data to FHIR Encounter resource.
+
+    Args:
+        parsed_data: Parsed checkout data from parse_checkout_data
+        encounter_id: The ID of the encounter
+        request: The HTTP request object to get the host
+
+    Returns:
+        FHIR Encounter resource
+    """
+    # Create enhanced FHIR Encounter resource
+    fhir_encounter = {
+        "resourceType": "Encounter",
+        "id": encounter_id,
+        "status": "discharged",
+        "type": [
+            {
+                "coding": [
+                    {
+                        "system": "http://snomed.info/sct",
+                        "code": "305056002",
+                        "display": "Admission to hospital"
+                    }
+                ]
+            }
+        ],
+        "subject": {
+            "reference": f"Patient/{parsed_data.get('patient_id', '')}"
+        },
+        "participant": []
+    }
+
+    # Add performer if available
+    if parsed_data.get("performer"):
+        fhir_encounter["participant"].append({
+            "type": [
+                {
+                    "coding": [
+                        {
+                            "system": "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
+                            "code": "ATND",
+                            "display": "attender"
+                        }
+                    ]
+                }
+            ],
+            "individual": {
+                "display": parsed_data["performer"]
+            }
+        })
+
+    # Add reason (admission diagnostic) if available
+    if parsed_data.get("admission_diagnostic"):
+        fhir_encounter["reasonCode"] = [
+            {
+                "text": parsed_data["admission_diagnostic"]
+            }
+        ]
+
+    # Add text summary if epicrisis exists
+    if parsed_data.get("epicrisis"):
+        #fhir_encounter["text"] = {
+        #    "status": "generated",
+        #    "div": f"<div xmlns=\"http://www.w3.org/1999/xhtml\">{parsed_data['epicrisis']}</div>"
+        #}
+
+        # Also add as a note
+        fhir_encounter["note"] = [
+            {
+                "text": parsed_data["epicrisis"]
+            }
+        ]
+
+    # Add diagnosis if available
+    if parsed_data.get("admission_diagnostic"):
+        fhir_encounter["diagnosis"] = [
+            {
+                "condition": {
+                    "reference": f"Condition/admission-{encounter_id}",
+                    "display": parsed_data["admission_diagnostic"]
+                },
+                "use": {
+                    "coding": [
+                        {
+                            "system": "http://terminology.hl7.org/CodeSystem/diagnosis-role",
+                            "code": "AD",
+                            "display": "Admission diagnosis"
+                        }
+                    ]
+                }
+            }
+        ]
+
+    # Add discharge diagnosis if available
+    if parsed_data.get("diagnostic"):
+        if "diagnosis" not in fhir_encounter:
+            fhir_encounter["diagnosis"] = []
+        fhir_encounter["diagnosis"].append(
+            {
+                "condition": {
+                    "reference": f"Condition/discharge-{encounter_id}",
+                    "display": parsed_data["diagnostic"]
+                },
+                "use": {
+                    "coding": [
+                        {
+                            "system": "http://terminology.hl7.org/CodeSystem/diagnosis-role",
+                            "code": "DD",
+                            "display": "Discharge diagnosis"
+                        }
+                    ]
+                }
+            }
+        )
+
+    return fhir_encounter
 
 
 async def serve_analysis_types(request):
