@@ -2157,14 +2157,14 @@ async def get_observation(request):
         return create_error_response("Observation retrieval failed", 500, {"exception": str(e)})
 
 def create_fhir_observation(report_data: Dict[str, Any], request) -> Dict[str, Any]:
-    """Convert report data to FHIR ImagingStudy resource format.
+    """Convert report data to FHIR Observation resource format.
 
     Args:
         report_data: Report data from parse_report_data
         request: The HTTP request object to get the host
 
     Returns:
-        FHIR ImagingStudy resource
+        FHIR Observation resource
     """
     # Create FHIR Observation resource
     fhir_observation = {
@@ -2190,14 +2190,22 @@ def create_fhir_observation(report_data: Dict[str, Any], request) -> Dict[str, A
     }
 
     # Add effective datetime if available
-    if report_data.get("datetime"):
-        fhir_observation["effectiveDateTime"] = report_data["datetime"].isoformat()
+    if report_data.get("request_datetime"):
+        fhir_observation["effectiveDateTime"] = report_data["request_datetime"]
+    elif report_data.get("validation_datetime"):
+        fhir_observation["effectiveDateTime"] = report_data["validation_datetime"]
 
     # Add performer if available
     if report_data.get("performer"):
         fhir_observation["performer"] = [
             {
                 "display": report_data["performer"]
+            }
+        ]
+    elif report_data.get("validator"):
+        fhir_observation["performer"] = [
+            {
+                "display": report_data["validator"]
             }
         ]
 
@@ -2207,10 +2215,70 @@ def create_fhir_observation(report_data: Dict[str, Any], request) -> Dict[str, A
         for report in report_data["reports"]:
             fhir_observation["note"].append(
                 {
-                    "contentType": "text/plain",
-                    "data": report["result"]
+                    "text": report["result"]
                 }
             )
+
+    # Add extensions for additional data
+    extensions = []
+
+    # Add physician information
+    if report_data.get("physician"):
+        extensions.append({
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/observation-requester",
+            "valueString": report_data["physician"]
+        })
+
+    # Add admission ID if available
+    if report_data.get("admission_id"):
+        extensions.append({
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/observation-encounter",
+            "valueString": report_data["admission_id"]
+        })
+
+    # Add barcode if available
+    if report_data.get("barcode"):
+        extensions.append({
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/observation-barcode",
+            "valueString": report_data["barcode"]
+        })
+
+    # Add clinical comments if available
+    if report_data.get("clinical_comments"):
+        extensions.append({
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/observation-clinical-comments",
+            "valueString": report_data["clinical_comments"]
+        })
+
+    # Add lab comments if available
+    if report_data.get("lab_comments"):
+        extensions.append({
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/observation-lab-comments",
+            "valueString": report_data["lab_comments"]
+        })
+
+    # Add diagnosis if available
+    if report_data.get("diagnosis"):
+        extensions.append({
+            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/observation-diagnosis",
+            "valueString": report_data["diagnosis"]
+        })
+
+    if extensions:
+        fhir_observation["extension"] = extensions
+
+    # Add identifiers
+    identifiers = []
+
+    # Add barcode as identifier if available
+    if report_data.get("barcode"):
+        identifiers.append({
+            "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/barcode",
+            "value": report_data["barcode"]
+        })
+
+    if identifiers:
+        fhir_observation["identifier"] = identifiers
 
     return fhir_observation
 
