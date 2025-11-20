@@ -241,6 +241,83 @@ class HipocrateClient:
             url: Specific URL to clear from cache, or None to clear all
         """
         self.url_cache.clear(url)
+    
+    async def make_authenticated_request(self, session, url, method="GET", data=None, username=None, password=None):
+        """Make an authenticated request to the Hipocrate service with automatic login handling.
+        
+        Args:
+            session: The aiohttp session to use
+            url: The URL to request
+            method: HTTP method ("GET" or "POST")
+            data: Data to send with POST requests
+            username: Username for login if needed
+            password: Password for login if needed
+            
+        Returns:
+            Tuple of (response_text, success, error_response) where success is boolean
+        """
+        
+        async def _make_request(use_retry_headers=False):
+            """Helper function to make a request with proper headers."""
+            if method == "GET":
+                logger.debug(f"Making GET request to: {url}")
+                async with session.get(url, headers=self.headers) as response:
+                    response_text = await handle_response_encoding(response)
+                    logger.debug(f"GET response status: {response.status}")
+            else:  # POST
+                logger.debug(f"Making POST request to: {url}")
+                # For POST requests, we need to be careful about Content-Type headers
+                # Create a copy of headers without Content-Type to avoid conflicts
+                post_headers = self.headers.copy()
+                if use_retry_headers or method == "POST":
+                    post_headers.pop("Content-Type", None)
+                # When sending form data, let aiohttp set the Content-Type automatically
+                if data:
+                    async with session.post(url, data=data, headers=post_headers) as response:
+                        response_text = await handle_response_encoding(response)
+                        logger.debug(f"POST response status: {response.status}")
+                else:
+                    async with session.post(url, headers=post_headers) as response:
+                        response_text = await handle_response_encoding(response)
+                        logger.debug(f"POST response status: {response.status}")
+            return html.unescape(response_text)
+        
+        # Check if we have a cached response for GET requests
+        if method == "GET":
+            cached_response = self.url_cache.get(url)
+            if cached_response is not None:
+                return cached_response, True, None
+        
+        try:
+            # Log current cookies before request
+            if session.cookie_jar:
+                cookies = session.cookie_jar.filter_cookies(URL(self.service_url))
+                logger.debug(f"Using {len(cookies)} cookies for request to {url}")
+            
+            # Make the initial request
+            response_text = await _make_request()
+            
+            # Check if we got redirected to login page (session expired)
+            if is_login_page(response_text):
+                logger.warning(f"Session expired during request to {url}, attempting re-login")
+                login_success = await login_if_needed(session, username, password)
+                if login_success:
+                    # Retry the request with special headers for POST
+                    response_text = await _make_request(use_retry_headers=True)
+                    # Check again if still on login page
+                    if is_login_page(response_text):
+                        return None, False, create_error_response("Authentication failed after retry", 401)
+                else:
+                    return None, False, create_error_response("Re-authentication failed", 401)
+            
+            # Cache the response for GET requests
+            if method == "GET":
+                self.url_cache.put(url, response_text)
+            
+            # If we reach here, we have a valid response
+            return response_text, True, None
+        except Exception as e:
+            return None, False, create_error_response(str(e), 500, {"URL": url})
 
 
 
@@ -353,82 +430,6 @@ def require_auth(handler):
     # End of wrapper function
     return wrapper
 
-async def make_authenticated_request(session, url, method="GET", data=None, username=None, password=None):
-    """Make an authenticated request to the Hipocrate service with automatic login handling.
-    
-    Args:
-        session: The aiohttp session to use
-        url: The URL to request
-        method: HTTP method ("GET" or "POST")
-        data: Data to send with POST requests
-        username: Username for login if needed
-        password: Password for login if needed
-        
-    Returns:
-        Tuple of (response_text, success, error_response) where success is boolean
-    """
-    
-    async def _make_request(use_retry_headers=False):
-        """Helper function to make a request with proper headers."""
-        if method == "GET":
-            logger.debug(f"Making GET request to: {url}")
-            async with session.get(url, headers=HEADERS) as response:
-                response_text = await handle_response_encoding(response)
-                logger.debug(f"GET response status: {response.status}")
-        else:  # POST
-            logger.debug(f"Making POST request to: {url}")
-            # For POST requests, we need to be careful about Content-Type headers
-            # Create a copy of headers without Content-Type to avoid conflicts
-            post_headers = HEADERS.copy()
-            if use_retry_headers or method == "POST":
-                post_headers.pop("Content-Type", None)
-            # When sending form data, let aiohttp set the Content-Type automatically
-            if data:
-                async with session.post(url, data=data, headers=post_headers) as response:
-                    response_text = await handle_response_encoding(response)
-                    logger.debug(f"POST response status: {response.status}")
-            else:
-                async with session.post(url, headers=post_headers) as response:
-                    response_text = await handle_response_encoding(response)
-                    logger.debug(f"POST response status: {response.status}")
-        return html.unescape(response_text)
-    
-    # Check if we have a cached response for GET requests
-    if method == "GET":
-        cached_response = url_cache.get(url)
-        if cached_response is not None:
-            return cached_response, True, None
-    
-    try:
-        # Log current cookies before request
-        if session.cookie_jar:
-            cookies = session.cookie_jar.filter_cookies(URL(SERVICE_URL))
-            logger.debug(f"Using {len(cookies)} cookies for request to {url}")
-        
-        # Make the initial request
-        response_text = await _make_request()
-        
-        # Check if we got redirected to login page (session expired)
-        if is_login_page(response_text):
-            logger.warning(f"Session expired during request to {url}, attempting re-login")
-            login_success = await login_if_needed(session, username, password)
-            if login_success:
-                # Retry the request with special headers for POST
-                response_text = await _make_request(use_retry_headers=True)
-                # Check again if still on login page
-                if is_login_page(response_text):
-                    return None, False, create_error_response("Authentication failed after retry", 401)
-            else:
-                return None, False, create_error_response("Re-authentication failed", 401)
-        
-        # Cache the response for GET requests
-        if method == "GET":
-            url_cache.put(url, response_text)
-        
-        # If we reach here, we have a valid response
-        return response_text, True, None
-    except Exception as e:
-        return None, False, create_error_response(str(e), 500, {"URL": url})
 
 async def handle_response_encoding(response):
     """Handle response encoding for the Hipocrate service.
