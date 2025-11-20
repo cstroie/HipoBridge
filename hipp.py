@@ -771,6 +771,14 @@ def extract_value_from_input(soup: 'BeautifulSoup', id: str = None, name: str = 
     if input_element:
         return input_element.get('value', '').strip()
 
+def extract_text_from_element(soup: 'BeautifulSoup', id: str = None) -> str:
+    if id:
+        element = soup.find(id=id)
+    else:
+        return ""
+    if element and element.string:
+        return element.string.strip()
+
 def extract_textarea_after_label(soup: 'BeautifulSoup', label_regex: str) -> str:
     """Get content of first textarea after a label matching the given regex.
 
@@ -1716,9 +1724,6 @@ def parse_report(html_content: str) -> Dict[str, Any]:
         "patient_cnp": "",
         "patient_id": "",
         "physician": "",
-
-        "examination": "",
-        "reports": [],
         "performer": "",
         "validator": "",
         "validation_datetime": "",
@@ -1735,6 +1740,8 @@ def parse_report(html_content: str) -> Dict[str, Any]:
     # Inner function to extract data from input elements
     def store_data(data_key: str, value: str) -> None:
         if value:
+            if isinstance(value, list) and value[0]:
+                value = value[0]
             if isinstance(value, str):
                 report_data[data_key] = value.strip()
             else:
@@ -1767,13 +1774,32 @@ def parse_report(html_content: str) -> Dict[str, Any]:
 
         # Extract patient code from the table with patient data
         patient_ids = extract_ids_from_links(soup, r'/pacient/edit\.asp\?id=(\d+)')
-        store_data("patient_id", patient_ids[0])
+        store_data("patient_id", patient_ids)
+        
+        # Extract admission ID
+        admission_ids = extract_ids_from_links(soup, r'/files/checkin\.asp\?id=(\d+)')
+        store_data("admission_id", admission_ids)
+
+        # Extract barcode
+        store_data("barcode", extract_text_after_label(soup, r'Cerere de investigatii (?!paraclinice)'))
 
         # Extract physician
         store_data("physician", extract_text_after_label(soup, r'Medic:', 'tr'))
 
-        # Extract diagnostis
-        store_data("diagnosis", extract_text_after_label(soup, r'Diagnostic:', 'tr'))
+        # Extract the clinical comments
+        store_data("diagnosis", extract_text_after_label(soup, r'prezumtiv:', 'tr'))
+
+        # Extract the clinical comments
+        store_data("clinical_comments", extract_text_after_label(soup, r'Informatii suplimentare:', 'tr', stop_at=r'Motiv'))
+
+        # Extract the lab comments
+        store_data("lab_comments", extract_text_from_element(soup, id="strComments"))
+
+        # Extract the justification
+        store_data("justification", extract_text_from_element(soup, id="strJustificare"))
+
+        # Extract ICD10 coded diagnosis
+        store_data("icd10", extract_text_after_label(soup, r'Diagnostic:', 'tr'))
 
         # Extract requester and request date and time
         req = extract_text_after_label(soup, r'Ceruta:', 'tr')
@@ -1808,7 +1834,6 @@ def parse_report(html_content: str) -> Dict[str, Any]:
             parent_td = input_elem.find_parent('td')
             if parent_td:
                 first_b = parent_td.find('b')
-                print(first_b.get_text(strip=True))
                 # Find the 'table' parent and then the 'center' sibling
                 parent_table = parent_td.find_parent('table')
                 container = parent_table.find_next_sibling('center')
@@ -2114,7 +2139,6 @@ async def get_observation(request):
         #request_url = f"/analyse/Reports/analyseFile_4212-lab.asp?fullpacient=yes&id={id}&section=4212-lab"
         request_url = f"/analyse/labrequest/edit.asp?id={id}"
 
-
         # Retrieve the page
         response_text, success, error_response = await client.get_page(request_url)
 
@@ -2125,9 +2149,9 @@ async def get_observation(request):
         # Return Observation
         report_data = parse_report(response_text)
         report_data['report_id'] = id
-        #fhir_response = create_fhir_observation(report_data, request)
-        #return web.json_response(fhir_response)
-        return web.json_response(report_data)
+        fhir_response = create_fhir_observation(report_data, request)
+        return web.json_response(fhir_response)
+        #return web.json_response(report_data)
 
     except Exception as e:
         return create_error_response("Observation retrieval failed", 500, {"exception": str(e)})
