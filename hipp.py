@@ -2,8 +2,8 @@
 """
 HippoBridge - FHIR Bridge for Hipocrate Medical System
 
-This application provides a FHIR-compatible API bridge to access patient data 
-from the Hipocrate medical system. It exposes endpoints for patient search, 
+This application provides a FHIR-compatible API bridge to access patient data
+from the Hipocrate medical system. It exposes endpoints for patient search,
 retrieval, observations, diagnostic reports, and encounters.
 
 Key Features:
@@ -117,10 +117,10 @@ ANALYSIS_TYPES = {
 
 class URLCache:
     """Simple in-memory cache for HTTP responses with LRU eviction and timeout."""
-    
+
     def __init__(self, max_size: int = 100, timeout: int = 600):
         """Initialize the cache.
-        
+
         Args:
             max_size: Maximum number of entries to cache
             timeout: Cache timeout in seconds (default: 10 minutes)
@@ -129,19 +129,19 @@ class URLCache:
         self.timeout = timeout
         self.cache: Dict[str, str] = {}
         self.timestamps: Dict[str, datetime] = {}
-    
+
     def get(self, url: str) -> Optional[str]:
         """Get cached response for URL if exists and not expired.
-        
+
         Args:
             url: URL to lookup
-            
+
         Returns:
             Cached response text or None if not found or expired
         """
         if url not in self.cache:
             return None
-            
+
         # Check if cache entry is still valid
         if url in self.timestamps:
             cache_age = (datetime.now() - self.timestamps[url]).total_seconds()
@@ -154,10 +154,10 @@ class URLCache:
         # Return cached response
         logger.debug(f"Using cached response for: {url} (age: {(datetime.now() - self.timestamps[url]).total_seconds():.1f}s)")
         return self.cache[url]
-    
+
     def put(self, url: str, response_text: str) -> None:
         """Add response to cache, evicting oldest entry if needed.
-        
+
         Args:
             url: URL key
             response_text: Response text to cache
@@ -173,10 +173,10 @@ class URLCache:
         self.cache[url] = response_text
         self.timestamps[url] = datetime.now()
         logger.debug(f"Cached response for: {url}")
-    
+
     def remove(self, url: str) -> None:
         """Remove cache entries.
-        
+
         Args:
             url: Specific URL to clear from cache, or None to clear all
         """
@@ -185,10 +185,10 @@ class URLCache:
                 del self.cache[url]
             if url in self.timestamps:
                 del self.timestamps[url]
-    
+
     def clear(self) -> None:
         """Clear cache entries.
-        
+
         Args:
             url: Specific URL to clear from cache, or None to clear all
         """
@@ -206,17 +206,17 @@ cache_max_size = 1000  # Maximum number of entries to cache
 
 class UserSessionManager:
     """Manager for user-specific HTTP sessions."""
-    
+
     def __init__(self):
         """Initialize the user session manager."""
         self.user_sessions: Dict[str, aiohttp.ClientSession] = {}
-    
+
     def get_user_session(self, username: str):
         """Get or create a user-specific session.
-        
+
         Args:
             username: Username to get session for
-            
+
         Returns:
             aiohttp.ClientSession for the user
         """
@@ -227,7 +227,7 @@ class UserSessionManager:
         else:
             logger.debug(f"Reusing existing aiohttp ClientSession for user {username}")
         return self.user_sessions[username]
-    
+
     async def close_all_sessions(self):
         """Close all user sessions."""
         logger.info("Closing all user sessions")
@@ -243,10 +243,10 @@ user_session_manager = UserSessionManager()
 
 class HipocrateClient:
     """Client for interacting with the Hipocrate medical system."""
-    
+
     def __init__(self, service_url: str, username: str = None, password: str = None):
         """Initialize the Hipocrate client.
-        
+
         Args:
             service_url: Base URL of the Hipocrate service
         """
@@ -260,7 +260,7 @@ class HipocrateClient:
 
     def set_credentials(self, username: str, password: str):
         """Set the username and password for authentication.
-        
+
         Args:
             username: Username for Hipocrate service
             password: Password for Hipocrate service
@@ -268,82 +268,82 @@ class HipocrateClient:
         self.username = username
         self.password = password
 
-    
+
     def get_user_session(self, username: str):
         """Get or create a user-specific session.
-        
+
         Args:
             username: Username to get session for
-            
+
         Returns:
             aiohttp.ClientSession for the user
         """
         return user_session_manager.get_user_session(username)
-    
+
     async def get_authenticated_session(self, username: str, password: str):
         """Get an authenticated session for the user.
-        
+
         Args:
             username: Username for authentication
             password: Password for authentication
-            
+
         Returns:
             Tuple of (session, success) where success is boolean
         """
         session = self.get_user_session(username)
         login_success = await self.login_if_needed(session, username, password)
         return session, login_success
-    
+
     async def close_all_sessions(self):
         """Close all user sessions."""
         await user_session_manager.close_all_sessions()
 
-    
+
     def cache_get(self, url: str) -> Optional[str]:
         """Get cached response for URL if exists and not expired.
-        
+
         Args:
             url: URL to lookup
-            
+
         Returns:
             Cached response text or None if not found or expired
         """
         return self.url_cache.get(self.get_full_url(url))
-    
+
     def cache_put(self, url: str, response_text: str) -> None:
         """Add response to cache.
-        
+
         Args:
             url: URL key
             response_text: Response text to cache
         """
         self.url_cache.put(self.get_full_url(url), response_text)
-    
+
     def cache_remove(self, url: str):
         """Remove cached response for URL.
-        
+
         Args:
             url: URL to lookup
         """
         return self.url_cache.remove(url)
-    
+
     def cache_clear(self) -> None:
         """Clear cache entries.
-        
+
         Args:
             url: Specific URL to clear from cache, or None to clear all
         """
         self.url_cache.clear()
 
-    
+
     def is_login_page(self, content: str) -> bool:
         """Detect if the provided content is a login page.
-        
+
         Checks for 'Identificare' in the HTML title to determine if we're on the login page.
-        
+
         Args:
             content: HTML content to check
-            
+
         Returns:
             True if content appears to be a login page, False otherwise
         """
@@ -359,27 +359,27 @@ class HipocrateClient:
         if is_login:
             logger.debug("Detected login page")
         return is_login
-    
+
     async def login_if_needed(self, session, username: str, password: str) -> bool:
         """Attempt to login to the Hipocrate service if needed.
-        
+
         Checks if we're currently on the login page, and if so, performs login
         using the provided credentials.
-        
+
         Args:
             session: The aiohttp session to use
             username: Username for login
             password: Password for login
-            
+
         Returns:
             True if login was successful or not needed, False otherwise
         """
         logger.info("Attempting login if needed")
-        
+
         if not username or not password:
             logger.warning("Username or password not set, skipping login")
             return False
-        
+
         try:
             # First, check if we're already logged in by accessing main.asp
             main_url = f"{self.service_url}/main.asp"
@@ -396,21 +396,21 @@ class HipocrateClient:
                     except UnicodeDecodeError:
                         main_text = raw_data.decode('latin-1')
                 logger.debug(f"Main page response status: {main_response.status}")
-                
+
                 # If we're not on the login page, we're already logged in
                 if not self.is_login_page(main_text):
                     logger.info("Already logged in, skipping login")
                     return True
-            
+
             # If we're on the login page, proceed with login
             logger.info("Not logged in, proceeding with login")
-            
+
             # First, access the default.asp page to get initial cookies
             default_url = f"{self.service_url}/default.asp"
             logger.debug(f"Accessing default page to get cookies: {default_url}")
             async with session.get(default_url, headers=self.headers) as default_response:
                 logger.debug(f"Default page response status: {default_response.status}")
-                
+
             # Prepare login data to match browser submission
             login_data = {
                 "id_recuperare_pwd_2": "",
@@ -418,28 +418,28 @@ class HipocrateClient:
                 "strPwd": password,
                 "cboLang": "ro"
             }
-            
+
             # Add referer header for the login request
             login_headers = self.headers.copy()
             login_headers["Referer"] = default_url
-            
+
             # Use the correct login endpoint
             login_url = f"{self.service_url}/security/logon.asp"
             logger.debug(f"Submitting login form to {login_url}")
             # Submit login form
             async with session.post(
-                login_url, 
-                data=login_data, 
+                login_url,
+                data=login_data,
                 headers=login_headers
             ) as login_response:
                 response_text = await self.handle_response_encoding(login_response)
                 logger.debug(f"Login response status: {login_response.status}")
-                
+
                 # Log cookie information
                 if session.cookie_jar:
                     cookies = session.cookie_jar.filter_cookies(URL(self.service_url))
                     logger.debug(f"Session cookies after login: {len(cookies)} cookies")
-            
+
             # Check if login was successful (redirect to main.asp or not on login page)
             if login_response.status == 302 and "main.asp" in login_response.headers.get("Location", ""):
                 logger.info("Login successful: redirected to main.asp")
@@ -453,13 +453,13 @@ class HipocrateClient:
         except Exception as e:
             logger.error(f"Login failed with exception: {e}")
             return False
-    
+
     async def handle_response_encoding(self, response):
         """Handle response encoding for the Hipocrate service.
-        
+
         Args:
             response: The aiohttp response object
-            
+
         Returns:
             Decoded response text
         """
@@ -473,10 +473,10 @@ class HipocrateClient:
             except UnicodeDecodeError:
                 response_text = raw_data.decode('latin-1')
         return response_text
-    
+
     def get_full_url(self, url: str) -> str:
         """Construct full URL from service URL and relative path.
-        
+
         Args:
             url: Relative path
         Returns:
@@ -485,22 +485,21 @@ class HipocrateClient:
         # Construct the full URL if a relative path is provided
         if url.startswith("http"):
             full_url = url
-        elif url.startswith("/"): 
+        elif url.startswith("/"):
             full_url = f'{self.service_url}{url}'
         else:
             full_url = f'{self.service_url}/{url}'
         return full_url
 
-    async def get_page(self, url, max_redirects=5):
-        """Abstract method to retrieve a page from the Hipocrate service, following redirects.
-        
-        This method handles the common pattern of making authenticated requests with
-        redirect following, which can be reused by derived classes.
-        
+    async def post_form(self, url, data=None):
+        """Submit a form to the Hipocrate service, following redirects.
+
+        This method handles the common pattern of making authenticated POST requests.
+
         Args:
-            url: The URL to request
-            max_redirects: Maximum number of redirects to follow (default: 5)
-            
+            url: The URL to submit the form to
+            data: Form data to submit
+
         Returns:
             Tuple of (response_text, success, error_response) where success is boolean
         """
@@ -510,7 +509,42 @@ class HipocrateClient:
         # Get the session for the current user
         if not self.session:
             self.session = self.get_user_session(self.username)
-        
+
+        # Make the authenticated request
+        start_time = datetime.now()
+        response_text, success, error_response = await self.make_authenticated_request(
+            current_url, "POST", data, self.username, self.password
+        )
+        duration = (datetime.now() - start_time).total_seconds()
+
+        # Check for errors in the response
+        if not success:
+            return None, False, error_response
+        logger.info(f"Response received in {duration:.2f} seconds")
+
+        # Return the final response
+        return response_text, True, None
+
+    async def get_page(self, url, max_redirects=5):
+        """Abstract method to retrieve a page from the Hipocrate service, following redirects.
+
+        This method handles the common pattern of making authenticated requests with
+        redirect following, which can be reused by derived classes.
+
+        Args:
+            url: The URL to request
+            max_redirects: Maximum number of redirects to follow (default: 5)
+
+        Returns:
+            Tuple of (response_text, success, error_response) where success is boolean
+        """
+        # Construct the full URL if a relative path is provided
+        current_url = self.get_full_url(url)
+
+        # Get the session for the current user
+        if not self.session:
+            self.session = self.get_user_session(self.username)
+
         # Follow up to max_redirects redirects to get the final page data
         redirect_count = 0
         while redirect_count < max_redirects:
@@ -530,17 +564,17 @@ class HipocrateClient:
             # We need to make a direct request to check the status code
             async with self.session.get(current_url, headers=self.headers) as response:
                 logger.debug(f"Page request response status: {response.status}")
-                
+
                 # If we get the final data (not a redirect), break the loop
                 if response.status != 302:
                     logger.info(f"Page retrieval completed successfully after {redirect_count} redirects")
                     return response_text, True, None
-                
+
                 # Handle 302 redirect
                 location = response.headers.get("Location")
                 if not location:
                     return None, False, create_error_response("Redirect without location header", 500)
-                
+
                 # Construct the full URL for the redirect
                 if location.startswith("/"):
                     # Relative path from root - need to extract scheme and host from current_url
@@ -554,27 +588,27 @@ class HipocrateClient:
                     # Relative path from current directory
                     base_path = "/".join(current_url.split("/")[:-1])
                     current_url = f"{base_path}/{location}"
-                
+
                 logger.debug(f"Following redirect #{redirect_count + 1} to: {current_url}")
                 redirect_count += 1
-        
+
         # If we've exceeded the maximum redirects
         return None, False, create_error_response(f"Exceeded maximum redirects ({max_redirects})", 500)
 
     async def make_authenticated_request(self, url, method="GET", data=None, username=None, password=None):
         """Make an authenticated request to the Hipocrate service with automatic login handling.
-        
+
         Args:
             url: The URL to request
             method: HTTP method ("GET" or "POST")
             data: Data to send with POST requests
             username: Username for login if needed
             password: Password for login if needed
-            
+
         Returns:
             Tuple of (response_text, success, error_response) where success is boolean
         """
-        
+
         async def _make_request(use_retry_headers=False):
             """Helper function to make a request with proper headers."""
             if method == "GET":
@@ -599,22 +633,22 @@ class HipocrateClient:
                         response_text = await self.handle_response_encoding(response)
                         logger.debug(f"POST response status: {response.status}")
             return html.unescape(response_text)
-        
+
         # Check if we have a cached response for GET requests
         if method == "GET":
             cached_response = self.cache_get(url)
             if cached_response is not None:
                 return cached_response, True, None
-        
+
         try:
             # Log current cookies before request
             if self.session.cookie_jar:
                 cookies = self.session.cookie_jar.filter_cookies(URL(self.service_url))
                 logger.debug(f"Using {len(cookies)} cookies for request to {url}")
-            
+
             # Make the initial request
             response_text = await _make_request()
-            
+
             # Check if we got redirected to login page (session expired)
             if self.is_login_page(response_text):
                 logger.warning(f"Session expired during request to {url}, attempting re-login")
@@ -627,11 +661,11 @@ class HipocrateClient:
                         return None, False, create_error_response("Authentication failed after retry", 401)
                 else:
                     return None, False, create_error_response("Re-authentication failed", 401)
-            
+
             # Cache the response for GET requests
             if method == "GET":
                 self.cache_put(url, response_text)
-            
+
             # If we reach here, we have a valid response
             return response_text, True, None
         except Exception as e:
@@ -646,13 +680,13 @@ hipocrate_client = None
 
 def extract_text_after_label(soup: BeautifulSoup, label_regex: str, element_tag: str = None, stop_at: str = None) -> str:
     """Extract field data from an element containing a label.
-    
+
     Args:
         soup: BeautifulSoup object of the parsed HTML content
         label_regex: Regular expression pattern to match label text
         element_tag: HTML tag name to search for. If None, uses the own element of the label.
         stop_at: Optional string pattern to stop extraction at
-        
+
     Returns:
         Extracted field content or empty string if not found
     """
@@ -695,11 +729,11 @@ def extract_text_after_label(soup: BeautifulSoup, label_regex: str, element_tag:
 
 def extract_id_from_link(link_element, id_pattern: str = r'id=([^&"]+)') -> Optional[str]:
     """Extract ID from a link element's href attribute.
-    
+
     Args:
         link_element: BeautifulSoup element with href attribute
         id_pattern: Regex pattern to extract ID from href (default: r'id=([^&"]+)')
-        
+
     Returns:
         Extracted ID string or None if not found
     """
@@ -713,11 +747,11 @@ def extract_id_from_link(link_element, id_pattern: str = r'id=([^&"]+)') -> Opti
 
 def extract_ids_from_links(soup: BeautifulSoup, id_pattern: str = r'id=([^&"]+)') -> List[str]:
     """Extract IDs from multiple link elements' href attributes.
-    
+
     Args:
         soup: BeautifulSoup object of the parsed HTML content
         id_pattern: Regex pattern to extract ID from href (default: r'id=([^&"]+)')
-        
+
     Returns:
         List of extracted ID strings
     """
@@ -752,16 +786,16 @@ def require_auth(handler):
 
 
 @require_auth
-async def patient(request):
+async def get_patient(request):
     """Retrieve patient information by ID.
-    
+
     Gets patient information from the Hipocrate service and extracts
     associated admission and discharge IDs.
-    
+
     Args:
         request: The incoming HTTP request with 'id' query parameter for patient ID
                  and basic auth credentials for authentication
-        
+
     Returns:
         JSON response with patient data or error information
     """
@@ -770,7 +804,7 @@ async def patient(request):
     if not id:
         return create_error_response("Patient ID is required")
     logger.info(f"Retrieving patient with ID: {id}")
-    
+
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
 
@@ -787,7 +821,7 @@ async def patient(request):
         # Check for errors in the response
         if not success:
             return error_response
-        
+
         # Get patient details
         patient_data = parse_patient_data(response_text)
         if patient_data and patient_data.get("patient_id") and not patient_data.get("error"):
@@ -801,41 +835,41 @@ async def patient(request):
                 return create_error_response(patient_data['error'], 404)
             # Return an error if we couldn't read patient data
             return create_error_response("Unable to read patient data", 500)
-            
+
     except Exception as e:
         return create_error_response("Patient retrieval failed", 500, {"exception": str(e)})
 
 @require_auth
-async def patient_search(request):
+async def search_patient(request):
     """Search for patients by name or other criteria.
-    
+
     Performs a patient search on the Hipocrate service using the provided search term.
     Can return either a single patient result or multiple patient results.
     If the search term ends with *, it's treated as a partial CNP search.
-    
+
     Args:
         request: The incoming HTTP request with 'q' query parameter for search term
                  and basic auth credentials for authentication
-        
+
     Returns:
         JSON response with search results or error information
     """
     # Get search parameter from query string
     search_term = request.query.get('q', '')
-    logger.info(f"Searching for patients with term: {search_term}")
     if not search_term:
         return create_error_response("Search term is required")
-    
+    logger.info(f"Searching for patients with term: {search_term}")
+
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
-    
+
+    # Create a new HipocrateClient instance with credentials
+    client = HipocrateClient(SERVICE_URL, username, password)
+
     try:
-        # Get user-specific aiohttp session
-        session = user_session_manager.get_user_session(username)
-        
         # Determine search type based on input
         search_type = "name"  # default
-        
+
         # Check if search term is numeric
         if search_term.isdigit():
             # If it's 13 digits, validate as CNP
@@ -867,7 +901,7 @@ async def patient_search(request):
                 # Not numeric, treat as name search
                 search_type = "name"
                 logger.info(f"Searching for patients by name: {search_term}")
-        
+
         # Prepare full search data as captured in the POST request
         search_data = {
             "hdnSearchType": "1",
@@ -897,26 +931,17 @@ async def patient_search(request):
             "hdnQRSave": "",
             "IdQR": ""
         }
-        
-        # Make search request to the patient search page
-        search_url = f"{SERVICE_URL}/files/search.asp?what=PA"
-        
-        # For POST requests, we need to be careful about Content-Type headers
-        # Create a copy of headers without Content-Type to avoid conflicts
-        post_headers = HEADERS.copy()
-        post_headers.pop("Content-Type", None)
 
-        # Make the authenticated request
-        start_time = datetime.now()
-        response_text, success, error_response = await hipocrate_client.make_authenticated_request(
-            session, search_url, "POST", search_data, username, password
-        )
-        duration = (datetime.now() - start_time).total_seconds()
+        # Make search request to the patient search page
+        request_url = f"/files/search.asp?what=PA"
+
+        # Post the request
+        response_text, success, error_response = await client.post_form(request_url, search_data)
 
         # Check for errors in the response
         if not success:
             return error_response
-        logger.info(f"Patient search completed in {duration:.2f} seconds")
+
 
         ## Try to parse as single patient page first
         patient_data = parse_patient_data(response_text)
@@ -976,8 +1001,8 @@ async def patient_search(request):
 
         # Log a snippet of the response for debugging
         return create_error_response(
-            "Unable to parse patient search results", 
-            500, 
+            "Unable to parse patient search results",
+            500,
             {"text": response_text[:300] + "..."}
         )
 
@@ -986,13 +1011,13 @@ async def patient_search(request):
 
 def parse_patient_data(html_content: str) -> Dict[str, Any]:
     """Parse HTML content for a single patient page and extract patient data.
-    
+
     Extracts patient name, CNP, id, and associated encounter/admission/discharge IDs
     from a single patient page HTML content.
-    
+
     Args:
         html_content: HTML content of the single patient page
-        
+
     Returns:
         Dictionary containing parsed patient data, or empty dict if not a patient page
         Returns {"error": "Invalid patient id"} if patient name is empty
@@ -1009,12 +1034,12 @@ def parse_patient_data(html_content: str) -> Dict[str, Any]:
     try:
         # Parse HTML content with BeautifulSoup
         soup = BeautifulSoup(html_content, 'html.parser')
-        
+
         # Check if this is a single patient page by looking for 'Date pasaportale' in title
         if not is_expected_page(soup, 'Date pasaportale'):
             # Log snnippet of response for debugging
             return create_error_response("Backend returned an unexpected page", 500, {"text": html_content[:200] + "..."})
-        
+
         # Check if there is patient data on page by getting the name from the div with id "div_navbar"
         navbar_div = soup.find('div', id='div_navbar')
         if not navbar_div:
@@ -1022,54 +1047,54 @@ def parse_patient_data(html_content: str) -> Dict[str, Any]:
         patient_name_from_navbar = navbar_div.get_text().strip()
         if not patient_name_from_navbar:
             return create_error_response("Patient name from navbar is empty, invalid patient id", 404)
-        
+
         # Patient name
         patient_data["patient_name"] = patient_name_from_navbar
-        
+
         # Extract patient name from input elements
         get_data_from("family_name", "strNume")
         get_data_from("given_name", "strPrenume")
         if patient_data.get("family_name") and patient_data.get("given_name"):
             patient_data["patient_name"] = f"{patient_data['family_name']} {patient_data['given_name']}".strip()
-        
+
         # Extract patient CNP from input element with id "strCNP"
         get_data_from("patient_cnp", "strCNP")
-        
+
         # Extract patient id from hidden input with id "hdnCodeID"
         get_data_from("patient_id", "hdnCodeID")
-        
+
         # Extract CID
         get_data_from("cid", "strCID")
-        
+
         # Extract phone
         get_data_from("phone", "strTelefon")
-        
+
         # Extract email
         get_data_from("email", "strEmail")
-        
+
         # Extract weight
         get_data_from("weight", "strGreutate")
-        
+
         # Extract height
         get_data_from("height", "strInaltime")
-        
+
         # Extract MCP
         get_data_from("mcp", "strmcp")
-        
+
         # Extract address from SELECT with id strDomLegal_LocId
         address_select = soup.find('select', id='strDomLegal_LocId')
         if address_select:
             selected_option = address_select.find('option', selected=True)
             if selected_option:
                 patient_data["address"] = selected_option.get_text().strip()
-        
+
         # Derive sex and birth date from CNP if available
         if patient_data.get("patient_cnp"):
             parsed_cnp = parse_cnp(patient_data["patient_cnp"])
             if parsed_cnp.get("valid"):
                 patient_data["sex"] = parsed_cnp.get("gender", "unknown")
                 patient_data["birth_date"] = parsed_cnp.get("birth_date", "")
-        
+
         # If we couldn't derive birth date from CNP, try to get it from strDataNastere input
         if not patient_data.get("birth_date"):
             birth_date_input = soup.find('input', id='strDataNastere', type='text')
@@ -1082,22 +1107,22 @@ def parse_patient_data(html_content: str) -> Dict[str, Any]:
                         patient_data["birth_date"] = f"{year}-{month}-{day}"
                     except Exception:
                         pass  # Keep birth_date empty if parsing fails
-        
+
         # Extract encounters / presentations
         encounter_ids = extract_ids_from_links(soup, r'../files/presentation\.asp\?id=(\d+)')
         if encounter_ids:
             patient_data["encounters"] = encounter_ids
-        
+
         # Extract admissions / checkins
         admission_ids = extract_ids_from_links(soup, r'../files/checkin\.asp\?id=(\d+)')
         if admission_ids:
             patient_data["admissions"] = admission_ids
-        
+
         # Extract discharges / checkouts
         discharge_ids = extract_ids_from_links(soup, r'../files/checkout\.asp\?id=(\d+)')
         if discharge_ids:
             patient_data["discharges"] = discharge_ids
-        
+
         # Return the extracted patient data
         return patient_data
     except Exception as e:
@@ -1106,12 +1131,12 @@ def parse_patient_data(html_content: str) -> Dict[str, Any]:
 
 def parse_multiple_patients_data(html_content: str) -> Dict[str, Any]:
     """Parse HTML content for multiple patient search results and extract patient data.
-    
+
     Extracts patient names, CNP, and ids from search results page with multiple patients.
-    
+
     Args:
         html_content: HTML content of the search results page
-        
+
     Returns:
         List of dictionaries containing patient data (name, ID only)
     """
@@ -1121,7 +1146,7 @@ def parse_multiple_patients_data(html_content: str) -> Dict[str, Any]:
     try:
         # Parse HTML content with BeautifulSoup
         soup = BeautifulSoup(html_content, 'html.parser')
-        
+
         # Check if this is a search results page by looking for 'Fisier' in title
         if not is_expected_page(soup, 'Fisier'):
             # Log snippet of response for debugging
@@ -1154,28 +1179,28 @@ def parse_multiple_patients_data(html_content: str) -> Dict[str, Any]:
 
 def convert_patient_to_fhir(patient_data: Dict[str, Any], request) -> Dict[str, Any]:
     """Convert patient data to FHIR Patient resource format.
-    
+
     Args:
         patient_data: Patient data from parse_patient_data
         request: The HTTP request object to get the host
-        
+
     Returns:
         FHIR Patient resource
     """
     # Use already extracted family name and given name if available
     family_name = patient_data.get("family_name", "")
     given_names = [patient_data.get("given_name", "")] if patient_data.get("given_name") else []
-    
+
     # Fallback to parsing from full name if family/given names are not available
     if not family_name and not given_names:
         name_parts = patient_data.get("patient_name", "").split()
         family_name = name_parts[0] if len(name_parts) > 0 else ""
         given_names = name_parts[1:] if len(name_parts) > 1 else []
-    
+
     # Use already extracted gender and birth date if available
     gender = patient_data.get("sex", "unknown")
     birth_date = patient_data.get("birth_date", "")
-    
+
     # Create FHIR Patient resource using the FHIR class
     fhir_patient = FHIRPatient(
         id=patient_data.get("patient_id", ""),
@@ -1183,7 +1208,7 @@ def convert_patient_to_fhir(patient_data: Dict[str, Any], request) -> Dict[str, 
         gender=gender,
         birthDate=birth_date
     )
-    
+
     # Add name
     name = {
         "use": "official",
@@ -1191,7 +1216,7 @@ def convert_patient_to_fhir(patient_data: Dict[str, Any], request) -> Dict[str, 
         "given": given_names
     }
     fhir_patient["name"] = [name]
-    
+
     # Add telecom information if available
     telecom = []
     if patient_data.get("phone", None):
@@ -1199,13 +1224,13 @@ def convert_patient_to_fhir(patient_data: Dict[str, Any], request) -> Dict[str, 
             "system": "phone",
             "value": patient_data["phone"]
         })
-    
+
     if patient_data.get("email", None):
         telecom.append({
             "system": "email",
             "value": patient_data["email"]
         })
-    
+
     if telecom:
         fhir_patient["telecom"] = telecom
 
@@ -1215,27 +1240,27 @@ def convert_patient_to_fhir(patient_data: Dict[str, Any], request) -> Dict[str, 
         address.append({
             "text": patient_data["address"]
         })
-    
+
     if address:
         fhir_patient["address"] = address
 
     # Add extensions for additional patient data
     extensions = []
-    
+
     # Add weight if available
     if patient_data.get("weight", None):
         extensions.append({
             "url": "http://hl7.org/fhir/us/vitals/StructureDefinition/body-weight",
             "valueString": patient_data["weight"]
         })
-    
+
     # Add height if available
     if patient_data.get("height", None):
         extensions.append({
             "url": "http://hl7.org/fhir/us/vitals/StructureDefinition/height",
             "valueString": patient_data["height"]
         })
-    
+
     # Add extensions for encounter/admission/discharge IDs
     if "encounters" in patient_data:
         extensions.append({
@@ -1252,13 +1277,13 @@ def convert_patient_to_fhir(patient_data: Dict[str, Any], request) -> Dict[str, 
             "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/discharge-ids",
             "valueString": ",".join(patient_data["discharges"])
         })
-    
+
     if extensions:
         fhir_patient["extension"] = extensions
-    
+
     # Add identifiers
     identifiers = []
-    
+
     # Add CNP as identifier if available
     if patient_data.get("patient_cnp", None):
         identifiers.append({
@@ -1266,39 +1291,39 @@ def convert_patient_to_fhir(patient_data: Dict[str, Any], request) -> Dict[str, 
             "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-cnp",
             "value": patient_data["patient_cnp"]
         })
-    
+
     # Add CID if available
     if patient_data.get("cid", None):
         identifiers.append({
             "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-cid",
             "value": patient_data["cid"]
         })
-    
+
     # Add MCP if available
     if patient_data.get("mcp", None):
         identifiers.append({
             "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-mcp",
             "value": patient_data["mcp"]
         })
-    
+
     if identifiers:
         fhir_patient["identifier"] = identifiers
-    
+
     # Return the FHIR Patient resource as dict
     return fhir_patient.to_dict()
 
 
 @require_auth
-async def diagnostic_report(request):
+async def get_diagnostic_report(request):
     """Retrieve a diagnostic report by ID, following redirect chains.
-    
+
     Gets a diagnostic report from the Hipocrate service, following any redirects to
     retrieve the final report data, then parses it into structured format.
-    
+
     Args:
         request: The incoming HTTP request with 'id' path parameter for report ID
                  and basic auth credentials for authentication
-        
+
     Returns:
         JSON response with diagnostic report data or error information
     """
@@ -1307,7 +1332,7 @@ async def diagnostic_report(request):
     if not id:
         return create_error_response("Report ID is required")
     logger.info(f"Retrieving report with ID: {id}")
-    
+
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
 
@@ -1330,21 +1355,21 @@ async def diagnostic_report(request):
         report_data['report_id'] = id
         fhir_response = convert_report_to_diagnostic_report(report_data, request)
         return web.json_response(fhir_response)
-            
+
     except Exception as e:
         return create_error_response("Report retrieval failed", 500, {"exception": str(e)})
 
 @require_auth
-async def imaging_study(request):
+async def get_imaging_study(request):
     """Retrieve an imaging study by ID, following redirect chains.
-    
+
     Gets an imaging study from the Hipocrate service, following any redirects to
     retrieve the final report data, then parses it into structured format.
-    
+
     Args:
         request: The incoming HTTP request with 'id' path parameter for study ID
                  and basic auth credentials for authentication
-        
+
     Returns:
         JSON response with imaging study data or error information
     """
@@ -1353,13 +1378,13 @@ async def imaging_study(request):
     if not id:
         return create_error_response("Study ID is required")
     logger.info(f"Retrieving study with ID: {id}")
-    
+
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
 
     # Create a new HipocrateClient instance with credentials
     client = HipocrateClient(SERVICE_URL, username, password)
-    
+
     try:
         # The study endpoint
         request_url = f"/analyse/Reports/analyseFile.asp?id={id}"
@@ -1376,19 +1401,19 @@ async def imaging_study(request):
         report_data['report_id'] = id
         fhir_response = convert_report_to_imaging_study(report_data, request)
         return web.json_response(fhir_response)
-            
+
     except Exception as e:
         return create_error_response("Imaging study retrieval failed", 500, {"exception": str(e)})
 
 def parse_report_data(html_content: str) -> Dict[str, Any]:
     """Parse HTML report content and extract structured data.
-    
+
     Extracts patient information, examination details, and report results
     from HTML report content.
-    
+
     Args:
         html_content: HTML content of the report
-        
+
     Returns:
         Dictionary containing parsed report data
     """
@@ -1410,10 +1435,10 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
     try:
         # Parse HTML content with BeautifulSoup
         soup = BeautifulSoup(html_content, 'html.parser')
-        
+
         # Extract text content for pattern matching
         text_content = soup.get_text()
-        
+
         # Extract patient name
         name_match = re.search(r'(?:Nume:|PACIENT:)\s*([^\n\r<>&]+?)(?:\s+VARSTA:|\s+SEX:|\s+C\.N\.P:|\s+COD\s+PACIENT:)', text_content, re.IGNORECASE)
         if name_match:
@@ -1423,27 +1448,27 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
             name_match = re.search(r'(?:Nume:|PACIENT:)\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
             if name_match:
                 report_data["patient_name"] = re.sub(r'\s+', ' ', name_match.group(1).strip())
-        
+
         # Extract age
         age_match = re.search(r'Varsta:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
         if age_match:
             report_data["age"] = re.sub(r'\s+', ' ', age_match.group(1).strip())
-        
+
         # Extract gender
         gender_match = re.search(r'Sex:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
         if gender_match:
             report_data["gender"] = re.sub(r'\s+', ' ', gender_match.group(1).strip())
-        
+
         # Extract patient CNP
         cnp_match = re.search(r'C\.N\.P:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
         if cnp_match:
             report_data["patient_cnp"] = re.sub(r'\s+', ' ', cnp_match.group(1).strip())
-        
+
         # Extract patient code
         code_match = re.search(r'Cod pacient:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
         if code_match:
             report_data["patient_id"] = re.sub(r'\s+', ' ', code_match.group(1).strip())
-        
+
         # Extract date and time
         datetime_match = re.search(r'(?:Data si ora recoltarii:|Data investigatiei:)\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
         dt = None  # Initialize dt variable
@@ -1465,10 +1490,10 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
         performer_match = re.search(r'(?:Efectuata de catre:)\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
         if performer_match:
             report_data["performer"] = re.sub(r'\s+', ' ', performer_match.group(1).strip())
-        
+
         # Extract fields using the helper function
         report_data["examination"] = extract_text_after_label(soup, r'EXAMINARE EFECTUATA:', 'td')
-        
+
         # Extract modality from examination text
         examination_text = report_data["examination"].lower() if report_data["examination"] else ""
         modality_mapping = {
@@ -1479,18 +1504,18 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
             'angiografia': 'XA',    # X-Ray Angiography
             'cisto': 'RF'     # Radio Fluoroscopy
         }
-        
+
         # Check if any modality code is in the examination text
         for key, modality in modality_mapping.items():
             if key in examination_text:
                 report_data["modality"] = modality
                 break
-        
+
         report_data["referral_reason"] = extract_text_after_label(soup, r'DIAGNOSTIC DE TRIMITERE:', 'td')
         report_data["presumptive_diagnosis"] = extract_text_after_label(soup, r'DG\.PREZUMTIV:', 'td')
         report_data["special_indications"] = extract_text_after_label(soup, r'INDICATII SPECIALE:', 'td')
         report_data["referring_physician"] = extract_text_after_label(soup, r'TRIMIS DE:\s*MEDIC', 'td', stop_at=r'SECTIA')
-        
+
         # Parse referral code and reason if we have referral data
         if report_data["referral_reason"]:
             # Split into code and text - first part numeric is the code, rest is the reason
@@ -1500,7 +1525,7 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
                 if parts[0].isdigit():
                     report_data["referral_code"] = parts[0]
                     report_data["referral_reason"] = parts[1].strip() if len(parts) > 1 else ""
-        
+
         # Extract multiple reports: find all elements with text starting with "REZULTAT:"
         for result_element in soup.find_all(string=re.compile(r'^REZULTAT:', re.IGNORECASE)):
             try:
@@ -1510,7 +1535,7 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
                 investigation_name = ""
                 if investigation_match:
                     investigation_name = investigation_match.group(1).strip()
-                
+
                 # Find the next div sibling which contains the actual result
                 result_div = result_element.find_next('div')
                 result_content = ""
@@ -1525,7 +1550,7 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
                     else:
                         # Otherwise, process the entire div
                         result_content = html_to_markdown(str(result_div))
-                
+
                 # Add to reports list
                 report_data["reports"].append({
                     "investigation": investigation_name,
@@ -1534,7 +1559,7 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
             except Exception as e:
                 logger.error(f"Error parsing individual report: {e}")
                 continue
-        
+
         # Extract interpreter (MEDIC, or Medic validator:)
         # Handle both plain text and HTML formatted interpreter names
         interpreter_patterns = [
@@ -1555,7 +1580,7 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
             report_data["interpreter"] = interpreter_name
         # Return the parsed report data
         return report_data
-    
+
     except Exception as e:
         logger.error(f"Error parsing report data: {e}")
         return {}
@@ -1587,7 +1612,7 @@ def convert_report_to_diagnostic_report(report_data: Dict[str, Any], request) ->
         },
 
     }
-    
+
     # Add effective date if available
     if report_data.get("datetime"):
         # Ensure datetime is in proper ISO format
@@ -1603,7 +1628,7 @@ def convert_report_to_diagnostic_report(report_data: Dict[str, Any], request) ->
                 "display": report_data["performer"]
             }
         ]
-    
+
     # Add results interpreter if available
     if report_data.get("interpreter"):
         fhir_report["resultsInterpreter"] = [
@@ -1619,7 +1644,7 @@ def convert_report_to_diagnostic_report(report_data: Dict[str, Any], request) ->
                 "reference": f"Observation/{report_data['report_id']}"
             }
         ]
-        
+
         # Add full report text from the first report result
         fhir_report["presentedForm"] = []
         for report in report_data["reports"]:
@@ -1631,59 +1656,59 @@ def convert_report_to_diagnostic_report(report_data: Dict[str, Any], request) ->
                     "data": markdown_content
                 }
             )
-        
+
         # Add the first report's result text to conclusion
         first_report_result = report_data["reports"][0]["result"] if report_data["reports"] else ""
         fhir_report["conclusion"] = html_to_markdown(first_report_result)
 
     # Add media references placeholder
     fhir_report["media"] = []
-    
+
     # Add extensions for referer and reason code/text if available
     extensions = []
-    
+
     # Add referer if available
     if report_data.get("referring_physician"):
         extensions.append({
             "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/diagnostic-report-referer",
             "valueString": report_data["referring_physician"]
         })
-    
+
     # Add reason code and text if available
     if report_data.get("referral_code") or report_data.get("referral_reason"):
         reason_extension = {
             "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/diagnostic-report-reason",
             "extension": []
         }
-        
+
         if report_data.get("referral_code"):
             reason_extension["extension"].append({
                 "url": "code",
                 "valueString": report_data["referral_code"]
             })
-        
+
         if report_data.get("referral_reason"):
             reason_extension["extension"].append({
                 "url": "text",
                 "valueString": report_data["referral_reason"]
             })
-        
+
         extensions.append(reason_extension)
-    
+
     if extensions:
         fhir_report["extension"] = extensions
-    
+
     # Return the FHIR Patient resource
     return fhir_report
 
 
 def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dict[str, Any]:
     """Convert report data to FHIR ImagingStudy resource format.
-    
+
     Args:
         report_data: Report data from parse_report_data
         request: The HTTP request object to get the host
-        
+
     Returns:
         FHIR ImagingStudy resource
     """
@@ -1701,7 +1726,7 @@ def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dic
         "started": report_data["datetime"].isoformat() if report_data.get("datetime") else datetime.now().isoformat(),
         "series": []
     }
-    
+
     # Add modality if available
     if report_data.get("modality"):
         fhir_imaging_study["modality"] = {
@@ -1709,14 +1734,14 @@ def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dic
             "code": report_data["modality"].upper(),
             "display": report_data["modality"].upper()
         }
-    
+
     # Add patient information if available
     if report_data.get("patient_name"):
         fhir_imaging_study["identifier"] = [{
             "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-name",
             "value": report_data["patient_name"]
         }]
-    
+
     if report_data.get("patient_cnp"):
         if "identifier" not in fhir_imaging_study:
             fhir_imaging_study["identifier"] = []
@@ -1724,11 +1749,11 @@ def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dic
             "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-cnp",
             "value": report_data["patient_cnp"]
         })
-    
+
     # Add description from examination
     if report_data.get("examination"):
         fhir_imaging_study["description"] = report_data["examination"]
-    
+
     # Add performer if available
     if report_data.get("performer"):
         fhir_imaging_study["performer"] = [
@@ -1738,13 +1763,13 @@ def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dic
                 }
             }
         ]
-    
+
     # Add referrer if referring physician is available
     if report_data.get("referring_physician"):
         fhir_imaging_study["referrer"] = {
             "display": report_data["referring_physician"]
         }
-    
+
     # Add series for each report
     if report_data.get("reports"):
         for i, report in enumerate(report_data["reports"]):
@@ -1767,9 +1792,9 @@ def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dic
                 "code": series_modality.upper(),
                 "display": series_modality.upper()
             }
-            # Add the instance 
+            # Add the instance
             fhir_imaging_study["series"].append(series)
-    
+
     # Add reason for study if referral information is available
     if report_data.get("referral_reason") or report_data.get("referral_code"):
         reason_text = ""
@@ -1779,13 +1804,13 @@ def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dic
             if reason_text:
                 reason_text += " - "
             reason_text += report_data["referral_reason"]
-        
+
         fhir_imaging_study["reason"] = [
             {
                 "text": reason_text
             }
         ]
-    
+
     # Add note if presumptive diagnosis is available
     if report_data.get("presumptive_diagnosis"):
         fhir_imaging_study["note"] = [
@@ -1793,23 +1818,23 @@ def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dic
                 "text": report_data["presumptive_diagnosis"]
             }
         ]
-    
+
     # Add description if special _indications are available
     if report_data.get("special_indications"):
         fhir_imaging_study["description"] = report_data["presumptive_diagnosis"]
-    
+
     return fhir_imaging_study
 
 @require_auth
-async def observation(request):
+async def get_observation(request):
     """Retrieve a single observation by ID.
-    
+
     Gets detailed information for a specific observation from the Hipocrate service.
-    
+
     Args:
         request: The incoming HTTP request with 'id' path parameter for observation ID
                  and basic auth credentials for authentication
-        
+
     Returns:
         JSON response with observation data or error information
     """
@@ -1818,7 +1843,7 @@ async def observation(request):
     if not id:
         return create_error_response("Observation ID is required")
     logger.info(f"Retrieving observation with ID: {id}")
-    
+
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
 
@@ -1841,21 +1866,21 @@ async def observation(request):
         report_data['report_id'] = id
         fhir_response = convert_report_to_observation(report_data, request)
         return web.json_response(fhir_response)
-            
+
     except Exception as e:
         return create_error_response("Observation retrieval failed", 500, {"exception": str(e)})
 
 def convert_report_to_observation(report_data: Dict[str, Any], request) -> Dict[str, Any]:
     """Convert report data to FHIR ImagingStudy resource format.
-    
+
     Args:
         report_data: Report data from parse_report_data
         request: The HTTP request object to get the host
-        
+
     Returns:
         FHIR ImagingStudy resource
     """
-    # Create FHIR Observation resource        
+    # Create FHIR Observation resource
     fhir_observation = {
         "resourceType": "Observation",
         "id": report_data["report_id"],
@@ -1864,7 +1889,7 @@ def convert_report_to_observation(report_data: Dict[str, Any], request) -> Dict[
             "coding": [
                 {
                     "system": f"{request.scheme}://{request.host}/fhir/CodeSystem/analysis-types",
-                    "code": "unknown", 
+                    "code": "unknown",
                     "display": "Analysis"
                 }
             ],
@@ -1881,7 +1906,7 @@ def convert_report_to_observation(report_data: Dict[str, Any], request) -> Dict[
     # Add effective datetime if available
     if report_data.get("datetime"):
         fhir_observation["effectiveDateTime"] = report_data["datetime"].isoformat()
-    
+
     # Add performer if available
     if report_data.get("performer"):
         fhir_observation["performer"] = [
@@ -1900,20 +1925,20 @@ def convert_report_to_observation(report_data: Dict[str, Any], request) -> Dict[
                     "data": report["result"]
                 }
             )
-    
+
     return fhir_observation
 
 @require_auth
-async def observation_search(request):
+async def search_observation(request):
     """Retrieve list of observations for a patient by ID.
-    
+
     Gets a list of observations for a specific patient from the Hipocrate service
     without fetching detailed data for each observation.
-    
+
     Args:
         request: The incoming HTTP request with 'patient' query parameter for patient ID
                  and basic auth credentials for authentication
-        
+
     Returns:
         JSON response with observations data or error information
     """
@@ -1922,19 +1947,19 @@ async def observation_search(request):
     if not patient_id:
         return create_error_response("Patient ID is required")
     logger.info(f"Retrieving analyses list for patient with ID: {patient_id}")
-    
+
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
 
     # Create a new HipocrateClient instance with credentials
     client = HipocrateClient(SERVICE_URL, username, password)
-    
+
     # Get optional parameters
     exam_type = request.query.get('type')
     exam_region = request.query.get('region')
     exam_datetime = request.query.get('dt')
     full_data = request.query.get('full', 'no').lower() == 'yes'
-    
+
     try:
         # The analyses endpoint
         request_url = f"/pacient/analyses.asp?type=PA&pacid={patient_id}"
@@ -1951,12 +1976,12 @@ async def observation_search(request):
 
         # Parse the analyses data to extract report IDs, types, and patient name
         parsed_data = parse_analyses_data(response_text)
-        
+
         # Filter analyses by type if specified
         analyses = parsed_data["analyses"]
         if exam_type:
             analyses = [a for a in analyses if a["type"] == exam_type]
-        
+
         # Filter analyses by datetime if specified
         if exam_datetime:
             # Parse the datetime string to match against analysis datetimes
@@ -1965,16 +1990,16 @@ async def observation_search(request):
                 # Start with a date range from one day earlier to one day after
                 hours_range = 24
                 max_attempts = 3
-                
+
                 for attempt in range(max_attempts):
                     start_dt = target_dt - timedelta(hours=hours_range)
                     end_dt = target_dt + timedelta(hours=hours_range)
-                    
+
                     filtered_analyses = []
                     for a in analyses:
                         if "datetime" in a and start_dt <= a["datetime"] <= end_dt:
                             filtered_analyses.append(a)
-                    
+
                     # If we found exactly one observation, return it
                     if len(filtered_analyses) == 1:
                         analyses = filtered_analyses
@@ -1987,10 +2012,10 @@ async def observation_search(request):
                     else:
                         analyses = filtered_analyses
                         break
-                        
+
             except ValueError:
                 logger.warning(f"Invalid datetime format: {exam_datetime}")
-        
+
         # Create FHIR Bundle of Observation resources (minimal data only)
         bundle = {
             "resourceType": "Bundle",
@@ -1998,7 +2023,7 @@ async def observation_search(request):
             "total": len(analyses),
             "entry": []
         }
-        
+
         for analysis in analyses:
             fhir_observation = {
                 "resourceType": "Observation",
@@ -2025,43 +2050,43 @@ async def observation_search(request):
             # Add effective datetime if available
             if analysis.get("datetime"):
                 fhir_observation["effectiveDateTime"] = analysis["datetime"].isoformat()
-            
+
             bundle["entry"].append({
                 "resource": fhir_observation
             })
-        
+
         return web.json_response(bundle)
-            
+
     except Exception as e:
         return create_error_response("Analyses list retrieval failed", 500, {"exception": str(e)})
 
 def parse_analyses_data(html_content: str) -> Dict[str, Any]:
     """Parse HTML analyses content and extract analysis IDs, analysis types, patient name, and patient id.
-    
+
     Extracts patient name, patient id, and list of analyses with their types and analysis IDs
     from the analyses HTML page.
-    
+
     Args:
         html_content: HTML content of the analyses page
-        
+
     Returns:
         Dictionary containing patient name, patient id, and list of analyses
     """
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
-        
+
         # Check if this is the correct page by looking for 'Cereri de Laborator' in title
         if not is_expected_page(soup, 'Cereri de Laborator'):
             logger.warning("Page is not a laboratory requests page")
             return {"patient_name": "", "patient_id": "", "analyses": []}
-        
+
         # Initialize result
         result = {
             "patient_name": "",
             "patient_id": "",
             "analyses": []
         }
-        
+
         # Extract patient name and id from the link pattern
         patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id=\d+'))
         if patient_link:
@@ -2071,7 +2096,7 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
             code_match = re.search(r'id=(\d+)', href)
             if code_match:
                 result["patient_id"] = code_match.group(1)
-        
+
         # Extract CNP from table (next TD after 'CNP:')
         cnp_cells = soup.find_all('td', string=re.compile(r'CNP:', re.IGNORECASE))
         for cnp_cell in cnp_cells:
@@ -2081,14 +2106,14 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
                 if cnp_text and cnp_text.isdigit() and len(cnp_text) == 13:
                     result["patient_cnp"] = cnp_text
                     break
-        
+
         # Find all links to analysis
         for link in soup.find_all('a', href=re.compile(r'../analyse/Reports/analyseFile\.asp\?id=\d+')):
             # Extract analysis ID
             analysis_id = extract_id_from_link(link, r'id=(\d+)')
             if not analysis_id:
                 continue
-            
+
             # Find the parent table row
             parent_row = link.find_parent('tr')
             if not parent_row:
@@ -2098,13 +2123,13 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
                     "type": "unknown"
                 })
                 continue
-            
+
             # Extract information from table cells
             analysis_data = {
                 "analysis_id": analysis_id,
                 "type": "unknown"
             }
-            
+
             cells = parent_row.find_all('td')
             if len(cells) >= 8:
                 # Cell 0: Checkbox (ignore)
@@ -2117,7 +2142,7 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
                     checkin_match = re.search(r'id=(\d+)', checkin_href)
                     if checkin_match:
                         analysis_data["admission"] = checkin_match.group(1)
-                
+
                 # Cell 4: Date
                 date_text = cells[4].get_text().strip()
                 if date_text:
@@ -2129,23 +2154,23 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
                         month_mapping = {
                             'Ian': 'Jan', 'Mai': 'May', 'Iun': 'Jun', 'Iul': 'Jul'
                         }
-                        
+
                         # Replace Romanian month abbreviations with English ones
                         formatted_date = date_text
                         for ro_month, en_month in month_mapping.items():
                             formatted_date = formatted_date.replace(ro_month, en_month)
-                        
+
                         # Parse the datetime using strptime
                         analysis_data["datetime"] = datetime.strptime(formatted_date, '%d %b %Y %H:%M:%S')
                     except Exception as e:
                         logger.debug(f"Could not parse datetime from string '{date_text}': {e}")
                         # Keep the original string if parsing fails
-                
+
                 # Cell 5: Priority
                 priority_text = cells[5].get_text().strip()
                 if priority_text:
                     analysis_data["priority"] = priority_text
-                
+
                 # Cell 6: Analysis type
                 type_text = cells[6].get_text().strip()
                 # Look for pattern like 'XXXX-Radio', 'XXXX-lab', etc.
@@ -2159,7 +2184,7 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
                         analysis_data["type"] = "unknown"
                 else:
                     analysis_data["type"] = "unknown"
-                
+
                 # Cell 7: Requesting doctor
                 doctor_text = cells[7].get_text().strip()
                 if doctor_text:
@@ -2168,7 +2193,7 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
             result["analyses"].append(analysis_data)
         # Return the parsed result
         return result
-    
+
     except Exception as e:
         logger.error(f"Error parsing analyses data: {e}")
         return {"patient_name": "", "patient_id": "", "analyses": []}
@@ -2177,21 +2202,21 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
 
 def parse_checkout_data(html_content: str) -> Dict[str, Any]:
     """Parse HTML checkout content and extract structured data.
-    
+
     Extracts patient information and medical data from checkout HTML content.
-    
+
     Args:
         html_content: HTML content of the checkout page
-        
+
     Returns:
         Dictionary containing parsed checkout data
     """
     import re
     from bs4 import BeautifulSoup
-    
+
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
-        
+
         # Initialize result dictionary
         checkout_data = {
             "patient_name": "",
@@ -2203,7 +2228,7 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
             "surgery": "",
             "recommendations": ""
         }
-        
+
         # Extract patient name and ID from the link
         patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id='))
         if patient_link:
@@ -2212,7 +2237,7 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
             patient_id = extract_id_from_link(patient_link)
             if patient_id:
                 checkout_data["patient_id"] = patient_id.strip()
-        
+
         # Extract patient id (Cod pacient)
         code_elements = soup.find_all('td', string=re.compile(r'Cod pacient\s*:', re.IGNORECASE))
         for code_element in code_elements:
@@ -2220,7 +2245,7 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
             if next_td:
                 checkout_data["patient_id"] = next_td.get_text().strip()
                 break
-        
+
         # Extract admission diagnostic
         diag_elements = soup.find_all('td', string=re.compile(r'Diagnostic\s*:', re.IGNORECASE))
         for diag_element in diag_elements:
@@ -2228,35 +2253,35 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
             if next_td:
                 checkout_data["admission_diagnostic"] = next_td.get_text().strip()
                 break
-        
+
         # Extract epicrisis (first textarea after 'Epicriza:')
         checkout_data["epicrisis"] = get_textarea_content_after_label(soup, r'Epicriza[^:]*:')
-        
+
         # Extract diagnostic (textarea after 'Diagnostic externare')
         checkout_data["diagnostic"] = get_textarea_content_after_label(soup, r'Diagnostic externare[^:]*:')
-        
+
         # Extract surgery (textarea after 'Protocol operator:')
         checkout_data["surgery"] = get_textarea_content_after_label(soup, r'Protocol operator[^:]*:')
-        
+
         # Extract recommendations (textarea after 'Recomandari')
         checkout_data["recommendations"] = get_textarea_content_after_label(soup, r'Recomandari[^:]*:')
-        
+
         return checkout_data
     except Exception as e:
         logger.error(f"Error parsing checkout data: {e}")
         return {}
 
 @require_auth
-async def service_request(request):
+async def get_service_request(request):
     """Retrieve service request information by ID.
-    
+
     Gets service request information from the Hipocrate service and parses
     the medical data into structured format.
-    
+
     Args:
         request: The incoming HTTP request with 'id' path parameter for service request ID
                  and basic auth credentials for authentication
-        
+
     Returns:
         JSON response with service request data or error information
 
@@ -2268,7 +2293,7 @@ async def service_request(request):
     if not id:
         return create_error_response("Service request ID is required")
     logger.info(f"Retrieving service request with ID: {id}")
-    
+
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
 
@@ -2278,39 +2303,39 @@ async def service_request(request):
     try:
         # The service request endpoint
         request_url = f"/Analyse/LabRequest/buletinRecoltari.asp?id={id}"
-        
+
         # Use the get_page method from the new HipocrateClient instance to retrieve the page
         response_text, success, error_response = await client.get_page(request_url)
 
         # Check for errors in the response
         if not success:
             return error_response
-        
+
         # Create FHIR ServiceRequest resource directly from HTML content
         fhir_response = convert_to_service_request(response_text, id, request)
         return web.json_response(fhir_response)
-            
+
     except Exception as e:
         return create_error_response("Service request retrieval failed", 500, {"exception": str(e)})
 
 def convert_to_service_request(html_content: str, service_request_id: str, http_request) -> Dict[str, Any]:
     """Convert HTML service request content directly to FHIR ServiceRequest resource.
-    
+
     Extracts patient information and medical data from service request HTML content
     and converts it directly to a FHIR ServiceRequest resource.
-    
+
     Args:
         html_content: HTML content of the service request page
         service_request_id: The ID of the service request
         http_request: The HTTP request object to get the host
-        
+
     Returns:
         FHIR ServiceRequest resource
     """
     try:
         # Parse HTML content
         soup = BeautifulSoup(html_content, 'html.parser')
-        
+
         # Create FHIR ServiceRequest resource using the FHIR class
         fhir_service_request = FHIRServiceRequest(
             id=service_request_id,
@@ -2318,27 +2343,27 @@ def convert_to_service_request(html_content: str, service_request_id: str, http_
             intent="order",
             priority="urgent" if "~URGENTA~" in html_content else "routine"
         )
-        
+
         # Extract patient name
         patient_name = extract_text_after_label(soup, r'Nume Pacient:')
-        
+
         # Extract patient ID
         patient_id = ""
         # Try to extract patient ID from various possible locations
         patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id='))
         if patient_link:
             patient_id = extract_id_from_link(patient_link)
-        
+
         # Create subject reference
         subject = Reference(
             reference=f"Patient/{patient_id}"
         )
-        
+
         # Add patient name to subject if available
         if patient_name:
             subject["display"] = patient_name
         fhir_service_request["subject"] = subject
-        
+
         # Create codeable concept for the service type
         code = CodeableConcept(
             coding=[{
@@ -2349,13 +2374,13 @@ def convert_to_service_request(html_content: str, service_request_id: str, http_
             text="Imaging Study Request"
         )
         fhir_service_request["code"] = code
-        
+
         # Extract physician
         physician = extract_text_after_label(soup, r'Medicul:', stop_at=r'-')
         # Add requester if available (requesting doctor)
         if physician:
             fhir_service_request["requester"] = Reference(display=physician)
-        
+
         # Extract admission ID from the "Back" link
         admission_ids = extract_ids_from_links(soup, r'/checkin\.asp\?id=([^&"]+)')
         # Add encounter if we can derive it
@@ -2363,7 +2388,7 @@ def convert_to_service_request(html_content: str, service_request_id: str, http_
             fhir_service_request["encounter"] = Reference(
                 reference=f"Encounter/{admission_ids[0]}"
             )
-        
+
         # Extract diagnosis
         diagnosis = extract_text_after_label(soup, r'Diagnostic:', 'td')
         # Add reason code if diagnosis is available
@@ -2394,7 +2419,7 @@ def convert_to_service_request(html_content: str, service_request_id: str, http_
                 if len(comment_tds) >= 2:
                     reason_text = comment_tds[0].get_text().strip()
                     note_text = comment_tds[1].get_text().strip()
-        
+
         # Add reason reference if clinical comments are available
         if reason_text:
             fhir_service_request["supportingInfo"] = [{
@@ -2406,7 +2431,7 @@ def convert_to_service_request(html_content: str, service_request_id: str, http_
             fhir_service_request["note"] = [{
                 "text": note_text
             }]
-        
+
         # Extract procedures from the table
         procedures = {}
         procedure_rows = soup.find_all('tr')
@@ -2419,7 +2444,7 @@ def convert_to_service_request(html_content: str, service_request_id: str, http_
                     procedure_text = cells[1].get_text().strip()
                     if procedure_text:
                         procedures[first_cell_text] = procedure_text
-        
+
         # Add order details for procedures
         if procedures:
             order_details = []
@@ -2434,7 +2459,7 @@ def convert_to_service_request(html_content: str, service_request_id: str, http_
                 )
                 order_details.append(order_detail)
             fhir_service_request["orderDetail"] = order_details
-        
+
         # Extract request datetime (Data si ora cererii)
         request_datetime = extract_text_after_label(soup, r'Data si ora cererii:', stop_at=r'Receptionat')
         # Add authoredOn if request datetime is available
@@ -2447,7 +2472,7 @@ def convert_to_service_request(html_content: str, service_request_id: str, http_
             else:
                 # If parsing fails, keep the original string
                 fhir_service_request["authoredOn"] = request_datetime
-        
+
         return fhir_service_request.to_dict()
     except Exception as e:
         logger.error(f"Error converting service request data: {e}")
@@ -2455,16 +2480,16 @@ def convert_to_service_request(html_content: str, service_request_id: str, http_
 
 
 @require_auth
-async def fhir_encounter_read(request):
+async def get_encounter(request):
     """Retrieve encounter information by ID.
-    
+
     Gets encounter information from the Hipocrate service and parses
     the medical data into structured format.
-    
+
     Args:
         request: The incoming HTTP request with 'identifier' query parameter for encounter ID
                  and basic auth credentials for authentication
-        
+
     Returns:
         JSON response with encounter data or error information
 
@@ -2473,18 +2498,18 @@ async def fhir_encounter_read(request):
     """
     encounter_id = request.match_info.get('id')
     logger.info(f"GET /fhir/Encounter endpoint accessed with identifier: {encounter_id}")
-    
+
     if not encounter_id:
         return create_error_response("Encounter ID is required")
-    
+
     logger.info(f"Retrieving encounter with ID: {encounter_id}")
-    
+
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
-    
+
     try:
         session = user_session_manager.get_user_session(username)
-        
+
         # Make request to the checkout endpoint
         checkout_url = f"{SERVICE_URL}/files/checkout.asp?id={encounter_id}"
         # Make the authenticated request
@@ -2497,11 +2522,11 @@ async def fhir_encounter_read(request):
         # Check for errors in the response
         if not success:
             return error_response
-        
+
         logger.info(f"Encounter retrieval completed successfully in {duration:.2f} seconds")
         # Parse the checkout data
         parsed_data = parse_checkout_data(response_text)
-        
+
         # Create enhanced FHIR Encounter resource
         fhir_encounter = {
             "resourceType": "Encounter",
@@ -2523,7 +2548,7 @@ async def fhir_encounter_read(request):
             },
             "participant": []
         }
-        
+
         # Add performer if available
         if parsed_data.get("performer"):
             fhir_encounter["participant"].append({
@@ -2542,7 +2567,7 @@ async def fhir_encounter_read(request):
                     "display": parsed_data["performer"]
                 }
             })
-        
+
         # Add reason (admission diagnostic) if available
         if parsed_data.get("admission_diagnostic"):
             fhir_encounter["reasonCode"] = [
@@ -2550,21 +2575,21 @@ async def fhir_encounter_read(request):
                     "text": parsed_data["admission_diagnostic"]
                 }
             ]
-        
+
         # Add text summary if epicrisis exists
         if parsed_data.get("epicrisis"):
             #fhir_encounter["text"] = {
             #    "status": "generated",
             #    "div": f"<div xmlns=\"http://www.w3.org/1999/xhtml\">{parsed_data['epicrisis']}</div>"
             #}
-            
+
             # Also add as a note
             fhir_encounter["note"] = [
                 {
                     "text": parsed_data["epicrisis"]
                 }
             ]
-        
+
         # Add diagnosis if available
         if parsed_data.get("admission_diagnostic"):
             fhir_encounter["diagnosis"] = [
@@ -2584,7 +2609,7 @@ async def fhir_encounter_read(request):
                     }
                 }
             ]
-        
+
         # Add discharge diagnosis if available
         if parsed_data.get("diagnostic"):
             if "diagnosis" not in fhir_encounter:
@@ -2606,26 +2631,26 @@ async def fhir_encounter_read(request):
                     }
                 }
             )
-        
+
         return web.json_response(fhir_encounter)
-            
+
     except Exception as e:
         return create_error_response("Encounter retrieval failed", 500, {"exception": str(e)})
 
 
 async def serve_analysis_types(request):
     """Serve the analysis types terminology.
-    
+
     Returns a FHIR CodeSystem resource defining the analysis types used in the hospital system.
-    
+
     Args:
         request: The incoming HTTP request
-        
+
     Returns:
         JSON response with CodeSystem resource
     """
     logger.info("GET /fhir/CodeSystem/analysis-types endpoint accessed")
-    
+
     # Build concepts list using for loop
     concepts = []
     for code, details in ANALYSIS_TYPES.items():
@@ -2634,7 +2659,7 @@ async def serve_analysis_types(request):
             "display": details["display"],
             "definition": details["definition"]
         })
-    
+
     code_system = {
         "resourceType": "CodeSystem",
         "id": "analysis-types",
@@ -2651,28 +2676,28 @@ async def serve_analysis_types(request):
         "content": "complete",
         "concept": concepts
     }
-    
+
     return web.json_response(code_system)
 
 
 async def serve_spec(request):
     """Serve the OpenAPI specification.
-    
+
     Returns the OpenAPI specification in JSON format for API documentation.
-    
+
     Args:
         request: The incoming HTTP request
-        
+
     Returns:
         JSON response with OpenAPI specification
     """
     logger.info("GET /fhir/spec endpoint accessed")
-    
+
     try:
         with open('spec.json', 'r') as f:
             spec = json.load(f)
         # Update the server URL with the current PORT
-        spec["servers"][0]["url"] = f"{request.scheme}://{request.host}" 
+        spec["servers"][0]["url"] = f"{request.scheme}://{request.host}"
         return web.json_response(spec)
     except FileNotFoundError:
         return create_error_response("Specification file not found", 500)
@@ -2682,17 +2707,17 @@ async def serve_spec(request):
 
 async def serve_metadata(request):
     """Serve the FHIR capability statement.
-    
+
     Returns the FHIR capability statement as a metadata endpoint.
-    
+
     Args:
         request: The incoming HTTP request
-        
+
     Returns:
         JSON response with FHIR capability statement
     """
     logger.info("GET /fhir/Metadata endpoint accessed")
-    
+
     # Create a basic FHIR CapabilityStatement
     capability_statement = {
         "resourceType": "CapabilityStatement",
@@ -2753,7 +2778,7 @@ async def serve_metadata(request):
             }
         ]
     }
-    
+
     return web.json_response(capability_statement)
 
 
@@ -2762,10 +2787,10 @@ async def serve_metadata(request):
 
 def parse_date_time(date_str: str) -> Optional[datetime]:
     """Parse a date string in the format '30 Aug 2025 19:25:00'.
-    
+
     Args:
         date_str: Date string to parse
-        
+
     Returns:
         datetime object if parsing successful, None otherwise
     """
@@ -2777,22 +2802,22 @@ def parse_date_time(date_str: str) -> Optional[datetime]:
             'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12,
             'Ian': 1, 'Mai': 5, 'Iun': 6, 'Iul': 7  # Romanian month abbreviations
         }
-        
+
         # Split the date string into components
         parts = date_str.strip().split()
         if len(parts) != 4:
             return None
-            
+
         day = int(parts[0])
         month_abbr = parts[1]
         year = int(parts[2])
         time_part = parts[3]
-        
+
         # Get month number from mapping
         if month_abbr not in month_mapping:
             return None
         month = month_mapping[month_abbr]
-        
+
         # Parse time
         time_parts = time_part.split(':')
         if len(time_parts) != 3:
@@ -2800,7 +2825,7 @@ def parse_date_time(date_str: str) -> Optional[datetime]:
         hour = int(time_parts[0])
         minute = int(time_parts[1])
         second = int(time_parts[2])
-        
+
         # Create datetime object
         return datetime(year, month, day, hour, minute, second)
     except (ValueError, IndexError, TypeError):
@@ -2809,29 +2834,29 @@ def parse_date_time(date_str: str) -> Optional[datetime]:
 
 def html_to_markdown(html_content: str) -> str:
     """Convert HTML content to clean markdown text.
-    
+
     Processes HTML content by removing unnecessary tags, converting formatting
     elements to markdown syntax, and normalizing whitespace.
-    
+
     Args:
         html_content: HTML content to convert
-        
+
     Returns:
         Clean markdown text
     """
-    
+
     try:
         # Parse the HTML content
         soup = BeautifulSoup(html_content, 'html.parser')
-        
+
         # Remove XML namespace declarations and processing instructions
         for ns_decl in soup.find_all(re.compile(r'^\?xml')):
             ns_decl.decompose()
-        
+
         # Remove Microsoft Office specific tags
         for tag in soup.find_all(['o:p', 'xml:namespace']):
             tag.decompose()
-        
+
         # Remove wrapping <b> tags that might enclose the entire content
         # Check if there's a single <b> tag that contains everything
         body_content = soup.find('body')
@@ -2848,7 +2873,7 @@ def html_to_markdown(html_content: str) -> str:
             if len(element_children) == 1 and element_children[0].name == 'b':
                 # If the only element child is a <b> tag, unwrap it
                 element_children[0].unwrap()
-        
+
         # Convert common HTML elements to markdown
         # Headings
         for tag in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
@@ -2856,42 +2881,42 @@ def html_to_markdown(html_content: str) -> str:
             tag.insert_before('#' * level + ' ')
             tag.insert_after('\n\n')
             tag.unwrap()
-        
+
         # Paragraphs
         for p in soup.find_all('p'):
             p.insert_after('\n\n')
             p.unwrap()
-        
+
         # Line breaks
         for br in soup.find_all('br'):
             br.replace_with('\n')
-        
+
         # Bold (but skip if it's a wrapper tag)
         for b in soup.find_all(['b', 'strong']):
             # Check if this is a wrapper tag (contains all other content)
             parent_children = list(b.parent.children)
             # Filter out text nodes that are only whitespace
             element_children = [child for child in parent_children if hasattr(child, 'name') and child.name]
-            
+
             # Skip if this is a wrapper tag (only child element in parent)
             is_wrapper = (b.parent.name == 'body' or b.parent == soup) and len(element_children) == 1
             if not is_wrapper:
                 b.insert_before('**')
                 b.insert_after('**')
             b.unwrap()
-        
+
         # Italic
         for i in soup.find_all(['i', 'em']):
             i.insert_before('*')
             i.insert_after('*')
             i.unwrap()
-        
+
         # Underline (convert to italic as markdown doesn't have underline)
         for u in soup.find_all('u'):
             u.insert_before('*')
             u.insert_after('*')
             u.unwrap()
-        
+
         # Remove excessive whitespace and HTML entities
         text = soup.get_text()
         # Decode HTML entities
@@ -2904,7 +2929,7 @@ def html_to_markdown(html_content: str) -> str:
         text = re.sub(r'[ \t]+', ' ', text)
         text = re.sub(r'\n\s*\n', '\n\n', text)
         text = text.strip()
-        
+
         return text
     except Exception as e:
         # If parsing fails, return cleaned text
@@ -2918,7 +2943,7 @@ def html_to_markdown(html_content: str) -> str:
 
 def markdown_to_html(markdown_text: str) -> str:
     """Convert simple markdown to basic HTML.
-    
+
     Supports:
     - Paragraphs (double newlines)
     - Line breaks (single newlines)
@@ -2927,18 +2952,18 @@ def markdown_to_html(markdown_text: str) -> str:
     - Headers (# Header, ## Header, etc.)
     - Unordered lists (- item or * item)
     - Ordered lists (1. item, 2. item, etc.)
-    
+
     Args:
         markdown_text: Markdown text to convert
-        
+
     Returns:
         HTML representation of the markdown
     """
     import re
-    
+
     # Escape HTML characters
     html = markdown_text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-    
+
     # Headers (# Header, ## Header, etc.)
     html = re.sub(r'^###### (.*)$', r'<h6>\1</h6>', html, flags=re.MULTILINE)
     html = re.sub(r'^##### (.*)$', r'<h5>\1</h5>', html, flags=re.MULTILINE)
@@ -2946,27 +2971,27 @@ def markdown_to_html(markdown_text: str) -> str:
     html = re.sub(r'^### (.*)$', r'<h3>\1</h3>', html, flags=re.MULTILINE)
     html = re.sub(r'^## (.*)$', r'<h2>\1</h2>', html, flags=re.MULTILINE)
     html = re.sub(r'^# (.*)$', r'<h1>\1</h1>', html, flags=re.MULTILINE)
-    
+
     # Bold (**text** or __text__)
     html = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', html)
     html = re.sub(r'__(.*?)__', r'<strong>\1</strong>', html)
-    
+
     # Italic (*text* or _text_)
     html = re.sub(r'\*(.*?)\*', r'<em>\1</em>', html)
     html = re.sub(r'_(.*?)_', r'<em>\1</em>', html)
-    
+
     # Unordered lists (- item or * item)
     html = re.sub(r'^\s*[-*]\s+(.*)$', r'<li>\1</li>', html, flags=re.MULTILINE)
     html = re.sub(r'(<li>.*</li>\s*)+', r'<ul>\n\g<0></ul>\n', html)
-    
+
     # Ordered lists (1. item, 2. item, etc.)
     html = re.sub(r'^\s*\d+\.\s+(.*)$', r'<li>\1</li>', html, flags=re.MULTILINE)
     html = re.sub(r'(<li>.*</li>\s*)+', r'<ol>\n\g<0></ol>\n', html)
-    
+
     # Paragraphs (separated by double newlines)
     paragraphs = html.split('\n\n')
     html = '\n'.join([f'<p>{p}</p>' if not p.startswith(('<h', '<ul', '<ol')) else p for p in paragraphs if p.strip()])
-    
+
     # Line breaks (single newlines within paragraphs, but not between block elements)
     # Split by block elements to avoid adding <br> between them
     parts = re.split(r'(<(?:h[1-6]|ul|ol|li|p)[^>]*>.*?</(?:h[1-6]|ul|ol|li|p)>)', html, flags=re.DOTALL)
@@ -2977,29 +3002,29 @@ def markdown_to_html(markdown_text: str) -> str:
             part = re.sub(r'([^\n])\n([^\n])', r'\1<br>\2', part)
             parts[i] = part
     html = ''.join(parts)
-    
+
     return html
 
 async def serve_md2html(request):
     """Convert markdown text to HTML.
-    
+
     Takes markdown text and converts it to basic HTML.
-    
+
     Args:
         request: The incoming HTTP request with JSON body containing 'text' field
-        
+
     Returns:
         JSON response with HTML content
     """
     logger.info("POST /fhir/md2html endpoint accessed")
-    
+
     try:
         # Get markdown text from request body
         data = await request.json()
         markdown_text = data.get('text', '')
-        
+
         html_content = markdown_to_html(markdown_text)
-        
+
         return web.json_response({
             "status": "success",
             "html": html_content
@@ -3012,12 +3037,12 @@ async def serve_md2html(request):
 
 def parse_cnp(cnp: str) -> Dict[str, Any]:
     """Parse a Romanian CNP (Personal Numerical Code) and extract meaningful data.
-    
+
     Extracts gender, birth date, county, and other information from a valid CNP.
-    
+
     Args:
         cnp: The CNP to parse
-        
+
     Returns:
         Dictionary with parsed data including:
             - valid: bool - whether the CNP is valid
@@ -3031,7 +3056,7 @@ def parse_cnp(cnp: str) -> Dict[str, Any]:
     # Check if CNP is exactly 13 digits
     if not cnp or len(cnp) != 13 or not cnp.isdigit():
         return {"valid": False}
-    
+
     # Extract components
     gender_digit = int(cnp[0])
     year = int(cnp[1:3])
@@ -3040,7 +3065,7 @@ def parse_cnp(cnp: str) -> Dict[str, Any]:
     county_code = int(cnp[7:9])
     serial = cnp[9:12]
     control_digit = int(cnp[12])
-    
+
     # County codes mapping
     county_names = {
         1: "Alba", 2: "Arad", 3: "Argeș", 4: "Bacău", 5: "Bihor", 6: "Bistrița-Năsăud",
@@ -3058,25 +3083,25 @@ def parse_cnp(cnp: str) -> Dict[str, Any]:
         90: "Special", 91: "Special", 92: "Special", 93: "Special", 94: "Special",
         95: "Special", 96: "Special", 97: "Special", 98: "Special", 99: "Special"
     }
-    
+
     # Validate gender digit (1-8 are valid)
     if gender_digit < 1 or gender_digit > 8:
         return {"valid": False}
-    
+
     # Validate month (1-12)
     if month < 1 or month > 12:
         return {"valid": False}
-    
+
     # Validate day (1-31)
     if day < 1 or day > 31:
         return {"valid": False}
-    
+
     # Validate county code (1-52, excluding 47-50, plus 70-79 for diaspora, 90-99 for special cases)
-    if not ((1 <= county_code <= 52 and not (47 <= county_code <= 50)) or 
-            (70 <= county_code <= 79) or 
+    if not ((1 <= county_code <= 52 and not (47 <= county_code <= 50)) or
+            (70 <= county_code <= 79) or
             (90 <= county_code <= 99)):
         return {"valid": False}
-    
+
     # Validate date by trying to create a datetime object
     try:
         # Determine century based on gender digit
@@ -3088,26 +3113,26 @@ def parse_cnp(cnp: str) -> Dict[str, Any]:
             full_year = 2000 + year
         else:  # 7, 8
             full_year = 2000 + year  # For people born after 2000
-        
+
         # Check if date is valid
         birth_date = datetime(full_year, month, day)
     except ValueError:
         return {"valid": False}
-    
+
     # Validate control digit using checksum
     weights = [2, 7, 9, 1, 4, 6, 3, 5, 8, 2, 7, 9]
     checksum = sum(int(cnp[i]) * weights[i] for i in range(12)) % 11
     calculated_control_digit = 1 if checksum == 10 else checksum
-    
+
     if calculated_control_digit != control_digit:
         return {"valid": False}
-    
+
     # Determine gender
     gender = "male" if gender_digit in [1, 3, 5, 7] else "female"
-    
+
     # Get county name
     county_name = county_names.get(county_code, "Unknown")
-    
+
     return {
         "valid": True,
         "gender": gender,
@@ -3120,17 +3145,17 @@ def parse_cnp(cnp: str) -> Dict[str, Any]:
 
 def validate_cnp(cnp: str) -> bool:
     """Validate a Romanian CNP (Personal Numerical Code).
-    
+
     Checks if the provided string is a valid Romanian CNP by verifying:
     - Length (13 digits)
     - Gender digit (1-8)
     - Date components (year, month, day)
     - County code (1-52, excluding 47-50)
     - Control digit using checksum algorithm
-    
+
     Args:
         cnp: The CNP to validate
-        
+
     Returns:
         True if CNP is valid, False otherwise
     """
@@ -3140,34 +3165,34 @@ def validate_cnp(cnp: str) -> bool:
 @require_auth
 async def serve_validate_cnp(request):
     """Validate a Romanian CNP (Personal Numerical Code).
-    
+
     Validates a Romanian CNP using the internal validation algorithm and returns parsed data.
-    
+
     Args:
         request: The incoming HTTP request with 'id' query parameter for CNP
-        
+
     Returns:
         JSON response with validation result and parsed data
     """
     logger.info("GET /fhir/ValueSet/cnp endpoint accessed")
-    
+
     # Get CNP from query string
     cnp = request.query.get('id')
-    
+
     if not cnp:
         return create_error_response("CNP is required")
-    
+
     logger.info(f"Validating CNP: {cnp}")
-    
+
     # Parse CNP to get detailed information
     parsed_data = parse_cnp(cnp)
-    
+
     response_data = {
         "status": "success",
         "cnp": cnp,
         "valid": parsed_data.get("valid", False)
     }
-    
+
     # Add parsed data if valid
     if parsed_data.get("valid"):
         response_data.update({
@@ -3178,7 +3203,7 @@ async def serve_validate_cnp(request):
             "serial": parsed_data.get("serial"),
             "control_digit": parsed_data.get("control_digit")
         })
-    
+
     return web.json_response(response_data)
 
 
@@ -3186,36 +3211,36 @@ async def serve_validate_cnp(request):
 @require_auth
 async def serve_web_page(request):
     """Handle requests to the root endpoint.
-    
+
     Returns a web page with a CNP input form and analysis functionality.
     Requires basic authentication.
-    
+
     Args:
         request: The incoming HTTP request
-        
+
     Returns:
         HTML response with the web interface or 401 if not authenticated
     """
     logger.info("Root endpoint accessed")
-    
+
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
-    
+
     # Try to login with provided credentials
     session = user_session_manager.get_user_session(username)
     login_success = await hipocrate_client.login_if_needed(session, username, password)
-    
+
     if not login_success:
         return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
-    
+
     # Set cookie with 30-minute expiration
     response = web.StreamResponse()
     response.set_cookie('auth_user', username, max_age=1800, httponly=True)
-    
+
     # Serve the external HTML file
     with open('static/main.html', 'r') as f:
         html_content = f.read()
-    
+
     response.content_type = 'text/html'
     await response.prepare(request)
     await response.write(html_content.encode('utf-8'))
@@ -3224,19 +3249,19 @@ async def serve_web_page(request):
 
 def get_textarea_content_after_label(soup: 'BeautifulSoup', label_regex: str) -> str:
     """Get content of first textarea after a label matching the given regex.
-    
+
     Searches for a label matching the regex pattern and returns the content
     of the first textarea element that follows it.
-    
+
     Args:
         soup: Parsed HTML content
         label_regex: Regular expression pattern to match label text
-        
+
     Returns:
         Content of the textarea converted to markdown, or empty string if not found
     """
     import re
-    
+
     try:
         # Find elements with text matching the label regex
         label_elements = soup.find_all(string=re.compile(label_regex, re.IGNORECASE))
@@ -3256,11 +3281,11 @@ def get_textarea_content_after_label(soup: 'BeautifulSoup', label_regex: str) ->
 
 def is_expected_page(soup: BeautifulSoup, expected_title_text: str) -> bool:
     """Check if the parsed HTML content is the expected page by looking for specific text in the title.
-    
+
     Args:
         soup: BeautifulSoup object of the parsed HTML content
         expected_title_text: Text that should be present in the page title
-        
+
     Returns:
         True if the page title contains the expected text, False otherwise
     """
@@ -3269,18 +3294,18 @@ def is_expected_page(soup: BeautifulSoup, expected_title_text: str) -> bool:
 
 def create_error_response(message: str, status_code: int = 400, details: Dict[str, Any] = None) -> web.Response:
     """Create a standardized error response.
-    
+
     Args:
         message: Error message
         status_code: HTTP status code (default: 400)
         details: Additional error details
-        
+
     Returns:
         Standardized JSON error response
     """
     if status_code >= 500:
         logger.error(f"{message}")
-    else: 
+    else:
         logger.warning(f"{message}")
     # Build response data
     response_data = {
@@ -3296,32 +3321,32 @@ def create_error_response(message: str, status_code: int = 400, details: Dict[st
 
 def load_config():
     """Load configuration from hipp.cfg and local.cfg (if exists).
-    
+
     Returns:
         dict: Configuration dictionary with merged settings
     """
     config = configparser.ConfigParser()
-    
+
     # Read default config
     config.read_dict(DEFAULT_CONFIG)
-    
+
     # Load main config file
     if os.path.exists('hipp.cfg'):
         logger.info("Loading hipp.cfg configuration")
         config.read('hipp.cfg')
     else:
         logger.info("hipp.cfg not found, using default configuration")
-    
+
     # Load local config if exists (will override hipp.cfg)
     if os.path.exists('local.cfg'):
         logger.info("Loading local.cfg configuration (overrides hipp.cfg)")
         config.read('local.cfg')
-    
+
     return config
 
 async def on_startup(app):
     """Handle application startup.
-    
+
     Args:
         app: The web application
     """
@@ -3329,9 +3354,9 @@ async def on_startup(app):
 
 async def on_cleanup(app):
     """Handle application cleanup.
-    
+
     Closes all user HTTP sessions.
-    
+
     Args:
         app: The web application
     """
@@ -3344,62 +3369,62 @@ async def auth_middleware(app, handler):
         # Skip authentication for static files
         if request.path.startswith('/static/'):
             return await handler(request)
-        
+
         return await handler(request)
-    
+
     return middleware_handler
 
 async def init_app():
     """Initialize the web application.
-    
+
     Sets up routes and application lifecycle handlers.
-    
+
     Returns:
         Configured web application
     """
     global hipocrate_client
     logger.info("Initializing web application")
-    
+
     # Initialize the global Hipocrate client
     hipocrate_client = HipocrateClient(SERVICE_URL)
-    
+
     app = web.Application(middlewares=[auth_middleware])
     app.router.add_get('/', serve_web_page)
     # FHIR-compatible endpoints
-    app.router.add_get('/fhir/Patient', patient_search)
-    app.router.add_get('/fhir/Patient/{id}', patient)
-    app.router.add_get('/fhir/DiagnosticReport/{id}', diagnostic_report)
-    app.router.add_get('/fhir/ImagingStudy/{id}', imaging_study)
-    app.router.add_get('/fhir/Encounter/{id}', fhir_encounter_read)
-    app.router.add_get('/fhir/Observation', observation_search)
-    app.router.add_get('/fhir/Observation/{id}', observation)
-    app.router.add_get('/fhir/ServiceRequest/{id}', service_request)
+    app.router.add_get('/fhir/Patient', search_patient)
+    app.router.add_get('/fhir/Patient/{id}', get_patient)
+    app.router.add_get('/fhir/DiagnosticReport/{id}', get_diagnostic_report)
+    app.router.add_get('/fhir/ImagingStudy/{id}', get_imaging_study)
+    app.router.add_get('/fhir/Encounter/{id}', get_encounter)
+    app.router.add_get('/fhir/Observation', search_observation)
+    app.router.add_get('/fhir/Observation/{id}', get_observation)
+    app.router.add_get('/fhir/ServiceRequest/{id}', get_service_request)
     app.router.add_get('/fhir/ValueSet/cnp', serve_validate_cnp)
     app.router.add_post('/fhir/md2html', serve_md2html)
     app.router.add_get('/fhir/CodeSystem/analysis-types', serve_analysis_types)
     app.router.add_get('/fhir/spec', serve_spec)
     app.router.add_get('/fhir/Metadata', serve_metadata)
     app.router.add_static('/static/', path='static', name='static')
-    
+
     # Setup startup and cleanup
     app.on_startup.append(on_startup)
     app.on_cleanup.append(on_cleanup)
-    
+
     return app
 
 def get_basic_auth(request):
     """Extract basic auth credentials from request.
-    
+
     Args:
         request: The incoming HTTP request
-        
+
     Returns:
         Tuple of (username, password) or None if not found
     """
     auth_header = request.headers.get('Authorization')
     if not auth_header or not auth_header.startswith('Basic '):
         return None
-    
+
     try:
         encoded_credentials = auth_header.split(' ', 1)[1]
         decoded_credentials = base64.b64decode(encoded_credentials).decode('utf-8')
