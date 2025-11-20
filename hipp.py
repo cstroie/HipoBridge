@@ -760,8 +760,40 @@ def extract_ids_from_links(soup: BeautifulSoup, id_pattern: str = r'id=([^&"]+)'
             ids_list.append(id_match.group(1))
     return ids_list
 
+def extract_textarea_after_label(soup: 'BeautifulSoup', label_regex: str) -> str:
+    """Get content of first textarea after a label matching the given regex.
+
+    Searches for a label matching the regex pattern and returns the content
+    of the first textarea element that follows it.
+
+    Args:
+        soup: Parsed HTML content
+        label_regex: Regular expression pattern to match label text
+
+    Returns:
+        Content of the textarea converted to markdown, or empty string if not found
+    """
+    import re
+
+    try:
+        # Find elements with text matching the label regex
+        label_elements = soup.find_all(string=re.compile(label_regex, re.IGNORECASE))
+        if label_elements:
+            # Get the parent element which should contain the label
+            parent = label_elements[0].parent
+            if parent:
+                # Find the next textarea sibling
+                textarea = parent.find_next('textarea')
+                if textarea:
+                    return html_to_markdown(str(textarea))
+        return ""
+    except Exception as e:
+        logger.error(f"Error extracting textarea content after label '{label_regex}': {e}")
+        return ""
 
 
+# Authentication helpers
+# ###########################################################################
 
 def get_basic_auth(request):
     """Extract basic auth credentials from request.
@@ -1714,7 +1746,6 @@ def convert_report_to_diagnostic_report(report_data: Dict[str, Any], request) ->
     # Return the FHIR Patient resource
     return fhir_report
 
-
 def convert_report_to_imaging_study(report_data: Dict[str, Any], request) -> Dict[str, Any]:
     """Convert report data to FHIR ImagingStudy resource format.
 
@@ -2268,16 +2299,16 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
                 break
 
         # Extract epicrisis (first textarea after 'Epicriza:')
-        checkout_data["epicrisis"] = get_textarea_content_after_label(soup, r'Epicriza[^:]*:')
+        checkout_data["epicrisis"] = extract_textarea_after_label(soup, r'Epicriza[^:]*:')
 
         # Extract diagnostic (textarea after 'Diagnostic externare')
-        checkout_data["diagnostic"] = get_textarea_content_after_label(soup, r'Diagnostic externare[^:]*:')
+        checkout_data["diagnostic"] = extract_textarea_after_label(soup, r'Diagnostic externare[^:]*:')
 
         # Extract surgery (textarea after 'Protocol operator:')
-        checkout_data["surgery"] = get_textarea_content_after_label(soup, r'Protocol operator[^:]*:')
+        checkout_data["surgery"] = extract_textarea_after_label(soup, r'Protocol operator[^:]*:')
 
         # Extract recommendations (textarea after 'Recomandari')
-        checkout_data["recommendations"] = get_textarea_content_after_label(soup, r'Recomandari[^:]*:')
+        checkout_data["recommendations"] = extract_textarea_after_label(soup, r'Recomandari[^:]*:')
 
         return checkout_data
     except Exception as e:
@@ -3271,37 +3302,6 @@ async def serve_web_page(request):
     return response
 
 
-def get_textarea_content_after_label(soup: 'BeautifulSoup', label_regex: str) -> str:
-    """Get content of first textarea after a label matching the given regex.
-
-    Searches for a label matching the regex pattern and returns the content
-    of the first textarea element that follows it.
-
-    Args:
-        soup: Parsed HTML content
-        label_regex: Regular expression pattern to match label text
-
-    Returns:
-        Content of the textarea converted to markdown, or empty string if not found
-    """
-    import re
-
-    try:
-        # Find elements with text matching the label regex
-        label_elements = soup.find_all(string=re.compile(label_regex, re.IGNORECASE))
-        if label_elements:
-            # Get the parent element which should contain the label
-            parent = label_elements[0].parent
-            if parent:
-                # Find the next textarea sibling
-                textarea = parent.find_next('textarea')
-                if textarea:
-                    return html_to_markdown(str(textarea))
-        return ""
-    except Exception as e:
-        logger.error(f"Error extracting textarea content after label '{label_regex}': {e}")
-        return ""
-
 
 def is_expected_page(soup: BeautifulSoup, expected_title_text: str) -> bool:
     """Check if the parsed HTML content is the expected page by looking for specific text in the title.
@@ -3438,6 +3438,7 @@ async def init_app():
     app.on_startup.append(on_startup)
     app.on_cleanup.append(on_cleanup)
 
+    # Return the configured app
     return app
 
 # Load configuration
