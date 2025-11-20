@@ -2493,21 +2493,100 @@ async def get_service_request(request):
         if not success:
             return error_response
 
-        # Create FHIR ServiceRequest resource directly from HTML content
-        fhir_response = create_fhir_service_request(response_text, id, request)
+        # Parse the service request data from HTML content
+        request_data = parse_request_data(response_text)
+        
+        # Create FHIR ServiceRequest resource from parsed data
+        fhir_response = create_fhir_service_request(request_data, id, request)
         return web.json_response(fhir_response)
 
     except Exception as e:
         return create_error_response("Service request retrieval failed", 500, {"exception": str(e)})
 
-def create_fhir_service_request(html_content: str, service_request_id: str, http_request) -> Dict[str, Any]:
-    """Convert HTML service request content directly to FHIR ServiceRequest resource.
+def parse_request_data(html_content: str) -> Dict[str, Any]:
+    """Parse HTML service request content and extract structured data.
 
-    Extracts patient information and medical data from service request HTML content
-    and converts it directly to a FHIR ServiceRequest resource.
+    Extracts patient information and medical data from service request HTML content.
 
     Args:
         html_content: HTML content of the service request page
+
+    Returns:
+        Dictionary containing parsed service request data
+    """
+    try:
+        # Parse HTML content
+        soup = BeautifulSoup(html_content, 'html.parser')
+
+        # Initialize result dictionary
+        request_data = {
+            "patient_name": "",
+            "patient_id": "",
+            "physician": "",
+            "admission_id": "",
+            "diagnosis": "",
+            "clinical_comments": "",
+            "lab_comments": "",
+            "procedures": {},
+            "request_datetime": "",
+            "is_urgent": "~URGENTA~" in html_content
+        }
+
+        # Extract patient name
+        request_data["patient_name"] = extract_text_after_label(soup, r'Nume Pacient:')
+
+        # Extract patient ID
+        patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id='))
+        if patient_link:
+            request_data["patient_id"] = extract_id_from_link(patient_link)
+
+        # Extract physician
+        request_data["physician"] = extract_text_after_label(soup, r'Medicul:', stop_at=r'-')
+
+        # Extract admission ID from the "Back" link
+        admission_ids = extract_ids_from_links(soup, r'/checkin\.asp\?id=([^&"]+)')
+        if admission_ids:
+            request_data["admission_id"] = admission_ids[0]
+
+        # Extract diagnosis
+        request_data["diagnosis"] = extract_text_after_label(soup, r'Diagnostic:', 'td')
+
+        # Extract comments (clinical and lab)
+        comment_headers = soup.find_all('td', class_='tdnplus', string=re.compile(r'Comentariile', re.IGNORECASE))
+        if len(comment_headers) >= 2:
+            # Get the next row which contains the actual comments
+            comment_row = comment_headers[0].parent.find_next_sibling('tr')
+            if comment_row:
+                comment_tds = comment_row.find_all('td', class_='tdn')
+                if len(comment_tds) >= 2:
+                    request_data["clinical_comments"] = comment_tds[0].get_text().strip()
+                    request_data["lab_comments"] = comment_tds[1].get_text().strip()
+
+        # Extract procedures from the table
+        procedure_rows = soup.find_all('tr')
+        for row in procedure_rows:
+            cells = row.find_all('td')
+            if len(cells) >= 3:
+                # Check if this is a procedure row (has numbering in first cell)
+                first_cell_text = cells[0].get_text().strip()
+                if first_cell_text and first_cell_text.isdigit():
+                    procedure_text = cells[1].get_text().strip()
+                    if procedure_text:
+                        request_data["procedures"][first_cell_text] = procedure_text
+
+        # Extract request datetime (Data si ora cererii)
+        request_data["request_datetime"] = extract_text_after_label(soup, r'Data si ora cererii:', stop_at=r'Receptionat')
+
+        return request_data
+    except Exception as e:
+        logger.error(f"Error parsing service request data: {e}")
+        return {}
+
+def create_fhir_service_request(request_data: Dict[str, Any], service_request_id: str, http_request) -> Dict[str, Any]:
+    """Convert parsed service request data to FHIR ServiceRequest resource.
+
+    Args:
+        request_data: Parsed service request data from parse_request_data
         service_request_id: The ID of the service request
         http_request: The HTTP request object to get the host
 
@@ -2515,35 +2594,22 @@ def create_fhir_service_request(html_content: str, service_request_id: str, http
         FHIR ServiceRequest resource
     """
     try:
-        # Parse HTML content
-        soup = BeautifulSoup(html_content, 'html.parser')
-
         # Create FHIR ServiceRequest resource using the FHIR class
         fhir_service_request = FHIRServiceRequest(
             id=service_request_id,
             status="active",
             intent="order",
-            priority="urgent" if "~URGENTA~" in html_content else "routine"
+            priority="urgent" if request_data.get("is_urgent", False) else "routine"
         )
-
-        # Extract patient name
-        patient_name = extract_text_after_label(soup, r'Nume Pacient:')
-
-        # Extract patient ID
-        patient_id = ""
-        # Try to extract patient ID from various possible locations
-        patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id='))
-        if patient_link:
-            patient_id = extract_id_from_link(patient_link)
 
         # Create subject reference
         subject = Reference(
-            reference=f"Patient/{patient_id}"
+            reference=f"Patient/{request_data.get('patient_id', '')}"
         )
 
         # Add patient name to subject if available
-        if patient_name:
-            subject["display"] = patient_name
+        if request_data.get("patient_name"):
+            subject["display"] = request_data["patient_name"]
         fhir_service_request["subject"] = subject
 
         # Create codeable concept for the service type
@@ -2557,24 +2623,19 @@ def create_fhir_service_request(html_content: str, service_request_id: str, http
         )
         fhir_service_request["code"] = code
 
-        # Extract physician
-        physician = extract_text_after_label(soup, r'Medicul:', stop_at=r'-')
         # Add requester if available (requesting doctor)
-        if physician:
-            fhir_service_request["requester"] = Reference(display=physician)
+        if request_data.get("physician"):
+            fhir_service_request["requester"] = Reference(display=request_data["physician"])
 
-        # Extract admission ID from the "Back" link
-        admission_ids = extract_ids_from_links(soup, r'/checkin\.asp\?id=([^&"]+)')
         # Add encounter if we can derive it
-        if admission_ids:
+        if request_data.get("admission_id"):
             fhir_service_request["encounter"] = Reference(
-                reference=f"Encounter/{admission_ids[0]}"
+                reference=f"Encounter/{request_data['admission_id']}"
             )
 
-        # Extract diagnosis
-        diagnosis = extract_text_after_label(soup, r'Diagnostic:', 'td')
         # Add reason code if diagnosis is available
-        if diagnosis:
+        if request_data.get("diagnosis"):
+            diagnosis = request_data["diagnosis"]
             # Try to extract ICD-10 code from the diagnosis text
             # Format is usually "CODE Description"
             diagnosis_match = re.match(r'^(\d{3,4})\s+(.+)$', diagnosis)
@@ -2588,47 +2649,21 @@ def create_fhir_service_request(html_content: str, service_request_id: str, http
                 condition = Reference(display=diagnosis)
             fhir_service_request["reason"] = [condition]
 
-        # Extract comments (clinical and lab)
-        # Find the table with comments headers
-        comment_headers = soup.find_all('td', class_='tdnplus', string=re.compile(r'Comentariile', re.IGNORECASE))
-        reason_text = ""
-        note_text = ""
-        if len(comment_headers) >= 2:
-            # Get the next row which contains the actual comments
-            comment_row = comment_headers[0].parent.find_next_sibling('tr')
-            if comment_row:
-                comment_tds = comment_row.find_all('td', class_='tdn')
-                if len(comment_tds) >= 2:
-                    reason_text = comment_tds[0].get_text().strip()
-                    note_text = comment_tds[1].get_text().strip()
-
         # Add reason reference if clinical comments are available
-        if reason_text:
+        if request_data.get("clinical_comments"):
             fhir_service_request["supportingInfo"] = [{
-                "display": reason_text
+                "display": request_data["clinical_comments"]
             }]
 
         # Add note for lab comments
-        if note_text:
+        if request_data.get("lab_comments"):
             fhir_service_request["note"] = [{
-                "text": note_text
+                "text": request_data["lab_comments"]
             }]
 
-        # Extract procedures from the table
-        procedures = {}
-        procedure_rows = soup.find_all('tr')
-        for row in procedure_rows:
-            cells = row.find_all('td')
-            if len(cells) >= 3:
-                # Check if this is a procedure row (has numbering in first cell)
-                first_cell_text = cells[0].get_text().strip()
-                if first_cell_text and first_cell_text.isdigit():
-                    procedure_text = cells[1].get_text().strip()
-                    if procedure_text:
-                        procedures[first_cell_text] = procedure_text
-
         # Add order details for procedures
-        if procedures:
+        if request_data.get("procedures"):
+            procedures = request_data["procedures"]
             order_details = []
             for code, description in procedures.items():
                 order_detail = CodeableConcept(
@@ -2642,10 +2677,9 @@ def create_fhir_service_request(html_content: str, service_request_id: str, http
                 order_details.append(order_detail)
             fhir_service_request["orderDetail"] = order_details
 
-        # Extract request datetime (Data si ora cererii)
-        request_datetime = extract_text_after_label(soup, r'Data si ora cererii:', stop_at=r'Receptionat')
         # Add authoredOn if request datetime is available
-        if request_datetime:
+        if request_data.get("request_datetime"):
+            request_datetime = request_data["request_datetime"]
             # Parse the datetime using our parse_date_time function
             parsed_dt = parse_date_time(request_datetime)
             if parsed_dt:
