@@ -706,7 +706,6 @@ class HipocrateData(dict):
             value: Value to store. Lists with one element are automatically unwrapped,
                   and string values are stripped of whitespace.
         """
-        logger.debug(f"Data store '{section},{key}' = '{value}'")
         # Handle the case where no section is provided
         if not section:
             data = self
@@ -831,12 +830,17 @@ def extract_value_from_input(soup: 'BeautifulSoup', id: str = None, name: str = 
         return input_element.get('value', '').strip()
 
 def extract_text_from_element(soup: 'BeautifulSoup', id: str = None) -> str:
+    content = None
     if id:
         element = soup.find(id=id)
-    else:
-        return ""
-    if element and element.string:
-        return element.string.strip()
+        if element:
+            if element.string:
+                content = element.string.strip()
+                logger.debug(f"Extracted text from '{id}': {content}")
+            else:
+                content = html_to_markdown(str(element))
+                logger.debug(f"Extracted markdown from '{id}'")
+    return content
 
 def extract_textarea_after_label(soup: 'BeautifulSoup', label_regex: str) -> str:
     """Get content of first textarea after a label matching the given regex.
@@ -2926,6 +2930,11 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
         # Parse HTML content with BeautifulSoup
         soup = BeautifulSoup(html_content, 'html.parser')
 
+        # Check if this is the correct page by looking for title
+        if not is_expected_page(soup, 'FISA EXTERNARE'):
+            logger.warning("Page is not a discharge page")
+            return
+
         # Extract patient name and ID from the link
         patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id='))
         if patient_link:
@@ -2935,9 +2944,33 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
 
         # Extract patient CNP
         data.store("patient", "cnp", extract_text_after_label(soup, r'CNP\s*:', 'tr'))
+        parsed_cnp = parse_cnp(data["patient"]["cnp"])
+        data.store("patient", "gender", parsed_cnp.get("gender", ""))
+        data.store("patient", "date", parsed_cnp.get("birth_date", ""))
+        data.store("patient", "age", parsed_cnp.get("age", ""))
+
+        # Extract presentation ID
+        data.store("presentation", "id", extract_ids_from_links(soup, r'presentation\.asp\?id=(\d+)'))
+
+        # Extract admission ID
+        data.store("checkin", "id", extract_ids_from_links(soup, r'checkin\.asp\?id=(\d+)'))
 
         # Extract physician
-        data.store("patient", "physician", extract_text_after_label(soup, r'Medic\s*:', 'tr'))
+        data.store("checkin", "physician", extract_text_after_label(soup, r'Medic\s*:', 'tr'))
+
+        # Extract ward
+        data.store("checkin", "ward", extract_text_after_label(soup, r'Sectie\s*:', 'tr'))
+
+        # Extract checkin diagnostic
+        data.store("checkin", "diagnosis", extract_text_after_label(soup, r'Diagnostic\s*:', 'tr'))
+
+        # Extract checkin date and time from input fields
+        data.store("checkin", "date", extract_value_from_input(soup, id='sCIDate'))
+        data.store("checkin", "time", extract_value_from_input(soup, id='sCITime'))
+        
+        # Create combined checkin datetime
+        if data["checkin"]["date"] and data["checkin"]["time"]:
+            data.store("checkin", "datetime", f'{data["checkin"]["date"]} {data["checkin"]["time"]}')
 
         # Extract checkout date and time from input fields
         data.store("checkout", "date", extract_value_from_input(soup, id='sCODate'))
@@ -2947,14 +2980,6 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
         if data["checkout"]["date"] and data["checkout"]["time"]:
             data.store("checkout", "datetime", f'{data["checkout"]["date"]} {data["checkout"]["time"]}')
 
-        # Extract admission diagnostic
-        diag_elements = soup.find_all('td', string=re.compile(r'Diagnostic\s*:', re.IGNORECASE))
-        for diag_element in diag_elements:
-            next_td = diag_element.find_next('td')
-            if next_td:
-                data.store("checkin", "diagnosis", next_td.get_text())
-                break
-
         # Extract epicrisis (textarea with id "sEpicrisysHtmlArea")
         epicrisis_content = extract_text_from_element(soup, id='sEpicrisys')
         if epicrisis_content:
@@ -2962,6 +2987,7 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
 
         # Extract diagnostic (textarea after 'Diagnostic externare')
         data.store("checkout", "diagnosis", extract_textarea_after_label(soup, r'Diagnostic externare[^:]*:'))
+        #data.store("checkout", "diagnosis", extract_text_from_element(soup, id='sCODiagnosis'))
 
         # Extract surgery (textarea with id "sBOProtocolHtmlArea")
         surgery_content = extract_text_from_element(soup, id='sBOProtocol')
