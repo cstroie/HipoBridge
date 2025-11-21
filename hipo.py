@@ -27,14 +27,11 @@ import asyncio
 import aiohttp
 from aiohttp import web, BasicAuth
 from yarl import URL
-import json
 import logging
 import re
 from bs4 import BeautifulSoup, Comment
 import html
 from datetime import datetime, timedelta
-import configparser
-import base64
 
 from typing import Any, Dict, List, Optional
 
