@@ -2600,6 +2600,15 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
                 checkout_data["patient_cnp"] = next_td.get_text().strip()
                 break
 
+        # Extract checkout date and time from input fields
+        date_input = soup.find('input', id='sCODate')
+        if date_input and date_input.get('value'):
+            checkout_data["checkout_date"] = date_input.get('value').strip()
+            
+        time_input = soup.find('input', id='sCOTime')
+        if time_input and time_input.get('value'):
+            checkout_data["checkout_time"] = time_input.get('value').strip()
+
         # Extract admission diagnostic
         diag_elements = soup.find_all('td', string=re.compile(r'Diagnostic\s*:', re.IGNORECASE))
         for diag_element in diag_elements:
