@@ -1,27 +1,5 @@
 #!/usr/bin/env python3
-"""Hipocrate medical system data retrieval client implementation.
-
-This module provides client classes for interacting with the Hipocrate medical system,
-a web-based medical record management system. It includes specialized clients for
-different types of medical data retrieval and parsing, with support for authentication,
-caching, and FHIR-compatible data formatting.
-
-Key features:
-- HipoClient: Base client for general Hipocrate service interactions
-- HipoClientCheckout: Specialized client for patient discharge/checkout data
-- HipoClientServiceRequest: Specialized client for medical service requests
-- Automatic session management with cookie handling
-- Response caching with LRU eviction and timeout
-- FHIR-compatible data structure conversion
-- Robust error handling and logging
-
-The module handles the complexities of web scraping medical data including:
-- Authentication and session management
-- Redirect following and form submission
-- HTML parsing and data extraction
-- Character encoding handling
-- Data validation and normalization
-"""
+""" Hipocrate Data Retrieval Implementation """
 
 import asyncio
 import aiohttp
@@ -66,11 +44,8 @@ HEADERS = {
 def parse_date_time(date_str: str) -> Optional[datetime]:
     """Parse a date string in the format '30 Aug 2025 19:25:00'.
 
-    Handles common date formats used in medical records including both English
-    and Romanian month abbreviations.
-
     Args:
-        date_str: Date string to parse in format like "30 Aug 2025 19:25:00"
+        date_str: Date string to parse
 
     Returns:
         datetime object if parsing successful, None otherwise
@@ -120,18 +95,15 @@ def parse_date_time(date_str: str) -> Optional[datetime]:
 
 
 def create_error_response(message: str, status_code: int = 400, details: Dict[str, Any] = None) -> web.Response:
-    """Create a standardized error response for web API endpoints.
-
-    Generates consistent JSON error responses with appropriate logging based
-    on the HTTP status code (error level for 5xx, warning for 4xx).
+    """Create a standardized error response.
 
     Args:
-        message: Error message to include in response
+        message: Error message
         status_code: HTTP status code (default: 400)
-        details: Additional error details to include in response
+        details: Additional error details
 
     Returns:
-        Standardized JSON error response as web.Response
+        Standardized JSON error response
     """
     if status_code >= 500:
         logger.error(f"{message}")
@@ -151,18 +123,14 @@ def create_error_response(message: str, status_code: int = 400, details: Dict[st
 
 
 class URLCache:
-    """Simple in-memory cache for HTTP responses with LRU eviction and timeout.
-
-    Implements a basic Least Recently Used (LRU) cache for storing HTTP response
-    content with automatic expiration based on configurable timeout periods.
-    """
+    """Simple in-memory cache for HTTP responses with LRU eviction and timeout."""
 
     def __init__(self, max_size: int = 100, timeout: int = 600):
         """Initialize the cache.
 
         Args:
-            max_size: Maximum number of entries to cache (default: 100)
-            timeout: Cache timeout in seconds (default: 600 seconds/10 minutes)
+            max_size: Maximum number of entries to cache
+            timeout: Cache timeout in seconds (default: 10 minutes)
         """
         self.max_size = max_size
         self.timeout = timeout
@@ -172,11 +140,8 @@ class URLCache:
     def get(self, url: str) -> Optional[str]:
         """Get cached response for URL if exists and not expired.
 
-        Retrieves cached content for a URL if it exists and hasn't expired
-        based on the configured timeout value.
-
         Args:
-            url: URL to lookup in cache
+            url: URL to lookup
 
         Returns:
             Cached response text or None if not found or expired
@@ -200,11 +165,8 @@ class URLCache:
     def put(self, url: str, response_text: str) -> None:
         """Add response to cache, evicting oldest entry if needed.
 
-        Stores response text in cache with current timestamp. If cache is at
-        maximum capacity, the oldest entry is automatically removed.
-
         Args:
-            url: URL key for caching
+            url: URL key
             response_text: Response text to cache
         """
         # If cache is at max size, remove the oldest entry
@@ -220,12 +182,10 @@ class URLCache:
         logger.debug(f"Cached response for: {url}")
 
     def remove(self, url: str) -> None:
-        """Remove specific cache entry.
-
-        Removes a specific URL's cached content if it exists.
+        """Remove cache entries.
 
         Args:
-            url: Specific URL to remove from cache
+            url: Specific URL to clear from cache, or None to clear all
         """
         if url:
             if url in self.cache:
@@ -234,9 +194,10 @@ class URLCache:
                 del self.timestamps[url]
 
     def clear(self) -> None:
-        """Clear all cache entries.
+        """Clear cache entries.
 
-        Removes all cached content from the cache.
+        Args:
+            url: Specific URL to clear from cache, or None to clear all
         """
         self.cache.clear()
         self.timestamps.clear()
@@ -252,27 +213,20 @@ cache_max_size = 1000  # Maximum number of entries to cache
 
 
 class UserSessionManager:
-    """Manager for user-specific HTTP sessions with automatic cookie handling.
-
-    Handles creation, storage, and cleanup of aiohttp ClientSessions for
-    individual users, ensuring proper cookie management and resource cleanup.
-    """
+    """Manager for user-specific HTTP sessions."""
 
     def __init__(self):
         """Initialize the user session manager."""
         self.user_sessions: Dict[str, aiohttp.ClientSession] = {}
 
     def get_user_session(self, username: str):
-        """Get or create a user-specific session with cookie support.
-
-        Retrieves an existing session for a user or creates a new one with
-        automatic cookie handling enabled.
+        """Get or create a user-specific session.
 
         Args:
             username: Username to get session for
 
         Returns:
-            aiohttp.ClientSession for the user with cookie jar enabled
+            aiohttp.ClientSession for the user
         """
         if username not in self.user_sessions or self.user_sessions[username].closed:
             logger.debug(f"Creating new aiohttp ClientSession for user {username} with cookie support")
@@ -283,11 +237,7 @@ class UserSessionManager:
         return self.user_sessions[username]
 
     async def close_all_sessions(self):
-        """Close all user sessions and free associated resources.
-
-        Closes all active aiohttp ClientSessions managed by this manager
-        to ensure proper cleanup of network resources.
-        """
+        """Close all user sessions."""
         logger.info("Closing all user sessions")
         for username, session in self.user_sessions.items():
             if session and not session.closed:
@@ -299,12 +249,11 @@ class UserSessionManager:
 user_session_manager = UserSessionManager()
 
 class HipoData(dict):
-    """A specialized dictionary for storing structured medical data with section support.
+    """A specialized dictionary for storing structured data with section support.
     
     This class extends the standard dict to provide a convenient store() method
-    for organizing parsed medical data in hierarchical sections. It's particularly 
-    useful for parsing structured HTML data from medical records where information 
-    needs to be grouped by logical categories.
+    for organizing data in hierarchical sections. It's particularly useful for
+    parsing structured HTML data where information needs to be grouped by categories.
     
     The store() method can handle different scenarios:
     - Store data directly in the root dictionary when no section is provided
@@ -357,13 +306,7 @@ class HipoData(dict):
 
 
 class HipoClient:
-    """Base client for interacting with the Hipocrate medical system.
-
-    Provides core functionality for authenticating with the Hipocrate service,
-    making HTTP requests, handling sessions, caching responses, and parsing
-    medical data from HTML content. This class should be extended for specific
-    use cases rather than used directly.
-    """
+    """Client for interacting with the Hipocrate medical system."""
 
     def __init__(self, service_url: str, request=None):
         """Initialize the Hipocrate client.
@@ -410,9 +353,6 @@ class HipoClient:
     async def get_authenticated_session(self, username: str, password: str):
         """Get an authenticated session for the user.
 
-        Attempts to authenticate with the Hipocrate service using provided
-        credentials. Checks if already logged in before attempting login.
-
         Args:
             username: Username for authentication
             password: Password for authentication
@@ -425,7 +365,7 @@ class HipoClient:
         return session, login_success
 
     async def close_all_sessions(self):
-        """Close all user sessions by delegating to the session manager."""
+        """Close all user sessions."""
         await user_session_manager.close_all_sessions()
 
 
@@ -433,7 +373,7 @@ class HipoClient:
         """Get cached response for URL if exists and not expired.
 
         Args:
-            url: URL to lookup in cache
+            url: URL to lookup
 
         Returns:
             Cached response text or None if not found or expired
@@ -444,7 +384,7 @@ class HipoClient:
         """Add response to cache.
 
         Args:
-            url: URL key for caching
+            url: URL key
             response_text: Response text to cache
         """
         self.url_cache.put(self.get_full_url(url), response_text)
@@ -453,19 +393,22 @@ class HipoClient:
         """Remove cached response for URL.
 
         Args:
-            url: URL to remove from cache
+            url: URL to lookup
         """
         return self.url_cache.remove(url)
 
     def cache_clear(self) -> None:
-        """Clear all cache entries."""
+        """Clear cache entries.
+
+        Args:
+            url: Specific URL to clear from cache, or None to clear all
+        """
         self.url_cache.clear()
 
     def is_login_page(self, content: str) -> bool:
         """Detect if the provided content is a login page.
 
-        Checks for 'Identificare' in the HTML title or common login form
-        elements to determine if we're on the login page.
+        Checks for 'Identificare' in the HTML title to determine if we're on the login page.
 
         Args:
             content: HTML content to check
@@ -490,8 +433,7 @@ class HipoClient:
         """Attempt to login to the Hipocrate service if needed.
 
         Checks if we're currently on the login page, and if so, performs login
-        using the provided credentials. Handles the complete login flow including
-        initial cookie setup and form submission.
+        using the provided credentials.
 
         Args:
             session: The aiohttp session to use
@@ -584,10 +526,6 @@ class HipoClient:
     async def make_authenticated_request(self, url, method="GET", data=None, username=None, password=None):
         """Make an authenticated request to the Hipocrate service with automatic login handling.
 
-        Handles the complete request lifecycle including authentication, caching,
-        and error handling. Automatically retries requests with re-authentication
-        if session expires.
-
         Args:
             url: The URL to request
             method: HTTP method ("GET" or "POST")
@@ -664,9 +602,6 @@ class HipoClient:
     async def handle_response_encoding(self, response):
         """Handle response encoding for the Hipocrate service.
 
-        Attempts to decode response content with appropriate character encoding,
-        falling back to common encodings used by the Hipocrate service if UTF-8 fails.
-
         Args:
             response: The aiohttp response object
 
@@ -701,8 +636,7 @@ class HipoClient:
         """Construct full URL from service URL and relative path.
 
         Args:
-            url: Relative path or full URL
-
+            url: Relative path
         Returns:
             Full URL string
         """
@@ -718,8 +652,7 @@ class HipoClient:
     async def post_form(self, url, data=None):
         """Submit a form to the Hipocrate service, following redirects.
 
-        This method handles the common pattern of making authenticated POST requests
-        with proper form data submission and redirect following.
+        This method handles the common pattern of making authenticated POST requests.
 
         Args:
             url: The URL to submit the form to
@@ -754,8 +687,7 @@ class HipoClient:
         """Abstract method to retrieve a page from the Hipocrate service, following redirects.
 
         This method handles the common pattern of making authenticated requests with
-        redirect following, which can be reused by derived classes. Implements
-        caching and automatic authentication handling.
+        redirect following, which can be reused by derived classes.
 
         Args:
             url: The URL to request
@@ -822,42 +754,20 @@ class HipoClient:
         return None, False, create_error_response(f"Exceeded maximum redirects ({max_redirects})", 500)
 
     def parse_data(self, html_content: str, **kwargs) -> Dict[str, Any]:
-        """Parse HTML content and extract structured data.
-
-        Abstract method to be implemented by subclasses for specific data parsing.
-
-        Args:
-            html_content: HTML content to parse
-            **kwargs: Additional arguments for parsing
-
-        Returns:
-            Dictionary containing parsed data
-        """
         return {}
 
     def fhir_response(self, parsed_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        """Convert parsed data to FHIR-compatible format.
-
-        Abstract method to be implemented by subclasses for FHIR conversion.
-
-        Args:
-            parsed_data: Parsed data from parse_data method
-            **kwargs: Additional arguments for FHIR conversion
-
-        Returns:
-            Dictionary containing FHIR-compatible data
-        """
         return {}
 
     async def fetch_and_parse(self, *args, max_redirects=5, **kwargs):
         """Generic method to fetch data from an endpoint and parse it with a provided function.
 
         This method provides a reusable way to fetch data from any endpoint and parse it
-        using the instance parser method. Handles authentication, caching, and error handling.
+        using the instace parser method.
 
         Args:
+            url: The URL to request
             max_redirects: Maximum number of redirects to follow (default: 5)
-            **kwargs: Arguments for URL formatting and parsing
 
         Returns:
             Tuple of (parsed_data, error_response) where one will be None
@@ -880,17 +790,17 @@ class HipoClient:
             return None, create_error_response("Data retrieval failed", 500, {"exception": str(e)})
 
     async def fetch_repond_fhir(self, *args, max_redirects=5, **kwargs):
-        """Generic method to fetch data from an endpoint and convert it to FHIR format.
+        """Generic method to fetch data from an endpoint and parse it with a provided function.
 
-        This method provides a reusable way to fetch data from any endpoint, parse it,
-        and convert it to FHIR-compatible format using the instance parser and FHIR methods.
+        This method provides a reusable way to fetch data from any endpoint and parse it
+        using the instace parser method.
 
         Args:
+            url: The URL to request
             max_redirects: Maximum number of redirects to follow (default: 5)
-            **kwargs: Arguments for URL formatting and parsing
 
         Returns:
-            Tuple of (fhir_data, error_response) where one will be None
+            Tuple of (parsed_data, error_response) where one will be None
         """
 
         try:
@@ -910,12 +820,7 @@ class HipoClient:
 
 
 class HipoClientCheckout(HipoClient):
-    """Specialized client for checkout-related operations in the Hipocrate medical system.
-
-    Handles retrieval and parsing of patient discharge/checkout information from
-    the Hipocrate system, including admission details, discharge summaries,
-    diagnoses, and physician information.
-    """
+    """Specialized client for checkout-related operations in the Hipocrate medical system."""
 
     def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
         # Initialize the parent
@@ -932,7 +837,6 @@ class HipoClientCheckout(HipoClient):
 
         Args:
             html_content: HTML content of the checkout page
-            **kwargs: Additional arguments including 'id' for checkout ID
 
         Returns:
             Dictionary containing parsed checkout data organized in sections:
@@ -1047,15 +951,13 @@ class HipoClientCheckout(HipoClient):
     def fhir_response(self, parsed_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """Convert parsed checkout data to FHIR Encounter resource.
 
-        Transforms parsed checkout data into a FHIR-compatible Encounter resource
-        with proper structure, references, and coding systems.
-
         Args:
-            parsed_data: Parsed checkout data from parse_data method
-            **kwargs: Additional arguments including 'id' for encounter ID
+            parsed_data: Parsed checkout data from parse_checkout_data
+            encounter_id: The ID of the encounter
+            request: The HTTP request object to get the host
 
         Returns:
-            FHIR Encounter resource as dictionary
+            FHIR Encounter resource
         """
         encounter_id = parsed_data.get('checkout', {}).get('id', '')
         # Create enhanced FHIR Encounter resource
@@ -1199,11 +1101,7 @@ class HipoClientCheckout(HipoClient):
 
 
 class HipoClientServiceRequest(HipoClient):
-    """Specialized client for service request related operations in the Hipocrate medical system.
-
-    Handles retrieval and parsing of medical service requests including laboratory
-    orders, imaging requests, and other medical service requisitions.
-    """
+    """Specialized client for service request related operations in the Hipocrate medical system."""
 
     def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
         # Initialize the parent
@@ -1214,19 +1112,13 @@ class HipoClientServiceRequest(HipoClient):
     def parse_data(self, html_content: str, **kwargs) -> Dict[str, Any]:
         """Parse HTML service request content and extract structured data.
 
-        Extracts patient information and medical data from service request HTML content,
-        including physician information, diagnosis, procedures, and request details.
+        Extracts patient information and medical data from service request HTML content.
 
         Args:
             html_content: HTML content of the service request page
-            **kwargs: Additional arguments
 
         Returns:
-            Dictionary containing parsed service request data organized in sections:
-            - patient: Patient information (name, id)
-            - checkin: Admission information (physician, id, diagnosis)
-            - request: Request information (clinical_comments, lab_comments, datetime, is_urgent)
-            - procedures: List of requested procedures
+            Dictionary containing parsed service request data
         """
         # Initialize result dictionary
         data = HipoData()
@@ -1241,7 +1133,7 @@ class HipoClientServiceRequest(HipoClient):
             # Extract patient ID
             patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id='))
             if patient_link:
-                data.store("patient", "id", extract_id_from_link(patient_link))
+                data.store("patient", "name", extract_id_from_link(patient_link))
 
 
             # Extract physician
@@ -1293,16 +1185,12 @@ class HipoClientServiceRequest(HipoClient):
     def fhir_response(self, parsed_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """Convert parsed service request data to FHIR ServiceRequest resource.
 
-        Transforms parsed service request data into a FHIR-compatible ServiceRequest
-        resource with proper structure, references, coding systems, and extensions.
-
         Args:
-            parsed_data: Parsed service request data from parse_data method
+            parsed_data: Parsed service request data from parse_data
             **kwargs: Additional arguments including 'http_request' for host information
-                     and 'id' for service request ID
 
         Returns:
-            FHIR ServiceRequest resource as dictionary
+            FHIR ServiceRequest resource
         """
         # Extract http_request from kwargs if available
         http_request = kwargs.get('http_request')
