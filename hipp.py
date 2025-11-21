@@ -672,6 +672,27 @@ class HipocrateClient:
             return None, False, create_error_response(str(e), 500, {"URL": url})
 
 
+class HipocrateData(dict):
+    def store(self, section: str = None, key: str = None, value: str = None) -> None:
+        logger.debug(f"Data store '{section},{key}' = '{value}'")
+        if section:
+            if self.get(section, None) == None:
+                self[section] = {}
+            data = self[section]
+        else:
+            data = self
+        if not key:
+            key = section
+            data = self
+        if (section or key) and value:
+            if isinstance(value, list) and value[0]:
+                value = value[0]
+            if isinstance(value, str):
+                value = value.strip()
+            data[key] = value
+
+
+
 # Extractors
 # ###########################################################################
 
@@ -865,6 +886,9 @@ def extract_tabular_data(soup: BeautifulSoup, identifier: str, identifier_type: 
     except Exception as e:
         logger.error(f"Error extracting tabular data: {e}")
         return []
+
+
+
 
 # Authentication helpers
 # ###########################################################################
@@ -2554,111 +2578,6 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
 
 
 
-def parse_checkout_data(html_content: str) -> Dict[str, Any]:
-    """Parse HTML checkout content and extract structured data.
-
-    Extracts patient information and medical data from checkout HTML content.
-
-    Args:
-        html_content: HTML content of the checkout page
-
-    Returns:
-        Dictionary containing parsed checkout data
-    """
-    import re
-    from bs4 import BeautifulSoup
-
-    try:
-        soup = BeautifulSoup(html_content, 'html.parser')
-
-        # Initialize result dictionary
-        checkout_data = {
-            "patient_name": "",
-            "patient_cnp": "",
-            "patient_id": "",
-            "admission_diagnostic": "",
-            "epicrisis": "",
-            "diagnostic": "",
-            "surgery": "",
-            "recommendations": ""
-        }
-
-        # Extract patient name and ID from the link
-        patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id='))
-        if patient_link:
-            checkout_data["patient_name"] = patient_link.get_text().strip()
-            # Extract patient ID from href
-            patient_id = extract_id_from_link(patient_link)
-            if patient_id:
-                checkout_data["patient_id"] = patient_id.strip()
-
-        # Extract patient CNP
-        cnp_element = extract_text_from_element(soup, id='strCNP')
-        if cnp_element:
-            checkout_data["patient_cnp"] = cnp_element
-        else:
-            checkout_data["patient_cnp"] = extract_text_after_label(soup, r'CNP\s*:', 'tr')
-
-        # Extract physician
-        physician_element = extract_text_from_element(soup, id='sPhysician')
-        if physician_element:
-            checkout_data["physician"] = physician_element
-        else:
-            checkout_data["physician"] = extract_text_after_label(soup, r'Medic\s*:', 'tr')
-
-        # Extract checkout date and time from input fields
-        checkout_data["checkout_date"] = extract_value_from_input(soup, id='sCODate')
-        checkout_data["checkout_time"] = extract_value_from_input(soup, id='sCOTime')
-        
-        # Create combined checkout datetime
-        if checkout_data["checkout_date"] and checkout_data["checkout_time"]:
-            checkout_data["checkout_datetime"] = f"{checkout_data['checkout_date']} {checkout_data['checkout_time']}"
-
-        # Extract admission diagnostic
-        diag_elements = soup.find_all('td', string=re.compile(r'Diagnostic\s*:', re.IGNORECASE))
-        for diag_element in diag_elements:
-            next_td = diag_element.find_next('td')
-            if next_td:
-                checkout_data["admission_diagnostic"] = next_td.get_text().strip()
-                break
-
-        # Extract epicrisis (textarea with id "sEpicrisysHtmlArea")
-        epicrisis_content = extract_text_from_element(soup, id='sEpicrisysHtmlArea')
-        if epicrisis_content:
-            checkout_data["epicrisis"] = html_to_markdown(epicrisis_content)
-        else:
-            # Fallback to old method if textarea not found
-            checkout_data["epicrisis"] = extract_textarea_after_label(soup, r'Epicriza[^:]*:')
-
-        # Extract diagnostic (textarea after 'Diagnostic externare')
-        checkout_data["diagnostic"] = extract_textarea_after_label(soup, r'Diagnostic externare[^:]*:')
-
-        # Extract surgery (textarea with id "sBOProtocolHtmlArea")
-        surgery_content = extract_text_from_element(soup, id='sBOProtocolHtmlArea')
-        if surgery_content:
-            checkout_data["surgery"] = html_to_markdown(surgery_content)
-        else:
-            # Fallback to old method if textarea not found
-            checkout_data["surgery"] = extract_textarea_after_label(soup, r'Protocol operator[^:]*:')
-
-        # Extract recommendations (textarea with id 'sRecommendationsHtmlArea')
-        recommendations_content = extract_text_from_element(soup, id='sRecommendationsHtmlArea')
-        if recommendations_content:
-            checkout_data["recommendations"] = html_to_markdown(recommendations_content)
-        else:
-            # Fallback to old method if textarea not found
-            checkout_data["recommendations"] = extract_textarea_after_label(soup, r'Recomandari[^:]*:')
-
-        # Extract ICD10 diagnostic from textarea with name "sCODiagnosis"
-        icd10_textarea = soup.find('textarea', {'name': 'sCODiagnosis'})
-        if icd10_textarea:
-            checkout_data["icd10_diagnostic"] = icd10_textarea.get_text().strip()
-
-        return checkout_data
-    except Exception as e:
-        logger.error(f"Error parsing checkout data: {e}")
-        return {}
-
 @require_auth
 async def get_service_request(request):
     """Retrieve service request information by ID.
@@ -2946,11 +2865,85 @@ async def get_encounter(request):
 
         # Convert parsed data to FHIR Encounter resource
         fhir_response = create_fhir_encounter(parsed_data, id, request)
-        return web.json_response(fhir_response)
+        return web.json_response(parsed_data)
 
     except Exception as e:
         return create_error_response("Encounter retrieval failed", 500, {"exception": str(e)})
 
+def parse_checkout_data(html_content: str) -> Dict[str, Any]:
+    """Parse HTML checkout content and extract structured data.
+
+    Extracts patient information and medical data from checkout HTML content.
+
+    Args:
+        html_content: HTML content of the checkout page
+
+    Returns:
+        Dictionary containing parsed checkout data
+    """
+    # Initialize result dictionary
+    data = HipocrateData()
+
+    try:
+        # Parse HTML content with BeautifulSoup
+        soup = BeautifulSoup(html_content, 'html.parser')
+
+        # Extract patient name and ID from the link
+        patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id='))
+        if patient_link:
+            data.store("patient", "name", patient_link.get_text())
+            # Extract patient ID from href
+            data.store("patient", "id", extract_id_from_link(patient_link))
+
+        # Extract patient CNP
+        data.store("patient", "cnp", extract_text_after_label(soup, r'CNP\s*:', 'tr'))
+
+        # Extract physician
+        data.store("patient", "physician", extract_text_after_label(soup, r'Medic\s*:', 'tr'))
+
+        # Extract checkout date and time from input fields
+        data.store("checkout", "date", extract_value_from_input(soup, id='sCODate'))
+        data.store("checkout", "time", extract_value_from_input(soup, id='sCOTime'))
+        
+        # Create combined checkout datetime
+        if data["checkout"]["date"] and data["checkout"]["time"]:
+            data.store("checkout", "datetime", f'{data["checkout"]["date"]} {data["checkout"]["time"]}')
+
+        # Extract admission diagnostic
+        diag_elements = soup.find_all('td', string=re.compile(r'Diagnostic\s*:', re.IGNORECASE))
+        for diag_element in diag_elements:
+            next_td = diag_element.find_next('td')
+            if next_td:
+                data.store("checkin", "diagnosis", next_td.get_text())
+                break
+
+        # Extract epicrisis (textarea with id "sEpicrisysHtmlArea")
+        epicrisis_content = extract_text_from_element(soup, id='sEpicrisys')
+        if epicrisis_content:
+            data.store("checkout", "epicrisis", html_to_markdown(epicrisis_content))
+
+        # Extract diagnostic (textarea after 'Diagnostic externare')
+        data.store("checkout", "diagnosis", extract_textarea_after_label(soup, r'Diagnostic externare[^:]*:'))
+
+        # Extract surgery (textarea with id "sBOProtocolHtmlArea")
+        surgery_content = extract_text_from_element(soup, id='sBOProtocol')
+        if surgery_content:
+            data.store("checkout", "surgery", html_to_markdown(surgery_content))
+
+        # Extract recommendations (textarea with id 'sRecommendationsHtmlArea')
+        recommendations_content = extract_text_from_element(soup, id='sRecommendations')
+        if recommendations_content:
+            data.store("checkout", "recommendations", html_to_markdown(recommendations_content))
+
+        # Extract ICD10 diagnostic from textarea with name "sCODiagnosis"
+        icd10_textarea = soup.find('textarea', {'name': 'sCODiagnosis'})
+        if icd10_textarea:
+            data.store("checkout", "icd10", icd10_textarea.get_text())
+
+        return data
+    except Exception as e:
+        logger.error(f"Error parsing checkout data: {e}")
+        return {}
 
 def create_fhir_encounter(parsed_data: Dict[str, Any], encounter_id: str, request) -> Dict[str, Any]:
     """Convert parsed checkout data to FHIR Encounter resource.
