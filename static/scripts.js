@@ -168,6 +168,12 @@ document.addEventListener('DOMContentLoaded', function() {
                             // Concatenate all note texts
                             epicrisisText = encounterData.note.map(note => note.text || '').join('\n\n');
                         }
+                            
+                        // Extract checkout date and time if available
+                        let checkoutDateTime = '';
+                        if (encounterData.period && encounterData.period.start) {
+                            checkoutDateTime = encounterData.period.start;
+                        }
                         
                         if (epicrisisText) {
                             epicrisisData = {
