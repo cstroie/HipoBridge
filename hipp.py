@@ -675,17 +675,23 @@ class HipocrateClient:
 class HipocrateData(dict):
     def store(self, section: str = None, key: str = None, value: str = None) -> None:
         logger.debug(f"Data store '{section},{key}' = '{value}'")
-        if section:
-            if self.get(section, None) == None:
+        # Handle the case where no section is provided
+        if not section:
+            data = self
+        else:
+            # Create section if it doesn't exist
+            if section not in self:
                 self[section] = {}
             data = self[section]
-        else:
-            data = self
+        
+        # If no key is provided, use section as key and store in root
         if not key:
             key = section
             data = self
-        if (section or key) and value:
-            if isinstance(value, list) and value[0]:
+            
+        # Store the value if we have a key and value
+        if key and value:
+            if isinstance(value, list) and len(value) > 0 and value[0]:
                 value = value[0]
             if isinstance(value, str):
                 value = value.strip()
