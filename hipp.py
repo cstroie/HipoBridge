@@ -819,28 +819,28 @@ def extract_ids_from_links(soup: BeautifulSoup, id_pattern: str = r'id=([^&"]+)'
             ids_list.append(id_match.group(1))
     return ids_list
 
-def extract_value_from_input(soup: 'BeautifulSoup', element_id: str = None, name: str = None) -> str:
+def extract_value_from_input(soup: 'BeautifulSoup', id: str = None, name: str = None) -> str:
     """Extract the value attribute from an HTML input element by its ID or name.
     
     Args:
         soup: BeautifulSoup object of the parsed HTML content
-        element_id: HTML input element ID to extract value from
+        id: HTML input element ID to extract value from
         name: HTML input element name to extract value from
         
     Returns:
         Value attribute content stripped of whitespace, or empty string if not found
     """
-    if not element_id and not name:
+    if not id and not name:
         return ""
         
     # Find element by either id or name
     if name:
         input_element = soup.find('input', attrs={'name': name})
     else:  # default to id
-        input_element = soup.find('input', id=element_id)
+        input_element = soup.find('input', id=id)
         
     if input_element:
-        identifier = name if name else element_id
+        identifier = name if name else id
         content = input_element.get('value', '').strip()
         logger.debug(f"Extracted value from '{identifier}' (by {'name' if name else 'id'}): {content}")
         return content
@@ -2274,7 +2274,6 @@ async def get_observation(request):
         report_data['report_id'] = id
         fhir_response = create_fhir_observation(report_data, request)
         return web.json_response(fhir_response)
-        #return web.json_response(report_data)
 
     except Exception as e:
         return create_error_response("Observation retrieval failed", 500, {"exception": str(e)})
@@ -2964,7 +2963,7 @@ async def get_encounter(request):
 
         # Convert parsed data to FHIR Encounter resource
         fhir_response = create_fhir_encounter(parsed_data, id, request)
-        return web.json_response(parsed_data)
+        return web.json_response(fhir_response)
 
     except Exception as e:
         return create_error_response("Encounter retrieval failed", 500, {"exception": str(e)})
@@ -3035,8 +3034,8 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
         data.store("checkin", "diagnosis", extract_text_after_label(soup, r'Diagnostic\s*:', 'tr'))
 
         # Extract checkin date and time from input fields
-        data.store("checkin", "date", extract_value_from_input(soup, 'sCIDate'))
-        data.store("checkin", "time", extract_value_from_input(soup, 'sCITime'))
+        data.store("checkin", "date", extract_value_from_input(soup, id='sCIDate'))
+        data.store("checkin", "time", extract_value_from_input(soup, id='sCITime'))
         
         # Create combined checkin datetime
         checkin_date = data.get("checkin", {}).get("date")
@@ -3045,8 +3044,8 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
             data.store("checkin", "datetime", f'{checkin_date} {checkin_time}')
 
         # Extract checkout date and time from input fields
-        data.store("checkout", "date", extract_value_from_input(soup, 'sCODate'))
-        data.store("checkout", "time", extract_value_from_input(soup, 'sCOTime'))
+        data.store("checkout", "date", extract_value_from_input(soup, id='sCODate'))
+        data.store("checkout", "time", extract_value_from_input(soup, id='sCOTime'))
         
         # Create combined checkout datetime
         checkout_date = data.get("checkout", {}).get("date")
