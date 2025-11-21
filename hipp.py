@@ -819,11 +819,9 @@ def extract_ids_from_links(soup: BeautifulSoup, id_pattern: str = r'id=([^&"]+)'
             ids_list.append(id_match.group(1))
     return ids_list
 
-def extract_value_from_input(soup: 'BeautifulSoup', id: str = None, name: str = None) -> str:
+def extract_value_from_input(soup: 'BeautifulSoup', id: str = None) -> str:
     if id:
         input_element = soup.find('input', id=id)
-    elif name:
-        input_element = soup.find('input', name=name)
     else:
         return ""
     if input_element:
@@ -2986,8 +2984,10 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
         data.store("patient", "date", parsed_cnp.get("birth_date", ""))
         data.store("patient", "age", parsed_cnp.get("age", ""))
 
+
         # Extract presentation ID
         data.store("presentation", "id", extract_ids_from_links(soup, r'presentation\.asp\?id=(\d+)'))
+
 
         # Extract admission ID
         data.store("checkin", "id", extract_ids_from_links(soup, r'checkin\.asp\?id=(\d+)'))
@@ -3002,16 +3002,17 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
         data.store("checkin", "diagnosis", extract_text_after_label(soup, r'Diagnostic\s*:', 'tr'))
 
         # Extract checkin date and time from input fields
-        data.store("checkin", "date", extract_value_from_input(soup, id='sCIDate'))
-        data.store("checkin", "time", extract_value_from_input(soup, id='sCITime'))
+        data.store("checkin", "date", extract_value_from_input(soup, 'sCIDate'))
+        data.store("checkin", "time", extract_value_from_input(soup, 'sCITime'))
         
         # Create combined checkin datetime
         if data["checkin"]["date"] and data["checkin"]["time"]:
             data.store("checkin", "datetime", f'{data["checkin"]["date"]} {data["checkin"]["time"]}')
 
+
         # Extract checkout date and time from input fields
-        data.store("checkout", "date", extract_value_from_input(soup, id='sCODate'))
-        data.store("checkout", "time", extract_value_from_input(soup, id='sCOTime'))
+        data.store("checkout", "date", extract_value_from_input(soup, 'sCODate'))
+        data.store("checkout", "time", extract_value_from_input(soup, 'sCOTime'))
         
         # Create combined checkout datetime
         if data["checkout"]["date"] and data["checkout"]["time"]:
@@ -3026,13 +3027,16 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
         data.store("checkout", "diagnosis", extract_textarea_after_label(soup, r'Diagnostic externare[^:]*:'))
         #data.store("checkout", "diagnosis", extract_text_from_element(soup, id='sCODiagnosis'))
 
+        # Extract physician
+        data.store("checkin", "physician", extract_selected_from_dropdown(soup, "iCOMedicID"))
+
         # Extract surgery (textarea with id "sBOProtocolHtmlArea")
         surgery_content = extract_text_from_element(soup, id='sBOProtocol')
         if surgery_content:
             data.store("checkout", "surgery", html_to_markdown(surgery_content))
 
         # Extract recommendations (textarea with id 'sRecommendationsHtmlArea')
-        recommendations_content = extract_text_from_element(soup, id='sRecommendations')
+        recommendations_content = extract_text_from_element(soup, 'sRecommendations')
         if recommendations_content:
             data.store("checkout", "recommendations", html_to_markdown(recommendations_content))
 
