@@ -3047,10 +3047,10 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
         #data.store("checkout", "diagnosis", extract_text_from_element(soup, 'sCODiagnosis'))
 
         # Extract physician
-        data.store("checkout", "physician", extract_selected_from_dropdown(soup, 'iCOMedicID'))
+        data.store("checkout", "physician", extract_selected_from_dropdown(soup, name='iCOMedicID'))
 
         # Extract ward
-        data.store("checkout", "ward", extract_selected_from_dropdown(soup, 'sSectionCode'))
+        data.store("checkout", "ward", extract_selected_from_dropdown(soup, name='sSectionCode'))
 
         # Extract surgery (textarea with id "sBOProtocolHtmlArea")
         surgery_content = extract_text_from_element(soup, 'sBOProtocol')
