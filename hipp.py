@@ -2623,9 +2623,9 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
                 break
 
         # Extract epicrisis (textarea with id "sEpicrisysHtmlArea")
-        epicrisis_textarea = soup.find('textarea', id='sEpicrisysHtmlArea')
-        if epicrisis_textarea:
-            checkout_data["epicrisis"] = html_to_markdown(str(epicrisis_textarea))
+        epicrisis_content = extract_text_from_element(soup, id='sEpicrisysHtmlArea')
+        if epicrisis_content:
+            checkout_data["epicrisis"] = html_to_markdown(epicrisis_content)
         else:
             # Fallback to old method if textarea not found
             checkout_data["epicrisis"] = extract_textarea_after_label(soup, r'Epicriza[^:]*:')
@@ -2634,17 +2634,17 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
         checkout_data["diagnostic"] = extract_textarea_after_label(soup, r'Diagnostic externare[^:]*:')
 
         # Extract surgery (textarea with id "sBOProtocolHtmlArea")
-        surgery_textarea = soup.find('textarea', id='sBOProtocolHtmlArea')
-        if surgery_textarea:
-            checkout_data["surgery"] = html_to_markdown(str(surgery_textarea))
+        surgery_content = extract_text_from_element(soup, id='sBOProtocolHtmlArea')
+        if surgery_content:
+            checkout_data["surgery"] = html_to_markdown(surgery_content)
         else:
             # Fallback to old method if textarea not found
             checkout_data["surgery"] = extract_textarea_after_label(soup, r'Protocol operator[^:]*:')
 
         # Extract recommendations (textarea with id 'sRecommendationsHtmlArea')
-        recommendations_textarea = soup.find('textarea', id='sRecommendationsHtmlArea')
-        if recommendations_textarea:
-            checkout_data["recommendations"] = html_to_markdown(str(recommendations_textarea))
+        recommendations_content = extract_text_from_element(soup, id='sRecommendationsHtmlArea')
+        if recommendations_content:
+            checkout_data["recommendations"] = html_to_markdown(recommendations_content)
         else:
             # Fallback to old method if textarea not found
             checkout_data["recommendations"] = extract_textarea_after_label(soup, r'Recomandari[^:]*:')
