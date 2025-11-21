@@ -252,6 +252,7 @@ class HipoClient:
             request: Optional request object to extract credentials from
         """
         self.service_url = service_url
+        self.request = request
         self.headers = HEADERS.copy()
         self.url_cache = url_cache
         self.username = None
@@ -1101,9 +1102,6 @@ async def get_fhir_patient(request):
         return create_error_response("Patient ID is required")
     logger.info(f"Retrieving patient with ID: {id}")
 
-    # Get credentials from request (added by decorator)
-    username, password = request.auth_credentials
-
     # Create a new HipoClient instance with credentials
     client = HipoClient(SERVICE_URL, request)
 
@@ -1155,9 +1153,6 @@ async def search_fhir_patient(request):
     if not search_term:
         return create_error_response("Search term is required")
     logger.info(f"Searching for patients with term: {search_term}")
-
-    # Get credentials from request (added by decorator)
-    username, password = request.auth_credentials
 
     # Create a new HipoClient instance with credentials
     client = HipoClient(SERVICE_URL, request)
@@ -1624,9 +1619,6 @@ async def get_fhir_diagnostic_report(request):
         return create_error_response("Report ID is required")
     logger.info(f"Retrieving report with ID: {id}")
 
-    # Get credentials from request (added by decorator)
-    username, password = request.auth_credentials
-
     # Create a new HipoClient instance with credentials
     client = HipoClient(SERVICE_URL, request)
 
@@ -1669,9 +1661,6 @@ async def get_fhir_imaging_study(request):
     if not id:
         return create_error_response("Study ID is required")
     logger.info(f"Retrieving study with ID: {id}")
-
-    # Get credentials from request (added by decorator)
-    username, password = request.auth_credentials
 
     # Create a new HipoClient instance with credentials
     client = HipoClient(SERVICE_URL, request)
@@ -2285,9 +2274,6 @@ async def get_fhir_observation(request):
         return create_error_response("Observation ID is required")
     logger.info(f"Retrieving observation with ID: {id}")
 
-    # Get credentials from request (added by decorator)
-    username, password = request.auth_credentials
-
     # Create a new HipoClient instance with credentials
     client = HipoClient(SERVICE_URL, request)
 
@@ -2457,9 +2443,6 @@ async def search_fhir_observation(request):
     if not patient_id:
         return create_error_response("Patient ID is required")
     logger.info(f"Retrieving analyses list for patient with ID: {patient_id}")
-
-    # Get credentials from request (added by decorator)
-    username, password = request.auth_credentials
 
     # Create a new HipoClient instance with credentials
     client = HipoClient(SERVICE_URL, request)
@@ -2733,9 +2716,6 @@ async def get_fhir_service_request(request):
         return create_error_response("Service request ID is required")
     logger.info(f"Retrieving service request with ID: {id}")
 
-    # Get credentials from request (added by decorator)
-    username, password = request.auth_credentials
-
     # Create a new HipoClient instance with credentials
     client = HipoClient(SERVICE_URL, request)
 
@@ -2970,9 +2950,6 @@ async def get_checkout(request):
         return create_error_response("Checkout ID is required")
     logger.info(f"Retrieving checkout with ID: {id}")
 
-    # Get credentials from request (added by decorator)
-    username, password = request.auth_credentials
-
     try:
         # Create a new HipoClient instance with credentials
         client = HipoClient(SERVICE_URL, request)
@@ -3014,9 +2991,6 @@ async def get_fhir_encounter(request):
     if not id:
         return create_error_response("Encounter ID is required")
     logger.info(f"Retrieving encounter with ID: {id}")
-
-    # Get credentials from request (added by decorator)
-    username, password = request.auth_credentials
 
     try:
         # Create a new HipoClient instance with credentials
@@ -3151,30 +3125,6 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Error parsing checkout data: {e}")
         return {}
-
-async def _get_checkout_data(checkout_id: str, username: str, password: str) -> tuple:
-    """Retrieve and parse checkout data from Hipocrate service.
-
-    This shared function handles the common logic for retrieving checkout data
-    that is used by both get_checkout and get_fhir_encounter endpoints.
-
-    Args:
-        checkout_id: The ID of the checkout to retrieve
-        username: Username for authentication
-        password: Password for authentication
-
-    Returns:
-        Tuple of (parsed_data, error_response) where one will be None
-    """
-    # Create a new HipoClient instance with credentials
-    client = HipoClient(SERVICE_URL, None)
-    client.set_credentials(username, password)
-
-    # The checkout endpoint
-    checkout_url = f"/files/checkout.asp?id={checkout_id}"
-    
-    # Use the generic fetch and parse method
-    return await client.fetch_and_parse(checkout_url, parse_checkout_data)
 
 def create_fhir_encounter(parsed_data: Dict[str, Any], encounter_id: str, request) -> Dict[str, Any]:
     """Convert parsed checkout data to FHIR Encounter resource.
