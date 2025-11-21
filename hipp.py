@@ -2595,6 +2595,9 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
         # Extract patient CNP
         checkout_data["patient_cnp"] = extract_text_after_label(soup, r'CNP\s*:')
 
+        # Extract physician
+        checkout_data["physician"] = extract_text_after_label(soup, r'Medic\s*:')
+
         # Extract checkout date and time from input fields
         checkout_data["checkout_date"] = extract_value_from_input(soup, id='sCODate')
         checkout_data["checkout_time"] = extract_value_from_input(soup, id='sCOTime')
