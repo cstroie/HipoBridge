@@ -1847,6 +1847,42 @@ async def get_checkout(request):
         return create_error_response("Checkout retrieval failed", 500, {"exception": str(e)})
 
 @require_auth
+async def get_request(request):
+    """Retrieve service request information by ID.
+
+    Gets service request information from the Hipocrate service and parses
+    the medical data into structured format.
+
+    Args:
+        request
+
+    Returns:
+        JSON response with service request data or error information
+    """
+    # Extract service request ID from path
+    id = request.match_info.get('id')
+    if not id:
+        return create_error_response("Service request ID is required")
+    logger.info(f"Retrieving service request with ID: {id}")
+
+    try:
+        # Create a new HipoClient instance
+        client = HipoClientServiceRequest(SERVICE_URL, request)
+
+        # Retrieve and parse the page
+        parsed_data, error_response = await client.fetch_and_parse(id=id)
+
+        # Check for errors in the response
+        if error_response:
+            return error_response
+
+        # Return the response
+        return web.json_response(parsed_data)
+
+    except Exception as e:
+        return create_error_response("Service request retrieval failed", 500, {"exception": str(e)})
+
+@require_auth
 async def get_fhir_encounter(request):
     """Retrieve encounter information by ID.
 
@@ -2340,6 +2376,7 @@ async def init_app():
     app.router.add_get('/', serve_web_page)
     # API endpointa
     app.router.add_get('/api/checkout/{id}', get_checkout)
+    app.router.add_get('/api/request/{id}', get_request)
     # FHIR-compatible endpoints
     app.router.add_get('/fhir/Patient', search_fhir_patient)
     app.router.add_get('/fhir/Patient/{id}', get_fhir_patient)
