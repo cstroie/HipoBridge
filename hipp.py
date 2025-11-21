@@ -46,7 +46,7 @@ import base64
 from fhir import ServiceRequest as FHIRServiceRequest, CodeableConcept, Coding, Reference, CodeableReference, Condition, Patient as FHIRPatient
 
 from hipo import HipoClient, HipoClientCheckout, HipoClientServiceRequest
-from hipo import HipoData
+from hipo import HipoData, user_session_manager
 
 from extractors import extract_id_from_link, extract_ids_from_links, extract_selected_from_dropdown, extract_tabular_data, extract_text_after_label, extract_text_from_element, extract_textarea_after_label, extract_value_from_input
 from extractors import parse_cnp
@@ -2340,8 +2340,7 @@ async def on_cleanup(app):
         app: The web application
     """
     logger.info("Application cleanup")
-    # TODO This needs to be fixed
-    #await user_session_manager.close_all_sessions()
+    await user_session_manager.close_all_sessions()
 
 async def auth_middleware(app, handler):
     """Authentication middleware that skips static files.
