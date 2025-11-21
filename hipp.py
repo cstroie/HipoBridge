@@ -2593,12 +2593,7 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
                 checkout_data["patient_id"] = patient_id.strip()
 
         # Extract patient CNP
-        cnp_elements = soup.find_all('td', string=re.compile(r'CNP\s*:', re.IGNORECASE))
-        for cnp_element in cnp_elements:
-            next_td = cnp_element.find_next('td')
-            if next_td:
-                checkout_data["patient_cnp"] = next_td.get_text().strip()
-                break
+        checkout_data["patient_cnp"] = extract_text_after_label(soup, r'CNP\s*:')
 
         # Extract checkout date and time from input fields
         checkout_data["checkout_date"] = extract_value_from_input(soup, id='sCODate')
