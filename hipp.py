@@ -2626,6 +2626,11 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
         # Extract recommendations (textarea after 'Recomandari')
         checkout_data["recommendations"] = extract_textarea_after_label(soup, r'Recomandari[^:]*:')
 
+        # Extract ICD10 diagnostic from textarea with name "sCODiagnosis"
+        icd10_textarea = soup.find('textarea', {'name': 'sCODiagnosis'})
+        if icd10_textarea:
+            checkout_data["icd10_diagnostic"] = icd10_textarea.get_text().strip()
+
         return checkout_data
     except Exception as e:
         logger.error(f"Error parsing checkout data: {e}")
