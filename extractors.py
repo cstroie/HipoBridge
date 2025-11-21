@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 """Data extraction utilities for parsing HTML content from medical records.
 
@@ -15,9 +14,9 @@ from typing import Dict, Any, Optional, List
 from bs4 import BeautifulSoup, Comment
 import logging
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
 
-from markdown import html_to_markdown, markdown_to_html
+from markdown import html_to_markdown
 
 # Configure logging
 logging.basicConfig(
