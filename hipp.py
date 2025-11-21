@@ -2603,6 +2603,10 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
         # Extract checkout date and time from input fields
         checkout_data["checkout_date"] = extract_value_from_input(soup, id='sCODate')
         checkout_data["checkout_time"] = extract_value_from_input(soup, id='sCOTime')
+        
+        # Create combined checkout datetime
+        if checkout_data["checkout_date"] and checkout_data["checkout_time"]:
+            checkout_data["checkout_datetime"] = f"{checkout_data['checkout_date']} {checkout_data['checkout_time']}"
 
         # Extract admission diagnostic
         diag_elements = soup.find_all('td', string=re.compile(r'Diagnostic\s*:', re.IGNORECASE))
