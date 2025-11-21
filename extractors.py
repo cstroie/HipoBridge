@@ -1,6 +1,15 @@
 
 #!/usr/bin/env python3
-""" Extractors """
+"""Data extraction utilities for parsing HTML content from medical records.
+
+This module provides a collection of functions for extracting structured data
+from HTML content, particularly focused on medical record systems. The functions
+handle various data extraction scenarios including form fields, tables, links,
+and specialized medical data like Romanian CNP (Personal Numerical Code).
+
+The module is designed to work with BeautifulSoup for HTML parsing and includes
+robust error handling and logging for debugging purposes.
+"""
 
 from typing import Dict, Any, Optional, List
 from bs4 import BeautifulSoup, Comment
@@ -22,20 +31,21 @@ def parse_cnp(cnp: str) -> Dict[str, Any]:
     """Parse a Romanian CNP (Personal Numerical Code) and extract meaningful data.
 
     Extracts gender, birth date, county, and other information from a valid CNP.
+    Performs comprehensive validation including checksum verification.
 
     Args:
-        cnp: The CNP to parse
+        cnp: The 13-digit Romanian CNP to parse
 
     Returns:
         Dictionary with parsed data including:
             - valid: bool - whether the CNP is valid
-            - gender: str - male/female
+            - gender: str - "male" or "female"
             - birth_date: str - ISO format date (YYYY-MM-DD)
             - age: int - patient age in years
-            - county_code: int - county code
-            - county_name: str - county name
-            - serial: str - serial number
-            - control_digit: int - control digit
+            - county_code: int - county code (1-52, 70-79 for diaspora, 90-99 for special)
+            - county_name: str - full county name
+            - serial: str - 3-digit serial number
+            - control_digit: int - control digit (0-9)
     """
     # Check if CNP is exactly 13 digits
     if not cnp or len(cnp) != 13 or not cnp.isdigit():
@@ -136,16 +146,19 @@ def parse_cnp(cnp: str) -> Dict[str, Any]:
     }
 
 def extract_text_after_label(soup: BeautifulSoup, label_regex: str, element_tag: str = None, stop_at: str = None) -> str:
-    """Extract field data from an element containing a label.
+    """Extract text content that appears after a label matching the given regex pattern.
+
+    Searches for text matching the label pattern and extracts content that follows it
+    within the same container element. Useful for extracting form field values.
 
     Args:
         soup: BeautifulSoup object of the parsed HTML content
-        label_regex: Regular expression pattern to match label text
-        element_tag: HTML tag name to search for. If None, uses the own element of the label.
-        stop_at: Optional string pattern to stop extraction at
+        label_regex: Regular expression pattern to match label text (case insensitive)
+        element_tag: HTML tag name to search within. If None, uses the parent of the label.
+        stop_at: Optional regex pattern to stop extraction at (e.g., next label)
 
     Returns:
-        Extracted field content or empty string if not found
+        Extracted field content stripped of whitespace, or empty string if not found
     """
     try:
         # Look for the element containing this label
@@ -186,14 +199,14 @@ def extract_text_after_label(soup: BeautifulSoup, label_regex: str, element_tag:
         return ""
 
 def extract_id_from_link(link_element, id_pattern: str = r'id=([^&"]+)') -> Optional[str]:
-    """Extract ID from a link element's href attribute.
+    """Extract ID from a link element's href attribute using a regex pattern.
 
     Args:
         link_element: BeautifulSoup element with href attribute
         id_pattern: Regex pattern to extract ID from href (default: r'id=([^&"]+)')
 
     Returns:
-        Extracted ID string or None if not found
+        Extracted ID string or None if not found or invalid element
     """
     # Ensure link_element is valid
     if link_element:
@@ -211,7 +224,7 @@ def extract_ids_from_links(soup: BeautifulSoup, id_pattern: str = r'id=([^&"]+)'
         id_pattern: Regex pattern to extract ID from href (default: r'id=([^&"]+)')
 
     Returns:
-        List of extracted ID strings
+        List of extracted ID strings (may be empty)
     """
     ids_list = []
     for item in soup.find_all('a', href=re.compile(id_pattern)):
@@ -251,6 +264,9 @@ def extract_value_from_input(soup: 'BeautifulSoup', id: str = None, name: str = 
 def extract_text_from_element(soup: 'BeautifulSoup', id: str = None, name: str = None) -> str:
     """Extract text content from an HTML element by its ID or name.
     
+    For elements with simple text content, returns the text directly.
+    For complex elements with nested HTML, converts to markdown format.
+    
     Args:
         soup: BeautifulSoup object of the parsed HTML content
         id: HTML element ID to extract text from
@@ -287,7 +303,7 @@ def extract_text_from_element(soup: 'BeautifulSoup', id: str = None, name: str =
     return content
 
 def extract_selected_from_dropdown(soup: 'BeautifulSoup', id: str = None, name: str = None) -> str:
-    """Extract the text of the selected option from a dropdown element.
+    """Extract the text of the selected option from a dropdown (select) element.
     
     Args:
         soup: BeautifulSoup object of the parsed HTML content
@@ -317,20 +333,18 @@ def extract_selected_from_dropdown(soup: 'BeautifulSoup', id: str = None, name: 
 
 
 def extract_textarea_after_label(soup: 'BeautifulSoup', label_regex: str) -> str:
-    """Get content of first textarea after a label matching the given regex.
+    """Extract content from the first textarea that appears after a label matching the regex.
 
     Searches for a label matching the regex pattern and returns the content
-    of the first textarea element that follows it.
+    of the first textarea element that follows it in the DOM.
 
     Args:
-        soup: Parsed HTML content
-        label_regex: Regular expression pattern to match label text
+        soup: BeautifulSoup object of the parsed HTML content
+        label_regex: Regular expression pattern to match label text (case insensitive)
 
     Returns:
         Content of the textarea converted to markdown, or empty string if not found
     """
-    import re
-
     try:
         # Find elements with text matching the label regex
         label_elements = soup.find_all(string=re.compile(label_regex, re.IGNORECASE))
@@ -356,7 +370,7 @@ def extract_tabular_data(soup: BeautifulSoup, identifier: str, identifier_type: 
         identifier_type: Type of identifier - "text", "id", or "class" (default: "text")
 
     Returns:
-        List of rows, each row being a list of cell contents as plain text
+        List of rows, each row being a list of cell contents as plain text (may be empty)
     """
     try:
         # Find the table based on the identifier type
