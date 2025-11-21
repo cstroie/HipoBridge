@@ -2969,8 +2969,14 @@ async def get_checkout(request):
     username, password = request.auth_credentials
 
     try:
-        # Retrieve and parse the checkout data using shared function
-        parsed_data, error_response = await _get_checkout_data(id, username, password)
+        # Create a new HipoClient instance with credentials
+        client = HipoClient(SERVICE_URL, username, password)
+
+        # The checkout endpoint
+        checkout_url = f"/files/checkout.asp?id={id}"
+        
+        # Use the generic fetch and parse method
+        parsed_data, error_response = await client.fetch_and_parse(checkout_url, parse_checkout_data)
         
         # Check for errors in the response
         if error_response:
@@ -3008,8 +3014,14 @@ async def get_fhir_encounter(request):
     username, password = request.auth_credentials
 
     try:
-        # Retrieve and parse the checkout data using shared function
-        parsed_data, error_response = await _get_checkout_data(id, username, password)
+        # Create a new HipoClient instance with credentials
+        client = HipoClient(SERVICE_URL, username, password)
+
+        # The checkout endpoint
+        checkout_url = f"/files/checkout.asp?id={id}"
+        
+        # Use the generic fetch and parse method
+        parsed_data, error_response = await client.fetch_and_parse(checkout_url, parse_checkout_data)
         
         # Check for errors in the response
         if error_response:
