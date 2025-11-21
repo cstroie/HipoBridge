@@ -880,10 +880,14 @@ def extract_selected_from_dropdown(soup: 'BeautifulSoup', id: str = None) -> str
         return ""
         
     element = soup.find('select', id=id)
+    print(element)
     if element:
         option = element.find('option', selected=True)
+        print(option)
         if option:
-            return option.get_text().strip()
+            content = option.get_text().strip()
+            logger.debug(f"Extracted text from '{id}': {content}")
+            return content
     return ""
 
 
@@ -3029,19 +3033,22 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
             data.store("checkout", "datetime", f'{data["checkout"]["date"]} {data["checkout"]["time"]}')
 
         # Extract epicrisis (textarea with id "sEpicrisysHtmlArea")
-        epicrisis_content = extract_text_from_element(soup, id='sEpicrisys')
+        epicrisis_content = extract_text_from_element(soup, 'sEpicrisys')
         if epicrisis_content:
             data.store("checkout", "epicrisis", html_to_markdown(epicrisis_content))
 
         # Extract diagnostic (textarea after 'Diagnostic externare')
         data.store("checkout", "diagnosis", extract_textarea_after_label(soup, r'Diagnostic externare[^:]*:'))
-        #data.store("checkout", "diagnosis", extract_text_from_element(soup, id='sCODiagnosis'))
+        #data.store("checkout", "diagnosis", extract_text_from_element(soup, 'sCODiagnosis'))
 
         # Extract physician
-        data.store("checkin", "physician", extract_selected_from_dropdown(soup, "iCOMedicID"))
+        data.store("checkout", "physician", extract_selected_from_dropdown(soup, 'iCOMedicID'))
+
+        # Extract ward
+        data.store("checkout", "ward", extract_selected_from_dropdown(soup, 'sSectionCode'))
 
         # Extract surgery (textarea with id "sBOProtocolHtmlArea")
-        surgery_content = extract_text_from_element(soup, id='sBOProtocol')
+        surgery_content = extract_text_from_element(soup, 'sBOProtocol')
         if surgery_content:
             data.store("checkout", "surgery", html_to_markdown(surgery_content))
 
