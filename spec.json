@@ -1,7 +1,7 @@
 {
     "openapi": "3.0.0",
     "info": {
-        "title": "Hipocrate Patient Analyzer API (FHIR)",
+        "title": "HippoBridge FHIR API",
         "description": "FHIR-compatible API for accessing patient data from the Hipocrate medical system",
         "version": "1.0.0"
     },
@@ -15,10 +15,13 @@
         "/": {
             "get": {
                 "summary": "Web interface",
-                "description": "Returns the web interface for patient analysis",
+                "description": "Returns the web interface for patient analysis with CNP input form",
                 "responses": {
                     "200": {
                         "description": "HTML web interface"
+                    },
+                    "401": {
+                        "description": "Authentication required"
                     }
                 }
             }
@@ -131,10 +134,21 @@
                 }
             }
         },
+        "/fhir/spec": {
+            "get": {
+                "summary": "OpenAPI Specification",
+                "description": "Returns this OpenAPI specification in JSON format",
+                "responses": {
+                    "200": {
+                        "description": "OpenAPI specification in JSON format"
+                    }
+                }
+            }
+        },
         "/fhir/login": {
             "post": {
                 "summary": "Login to Hipocrate system",
-                "description": "Authenticate with the Hipocrate medical system",
+                "description": "Authenticate with the Hipocrate medical system using username and password",
                 "requestBody": {
                     "required": true,
                     "content": {
@@ -226,7 +240,7 @@
         "/fhir/md2html": {
             "post": {
                 "summary": "Convert markdown to HTML",
-                "description": "Convert simple markdown text to basic HTML",
+                "description": "Convert simple markdown text to basic HTML for display in web interface",
                 "requestBody": {
                     "required": true,
                     "content": {
@@ -266,6 +280,26 @@
                             }
                         }
                     },
+                    "400": {
+                        "description": "Invalid JSON data",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Invalid JSON data"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
                     "500": {
                         "description": "Conversion error",
                         "content": {
@@ -291,31 +325,13 @@
         "/fhir/Patient": {
             "get": {
                 "summary": "Search for patients",
-                "description": "Search for patients by name, CNP, or patient code. Returns FHIR Patient resources.",
+                "description": "Search for patients by name, CNP, patient code, or partial CNP. Returns FHIR Patient resources or Bundle.",
                 "parameters": [
                     {
                         "name": "q",
                         "in": "query",
                         "required": true,
                         "description": "Search term (patient name, CNP, patient code, or partial CNP ending with *)",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "X-Username",
-                        "in": "header",
-                        "required": false,
-                        "description": "Username for authentication",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "X-Password",
-                        "in": "header",
-                        "required": false,
-                        "description": "Password for authentication",
                         "schema": {
                             "type": "string"
                         }
@@ -370,6 +386,26 @@
                                 }
                             }
                         }
+                    },
+                    "401": {
+                        "description": "Authentication required",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Authentication required"
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -377,31 +413,13 @@
         "/fhir/Patient/{id}": {
             "get": {
                 "summary": "Get patient information",
-                "description": "Retrieve patient information by ID as FHIR Patient resource",
+                "description": "Retrieve detailed patient information by ID, CNP, or partial CNP as FHIR Patient resource",
                 "parameters": [
                     {
                         "name": "id",
                         "in": "path",
                         "required": true,
-                        "description": "Patient ID",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "X-Username",
-                        "in": "header",
-                        "required": false,
-                        "description": "Username for authentication",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "X-Password",
-                        "in": "header",
-                        "required": false,
-                        "description": "Password for authentication",
+                        "description": "Patient ID, 13-digit CNP, or partial CNP with asterisk (*)",
                         "schema": {
                             "type": "string"
                         }
@@ -461,6 +479,46 @@
                                 }
                             }
                         }
+                    },
+                    "401": {
+                        "description": "Authentication required",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Authentication required"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Patient not found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Patient not found"
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -474,7 +532,7 @@
                         "name": "patient",
                         "in": "query",
                         "required": true,
-                        "description": "Patient ID",
+                        "description": "Patient ID, 13-digit CNP, or partial CNP with asterisk (*)",
                         "schema": {
                             "type": "string"
                         }
@@ -496,24 +554,6 @@
                         "schema": {
                             "type": "string",
                             "format": "date-time"
-                        }
-                    },
-                    {
-                        "name": "X-Username",
-                        "in": "header",
-                        "required": false,
-                        "description": "Username for authentication",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "X-Password",
-                        "in": "header",
-                        "required": false,
-                        "description": "Password for authentication",
-                        "schema": {
-                            "type": "string"
                         }
                     }
                 ],
@@ -570,6 +610,26 @@
                                 }
                             }
                         }
+                    },
+                    "401": {
+                        "description": "Authentication required",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Authentication required"
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -584,24 +644,6 @@
                         "in": "path",
                         "required": true,
                         "description": "Observation ID",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "X-Username",
-                        "in": "header",
-                        "required": false,
-                        "description": "Username for authentication",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "X-Password",
-                        "in": "header",
-                        "required": false,
-                        "description": "Password for authentication",
                         "schema": {
                             "type": "string"
                         }
@@ -667,38 +709,40 @@
                                 }
                             }
                         }
+                    },
+                    "401": {
+                        "description": "Authentication required",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Authentication required"
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
         },
-        "/fhir/DiagnosticReport": {
+        "/fhir/DiagnosticReport/{id}": {
             "get": {
-                "summary": "Get analysis report",
-                "description": "Retrieve an analysis report by ID as FHIR DiagnosticReport resource",
+                "summary": "Get diagnostic report",
+                "description": "Retrieve a diagnostic report by ID as FHIR DiagnosticReport resource",
                 "parameters": [
                     {
-                        "name": "identifier",
-                        "in": "query",
+                        "name": "id",
+                        "in": "path",
                         "required": true,
                         "description": "Report ID",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "X-Username",
-                        "in": "header",
-                        "required": false,
-                        "description": "Username for authentication",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "X-Password",
-                        "in": "header",
-                        "required": false,
-                        "description": "Password for authentication",
                         "schema": {
                             "type": "string"
                         }
@@ -706,7 +750,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Analysis report as FHIR DiagnosticReport resource",
+                        "description": "Diagnostic report as FHIR DiagnosticReport resource",
                         "content": {
                             "application/fhir+json": {
                                 "schema": {
@@ -770,38 +814,40 @@
                                 }
                             }
                         }
+                    },
+                    "401": {
+                        "description": "Authentication required",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Authentication required"
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
         },
-        "/fhir/ImagingStudy": {
+        "/fhir/ImagingStudy/{id}": {
             "get": {
                 "summary": "Get imaging study",
                 "description": "Retrieve an imaging study by ID as FHIR ImagingStudy resource",
                 "parameters": [
                     {
-                        "name": "identifier",
-                        "in": "query",
+                        "name": "id",
+                        "in": "path",
                         "required": true,
                         "description": "Study ID",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "X-Username",
-                        "in": "header",
-                        "required": false,
-                        "description": "Username for authentication",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "X-Password",
-                        "in": "header",
-                        "required": false,
-                        "description": "Password for authentication",
                         "schema": {
                             "type": "string"
                         }
@@ -864,38 +910,40 @@
                                 }
                             }
                         }
+                    },
+                    "401": {
+                        "description": "Authentication required",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Authentication required"
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
         },
-        "/fhir/Encounter": {
+        "/fhir/Encounter/{id}": {
             "get": {
-                "summary": "Get checkout information",
-                "description": "Retrieve checkout information by ID as FHIR Encounter resource",
+                "summary": "Get encounter information",
+                "description": "Retrieve encounter/checkout information by ID as FHIR Encounter resource",
                 "parameters": [
                     {
-                        "name": "identifier",
-                        "in": "query",
+                        "name": "id",
+                        "in": "path",
                         "required": true,
-                        "description": "Checkout ID",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "X-Username",
-                        "in": "header",
-                        "required": false,
-                        "description": "Username for authentication",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "X-Password",
-                        "in": "header",
-                        "required": false,
-                        "description": "Password for authentication",
+                        "description": "Encounter/Checkout ID",
                         "schema": {
                             "type": "string"
                         }
@@ -903,7 +951,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Checkout information as FHIR Encounter resource",
+                        "description": "Encounter information as FHIR Encounter resource",
                         "content": {
                             "application/fhir+json": {
                                 "schema": {
@@ -949,7 +997,7 @@
                         }
                     },
                     "400": {
-                        "description": "Missing checkout ID",
+                        "description": "Missing encounter ID",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -961,7 +1009,120 @@
                                         },
                                         "message": {
                                             "type": "string",
-                                            "example": "Checkout ID is required"
+                                            "example": "Encounter ID is required"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Authentication required",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Authentication required"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/fhir/ServiceRequest/{id}": {
+            "get": {
+                "summary": "Get service request",
+                "description": "Retrieve service request information by ID as FHIR ServiceRequest resource",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "description": "Service Request ID",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Service request as FHIR ServiceRequest resource",
+                        "content": {
+                            "application/fhir+json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "resourceType": {
+                                            "type": "string",
+                                            "example": "ServiceRequest"
+                                        },
+                                        "id": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "string"
+                                        },
+                                        "intent": {
+                                            "type": "string"
+                                        },
+                                        "code": {
+                                            "type": "object"
+                                        },
+                                        "subject": {
+                                            "type": "object"
+                                        },
+                                        "authoredOn": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Missing service request ID",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Service request ID is required"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Authentication required",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Authentication required"
                                         }
                                     }
                                 }
