@@ -858,6 +858,14 @@ def extract_text_from_element(soup: 'BeautifulSoup', id: str = None) -> str:
     logger.debug(f"Extracted markdown from '{id}': {content[:50]}..." if len(content) > 50 else f"Extracted markdown from '{id}': {content}")
     return content
 
+def extract_selected_from_dropdown(soup: 'BeautifulSoup', id: str = None) -> str:
+    element = soup.find('select', id=id)
+    if element:
+        option = element.find('option', selected=True)
+        if option:
+            return selected_option.get_text().strip()
+
+
 def extract_textarea_after_label(soup: 'BeautifulSoup', label_regex: str) -> str:
     """Get content of first textarea after a label matching the given regex.
 
