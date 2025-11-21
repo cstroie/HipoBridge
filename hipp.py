@@ -2917,6 +2917,48 @@ def create_fhir_service_request(request_data: Dict[str, Any], service_request_id
         logger.error(f"Error converting service request data: {e}")
         return {}
 
+@require_auth
+async def get_checkout(request):
+    """Retrieve checkout information by ID.
+
+    Gets checkout information from the Hipocrate service and parses
+    the medical data into structured format.
+
+    Args:
+        request
+
+    Returns:
+        JSON response with checkout data or error information
+    """
+    # Extract encounter ID from path
+    id = request.match_info.get('id')
+    if not id:
+        return create_error_response("Checkout ID is required")
+    logger.info(f"Retrieving checkout with ID: {id}")
+
+    # Get credentials from request (added by decorator)
+    username, password = request.auth_credentials
+
+    # Create a new HipocrateClient instance with credentials
+    client = HipocrateClient(SERVICE_URL, username, password)
+
+    try:
+        # The checkout endpoint
+        checkout_url = f"/files/checkout.asp?id={id}"
+        
+        # Retrieve the page
+        response_text, success, error_response = await client.get_page(checkout_url)
+
+        # Check for errors in the response
+        if not success:
+            return error_response
+
+        # Parse the checkout data
+        parsed_data = parse_checkout_data(response_text)
+        return web.json_response(parsed_data)
+
+    except Exception as e:
+        return create_error_response("Checkout retrieval failed", 500, {"exception": str(e)})
 
 @require_auth
 async def get_fhir_encounter(request):
@@ -3971,6 +4013,8 @@ async def init_app():
 
     app = web.Application(middlewares=[auth_middleware])
     app.router.add_get('/', serve_web_page)
+    # API endpointa
+    app.router.add_get('/api/checkout/{id}', get_checkout)
     # FHIR-compatible endpoints
     app.router.add_get('/fhir/Patient', search_fhir_patient)
     app.router.add_get('/fhir/Patient/{id}', get_fhir_patient)
