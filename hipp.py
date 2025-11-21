@@ -3109,13 +3109,14 @@ def create_fhir_encounter(parsed_data: Dict[str, Any], encounter_id: str, reques
             }
         ],
         "subject": {
-            "reference": f"Patient/{parsed_data.get('patient_id', '')}"
+            "reference": f"Patient/{parsed_data.get('patient', {}).get('id', '')}"
         },
         "participant": []
     }
 
-    # Add performer if available
-    if parsed_data.get("performer"):
+    # Add performer if available (from checkout physician)
+    checkout_physician = parsed_data.get("checkout", {}).get("physician")
+    if checkout_physician:
         fhir_encounter["participant"].append({
             "type": [
                 {
@@ -3129,39 +3130,36 @@ def create_fhir_encounter(parsed_data: Dict[str, Any], encounter_id: str, reques
                 }
             ],
             "individual": {
-                "display": parsed_data["performer"]
+                "display": checkout_physician
             }
         })
 
     # Add reason (admission diagnostic) if available
-    if parsed_data.get("admission_diagnostic"):
+    admission_diagnosis = parsed_data.get("checkin", {}).get("diagnosis")
+    if admission_diagnosis:
         fhir_encounter["reasonCode"] = [
             {
-                "text": parsed_data["admission_diagnostic"]
+                "text": admission_diagnosis
             }
         ]
 
     # Add text summary if epicrisis exists
-    if parsed_data.get("epicrisis"):
-        #fhir_encounter["text"] = {
-        #    "status": "generated",
-        #    "div": f"<div xmlns=\"http://www.w3.org/1999/xhtml\">{parsed_data['epicrisis']}</div>"
-        #}
-
+    epicrisis = parsed_data.get("checkout", {}).get("epicrisis")
+    if epicrisis:
         # Also add as a note
         fhir_encounter["note"] = [
             {
-                "text": parsed_data["epicrisis"]
+                "text": epicrisis
             }
         ]
 
     # Add diagnosis if available
-    if parsed_data.get("admission_diagnostic"):
+    if admission_diagnosis:
         fhir_encounter["diagnosis"] = [
             {
                 "condition": {
                     "reference": f"Condition/admission-{encounter_id}",
-                    "display": parsed_data["admission_diagnostic"]
+                    "display": admission_diagnosis
                 },
                 "use": {
                     "coding": [
@@ -3176,14 +3174,15 @@ def create_fhir_encounter(parsed_data: Dict[str, Any], encounter_id: str, reques
         ]
 
     # Add discharge diagnosis if available
-    if parsed_data.get("diagnostic"):
+    discharge_diagnosis = parsed_data.get("checkout", {}).get("diagnosis")
+    if discharge_diagnosis:
         if "diagnosis" not in fhir_encounter:
             fhir_encounter["diagnosis"] = []
         fhir_encounter["diagnosis"].append(
             {
                 "condition": {
                     "reference": f"Condition/discharge-{encounter_id}",
-                    "display": parsed_data["diagnostic"]
+                    "display": discharge_diagnosis
                 },
                 "use": {
                     "coding": [
@@ -3196,6 +3195,39 @@ def create_fhir_encounter(parsed_data: Dict[str, Any], encounter_id: str, reques
                 }
             }
         )
+
+    # Add period for admission and discharge times
+    checkin_datetime = parsed_data.get("checkin", {}).get("datetime")
+    checkout_datetime = parsed_data.get("checkout", {}).get("datetime")
+    if checkin_datetime or checkout_datetime:
+        period = {}
+        if checkin_datetime:
+            period["start"] = checkin_datetime
+        if checkout_datetime:
+            period["end"] = checkout_datetime
+        fhir_encounter["period"] = period
+
+    # Add location/ward information
+    checkin_ward = parsed_data.get("checkin", {}).get("ward")
+    checkout_ward = parsed_data.get("checkout", {}).get("ward")
+    if checkin_ward or checkout_ward:
+        location = []
+        if checkin_ward:
+            location.append({
+                "location": {
+                    "display": checkin_ward
+                },
+                "status": "active"
+            })
+        if checkout_ward and checkout_ward != checkin_ward:
+            location.append({
+                "location": {
+                    "display": checkout_ward
+                },
+                "status": "completed"
+            })
+        if location:
+            fhir_encounter["location"] = location
 
     return fhir_encounter
 
