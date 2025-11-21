@@ -2614,8 +2614,13 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
                 checkout_data["admission_diagnostic"] = next_td.get_text().strip()
                 break
 
-        # Extract epicrisis (first textarea after 'Epicriza:')
-        checkout_data["epicrisis"] = extract_textarea_after_label(soup, r'Epicriza[^:]*:')
+        # Extract epicrisis (textarea with id "sEpicrisysHtmlArea")
+        epicrisis_textarea = soup.find('textarea', id='sEpicrisysHtmlArea')
+        if epicrisis_textarea:
+            checkout_data["epicrisis"] = html_to_markdown(str(epicrisis_textarea))
+        else:
+            # Fallback to old method if textarea not found
+            checkout_data["epicrisis"] = extract_textarea_after_label(soup, r'Epicriza[^:]*:')
 
         # Extract diagnostic (textarea after 'Diagnostic externare')
         checkout_data["diagnostic"] = extract_textarea_after_label(soup, r'Diagnostic externare[^:]*:')
