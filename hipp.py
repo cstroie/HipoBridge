@@ -819,13 +819,23 @@ def extract_ids_from_links(soup: BeautifulSoup, id_pattern: str = r'id=([^&"]+)'
             ids_list.append(id_match.group(1))
     return ids_list
 
-def extract_value_from_input(soup: 'BeautifulSoup', id: str = None) -> str:
-    if id:
-        input_element = soup.find('input', id=id)
-    else:
+def extract_value_from_input(soup: 'BeautifulSoup', element_id: str = None) -> str:
+    """Extract the value attribute from an HTML input element by its ID.
+    
+    Args:
+        soup: BeautifulSoup object of the parsed HTML content
+        element_id: HTML input element ID to extract value from
+        
+    Returns:
+        Value attribute content stripped of whitespace, or empty string if not found
+    """
+    if not element_id:
         return ""
+        
+    input_element = soup.find('input', id=element_id)
     if input_element:
         return input_element.get('value', '').strip()
+    return ""
 
 def extract_text_from_element(soup: 'BeautifulSoup', id: str = None) -> str:
     """Extract text content from an HTML element by its ID.
