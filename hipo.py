@@ -306,34 +306,46 @@ class HipoData(dict):
     useful for parsing structured HTML data from medical records where information 
     needs to be grouped by logical categories.
     
-    The store() method can handle different scenarios:
-    - Store data directly in the root dictionary when no section is provided
-    - Store data in named sections, creating them automatically if they don't exist
-    - Handle special cases where the section name should be used as the key
+    The store() method handles data storage with the following rules:
+    1. If section is None: Store key-value directly in root dictionary
+    2. If section is provided but key is None: Store value with section name as key in root
+    3. If both section and key are provided: Store value in nested section[key] structure
+    
+    Automatic data processing:
+    - Lists with single elements are automatically unwrapped
+    - String values are stripped of leading/trailing whitespace
+    - Sections are created automatically when first referenced
     
     Examples:
         data = HipoData()
         
-        # Store in root
-        data.store(None, "name", "John Doe")
+        # Store in root (section=None)
+        data.store(None, "name", "John Doe")  # {"name": "John Doe"}
         
         # Store in a section
-        data.store("patient", "id", "12345")
+        data.store("patient", "id", "12345")  # {"patient": {"id": "12345"}}
         
-        # Store with section as key
-        data.store("diagnosis", None, "Healthy")
+        # Store with section as key (key=None)
+        data.store("diagnosis", None, "Healthy")  # {"diagnosis": "Healthy"}
     """
     
     def store(self, section: str = None, key: str = None, value: str = None) -> None:
-        """Store a value in the dictionary, optionally within a section.
+        """Store a value in the dictionary with automatic data processing.
         
         Args:
-            section: Optional section name to group related data. If None, data is stored in root.
-            key: Key for the value. If None, section name is used as key and value is stored in root.
+            section: Optional section name for grouping related data.
+                    If None, data is stored directly in root dictionary.
+            key: Key for the value. If None, section name is used as key in root.
             value: Value to store. Lists with one element are automatically unwrapped,
                   and string values are stripped of whitespace.
+                  
+        Storage logic:
+        - If section is None: Store key-value pair directly in root dict
+        - If section provided but key is None: Store value in root with section as key
+        - If both section and key provided: Store value in section[key] nested structure
+        - Sections are created automatically if they don't exist
         """
-        # Handle the case where no section is provided
+        # Handle the case where no section is provided - store directly in root
         if not section:
             data = self
         else:
@@ -349,8 +361,10 @@ class HipoData(dict):
             
         # Store the value if we have a key and value
         if key and value:
+            # Auto-unwrap single element lists
             if isinstance(value, list) and len(value) > 0 and value[0]:
                 value = value[0]
+            # Auto-strip string values
             if isinstance(value, str):
                 value = value.strip()
             data[key] = value
