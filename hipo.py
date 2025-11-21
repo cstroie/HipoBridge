@@ -20,6 +20,9 @@ from typing import Any, Dict, List, Optional
 from extractors import extract_id_from_link, extract_ids_from_links, extract_selected_from_dropdown, extract_tabular_data, extract_text_after_label, extract_text_from_element, extract_textarea_after_label, extract_value_from_input
 from extractors import parse_cnp
 
+# Import FHIR classes
+from fhir import ServiceRequest as FHIRServiceRequest, CodeableConcept, Reference
+
 # Configure logging
 logging.basicConfig(
     level=logging.DEBUG,
@@ -36,6 +39,59 @@ HEADERS = {
     "Accept-Encoding": "gzip, deflate",
     "Connection": "keep-alive",
 }
+
+
+def parse_date_time(date_str: str) -> Optional[datetime]:
+    """Parse a date string in the format '30 Aug 2025 19:25:00'.
+
+    Args:
+        date_str: Date string to parse
+
+    Returns:
+        datetime object if parsing successful, None otherwise
+    """
+    try:
+        # Handle common date formats like "30 Aug 2025 19:25:00"
+        # Create a mapping for month abbreviations to numbers
+        month_mapping = {
+            'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
+            'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12,
+            'Ian': 1, 'Mai': 5, 'Iun': 6, 'Iul': 7  # Romanian month abbreviations
+        }
+
+        # Split the date string into components
+        parts = date_str.strip().split()
+        if len(parts) != 4:
+            return None
+
+        day = int(parts[0])
+        month_abbr = parts[1]
+        year = int(parts[2])
+        time_part = parts[3]
+
+        # Get month number from mapping
+        if month_abbr not in month_mapping:
+            return None
+        month = month_mapping[month_abbr]
+
+        # Parse time
+        time_parts = time_part.split(':')
+        if len(time_parts) == 2:
+            hour = int(time_parts[0])
+            minute = int(time_parts[1])
+            second = 0
+        elif len(time_parts) == 3:
+            hour = int(time_parts[0])
+            minute = int(time_parts[1])
+            second = int(time_parts[2])
+        else:
+            return None
+
+        # Create datetime object
+        return datetime(year, month, day, hour, minute, second)
+    except (ValueError, IndexError, TypeError):
+        # If parsing fails, return None
+        return None
 
 
 def create_error_response(message: str, status_code: int = 400, details: Dict[str, Any] = None) -> web.Response:
@@ -756,7 +812,7 @@ class HipoClient:
                 return None, error_response
 
             # Convert parsed data to FHIR Encounter resource
-            fhir_data = self.fhir_response(parsed_data)
+            fhir_data = self.fhir_response(parsed_data, **kwargs)
             return fhir_data, None
 
         except Exception as e:
