@@ -32,11 +32,14 @@ import asyncio
 import aiohttp
 from aiohttp import web
 from typing import Dict, Any, Optional, List
+import json
 import logging
 import re
 from bs4 import BeautifulSoup
 import html
 from datetime import datetime, timedelta
+import configparser
+import base64
 
 # Import FHIR classes
 from fhir import ServiceRequest as FHIRServiceRequest, CodeableConcept, Coding, Reference, CodeableReference, Condition, Patient as FHIRPatient
