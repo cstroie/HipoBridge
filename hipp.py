@@ -244,19 +244,24 @@ user_session_manager = UserSessionManager()
 class HipoClient:
     """Client for interacting with the Hipocrate medical system."""
 
-    def __init__(self, service_url: str, username: str = None, password: str = None):
+    def __init__(self, service_url: str, request=None):
         """Initialize the Hipocrate client.
 
         Args:
             service_url: Base URL of the Hipocrate service
+            request: Optional request object to extract credentials from
         """
         self.service_url = service_url
         self.headers = HEADERS.copy()
         self.url_cache = url_cache
-        self.username = username
-        self.password = password
+        self.username = None
+        self.password = None
         # Get session using the client's session manager
         self.session = None
+        
+        # Extract credentials from request if provided
+        if request and hasattr(request, 'auth_credentials'):
+            self.username, self.password = request.auth_credentials
 
     def set_credentials(self, username: str, password: str):
         """Set the username and password for authentication.
@@ -1100,7 +1105,7 @@ async def get_fhir_patient(request):
     username, password = request.auth_credentials
 
     # Create a new HipoClient instance with credentials
-    client = HipoClient(SERVICE_URL, username, password)
+    client = HipoClient(SERVICE_URL, request)
 
     try:
         # Make request to the patient endpoint
@@ -1155,7 +1160,7 @@ async def search_fhir_patient(request):
     username, password = request.auth_credentials
 
     # Create a new HipoClient instance with credentials
-    client = HipoClient(SERVICE_URL, username, password)
+    client = HipoClient(SERVICE_URL, request)
 
     try:
         # Determine search type based on input
@@ -1623,7 +1628,7 @@ async def get_fhir_diagnostic_report(request):
     username, password = request.auth_credentials
 
     # Create a new HipoClient instance with credentials
-    client = HipoClient(SERVICE_URL, username, password)
+    client = HipoClient(SERVICE_URL, request)
 
     try:
         # The report endpoint
@@ -1669,7 +1674,7 @@ async def get_fhir_imaging_study(request):
     username, password = request.auth_credentials
 
     # Create a new HipoClient instance with credentials
-    client = HipoClient(SERVICE_URL, username, password)
+    client = HipoClient(SERVICE_URL, request)
 
     try:
         # The study endpoint
@@ -2284,7 +2289,7 @@ async def get_fhir_observation(request):
     username, password = request.auth_credentials
 
     # Create a new HipoClient instance with credentials
-    client = HipoClient(SERVICE_URL, username, password)
+    client = HipoClient(SERVICE_URL, request)
 
     try:
         # The observation endpoint
@@ -2457,7 +2462,7 @@ async def search_fhir_observation(request):
     username, password = request.auth_credentials
 
     # Create a new HipoClient instance with credentials
-    client = HipoClient(SERVICE_URL, username, password)
+    client = HipoClient(SERVICE_URL, request)
 
     # Get optional parameters
     exam_type = request.query.get('type')
@@ -2732,7 +2737,7 @@ async def get_fhir_service_request(request):
     username, password = request.auth_credentials
 
     # Create a new HipoClient instance with credentials
-    client = HipoClient(SERVICE_URL, username, password)
+    client = HipoClient(SERVICE_URL, request)
 
     try:
         # The service request endpoint
@@ -2970,7 +2975,7 @@ async def get_checkout(request):
 
     try:
         # Create a new HipoClient instance with credentials
-        client = HipoClient(SERVICE_URL, username, password)
+        client = HipoClient(SERVICE_URL, request)
 
         # The checkout endpoint
         checkout_url = f"/files/checkout.asp?id={id}"
@@ -3015,7 +3020,7 @@ async def get_fhir_encounter(request):
 
     try:
         # Create a new HipoClient instance with credentials
-        client = HipoClient(SERVICE_URL, username, password)
+        client = HipoClient(SERVICE_URL, request)
 
         # The checkout endpoint
         checkout_url = f"/files/checkout.asp?id={id}"
@@ -3162,7 +3167,7 @@ async def _get_checkout_data(checkout_id: str, username: str, password: str) -> 
         Tuple of (parsed_data, error_response) where one will be None
     """
     # Create a new HipoClient instance with credentials
-    client = HipoClient(SERVICE_URL, username, password)
+    client = HipoClient(SERVICE_URL, request)
 
     # The checkout endpoint
     checkout_url = f"/files/checkout.asp?id={checkout_id}"
@@ -3924,8 +3929,8 @@ async def serve_web_page(request):
     username, password = request.auth_credentials
 
     # Try to login with provided credentials
-    client = HipoClient(SERVICE_URL, username, password)
-    session, login_success = await client.get_authenticated_session(username, password)
+    client = HipoClient(SERVICE_URL, request)
+    session, login_success = await client.get_authenticated_session(client.username, client.password)
 
     if not login_success:
         return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HipoBridge"'})
