@@ -830,16 +830,32 @@ def extract_value_from_input(soup: 'BeautifulSoup', id: str = None, name: str = 
         return input_element.get('value', '').strip()
 
 def extract_text_from_element(soup: 'BeautifulSoup', id: str = None) -> str:
-    content = None
-    if id:
-        element = soup.find(id=id)
-        if element:
-            if element.string:
-                content = element.string.strip()
-                logger.debug(f"Extracted text from '{id}': {content}")
-            else:
-                content = html_to_markdown(str(element))
-                logger.debug(f"Extracted markdown from '{id}'")
+    """Extract text content from an HTML element by its ID.
+    
+    Args:
+        soup: BeautifulSoup object of the parsed HTML content
+        id: HTML element ID to extract text from
+        
+    Returns:
+        Extracted text content or empty string if element not found or empty
+    """
+    if not id:
+        return ""
+        
+    element = soup.find(id=id)
+    if not element:
+        logger.debug(f"Element with id '{id}' not found")
+        return ""
+        
+    # Try to get direct text content first
+    if element.string:
+        content = element.string.strip()
+        logger.debug(f"Extracted direct text from '{id}': {content}")
+        return content
+    
+    # For elements with nested content, convert to markdown
+    content = html_to_markdown(str(element))
+    logger.debug(f"Extracted markdown from '{id}': {content[:50]}..." if len(content) > 50 else f"Extracted markdown from '{id}': {content}")
     return content
 
 def extract_textarea_after_label(soup: 'BeautifulSoup', label_regex: str) -> str:
