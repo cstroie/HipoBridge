@@ -709,6 +709,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         epicrisisText = encounterData.note.map(note => note.text || '').join('\n\n');
                     }
                     
+                    // Extract checkout date and time if available
+                    let checkoutDateTime = '';
+                    if (encounterData.period && encounterData.period.start) {
+                        checkoutDateTime = encounterData.period.start;
+                    }
+                    
                     if (epicrisisText) {
                         // Display epicrisis immediately
                         const epicrisisSection = document.getElementById('epicrisisSection');
