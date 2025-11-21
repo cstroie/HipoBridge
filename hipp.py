@@ -1048,7 +1048,7 @@ def require_auth(handler):
 
 
 @require_auth
-async def get_patient(request):
+async def get_fhir_patient(request):
     """Retrieve patient information by ID.
 
     Gets patient information from the Hipocrate service and extracts
@@ -1102,7 +1102,7 @@ async def get_patient(request):
         return create_error_response("Patient retrieval failed", 500, {"exception": str(e)})
 
 @require_auth
-async def search_patient(request):
+async def search_fhir_patient(request):
     """Search for patients by name or other criteria.
 
     Performs a patient search on the Hipocrate service using the provided search term.
@@ -1571,7 +1571,7 @@ def create_fhir_patient(patient_data: Dict[str, Any], request) -> Dict[str, Any]
 
 
 @require_auth
-async def get_diagnostic_report(request):
+async def get_fhir_diagnostic_report(request):
     """Retrieve a diagnostic report by ID, following redirect chains.
 
     Gets a diagnostic report from the Hipocrate service, following any redirects to
@@ -1617,7 +1617,7 @@ async def get_diagnostic_report(request):
         return create_error_response("Report retrieval failed", 500, {"exception": str(e)})
 
 @require_auth
-async def get_imaging_study(request):
+async def get_fhir_imaging_study(request):
     """Retrieve an imaging study by ID, following redirect chains.
 
     Gets an imaging study from the Hipocrate service, following any redirects to
@@ -2233,7 +2233,7 @@ def create_fhir_imaging_study(report_data: Dict[str, Any], request) -> Dict[str,
     return fhir_imaging_study
 
 @require_auth
-async def get_observation(request):
+async def get_fhir_observation(request):
     """Retrieve a single observation by ID.
 
     Gets detailed information for a specific observation from the Hipocrate service.
@@ -2405,7 +2405,7 @@ def create_fhir_observation(report_data: Dict[str, Any], request) -> Dict[str, A
     return fhir_observation
 
 @require_auth
-async def search_observation(request):
+async def search_fhir_observation(request):
     """Retrieve list of observations for a patient by ID.
 
     Gets a list of observations for a specific patient from the Hipocrate service
@@ -2677,7 +2677,7 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
 
 
 @require_auth
-async def get_service_request(request):
+async def get_fhir_service_request(request):
     """Retrieve service request information by ID.
 
     Gets service request information from the Hipocrate service and parses
@@ -2919,7 +2919,7 @@ def create_fhir_service_request(request_data: Dict[str, Any], service_request_id
 
 
 @require_auth
-async def get_encounter(request):
+async def get_fhir_encounter(request):
     """Retrieve encounter information by ID.
 
     Gets encounter information from the Hipocrate service and parses
@@ -3232,7 +3232,7 @@ def create_fhir_encounter(parsed_data: Dict[str, Any], encounter_id: str, reques
     return fhir_encounter
 
 
-async def serve_analysis_types(request):
+async def serve_fhir_analysis_types(request):
     """Serve the analysis types terminology.
 
     Returns a FHIR CodeSystem resource defining the analysis types used in the hospital system.
@@ -3299,7 +3299,7 @@ async def serve_spec(request):
         return create_error_response("Error parsing specification file", 500)
 
 
-async def serve_metadata(request):
+async def serve_fhir_metadata(request):
     """Serve the FHIR capability statement.
 
     Returns the FHIR capability statement as a metadata endpoint.
@@ -3972,19 +3972,19 @@ async def init_app():
     app = web.Application(middlewares=[auth_middleware])
     app.router.add_get('/', serve_web_page)
     # FHIR-compatible endpoints
-    app.router.add_get('/fhir/Patient', search_patient)
-    app.router.add_get('/fhir/Patient/{id}', get_patient)
-    app.router.add_get('/fhir/DiagnosticReport/{id}', get_diagnostic_report)
-    app.router.add_get('/fhir/ImagingStudy/{id}', get_imaging_study)
-    app.router.add_get('/fhir/Encounter/{id}', get_encounter)
-    app.router.add_get('/fhir/Observation', search_observation)
-    app.router.add_get('/fhir/Observation/{id}', get_observation)
-    app.router.add_get('/fhir/ServiceRequest/{id}', get_service_request)
+    app.router.add_get('/fhir/Patient', search_fhir_patient)
+    app.router.add_get('/fhir/Patient/{id}', get_fhir_patient)
+    app.router.add_get('/fhir/DiagnosticReport/{id}', get_fhir_diagnostic_report)
+    app.router.add_get('/fhir/ImagingStudy/{id}', get_fhir_imaging_study)
+    app.router.add_get('/fhir/Encounter/{id}', get_fhir_encounter)
+    app.router.add_get('/fhir/Observation', search_fhir_observation)
+    app.router.add_get('/fhir/Observation/{id}', get_fhir_observation)
+    app.router.add_get('/fhir/ServiceRequest/{id}', get_fhir_service_request)
     app.router.add_get('/fhir/ValueSet/cnp', serve_validate_cnp)
     app.router.add_post('/fhir/md2html', serve_md2html)
-    app.router.add_get('/fhir/CodeSystem/analysis-types', serve_analysis_types)
+    app.router.add_get('/fhir/CodeSystem/analysis-types', serve_fhir_analysis_types)
     app.router.add_get('/fhir/spec', serve_spec)
-    app.router.add_get('/fhir/Metadata', serve_metadata)
+    app.router.add_get('/fhir/Metadata', serve_fhir_metadata)
     app.router.add_static('/static/', path='static', name='static')
 
     # Setup startup and cleanup
