@@ -859,11 +859,24 @@ def extract_text_from_element(soup: 'BeautifulSoup', id: str = None) -> str:
     return content
 
 def extract_selected_from_dropdown(soup: 'BeautifulSoup', id: str = None) -> str:
+    """Extract the text of the selected option from a dropdown element.
+    
+    Args:
+        soup: BeautifulSoup object of the parsed HTML content
+        id: HTML select element ID to extract selected option from
+        
+    Returns:
+        Text content of the selected option, or empty string if not found
+    """
+    if not id:
+        return ""
+        
     element = soup.find('select', id=id)
     if element:
         option = element.find('option', selected=True)
         if option:
-            return selected_option.get_text().strip()
+            return option.get_text().strip()
+    return ""
 
 
 def extract_textarea_after_label(soup: 'BeautifulSoup', label_regex: str) -> str:
