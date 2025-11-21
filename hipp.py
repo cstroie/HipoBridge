@@ -3056,9 +3056,7 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
             data.store("checkout", "datetime", f'{data["checkout"]["date"]} {data["checkout"]["time"]}')
 
         # Extract epicrisis (textarea with id "sEpicrisysHtmlArea")
-        epicrisis_content = extract_text_from_element(soup, 'sEpicrisys')
-        if epicrisis_content:
-            data.store("checkout", "epicrisis", html_to_markdown(epicrisis_content))
+        data.store("checkout", "epicrisis", extract_text_from_element(soup, 'sEpicrisys'))
 
         # Extract diagnostic (textarea after 'Diagnostic externare')
         data.store("checkout", "diagnosis", extract_textarea_after_label(soup, r'Diagnostic externare[^:]*:'))
@@ -3071,21 +3069,17 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
         data.store("checkout", "ward", extract_selected_from_dropdown(soup, name='sSectionCode'))
 
         # Extract surgery (textarea with id "sBOProtocolHtmlArea")
-        surgery_content = extract_text_from_element(soup, 'sBOProtocol')
-        if surgery_content:
-            data.store("checkout", "surgery", html_to_markdown(surgery_content))
+        data.store("checkout", "surgery", extract_text_from_element(soup, 'sBOProtocol'))
 
         # Extract recommendations (textarea with id 'sRecommendationsHtmlArea')
-        recommendations_content = extract_text_from_element(soup, 'sRecommendations')
-        if recommendations_content:
-            data.store("checkout", "recommendations", html_to_markdown(recommendations_content))
+        data.store("checkout", "recommendations", extract_text_from_element(soup, 'sRecommendations'))
 
         # Extract ICD10 diagnostic from textarea with name "sCODiagnosis"
-        icd10_textarea = soup.find('textarea', {'name': 'sCODiagnosis'})
-        if icd10_textarea:
-            data.store("checkout", "icd10", icd10_textarea.get_text())
+        data.store("checkout", "icd10", extract_text_from_element(soup, name='sCODiagnosis'))
 
+        # Return the extracted data
         return data
+
     except Exception as e:
         logger.error(f"Error parsing checkout data: {e}")
         return {}
