@@ -3167,7 +3167,8 @@ async def _get_checkout_data(checkout_id: str, username: str, password: str) -> 
         Tuple of (parsed_data, error_response) where one will be None
     """
     # Create a new HipoClient instance with credentials
-    client = HipoClient(SERVICE_URL)
+    client = HipoClient(SERVICE_URL, None)
+    client.set_credentials(username, password)
 
     # The checkout endpoint
     checkout_url = f"/files/checkout.asp?id={checkout_id}"
