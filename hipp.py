@@ -2939,22 +2939,14 @@ async def get_checkout(request):
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
 
-    # Create a new HipoClient instance with credentials
-    client = HipoClient(SERVICE_URL, username, password)
-
     try:
-        # The checkout endpoint
-        checkout_url = f"/files/checkout.asp?id={id}"
+        # Retrieve and parse the checkout data using shared function
+        parsed_data, error_response = await _get_checkout_data(id, username, password)
         
-        # Retrieve the page
-        response_text, success, error_response = await client.get_page(checkout_url)
-
         # Check for errors in the response
-        if not success:
+        if error_response:
             return error_response
 
-        # Parse the checkout data
-        parsed_data = parse_checkout_data(response_text)
         return web.json_response(parsed_data)
 
     except Exception as e:
@@ -2986,22 +2978,13 @@ async def get_fhir_encounter(request):
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
 
-    # Create a new HipoClient instance with credentials
-    client = HipoClient(SERVICE_URL, username, password)
-
     try:
-        # The checkout endpoint
-        checkout_url = f"/files/checkout.asp?id={id}"
+        # Retrieve and parse the checkout data using shared function
+        parsed_data, error_response = await _get_checkout_data(id, username, password)
         
-        # Retrieve the page
-        response_text, success, error_response = await client.get_page(checkout_url)
-
         # Check for errors in the response
-        if not success:
+        if error_response:
             return error_response
-
-        # Parse the checkout data
-        parsed_data = parse_checkout_data(response_text)
 
         # Convert parsed data to FHIR Encounter resource
         fhir_response = create_fhir_encounter(parsed_data, id, request)
@@ -3122,6 +3105,41 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Error parsing checkout data: {e}")
         return {}
+
+async def _get_checkout_data(checkout_id: str, username: str, password: str) -> tuple:
+    """Retrieve and parse checkout data from Hipocrate service.
+
+    This shared function handles the common logic for retrieving checkout data
+    that is used by both get_checkout and get_fhir_encounter endpoints.
+
+    Args:
+        checkout_id: The ID of the checkout to retrieve
+        username: Username for authentication
+        password: Password for authentication
+
+    Returns:
+        Tuple of (parsed_data, error_response) where one will be None
+    """
+    # Create a new HipoClient instance with credentials
+    client = HipoClient(SERVICE_URL, username, password)
+
+    try:
+        # The checkout endpoint
+        checkout_url = f"/files/checkout.asp?id={checkout_id}"
+        
+        # Retrieve the page
+        response_text, success, error_response = await client.get_page(checkout_url)
+
+        # Check for errors in the response
+        if not success:
+            return None, error_response
+
+        # Parse the checkout data
+        parsed_data = parse_checkout_data(response_text)
+        return parsed_data, None
+
+    except Exception as e:
+        return None, create_error_response("Checkout data retrieval failed", 500, {"exception": str(e)})
 
 def create_fhir_encounter(parsed_data: Dict[str, Any], encounter_id: str, request) -> Dict[str, Any]:
     """Convert parsed checkout data to FHIR Encounter resource.
