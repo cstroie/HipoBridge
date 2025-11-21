@@ -2988,12 +2988,20 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
     """Parse HTML checkout content and extract structured data.
 
     Extracts patient information and medical data from checkout HTML content.
+    This function parses discharge/checkout forms from the Hipocrate system
+    to extract structured data about patient encounters.
 
     Args:
         html_content: HTML content of the checkout page
 
     Returns:
-        Dictionary containing parsed checkout data
+        Dictionary containing parsed checkout data organized in sections:
+        - patient: Patient information (name, id, cnp, gender, date, age)
+        - presentation: Presentation/visit information
+        - checkin: Admission information (id, physician, ward, diagnosis, date, time, datetime)
+        - checkout: Discharge information (date, time, datetime, epicrisis, diagnosis, 
+                   physician, ward, surgery, recommendations, icd10)
+        Returns empty dict if parsing fails or page is not a checkout page.
     """
     # Initialize result dictionary
     data = HipocrateData()
@@ -3005,7 +3013,7 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
         # Check if this is the correct page by looking for title
         if not is_expected_page(soup, 'FISA EXTERNARE'):
             logger.warning("Page is not a discharge page")
-            return
+            return {}
 
         # Extract patient name and ID from the link
         patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id='))
@@ -3016,18 +3024,21 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
 
         # Extract patient CNP
         data.store("patient", "cnp", extract_text_after_label(soup, r'CNP\s*:', 'tr'))
-        parsed_cnp = parse_cnp(data["patient"]["cnp"])
-        data.store("patient", "gender", parsed_cnp.get("gender", ""))
-        data.store("patient", "date", parsed_cnp.get("birth_date", ""))
-        data.store("patient", "age", parsed_cnp.get("age", ""))
-
+        if data.get("patient", {}).get("cnp"):
+            parsed_cnp = parse_cnp(data["patient"]["cnp"])
+            data.store("patient", "gender", parsed_cnp.get("gender", ""))
+            data.store("patient", "date", parsed_cnp.get("birth_date", ""))
+            data.store("patient", "age", parsed_cnp.get("age", ""))
 
         # Extract presentation ID
-        data.store("presentation", "id", extract_ids_from_links(soup, r'presentation\.asp\?id=(\d+)'))
-
+        presentation_ids = extract_ids_from_links(soup, r'presentation\.asp\?id=(\d+)')
+        if presentation_ids:
+            data.store("presentation", "id", presentation_ids)
 
         # Extract admission ID
-        data.store("checkin", "id", extract_ids_from_links(soup, r'checkin\.asp\?id=(\d+)'))
+        checkin_ids = extract_ids_from_links(soup, r'checkin\.asp\?id=(\d+)')
+        if checkin_ids:
+            data.store("checkin", "id", checkin_ids)
 
         # Extract physician
         data.store("checkin", "physician", extract_text_after_label(soup, r'Medic\s*:', 'tr'))
@@ -3043,24 +3054,26 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
         data.store("checkin", "time", extract_value_from_input(soup, 'sCITime'))
         
         # Create combined checkin datetime
-        if data["checkin"]["date"] and data["checkin"]["time"]:
-            data.store("checkin", "datetime", f'{data["checkin"]["date"]} {data["checkin"]["time"]}')
-
+        checkin_date = data.get("checkin", {}).get("date")
+        checkin_time = data.get("checkin", {}).get("time")
+        if checkin_date and checkin_time:
+            data.store("checkin", "datetime", f'{checkin_date} {checkin_time}')
 
         # Extract checkout date and time from input fields
         data.store("checkout", "date", extract_value_from_input(soup, 'sCODate'))
         data.store("checkout", "time", extract_value_from_input(soup, 'sCOTime'))
         
         # Create combined checkout datetime
-        if data["checkout"]["date"] and data["checkout"]["time"]:
-            data.store("checkout", "datetime", f'{data["checkout"]["date"]} {data["checkout"]["time"]}')
+        checkout_date = data.get("checkout", {}).get("date")
+        checkout_time = data.get("checkout", {}).get("time")
+        if checkout_date and checkout_time:
+            data.store("checkout", "datetime", f'{checkout_date} {checkout_time}')
 
         # Extract epicrisis (textarea with id "sEpicrisysHtmlArea")
         data.store("checkout", "epicrisis", extract_text_from_element(soup, 'sEpicrisys'))
 
         # Extract diagnostic (textarea after 'Diagnostic externare')
         data.store("checkout", "diagnosis", extract_textarea_after_label(soup, r'Diagnostic externare[^:]*:'))
-        #data.store("checkout", "diagnosis", extract_text_from_element(soup, 'sCODiagnosis'))
 
         # Extract physician
         data.store("checkout", "physician", extract_selected_from_dropdown(soup, name='iCOMedicID'))
