@@ -2624,7 +2624,12 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
         checkout_data["surgery"] = extract_textarea_after_label(soup, r'Protocol operator[^:]*:')
 
         # Extract recommendations (textarea after 'Recomandari')
-        checkout_data["recommendations"] = extract_textarea_after_label(soup, r'Recomandari[^:]*:')
+        recommendations_textarea = soup.find('textarea', id='sRecommendationsHtmlArea')
+        if recommendations_textarea:
+            checkout_data["recommendations"] = html_to_markdown(str(recommendations_textarea))
+        else:
+            # Fallback to old method if textarea not found
+            checkout_data["recommendations"] = extract_textarea_after_label(soup, r'Recomandari[^:]*:')
 
         # Extract ICD10 diagnostic from textarea with name "sCODiagnosis"
         icd10_textarea = soup.find('textarea', {'name': 'sCODiagnosis'})
