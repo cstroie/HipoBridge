@@ -2592,6 +2592,14 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
             if patient_id:
                 checkout_data["patient_id"] = patient_id.strip()
 
+        # Extract patient CNP
+        cnp_elements = soup.find_all('td', string=re.compile(r'CNP\s*:', re.IGNORECASE))
+        for cnp_element in cnp_elements:
+            next_td = cnp_element.find_next('td')
+            if next_td:
+                checkout_data["patient_cnp"] = next_td.get_text().strip()
+                break
+
         # Extract patient id (Cod pacient)
         code_elements = soup.find_all('td', string=re.compile(r'Cod pacient\s*:', re.IGNORECASE))
         for code_element in code_elements:
