@@ -2600,14 +2600,6 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
                 checkout_data["patient_cnp"] = next_td.get_text().strip()
                 break
 
-        # Extract patient id (Cod pacient)
-        code_elements = soup.find_all('td', string=re.compile(r'Cod pacient\s*:', re.IGNORECASE))
-        for code_element in code_elements:
-            next_td = code_element.find_next('td')
-            if next_td:
-                checkout_data["patient_id"] = next_td.get_text().strip()
-                break
-
         # Extract admission diagnostic
         diag_elements = soup.find_all('td', string=re.compile(r'Diagnostic\s*:', re.IGNORECASE))
         for diag_element in diag_elements:
