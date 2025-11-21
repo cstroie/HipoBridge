@@ -595,6 +595,35 @@ class HipoClient:
         # If we've exceeded the maximum redirects
         return None, False, create_error_response(f"Exceeded maximum redirects ({max_redirects})", 500)
 
+    async def fetch_and_parse(self, url: str, parser_func, max_redirects=5):
+        """Generic method to fetch data from an endpoint and parse it with a provided function.
+
+        This method provides a reusable way to fetch data from any endpoint and parse it
+        using a custom parser function.
+
+        Args:
+            url: The URL to request
+            parser_func: Function to parse the response text into structured data
+            max_redirects: Maximum number of redirects to follow (default: 5)
+
+        Returns:
+            Tuple of (parsed_data, error_response) where one will be None
+        """
+        try:
+            # Retrieve the page
+            response_text, success, error_response = await self.get_page(url, max_redirects)
+
+            # Check for errors in the response
+            if not success:
+                return None, error_response
+
+            # Parse the data using the provided parser function
+            parsed_data = parser_func(response_text)
+            return parsed_data, None
+
+        except Exception as e:
+            return None, create_error_response("Data retrieval failed", 500, {"exception": str(e)})
+
     async def make_authenticated_request(self, url, method="GET", data=None, username=None, password=None):
         """Make an authenticated request to the Hipocrate service with automatic login handling.
 
@@ -3123,23 +3152,11 @@ async def _get_checkout_data(checkout_id: str, username: str, password: str) -> 
     # Create a new HipoClient instance with credentials
     client = HipoClient(SERVICE_URL, username, password)
 
-    try:
-        # The checkout endpoint
-        checkout_url = f"/files/checkout.asp?id={checkout_id}"
-        
-        # Retrieve the page
-        response_text, success, error_response = await client.get_page(checkout_url)
-
-        # Check for errors in the response
-        if not success:
-            return None, error_response
-
-        # Parse the checkout data
-        parsed_data = parse_checkout_data(response_text)
-        return parsed_data, None
-
-    except Exception as e:
-        return None, create_error_response("Checkout data retrieval failed", 500, {"exception": str(e)})
+    # The checkout endpoint
+    checkout_url = f"/files/checkout.asp?id={checkout_id}"
+    
+    # Use the generic fetch and parse method
+    return await client.fetch_and_parse(checkout_url, parse_checkout_data)
 
 def create_fhir_encounter(parsed_data: Dict[str, Any], encounter_id: str, request) -> Dict[str, Any]:
     """Convert parsed checkout data to FHIR Encounter resource.
