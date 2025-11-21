@@ -1252,7 +1252,7 @@ class HipoClientServiceRequest(HipoClient):
             # Extract patient ID
             patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id='))
             if patient_link:
-                data.store("patient", "name", extract_id_from_link(patient_link))
+                data.store("patient", "id", extract_id_from_link(patient_link))
 
 
             # Extract physician

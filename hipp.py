@@ -30,13 +30,12 @@ Version: 1.0.0
 import os
 import asyncio
 import aiohttp
-from aiohttp import web, BasicAuth
-from yarl import URL
+from aiohttp import web
 from typing import Dict, Any, Optional, List
 import json
 import logging
 import re
-from bs4 import BeautifulSoup, Comment
+from bs4 import BeautifulSoup
 import html
 from datetime import datetime, timedelta
 import configparser
