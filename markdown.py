@@ -18,9 +18,8 @@ Key features:
 - Robust error handling with fallback processing
 """
 
-from typing import Dict, Any, Optional, List
 import re
-from bs4 import BeautifulSoup, Comment
+from bs4 import BeautifulSoup
 import html
 
 def html_to_markdown(html_content: str) -> str:
