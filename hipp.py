@@ -673,7 +673,39 @@ class HipocrateClient:
 
 
 class HipocrateData(dict):
+    """A specialized dictionary for storing structured data with section support.
+    
+    This class extends the standard dict to provide a convenient store() method
+    for organizing data in hierarchical sections. It's particularly useful for
+    parsing structured HTML data where information needs to be grouped by categories.
+    
+    The store() method can handle different scenarios:
+    - Store data directly in the root dictionary when no section is provided
+    - Store data in named sections, creating them automatically if they don't exist
+    - Handle special cases where the section name should be used as the key
+    
+    Examples:
+        data = HipocrateData()
+        
+        # Store in root
+        data.store(None, "name", "John Doe")
+        
+        # Store in a section
+        data.store("patient", "id", "12345")
+        
+        # Store with section as key
+        data.store("diagnosis", None, "Healthy")
+    """
+    
     def store(self, section: str = None, key: str = None, value: str = None) -> None:
+        """Store a value in the dictionary, optionally within a section.
+        
+        Args:
+            section: Optional section name to group related data. If None, data is stored in root.
+            key: Key for the value. If None, section name is used as key and value is stored in root.
+            value: Value to store. Lists with one element are automatically unwrapped,
+                  and string values are stripped of whitespace.
+        """
         logger.debug(f"Data store '{section},{key}' = '{value}'")
         # Handle the case where no section is provided
         if not section:
