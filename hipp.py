@@ -2620,10 +2620,15 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
         # Extract diagnostic (textarea after 'Diagnostic externare')
         checkout_data["diagnostic"] = extract_textarea_after_label(soup, r'Diagnostic externare[^:]*:')
 
-        # Extract surgery (textarea after 'Protocol operator:')
-        checkout_data["surgery"] = extract_textarea_after_label(soup, r'Protocol operator[^:]*:')
+        # Extract surgery (textarea with id "sBOProtocolHtmlArea")
+        surgery_textarea = soup.find('textarea', id='sBOProtocolHtmlArea')
+        if surgery_textarea:
+            checkout_data["surgery"] = html_to_markdown(str(surgery_textarea))
+        else:
+            # Fallback to old method if textarea not found
+            checkout_data["surgery"] = extract_textarea_after_label(soup, r'Protocol operator[^:]*:')
 
-        # Extract recommendations (textarea after 'Recomandari')
+        # Extract recommendations (textarea with id 'sRecommendationsHtmlArea')
         recommendations_textarea = soup.find('textarea', id='sRecommendationsHtmlArea')
         if recommendations_textarea:
             checkout_data["recommendations"] = html_to_markdown(str(recommendations_textarea))
