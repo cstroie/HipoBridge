@@ -45,7 +45,7 @@ import base64
 # Import FHIR classes
 from fhir import ServiceRequest as FHIRServiceRequest, CodeableConcept, Coding, Reference, CodeableReference, Condition, Patient as FHIRPatient
 
-from hipo import HipoClient, HipoClientCheckout
+from hipo import HipoClient, HipoClientCheckout, HipoClientServiceRequest
 from hipo import HipoData
 
 from extractors import extract_id_from_link, extract_ids_from_links, extract_selected_from_dropdown, extract_tabular_data, extract_text_after_label, extract_text_from_element, extract_textarea_after_label, extract_value_from_input
@@ -111,12 +111,6 @@ ANALYSIS_TYPES = {
         "definition": "Anatomopathology"
     }
 }
-
-
-
-
-
-
 
 
 # Authentication helpers
@@ -1796,220 +1790,25 @@ async def get_fhir_service_request(request):
         return create_error_response("Service request ID is required")
     logger.info(f"Retrieving service request with ID: {id}")
 
-    # Create a new HipoClient instance with credentials
-    client = HipoClient(SERVICE_URL, request)
-
     try:
-        # The service request endpoint
-        request_url = f"/Analyse/LabRequest/buletinRecoltari.asp?id={id}"
+        # Create a new HipoClient instance with credentials
+        client = HipoClientServiceRequest(SERVICE_URL, request)
 
-        # Retrieve the page
-        response_text, success, error_response = await client.get_page(request_url)
+        # Retrieve and parse the page, then convert to FHIR resource
+        fhir_response, error_response = await client.fetch_repond_fhir(id=id)
 
         # Check for errors in the response
-        if not success:
+        if error_response:
             return error_response
-
-        # Parse the service request data from HTML content
-        request_data = parse_request_data(response_text)
         
-        # Create FHIR ServiceRequest resource from parsed data
-        fhir_response = create_fhir_service_request(request_data, id, request)
+        # Return the response
         return web.json_response(fhir_response)
 
     except Exception as e:
         return create_error_response("Service request retrieval failed", 500, {"exception": str(e)})
 
-def parse_request_data(html_content: str) -> Dict[str, Any]:
-    """Parse HTML service request content and extract structured data.
 
-    Extracts patient information and medical data from service request HTML content.
 
-    Args:
-        html_content: HTML content of the service request page
-
-    Returns:
-        Dictionary containing parsed service request data
-    """
-    try:
-        # Parse HTML content
-        soup = BeautifulSoup(html_content, 'html.parser')
-
-        # Initialize result dictionary
-        request_data = {
-            "patient_name": "",
-            "patient_id": "",
-            "physician": "",
-            "admission_id": "",
-            "diagnosis": "",
-            "clinical_comments": "",
-            "lab_comments": "",
-            "procedures": {},
-            "request_datetime": "",
-            "is_urgent": "~URGENTA~" in html_content
-        }
-
-        # Extract patient name
-        request_data["patient_name"] = extract_text_after_label(soup, r'Nume Pacient:')
-
-        # Extract patient ID
-        patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id='))
-        if patient_link:
-            request_data["patient_id"] = extract_id_from_link(patient_link)
-
-        # Extract physician
-        request_data["physician"] = extract_text_after_label(soup, r'Medicul:', stop_at=r'-')
-
-        # Extract admission ID from the "Back" link
-        admission_ids = extract_ids_from_links(soup, r'/checkin\.asp\?id=([^&"]+)')
-        if admission_ids:
-            request_data["admission_id"] = admission_ids[0]
-
-        # Extract diagnosis
-        request_data["diagnosis"] = extract_text_after_label(soup, r'Diagnostic:', 'td')
-
-        # Extract comments (clinical and lab)
-        comment_headers = soup.find_all('td', class_='tdnplus', string=re.compile(r'Comentariile', re.IGNORECASE))
-        if len(comment_headers) >= 2:
-            # Get the next row which contains the actual comments
-            comment_row = comment_headers[0].parent.find_next_sibling('tr')
-            if comment_row:
-                comment_tds = comment_row.find_all('td', class_='tdn')
-                if len(comment_tds) >= 2:
-                    request_data["clinical_comments"] = comment_tds[0].get_text().strip()
-                    request_data["lab_comments"] = comment_tds[1].get_text().strip()
-
-        # Extract procedures from the table
-        procedure_rows = soup.find_all('tr')
-        for row in procedure_rows:
-            cells = row.find_all('td')
-            if len(cells) >= 3:
-                # Check if this is a procedure row (has numbering in first cell)
-                first_cell_text = cells[0].get_text().strip()
-                if first_cell_text and first_cell_text.isdigit():
-                    procedure_text = cells[1].get_text().strip()
-                    if procedure_text:
-                        request_data["procedures"][first_cell_text] = procedure_text
-
-        # Extract request datetime (Data si ora cererii)
-        request_data["request_datetime"] = extract_text_after_label(soup, r'Data si ora cererii:', stop_at=r'Receptionat')
-
-        return request_data
-    except Exception as e:
-        logger.error(f"Error parsing service request data: {e}")
-        return {}
-
-def create_fhir_service_request(request_data: Dict[str, Any], service_request_id: str, http_request) -> Dict[str, Any]:
-    """Convert parsed service request data to FHIR ServiceRequest resource.
-
-    Args:
-        request_data: Parsed service request data from parse_request_data
-        service_request_id: The ID of the service request
-        http_request: The HTTP request object to get the host
-
-    Returns:
-        FHIR ServiceRequest resource
-    """
-    try:
-        # Create FHIR ServiceRequest resource using the FHIR class
-        fhir_service_request = FHIRServiceRequest(
-            id=service_request_id,
-            status="active",
-            intent="order",
-            priority="urgent" if request_data.get("is_urgent", False) else "routine"
-        )
-
-        # Create subject reference
-        subject = Reference(
-            reference=f"Patient/{request_data.get('patient_id', '')}"
-        )
-
-        # Add patient name to subject if available
-        if request_data.get("patient_name"):
-            subject["display"] = request_data["patient_name"]
-        fhir_service_request["subject"] = subject
-
-        # Create codeable concept for the service type
-        code = CodeableConcept(
-            coding=[{
-                "system": f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/service-types",
-                "code": "imaging-study",
-                "display": "Imaging Study"
-            }],
-            text="Imaging Study Request"
-        )
-        fhir_service_request["code"] = code
-
-        # Add requester if available (requesting doctor)
-        if request_data.get("physician"):
-            fhir_service_request["requester"] = Reference(display=request_data["physician"])
-
-        # Add encounter if we can derive it
-        if request_data.get("admission_id"):
-            fhir_service_request["encounter"] = Reference(
-                reference=f"Encounter/{request_data['admission_id']}"
-            )
-
-        # Add reason code if diagnosis is available
-        if request_data.get("diagnosis"):
-            diagnosis = request_data["diagnosis"]
-            # Try to extract ICD-10 code from the diagnosis text
-            # Format is usually "CODE Description"
-            diagnosis_match = re.match(r'^(\d{3,4})\s+(.+)$', diagnosis)
-            if diagnosis_match:
-                condition = Reference(
-                    reference=f"Condition/{diagnosis_match.group(1)}",
-                    display=diagnosis_match.group(2)
-                )
-            else:
-                # If no code found, use the entire diagnosis as display text
-                condition = Reference(display=diagnosis)
-            fhir_service_request["reason"] = [condition]
-
-        # Add reason reference if clinical comments are available
-        if request_data.get("clinical_comments"):
-            fhir_service_request["supportingInfo"] = [{
-                "display": request_data["clinical_comments"]
-            }]
-
-        # Add note for lab comments
-        if request_data.get("lab_comments"):
-            fhir_service_request["note"] = [{
-                "text": request_data["lab_comments"]
-            }]
-
-        # Add order details for procedures
-        if request_data.get("procedures"):
-            procedures = request_data["procedures"]
-            order_details = []
-            for code, description in procedures.items():
-                order_detail = CodeableConcept(
-                    coding=[{
-                        "system": f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/procedure-codes",
-                        "code": f"procedure-{code}",
-                        "display": description
-                    }],
-                    text=description
-                )
-                order_details.append(order_detail)
-            fhir_service_request["orderDetail"] = order_details
-
-        # Add authoredOn if request datetime is available
-        if request_data.get("request_datetime"):
-            request_datetime = request_data["request_datetime"]
-            # Parse the datetime using our parse_date_time function
-            parsed_dt = parse_date_time(request_datetime)
-            if parsed_dt:
-                # Convert to ISO format
-                fhir_service_request["authoredOn"] = parsed_dt.isoformat()
-            else:
-                # If parsing fails, keep the original string
-                fhir_service_request["authoredOn"] = request_datetime
-
-        return fhir_service_request.to_dict()
-    except Exception as e:
-        logger.error(f"Error converting service request data: {e}")
-        return {}
 
 @require_auth
 async def get_checkout(request):
