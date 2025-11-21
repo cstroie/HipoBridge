@@ -17,6 +17,7 @@ from tests.reports import test_report_endpoint_missing_id
 from tests.checkout import test_checkout_endpoint_missing_id
 from tests.cnp import test_cnp_validation_endpoint, test_cnp_validation_missing_id
 from tests.extractors import test_extract_text_after_label_basic, test_extract_text_after_label_with_element_tag, test_extract_text_after_label_with_stop_at, test_extract_text_after_label_not_found, test_extract_text_after_label_case_insensitive, test_extract_text_with_bold_tag, test_extract_text_with_bold_and_underline_tags, test_extract_text_with_whitespace, test_extract_id_from_link_basic, test_extract_id_from_link_with_custom_pattern, test_extract_id_from_link_no_href, test_extract_id_from_link_no_match, test_extract_ids_from_links_basic, test_extract_ids_from_links_with_custom_pattern, test_extract_ids_from_links_no_matches
+from tests.hipodata import TestHipoData
 
 # Configuration
 BASE_URL = "http://localhost:44660"
@@ -42,7 +43,8 @@ TEST_GROUPS = {
         test_extract_text_after_label_with_element_tag,
         test_extract_text_after_label_with_stop_at,
         test_extract_text_after_label_not_found,
-        test_extract_text_after_label_case_insensitive
+        test_extract_text_after_label_case_insensitive,
+        TestHipoData
     ],
     "root": [test_root_endpoint],
     "auth": [
@@ -78,7 +80,8 @@ TEST_GROUPS = {
         test_extract_ids_from_links_basic,
         test_extract_ids_from_links_with_custom_pattern,
         test_extract_ids_from_links_no_matches
-    ]
+    ],
+    "hipodata": [TestHipoData]
 }
 
 async def run_tests(test_list) -> None:
