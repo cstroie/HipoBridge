@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-HippoBridge - FHIR Bridge for Hipocrate Medical System
+HipoBridge - FHIR Bridge for Hipocrate Medical System
 
 This application provides a FHIR-compatible API bridge to access patient data
 from the Hipocrate medical system. It exposes endpoints for patient search,
@@ -51,7 +51,7 @@ logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s | %(levelname)8s | %(message)s'
 )
-logger = logging.getLogger('HippoBridge')
+logger = logging.getLogger('HipoBridge')
 
 # Default configuration
 DEFAULT_CONFIG = {
@@ -241,7 +241,7 @@ class UserSessionManager:
 user_session_manager = UserSessionManager()
 
 
-class HipocrateClient:
+class HipoClient:
     """Client for interacting with the Hipocrate medical system."""
 
     def __init__(self, service_url: str, username: str = None, password: str = None):
@@ -672,7 +672,7 @@ class HipocrateClient:
             return None, False, create_error_response(str(e), 500, {"URL": url})
 
 
-class HipocrateData(dict):
+class HipoData(dict):
     """A specialized dictionary for storing structured data with section support.
     
     This class extends the standard dict to provide a convenient store() method
@@ -685,7 +685,7 @@ class HipocrateData(dict):
     - Handle special cases where the section name should be used as the key
     
     Examples:
-        data = HipocrateData()
+        data = HipoData()
         
         # Store in root
         data.store(None, "name", "John Doe")
@@ -1034,7 +1034,7 @@ def require_auth(handler):
         # Get credentials from basic auth
         auth = get_basic_auth(request)
         if not auth:
-            return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
+            return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HipoBridge"'})
         # Extract username and password
         username, password = auth
         # Add credentials to request for use in handler
@@ -1070,8 +1070,8 @@ async def get_fhir_patient(request):
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
 
-    # Create a new HipocrateClient instance with credentials
-    client = HipocrateClient(SERVICE_URL, username, password)
+    # Create a new HipoClient instance with credentials
+    client = HipoClient(SERVICE_URL, username, password)
 
     try:
         # Make request to the patient endpoint
@@ -1125,8 +1125,8 @@ async def search_fhir_patient(request):
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
 
-    # Create a new HipocrateClient instance with credentials
-    client = HipocrateClient(SERVICE_URL, username, password)
+    # Create a new HipoClient instance with credentials
+    client = HipoClient(SERVICE_URL, username, password)
 
     try:
         # Determine search type based on input
@@ -1593,8 +1593,8 @@ async def get_fhir_diagnostic_report(request):
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
 
-    # Create a new HipocrateClient instance with credentials
-    client = HipocrateClient(SERVICE_URL, username, password)
+    # Create a new HipoClient instance with credentials
+    client = HipoClient(SERVICE_URL, username, password)
 
     try:
         # The report endpoint
@@ -1639,8 +1639,8 @@ async def get_fhir_imaging_study(request):
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
 
-    # Create a new HipocrateClient instance with credentials
-    client = HipocrateClient(SERVICE_URL, username, password)
+    # Create a new HipoClient instance with credentials
+    client = HipoClient(SERVICE_URL, username, password)
 
     try:
         # The study endpoint
@@ -1863,7 +1863,7 @@ def parse_report(html_content: str) -> Dict[str, Any]:
         Returns empty dict if parsing fails.
     """
     # Initialize result dictionary
-    data = HipocrateData()
+    data = HipoData()
 
     try:
         # Parse HTML content with BeautifulSoup
@@ -2254,8 +2254,8 @@ async def get_fhir_observation(request):
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
 
-    # Create a new HipocrateClient instance with credentials
-    client = HipocrateClient(SERVICE_URL, username, password)
+    # Create a new HipoClient instance with credentials
+    client = HipoClient(SERVICE_URL, username, password)
 
     try:
         # The observation endpoint
@@ -2427,8 +2427,8 @@ async def search_fhir_observation(request):
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
 
-    # Create a new HipocrateClient instance with credentials
-    client = HipocrateClient(SERVICE_URL, username, password)
+    # Create a new HipoClient instance with credentials
+    client = HipoClient(SERVICE_URL, username, password)
 
     # Get optional parameters
     exam_type = request.query.get('type')
@@ -2702,8 +2702,8 @@ async def get_fhir_service_request(request):
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
 
-    # Create a new HipocrateClient instance with credentials
-    client = HipocrateClient(SERVICE_URL, username, password)
+    # Create a new HipoClient instance with credentials
+    client = HipoClient(SERVICE_URL, username, password)
 
     try:
         # The service request endpoint
@@ -2939,8 +2939,8 @@ async def get_checkout(request):
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
 
-    # Create a new HipocrateClient instance with credentials
-    client = HipocrateClient(SERVICE_URL, username, password)
+    # Create a new HipoClient instance with credentials
+    client = HipoClient(SERVICE_URL, username, password)
 
     try:
         # The checkout endpoint
@@ -2986,8 +2986,8 @@ async def get_fhir_encounter(request):
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
 
-    # Create a new HipocrateClient instance with credentials
-    client = HipocrateClient(SERVICE_URL, username, password)
+    # Create a new HipoClient instance with credentials
+    client = HipoClient(SERVICE_URL, username, password)
 
     try:
         # The checkout endpoint
@@ -3030,7 +3030,7 @@ def parse_checkout_data(html_content: str) -> Dict[str, Any]:
         Returns empty dict if parsing fails or page is not a checkout page.
     """
     # Initialize result dictionary
-    data = HipocrateData()
+    data = HipoData()
 
     try:
         # Parse HTML content with BeautifulSoup
@@ -3357,19 +3357,19 @@ async def serve_fhir_metadata(request):
     # Create a basic FHIR CapabilityStatement
     capability_statement = {
         "resourceType": "CapabilityStatement",
-        "id": "hippobridge-fhir-capability-statement",
+        "id": "hipobridge-fhir-capability-statement",
         "url": f"{request.scheme}://{request.host}/fhir/Metadata",
         "version": "1.0.0",
-        "name": "HippoBridgeFHIRCapabilityStatement",
-        "title": "HippoBridge FHIR Capability Statement",
+        "name": "HipoBridgeFHIRCapabilityStatement",
+        "title": "HipoBridge FHIR Capability Statement",
         "status": "active",
         "experimental": False,
         "date": datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
-        "publisher": "HippoBridge",
-        "description": "This is the FHIR capability statement for the HippoBridge FHIR API",
+        "publisher": "HipoBridge",
+        "description": "This is the FHIR capability statement for the HipoBridge FHIR API",
         "kind": "instance",
         "software": {
-            "name": "HippoBridge",
+            "name": "HipoBridge",
             "version": "1.0.0"
         },
         "fhirVersion": "4.0.1",
@@ -3877,11 +3877,11 @@ async def serve_web_page(request):
     username, password = request.auth_credentials
 
     # Try to login with provided credentials
-    client = HipocrateClient(SERVICE_URL, username, password)
+    client = HipoClient(SERVICE_URL, username, password)
     session, login_success = await client.get_authenticated_session(username, password)
 
     if not login_success:
-        return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
+        return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HipoBridge"'})
 
     # Set cookie with 30-minute expiration
     response = web.StreamResponse()
@@ -4048,6 +4048,6 @@ HOST = config.get('server', 'host')
 
 # Run the application
 if __name__ == "__main__":
-    logger.info(f"Starting HippoBridge server on {HOST}:{PORT}")
+    logger.info(f"Starting HipoBridge server on {HOST}:{PORT}")
     app = init_app()
     web.run_app(app, host=HOST, port=PORT)
