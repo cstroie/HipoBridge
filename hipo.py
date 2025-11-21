@@ -1403,37 +1403,48 @@ class HipoClientServiceRequest(HipoClient):
         """Convert parsed service request data to FHIR ServiceRequest resource.
 
         Args:
-            request_data: Parsed service request data from parse_request_data
-            service_request_id: The ID of the service request
-            http_request: The HTTP request object to get the host
+            parsed_data: Parsed service request data from parse_data
+            **kwargs: Additional arguments including 'http_request' for host information
 
         Returns:
             FHIR ServiceRequest resource
         """
-        service_request_id = parsed_data.get('request', {}).get('id', '')
+        # Extract http_request from kwargs if available
+        http_request = kwargs.get('http_request')
+        
+        # Get service request ID from the request URL parameters
+        service_request_id = kwargs.get('id', '')
+        
         try:
             # Create FHIR ServiceRequest resource using the FHIR class
             fhir_service_request = FHIRServiceRequest(
                 id=service_request_id,
                 status="active",
                 intent="order",
-                priority="urgent" if request_data.get("is_urgent", False) else "routine"
+                priority="urgent" if parsed_data.get("is_urgent", False) else "routine"
             )
 
             # Create subject reference
+            patient_id = parsed_data.get("patient", {}).get("id", "")
             subject = Reference(
-                reference=f"Patient/{request_data.get('patient_id', '')}"
+                reference=f"Patient/{patient_id}"
             )
 
             # Add patient name to subject if available
-            if request_data.get("patient_name"):
-                subject["display"] = request_data["patient_name"]
+            patient_name = parsed_data.get("patient", {}).get("name", "")
+            if patient_name:
+                subject["display"] = patient_name
             fhir_service_request["subject"] = subject
 
             # Create codeable concept for the service type
+            if http_request:
+                system_url = f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/service-types"
+            else:
+                system_url = "http://example.com/fhir/CodeSystem/service-types"
+                
             code = CodeableConcept(
                 coding=[{
-                    "system": f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/service-types",
+                    "system": system_url,
                     "code": "imaging-study",
                     "display": "Imaging Study"
                 }],
@@ -1442,18 +1453,20 @@ class HipoClientServiceRequest(HipoClient):
             fhir_service_request["code"] = code
 
             # Add requester if available (requesting doctor)
-            if request_data.get("physician"):
-                fhir_service_request["requester"] = Reference(display=request_data["physician"])
+            physician = parsed_data.get("checkin", {}).get("physician")
+            if physician:
+                fhir_service_request["requester"] = Reference(display=physician)
 
             # Add encounter if we can derive it
-            if request_data.get("admission_id"):
+            admission_id = parsed_data.get("checkin", {}).get("id")
+            if admission_id:
                 fhir_service_request["encounter"] = Reference(
-                    reference=f"Encounter/{request_data['admission_id']}"
+                    reference=f"Encounter/{admission_id}"
                 )
 
             # Add reason code if diagnosis is available
-            if request_data.get("diagnosis"):
-                diagnosis = request_data["diagnosis"]
+            diagnosis = parsed_data.get("checkin", {}).get("diagnosis")
+            if diagnosis:
                 # Try to extract ICD-10 code from the diagnosis text
                 # Format is usually "CODE Description"
                 diagnosis_match = re.match(r'^(\d{3,4})\s+(.+)$', diagnosis)
@@ -1468,25 +1481,32 @@ class HipoClientServiceRequest(HipoClient):
                 fhir_service_request["reason"] = [condition]
 
             # Add reason reference if clinical comments are available
-            if request_data.get("clinical_comments"):
+            clinical_comments = parsed_data.get("request", {}).get("clinical_comments")
+            if clinical_comments:
                 fhir_service_request["supportingInfo"] = [{
-                    "display": request_data["clinical_comments"]
+                    "display": clinical_comments
                 }]
 
             # Add note for lab comments
-            if request_data.get("lab_comments"):
+            lab_comments = parsed_data.get("request", {}).get("lab_comments")
+            if lab_comments:
                 fhir_service_request["note"] = [{
-                    "text": request_data["lab_comments"]
+                    "text": lab_comments
                 }]
 
             # Add order details for procedures
-            if request_data.get("procedures"):
-                procedures = request_data["procedures"]
+            procedures = parsed_data.get("procedures")
+            if procedures:
                 order_details = []
+                if http_request:
+                    procedure_system_url = f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/procedure-codes"
+                else:
+                    procedure_system_url = "http://example.com/fhir/CodeSystem/procedure-codes"
+                    
                 for code, description in procedures.items():
                     order_detail = CodeableConcept(
                         coding=[{
-                            "system": f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/procedure-codes",
+                            "system": procedure_system_url,
                             "code": f"procedure-{code}",
                             "display": description
                         }],
@@ -1496,8 +1516,8 @@ class HipoClientServiceRequest(HipoClient):
                 fhir_service_request["orderDetail"] = order_details
 
             # Add authoredOn if request datetime is available
-            if request_data.get("request_datetime"):
-                request_datetime = request_data["request_datetime"]
+            request_datetime = parsed_data.get("request", {}).get("datetime")
+            if request_datetime:
                 # Parse the datetime using our parse_date_time function
                 parsed_dt = parse_date_time(request_datetime)
                 if parsed_dt:
