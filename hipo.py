@@ -55,11 +55,11 @@ RADIO_REGION_RULES = {
     'ribs': ['coastelor'],
     'sternum': ['sternului'],
     'abdominal': ['abdomenului', 'renala'],
-    'skull': ['craniului'],
+    'skull': ['craniului', 'occiput'],
     'mandible': ['mandibulei', 'temporomandibulare'],
     'nasal_bones': ['nasului'],
     'paranasal_sinuses': ['sinusului'],
-    'larynx': ['laringelui'],
+    'neck': ['laringelui'],
     'spine': ['coloanei'],
     'pelvis': ['pelvina'],
     'clavicle': ['claviculei'],
@@ -72,9 +72,24 @@ RADIO_REGION_RULES = {
     'knee': ['genunchiului'],
     'ankle': ['gleznei'],
     'foot': ['piciorului'],
-    'foreign_bodies': ['straini'],
-    'skeleton': ['schelet', 'silverman', 'displazii']
+    'other': ['straini', 'schelet', 'silverman', 'displazii']
 }
+
+ECO_REGION_RULES = {
+    'brain': ['capului'],
+    'chest': ['toracelui', 'peretelui'],
+    'neck': ['gatului'],
+    'abdominal': ['abdominala'],
+    'spine': ['coloanei'],
+    'pelvis': ['pelviana'],
+    'hip': ['soldului'],
+    'inguinal': ['inghonale'],
+    'scrotum': ['scrotala'],
+    'skin': ['tegumentului'],
+    'fetus':['fetale', 'fatului'],
+    'other': ['altor']
+}
+
 
 
 
