@@ -709,7 +709,6 @@ async def get_fhir_diagnostic_report(request):
         # Return DiagnosticReport
         report_data = parse_report_data(response_text)
         report_data['report_id'] = id
-        print(report_data)
         fhir_response = create_fhir_diagnostic_report(report_data, request)
         return web.json_response(fhir_response)
 
