@@ -45,7 +45,7 @@ import base64
 from fhir import ServiceRequest as FHIRServiceRequest, CodeableConcept, Coding, Reference, CodeableReference, Condition, Patient as FHIRPatient
 
 from hipo import HipoClient, HipoClientCheckout, HipoClientServiceRequest
-from hipo import HipoData, user_session_manager
+from hipo import HipoData, user_session_manager, identify_study_type_and_region
 
 from extractors import extract_id_from_link, extract_ids_from_links, extract_selected_from_dropdown, extract_tabular_data, extract_text_after_label, extract_text_from_element, extract_textarea_after_label, extract_value_from_input
 from extractors import parse_cnp
@@ -906,9 +906,13 @@ def parse_report_data(html_content: str) -> Dict[str, Any]:
                         result_content = html_to_markdown(str(result_div))
 
                 # Add to reports list
+                # Process investigation name to identify study type and region
+                study_type, region = identify_study_type_and_region(investigation_name)
                 report_data["reports"].append({
                     "investigation": investigation_name,
-                    "result": result_content
+                    "result": result_content,
+                    "type": study_type,
+                    "region": region
                 })
             except Exception as e:
                 logger.error(f"Error parsing individual report: {e}")
