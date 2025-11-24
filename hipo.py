@@ -1494,7 +1494,8 @@ class HipoClientServiceRequest(HipoClient):
                 else:
                     study_system_url = "http://example.com/fhir/CodeSystem/study-codes"
                     
-                for code, description, study_type, study_region in studies.items():
+                for code, study_info in studies.items():
+                    description = study_info.get("description", "")
                     order_detail = CodeableConcept(
                         coding=[{
                             "system": study_system_url,
