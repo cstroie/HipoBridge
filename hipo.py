@@ -70,7 +70,7 @@ def load_region_rules():
     return radio_rules, eco_rules
 
 # Load the region rules
-RADIO_REGION_RULES, ECO_REGION_RULES = load_region_rules()
+RADIO_REGION_RULES, ECO_REGION_RULES, CT_REGION_RULES = load_region_rules() + ({},) if len(load_region_rules()) < 3 else load_region_rules()
 
 
 
@@ -117,8 +117,12 @@ def identify_study_type_and_region(desc: str) -> tuple:
     
     desc_lower = desc.lower()
     
+    # Check if it's a CT study (contains TOMOGRAFIA COMPUTERIZATA)
+    if 'tomografia computerizata' in desc_lower:
+        study_type = 'ct'
+        region_rules = CT_REGION_RULES
     # Check if it's a radiography study (starts with RADIOGRAFIA or RADIO)
-    if desc_lower.startswith('radiografia') or desc_lower.startswith('radio'):
+    elif desc_lower.startswith('radiografia') or desc_lower.startswith('radio'):
         study_type = 'radio'
         region_rules = RADIO_REGION_RULES
     # Check if it's an ultrasound study (starts with ECOGRAFIA, ULTRASONOGRAFIA, or ECO)
