@@ -128,19 +128,21 @@ def identify_study_type_and_region(desc: str) -> tuple:
     desc_lower = desc.lower()
     
     # Check if it's an MRI study (contains REZONANTA MAGNETICA)
-    if 'rezonanta magnetica' in desc_lower:
+    if 'rezonanta' in desc_lower:
         study_type = 'mri'
         region_rules = MRI_REGION_RULES
     # Check if it's a CT study (contains TOMOGRAFIA COMPUTERIZATA)
-    elif 'tomografia computerizata' in desc_lower:
+    elif desc_lower.startswith('tomografia') or \
+         desc_lower.startswith('angiotomografia') or \
+         desc_lower.startswith('densitometria'):
         study_type = 'ct'
         region_rules = CT_REGION_RULES
     # Check if it's a radiography study (starts with RADIOGRAFIA or RADIO)
-    elif desc_lower.startswith('radiografia') or desc_lower.startswith('radio'):
+    elif desc_lower.startswith('radiografia'):
         study_type = 'radio'
         region_rules = RADIO_REGION_RULES
     # Check if it's an ultrasound study (starts with ECOGRAFIA, ULTRASONOGRAFIA, or ECO)
-    elif desc_lower.startswith('ecografia') or desc_lower.startswith('ultrasonografia') or desc_lower.startswith('eco'):
+    elif desc_lower.startswith('ecografia') or desc_lower.startswith('ultrasonografia'):
         study_type = 'eco'
         region_rules = ECO_REGION_RULES
     else:
