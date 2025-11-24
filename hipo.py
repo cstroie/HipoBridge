@@ -49,6 +49,77 @@ logging.basicConfig(
 )
 logger = logging.getLogger('HipoClient')
 
+# Region identification rules
+REGION_RULES = {
+    'chest': ['torace', 'pulmon', 'thorax', 'chest'],
+    'ribs': ['grilaj', 'coaste'],
+    'sternum': ['stern'],
+    'abdominal': ['abdomen', 'abdominal'],
+    'skull': ['cap', 'craniu', 'occiput', 'skull'],
+    'mandible': ['mandibula'],
+    'nasal_bones': ['nazal', 'piramida'],
+    'paranasal_sinuses': ['sinus'],
+    'spine': ['col.', 'spine', 'dens', 'sacrat'],
+    'pelvis': ['bazin', 'pelvis'],
+    'clavicle': ['clavicula', 'clavicle'],
+    'upper_limb': ['humerus', 'antebrat', 'forearm'],
+    'hand': ['pumn', 'mana', 'deget', 'hand', 'finger'],
+    'shoulder': ['umar', 'shoulder'],
+    'elbow': ['cot', 'elbow'],
+    'hip': ['sold', 'hip'],
+    'lower_limb': ['femur', 'tibie', 'picior', 'gamba', 'calcai', 'leg', 'foot'],
+    'knee': ['genunchi', 'patella', 'knee'],
+    'ankle': ['glezna', 'calcaneu', 'ankle']
+}
+
+# List of radiography studies
+RADIO_STUDIES = [
+    "RADIOGRAFIA ABDOMENULUI",
+    "RADIOGRAFIA ANTEBRATULUI",
+    "RADIOGRAFIA ARTICULATIEI MAINII",
+    "RADIOGRAFIA ARTICULATIEI SOLDULUI",
+    "RADIOGRAFIA ARTICULATIEI TEMPOROMANDIBULARE",
+    "RADIOGRAFIA CLAVICULEI",
+    "RADIOGRAFIA COASTELOR, BILATERAL",
+    "RADIOGRAFIA COASTELOR, UNILATERAL (OBLIC)",
+    "RADIOGRAFIA COLOANEI CERVICALE",
+    "RADIOGRAFIA COLOANEI LOMBOSACRATE",
+    "RADIOGRAFIA COLOANEI SACROCOCIGIENE",
+    "RADIOGRAFIA COLOANEI TORACICE",
+    "RADIOGRAFIA COLOANEI VERTEBRALE, 2 REGIUNI (TL)",
+    "RADIOGRAFIA COLOANEI VERTEBRALE, 3 REGIUNI (CTL)",
+    "RADIOGRAFIA COTULUI",
+    "RADIOGRAFIA COTULUI SI ANTEBRATULUI",
+    "RADIOGRAFIA COTULUI SI HUMERUSULUI",
+    "RADIOGRAFIA CRANIULUI",
+    "RADIOGRAFIA FEMURULUI",
+    "RADIOGRAFIA FEMURULUI SI A GENUNCHIULUI",
+    "RADIOGRAFIA GAMBEI SI GLEZNEI",
+    "RADIOGRAFIA GAMBEI, GLEZNEI SI A PICIORULUI",
+    "RADIOGRAFIA GENUNCHIULUI",
+    "RADIOGRAFIA GENUNCHIULUI SI GAMBEI",
+    "RADIOGRAFIA GLEZNEI",
+    "RADIOGRAFIA GLEZNEI SI PICIORULUI",
+    "RADIOGRAFIA HUMERUSULUI",
+    "RADIOGRAFIA INTREGULUI SCHELET -SD.SILVERMAN SAU DISPLAZII (CAP -F+P, TORACE -F, BAZIN&COL.L -F, MEMBRE-F, +/- COL.T -P, COL.L -P)",
+    "RADIOGRAFIA LARINGELUI",
+    "RADIOGRAFIA MAINII",
+    "RADIOGRAFIA MAINII, ARTICULATIEI MAINII SI ANTEBRATULUI",
+    "RADIOGRAFIA MANDIBULEI (RAM, OBLIC)",
+    "RADIOGRAFIA NASULUI",
+    "RADIOGRAFIA PARTII INFERIOARE A PICIORULUI / ANTEPICIOR",
+    "RADIOGRAFIA PELVINA (BAZIN)",
+    "RADIOGRAFIA PENTRU LOCALIZAREA CORPILOR STRAINI",
+    "RADIOGRAFIA PICIORULUI",
+    "RADIOGRAFIA RENALA SIMPLA",
+    "RADIOGRAFIA SINUSULUI PARANAZAL",
+    "RADIOGRAFIA STERNULUI",
+    "RADIOGRAFIA TORACICA-PULMONARA",
+    "RADIOGRAFIA UMARULUI SAU SCAPULEI",
+    "SCRISOARE MEDICALA / RAPORT MEDICAL",
+    "STUDII DE VARSTA OSOASA ALE CARPULUI SI GENUNCHIULUI"
+]
+
 
 # Headers for compatibility with Hipocrate service
 HEADERS = {
@@ -60,60 +131,48 @@ HEADERS = {
 }
 
 
-def parse_date_time(date_str: str) -> Optional[datetime]:
-    """Parse a date string in the format '30 Aug 2025 19:25:00'.
-
-    Handles common date formats used in medical records including both English
-    and Romanian month abbreviations.
+def contains_any_word(string, *words):
+    """
+    Check if any of the specified words are present in the given string.
 
     Args:
-        date_str: Date string to parse in format like "30 Aug 2025 19:25:00"
+        string: String to search in
+        *words: Variable number of words to search for
 
     Returns:
-        datetime object if parsing successful, None otherwise
+        bool: True if any word is found in the string, False otherwise
     """
-    try:
-        # Handle common date formats like "30 Aug 2025 19:25:00"
-        # Create a mapping for month abbreviations to numbers
-        month_mapping = {
-            'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
-            'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12,
-            'Ian': 1, 'Mai': 5, 'Iun': 6, 'Iul': 7  # Romanian month abbreviations
-        }
+    return any(i in string.lower() for i in words)
 
-        # Split the date string into components
-        parts = date_str.strip().split()
-        if len(parts) != 4:
-            return None
 
-        day = int(parts[0])
-        month_abbr = parts[1]
-        year = int(parts[2])
-        time_part = parts[3]
+def identify_study_type_and_region(desc: str) -> tuple:
+    """
+    Identify the study type and anatomical region from the study description.
 
-        # Get month number from mapping
-        if month_abbr not in month_mapping:
-            return None
-        month = month_mapping[month_abbr]
+    Args:
+        desc: Study description text
 
-        # Parse time
-        time_parts = time_part.split(':')
-        if len(time_parts) == 2:
-            hour = int(time_parts[0])
-            minute = int(time_parts[1])
-            second = 0
-        elif len(time_parts) == 3:
-            hour = int(time_parts[0])
-            minute = int(time_parts[1])
-            second = int(time_parts[2])
-        else:
-            return None
-
-        # Create datetime object
-        return datetime(year, month, day, hour, minute, second)
-    except (ValueError, IndexError, TypeError):
-        # If parsing fails, return None
-        return None
+    Returns:
+        tuple: (study_type, region) where study_type is 'radio' or 'other'
+               and region is the identified anatomical region or 'unknown'
+    """
+    if not desc:
+        return 'other', 'unknown'
+    
+    desc_lower = desc.lower()
+    
+    # Check if it's a radiography study
+    is_radio = any(study.lower() in desc_lower for study in RADIO_STUDIES)
+    study_type = 'radio' if is_radio else 'other'
+    
+    # Identify region based on keywords
+    region = 'unknown'
+    for region_key, keywords in REGION_RULES.items():
+        if contains_any_word(desc_lower, *keywords):
+            region = region_key
+            break
+    
+    return study_type, region
 
 
 def create_error_response(message: str, status_code: int = 400, details: Dict[str, Any] = None) -> web.Response:
@@ -1286,7 +1345,13 @@ class HipoClientServiceRequest(HipoClient):
                     if first_cell_text and first_cell_text.isdigit():
                         study_text = cells[1].get_text().strip()
                         if study_text:
-                            data.store("studies", first_cell_text, study_text)
+                            # Get study type and region
+                            study_type, region = identify_study_type_and_region(study_text)
+                            data.store("studies", first_cell_text, {
+                                "description": study_text,
+                                "type": study_type,
+                                "region": region
+                            })
 
             # Extract request datetime (Data si ora cererii)
             data.store("request", "datetime", extract_text_after_label(soup, r'Data si ora cererii:', stop_at=r'Receptionat'))
