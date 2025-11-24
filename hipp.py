@@ -1547,6 +1547,10 @@ async def search_fhir_observation(request):
         analyses = parsed_data["analyses"]
         if exam_type:
             analyses = [a for a in analyses if a["type"] == exam_type]
+            
+        # Filter analyses by region if specified
+        if exam_region:
+            analyses = [a for a in analyses if a.get("region") == exam_region]
 
         # Filter analyses by datetime if specified
         if exam_datetime:
