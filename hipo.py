@@ -51,25 +51,25 @@ logger = logging.getLogger('HipoClient')
 
 # Region identification rules for medical imaging
 REGION_RULES = {
-    'chest': ['torace', 'pulmon', 'thorax', 'chest', 'toracica'],
-    'ribs': ['coaste', 'grilaj'],
-    'sternum': ['stern'],
-    'abdominal': ['abdomen', 'abdominal'],
-    'skull': ['craniu', 'cap', 'skull'],
-    'mandible': ['mandibula'],
-    'nasal_bones': ['nazal'],
-    'paranasal_sinuses': ['sinus'],
-    'spine': ['col.', 'coloanei', 'spine', 'vertebrale'],
-    'pelvis': ['bazin', 'pelvis', 'pelvina'],
-    'clavicle': ['clavicula', 'clavicle'],
-    'upper_limb': ['humerus', 'antebrat', 'forearm', 'cotului', 'mainii', 'umarului'],
-    'hand': ['mana', 'pumn', 'deget', 'hand', 'finger', 'mainii'],
-    'shoulder': ['umar', 'sold', 'shoulder'],
-    'elbow': ['cot', 'elbow'],
-    'hip': ['sold', 'hip'],
-    'lower_limb': ['femur', 'gamba', 'picior', 'tibie', 'calcai', 'leg', 'foot', 'genunchiului'],
-    'knee': ['genunchi', 'patella', 'knee'],
-    'ankle': ['glezna', 'gleznei', 'calcaneu', 'ankle']
+    'chest': ['torace', 'pulmon', 'thorax', 'chest', 'toracica', 'pulmonara'],
+    'ribs': ['coaste', 'grilaj', 'coastelor'],
+    'sternum': ['stern', 'sternului'],
+    'abdominal': ['abdomen', 'abdominal', 'abdomenului'],
+    'skull': ['craniu', 'cap', 'skull', 'craniului'],
+    'mandible': ['mandibula', 'mandibulei'],
+    'nasal_bones': ['nazal', 'nazale', 'piramida'],
+    'paranasal_sinuses': ['sinus', 'sinusuri'],
+    'spine': ['col.', 'coloanei', 'spine', 'vertebrale', 'cervicale', 'toracice', 'lombosacrate', 'sacrococigiene'],
+    'pelvis': ['bazin', 'pelvis', 'pelvina', 'bazinului'],
+    'clavicle': ['clavicula', 'clavicle', 'claviculei'],
+    'upper_limb': ['humerus', 'antebrat', 'forearm', 'cotului', 'mainii', 'umarului', 'antebratului', 'humerusului'],
+    'hand': ['mana', 'pumn', 'deget', 'hand', 'finger', 'mainii', 'mainii,', 'articulatiei mainii'],
+    'shoulder': ['umar', 'umarului', 'scapulei', 'soldului'],
+    'elbow': ['cot', 'elbow', 'cotului'],
+    'hip': ['sold', 'soldului', 'soldul'],
+    'lower_limb': ['femur', 'gamba', 'picior', 'tibie', 'calcai', 'leg', 'foot', 'genunchiului', 'femurului', 'gambii'],
+    'knee': ['genunchi', 'patella', 'knee', 'genunchiului'],
+    'ankle': ['glezna', 'gleznei', 'calcaneu', 'ankle', 'gleznei,', 'piciorului']
 }
 
 
