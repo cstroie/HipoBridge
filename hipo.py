@@ -120,6 +120,23 @@ RADIO_STUDIES = [
     "STUDII DE VARSTA OSOASA ALE CARPULUI SI GENUNCHIULUI"
 ]
 
+# List of ultrasound studies
+ECO_STUDIES = [
+    "ECOGRAFIA ALTOR ORGANE",
+    "ULTRASONOGRAFIA CAPULUI (ETF)",
+    "ULTRASONOGRAFIA COLOANEI VERTEBRALE SI A MADUVEI SPINARII",
+    "ULTRASONOGRAFIA GATULUI (PARTI MOI CERVICALE)",
+    "ULTRASONOGRAFIA PELVIANA LA FEMEIE",
+    "ULTRASONOGRAFIA PENTRU DEPISTAREA MALFORMATIILOR FETALE",
+    "ULTRASONOGRAFIA PENTRU VERIFICAREA DEZVOLTARII FATULUI",
+    "ULTRASONOGRAFIA REGIUNII INGHINALE",
+    "ULTRASONOGRAFIA SCROTALA",
+    "ULTRASONOGRAFIA SOLDULUI",
+    "ULTRASONOGRAFIA TEGUMENTULUI SI A TESUTULUI SUBCUTANAT (ECOGRAFIE PARTI MOI)",
+    "ULTRASONOGRAFIA TORACELUI SAU A PERETELUI ABDOMINAL",
+    "ULTRASONOGRAFIA ABDOMINALA (INCLUSIV PELVIS)"
+]
+
 
 # Headers for compatibility with Hipocrate service
 HEADERS = {
@@ -153,7 +170,7 @@ def identify_study_type_and_region(desc: str) -> tuple:
         desc: Study description text
 
     Returns:
-        tuple: (study_type, region) where study_type is 'radio' or 'other'
+        tuple: (study_type, region) where study_type is 'radio', 'eco' or 'other'
                and region is the identified anatomical region or 'unknown'
     """
     if not desc:
@@ -163,7 +180,12 @@ def identify_study_type_and_region(desc: str) -> tuple:
     
     # Check if it's a radiography study
     is_radio = any(study.lower() in desc_lower for study in RADIO_STUDIES)
-    study_type = 'radio' if is_radio else 'other'
+    if is_radio:
+        study_type = 'radio'
+    else:
+        # Check if it's an ultrasound study
+        is_eco = any(study.lower() in desc_lower for study in ECO_STUDIES)
+        study_type = 'eco' if is_eco else 'other'
     
     # Identify region based on keywords
     region = 'unknown'
