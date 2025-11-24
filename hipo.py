@@ -50,27 +50,33 @@ logging.basicConfig(
 logger = logging.getLogger('HipoClient')
 
 # Region identification rules for medical imaging
-REGION_RULES = {
-    'chest': ['torace', 'pulmon', 'thorax', 'chest', 'toracica', 'pulmonara'],
-    'ribs': ['coaste', 'grilaj', 'coastelor'],
-    'sternum': ['stern', 'sternului'],
-    'abdominal': ['abdomen', 'abdominal', 'abdomenului'],
-    'skull': ['craniu', 'cap', 'skull', 'craniului'],
-    'mandible': ['mandibula', 'mandibulei'],
-    'nasal_bones': ['nazal', 'nazale', 'piramida'],
-    'paranasal_sinuses': ['sinus', 'sinusuri'],
-    'spine': ['col.', 'coloanei', 'spine', 'vertebrale', 'cervicale', 'toracice', 'lombosacrate', 'sacrococigiene'],
-    'pelvis': ['bazin', 'pelvis', 'pelvina', 'bazinului'],
-    'clavicle': ['clavicula', 'clavicle', 'claviculei'],
-    'upper_limb': ['humerus', 'antebrat', 'forearm', 'cotului', 'mainii', 'umarului', 'antebratului', 'humerusului'],
-    'hand': ['mana', 'pumn', 'deget', 'hand', 'finger', 'mainii', 'mainii,', 'articulatiei mainii'],
-    'shoulder': ['umar', 'umarului', 'scapulei', 'soldului'],
-    'elbow': ['cot', 'elbow', 'cotului'],
-    'hip': ['sold', 'soldului', 'soldul'],
-    'lower_limb': ['femur', 'gamba', 'picior', 'tibie', 'calcai', 'leg', 'foot', 'genunchiului', 'femurului', 'gambii'],
-    'knee': ['genunchi', 'patella', 'knee', 'genunchiului'],
-    'ankle': ['glezna', 'gleznei', 'calcaneu', 'ankle', 'gleznei,', 'piciorului']
+RADIO_REGION_RULES = {
+    'chest': ['toracica', 'pulmonara'],
+    'ribs': ['coastelor'],
+    'sternum': ['sternului'],
+    'abdominal': ['abdomenului', 'renala'],
+    'skull': ['craniului'],
+    'mandible': ['mandibulei', 'temporomandibulare'],
+    'nasal_bones': ['nasului'],
+    'paranasal_sinuses': ['sinusului'],
+    'larynx': ['laringelui'],
+    'spine': ['coloanei'],
+    'pelvis': ['pelvina'],
+    'clavicle': ['claviculei'],
+    'upper_limb': ['antebratului', 'humerusului'],
+    'shoulder': ['umarului', 'scapulei'],
+    'elbow': ['cotului'],
+    'hand': ['mainii', 'carpului'],
+    'hip': ['soldului'],
+    'lower_limb': ['femurului', 'gambei'],
+    'knee': ['genunchiului'],
+    'ankle': ['gleznei'],
+    'foot': ['piciorului'],
+    'foreign_bodies': ['straini'],
+    'skeleton': ['schelet', 'silverman', 'displazii']
 }
+
+
 
 
 
