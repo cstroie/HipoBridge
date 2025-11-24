@@ -32,6 +32,7 @@ import re
 from bs4 import BeautifulSoup, Comment
 import html
 from datetime import datetime, timedelta
+import configparser
 
 from typing import Any, Dict, List, Optional
 
@@ -49,46 +50,27 @@ logging.basicConfig(
 )
 logger = logging.getLogger('HipoClient')
 
-# Region identification rules for medical imaging
-RADIO_REGION_RULES = {
-    'chest': ['toracica', 'pulmonara'],
-    'ribs': ['coastelor'],
-    'sternum': ['sternului'],
-    'abdominal': ['abdomenului', 'renala'],
-    'skull': ['craniului', 'occiput'],
-    'mandible': ['mandibulei', 'temporomandibulare'],
-    'nasal_bones': ['nasului'],
-    'paranasal_sinuses': ['sinusului'],
-    'neck': ['laringelui'],
-    'spine': ['coloanei'],
-    'pelvis': ['pelvina'],
-    'clavicle': ['claviculei'],
-    'upper_limb': ['antebratului', 'humerusului'],
-    'shoulder': ['umarului', 'scapulei'],
-    'elbow': ['cotului'],
-    'hand': ['mainii', 'carpului'],
-    'hip': ['soldului'],
-    'lower_limb': ['femurului', 'gambei'],
-    'knee': ['genunchiului'],
-    'ankle': ['gleznei'],
-    'foot': ['piciorului'],
-    'other': ['straini', 'schelet', 'silverman', 'displazii']
-}
+# Load region identification rules from config file
+def load_region_rules():
+    """Load region identification rules from regions.cfg file."""
+    config = configparser.ConfigParser()
+    config.read('regions.cfg')
+    
+    radio_rules = {}
+    eco_rules = {}
+    
+    if 'radiography' in config:
+        for key in config['radiography']:
+            radio_rules[key] = [word.strip() for word in config['radiography'][key].split(',')]
+    
+    if 'ultrasound' in config:
+        for key in config['ultrasound']:
+            eco_rules[key] = [word.strip() for word in config['ultrasound'][key].split(',')]
+    
+    return radio_rules, eco_rules
 
-ECO_REGION_RULES = {
-    'brain': ['capului'],
-    'chest': ['toracelui', 'peretelui'],
-    'neck': ['gatului'],
-    'abdominal': ['abdominala'],
-    'spine': ['coloanei'],
-    'pelvis': ['pelviana'],
-    'hip': ['soldului'],
-    'inguinal': ['inghonale'],
-    'scrotum': ['scrotala'],
-    'skin': ['tegumentului'],
-    'fetus':['fetale', 'fatului'],
-    'other': ['altor']
-}
+# Load the region rules
+RADIO_REGION_RULES, ECO_REGION_RULES = load_region_rules()
 
 
 
@@ -138,15 +120,18 @@ def identify_study_type_and_region(desc: str) -> tuple:
     # Check if it's a radiography study (starts with RADIOGRAFIA or RADIO)
     if desc_lower.startswith('radiografia') or desc_lower.startswith('radio'):
         study_type = 'radio'
+        region_rules = RADIO_REGION_RULES
     # Check if it's an ultrasound study (starts with ECOGRAFIA, ULTRASONOGRAFIA, or ECO)
     elif desc_lower.startswith('ecografia') or desc_lower.startswith('ultrasonografia') or desc_lower.startswith('eco'):
         study_type = 'eco'
+        region_rules = ECO_REGION_RULES
     else:
         study_type = 'other'
+        region_rules = {}
     
     # Identify region based on keywords
     region = 'unknown'
-    for region_key, keywords in REGION_RULES.items():
+    for region_key, keywords in region_rules.items():
         if contains_any_word(desc_lower, *keywords):
             region = region_key
             break
