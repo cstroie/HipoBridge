@@ -1158,6 +1158,17 @@ def create_fhir_diagnostic_report(report_data: Dict[str, Any], request) -> Dict[
         for report in report_data["reports"]:
             # Convert HTML to markdown - no need to encode as base64 since it's text
             markdown_content = html_to_markdown(report["result"])
+            
+            # Add exam type and region information to the content
+            exam_info = ""
+            if report.get("type") and report["type"] != "unknown":
+                exam_info += f"Type: {report['type']}\n"
+            if report.get("region") and report["region"] != "unknown":
+                exam_info += f"Region: {report['region']}\n"
+            
+            if exam_info:
+                markdown_content = exam_info + "\n" + markdown_content
+            
             fhir_report["presentedForm"].append(
                 {
                     "contentType": "text/markdown",
