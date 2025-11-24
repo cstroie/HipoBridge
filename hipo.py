@@ -59,6 +59,7 @@ def load_region_rules():
     radio_rules = {}
     eco_rules = {}
     ct_rules = {}
+    mri_rules = {}
     
     if 'radiography' in config:
         for key in config['radiography']:
@@ -72,10 +73,14 @@ def load_region_rules():
         for key in config['ct']:
             ct_rules[key] = [word.strip() for word in config['ct'][key].split(',')]
     
-    return radio_rules, eco_rules, ct_rules
+    if 'mri' in config:
+        for key in config['mri']:
+            mri_rules[key] = [word.strip() for word in config['mri'][key].split(',')]
+    
+    return radio_rules, eco_rules, ct_rules, mri_rules
 
 # Load the region rules
-RADIO_REGION_RULES, ECO_REGION_RULES, CT_REGION_RULES = load_region_rules()
+RADIO_REGION_RULES, ECO_REGION_RULES, CT_REGION_RULES, MRI_REGION_RULES = load_region_rules()
 
 
 
@@ -122,8 +127,12 @@ def identify_study_type_and_region(desc: str) -> tuple:
     
     desc_lower = desc.lower()
     
+    # Check if it's an MRI study (contains REZONANTA MAGNETICA)
+    if 'rezonanta magnetica' in desc_lower:
+        study_type = 'mri'
+        region_rules = MRI_REGION_RULES
     # Check if it's a CT study (contains TOMOGRAFIA COMPUTERIZATA)
-    if 'tomografia computerizata' in desc_lower:
+    elif 'tomografia computerizata' in desc_lower:
         study_type = 'ct'
         region_rules = CT_REGION_RULES
     # Check if it's a radiography study (starts with RADIOGRAFIA or RADIO)
