@@ -49,27 +49,27 @@ logging.basicConfig(
 )
 logger = logging.getLogger('HipoClient')
 
-# Region identification rules
+# Region identification rules for medical imaging
 REGION_RULES = {
-    'chest': ['torace', 'pulmon', 'thorax', 'chest'],
-    'ribs': ['grilaj', 'coaste'],
+    'chest': ['torace', 'pulmon', 'thorax', 'chest', 'toracica'],
+    'ribs': ['coaste', 'grilaj'],
     'sternum': ['stern'],
     'abdominal': ['abdomen', 'abdominal'],
-    'skull': ['cap', 'craniu', 'occiput', 'skull'],
+    'skull': ['craniu', 'cap', 'skull'],
     'mandible': ['mandibula'],
-    'nasal_bones': ['nazal', 'piramida'],
+    'nasal_bones': ['nazal'],
     'paranasal_sinuses': ['sinus'],
-    'spine': ['col.', 'spine', 'dens', 'sacrat'],
-    'pelvis': ['bazin', 'pelvis'],
+    'spine': ['col.', 'coloanei', 'spine', 'vertebrale'],
+    'pelvis': ['bazin', 'pelvis', 'pelvina'],
     'clavicle': ['clavicula', 'clavicle'],
-    'upper_limb': ['humerus', 'antebrat', 'forearm'],
-    'hand': ['pumn', 'mana', 'deget', 'hand', 'finger'],
-    'shoulder': ['umar', 'shoulder'],
+    'upper_limb': ['humerus', 'antebrat', 'forearm', 'cotului', 'mainii', 'umarului'],
+    'hand': ['mana', 'pumn', 'deget', 'hand', 'finger', 'mainii'],
+    'shoulder': ['umar', 'sold', 'shoulder'],
     'elbow': ['cot', 'elbow'],
     'hip': ['sold', 'hip'],
-    'lower_limb': ['femur', 'tibie', 'picior', 'gamba', 'calcai', 'leg', 'foot'],
+    'lower_limb': ['femur', 'gamba', 'picior', 'tibie', 'calcai', 'leg', 'foot', 'genunchiului'],
     'knee': ['genunchi', 'patella', 'knee'],
-    'ankle': ['glezna', 'calcaneu', 'ankle']
+    'ankle': ['glezna', 'gleznei', 'calcaneu', 'ankle']
 }
 
 
