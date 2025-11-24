@@ -1226,7 +1226,7 @@ class HipoClientServiceRequest(HipoClient):
         """Parse HTML service request content and extract structured data.
 
         Extracts patient information and medical data from service request HTML content,
-        including physician information, diagnosis, procedures, and request details.
+        including physician information, diagnosis, imaging studies, and request details.
 
         Args:
             html_content: HTML content of the service request page
@@ -1237,7 +1237,7 @@ class HipoClientServiceRequest(HipoClient):
             - patient: Patient information (name, id)
             - checkin: Admission information (physician, id, diagnosis)
             - request: Request information (clinical_comments, lab_comments, datetime, is_urgent)
-            - procedures: List of requested procedures
+            - studies: List of requested imaging studies
         """
         # Initialize result dictionary
         data = HipoData()
@@ -1276,17 +1276,17 @@ class HipoClientServiceRequest(HipoClient):
                         data.store("request", "clinical_comments", comment_tds[0].get_text().strip())
                         data.store("request", "lab_comments", comment_tds[1].get_text().strip())
 
-            # Extract procedures from the table
-            procedure_rows = soup.find_all('tr')
-            for row in procedure_rows:
+            # Extract imaging studies from the table
+            studies_rows = soup.find_all('tr')
+            for row in studies_rows:
                 cells = row.find_all('td')
                 if len(cells) >= 3:
-                    # Check if this is a procedure row (has numbering in first cell)
+                    # Check if this is a studies row (has numbering in first cell)
                     first_cell_text = cells[0].get_text().strip()
                     if first_cell_text and first_cell_text.isdigit():
-                        procedure_text = cells[1].get_text().strip()
-                        if procedure_text:
-                            data.store("procedures", first_cell_text, procedure_text)
+                        study_text = cells[1].get_text().strip()
+                        if study_text:
+                            data.store("studies", first_cell_text, study_text)
 
             # Extract request datetime (Data si ora cererii)
             data.store("request", "datetime", extract_text_after_label(soup, r'Data si ora cererii:', stop_at=r'Receptionat'))
@@ -1400,20 +1400,20 @@ class HipoClientServiceRequest(HipoClient):
                     "text": lab_comments
                 }]
 
-            # Add order details for procedures
-            procedures = parsed_data.get("procedures")
-            if procedures:
+            # Add order details for imaging studies
+            studies = parsed_data.get("studies")
+            if studies:
                 order_details = []
                 if http_request:
-                    procedure_system_url = f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/procedure-codes"
+                    study_system_url = f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/study-codes"
                 else:
-                    procedure_system_url = "http://example.com/fhir/CodeSystem/procedure-codes"
+                    study_system_url = "http://example.com/fhir/CodeSystem/study-codes"
                     
-                for code, description in procedures.items():
+                for code, description, study_type, study_region in studies.items():
                     order_detail = CodeableConcept(
                         coding=[{
-                            "system": procedure_system_url,
-                            "code": f"procedure-{code}",
+                            "system": study_system_url,
+                            "code": f"study-{code}",
                             "display": description
                         }],
                         text=description
