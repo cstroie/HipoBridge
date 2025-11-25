@@ -111,7 +111,12 @@ async def run_tests(test_list) -> None:
                     results.append(success)
                     print(f"Test {test.__name__}: {'PASS' if success else 'FAIL'}")
             except Exception as e:
-                print(f"Test {getattr(test, '__name__', str(test))} failed with exception: {e}")
+                # Safely get test name for error reporting
+                if hasattr(test, '__name__'):
+                    test_name = test.__name__
+                else:
+                    test_name = str(test)
+                print(f"Test {test_name} failed with exception: {e}")
                 results.append(False)
             print()
         
