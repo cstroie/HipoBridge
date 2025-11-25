@@ -1240,14 +1240,7 @@ class HipoClientPatient(HipoClient):
 
             # Extract discharges / checkouts
             data.store_list("patient.checkout", extract_ids_from_links(soup, r'../files/checkout\.asp\?id=(\d+)'))
-
-
-            # Extract request datetime (Data si ora cererii)
-            data.store("request.datetime", extract_text_after_label(soup, r'Data si ora cererii:', stop_at=r'Receptionat'))
-
-            # Extract request urgency
-            data.store("request.is_urgent", "~URGENTA~" in html_content)
-
+            
             # Return the data
             return data
         
@@ -1272,123 +1265,135 @@ class HipoClientPatient(HipoClient):
         # Extract http_request from kwargs if available
         http_request = kwargs.get('http_request')
         
-        # Get service request ID from the request URL parameters
-        service_request_id = kwargs.get('id', '')
+        # Get service patient ID from the request URL parameters
+        patient_id = kwargs.get('id', '')
         
         try:
-            # Create FHIR ServiceRequest resource using the FHIR class
-            fhir_service_request = FHIRServiceRequest(
-                id=service_request_id,
-                status="active",
-                intent="order",
-                priority="urgent" if parsed_data.get("is_urgent", False) else "routine"
+            # Use already extracted family name and given name if available
+            family_name = patient_data.get("family_name", "")
+            given_names = [patient_data.get("given_name", "")] if patient_data.get("given_name") else []
+
+            # Fallback to parsing from full name if family/given names are not available
+            if not family_name and not given_names:
+                name_parts = patient_data.get("patient_name", "").split()
+                family_name = name_parts[0] if len(name_parts) > 0 else ""
+                given_names = name_parts[1:] if len(name_parts) > 1 else []
+
+            # Use already extracted gender and birth date if available
+            gender = patient_data.get("sex", "unknown")
+            birth_date = patient_data.get("birth_date", "")
+
+            # Create FHIR Patient resource using the FHIR class
+            fhir_patient = FHIRPatient(
+                id=patient_data.get("patient_id", ""),
+                active=True,
+                gender=gender,
+                birthDate=birth_date
             )
 
-            # Create subject reference
-            patient_id = parsed_data.get("patient.id")
-            subject = Reference(
-                reference=f"Patient/{patient_id}"
-            )
+            # Add name
+            name = {
+                "use": "official",
+                "family": family_name,
+                "given": given_names
+            }
+            fhir_patient["name"] = [name]
 
-            # Add patient name to subject if available
-            patient_name = parsed_data.get("patient.name")
-            if patient_name:
-                subject["display"] = patient_name
-            fhir_service_request["subject"] = subject
+            # Add telecom information if available
+            telecom = []
+            if patient_data.get("phone", None):
+                telecom.append({
+                    "system": "phone",
+                    "value": patient_data["phone"]
+                })
 
-            # Create codeable concept for the service type
-            if http_request:
-                system_url = f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/service-types"
-            else:
-                system_url = "http://example.com/fhir/CodeSystem/service-types"
-                
-            code = CodeableConcept(
-                coding=[{
-                    "system": system_url,
-                    "code": "imaging-study",
-                    "display": "Imaging Study"
-                }],
-                text="Imaging Study Request"
-            )
-            fhir_service_request["code"] = code
+            if patient_data.get("email", None):
+                telecom.append({
+                    "system": "email",
+                    "value": patient_data["email"]
+                })
 
-            # Add requester if available (requesting doctor)
-            physician = parsed_data.get("checkin", {}).get("physician")
-            if physician:
-                fhir_service_request["requester"] = Reference(display=physician)
+            if telecom:
+                fhir_patient["telecom"] = telecom
 
-            # Add encounter if we can derive it
-            admission_id = parsed_data.get("checkin", {}).get("id")
-            if admission_id:
-                fhir_service_request["encounter"] = Reference(
-                    reference=f"Encounter/{admission_id}"
-                )
+            # Add address information if available
+            address = []
+            if patient_data.get("address", None):
+                address.append({
+                    "text": patient_data["address"]
+                })
 
-            # Add reason code if diagnosis is available
-            diagnosis = parsed_data.get("checkin", {}).get("diagnosis")
-            if diagnosis:
-                # Try to extract ICD-10 code from the diagnosis text
-                # Format is usually "CODE Description"
-                diagnosis_match = re.match(r'^(\d{3,4})\s+(.+)$', diagnosis)
-                if diagnosis_match:
-                    condition = Reference(
-                        reference=f"Condition/{diagnosis_match.group(1)}",
-                        display=diagnosis_match.group(2)
-                    )
-                else:
-                    # If no code found, use the entire diagnosis as display text
-                    condition = Reference(display=diagnosis)
-                fhir_service_request["reason"] = [condition]
+            if address:
+                fhir_patient["address"] = address
 
-            # Add reason reference if clinical comments are available
-            clinical_comments = parsed_data.get("request", {}).get("clinical_comments")
-            if clinical_comments:
-                fhir_service_request["supportingInfo"] = [{
-                    "display": clinical_comments
-                }]
+            # Add extensions for additional patient data
+            extensions = []
 
-            # Add note for lab comments
-            lab_comments = parsed_data.get("request", {}).get("lab_comments")
-            if lab_comments:
-                fhir_service_request["note"] = [{
-                    "text": lab_comments
-                }]
+            # Add weight if available
+            if patient_data.get("weight", None):
+                extensions.append({
+                    "url": "http://hl7.org/fhir/us/vitals/StructureDefinition/body-weight",
+                    "valueString": patient_data["weight"]
+                })
 
-            # Add order details for imaging studies
-            studies = parsed_data.get("studies")
-            if studies:
-                order_details = []
-                if http_request:
-                    study_system_url = f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/study-codes"
-                else:
-                    study_system_url = "http://example.com/fhir/CodeSystem/study-codes"
-                    
-                for code, study_info in studies.items():
-                    description = study_info.get("description", "")
-                    order_detail = CodeableConcept(
-                        coding=[{
-                            "system": study_system_url,
-                            "code": f"study-{code}",
-                            "display": description
-                        }],
-                        text=description
-                    )
-                    order_details.append(order_detail)
-                fhir_service_request["orderDetail"] = order_details
+            # Add height if available
+            if patient_data.get("height", None):
+                extensions.append({
+                    "url": "http://hl7.org/fhir/us/vitals/StructureDefinition/height",
+                    "valueString": patient_data["height"]
+                })
 
-            # Add authoredOn if request datetime is available
-            request_datetime = parsed_data.get("request", {}).get("datetime")
-            if request_datetime:
-                # Parse the datetime using our parse_date_time function
-                parsed_dt = parse_date_time(request_datetime)
-                if parsed_dt:
-                    # Convert to ISO format
-                    fhir_service_request["authoredOn"] = parsed_dt.isoformat()
-                else:
-                    # If parsing fails, keep the original string
-                    fhir_service_request["authoredOn"] = request_datetime
+            # Add extensions for encounter/admission/discharge IDs
+            if "encounters" in patient_data:
+                extensions.append({
+                    "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/encounter-ids",
+                    "valueString": ",".join(patient_data["encounters"])
+                })
+            if "admissions" in patient_data:
+                extensions.append({
+                    "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/admission-ids",
+                    "valueString": ",".join(patient_data["admissions"])
+                })
+            if "discharges" in patient_data:
+                extensions.append({
+                    "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/discharge-ids",
+                    "valueString": ",".join(patient_data["discharges"])
+                })
 
-            return fhir_service_request.to_dict()
+            if extensions:
+                fhir_patient["extension"] = extensions
+
+            # Add identifiers
+            identifiers = []
+
+            # Add CNP as identifier if available
+            if patient_data.get("patient_cnp", None):
+                identifiers.append({
+                    "use": "official",
+                    "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-cnp",
+                    "value": patient_data["patient_cnp"]
+                })
+
+            # Add CID if available
+            if patient_data.get("cid", None):
+                identifiers.append({
+                    "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-cid",
+                    "value": patient_data["cid"]
+                })
+
+            # Add MCP if available
+            if patient_data.get("mcp", None):
+                identifiers.append({
+                    "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-mcp",
+                    "value": patient_data["mcp"]
+                })
+
+            if identifiers:
+                fhir_patient["identifier"] = identifiers
+
+            # Return the FHIR Patient resource as dict
+            return fhir_patient.to_dict()
+
         except Exception as e:
             logger.error(f"Error converting service request data: {e}")
             return {}
