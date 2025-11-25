@@ -1790,7 +1790,7 @@ class HipoClientServiceRequest(HipoClient):
             logger.error(f"Error parsing service request data: {e}")
             return {}
 
-    def fhir_response(self, parsed_data: Dict[str, Any], **kwargs) -> HipoData[str, Any]:
+    def fhir_response(self, parsed_data: HipoData[str, Any], **kwargs) -> Dict[str, Any]:
         """Convert parsed service request data to FHIR ServiceRequest resource.
 
         Transforms parsed service request data into a FHIR-compatible ServiceRequest
@@ -1816,7 +1816,7 @@ class HipoClientServiceRequest(HipoClient):
                 id=service_request_id,
                 status="active",
                 intent="order",
-                priority="urgent" if parsed_data.get("is_urgent", False) else "routine"
+                priority="urgent" if parsed_data.get("request.is_urgent", False) else "routine"
             )
 
             # Create subject reference
@@ -1855,6 +1855,9 @@ class HipoClientServiceRequest(HipoClient):
             # Add encounter if we can derive it
             admission_id = parsed_data.get("checkin.id")
             if admission_id:
+                # Handle case where admission_id might be a list
+                if isinstance(admission_id, list) and len(admission_id) > 0:
+                    admission_id = admission_id[0]
                 fhir_service_request["encounter"] = Reference(
                     reference=f"Encounter/{admission_id}"
                 )
@@ -1899,7 +1902,7 @@ class HipoClientServiceRequest(HipoClient):
                     study_system_url = "http://example.com/fhir/CodeSystem/study-codes"
                     
                 for code, study_info in studies.items():
-                    description = study_info.get("description", "")
+                    description = study_info.get("description", "") if isinstance(study_info, dict) else str(study_info)
                     order_detail = CodeableConcept(
                         coding=[{
                             "system": study_system_url,
