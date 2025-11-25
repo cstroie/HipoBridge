@@ -1417,7 +1417,7 @@ class HipoClientCheckout(HipoClient):
         # The request endpoint
         self.request_url = "/files/checkout.asp?id={id}"
 
-    def parse_data(self, html_content: str, **kwargs) -> Dict[str, Any]:
+    def parse_data(self, html_content: str, **kwargs) -> HipoData[str, Any]:
         """Parse HTML checkout content and extract structured data.
 
         Extracts patient information and medical data from checkout HTML content.
