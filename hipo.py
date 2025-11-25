@@ -431,6 +431,7 @@ class HipoData(dict):
         Args:
             section: Optional section name for grouping related data.
                     If None, data is stored directly in root dictionary.
+                    If in format "section.key", will be parsed accordingly.
             key: Key for the value. If None, section name is used as key in root.
             value: Value to store. Lists with one element are automatically unwrapped,
                   and string values are stripped of whitespace.
@@ -439,8 +440,13 @@ class HipoData(dict):
         - If section is None: Store key-value pair directly in root dict
         - If section provided but key is None: Store value in root with section as key
         - If both section and key provided: Store value in section[key] nested structure
+        - If section has format "section.key" and key is None: Parse section and store accordingly
         - Sections are created automatically if they don't exist
         """
+        # Handle the case where section has "section.key" format and key is None
+        if section and '.' in section and key is None:
+            section, key = section.split('.', 1)
+        
         # Handle the case where no section is provided - store directly in root
         if not section:
             data = self
@@ -471,6 +477,7 @@ class HipoData(dict):
         Args:
             section: Optional section name for grouping related data.
                     If None, data is stored directly in root dictionary.
+                    If in format "section.key", will be parsed accordingly.
             key: Key for the value. If None, section name is used as key in root.
             value: Value to store. Lists with one element are automatically unwrapped,
                   and string values are stripped of whitespace.
@@ -479,8 +486,13 @@ class HipoData(dict):
         - If section is None: Store key-value pair directly in root dict
         - If section provided but key is None: Store value in root with section as key
         - If both section and key provided: Store value in section[key] nested structure
+        - If section has format "section.key" and key is None: Parse section and store accordingly
         - Sections are created automatically if they don't exist
         """
+        # Handle the case where section has "section.key" format and key is None
+        if section and '.' in section and key is None:
+            section, key = section.split('.', 1)
+        
         # Handle the case where no section is provided - store directly in root
         if not section:
             data = self
