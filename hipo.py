@@ -460,6 +460,12 @@ class HipoData(dict):
         if not key:
             key = section
             data = self
+        # If we have a section and key, make sure the section is a dict
+        elif section and section in self:
+            if not isinstance(self[section], dict):
+                # Convert existing value to dict
+                self[section] = {"": self[section]}
+            data = self[section]
             
         # Store the value if we have a key and value
         if key:
@@ -506,6 +512,12 @@ class HipoData(dict):
         if not key:
             key = section
             data = self
+        # If we have a section and key, make sure the section is a dict
+        elif section and section in self:
+            if not isinstance(self[section], dict):
+                # Convert existing value to dict
+                self[section] = {"": self[section]}
+            data = self[section]
             
         # Store the value if we have a key and value
         if key and value:
