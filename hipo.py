@@ -1761,6 +1761,7 @@ class HipoClientServiceRequest(HipoClient):
 
             # Extract imaging studies from the table
             studies_rows = soup.find_all('tr')
+            studies = []
             for row in studies_rows:
                 cells = row.find_all('td')
                 if len(cells) >= 3:
@@ -1771,11 +1772,12 @@ class HipoClientServiceRequest(HipoClient):
                         if study_text:
                             # Get study type and region
                             study_type, region = identify_study_type_and_region(study_text)
-                            data.store(f"studies.{first_cell_text}", {
-                                "description": study_text,
-                                "type": study_type,
-                                "region": region
+                            studies.append({"id": f"{first_cell_text}",
+                                            "description": study_text,
+                                            "type": study_type,
+                                            "region": region
                             })
+            data.store_list("studies", studies)
 
             # Extract request datetime (Data si ora cererii)
             data.store("request.datetime", extract_text_after_label(soup, r'Data si ora cererii:', stop_at=r'Receptionat'))
@@ -1900,18 +1902,9 @@ class HipoClientServiceRequest(HipoClient):
                     study_system_url = f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/study-codes"
                 else:
                     study_system_url = "http://example.com/fhir/CodeSystem/study-codes"
-                    
-                # Handle case where studies might be a dict or other iterable
-                if isinstance(studies, dict):
-                    studies_items = studies.items()
-                else:
-                    # If studies is not a dict, try to iterate over it directly
-                    try:
-                        studies_items = enumerate(studies)
-                    except TypeError:
-                        studies_items = []
-                        
-                for code, study_info in studies_items:
+                         
+                for study_info in studies:
+                    code = study_info.get("id")
                     description = study_info.get("description", "") if isinstance(study_info, dict) else str(study_info)
                     order_detail = CodeableConcept(
                         coding=[{
