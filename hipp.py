@@ -2270,7 +2270,7 @@ async def serve_web_page(request):
 
     # Try to login with provided credentials
     client = HipoClient(SERVICE_URL, request)
-    session, login_success = await client.get_authenticated_session(client.username, client.password)
+    session, login_success = await client.get_authenticated_session(username, password)
 
     if not login_success:
         return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HipoBridge"'})
