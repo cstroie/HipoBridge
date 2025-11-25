@@ -529,14 +529,15 @@ class HipoData(dict):
         else:
             return (section_key_str.strip(), None)
 
-    def get(self, section_key_str: str) -> str:
+    def get(self, section_key_str: str, default: Any = "") -> Any:
         """Get value from self[section][key] using 'section.key' string format.
         
         Args:
             section_key_str: String in format 'section.key'
+            default: Default value to return if key is not found (default: empty string)
             
         Returns:
-            Value at self[section][key] if it exists, otherwise empty string
+            Value at self[section][key] if it exists, otherwise default value
         """
         section, key = self.get_section_key(section_key_str)
         
@@ -547,7 +548,7 @@ class HipoData(dict):
                 value = self[section]
                 # Return value if it's a string, otherwise convert to string
                 return value if isinstance(value, str) else str(value)
-            return ""
+            return default
         
         # Check if section exists and is a dict
         if section in self and isinstance(self[section], dict):
@@ -556,7 +557,7 @@ class HipoData(dict):
                 value = self[section][key]
                 # Return value if it's a string, otherwise convert to string
                 return value if isinstance(value, str) else str(value)
-        return ""
+        return default
 
     def set(self, section_key_str: str, value: Any) -> None:
         """Set value to self[section][key] using 'section.key' string format.
