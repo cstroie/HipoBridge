@@ -118,49 +118,49 @@ class TestHipoData(unittest.TestCase):
         self.assertEqual(self.data["test"]["cholesterol"], "180 mg/dL")
 
     def test_get_section_key_with_valid_format(self):
-        """Test get_section_key with valid section,key format."""
-        section, key = self.data.get_section_key("patient,name")
+        """Test get_section_key with valid section.key format."""
+        section, key = self.data.get_section_key("patient.name")
         self.assertEqual(section, "patient")
         self.assertEqual(key, "name")
     
-    def test_get_section_key_with_no_comma(self):
-        """Test get_section_key with no comma in string."""
+    def test_get_section_key_with_no_dot(self):
+        """Test get_section_key with no dot in string."""
         section, key = self.data.get_section_key("patient")
         self.assertEqual(section, "patient")
         self.assertIsNone(key)
     
     def test_get_section_key_with_extra_spaces(self):
         """Test get_section_key with extra spaces."""
-        section, key = self.data.get_section_key(" patient , name ")
+        section, key = self.data.get_section_key(" patient . name ")
         self.assertEqual(section, "patient")
         self.assertEqual(key, "name")
     
     def test_get_method_with_existing_value(self):
         """Test get method with existing section and key."""
-        # Set up test data
-        self.data["patient"] = {"name": "John Doe"}
+        # Set up test data using store method
+        self.data.store("patient", "name", "John Doe")
         
         # Test getting existing value
-        result = self.data.get("patient,name")
+        result = self.data.get("patient.name")
         self.assertEqual(result, "John Doe")
     
     def test_get_method_with_non_existing_section(self):
         """Test get method with non-existing section."""
-        result = self.data.get("patient,name")
+        result = self.data.get("patient.name")
         self.assertEqual(result, "")
     
     def test_get_method_with_non_existing_key(self):
         """Test get method with existing section but non-existing key."""
         # Set up test data
-        self.data["patient"] = {}
+        self.data.store("patient", None, {})
         
-        result = self.data.get("patient,name")
+        result = self.data.get("patient.name")
         self.assertEqual(result, "")
     
     def test_get_method_with_key_none(self):
         """Test get method when key is None (section only)."""
         # Set up test data
-        self.data["patient"] = "John Doe"
+        self.data.store("patient", None, "John Doe")
         
         result = self.data.get("patient")
         self.assertEqual(result, "John Doe")
@@ -173,14 +173,14 @@ class TestHipoData(unittest.TestCase):
     def test_get_method_with_non_string_value(self):
         """Test get method with non-string value."""
         # Set up test data
-        self.data["patient"] = {"age": 30}
+        self.data.store("patient", "age", 30)
         
-        result = self.data.get("patient,age")
+        result = self.data.get("patient.age")
         self.assertEqual(result, "30")
     
     def test_set_method_with_valid_section_and_key(self):
         """Test set method with valid section and key."""
-        self.data.set("patient,name", "John Doe")
+        self.data.set("patient.name", "John Doe")
         
         self.assertIn("patient", self.data)
         self.assertIsInstance(self.data["patient"], dict)
@@ -196,7 +196,7 @@ class TestHipoData(unittest.TestCase):
     
     def test_set_method_creates_section_automatically(self):
         """Test that set method creates section automatically."""
-        self.data.set("patient,name", "John Doe")
+        self.data.set("patient.name", "John Doe")
         
         self.assertIn("patient", self.data)
         self.assertIsInstance(self.data["patient"], dict)
@@ -204,10 +204,10 @@ class TestHipoData(unittest.TestCase):
     def test_set_method_overwrites_existing_value(self):
         """Test that set method overwrites existing values."""
         # Set initial value
-        self.data.set("patient,name", "John Doe")
+        self.data.set("patient.name", "John Doe")
         
         # Overwrite with new value
-        self.data.set("patient,name", "Jane Smith")
+        self.data.set("patient.name", "Jane Smith")
         
         self.assertEqual(self.data["patient"]["name"], "Jane Smith")
 
