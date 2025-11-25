@@ -502,6 +502,21 @@ class HipoData(dict):
                 value = list(value)
             data[key] = value
 
+    def get_section_key(self, section_key_str: str) -> tuple:
+        """Parse a string in format 'section,key' and return as tuple.
+        
+        Args:
+            section_key_str: String in format 'section,key'
+            
+        Returns:
+            Tuple of (section, key)
+        """
+        if ',' in section_key_str:
+            parts = section_key_str.split(',', 1)
+            return (parts[0].strip(), parts[1].strip())
+        else:
+            return (section_key_str.strip(), None)
+
 
 class HipoClient:
     """Base client for interacting with the Hipocrate medical system.
