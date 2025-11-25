@@ -44,18 +44,20 @@ def html_to_markdown(html_content: str) -> str:
         for ns_decl in soup.find_all(re.compile(r'^\?xml')):
             ns_decl.decompose()
 
-        # Remove Microsoft Office specific tags
+        # Remove Microsoft Office specific tags but keep their content
         for tag in soup.find_all(['o:p', 'xml:namespace']):
-            tag.decompose()
+            tag.unwrap()
 
         # Remove wrapping <b> tags that might enclose the entire content
         # Check if there's a single <b> tag that contains everything
         body_content = soup.find('body')
         if body_content:
             content_children = list(body_content.children)
-            if len(content_children) == 1 and content_children[0].name == 'b':
+            # Filter out text nodes that are only whitespace
+            element_children = [child for child in content_children if hasattr(child, 'name') and child.name]
+            if len(element_children) == 1 and element_children[0].name == 'b':
                 # If the only child is a <b> tag, unwrap it
-                content_children[0].unwrap()
+                element_children[0].unwrap()
         else:
             # If no body tag, check if the soup itself has a single <b> child
             root_children = list(soup.children)
