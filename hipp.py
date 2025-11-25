@@ -992,69 +992,69 @@ def parse_report(html_content: str) -> Dict[str, Any]:
         soup = BeautifulSoup(html_content, 'html.parser')
 
         # Extract patient name from the table with patient data
-        data.store("patient", "name", extract_text_after_label(soup, r'Nume:', 'tr', stop_at=r'\['))
+        data.store("patient.name", extract_text_after_label(soup, r'Nume:', 'tr', stop_at=r'\['))
 
         # Extract patient CNP from the table with patient data
         patient_cnp = extract_value_from_input(soup, id="strCNP")
-        data.store("patient", "cnp", patient_cnp)
+        data.store("patient.cnp", patient_cnp)
         if patient_cnp:
             parsed_cnp = parse_cnp(patient_cnp)
-            data.store("patient", "gender", parsed_cnp.get("gender", ""))
-            data.store("patient", "birth_date", parsed_cnp.get("birth_date", ""))
-            data.store("patient", "age", parsed_cnp.get("age", ""))
+            data.store("patient.gender", parsed_cnp.get("gender", ""))
+            data.store("patient.birth_date", parsed_cnp.get("birth_date", ""))
+            data.store("patient.age", parsed_cnp.get("age", ""))
 
         # Extract patient code from the table with patient data
         patient_ids = extract_ids_from_links(soup, r'/pacient/edit\.asp\?id=(\d+)')
         if patient_ids:
-            data.store("patient", "id", patient_ids[0] if isinstance(patient_ids, list) else patient_ids)
+            data.store("patient.id", patient_ids[0] if isinstance(patient_ids, list) else patient_ids)
         
         # Extract admission ID
         admission_ids = extract_ids_from_links(soup, r'/files/checkin\.asp\?id=(\d+)')
         if admission_ids:
-            data.store("request", "admission_id", admission_ids[0] if isinstance(admission_ids, list) else admission_ids)
+            data.store("request.admission_id", admission_ids[0] if isinstance(admission_ids, list) else admission_ids)
 
         # Extract barcode
-        data.store("request", "barcode", extract_text_after_label(soup, r'Cerere de investigatii (?!paraclinice)'))
+        data.store("request.barcode", extract_text_after_label(soup, r'Cerere de investigatii (?!paraclinice)'))
 
         # Extract physician
-        data.store("request", "physician", extract_text_after_label(soup, r'Medic:', 'tr'))
+        data.store("request.physician", extract_text_after_label(soup, r'Medic:', 'tr'))
 
         # Extract the clinical comments
-        data.store("request", "diagnosis", extract_text_after_label(soup, r'prezumtiv:', 'tr'))
+        data.store("request.diagnosis", extract_text_after_label(soup, r'prezumtiv:', 'tr'))
 
         # Extract the clinical comments
-        data.store("request", "clinical_comments", extract_text_after_label(soup, r'Informatii suplimentare:', 'tr', stop_at=r'Motiv'))
+        data.store("request.clinical_comments", extract_text_after_label(soup, r'Informatii suplimentare:', 'tr', stop_at=r'Motiv'))
 
         # Extract the lab comments
-        data.store("request", "lab_comments", extract_text_from_element(soup, id="strComments"))
+        data.store("request.lab_comments", extract_text_from_element(soup, id="strComments"))
 
         # Extract the justification
-        data.store("request", "justification", extract_text_from_element(soup, id="strJustificare"))
+        data.store("request.justification", extract_text_from_element(soup, id="strJustificare"))
 
         # Extract ICD10 coded diagnosis
-        data.store("request", "icd10", extract_text_after_label(soup, r'Diagnostic:', 'tr'))
+        data.store("request.icd10", extract_text_after_label(soup, r'Diagnostic:', 'tr'))
 
         # Extract requester and request date and time
         req = extract_text_after_label(soup, r'Ceruta:', 'tr')
         if req and '-' in req:
             try:
                 request_physician, request_datetime = req.split('-', 1)
-                data.store("request", "request_physician", request_physician.strip())
+                data.store("request.request_physician", request_physician.strip())
                 # Try to parse the datetime
                 dt = parse_date_time(request_datetime)
                 if dt:
-                    data.store("request", "request_datetime", dt.isoformat())
+                    data.store("request.request_datetime", dt.isoformat())
                 else:
                     # If parsing fails, keep the original string
-                    data.store("request", "request_datetime", request_datetime.strip())
+                    data.store("request.request_datetime", request_datetime.strip())
             except ValueError:
                 # Handle case where split doesn't work as expected
-                data.store("request", "request_info", req)
+                data.store("request.request_info", req)
 
         # Extract performer (validator) from the domain section
         validator = extract_text_after_label(soup, r'Validat de:', 'td', stop_at=r'Data')
         if validator:
-            data.store("validation", "validator", validator)
+            data.store("validation.validator", validator)
 
         # Extract validation datetime
         validation_datetime = extract_value_from_input(soup, id="dataefectuarii")
@@ -1062,10 +1062,10 @@ def parse_report(html_content: str) -> Dict[str, Any]:
             # Try to parse the datetime
             dt = parse_date_time(validation_datetime)
             if dt:
-                data.store("validation", "datetime", dt.isoformat())
+                data.store("validation.datetime", dt.isoformat())
             else:
                 # If parsing fails, keep the original string
-                data.store("validation", "datetime", validation_datetime)
+                data.store("validation.datetime", validation_datetime)
         
         # For each strAnalyseExec input, find the parent 'td' and extract examination name from first 'b' element
         procedures = []
@@ -1103,10 +1103,10 @@ def parse_report(html_content: str) -> Dict[str, Any]:
                     procedures.append(procedure)
         
         if procedures:
-            data.store(None, "procedures", procedures)
+            data.store("procedures", procedures)
 
         # Store urgency flag
-        data.store(None, "is_urgent", "~URGENTA~" in html_content)
+        data.store("is_urgent", "~URGENTA~" in html_content)
 
         # Return the parsed report data
         return data
