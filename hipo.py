@@ -541,18 +541,14 @@ class HipoData(dict):
         if key is None:
             # Check if section exists in root
             if section in self:
-                value = self[section]
-                # Return value if it's a string, otherwise convert to string
-                return value if isinstance(value, str) else str(value)
+                return self[section]
             return default
         
         # Check if section exists and is a dict
         if section in self and isinstance(self[section], dict):
             # Check if key exists in section
             if key in self[section]:
-                value = self[section][key]
-                # Return value if it's a string, otherwise convert to string
-                return value if isinstance(value, str) else str(value)
+                return self[section][key]
         return default
 
     def set(self, section_key_str: str, value: Any) -> None:
