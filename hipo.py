@@ -1262,8 +1262,8 @@ class HipoClientPatient(HipoClient):
         Returns:
             FHIR Patient resource as dictionary
         """
-        # Extract http_request from kwargs if available
-        http_request = kwargs.get('http_request')
+        # Extract http_request from kwargs if available, otherwise use self.request
+        http_request = kwargs.get('http_request', self.request)
         
         # Get patient ID from the request URL parameters
         patient_id = kwargs.get('id', '')
