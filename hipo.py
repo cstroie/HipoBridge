@@ -1901,7 +1901,17 @@ class HipoClientServiceRequest(HipoClient):
                 else:
                     study_system_url = "http://example.com/fhir/CodeSystem/study-codes"
                     
-                for code, study_info in studies.items():
+                # Handle case where studies might be a dict or other iterable
+                if isinstance(studies, dict):
+                    studies_items = studies.items()
+                else:
+                    # If studies is not a dict, try to iterate over it directly
+                    try:
+                        studies_items = enumerate(studies)
+                    except TypeError:
+                        studies_items = []
+                        
+                for code, study_info in studies_items:
                     description = study_info.get("description", "") if isinstance(study_info, dict) else str(study_info)
                     order_detail = CodeableConcept(
                         coding=[{
