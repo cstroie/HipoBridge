@@ -110,8 +110,14 @@ def html_to_markdown(html_content: str) -> str:
             u.insert_after('*')
             u.unwrap()
 
-        # Remove excessive whitespace and HTML entities
-        text = soup.get_text()
+        # Get the modified HTML content as string
+        modified_html = str(soup)
+        
+        # Extract text content while preserving the markdown formatting we inserted
+        # We need to parse it again to get the text with our inserted markdown markers
+        soup2 = BeautifulSoup(modified_html, 'html.parser')
+        text = soup2.get_text()
+        
         # Decode HTML entities
         text = html.unescape(text)
         # Remove various forms of non-breaking spaces
