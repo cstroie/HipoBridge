@@ -1215,8 +1215,8 @@ class HipoClientPatient(HipoClient):
             data.store("patient.address", extract_selected_from_dropdown(soup, id='strDomLegal_LocId'))
 
             # Derive sex and birth date from CNP if available
-            if data["patient"].get("cnp"):
-                parsed_cnp = parse_cnp(data["patient"]["cnp"])
+            if data.get("patient.cnp"):
+                parsed_cnp = parse_cnp(data.get("patient.cnp"))
                 if parsed_cnp.get("valid"):
                     data.store("patient.sex", parsed_cnp.get("gender", "unknown"))
                     data.store("patient.birth_date", parsed_cnp.get("birth_date", ""))
