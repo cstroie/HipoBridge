@@ -1777,7 +1777,7 @@ class HipoClientServiceRequest(HipoClient):
                         if study_text:
                             # Get study type and region
                             study_type, region = identify_study_type_and_region(study_text)
-                            data.store("studies", first_cell_text, {
+                            data.store(f"studies.{first_cell_text}", {
                                 "description": study_text,
                                 "type": study_type,
                                 "region": region
