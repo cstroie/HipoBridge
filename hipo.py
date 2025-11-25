@@ -1345,21 +1345,21 @@ class HipoClientPatient(HipoClient):
 
             # Add extensions for encounter/admission/discharge IDs
             presentations = parsed_data.get("patient.presentation", [])
-            if presentations:
+            if presentations and http_request:
                 extensions.append({
                     "url": f"{http_request.scheme}://{http_request.host}/fhir/StructureDefinition/presentation-ids",
                     "valueString": ",".join(presentations) if isinstance(presentations, list) else str(presentations)
                 })
                 
             checkins = parsed_data.get("patient.checkin", [])
-            if checkins:
+            if checkins and http_request:
                 extensions.append({
                     "url": f"{http_request.scheme}://{http_request.host}/fhir/StructureDefinition/checkin-ids",
                     "valueString": ",".join(checkins) if isinstance(checkins, list) else str(checkins)
                 })
                 
             checkouts = parsed_data.get("patient.checkout", [])
-            if checkouts:
+            if checkouts and http_request:
                 extensions.append({
                     "url": f"{http_request.scheme}://{http_request.host}/fhir/StructureDefinition/checkout-ids",
                     "valueString": ",".join(checkouts) if isinstance(checkouts, list) else str(checkouts)
@@ -1372,7 +1372,7 @@ class HipoClientPatient(HipoClient):
             identifiers = []
 
             # Add CNP as identifier if available
-            if parsed_data.get("patient.cnp", None):
+            if parsed_data.get("patient.cnp", None) and http_request:
                 identifiers.append({
                     "use": "official",
                     "system": f"{http_request.scheme}://{http_request.host}/fhir/NamingSystem/patient-cnp",
@@ -1380,14 +1380,14 @@ class HipoClientPatient(HipoClient):
                 })
 
             # Add CID if available
-            if parsed_data.get("patient.cid", None):
+            if parsed_data.get("patient.cid", None) and http_request:
                 identifiers.append({
                     "system": f"{http_request.scheme}://{http_request.host}/fhir/NamingSystem/patient-cid",
                     "value": parsed_data.get("patient.cid")
                 })
 
             # Add MCP if available
-            if parsed_data.get("patient.mcp", None):
+            if parsed_data.get("patient.mcp", None) and http_request:
                 identifiers.append({
                     "system": f"{http_request.scheme}://{http_request.host}/fhir/NamingSystem/patient-mcp",
                     "value": parsed_data.get("patient.mcp")
