@@ -1458,8 +1458,8 @@ class HipoClientCheckout(HipoClient):
 
             # Extract patient CNP
             data.store("patient.cnp", extract_text_after_label(soup, r'CNP\s*:', 'tr'))
-            if data.get("patient", {}).get("cnp"):
-                parsed_cnp = parse_cnp(data["patient"]["cnp"])
+            if data.get("patient.cnp"):
+                parsed_cnp = parse_cnp(data.get("patient.cnp"))
                 data.store("patient.gender", parsed_cnp.get("gender"))
                 data.store("patient.date", parsed_cnp.get("birth_date"))
                 data.store("patient.age", parsed_cnp.get("age"))
@@ -1490,8 +1490,8 @@ class HipoClientCheckout(HipoClient):
             data.store("checkin.time", extract_value_from_input(soup, id='sCITime'))
             
             # Create combined checkin datetime
-            checkin_date = data.get("checkin", {}).get("date")
-            checkin_time = data.get("checkin", {}).get("time")
+            checkin_date = data.get("checkin.date")
+            checkin_time = data.get("checkin.time")
             if checkin_date and checkin_time:
                 data.store("checkin.datetime", f'{checkin_date} {checkin_time}')
 
@@ -1501,8 +1501,8 @@ class HipoClientCheckout(HipoClient):
             data.store("checkout.time", extract_value_from_input(soup, id='sCOTime'))
             
             # Create combined checkout datetime
-            checkout_date = data.get("checkout", {}).get("date")
-            checkout_time = data.get("checkout", {}).get("time")
+            checkout_date = data.get("checkout.date")
+            checkout_time = data.get("checkout.time")
             if checkout_date and checkout_time:
                 data.store("checkout.datetime", f'{checkout_date} {checkout_time}')
 
@@ -1538,7 +1538,7 @@ class HipoClientCheckout(HipoClient):
             logger.error(f"Error parsing checkout data: {e}")
             return {}
 
-    def fhir_response(self, parsed_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def fhir_response(self, parsed_data: HipoData[str, Any], **kwargs) -> Dict[str, Any]:
         """Convert parsed checkout data to FHIR Encounter resource.
 
         Transforms parsed checkout data into a FHIR-compatible Encounter resource
@@ -1551,7 +1551,7 @@ class HipoClientCheckout(HipoClient):
         Returns:
             FHIR Encounter resource as dictionary
         """
-        encounter_id = parsed_data.get('checkout', {}).get('id', '')
+        encounter_id = parsed_data.get('checkout.id', '')
         # Create enhanced FHIR Encounter resource
         fhir_encounter = {
             "resourceType": "Encounter",
@@ -1569,13 +1569,13 @@ class HipoClientCheckout(HipoClient):
                 }
             ],
             "subject": {
-                "reference": f"Patient/{parsed_data.get('patient', {}).get('id', '')}"
+                "reference": f"Patient/{parsed_data.get('patient.id', '')}"
             },
             "participant": []
         }
 
         # Add performer if available (from checkout physician)
-        checkout_physician = parsed_data.get("checkout", {}).get("physician")
+        checkout_physician = parsed_data.get("checkout.physician")
         if checkout_physician:
             fhir_encounter["participant"].append({
                 "type": [
@@ -1595,7 +1595,7 @@ class HipoClientCheckout(HipoClient):
             })
 
         # Add reason (admission diagnostic) if available
-        admission_diagnosis = parsed_data.get("checkin", {}).get("diagnosis")
+        admission_diagnosis = parsed_data.get("checkin.diagnosis")
         if admission_diagnosis:
             fhir_encounter["reasonCode"] = [
                 {
@@ -1604,7 +1604,7 @@ class HipoClientCheckout(HipoClient):
             ]
 
         # Add text summary if epicrisis exists
-        epicrisis = parsed_data.get("checkout", {}).get("epicrisis")
+        epicrisis = parsed_data.get("checkout.epicrisis")
         if epicrisis:
             # Also add as a note
             fhir_encounter["note"] = [
@@ -1634,7 +1634,7 @@ class HipoClientCheckout(HipoClient):
             ]
 
         # Add discharge diagnosis if available
-        discharge_diagnosis = parsed_data.get("checkout", {}).get("diagnosis")
+        discharge_diagnosis = parsed_data.get("checkout.diagnosis")
         if discharge_diagnosis:
             if "diagnosis" not in fhir_encounter:
                 fhir_encounter["diagnosis"] = []
@@ -1657,8 +1657,8 @@ class HipoClientCheckout(HipoClient):
             )
 
         # Add period for admission and discharge times
-        checkin_datetime = parsed_data.get("checkin", {}).get("datetime")
-        checkout_datetime = parsed_data.get("checkout", {}).get("datetime")
+        checkin_datetime = parsed_data.get("checkin.datetime")
+        checkout_datetime = parsed_data.get("checkout.datetime")
         if checkin_datetime or checkout_datetime:
             period = {}
             if checkin_datetime:
@@ -1668,8 +1668,8 @@ class HipoClientCheckout(HipoClient):
             fhir_encounter["period"] = period
 
         # Add location/ward information
-        checkin_ward = parsed_data.get("checkin", {}).get("ward")
-        checkout_ward = parsed_data.get("checkout", {}).get("ward")
+        checkin_ward = parsed_data.get("checkin.ward")
+        checkout_ward = parsed_data.get("checkout.ward")
         if checkin_ward or checkout_ward:
             location = []
             if checkin_ward:
