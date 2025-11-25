@@ -464,6 +464,43 @@ class HipoData(dict):
             if isinstance(value, str):
                 value = value.strip()
             data[key] = value
+    
+    def store_list(self, section: str = None, key: str = None, value: str = None) -> None:
+        """Store a value in the dictionary with automatic data processing.
+        
+        Args:
+            section: Optional section name for grouping related data.
+                    If None, data is stored directly in root dictionary.
+            key: Key for the value. If None, section name is used as key in root.
+            value: Value to store. Lists with one element are automatically unwrapped,
+                  and string values are stripped of whitespace.
+                  
+        Storage logic:
+        - If section is None: Store key-value pair directly in root dict
+        - If section provided but key is None: Store value in root with section as key
+        - If both section and key provided: Store value in section[key] nested structure
+        - Sections are created automatically if they don't exist
+        """
+        # Handle the case where no section is provided - store directly in root
+        if not section:
+            data = self
+        else:
+            # Create section if it doesn't exist
+            if section not in self:
+                self[section] = {}
+            data = self[section]
+        
+        # If no key is provided, use section as key and store in root
+        if not key:
+            key = section
+            data = self
+            
+        # Store the value if we have a key and value
+        if key and value:
+            # Auto-unwrap single element lists
+            if not isinstance(value, list):
+                value = list(value)
+            data[key] = value
 
 
 class HipoClient:
@@ -1018,6 +1055,268 @@ class HipoClient:
         except Exception as e:
             return None, create_error_response("Data retrieval failed", 500, {"exception": str(e)})
 
+class HipoClientPatient(HipoClient):
+    """Specialized client for service request related operations in the Hipocrate medical system.
+
+    Handles retrieval and parsing of medical service requests including laboratory
+    orders, imaging requests, and other medical service requisitions.
+    """
+
+    def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
+        # Initialize the parent
+        super().__init__(service_url = service_url, request = request)
+        # The request endpoint
+        self.request_url = "/Pacient/edit.asp?id={id}"
+
+    def parse_data(self, html_content: str, **kwargs) -> Dict[str, Any]:
+        """Parse HTML service request content and extract structured data.
+
+        Extracts patient information and medical data from service request HTML content,
+        including physician information, diagnosis, imaging studies, and request details.
+
+        Args:
+            html_content: HTML content of the service request page
+            **kwargs: Additional arguments
+
+        Returns:
+            Dictionary containing parsed service request data organized in sections:
+            - patient: Patient information (name, id)
+            - checkin: Admission information (physician, id, diagnosis)
+            - request: Request information (clinical_comments, lab_comments, datetime, is_urgent)
+            - studies: List of requested imaging studies
+        """
+        # Initialize result dictionary
+        data = HipoData()
+
+        try:
+            # Parse HTML content
+            soup = BeautifulSoup(html_content, 'html.parser')
+
+            # Check if this is a single patient page by looking for 'Date pasaportale' in title
+            if not self.is_expected_page(soup, 'Date pasaportale'):
+                # Log snnippet of response for debugging
+                return None, create_error_response("Backend returned an unexpected page", 500, {"text": html_content[:200] + "..."})
+
+            # Check if there is patient data on page by getting the name from the div with id "div_navbar"
+            patient_name_from_navbar = extract_text_from_element(soup, id='div_navbar')
+            if not patient_name_from_navbar:
+                return None, create_error_response("Patient name from navbar is empty, invalid patient id", 404)
+
+            # Extract patient name
+            data.store("patient", "name", patient_name_from_navbar)
+
+            # Extract patient name from input elements
+            data.store("patient", "family_name", extract_value_from_input(soup, id="strNume"))
+            data.store("patient", "given_name", extract_value_from_input(soup, id="strPrenume"))
+            if data["patient"].get("family_name") and data["patient"].get("given_name"):
+                data.store("patient", "name", f"{data['patient']['family_name']} {data['patient']['given_name']}")
+
+
+            # Extract patient CNP from input element with id "strCNP"
+            data.store("patient", "cnp", extract_value_from_input(soup, id="strCNP"))
+
+            # Extract patient id from hidden input with id "hdnCodeID"
+            data.store("patient", "id", extract_value_from_input(soup, id="hdnCodeID"))
+
+            # Extract CID
+            data.store("patient", "cid", extract_value_from_input(soup, id="strCID"))
+
+            # Extract phone
+            data.store("patient", "phone", extract_value_from_input(soup, id="strTelefon"))
+
+            # Extract email
+            data.store("patient", "email", extract_value_from_input(soup, id="strEmail"))
+
+            # Extract weight
+            data.store("patient", "weight", extract_value_from_input(soup, id="strGreutate"))
+
+            # Extract height
+            data.store("patient", "height", extract_value_from_input(soup, id="strInaltime"))
+
+            # Extract MCP
+            data.store("patient", "mcp", extract_value_from_input(soup, id="strmcp"))
+
+            # Extract address from SELECT with id strDomLegal_LocId
+            data.store("patient", "address", extract_selected_from_dropdown(soup, id='strDomLegal_LocId'))
+
+            # Derive sex and birth date from CNP if available
+            if data["patient"].get("cnp", ""):
+                parsed_cnp = parse_cnp(data["patient"]["cnp"])
+                if parsed_cnp.get("valid"):
+                    data.store("patient", "sex", parsed_cnp.get("gender", "unknown"))
+                    data.store("patient", "birth_date", parsed_cnp.get("birth_date", ""))
+
+            # If we couldn't derive birth date from CNP, try to get it from strDataNastere input
+            if not data["patient"].get("birth_date", ""):
+                birth_date = extract_value_from_input(soup, id='strDataNastere')
+                if birth_date and re.match(r'\d{2}/\d{2}/\d{4}', birth_date):
+                    # Convert DD/MM/YYYY format to YYYY-MM-DD
+                    try:
+                        day, month, year = birth_date.split('/')
+                        data.store("patient", "birth_date", f"{year}-{month}-{day}")
+                    except Exception:
+                        pass  # Keep birth_date empty if parsing fails
+
+            # Extract encounters / presentations
+            data.store_list("patient", "presentation", extract_ids_from_links(soup, r'../files/presentation\.asp\?id=(\d+)'))
+
+            # Extract admissions / checkins
+            data.store_list("patient", "checkin", extract_ids_from_links(soup, r'../files/checkin\.asp\?id=(\d+)'))
+
+            # Extract discharges / checkouts
+            data.store_list("patient", "checkout", extract_ids_from_links(soup, r'../files/checkout\.asp\?id=(\d+)'))
+
+
+            # Extract request datetime (Data si ora cererii)
+            data.store("request", "datetime", extract_text_after_label(soup, r'Data si ora cererii:', stop_at=r'Receptionat'))
+
+            # Extract request urgency
+            data.store("request", "is_urgent", "~URGENTA~" in html_content)
+
+            # Return the data
+            return data
+        
+        except Exception as e:
+            logger.error(f"Error parsing service request data: {e}")
+            return {}
+
+    def fhir_response(self, parsed_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Convert parsed service request data to FHIR ServiceRequest resource.
+
+        Transforms parsed service request data into a FHIR-compatible ServiceRequest
+        resource with proper structure, references, coding systems, and extensions.
+
+        Args:
+            parsed_data: Parsed service request data from parse_data method
+            **kwargs: Additional arguments including 'http_request' for host information
+                     and 'id' for service request ID
+
+        Returns:
+            FHIR ServiceRequest resource as dictionary
+        """
+        # Extract http_request from kwargs if available
+        http_request = kwargs.get('http_request')
+        
+        # Get service request ID from the request URL parameters
+        service_request_id = kwargs.get('id', '')
+        
+        try:
+            # Create FHIR ServiceRequest resource using the FHIR class
+            fhir_service_request = FHIRServiceRequest(
+                id=service_request_id,
+                status="active",
+                intent="order",
+                priority="urgent" if parsed_data.get("is_urgent", False) else "routine"
+            )
+
+            # Create subject reference
+            patient_id = parsed_data.get("patient", {}).get("id", "")
+            subject = Reference(
+                reference=f"Patient/{patient_id}"
+            )
+
+            # Add patient name to subject if available
+            patient_name = parsed_data.get("patient", {}).get("name", "")
+            if patient_name:
+                subject["display"] = patient_name
+            fhir_service_request["subject"] = subject
+
+            # Create codeable concept for the service type
+            if http_request:
+                system_url = f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/service-types"
+            else:
+                system_url = "http://example.com/fhir/CodeSystem/service-types"
+                
+            code = CodeableConcept(
+                coding=[{
+                    "system": system_url,
+                    "code": "imaging-study",
+                    "display": "Imaging Study"
+                }],
+                text="Imaging Study Request"
+            )
+            fhir_service_request["code"] = code
+
+            # Add requester if available (requesting doctor)
+            physician = parsed_data.get("checkin", {}).get("physician")
+            if physician:
+                fhir_service_request["requester"] = Reference(display=physician)
+
+            # Add encounter if we can derive it
+            admission_id = parsed_data.get("checkin", {}).get("id")
+            if admission_id:
+                fhir_service_request["encounter"] = Reference(
+                    reference=f"Encounter/{admission_id}"
+                )
+
+            # Add reason code if diagnosis is available
+            diagnosis = parsed_data.get("checkin", {}).get("diagnosis")
+            if diagnosis:
+                # Try to extract ICD-10 code from the diagnosis text
+                # Format is usually "CODE Description"
+                diagnosis_match = re.match(r'^(\d{3,4})\s+(.+)$', diagnosis)
+                if diagnosis_match:
+                    condition = Reference(
+                        reference=f"Condition/{diagnosis_match.group(1)}",
+                        display=diagnosis_match.group(2)
+                    )
+                else:
+                    # If no code found, use the entire diagnosis as display text
+                    condition = Reference(display=diagnosis)
+                fhir_service_request["reason"] = [condition]
+
+            # Add reason reference if clinical comments are available
+            clinical_comments = parsed_data.get("request", {}).get("clinical_comments")
+            if clinical_comments:
+                fhir_service_request["supportingInfo"] = [{
+                    "display": clinical_comments
+                }]
+
+            # Add note for lab comments
+            lab_comments = parsed_data.get("request", {}).get("lab_comments")
+            if lab_comments:
+                fhir_service_request["note"] = [{
+                    "text": lab_comments
+                }]
+
+            # Add order details for imaging studies
+            studies = parsed_data.get("studies")
+            if studies:
+                order_details = []
+                if http_request:
+                    study_system_url = f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/study-codes"
+                else:
+                    study_system_url = "http://example.com/fhir/CodeSystem/study-codes"
+                    
+                for code, study_info in studies.items():
+                    description = study_info.get("description", "")
+                    order_detail = CodeableConcept(
+                        coding=[{
+                            "system": study_system_url,
+                            "code": f"study-{code}",
+                            "display": description
+                        }],
+                        text=description
+                    )
+                    order_details.append(order_detail)
+                fhir_service_request["orderDetail"] = order_details
+
+            # Add authoredOn if request datetime is available
+            request_datetime = parsed_data.get("request", {}).get("datetime")
+            if request_datetime:
+                # Parse the datetime using our parse_date_time function
+                parsed_dt = parse_date_time(request_datetime)
+                if parsed_dt:
+                    # Convert to ISO format
+                    fhir_service_request["authoredOn"] = parsed_dt.isoformat()
+                else:
+                    # If parsing fails, keep the original string
+                    fhir_service_request["authoredOn"] = request_datetime
+
+            return fhir_service_request.to_dict()
+        except Exception as e:
+            logger.error(f"Error converting service request data: {e}")
+            return {}
 
 class HipoClientCheckout(HipoClient):
     """Specialized client for checkout-related operations in the Hipocrate medical system.
