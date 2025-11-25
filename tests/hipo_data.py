@@ -131,9 +131,9 @@ class TestHipoData(unittest.TestCase):
     
     def test_get_section_key_with_extra_spaces(self):
         """Test get_section_key with extra spaces."""
-        section, key = self.data.get_section_key(" patient . name ")
-        self.assertEqual(section, "patient . name")
-        self.assertIsNone(key)
+        section, key = self.data.get_section_key(" patient.name ")
+        self.assertEqual(section, "patient")
+        self.assertEqual(key, "name")
     
     def test_get_method_with_existing_value(self):
         """Test get method with existing section and key."""
