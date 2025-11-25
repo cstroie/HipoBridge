@@ -7,6 +7,7 @@ import aiohttp
 import os
 import argparse
 import sys
+import unittest
 
 # Import test functions from separate modules
 from tests.root import test_root_endpoint
@@ -96,10 +97,21 @@ async def run_tests(test_list) -> None:
         results = []
         for test in test_list:
             try:
-                result = await test(session)
-                results.append(result)
+                # Handle both async test functions and unittest classes
+                if hasattr(test, '__call__') and hasattr(test, '__name__'):
+                    # Regular async test function
+                    result = await test(session)
+                    results.append(result)
+                else:
+                    # Unittest class - run it
+                    suite = unittest.TestLoader().loadTestsFromTestCase(test)
+                    runner = unittest.TextTestRunner(stream=open('/dev/null', 'w'))
+                    test_result = runner.run(suite)
+                    success = test_result.wasSuccessful()
+                    results.append(success)
+                    print(f"Test {test.__name__}: {'PASS' if success else 'FAIL'}")
             except Exception as e:
-                print(f"Test {test.__name__} failed with exception: {e}")
+                print(f"Test {getattr(test, '__name__', str(test))} failed with exception: {e}")
                 results.append(False)
             print()
         
