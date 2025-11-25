@@ -456,9 +456,9 @@ class HipoData(dict):
             data = self
             
         # Store the value if we have a key and value
-        if key and value:
+        if key:
             # Auto-unwrap single element lists
-            if isinstance(value, list) and len(value) > 0 and value[0]:
+            if isinstance(value, list) and len(value) == 1:
                 value = value[0]
             # Auto-strip string values
             if isinstance(value, str):
@@ -503,25 +503,25 @@ class HipoData(dict):
             data[key] = value
 
     def get_section_key(self, section_key_str: str) -> tuple:
-        """Parse a string in format 'section,key' and return as tuple.
+        """Parse a string in format 'section.key' and return as tuple.
         
         Args:
-            section_key_str: String in format 'section,key'
+            section_key_str: String in format 'section.key'
             
         Returns:
             Tuple of (section, key)
         """
-        if ',' in section_key_str:
-            parts = section_key_str.split(',', 1)
+        if '.' in section_key_str:
+            parts = section_key_str.split('.', 1)
             return (parts[0].strip(), parts[1].strip())
         else:
             return (section_key_str.strip(), None)
 
     def get(self, section_key_str: str) -> str:
-        """Get value from self[section][key] using 'section,key' string format.
+        """Get value from self[section][key] using 'section.key' string format.
         
         Args:
-            section_key_str: String in format 'section,key'
+            section_key_str: String in format 'section.key'
             
         Returns:
             Value at self[section][key] if it exists, otherwise empty string
@@ -547,10 +547,10 @@ class HipoData(dict):
         return ""
 
     def set(self, section_key_str: str, value: Any) -> None:
-        """Set value to self[section][key] using 'section,key' string format.
+        """Set value to self[section][key] using 'section.key' string format.
         
         Args:
-            section_key_str: String in format 'section,key'
+            section_key_str: String in format 'section.key'
             value: Value to set
         """
         section, key = self.get_section_key(section_key_str)
