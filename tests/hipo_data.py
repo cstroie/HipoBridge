@@ -170,6 +170,19 @@ class TestHipoData(unittest.TestCase):
         result = self.data.get("patient")
         self.assertEqual(result, "")
     
+    def test_get_method_with_default_value(self):
+        """Test get method with custom default value."""
+        result = self.data.get("patient.name", "Unknown")
+        self.assertEqual(result, "Unknown")
+    
+    def test_get_method_with_default_value_existing_key(self):
+        """Test get method with custom default value for existing key."""
+        # Set up test data
+        self.data.store("patient", "name", "John Doe")
+        
+        result = self.data.get("patient.name", "Unknown")
+        self.assertEqual(result, "John Doe")
+    
     def test_get_method_with_non_string_value(self):
         """Test get method with non-string value."""
         # Set up test data
