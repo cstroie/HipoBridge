@@ -192,7 +192,7 @@ class TestHipoData(unittest.TestCase):
         self.data.store("patient.age", 30)
         
         result = self.data.get("patient.age")
-        self.assertEqual(result, "30")
+        self.assertEqual(result, 30)
     
     def test_set_method_with_valid_section_and_key(self):
         """Test set method with valid section and key."""
