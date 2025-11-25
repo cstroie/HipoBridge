@@ -1181,75 +1181,75 @@ class HipoClientPatient(HipoClient):
                 return None, create_error_response("Patient name from navbar is empty, invalid patient id", 404)
 
             # Extract patient name
-            data.store("patient", "name", patient_name_from_navbar)
+            data.store("patient.name", patient_name_from_navbar)
 
             # Extract patient name from input elements
-            data.store("patient", "family_name", extract_value_from_input(soup, id="strNume"))
-            data.store("patient", "given_name", extract_value_from_input(soup, id="strPrenume"))
+            data.store("patient.family_name", extract_value_from_input(soup, id="strNume"))
+            data.store("patient.given_name", extract_value_from_input(soup, id="strPrenume"))
             if data["patient"].get("family_name") and data["patient"].get("given_name"):
-                data.store("patient", "name", f"{data['patient']['family_name']} {data['patient']['given_name']}")
+                data.store("patient.name", f"{data['patient']['family_name']} {data['patient']['given_name']}")
 
 
             # Extract patient CNP from input element with id "strCNP"
-            data.store("patient", "cnp", extract_value_from_input(soup, id="strCNP"))
+            data.store("patient.cnp", extract_value_from_input(soup, id="strCNP"))
 
             # Extract patient id from hidden input with id "hdnCodeID"
-            data.store("patient", "id", extract_value_from_input(soup, id="hdnCodeID"))
+            data.store("patient.id", extract_value_from_input(soup, id="hdnCodeID"))
 
             # Extract CID
-            data.store("patient", "cid", extract_value_from_input(soup, id="strCID"))
+            data.store("patient.cid", extract_value_from_input(soup, id="strCID"))
 
             # Extract phone
-            data.store("patient", "phone", extract_value_from_input(soup, id="strTelefon"))
+            data.store("patient.phone", extract_value_from_input(soup, id="strTelefon"))
 
             # Extract email
-            data.store("patient", "email", extract_value_from_input(soup, id="strEmail"))
+            data.store("patient.email", extract_value_from_input(soup, id="strEmail"))
 
             # Extract weight
-            data.store("patient", "weight", extract_value_from_input(soup, id="strGreutate"))
+            data.store("patient.weight", extract_value_from_input(soup, id="strGreutate"))
 
             # Extract height
-            data.store("patient", "height", extract_value_from_input(soup, id="strInaltime"))
+            data.store("patient.height", extract_value_from_input(soup, id="strInaltime"))
 
             # Extract MCP
-            data.store("patient", "mcp", extract_value_from_input(soup, id="strmcp"))
+            data.store("patient.mcp", extract_value_from_input(soup, id="strmcp"))
 
             # Extract address from SELECT with id strDomLegal_LocId
-            data.store("patient", "address", extract_selected_from_dropdown(soup, id='strDomLegal_LocId'))
+            data.store("patient.address", extract_selected_from_dropdown(soup, id='strDomLegal_LocId'))
 
             # Derive sex and birth date from CNP if available
-            if data["patient"].get("cnp", ""):
+            if data["patient"].get("cnp"):
                 parsed_cnp = parse_cnp(data["patient"]["cnp"])
                 if parsed_cnp.get("valid"):
-                    data.store("patient", "sex", parsed_cnp.get("gender", "unknown"))
-                    data.store("patient", "birth_date", parsed_cnp.get("birth_date", ""))
+                    data.store("patient.sex", parsed_cnp.get("gender", "unknown"))
+                    data.store("patient.birth_date", parsed_cnp.get("birth_date", ""))
 
             # If we couldn't derive birth date from CNP, try to get it from strDataNastere input
-            if not data["patient"].get("birth_date", ""):
+            if not data.get("patient.birth_date"):
                 birth_date = extract_value_from_input(soup, id='strDataNastere')
                 if birth_date and re.match(r'\d{2}/\d{2}/\d{4}', birth_date):
                     # Convert DD/MM/YYYY format to YYYY-MM-DD
                     try:
                         day, month, year = birth_date.split('/')
-                        data.store("patient", "birth_date", f"{year}-{month}-{day}")
+                        data.store("patient.birth_date", f"{year}-{month}-{day}")
                     except Exception:
                         pass  # Keep birth_date empty if parsing fails
 
             # Extract encounters / presentations
-            data.store_list("patient", "presentation", extract_ids_from_links(soup, r'../files/presentation\.asp\?id=(\d+)'))
+            data.store_list("patient.presentation", extract_ids_from_links(soup, r'../files/presentation\.asp\?id=(\d+)'))
 
             # Extract admissions / checkins
-            data.store_list("patient", "checkin", extract_ids_from_links(soup, r'../files/checkin\.asp\?id=(\d+)'))
+            data.store_list("patient.checkin", extract_ids_from_links(soup, r'../files/checkin\.asp\?id=(\d+)'))
 
             # Extract discharges / checkouts
-            data.store_list("patient", "checkout", extract_ids_from_links(soup, r'../files/checkout\.asp\?id=(\d+)'))
+            data.store_list("patient.checkout", extract_ids_from_links(soup, r'../files/checkout\.asp\?id=(\d+)'))
 
 
             # Extract request datetime (Data si ora cererii)
-            data.store("request", "datetime", extract_text_after_label(soup, r'Data si ora cererii:', stop_at=r'Receptionat'))
+            data.store("request.datetime", extract_text_after_label(soup, r'Data si ora cererii:', stop_at=r'Receptionat'))
 
             # Extract request urgency
-            data.store("request", "is_urgent", "~URGENTA~" in html_content)
+            data.store("request.is_urgent", "~URGENTA~" in html_content)
 
             # Return the data
             return data
@@ -1258,7 +1258,7 @@ class HipoClientPatient(HipoClient):
             logger.error(f"Error parsing service request data: {e}")
             return {}
 
-    def fhir_response(self, parsed_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def fhir_response(self, parsed_data: HipoData[str, Any], **kwargs) -> Dict[str, Any]:
         """Convert parsed service request data to FHIR ServiceRequest resource.
 
         Transforms parsed service request data into a FHIR-compatible ServiceRequest
@@ -1288,13 +1288,13 @@ class HipoClientPatient(HipoClient):
             )
 
             # Create subject reference
-            patient_id = parsed_data.get("patient", {}).get("id", "")
+            patient_id = parsed_data.get("patient.id")
             subject = Reference(
                 reference=f"Patient/{patient_id}"
             )
 
             # Add patient name to subject if available
-            patient_name = parsed_data.get("patient", {}).get("name", "")
+            patient_name = parsed_data.get("patient.name")
             if patient_name:
                 subject["display"] = patient_name
             fhir_service_request["subject"] = subject
@@ -1445,84 +1445,84 @@ class HipoClientCheckout(HipoClient):
             # Extract patient name and ID from the link
             patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id='))
             if patient_link:
-                data.store("patient", "name", patient_link.get_text())
+                data.store("patient.name", patient_link.get_text())
                 # Extract patient ID from href
-                data.store("patient", "id", extract_id_from_link(patient_link))
+                data.store("patient.id", extract_id_from_link(patient_link))
 
             # Extract patient CNP
-            data.store("patient", "cnp", extract_text_after_label(soup, r'CNP\s*:', 'tr'))
+            data.store("patient.cnp", extract_text_after_label(soup, r'CNP\s*:', 'tr'))
             if data.get("patient", {}).get("cnp"):
                 parsed_cnp = parse_cnp(data["patient"]["cnp"])
-                data.store("patient", "gender", parsed_cnp.get("gender", ""))
-                data.store("patient", "date", parsed_cnp.get("birth_date", ""))
-                data.store("patient", "age", parsed_cnp.get("age", ""))
+                data.store("patient.gender", parsed_cnp.get("gender"))
+                data.store("patient.date", parsed_cnp.get("birth_date"))
+                data.store("patient.age", parsed_cnp.get("age"))
 
 
             # Extract presentation ID
             presentation_ids = extract_ids_from_links(soup, r'presentation\.asp\?id=(\d+)')
             if presentation_ids:
-                data.store("presentation", "id", presentation_ids)
+                data.store("presentation.id", presentation_ids)
 
 
             # Extract admission ID
             checkin_ids = extract_ids_from_links(soup, r'checkin\.asp\?id=(\d+)')
             if checkin_ids:
-                data.store("checkin", "id", checkin_ids)
+                data.store("checkin.id", checkin_ids)
 
             # Extract physician
-            data.store("checkin", "physician", extract_text_after_label(soup, r'Medic\s*:', 'tr'))
+            data.store("checkin.physician", extract_text_after_label(soup, r'Medic\s*:', 'tr'))
 
             # Extract ward
-            data.store("checkin", "ward", extract_text_after_label(soup, r'Sectie\s*:', 'tr'))
+            data.store("checkin.ward", extract_text_after_label(soup, r'Sectie\s*:', 'tr'))
 
             # Extract checkin diagnostic
-            data.store("checkin", "diagnosis", extract_text_after_label(soup, r'Diagnostic\s*:', 'tr'))
+            data.store("checkin.diagnosis", extract_text_after_label(soup, r'Diagnostic\s*:', 'tr'))
 
             # Extract checkin date and time from input fields
-            data.store("checkin", "date", extract_value_from_input(soup, id='sCIDate'))
-            data.store("checkin", "time", extract_value_from_input(soup, id='sCITime'))
+            data.store("checkin.date", extract_value_from_input(soup, id='sCIDate'))
+            data.store("checkin.time", extract_value_from_input(soup, id='sCITime'))
             
             # Create combined checkin datetime
             checkin_date = data.get("checkin", {}).get("date")
             checkin_time = data.get("checkin", {}).get("time")
             if checkin_date and checkin_time:
-                data.store("checkin", "datetime", f'{checkin_date} {checkin_time}')
+                data.store("checkin.datetime", f'{checkin_date} {checkin_time}')
 
 
             # Extract checkout date and time from input fields
-            data.store("checkout", "date", extract_value_from_input(soup, id='sCODate'))
-            data.store("checkout", "time", extract_value_from_input(soup, id='sCOTime'))
+            data.store("checkout.date", extract_value_from_input(soup, id='sCODate'))
+            data.store("checkout.time", extract_value_from_input(soup, id='sCOTime'))
             
             # Create combined checkout datetime
             checkout_date = data.get("checkout", {}).get("date")
             checkout_time = data.get("checkout", {}).get("time")
             if checkout_date and checkout_time:
-                data.store("checkout", "datetime", f'{checkout_date} {checkout_time}')
+                data.store("checkout.datetime", f'{checkout_date} {checkout_time}')
 
             # Extract epicrisis (textarea with id "sEpicrisysHtmlArea")
-            data.store("checkout", "epicrisis", extract_text_from_element(soup, 'sEpicrisys'))
+            data.store("checkout.epicrisis", extract_text_from_element(soup, 'sEpicrisys'))
 
             # Extract diagnostic (textarea after 'Diagnostic externare')
-            data.store("checkout", "diagnosis", extract_textarea_after_label(soup, r'Diagnostic externare[^:]*:'))
+            data.store("checkout.diagnosis", extract_textarea_after_label(soup, r'Diagnostic externare[^:]*:'))
 
             # Extract physician
-            data.store("checkout", "physician", extract_selected_from_dropdown(soup, name='iCOMedicID'))
+            data.store("checkout.physician", extract_selected_from_dropdown(soup, name='iCOMedicID'))
 
             # Extract ward
-            data.store("checkout", "ward", extract_selected_from_dropdown(soup, name='sSectionCode'))
+            data.store("checkout.ward", extract_selected_from_dropdown(soup, name='sSectionCode'))
 
             # Extract surgery (textarea with id "sBOProtocolHtmlArea")
-            data.store("checkout", "surgery", extract_text_from_element(soup, 'sBOProtocol'))
+            data.store("checkout.surgery", extract_text_from_element(soup, 'sBOProtocol'))
 
             # Extract recommendations (textarea with id 'sRecommendationsHtmlArea')
-            data.store("checkout", "recommendations", extract_text_from_element(soup, 'sRecommendations'))
+            data.store("checkout.recommendations", extract_text_from_element(soup, 'sRecommendations'))
 
             # Extract ICD10 diagnostic from textarea with name "sCODiagnosis"
-            data.store("checkout", "icd10", extract_text_from_element(soup, name='sCODiagnosis'))
+            data.store("checkout.icd10", extract_text_from_element(soup, name='sCODiagnosis'))
 
             # Add the id, if provided
             if 'id' in kwargs:
-                data.store("checkout", "id", kwargs["id"])
+                data.store("checkout.id", kwargs["id"])
 
             # Return the extracted data
             return data
@@ -1723,22 +1723,22 @@ class HipoClientServiceRequest(HipoClient):
             soup = BeautifulSoup(html_content, 'html.parser')
 
             # Extract patient name
-            data.store("patient", "name", extract_text_after_label(soup, r'Nume Pacient:'))
+            data.store("patient.name", extract_text_after_label(soup, r'Nume Pacient:'))
 
             # Extract patient ID
             patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id='))
             if patient_link:
-                data.store("patient", "id", extract_id_from_link(patient_link))
+                data.store("patient.id", extract_id_from_link(patient_link))
 
 
             # Extract physician
-            data.store("checkin", "physician", extract_text_after_label(soup, r'Medicul:', stop_at=r'-'))
+            data.store("checkin.physician", extract_text_after_label(soup, r'Medicul:', stop_at=r'-'))
 
             # Extract admission ID from the "Back" link
-            data.store("checkin", "id", extract_ids_from_links(soup, r'/checkin\.asp\?id=([^&"]+)'))
+            data.store("checkin.id", extract_ids_from_links(soup, r'/checkin\.asp\?id=([^&"]+)'))
 
             # Extract diagnosis
-            data.store("checkin", "diagnosis", extract_text_after_label(soup, r'Diagnostic:', 'td'))
+            data.store("checkin.diagnosis", extract_text_after_label(soup, r'Diagnostic:', 'td'))
 
 
             # Extract comments (clinical and lab)
@@ -1749,8 +1749,8 @@ class HipoClientServiceRequest(HipoClient):
                 if comment_row:
                     comment_tds = comment_row.find_all('td', class_='tdn')
                     if len(comment_tds) >= 2:
-                        data.store("request", "clinical_comments", comment_tds[0].get_text().strip())
-                        data.store("request", "lab_comments", comment_tds[1].get_text().strip())
+                        data.store("request.clinical_comments", comment_tds[0].get_text().strip())
+                        data.store("request.lab_comments", comment_tds[1].get_text().strip())
 
             # Extract imaging studies from the table
             studies_rows = soup.find_all('tr')
@@ -1771,10 +1771,10 @@ class HipoClientServiceRequest(HipoClient):
                             })
 
             # Extract request datetime (Data si ora cererii)
-            data.store("request", "datetime", extract_text_after_label(soup, r'Data si ora cererii:', stop_at=r'Receptionat'))
+            data.store("request.datetime", extract_text_after_label(soup, r'Data si ora cererii:', stop_at=r'Receptionat'))
 
             # Extract request urgency
-            data.store("request", "is_urgent", "~URGENTA~" in html_content)
+            data.store("request.is_urgent", "~URGENTA~" in html_content)
 
             # Return the data
             return data
@@ -1783,7 +1783,7 @@ class HipoClientServiceRequest(HipoClient):
             logger.error(f"Error parsing service request data: {e}")
             return {}
 
-    def fhir_response(self, parsed_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def fhir_response(self, parsed_data: Dict[str, Any], **kwargs) -> HipoData[str, Any]:
         """Convert parsed service request data to FHIR ServiceRequest resource.
 
         Transforms parsed service request data into a FHIR-compatible ServiceRequest
@@ -1813,13 +1813,13 @@ class HipoClientServiceRequest(HipoClient):
             )
 
             # Create subject reference
-            patient_id = parsed_data.get("patient", {}).get("id", "")
+            patient_id = parsed_data.get("patient.id")
             subject = Reference(
                 reference=f"Patient/{patient_id}"
             )
 
             # Add patient name to subject if available
-            patient_name = parsed_data.get("patient", {}).get("name", "")
+            patient_name = parsed_data.get("patient.name")
             if patient_name:
                 subject["display"] = patient_name
             fhir_service_request["subject"] = subject
