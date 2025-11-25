@@ -1848,19 +1848,19 @@ class HipoClientServiceRequest(HipoClient):
             fhir_service_request["code"] = code
 
             # Add requester if available (requesting doctor)
-            physician = parsed_data.get("checkin", {}).get("physician")
+            physician = parsed_data.get("checkin.physician")
             if physician:
                 fhir_service_request["requester"] = Reference(display=physician)
 
             # Add encounter if we can derive it
-            admission_id = parsed_data.get("checkin", {}).get("id")
+            admission_id = parsed_data.get("checkin.id")
             if admission_id:
                 fhir_service_request["encounter"] = Reference(
                     reference=f"Encounter/{admission_id}"
                 )
 
             # Add reason code if diagnosis is available
-            diagnosis = parsed_data.get("checkin", {}).get("diagnosis")
+            diagnosis = parsed_data.get("checkin.diagnosis")
             if diagnosis:
                 # Try to extract ICD-10 code from the diagnosis text
                 # Format is usually "CODE Description"
@@ -1876,14 +1876,14 @@ class HipoClientServiceRequest(HipoClient):
                 fhir_service_request["reason"] = [condition]
 
             # Add reason reference if clinical comments are available
-            clinical_comments = parsed_data.get("request", {}).get("clinical_comments")
+            clinical_comments = parsed_data.get("request.clinical_comments")
             if clinical_comments:
                 fhir_service_request["supportingInfo"] = [{
                     "display": clinical_comments
                 }]
 
             # Add note for lab comments
-            lab_comments = parsed_data.get("request", {}).get("lab_comments")
+            lab_comments = parsed_data.get("request.lab_comments")
             if lab_comments:
                 fhir_service_request["note"] = [{
                     "text": lab_comments
@@ -1912,7 +1912,7 @@ class HipoClientServiceRequest(HipoClient):
                 fhir_service_request["orderDetail"] = order_details
 
             # Add authoredOn if request datetime is available
-            request_datetime = parsed_data.get("request", {}).get("datetime")
+            request_datetime = parsed_data.get("request.datetime")
             if request_datetime:
                 # Parse the datetime using our parse_date_time function
                 parsed_dt = parse_date_time(request_datetime)
