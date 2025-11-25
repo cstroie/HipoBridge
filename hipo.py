@@ -425,106 +425,90 @@ class HipoData(dict):
         data.store("diagnosis", None, "Healthy")  # {"diagnosis": "Healthy"}
     """
     
-    def store(self, section: str = None, key: str = None, value: str = None) -> None:
+    def store(self, key: str, value: str = None) -> None:
         """Store a value in the dictionary with automatic data processing.
         
         Args:
-            section: Optional section name for grouping related data.
-                    If None, data is stored directly in root dictionary.
-                    If in format "section.key", will be parsed accordingly.
-            key: Key for the value. If None, section name is used as key in root.
+            key: Key for the value. Can be in format "section.key" for nested storage.
             value: Value to store. Lists with one element are automatically unwrapped,
                   and string values are stripped of whitespace.
                   
         Storage logic:
-        - If section is None: Store key-value pair directly in root dict
-        - If section provided but key is None: Store value in root with section as key
-        - If both section and key provided: Store value in section[key] nested structure
-        - If section has format "section.key" and key is None: Parse section and store accordingly
+        - If key is in format "section.key": Store value in nested section[key] structure
+        - Otherwise: Store key-value pair directly in root dict
         - Sections are created automatically if they don't exist
         """
-        # Handle the case where section has "section.key" format and key is None
-        if section and '.' in section and key is None:
-            section, key = section.split('.', 1)
-        
-        # Handle the case where no section is provided - store directly in root
-        if not section:
-            data = self
-        else:
+        # Check if key has dot notation for nested storage
+        if '.' in key:
+            section, sub_key = key.split('.', 1)
+            
             # Create section if it doesn't exist
             if section not in self:
                 self[section] = {}
-            data = self[section]
-        
-        # If no key is provided, use section as key and store in root
-        if not key:
-            key = section
-            data = self
-        # If we have a section and key, make sure the section is a dict
-        elif section and section in self:
+            
+            # Ensure section is a dict
             if not isinstance(self[section], dict):
                 # Convert existing value to dict
                 self[section] = {"": self[section]}
+            
             data = self[section]
             
-        # Store the value if we have a key and value
-        if key:
             # Auto-unwrap single element lists
             if isinstance(value, list) and len(value) == 1:
                 value = value[0]
             # Auto-strip string values
             if isinstance(value, str):
                 value = value.strip()
-            data[key] = value
+                
+            data[sub_key] = value
+        else:
+            # Store directly in root
+            # Auto-unwrap single element lists
+            if isinstance(value, list) and len(value) == 1:
+                value = value[0]
+            # Auto-strip string values
+            if isinstance(value, str):
+                value = value.strip()
+            self[key] = value
     
-    def store_list(self, section: str = None, key: str = None, value: str = None) -> None:
+    def store_list(self, key: str, value: str = None) -> None:
         """Store a value in the dictionary with automatic data processing.
         
         Args:
-            section: Optional section name for grouping related data.
-                    If None, data is stored directly in root dictionary.
-                    If in format "section.key", will be parsed accordingly.
-            key: Key for the value. If None, section name is used as key in root.
-            value: Value to store. Lists with one element are automatically unwrapped,
-                  and string values are stripped of whitespace.
+            key: Key for the value. Can be in format "section.key" for nested storage.
+            value: Value to store. Lists are preserved as lists.
                   
         Storage logic:
-        - If section is None: Store key-value pair directly in root dict
-        - If section provided but key is None: Store value in root with section as key
-        - If both section and key provided: Store value in section[key] nested structure
-        - If section has format "section.key" and key is None: Parse section and store accordingly
+        - If key is in format "section.key": Store value in nested section[key] structure
+        - Otherwise: Store key-value pair directly in root dict
         - Sections are created automatically if they don't exist
         """
-        # Handle the case where section has "section.key" format and key is None
-        if section and '.' in section and key is None:
-            section, key = section.split('.', 1)
-        
-        # Handle the case where no section is provided - store directly in root
-        if not section:
-            data = self
-        else:
+        # Check if key has dot notation for nested storage
+        if '.' in key:
+            section, sub_key = key.split('.', 1)
+            
             # Create section if it doesn't exist
             if section not in self:
                 self[section] = {}
-            data = self[section]
-        
-        # If no key is provided, use section as key and store in root
-        if not key:
-            key = section
-            data = self
-        # If we have a section and key, make sure the section is a dict
-        elif section and section in self:
+            
+            # Ensure section is a dict
             if not isinstance(self[section], dict):
                 # Convert existing value to dict
                 self[section] = {"": self[section]}
+            
             data = self[section]
             
-        # Store the value if we have a key and value
-        if key and value:
             # Auto-unwrap single element lists
             if not isinstance(value, list):
                 value = list(value)
-            data[key] = value
+                
+            data[sub_key] = value
+        else:
+            # Store directly in root
+            # Auto-unwrap single element lists
+            if not isinstance(value, list):
+                value = list(value)
+            self[key] = value
 
     def get_section_key(self, section_key_str: str) -> tuple:
         """Parse a string in format 'section.key' and return as tuple.
@@ -1199,8 +1183,8 @@ class HipoClientPatient(HipoClient):
             # Extract patient name from input elements
             data.store("patient.family_name", extract_value_from_input(soup, id="strNume"))
             data.store("patient.given_name", extract_value_from_input(soup, id="strPrenume"))
-            if data["patient"].get("family_name") and data["patient"].get("given_name"):
-                data.store("patient.name", f"{data['patient']['family_name']} {data['patient']['given_name']}")
+            if data.get("patient.family_name") and data.get("patient.given_name"):
+                data.store("patient.name", f"{data.get('patient.family_name')} {data.get('patient.given_name')}")
 
 
             # Extract patient CNP from input element with id "strCNP"
