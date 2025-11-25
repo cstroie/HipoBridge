@@ -1249,43 +1249,43 @@ class HipoClientPatient(HipoClient):
             return {}
 
     def fhir_response(self, parsed_data: HipoData[str, Any], **kwargs) -> Dict[str, Any]:
-        """Convert parsed service request data to FHIR ServiceRequest resource.
+        """Convert parsed patient data to FHIR Patient resource.
 
-        Transforms parsed service request data into a FHIR-compatible ServiceRequest
+        Transforms parsed patient data into a FHIR-compatible Patient
         resource with proper structure, references, coding systems, and extensions.
 
         Args:
-            parsed_data: Parsed service request data from parse_data method
+            parsed_data: Parsed patient data from parse_data method
             **kwargs: Additional arguments including 'http_request' for host information
-                     and 'id' for service request ID
+                     and 'id' for patient ID
 
         Returns:
-            FHIR ServiceRequest resource as dictionary
+            FHIR Patient resource as dictionary
         """
         # Extract http_request from kwargs if available
         http_request = kwargs.get('http_request')
         
-        # Get service patient ID from the request URL parameters
+        # Get patient ID from the request URL parameters
         patient_id = kwargs.get('id', '')
         
         try:
             # Use already extracted family name and given name if available
-            family_name = patient_data.get("family_name", "")
-            given_names = [patient_data.get("given_name", "")] if patient_data.get("given_name") else []
+            family_name = parsed_data.get("patient.family_name", "")
+            given_names = [parsed_data.get("patient.given_name", "")] if parsed_data.get("patient.given_name") else []
 
             # Fallback to parsing from full name if family/given names are not available
             if not family_name and not given_names:
-                name_parts = patient_data.get("patient_name", "").split()
+                name_parts = parsed_data.get("patient.name", "").split()
                 family_name = name_parts[0] if len(name_parts) > 0 else ""
                 given_names = name_parts[1:] if len(name_parts) > 1 else []
 
             # Use already extracted gender and birth date if available
-            gender = patient_data.get("sex", "unknown")
-            birth_date = patient_data.get("birth_date", "")
+            gender = parsed_data.get("patient.sex", "unknown")
+            birth_date = parsed_data.get("patient.birth_date", "")
 
             # Create FHIR Patient resource using the FHIR class
             fhir_patient = FHIRPatient(
-                id=patient_data.get("patient_id", ""),
+                id=parsed_data.get("patient.id", patient_id),
                 active=True,
                 gender=gender,
                 birthDate=birth_date
@@ -1301,16 +1301,16 @@ class HipoClientPatient(HipoClient):
 
             # Add telecom information if available
             telecom = []
-            if patient_data.get("phone", None):
+            if parsed_data.get("patient.phone", None):
                 telecom.append({
                     "system": "phone",
-                    "value": patient_data["phone"]
+                    "value": parsed_data.get("patient.phone")
                 })
 
-            if patient_data.get("email", None):
+            if parsed_data.get("patient.email", None):
                 telecom.append({
                     "system": "email",
-                    "value": patient_data["email"]
+                    "value": parsed_data.get("patient.email")
                 })
 
             if telecom:
@@ -1318,9 +1318,9 @@ class HipoClientPatient(HipoClient):
 
             # Add address information if available
             address = []
-            if patient_data.get("address", None):
+            if parsed_data.get("patient.address", None):
                 address.append({
-                    "text": patient_data["address"]
+                    "text": parsed_data.get("patient.address")
                 })
 
             if address:
@@ -1330,34 +1330,39 @@ class HipoClientPatient(HipoClient):
             extensions = []
 
             # Add weight if available
-            if patient_data.get("weight", None):
+            if parsed_data.get("patient.weight", None):
                 extensions.append({
                     "url": "http://hl7.org/fhir/us/vitals/StructureDefinition/body-weight",
-                    "valueString": patient_data["weight"]
+                    "valueString": parsed_data.get("patient.weight")
                 })
 
             # Add height if available
-            if patient_data.get("height", None):
+            if parsed_data.get("patient.height", None):
                 extensions.append({
                     "url": "http://hl7.org/fhir/us/vitals/StructureDefinition/height",
-                    "valueString": patient_data["height"]
+                    "valueString": parsed_data.get("patient.height")
                 })
 
             # Add extensions for encounter/admission/discharge IDs
-            if "encounters" in patient_data:
+            presentations = parsed_data.get("patient.presentation", [])
+            if presentations:
                 extensions.append({
-                    "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/encounter-ids",
-                    "valueString": ",".join(patient_data["encounters"])
+                    "url": f"{http_request.scheme}://{http_request.host}/fhir/StructureDefinition/presentation-ids",
+                    "valueString": ",".join(presentations) if isinstance(presentations, list) else str(presentations)
                 })
-            if "admissions" in patient_data:
+                
+            checkins = parsed_data.get("patient.checkin", [])
+            if checkins:
                 extensions.append({
-                    "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/admission-ids",
-                    "valueString": ",".join(patient_data["admissions"])
+                    "url": f"{http_request.scheme}://{http_request.host}/fhir/StructureDefinition/checkin-ids",
+                    "valueString": ",".join(checkins) if isinstance(checkins, list) else str(checkins)
                 })
-            if "discharges" in patient_data:
+                
+            checkouts = parsed_data.get("patient.checkout", [])
+            if checkouts:
                 extensions.append({
-                    "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/discharge-ids",
-                    "valueString": ",".join(patient_data["discharges"])
+                    "url": f"{http_request.scheme}://{http_request.host}/fhir/StructureDefinition/checkout-ids",
+                    "valueString": ",".join(checkouts) if isinstance(checkouts, list) else str(checkouts)
                 })
 
             if extensions:
@@ -1367,25 +1372,25 @@ class HipoClientPatient(HipoClient):
             identifiers = []
 
             # Add CNP as identifier if available
-            if patient_data.get("patient_cnp", None):
+            if parsed_data.get("patient.cnp", None):
                 identifiers.append({
                     "use": "official",
-                    "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-cnp",
-                    "value": patient_data["patient_cnp"]
+                    "system": f"{http_request.scheme}://{http_request.host}/fhir/NamingSystem/patient-cnp",
+                    "value": parsed_data.get("patient.cnp")
                 })
 
             # Add CID if available
-            if patient_data.get("cid", None):
+            if parsed_data.get("patient.cid", None):
                 identifiers.append({
-                    "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-cid",
-                    "value": patient_data["cid"]
+                    "system": f"{http_request.scheme}://{http_request.host}/fhir/NamingSystem/patient-cid",
+                    "value": parsed_data.get("patient.cid")
                 })
 
             # Add MCP if available
-            if patient_data.get("mcp", None):
+            if parsed_data.get("patient.mcp", None):
                 identifiers.append({
-                    "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-mcp",
-                    "value": patient_data["mcp"]
+                    "system": f"{http_request.scheme}://{http_request.host}/fhir/NamingSystem/patient-mcp",
+                    "value": parsed_data.get("patient.mcp")
                 })
 
             if identifiers:
@@ -1395,7 +1400,7 @@ class HipoClientPatient(HipoClient):
             return fhir_patient.to_dict()
 
         except Exception as e:
-            logger.error(f"Error converting service request data: {e}")
+            logger.error(f"Error converting patient data to FHIR: {e}")
             return {}
 
 class HipoClientCheckout(HipoClient):
