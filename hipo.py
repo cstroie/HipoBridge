@@ -546,6 +546,28 @@ class HipoData(dict):
                 return value if isinstance(value, str) else str(value)
         return ""
 
+    def set(self, section_key_str: str, value: Any) -> None:
+        """Set value to self[section][key] using 'section,key' string format.
+        
+        Args:
+            section_key_str: String in format 'section,key'
+            value: Value to set
+        """
+        section, key = self.get_section_key(section_key_str)
+        
+        # Handle case where key is None
+        if key is None:
+            # Store value directly in root with section as key
+            self[section] = value
+            return
+        
+        # Create section if it doesn't exist
+        if section not in self:
+            self[section] = {}
+        
+        # Set the value in section[key]
+        self[section][key] = value
+
 
 class HipoClient:
     """Base client for interacting with the Hipocrate medical system.
