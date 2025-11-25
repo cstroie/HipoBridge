@@ -517,6 +517,35 @@ class HipoData(dict):
         else:
             return (section_key_str.strip(), None)
 
+    def get(self, section_key_str: str) -> str:
+        """Get value from self[section][key] using 'section,key' string format.
+        
+        Args:
+            section_key_str: String in format 'section,key'
+            
+        Returns:
+            Value at self[section][key] if it exists, otherwise empty string
+        """
+        section, key = self.get_section_key(section_key_str)
+        
+        # Handle case where key is None
+        if key is None:
+            # Check if section exists in root
+            if section in self:
+                value = self[section]
+                # Return value if it's a string, otherwise convert to string
+                return value if isinstance(value, str) else str(value)
+            return ""
+        
+        # Check if section exists and is a dict
+        if section in self and isinstance(self[section], dict):
+            # Check if key exists in section
+            if key in self[section]:
+                value = self[section][key]
+                # Return value if it's a string, otherwise convert to string
+                return value if isinstance(value, str) else str(value)
+        return ""
+
 
 class HipoClient:
     """Base client for interacting with the Hipocrate medical system.
