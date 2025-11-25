@@ -41,7 +41,7 @@ from extractors import extract_id_from_link, extract_ids_from_links, extract_sel
 from extractors import parse_cnp
 
 # Import FHIR classes
-from fhir import ServiceRequest as FHIRServiceRequest, CodeableConcept, Reference
+from fhir import ServiceRequest as FHIRServiceRequest, CodeableConcept, Reference, Patient as FHIRPatient
 
 # Configure logging
 logging.basicConfig(
