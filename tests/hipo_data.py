@@ -141,7 +141,7 @@ class TestHipoData(unittest.TestCase):
     def test_get_method_with_existing_value(self):
         """Test get method with existing section and key."""
         # Set up test data using store method
-        self.data.store("patient", "name", "John Doe")
+        self.data.store("patient.name", "John Doe")
         
         # Test getting existing value
         result = self.data.get("patient.name")
@@ -155,7 +155,7 @@ class TestHipoData(unittest.TestCase):
     def test_get_method_with_non_existing_key(self):
         """Test get method with existing section but non-existing key."""
         # Set up test data
-        self.data.store("patient", None, {})
+        self.data.store("patient", {})
         
         result = self.data.get("patient.name")
         self.assertEqual(result, "")
@@ -163,7 +163,7 @@ class TestHipoData(unittest.TestCase):
     def test_get_method_with_key_none(self):
         """Test get method when key is None (section only)."""
         # Set up test data
-        self.data.store("patient", None, "John Doe")
+        self.data.store("patient", "John Doe")
         
         result = self.data.get("patient")
         self.assertEqual(result, "John Doe")
@@ -181,7 +181,7 @@ class TestHipoData(unittest.TestCase):
     def test_get_method_with_default_value_existing_key(self):
         """Test get method with custom default value for existing key."""
         # Set up test data
-        self.data.store("patient", "name", "John Doe")
+        self.data.store("patient.name", "John Doe")
         
         result = self.data.get("patient.name", "Unknown")
         self.assertEqual(result, "John Doe")
@@ -189,7 +189,7 @@ class TestHipoData(unittest.TestCase):
     def test_get_method_with_non_string_value(self):
         """Test get method with non-string value."""
         # Set up test data
-        self.data.store("patient", "age", 30)
+        self.data.store("patient.age", 30)
         
         result = self.data.get("patient.age")
         self.assertEqual(result, "30")
