@@ -1189,16 +1189,14 @@ class HipoClientPatient(HipoClient):
             # Check if this is a single patient page by looking for 'Date pasaportale' in title
             if not self.is_expected_page(soup, 'Date pasaportale'):
                 # Log snippet of response for debugging
-                data["status"] = "error"
-                data["message"] = "Backend returned an unexpected page"
+                data.set_error("Backend returned an unexpected page")
                 logger.warning(f"Backend returned an unexpected page: {html_content[:200]}...")
                 return data
 
             # Check if there is patient data on page by getting the name from the div with id "div_navbar"
             patient_name_from_navbar = extract_text_from_element(soup, id='div_navbar')
             if not patient_name_from_navbar:
-                data["status"] = "error"
-                data["message"] = "Patient name from navbar is empty, invalid patient id"
+                data.set_error("Patient name from navbar is empty, invalid patient id")
                 return data
 
             # Extract patient name
@@ -1612,8 +1610,7 @@ class HipoClientCheckout(HipoClient):
 
             # Check if this is the correct page by looking for title
             if not self.is_expected_page(soup, 'FISA EXTERNARE'):
-                data["status"] = "error"
-                data["message"] = "Page is not a discharge page"
+                data.set_error("Page is not a discharge page")
                 logger.warning("Page is not a discharge page")
                 return data
 
@@ -1907,8 +1904,7 @@ class HipoClientServiceRequest(HipoClient):
             if patient_link:
                 data.store("patient.id", extract_id_from_link(patient_link))
             else:
-                data["status"] = "error"
-                data["message"] = "Could not extract patient ID from service request"
+                data.set_error("Could not extract patient ID from service request")
                 return data
 
             # Extract physician
