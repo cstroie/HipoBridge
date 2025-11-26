@@ -1166,7 +1166,7 @@ class HipoClientPatient(HipoClient):
             - studies: List of requested imaging studies
         """
         # Initialize result dictionary
-        data = HipoData(status = "success", message = "")
+        data = HipoData(status="success", message="")
 
         try:
             # Parse HTML content
@@ -1174,13 +1174,18 @@ class HipoClientPatient(HipoClient):
 
             # Check if this is a single patient page by looking for 'Date pasaportale' in title
             if not self.is_expected_page(soup, 'Date pasaportale'):
-                # Log snnippet of response for debugging
-                return None, create_error_response("Backend returned an unexpected page", 500, {"text": html_content[:200] + "..."})
+                # Log snippet of response for debugging
+                data["status"] = "error"
+                data["message"] = "Backend returned an unexpected page"
+                logger.warning(f"Backend returned an unexpected page: {html_content[:200]}...")
+                return data
 
             # Check if there is patient data on page by getting the name from the div with id "div_navbar"
             patient_name_from_navbar = extract_text_from_element(soup, id='div_navbar')
             if not patient_name_from_navbar:
-                return None, create_error_response("Patient name from navbar is empty, invalid patient id", 404)
+                data["status"] = "error"
+                data["message"] = "Patient name from navbar is empty, invalid patient id"
+                return data
 
             # Extract patient name
             data.store("patient.name", patient_name_from_navbar)
@@ -1251,7 +1256,9 @@ class HipoClientPatient(HipoClient):
         
         except Exception as e:
             logger.error(f"Error parsing service request data: {e}")
-            return {}
+            data["status"] = "error"
+            data["message"] = str(e)
+            return data
 
     def fhir_response(self, parsed_data: HipoData[str, Any], **kwargs) -> Dict[str, Any]:
         """Convert parsed patient data to FHIR Patient resource.
