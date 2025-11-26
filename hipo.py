@@ -1103,6 +1103,8 @@ class HipoClient:
         Returns:
             Tuple of (parsed_data, error_response) where one will be None
         """
+        # Create the data object
+        data = HipoData(status="success", message="")
         # Create the specific request url
         url = self.request_url.format(**kwargs)
         try:
@@ -1111,14 +1113,16 @@ class HipoClient:
 
             # Check for errors in the response
             if not success:
-                return None, error_response
+                data.set_error(error_response)
+                return data
 
             # Parse the data using the parser function
             parsed_data = self.parse_data(response_text, **kwargs)
-            return parsed_data, None
+            return parsed_data
 
         except Exception as e:
-            return None, create_error_response("Data retrieval failed", 500, {"exception": str(e)})
+            data.set_error("Data retrieval failed")
+            return data
 
     async def fetch_repond_fhir(self, *args, max_redirects=5, **kwargs):
         """Generic method to fetch data from an endpoint and convert it to FHIR format.

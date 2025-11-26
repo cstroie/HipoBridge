@@ -179,14 +179,13 @@ async def search_patient(request):
         client = HipoClientPatientSearch(SERVICE_URL, request)
 
         # Retrieve and parse the page
-        parsed_data, error_response = await client.search(search_term)
+        parsed_data = await client.search(search_term)
 
         # Check for errors in the response
-        if error_response:
-            return error_response
+        status = 200 if parsed_data.get("status") == "success" else 404
         
         # Return the response
-        return web.json_response(parsed_data)
+        return web.json_response(parsed_data, status = status)
 
     except Exception as e:
         return create_error_response("Patient retrieval failed", 500, {"exception": str(e)})
@@ -215,14 +214,13 @@ async def get_patient(request):
         client = HipoClientPatient(SERVICE_URL, request)
 
         # Retrieve and parse the page
-        parsed_data, error_response = await client.fetch_and_parse(id=id)
+        parsed_data = await client.fetch_and_parse(id=id)
 
         # Check for errors in the response
-        if error_response:
-            return error_response
+        status = 200 if parsed_data.get("status") == "success" else 404
         
         # Return the response
-        return web.json_response(parsed_data)
+        return web.json_response(parsed_data, status = status)
 
     except Exception as e:
         return create_error_response("Patient retrieval failed", 500, {"exception": str(e)})
@@ -1859,14 +1857,13 @@ async def get_request(request):
         client = HipoClientServiceRequest(SERVICE_URL, request)
 
         # Retrieve and parse the page
-        parsed_data, error_response = await client.fetch_and_parse(id=id)
+        parsed_data = await client.fetch_and_parse(id=id)
 
         # Check for errors in the response
-        if error_response:
-            return error_response
-
+        status = 200 if parsed_data.get("status") == "success" else 404
+        
         # Return the response
-        return web.json_response(parsed_data)
+        return web.json_response(parsed_data, status = status)
 
     except Exception as e:
         return create_error_response("Service request retrieval failed", 500, {"exception": str(e)})
@@ -1938,14 +1935,13 @@ async def get_checkout(request):
         client = HipoClientCheckout(SERVICE_URL, request)
 
         # Retrieve and parse the page
-        parsed_data, error_response = await client.fetch_and_parse(id=id)
+        parsed_data = await client.fetch_and_parse(id=id)
 
         # Check for errors in the response
-        if error_response:
-            return error_response
-
+        status = 200 if parsed_data.get("status") == "success" else 404
+        
         # Return the response
-        return web.json_response(parsed_data)
+        return web.json_response(parsed_data, status = status)
 
     except Exception as e:
         return create_error_response("Checkout retrieval failed", 500, {"exception": str(e)})
