@@ -44,7 +44,7 @@ import base64
 # Import FHIR classes
 from fhir import ServiceRequest as FHIRServiceRequest, CodeableConcept, Coding, Reference, CodeableReference, Condition, Patient as FHIRPatient
 
-from hipo import HipoClient, HipoClientPatient, HipoClientCheckout, HipoClientServiceRequest
+from hipo import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientCheckout, HipoClientServiceRequest
 from hipo import HipoData, user_session_manager, identify_study_type_and_region
 
 from extractors import extract_id_from_link, extract_ids_from_links, extract_selected_from_dropdown, extract_tabular_data, extract_text_after_label, extract_text_from_element, extract_textarea_after_label, extract_value_from_input
@@ -156,6 +156,42 @@ def require_auth(handler):
 
 
 @require_auth
+async def search_patient(request):
+    """Retrieve service request information by ID.
+
+    Gets service request information from the Hipocrate service and parses
+    the medical data into structured format.
+
+    Args:
+        request
+
+    Returns:
+        JSON response with service request data or error information
+    """
+    # Get search parameter from query string
+    search_term = request.query.get('q', '')
+    if not search_term:
+        return create_error_response("Search term is required")
+    logger.info(f"Searching for patients with term: {search_term}")
+
+    try:
+        # Create a new HipoClient instance with credentials
+        client = HipoClientPatientSearch(SERVICE_URL, request)
+
+        # Retrieve and parse the page
+        parsed_data, error_response = await client.search(search_term)
+
+        # Check for errors in the response
+        if error_response:
+            return error_response
+        
+        # Return the response
+        return web.json_response(parsed_data)
+
+    except Exception as e:
+        return create_error_response("Patient retrieval failed", 500, {"exception": str(e)})
+
+@require_auth
 async def get_patient(request):
     """Retrieve service request information by ID.
 
@@ -178,15 +214,15 @@ async def get_patient(request):
         # Create a new HipoClient instance with credentials
         client = HipoClientPatient(SERVICE_URL, request)
 
-        # Retrieve and parse the page, then convert to FHIR resource
-        fhir_response, error_response = await client.fetch_and_parse(id=id)
+        # Retrieve and parse the page
+        parsed_data, error_response = await client.fetch_and_parse(id=id)
 
         # Check for errors in the response
         if error_response:
             return error_response
         
         # Return the response
-        return web.json_response(fhir_response)
+        return web.json_response(parsed_data)
 
     except Exception as e:
         return create_error_response("Patient retrieval failed", 500, {"exception": str(e)})
@@ -2405,7 +2441,8 @@ async def init_app():
 
     app = web.Application(middlewares=[auth_middleware])
     app.router.add_get('/', serve_web_page)
-    # API endpointa
+    # API endpoints
+    app.router.add_get('/api/patient', search_patient)
     app.router.add_get('/api/patient/{id}', get_patient)
     app.router.add_get('/api/checkout/{id}', get_checkout)
     app.router.add_get('/api/request/{id}', get_request)

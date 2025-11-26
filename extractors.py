@@ -233,6 +233,29 @@ def extract_ids_from_links(soup: BeautifulSoup, id_pattern: str = r'id=([^&"]+)'
             ids_list.append(id_match.group(1))
     return ids_list
 
+def extract_text_ids_from_links(soup: BeautifulSoup, id_pattern: str = r'id=([^&"]+)') -> dict:
+    """Extract text and IDs from multiple link elements' href attributes.
+
+    Args:
+        soup: BeautifulSoup object of the parsed HTML content
+        id_pattern: Regex pattern to extract ID from href (default: r'id=([^&"]+)')
+
+    Returns:
+        List of extracted ID strings (may be empty)
+    """
+    result = {}
+    for item in soup.find_all('a', href=re.compile(id_pattern)):
+        href = item.get('href', '')
+        id_match = re.search(id_pattern, href)
+        if not id_match:
+            continue
+        id = id_match.group(1)
+        text = item.get_text().strip().upper()
+        if text == id:
+            continue
+        result[id] = text
+    return result
+
 def extract_value_from_input(soup: 'BeautifulSoup', id: str = None, name: str = None) -> str:
     """Extract the value attribute from an HTML input element by its ID or name.
     

@@ -37,7 +37,7 @@ import configparser
 from typing import Any, Dict, List, Optional
 
 
-from extractors import extract_id_from_link, extract_ids_from_links, extract_selected_from_dropdown, extract_tabular_data, extract_text_after_label, extract_text_from_element, extract_textarea_after_label, extract_value_from_input
+from extractors import extract_id_from_link, extract_ids_from_links, extract_text_ids_from_links, extract_selected_from_dropdown, extract_tabular_data, extract_text_after_label, extract_text_from_element, extract_textarea_after_label, extract_value_from_input
 from extractors import parse_cnp
 
 # Import FHIR classes
@@ -1398,6 +1398,146 @@ class HipoClientPatient(HipoClient):
         except Exception as e:
             logger.error(f"Error converting patient data to FHIR: {e}")
             return {}
+
+
+class HipoClientPatientSearch(HipoClientPatient):
+    """Specialized client for service request related operations in the Hipocrate medical system.
+
+    Handles retrieval and parsing of medical service requests including laboratory
+    orders, imaging requests, and other medical service requisitions.
+    """
+
+    def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
+        # Initialize the parent
+        super().__init__(service_url = service_url, request = request)
+        # The request endpoint
+        self.request_url = "/files/search.asp?what=PA"
+
+    async def search(self, search_term, **kwargs):
+        # Determine search type based on input
+        search_type = "name"  # default
+
+        # Check if search term is numeric
+        if search_term.isdigit():
+            # If it's 13 digits, validate as CNP
+            if len(search_term) == 13:
+                if parse_cnp(search_term).get("valid", False):
+                    search_type = "cnp"
+                    logger.info(f"Performing CNP search for: {search_term}")
+                else:
+                    # Not a valid CNP, treat as patient code
+                    search_type = "code"
+                    logger.info(f"Performing patient code search for: {search_term}")
+            else:
+                # Numeric but not 13 digits, treat as patient code
+                search_type = "code"
+                logger.info(f"Performing patient code search for: {search_term}")
+        else:
+            # Check if search term ends with *, treat as partial CNP
+            if search_term.endswith('*'):
+                # Validate that the part before * is all digits
+                prefix = search_term[:-1]
+                if prefix.isdigit() and len(prefix) < 13:
+                    search_type = "partial_cnp"
+                    logger.info(f"Performing partial CNP search for: {search_term}")
+                else:
+                    # Not a valid partial CNP, treat as name search
+                    search_type = "name"
+                    logger.info(f"Searching for patients by name: {search_term}")
+            else:
+                # Not numeric, treat as name search
+                search_type = "name"
+                logger.info(f"Searching for patients by name: {search_term}")
+
+        # Prepare full search data as captured in the POST request
+        search_data = {
+            "hdnSearchType": "1",
+            "pageNo": "1",
+            "strDescription": search_term if search_type in ["name", "code", "cnp", "partial_cnp"] else "",
+            "strLastName": "",
+            "strFirstName": "",
+            "strCodePres": "",
+            "strCNP": "",
+            "strSDate": "",
+            "strEDate": "",
+            "strProfessionID": "",
+            "strSex": "",
+            "strReference": "",
+            "selSection": "0",
+            "selDoctor": "",
+            "intDiagnosisP": "",
+            "DiagnosisP": "",
+            "intDiagnosisPDRG": "",
+            "DiagnosisPDRG": "",
+            "searchWhat": "PA",
+            "strShowLastFile": "1",
+            "strCheckedIn": "-1",
+            "strCODQR": "",
+            "btnCODQR": "IMPORTA COD QR",
+            "btnCODQRClear": "STERGE COD QR",
+            "hdnQRSave": "",
+            "IdQR": ""
+        }
+
+        try:
+            # Post the request
+            response_text, success, error_response = await self.post_form(self.request_url, search_data)
+
+            # Check for errors in the response
+            if not success:
+                return error_response
+
+            # Parse the data using the patient parser function, for a single patient
+            parsed_data = self.parse_one_patient_data(response_text, **kwargs)
+            if parsed_data:
+                return parsed_data
+            
+            # Try to parse as multiple patients page
+            parsed_data, error_response = self.parse_multiple_patients_data(response_text, **kwargs)
+            if parsed_data:
+                patients = []
+                for id, name in parsed_data.items():
+                    patients.append({"patient": {"name": name, "id": id}})
+                return patients
+
+        except Exception as e:
+            return create_error_response("Patient search failed", 500, {"exception": str(e)})
+
+
+    def parse_one_patient_data(self, html_content: str, **kwargs) -> Dict[str, Any]:
+        return self.parse_data(html_content, **kwargs)
+
+    def parse_multiple_patients_data(self, html_content: str) -> Dict[str, Any]:
+        """Parse HTML content for multiple patient search results and extract patient data.
+
+        Extracts patient names, CNP, and ids from search results page with multiple patients.
+
+        Args:
+            html_content: HTML content of the search results page
+
+        Returns:
+            List of dictionaries containing patient data (name, ID only)
+        """
+        # Initialize empty dict for patients
+        patients = {}
+
+        try:
+            # Parse HTML content with BeautifulSoup
+            soup = BeautifulSoup(html_content, 'html.parser')
+
+            # Check if this is a search results page by looking for 'Fisier' in title
+            if not self.is_expected_page(soup, 'Fisier'):
+                # Return empty list if not expected page
+                return None, create_error_response("Backend returned an unexpected page", 500, {"text": html_content[:200] + "..."})
+
+            # Find all links with the pattern javascript:Edit('patient_id')
+            pattern = r"javascript:Edit\('([^']+)'\);"
+            patients = extract_text_ids_from_links(soup, pattern)
+
+        except Exception as e:
+            logger.error(f"Error parsing multiple patients data: {e}")
+        # Return the patients dict
+        return patients, None
 
 class HipoClientCheckout(HipoClient):
     """Specialized client for checkout-related operations in the Hipocrate medical system.

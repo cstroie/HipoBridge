@@ -123,7 +123,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Get analyses using FHIR API
             showToast('Loading diagnostic reports...', 'success');
-            const analysesResponse = await fetch(`/fhir/Observation?patient=${patientCode}`);
+            const analysesResponse = await fetch(`/fhir/Observation?patient=${patientCode}&full=yes`);
             
             if (!analysesResponse.ok) {
                 if (analysesResponse.status === 401) {
