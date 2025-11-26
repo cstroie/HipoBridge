@@ -1268,8 +1268,7 @@ class HipoClientPatient(HipoClient):
         
         except Exception as e:
             logger.error(f"Error parsing service request data: {e}")
-            data["status"] = "error"
-            data["message"] = str(e)
+            data.set_error(str(e))
             return data
 
     def fhir_response(self, parsed_data: HipoData[str, Any], **kwargs) -> Dict[str, Any]:
@@ -1701,8 +1700,7 @@ class HipoClientCheckout(HipoClient):
 
         except Exception as e:
             logger.error(f"Error parsing checkout data: {e}")
-            data["status"] = "error"
-            data["message"] = str(e)
+            data.set_error(str(e))
             return data
 
     def fhir_response(self, parsed_data: HipoData[str, Any], **kwargs) -> Dict[str, Any]:
