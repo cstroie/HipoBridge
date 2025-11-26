@@ -442,6 +442,11 @@ class HipoData(dict):
         self["status"] = "error"
         self["message"] = message
     
+    def set_success(self) -> None:
+        """Set the status to 'success' and clear any error message."""
+        self["status"] = "success"
+        self["message"] = ""
+    
     def store(self, key: str, value: str = None) -> None:
         """Store a value in the dictionary with automatic data processing.
         
