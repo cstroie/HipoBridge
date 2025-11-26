@@ -1879,7 +1879,7 @@ class HipoClientServiceRequest(HipoClient):
             - studies: List of requested imaging studies
         """
         # Initialize result dictionary
-        data = HipoData(status = "success", message = "")
+        data = HipoData(status="success", message="")
 
         try:
             # Parse HTML content
@@ -1892,7 +1892,10 @@ class HipoClientServiceRequest(HipoClient):
             patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id='))
             if patient_link:
                 data.store("patient.id", extract_id_from_link(patient_link))
-
+            else:
+                data["status"] = "error"
+                data["message"] = "Could not extract patient ID from service request"
+                return data
 
             # Extract physician
             data.store("checkin.physician", extract_text_after_label(soup, r'Medicul:', stop_at=r'-'))
@@ -1902,7 +1905,6 @@ class HipoClientServiceRequest(HipoClient):
 
             # Extract diagnosis
             data.store("checkin.diagnosis", extract_text_after_label(soup, r'Diagnostic:', 'td'))
-
 
             # Extract comments (clinical and lab)
             comment_headers = soup.find_all('td', class_='tdnplus', string=re.compile(r'Comentariile', re.IGNORECASE))
@@ -1946,7 +1948,9 @@ class HipoClientServiceRequest(HipoClient):
         
         except Exception as e:
             logger.error(f"Error parsing service request data: {e}")
-            return {}
+            data["status"] = "error"
+            data["message"] = str(e)
+            return data
 
     def fhir_response(self, parsed_data: HipoData[str, Any], **kwargs) -> Dict[str, Any]:
         """Convert parsed service request data to FHIR ServiceRequest resource.
