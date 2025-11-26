@@ -425,6 +425,14 @@ class HipoData(dict):
         data.store("diagnosis", None, "Healthy")  # {"diagnosis": "Healthy"}
     """
     
+    def __init__(self, **kwargs):
+        """Initialize HipoData with optional key/value pairs.
+        
+        Args:
+            **kwargs: Key/value pairs to initialize the dictionary with
+        """
+        super().__init__(**kwargs)
+    
     def store(self, key: str, value: str = None) -> None:
         """Store a value in the dictionary with automatic data processing.
         
