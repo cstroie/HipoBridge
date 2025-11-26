@@ -1590,7 +1590,7 @@ class HipoClientCheckout(HipoClient):
             Returns empty dict if parsing fails or page is not a checkout page.
         """
         # Initialize result dictionary
-        data = HipoData(status = "success", message = "")
+        data = HipoData(status="success", message="")
 
         try:
             # Parse HTML content with BeautifulSoup
@@ -1598,8 +1598,10 @@ class HipoClientCheckout(HipoClient):
 
             # Check if this is the correct page by looking for title
             if not self.is_expected_page(soup, 'FISA EXTERNARE'):
+                data["status"] = "error"
+                data["message"] = "Page is not a discharge page"
                 logger.warning("Page is not a discharge page")
-                return {}
+                return data
 
             # Extract patient name and ID from the link
             patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id='))
@@ -1688,7 +1690,9 @@ class HipoClientCheckout(HipoClient):
 
         except Exception as e:
             logger.error(f"Error parsing checkout data: {e}")
-            return {}
+            data["status"] = "error"
+            data["message"] = str(e)
+            return data
 
     def fhir_response(self, parsed_data: HipoData[str, Any], **kwargs) -> Dict[str, Any]:
         """Convert parsed checkout data to FHIR Encounter resource.
