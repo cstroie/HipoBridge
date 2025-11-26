@@ -1546,7 +1546,7 @@ class HipoClientPatientSearch(HipoClientPatient):
             List of dictionaries containing patient data (name, ID only)
         """
         # Initialize empty dict for patients
-        patients = {}
+        patients = HipoData(status="success", message="")
 
         try:
             # Parse HTML content with BeautifulSoup
@@ -1555,16 +1555,21 @@ class HipoClientPatientSearch(HipoClientPatient):
             # Check if this is a search results page by looking for 'Fisier' in title
             if not self.is_expected_page(soup, 'Fisier'):
                 # Return empty list if not expected page
-                return None, create_error_response("Backend returned an unexpected page", 500, {"text": html_content[:200] + "..."})
+                patients.set_error("Backend returned an unexpected page")
+                logger.warning(f"Backend returned an unexpected page: {html_content[:200]}...")
+                return patients
 
             # Find all links with the pattern javascript:Edit('patient_id')
             pattern = r"javascript:Edit\('([^']+)'\);"
-            patients = extract_text_ids_from_links(soup, pattern)
+            patients_data = extract_text_ids_from_links(soup, pattern)
+            # Add the extracted data to the patients dict
+            patients.update(patients_data)
 
         except Exception as e:
             logger.error(f"Error parsing multiple patients data: {e}")
+            patients.set_error(str(e))
         # Return the patients dict
-        return patients, None
+        return patients
 
 class HipoClientCheckout(HipoClient):
     """Specialized client for checkout-related operations in the Hipocrate medical system.
