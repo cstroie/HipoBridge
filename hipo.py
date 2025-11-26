@@ -1047,7 +1047,7 @@ class HipoClient:
         # If we've exceeded the maximum redirects
         return None, False, create_error_response(f"Exceeded maximum redirects ({max_redirects})", 500)
 
-    def parse_data(self, html_content: str, **kwargs) -> Dict[str, Any]:
+    def parse_data(self, html_content: str, **kwargs) -> HipoData:
         """Parse HTML content and extract structured data.
 
         Abstract method to be implemented by subclasses for specific data parsing.
@@ -1059,7 +1059,8 @@ class HipoClient:
         Returns:
             Dictionary containing parsed data
         """
-        return {}
+        data = HipoData(status = "success", message = "")
+        return data
 
     def fhir_response(self, parsed_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """Convert parsed data to FHIR-compatible format.
@@ -1147,7 +1148,7 @@ class HipoClientPatient(HipoClient):
         # The request endpoint
         self.request_url = "/Pacient/edit.asp?id={id}"
 
-    def parse_data(self, html_content: str, **kwargs) -> Dict[str, Any]:
+    def parse_data(self, html_content: str, **kwargs) -> HipoData:
         """Parse HTML service request content and extract structured data.
 
         Extracts patient information and medical data from service request HTML content,
@@ -1165,7 +1166,7 @@ class HipoClientPatient(HipoClient):
             - studies: List of requested imaging studies
         """
         # Initialize result dictionary
-        data = HipoData()
+        data = HipoData(status = "success", message = "")
 
         try:
             # Parse HTML content
@@ -1512,10 +1513,10 @@ class HipoClientPatientSearch(HipoClientPatient):
             return create_error_response("Patient search failed", 500, {"exception": str(e)})
 
 
-    def parse_one_patient_data(self, html_content: str, **kwargs) -> Dict[str, Any]:
+    def parse_one_patient_data(self, html_content: str, **kwargs) -> HipoData:
         return self.parse_data(html_content, **kwargs)
 
-    def parse_multiple_patients_data(self, html_content: str) -> Dict[str, Any]:
+    def parse_multiple_patients_data(self, html_content: str) -> HipoData:
         """Parse HTML content for multiple patient search results and extract patient data.
 
         Extracts patient names, CNP, and ids from search results page with multiple patients.
@@ -1561,7 +1562,7 @@ class HipoClientCheckout(HipoClient):
         # The request endpoint
         self.request_url = "/files/checkout.asp?id={id}"
 
-    def parse_data(self, html_content: str, **kwargs) -> HipoData[str, Any]:
+    def parse_data(self, html_content: str, **kwargs) -> HipoData:
         """Parse HTML checkout content and extract structured data.
 
         Extracts patient information and medical data from checkout HTML content.
@@ -1582,7 +1583,7 @@ class HipoClientCheckout(HipoClient):
             Returns empty dict if parsing fails or page is not a checkout page.
         """
         # Initialize result dictionary
-        data = HipoData()
+        data = HipoData(status = "success", message = "")
 
         try:
             # Parse HTML content with BeautifulSoup
@@ -1849,7 +1850,7 @@ class HipoClientServiceRequest(HipoClient):
         # The request endpoint
         self.request_url = "/Analyse/LabRequest/buletinRecoltari.asp?id={id}"
 
-    def parse_data(self, html_content: str, **kwargs) -> Dict[str, Any]:
+    def parse_data(self, html_content: str, **kwargs) -> HipoData:
         """Parse HTML service request content and extract structured data.
 
         Extracts patient information and medical data from service request HTML content,
@@ -1867,7 +1868,7 @@ class HipoClientServiceRequest(HipoClient):
             - studies: List of requested imaging studies
         """
         # Initialize result dictionary
-        data = HipoData()
+        data = HipoData(status = "success", message = "")
 
         try:
             # Parse HTML content
