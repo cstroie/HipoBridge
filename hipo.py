@@ -1180,7 +1180,7 @@ class HipoClientPatient(HipoClient):
             - studies: List of requested imaging studies
         """
         # Initialize result dictionary
-        data = HipoData(status="success", message="")
+        data = HipoData(status="success", message="", patient = {})
 
         try:
             # Parse HTML content
@@ -1521,22 +1521,15 @@ class HipoClientPatientSearch(HipoClientPatient):
             # Parse the data using the patient parser function, for a single patient
             parsed_data = self.parse_one_patient_data(response_text, **kwargs)
             if parsed_data and parsed_data.get("status") == "success":
-                data["patients"].append({"patient": {"name": parsed_data.get("patient.name", ""), "id": parsed_data.get("patient.id", "")}})
-                return data
-            elif parsed_data and parsed_data.get("status") == "error":
-                data.set_error(parsed_data.get("message", "Error parsing single patient data"))
-                return data
+                return parsed_data
             
             # Try to parse as multiple patients page
             parsed_data = self.parse_multiple_patients_data(response_text, **kwargs)
             if parsed_data and parsed_data.get("status") == "success":
-                patients_data = parsed_data.get("patients", {})
-                for id, name in patients_data.items():
-                    data["patients"].append({"patient": {"name": name, "id": id}})
-                return data
-            elif parsed_data and parsed_data.get("status") == "error":
-                data.set_error(parsed_data.get("message", "Error parsing multiple patients data"))
-                return data
+                return parsed_data         
+            
+            data.set_error("Patient not found")
+            return data
 
         except Exception as e:
             data.set_error(f"Patient search failed: {str(e)}")
@@ -1573,13 +1566,12 @@ class HipoClientPatientSearch(HipoClientPatient):
 
             # Find all links with the pattern javascript:Edit('patient_id')
             pattern = r"javascript:Edit\('([^']+)'\);"
-            patients_data = extract_text_ids_from_links(soup, pattern)
-            # Add the extracted data to the patients dict
-            data["patients"].update(patients_data)
+            data["patients"] = extract_text_ids_from_links(soup, pattern)
 
         except Exception as e:
             logger.error(f"Error parsing multiple patients data: {e}")
             data.set_error(str(e))
+
         # Return the patients dict
         return data
 
