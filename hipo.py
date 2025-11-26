@@ -433,6 +433,15 @@ class HipoData(dict):
         """
         super().__init__(**kwargs)
     
+    def set_error(self, message: str) -> None:
+        """Set the status to 'error' and the message to the provided error message.
+        
+        Args:
+            message: Error message to set
+        """
+        self["status"] = "error"
+        self["message"] = message
+    
     def store(self, key: str, value: str = None) -> None:
         """Store a value in the dictionary with automatic data processing.
         
