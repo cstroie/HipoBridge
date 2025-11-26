@@ -1441,6 +1441,9 @@ class HipoClientPatientSearch(HipoClientPatient):
         self.request_url = "/files/search.asp?what=PA"
 
     async def search(self, search_term, **kwargs):
+        # Initialize result data
+        data = HipoData(status="success", message="", patients=[])
+
         # Determine search type based on input
         search_type = "name"  # default
 
@@ -1512,23 +1515,32 @@ class HipoClientPatientSearch(HipoClientPatient):
 
             # Check for errors in the response
             if not success:
-                return error_response
+                data.set_error(error_response.get("message", "Unknown error during search"))
+                return data
 
             # Parse the data using the patient parser function, for a single patient
             parsed_data = self.parse_one_patient_data(response_text, **kwargs)
-            if parsed_data:
-                return parsed_data
+            if parsed_data and parsed_data.get("status") == "success":
+                data["patients"].append({"patient": {"name": parsed_data.get("patient.name", ""), "id": parsed_data.get("patient.id", "")}})
+                return data
+            elif parsed_data and parsed_data.get("status") == "error":
+                data.set_error(parsed_data.get("message", "Error parsing single patient data"))
+                return data
             
             # Try to parse as multiple patients page
-            parsed_data, error_response = self.parse_multiple_patients_data(response_text, **kwargs)
-            if parsed_data:
-                patients = []
-                for id, name in parsed_data.items():
-                    patients.append({"patient": {"name": name, "id": id}})
-                return patients
+            parsed_data = self.parse_multiple_patients_data(response_text, **kwargs)
+            if parsed_data and parsed_data.get("status") == "success":
+                patients_data = parsed_data.get("patients", {})
+                for id, name in patients_data.items():
+                    data["patients"].append({"patient": {"name": name, "id": id}})
+                return data
+            elif parsed_data and parsed_data.get("status") == "error":
+                data.set_error(parsed_data.get("message", "Error parsing multiple patients data"))
+                return data
 
         except Exception as e:
-            return create_error_response("Patient search failed", 500, {"exception": str(e)})
+            data.set_error(f"Patient search failed: {str(e)}")
+            return data
 
 
     def parse_one_patient_data(self, html_content: str, **kwargs) -> HipoData:
