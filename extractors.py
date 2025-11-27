@@ -241,7 +241,7 @@ def extract_text_ids_from_links(soup: BeautifulSoup, id_pattern: str = r'id=([^&
         id_pattern: Regex pattern to extract ID from href (default: r'id=([^&"]+)')
 
     Returns:
-        List of extracted ID strings (may be empty)
+        Dictionary mapping extracted IDs to their corresponding text content
     """
     result = {}
     for item in soup.find_all('a', href=re.compile(id_pattern)):
