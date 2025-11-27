@@ -993,7 +993,7 @@ class HipoClient:
         return response_text, True, None
 
     async def get_page(self, url, max_redirects=5):
-        """Abstract method to retrieve a page from the Hipocrate service, following redirects.
+        """Retrieve a page from the Hipocrate service, following redirects.
 
         This method handles the common pattern of making authenticated requests with
         redirect following, which can be reused by derived classes. Implements
@@ -1073,7 +1073,7 @@ class HipoClient:
             **kwargs: Additional arguments for parsing
 
         Returns:
-            Dictionary containing parsed data
+            HipoData containing parsed data
         """
         data = HipoData(status = "success", message = "")
         return data
@@ -1093,7 +1093,7 @@ class HipoClient:
         return {}
 
     async def fetch_and_parse(self, *args, max_redirects=5, **kwargs):
-        """Generic method to fetch data from an endpoint and parse it with a provided function.
+        """Generic method to fetch data from an endpoint and parse it.
 
         This method provides a reusable way to fetch data from any endpoint and parse it
         using the instance parser method. Handles authentication, caching, and error handling.
@@ -1103,7 +1103,7 @@ class HipoClient:
             **kwargs: Arguments for URL formatting and parsing
 
         Returns:
-            Tuple of (parsed_data, error_response) where one will be None
+            HipoData containing parsed data or error information
         """
         # Create the data object
         data = HipoData(status="success", message="")
@@ -1142,13 +1142,13 @@ class HipoClient:
 
         try:
             # Retrieve and parse the page
-            parsed_data, error_response = await self.fetch_and_parse(**kwargs)
+            parsed_data = await self.fetch_and_parse(**kwargs)
 
             # Check for errors in the response
-            if error_response:
-                return None, error_response
+            if parsed_data.get("status") == "error":
+                return None, parsed_data.get("message")
 
-            # Convert parsed data to FHIR Encounter resource
+            # Convert parsed data to FHIR resource
             fhir_data = self.fhir_response(parsed_data, **kwargs)
             return fhir_data, None
 
@@ -1163,27 +1163,34 @@ class HipoClientPatient(HipoClient):
     """
 
     def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
+        """Initialize the patient client.
+
+        Args:
+            service_url: Base URL of the Hipocrate service
+            request: Optional request object to extract credentials from
+        """
         # Initialize the parent
         super().__init__(service_url = service_url, request = request)
         # The request endpoint
         self.request_url = "/Pacient/edit.asp?id={id}"
 
     def parse_data(self, html_content: str, **kwargs) -> HipoData:
-        """Parse HTML service request content and extract structured data.
+        """Parse HTML patient content and extract structured data.
 
-        Extracts patient information and medical data from service request HTML content,
-        including physician information, diagnosis, imaging studies, and request details.
+        Extracts patient information from patient HTML content,
+        including personal data, contact information, medical identifiers,
+        and related encounter IDs.
 
         Args:
-            html_content: HTML content of the service request page
+            html_content: HTML content of the patient page
             **kwargs: Additional arguments
 
         Returns:
-            Dictionary containing parsed service request data organized in sections:
-            - patient: Patient information (name, id)
-            - checkin: Admission information (physician, id, diagnosis)
-            - request: Request information (clinical_comments, lab_comments, datetime, is_urgent)
-            - studies: List of requested imaging studies
+            HipoData containing parsed patient data organized in sections:
+            - patient: Patient information (name, id, cnp, etc.)
+            - presentation: List of presentation IDs
+            - checkin: List of admission/checkin IDs
+            - checkout: List of discharge/checkout IDs
         """
         # Initialize result dictionary
         data = HipoData(status="success", message="", patient = {})
@@ -1273,7 +1280,7 @@ class HipoClientPatient(HipoClient):
             return data
         
         except Exception as e:
-            logger.error(f"Error parsing service request data: {e}")
+            logger.error(f"Error parsing patient data: {e}")
             data.set_error(str(e))
             return data
 
@@ -1441,12 +1448,30 @@ class HipoClientPatientSearch(HipoClientPatient):
     """
 
     def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
+        """Initialize the patient search client.
+
+        Args:
+            service_url: Base URL of the Hipocrate service
+            request: Optional request object to extract credentials from
+        """
         # Initialize the parent
         super().__init__(service_url = service_url, request = request)
         # The request endpoint
         self.request_url = "/files/search.asp?what=PA"
 
     async def search(self, search_term, **kwargs):
+        """Search for patients by various criteria.
+
+        Handles searching for patients by name, CNP, partial CNP, or patient code.
+        Automatically determines the search type based on the input format.
+
+        Args:
+            search_term: Search term - can be name, CNP, partial CNP (ending with *), or patient code
+            **kwargs: Additional arguments
+
+        Returns:
+            HipoData containing search results or error information
+        """
         # Initialize result data
         data = HipoData(status="success", message="", patients=[])
 
@@ -1543,6 +1568,15 @@ class HipoClientPatientSearch(HipoClientPatient):
 
 
     def parse_one_patient_data(self, html_content: str, **kwargs) -> HipoData:
+        """Parse HTML content for a single patient page.
+
+        Args:
+            html_content: HTML content of the patient page
+            **kwargs: Additional arguments
+
+        Returns:
+            HipoData containing parsed patient data
+        """
         return self.parse_data(html_content, **kwargs)
 
     def parse_multiple_patients_data(self, html_content: str) -> HipoData:
@@ -1554,7 +1588,7 @@ class HipoClientPatientSearch(HipoClientPatient):
             html_content: HTML content of the search results page
 
         Returns:
-            List of dictionaries containing patient data (name, ID only)
+            HipoData containing patient search results
         """
         # Initialize empty dict for patients
         data = HipoData(status="success", message="", patients = {})
@@ -1590,6 +1624,12 @@ class HipoClientCheckout(HipoClient):
     """
 
     def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
+        """Initialize the checkout client.
+
+        Args:
+            service_url: Base URL of the Hipocrate service
+            request: Optional request object to extract credentials from
+        """
         # Initialize the parent
         super().__init__(service_url = service_url, request = request)
         # The request endpoint
@@ -1607,13 +1647,12 @@ class HipoClientCheckout(HipoClient):
             **kwargs: Additional arguments including 'id' for checkout ID
 
         Returns:
-            Dictionary containing parsed checkout data organized in sections:
+            HipoData containing parsed checkout data organized in sections:
             - patient: Patient information (name, id, cnp, gender, date, age)
             - presentation: Presentation/visit information
             - checkin: Admission information (id, physician, ward, diagnosis, date, time, datetime)
             - checkout: Discharge information (date, time, datetime, epicrisis, diagnosis, 
                     physician, ward, surgery, recommendations, icd10)
-            Returns empty dict if parsing fails or page is not a checkout page.
         """
         # Initialize result dictionary
         data = HipoData(status="success", message="")
@@ -1880,6 +1919,12 @@ class HipoClientServiceRequest(HipoClient):
     """
 
     def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
+        """Initialize the service request client.
+
+        Args:
+            service_url: Base URL of the Hipocrate service
+            request: Optional request object to extract credentials from
+        """
         # Initialize the parent
         super().__init__(service_url = service_url, request = request)
         # The request endpoint
@@ -1896,7 +1941,7 @@ class HipoClientServiceRequest(HipoClient):
             **kwargs: Additional arguments
 
         Returns:
-            Dictionary containing parsed service request data organized in sections:
+            HipoData containing parsed service request data organized in sections:
             - patient: Patient information (name, id)
             - checkin: Admission information (physician, id, diagnosis)
             - request: Request information (clinical_comments, lab_comments, datetime, is_urgent)
