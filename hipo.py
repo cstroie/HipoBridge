@@ -8,6 +8,8 @@ caching, and FHIR-compatible data formatting.
 
 Key features:
 - HipoClient: Base client for general Hipocrate service interactions
+- HipoClientPatient: Specialized client for patient data
+- HipoClientPatientSearch: Specialized client for patient search operations
 - HipoClientCheckout: Specialized client for patient discharge/checkout data
 - HipoClientServiceRequest: Specialized client for medical service requests
 - Automatic session management with cookie handling
@@ -1154,10 +1156,10 @@ class HipoClient:
             return None, create_error_response("Data retrieval failed", 500, {"exception": str(e)})
 
 class HipoClientPatient(HipoClient):
-    """Specialized client for service request related operations in the Hipocrate medical system.
+    """Specialized client for patient related operations in the Hipocrate medical system.
 
-    Handles retrieval and parsing of medical service requests including laboratory
-    orders, imaging requests, and other medical service requisitions.
+    Handles retrieval and parsing of patient information including personal data,
+    contact information, medical identifiers, and related encounter IDs.
     """
 
     def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
@@ -1432,10 +1434,10 @@ class HipoClientPatient(HipoClient):
 
 
 class HipoClientPatientSearch(HipoClientPatient):
-    """Specialized client for service request related operations in the Hipocrate medical system.
+    """Specialized client for patient search operations in the Hipocrate medical system.
 
-    Handles retrieval and parsing of medical service requests including laboratory
-    orders, imaging requests, and other medical service requisitions.
+    Handles searching for patients by various criteria including name, CNP (personal identification number),
+    partial CNP, and patient code. Supports both single patient and multiple patient result parsing.
     """
 
     def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
