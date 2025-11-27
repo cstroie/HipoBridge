@@ -29,6 +29,13 @@ def html_to_markdown(html_content: str) -> str:
     to markdown syntax, and normalizing whitespace. Special handling for medical record
     systems including Microsoft Office artifacts and common formatting patterns.
 
+    This function is specifically designed to handle the complex HTML structures often
+    found in medical record systems, including:
+    - Microsoft Office-generated HTML with namespace declarations
+    - Wrapper tags that enclose entire content blocks
+    - Complex nested formatting elements
+    - Non-breaking spaces and other HTML entities
+
     Args:
         html_content: HTML content to convert (may include Microsoft Office artifacts)
 
@@ -154,6 +161,10 @@ def markdown_to_html(markdown_text: str) -> str:
     - Italic text (*text* or _text_)
     - Unordered lists (- item or * item)
     - Ordered lists (1. item, 2. item, etc.)
+
+    This function is designed to produce clean, semantic HTML that's suitable for
+    medical record systems while preserving the structure and meaning of the original
+    markdown content.
 
     Args:
         markdown_text: Markdown text to convert to HTML
