@@ -1259,13 +1259,13 @@ class HipoClientPatient(HipoClient):
                         pass  # Keep birth_date empty if parsing fails
 
             # Extract encounters / presentations
-            data.store_list("patient.presentation", extract_ids_from_links(soup, r'../files/presentation\.asp\?id=(\d+)'))
+            data.store_list("presentation", extract_ids_from_links(soup, r'../files/presentation\.asp\?id=(\d+)'))
 
             # Extract admissions / checkins
-            data.store_list("patient.checkin", extract_ids_from_links(soup, r'../files/checkin\.asp\?id=(\d+)'))
+            data.store_list("checkin", extract_ids_from_links(soup, r'../files/checkin\.asp\?id=(\d+)'))
 
             # Extract discharges / checkouts
-            data.store_list("patient.checkout", extract_ids_from_links(soup, r'../files/checkout\.asp\?id=(\d+)'))
+            data.store_list("checkout", extract_ids_from_links(soup, r'../files/checkout\.asp\?id=(\d+)'))
             
             # Return the data
             return data
@@ -1914,9 +1914,9 @@ class HipoClientServiceRequest(HipoClient):
             patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id='))
             if patient_link:
                 data.store("patient.id", extract_id_from_link(patient_link))
-            else:
-                data.set_error("Could not extract patient ID from service request")
-                return data
+            #else:
+            #    data.set_error("Could not extract patient ID from service request")
+            #    return data
 
             # Extract physician
             data.store("checkin.physician", extract_text_after_label(soup, r'Medicul:', stop_at=r'-'))
