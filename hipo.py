@@ -1164,6 +1164,35 @@ class HipoClient:
             data.set_error("Data retrieval failed")
             return data
 
+    async def debug_page(self, *args, max_redirects=5, **kwargs):
+        """Generic method to fetch data from an endpoint and return raw HTML.
+
+        This method provides a reusable way to fetch raw HTML content from any endpoint
+        without parsing it. Useful for debugging purposes.
+
+        Args:
+            max_redirects: Maximum number of redirects to follow (default: 5)
+            **kwargs: Arguments for URL formatting
+
+        Returns:
+            String containing raw HTML content or error information
+        """
+        # Create the specific request url
+        url = self.request_url.format(**kwargs)
+        try:
+            # Retrieve the page
+            response_text, success, error_response = await self.get_page(url, max_redirects)
+
+            # Check for errors in the response
+            if not success:
+                return f"Error: {error_response}"
+
+            # Return the raw HTML content
+            return response_text
+
+        except Exception as e:
+            return f"Error: Data retrieval failed - {str(e)}"
+
     async def fetch_repond_fhir(self, *args, max_redirects=5, **kwargs):
         """Generic method to fetch data from an endpoint and convert it to FHIR format.
 
