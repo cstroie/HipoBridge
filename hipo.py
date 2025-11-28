@@ -1204,8 +1204,8 @@ class HipoClientPatient(HipoClient):
             # Check if this is a single patient page by looking for 'Date pasaportale' in title
             if not self.is_expected_page(soup, 'Date pasaportale'):
                 # Log snippet of response for debugging
-                data.set_error("Backend returned an unexpected page")
-                logger.warning(f"Backend returned an unexpected page: {html_content[:200]}...")
+                data.set_error("Unexpected page for Patient")
+                logger.warning(f"{data['message']}: {html_content[:200]}...")
                 return data
 
             # Check if there is patient data on page by getting the name from the div with id "div_navbar"
@@ -1602,8 +1602,8 @@ class HipoClientPatientSearch(HipoClientPatient):
             # Check if this is a search results page by looking for 'Fisier' in title
             if not self.is_expected_page(soup, 'Fisier'):
                 # Return empty list if not expected page
-                data.set_error("Backend returned an unexpected page")
-                logger.warning(f"Backend returned an unexpected page: {html_content[:200]}...")
+                data.set_error("Unexpected page for PatientSearch")
+                logger.warning(f"{data['message']}: {html_content[:200]}...")
                 return data
 
             # Find all links with the pattern javascript:Edit('patient_id')
@@ -1916,8 +1916,8 @@ class HipoClientDiagnosticReport(HipoClient):
             # Check if this is a diagnostic request/report page
             if not self.is_expected_page(soup, 'Cerere de investigatii paraclinice'):
                 # Log snippet of response for debugging
-                data.set_error("Backend returned an unexpected page")
-                logger.warning(f"Backend returned an unexpected page: {html_content[:200]}...")
+                data.set_error("Unexpected page for Diagnostic Report")
+                logger.warning(f"{data['message']}: {html_content[:200]}...")
                 return data
 
             # Extract patient name from the table with patient data

@@ -729,7 +729,7 @@ def create_fhir_patient(patient_data: Dict[str, Any], request) -> Dict[str, Any]
 
 
 @require_auth
-async def get_fhir_diagnostic_report(request):
+async def get_fhir_diagnostic_report_OLD(request):
     """Retrieve a diagnostic report by ID, following redirect chains.
 
     Gets a diagnostic report from the Hipocrate service, following any redirects to
@@ -770,6 +770,43 @@ async def get_fhir_diagnostic_report(request):
 
     except Exception as e:
         return create_error_response("Report retrieval failed", 500, {"exception": str(e)})
+
+@require_auth
+async def get_fhir_diagnostic_report(request):
+    """Retrieve service request information by ID.
+
+    Gets service request information from the Hipocrate service and parses
+    the medical data into structured format.
+
+    Args:
+        request: The incoming HTTP request with 'id' path parameter for service request ID
+                 and basic auth credentials for authentication
+
+    Returns:
+        JSON response with service request data or error information
+    """
+    # Extract diagnostic report ID from path
+    id = request.match_info.get('id')
+    if not id:
+        return create_error_response("Diagnostic report ID is required")
+    logger.info(f"Retrieving diagnostic report with ID: {id}")
+
+    try:
+        # Create a new HipoClient instance with credentials
+        client = HipoClientDiagnosticReport(SERVICE_URL, request)
+
+        # Retrieve and parse the page, then convert to FHIR resource
+        fhir_response, error_response = await client.fetch_repond_fhir(id=id)
+
+        # Check for errors in the response
+        if error_response:
+            return error_response
+        
+        # Return the response
+        return web.json_response(fhir_response)
+
+    except Exception as e:
+        return create_error_response("Diagnostic report retrieval failed", 500, {"exception": str(e)})
 
 @require_auth
 async def get_fhir_imaging_study(request):
@@ -1149,7 +1186,8 @@ def parse_report(html_content: str) -> Dict[str, Any]:
         logger.error(f"Error parsing report data: {e}")
         return {}
 
-def create_fhir_diagnostic_report(report_data: Dict[str, Any], request) -> Dict[str, Any]:
+
+def create_fhir_diagnostic_report_OLD(report_data: Dict[str, Any], request) -> Dict[str, Any]:
     # Create enhanced FHIR DiagnosticReport resource
     fhir_report = {
         "resourceType": "DiagnosticReport",
