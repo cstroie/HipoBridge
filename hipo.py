@@ -1908,7 +1908,7 @@ class HipoClientServiceRequest(HipoClient):
 
 
 
-class HipoClientDiagnosticReport(HipoClient):
+class HipoClientImagingStudy(HipoClient):
     """Specialized client for service request related operations in the Hipocrate medical system.
 
     Handles retrieval and parsing of medical service requests including laboratory
@@ -1954,7 +1954,184 @@ class HipoClientDiagnosticReport(HipoClient):
             # Check if this is a diagnostic request/report page
             if not self.is_expected_page(soup, 'Cerere de investigatii paraclinice'):
                 # Log snippet of response for debugging
-                data.set_error(f"Unexpected page for DiagnosticReport: {self.get_title(soup)}")
+                data.set_error(f"Unexpected page for ImagingStudy: {self.get_title(soup)}")
+                logger.warning(f"{data['message']}: {self.get_error(soup)}")
+                return data
+
+            # Extract patient name from the table with patient data
+            data.store("patient.name", extract_text_after_label(soup, r'Nume:', 'tr', stop_at=r'\['))
+
+            # Extract patient CNP from the table with patient data
+            patient_cnp = extract_value_from_input(soup, id="strCNP")
+            data.store("patient.cnp", patient_cnp)
+            if patient_cnp:
+                parsed_cnp = parse_cnp(patient_cnp)
+                data.store("patient.gender", parsed_cnp.get("gender", ""))
+                data.store("patient.birth_date", parsed_cnp.get("birth_date", ""))
+                data.store("patient.age", parsed_cnp.get("age", ""))
+
+            # Extract patient code from the table with patient data
+            patient_ids = extract_ids_from_links(soup, r'/pacient/edit\.asp\?id=(\d+)')
+            if patient_ids:
+                data.store("patient.id", patient_ids[0] if isinstance(patient_ids, list) else patient_ids)
+            
+            # Extract checkin ID
+            data.store("checkin.id", extract_ids_from_links(soup, r'/files/checkin\.asp\?id=(\d+)'))
+
+            # Extract barcode
+            data.store("request.barcode", extract_text_after_label(soup, r'Cerere de investigatii (?!paraclinice)'))
+
+            # Extract medic
+            data.store("checkin.medic", extract_text_after_label(soup, r'Medic:', 'tr'))
+
+            # Extract the clinical comments
+            data.store("checkin.diagnosis", extract_text_after_label(soup, r'prezumtiv:', 'tr'))
+
+            # Extract the clinical comments
+            data.store("request.clinical_comments", extract_text_after_label(soup, r'Informatii suplimentare:', 'tr', stop_at=r'Motiv'))
+
+            # Extract the lab comments
+            data.store("request.lab_comments", extract_text_from_element(soup, id="strComments"))
+
+            # Extract the justification
+            data.store("request.justification", extract_text_from_element(soup, id="strJustificare"))
+
+            # Extract ICD10 coded diagnosis
+            data.store("request.icd10", extract_text_after_label(soup, r'Diagnostic:', 'tr'))
+
+            # Extract requester and request date and time
+            req = extract_text_after_label(soup, r'Ceruta:', 'tr')
+            if req and '-' in req:
+                try:
+                    request_medic, request_datetime = req.split('-', 1)
+                    data.store("request.medic", request_medic)
+                    # Try to parse the datetime
+                    dt = parse_date_time(request_datetime)
+                    if dt:
+                        data.store("request.datetime", dt.isoformat())
+                    else:
+                        # If parsing fails, keep the original string
+                        data.store("request.datetime", request_datetime.strip())
+                except ValueError:
+                    # Handle case where split doesn't work as expected
+                    data.store("request.info", req)
+
+            # Extract performer (validator) from the domain section
+            validator = extract_text_after_label(soup, r'Validat de:', 'td', stop_at=r'Data')
+            if validator:
+                data.store("validation.validator", validator)
+
+            # Extract validation datetime
+            validation_datetime = extract_value_from_input(soup, id="dataefectuarii")
+            if validation_datetime:
+                # Try to parse the datetime
+                dt = parse_date_time(validation_datetime)
+                if dt:
+                    data.store("validation.datetime", dt.isoformat())
+                else:
+                    # If parsing fails, keep the original string
+                    data.store("validation.datetime", validation_datetime)
+            
+            # For each strAnalyseExec input, find the parent 'td' and extract examination name from first 'b' element
+            studies = []
+            for input_elem in soup.find_all('input', {'name': 'strAnalyseExec'}):
+                parent_td = input_elem.find_parent('td')
+                if parent_td:
+                    first_b = parent_td.find('b')
+                    if first_b:
+                        study_title = first_b.get_text(strip=True)
+                    else:
+                        study_title = parent_td.get_text(strip=True)
+                    # Find the 'table' parent and then the 'center' sibling
+                    parent_table = parent_td.find_parent('table')
+                    container = parent_table.find_next_sibling('center')
+                    study_result = None
+                    if container:
+                        # In 'center' there is another table.
+                        # The rows containing 'rezultat' in first 'td' have the result in second 'td'
+                        for row in container.find_all('tr'):
+                            cells = row.find_all('td')
+                            if len(cells) >= 2:
+                                if cells[0].get_text(strip=True).lower() == "rezultat":
+                                    # Filter out text nodes that contain only whitespace
+                                    subelements = [child for child in cells[1] if hasattr(child, 'name') and child.name]
+                                    if len(subelements) == 1 and subelements[0].name == 'b':
+                                        # If the only child is a <b> tag, use its content directly
+                                        study_result = html_to_markdown(str(subelements[0]))
+                                    else:
+                                        # Otherwise, process the entire div
+                                        study_result = html_to_markdown(str(cells[1]))
+                    # Append the study if the data is valid
+                    if study_title and study_result:
+                        # Get study type and region
+                        study_type, region = identify_study_type_and_region(study_title)
+                        study = {
+                            "title": study_title,
+                            "result": study_result,
+                            "type": study_type,
+                            "region": region
+                        }
+                        studies.append(study)
+            data.store_list("studies", studies)
+
+            # Store urgency flag
+            data.store("request.is_urgent", "~URGENTA~" in html_content)
+
+            # Return the parsed report data
+            return data
+
+        except Exception as e:
+            logger.error(f"Error parsing report data: {e}")
+            return HipoData(status="success", message=f"{e}")
+
+
+class HipoClientDiagnosticReport(HipoClient):
+    """Specialized client for service request related operations in the Hipocrate medical system.
+
+    Handles retrieval and parsing of medical service requests including laboratory
+    orders, imaging requests, and other medical service requisitions.
+    """
+
+    def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
+        """Initialize the service request client.
+
+        Args:
+            service_url: Base URL of the Hipocrate service
+            request: Optional request object to extract credentials from
+        """
+        # Initialize the parent
+        super().__init__(service_url = service_url, request = request)
+        # The request endpoint
+        self.request_url = f"/analyse/Reports/analyseFile.asp?id={id}"
+
+    def parse_data(self, html_content: str, **kwargs) -> HipoData:
+        """Parse HTML service request content and extract structured data.
+
+        Extracts patient information and medical data from service request HTML content,
+        including medic information, diagnosis, imaging studies, and request details.
+
+        Args:
+            html_content: HTML content of the service request page
+            **kwargs: Additional arguments
+
+        Returns:
+            HipoData containing parsed service request data organized in sections:
+            - patient: Patient information (name, id)
+            - checkin: Admission information (medic, id, diagnosis)
+            - request: Request information (clinical_comments, lab_comments, datetime, is_urgent)
+            - studies: List of requested imaging studies
+        """
+        # Initialize result dictionary
+        data = HipoData(status="success", message="")
+
+        try:
+            # Parse HTML content with BeautifulSoup
+            soup = BeautifulSoup(html_content, 'html.parser')
+
+            # Check if this is a diagnostic request/report page
+            if not self.is_expected_page(soup, 'Cerere de investigatii paraclinice'):
+                # Log snippet of response for debugging
+                data.set_error(f"Unexpected page for ImagingStudy: {self.get_title(soup)}")
                 logger.warning(f"{data['message']}: {self.get_error(soup)}")
                 return data
 
@@ -2085,9 +2262,9 @@ class HipoClientDiagnosticReport(HipoClient):
             return HipoData(status="success", message=f"{e}")
 
     def fhir_response(self, parsed_data: HipoData[str, Any], **kwargs) -> Dict[str, Any]:
-        """Convert parsed diagnostic report data to FHIR DiagnosticReport resource.
+        """Convert parsed diagnostic report data to FHIR ImagingStudy resource.
 
-        Transforms parsed diagnostic report data into a FHIR-compatible DiagnosticReport
+        Transforms parsed diagnostic report data into a FHIR-compatible ImagingStudy
         resource with proper structure, references, coding systems, and extensions.
 
         Args:
