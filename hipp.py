@@ -44,7 +44,7 @@ import base64
 # Import FHIR classes
 from fhir import ServiceRequest as FHIRServiceRequest, CodeableConcept, Coding, Reference, CodeableReference, Condition, Patient as FHIRPatient
 
-from hipo import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientCheckout
+from hipo import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientImagingStudy, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientCheckout
 from hipo import HipoData, user_session_manager, identify_study_type_and_region
 
 from extractors import extract_id_from_link, extract_ids_from_links, extract_selected_from_dropdown, extract_tabular_data, extract_text_after_label, extract_text_from_element, extract_textarea_after_label, extract_value_from_input
@@ -820,34 +820,28 @@ async def get_fhir_imaging_study(request):
     Returns:
         JSON response with imaging study data or error information
     """
-    # Extract study ID from path
+    # Extract imaging study ID from path
     id = request.match_info.get('id')
     if not id:
-        return create_error_response("Study ID is required")
-    logger.info(f"Retrieving study with ID: {id}")
-
-    # Create a new HipoClient instance with credentials
-    client = HipoClient(SERVICE_URL, request)
+        return create_error_response("Imaging study ID is required")
+    logger.info(f"Retrieving imaging study with ID: {id}")
 
     try:
-        # The study endpoint
-        request_url = f"/analyse/Reports/analyseFile.asp?id={id}"
+        # Create a new HipoClient instance with credentials
+        client = HipoClientImagingStudy(SERVICE_URL, request)
 
-        # Retrieve the page
-        response_text, success, error_response = await client.get_page(request_url)
+        # Retrieve and parse the page, then convert to FHIR resource
+        response = await client.fetch_repond_fhir(id=id)
 
         # Check for errors in the response
-        if not success:
-            return error_response
-
-        # Return ImagingStudy
-        report_data = parse_report_data(response_text)
-        report_data['report_id'] = id
-        fhir_response = create_fhir_imaging_study(report_data, request)
-        return web.json_response(fhir_response)
+        status = 200 if response.get("status") == "success" else 404
+        
+        # Return the response
+        return web.json_response(response.get("fhir", response), status = status)
 
     except Exception as e:
         return create_error_response("Imaging study retrieval failed", 500, {"exception": str(e)})
+
 
 def parse_report_data(html_content: str) -> Dict[str, Any]:
     """Parse HTML report content and extract structured data.
@@ -1870,6 +1864,41 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
 
 
 @require_auth
+async def get_study(request):
+    """Retrieve imaging study by ID.
+
+    Gets service request information from the Hipocrate service and parses
+    the medical data into structured format.
+
+    Args:
+        request
+
+    Returns:
+        JSON response with service request data or error information
+    """
+    # Extract service request ID from path
+    id = request.match_info.get('id')
+    if not id:
+        return create_error_response("Imaging study ID is required")
+    logger.info(f"Retrieving imaging study with ID: {id}")
+
+    try:
+        # Create a new HipoClient instance
+        client = HipoClientImagingStudy(SERVICE_URL, request)
+
+        # Retrieve and parse the page
+        parsed_data = await client.fetch_and_parse(id=id)
+
+        # Check for errors in the response
+        status = 200 if parsed_data.get("status") == "success" else 404
+        
+        # Return the response
+        return web.json_response(parsed_data, status = status)
+
+    except Exception as e:
+        return create_error_response("Imaging study retrieval failed", 500, {"exception": str(e)})
+
+@require_auth
 async def get_report(request):
     """Retrieve diagnostic report by ID.
 
@@ -1891,6 +1920,10 @@ async def get_report(request):
     try:
         # Create a new HipoClient instance
         client = HipoClientDiagnosticReport(SERVICE_URL, request)
+
+        if request.query.get('debug') == 'page':
+            result = await client.debug_page(id=id)
+            return web.Response(body = result, content_type="text/html")
 
         # Retrieve and parse the page
         parsed_data = await client.fetch_and_parse(id=id)
@@ -2512,17 +2545,18 @@ async def init_app():
     app.router.add_get('/api/patient', search_patient)
     app.router.add_get('/api/patient/{id}', get_patient)
     app.router.add_get('/api/request/{id}', get_request)
+    app.router.add_get('/api/study/{id}', get_study)
     app.router.add_get('/api/report/{id}', get_report)
     app.router.add_get('/api/checkout/{id}', get_checkout)
     # FHIR-compatible endpoints
     app.router.add_get('/fhir/Patient', search_fhir_patient)
     app.router.add_get('/fhir/Patient/{id}', get_fhir_patient)
-    app.router.add_get('/fhir/DiagnosticReport/{id}', get_fhir_diagnostic_report)
+    app.router.add_get('/fhir/ServiceRequest/{id}', get_fhir_service_request)
     app.router.add_get('/fhir/ImagingStudy/{id}', get_fhir_imaging_study)
+    app.router.add_get('/fhir/DiagnosticReport/{id}', get_fhir_diagnostic_report)
     app.router.add_get('/fhir/Encounter/{id}', get_fhir_encounter)
     app.router.add_get('/fhir/Observation', search_fhir_observation)
     app.router.add_get('/fhir/Observation/{id}', get_fhir_observation)
-    app.router.add_get('/fhir/ServiceRequest/{id}', get_fhir_service_request)
     app.router.add_get('/fhir/ValueSet/cnp', serve_validate_cnp)
     app.router.add_post('/fhir/md2html', serve_md2html)
     app.router.add_get('/fhir/CodeSystem/analysis-types', serve_fhir_analysis_types)

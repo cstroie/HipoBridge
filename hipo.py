@@ -2325,7 +2325,7 @@ class HipoClientDiagnosticReport(HipoClient):
             data.store("checkin.medic", extract_text_after_label(soup, r'Solicitat de:', 'td'))
 
             # Extract the clinical comments
-            data.store("checkin.diagnosis", extract_text_after_label(soup, r'Diagnostic:', 'tr'))
+            data.store("checkin.diagnosis", extract_text_after_label(soup, r'DIAGNOSTIC DE TRIMITERE:', 'td'))
 
             # Extract medic
             data.store("request.medic", extract_text_after_label(soup, r'TRIMIS DE:\s*MEDIC', 'tr', stop_at=r'SECTIA'))
@@ -2339,81 +2339,61 @@ class HipoClientDiagnosticReport(HipoClient):
             # Extract performer (Efectuata de catre:)
             data.store("study.performer", extract_text_after_label(soup, r'Efectuata de catre:'))
 
-
-            # Extract requester and request date and time
-            req = extract_text_after_label(soup, r'Ceruta:', 'tr')
-            if req and '-' in req:
-                try:
-                    request_medic, request_datetime = req.split('-', 1)
-                    data.store("request.medic", request_medic)
-                    # Try to parse the datetime
-                    dt = parse_date_time(request_datetime)
-                    if dt:
-                        data.store("request.datetime", dt.isoformat())
-                    else:
-                        # If parsing fails, keep the original string
-                        data.store("request.datetime", request_datetime.strip())
-                except ValueError:
-                    # Handle case where split doesn't work as expected
-                    data.store("request.info", req)
-
             # Extract performer (validator) from the domain section
-            validator = extract_text_after_label(soup, r'Validat de:', 'td', stop_at=r'Data')
-            if validator:
-                data.store("validation.validator", validator)
+            data.store("study.medic", extract_text_after_label(soup, r'MEDIC,|Medic validator:', 'td', stop_at=r'Semnatura'))
 
-            # Extract validation datetime
-            validation_datetime = extract_value_from_input(soup, id="dataefectuarii")
-            if validation_datetime:
+            # Extract study datetime
+            study_datetime = extract_text_after_label(soup, r'Data investigatiei:', stop_at=r'Efectuata')
+            if study_datetime:
                 # Try to parse the datetime
-                dt = parse_date_time(validation_datetime)
+                dt = parse_date_time(study_datetime)
                 if dt:
-                    data.store("validation.datetime", dt.isoformat())
+                    data.store("study.datetime", dt.isoformat())
                 else:
                     # If parsing fails, keep the original string
-                    data.store("validation.datetime", validation_datetime)
-            
-            # For each strAnalyseExec input, find the parent 'td' and extract examination name from first 'b' element
+                    data.store("study.datetime", study_datetime)
+
+            # Extract multiple reports: find all elements with text starting with "REZULTAT:"
             studies = []
-            for input_elem in soup.find_all('input', {'name': 'strAnalyseExec'}):
-                parent_td = input_elem.find_parent('td')
-                if parent_td:
-                    first_b = parent_td.find('b')
-                    if first_b:
-                        study_title = first_b.get_text(strip=True)
-                    else:
-                        study_title = parent_td.get_text(strip=True)
-                    # Find the 'table' parent and then the 'center' sibling
-                    parent_table = parent_td.find_parent('table')
-                    container = parent_table.find_next_sibling('center')
-                    study_result = None
-                    if container:
-                        # In 'center' there is another table.
-                        # The rows containing 'rezultat' in first 'td' have the result in second 'td'
-                        for row in container.find_all('tr'):
-                            cells = row.find_all('td')
-                            if len(cells) >= 2:
-                                if cells[0].get_text(strip=True).lower() == "rezultat":
-                                    # Filter out text nodes that contain only whitespace
-                                    subelements = [child for child in cells[1] if hasattr(child, 'name') and child.name]
-                                    if len(subelements) == 1 and subelements[0].name == 'b':
-                                        # If the only child is a <b> tag, use its content directly
-                                        study_result = html_to_markdown(str(subelements[0]))
-                                    else:
-                                        # Otherwise, process the entire div
-                                        study_result = html_to_markdown(str(cells[1]))
-                    # Append the study if the data is valid
-                    if study_title and study_result:
-                        # Get study type and region
-                        study_type, region = identify_study_type_and_region(study_title)
-                        study = {
+            for result_element in soup.find_all(string=re.compile(r'^REZULTAT:', re.IGNORECASE)):
+                try:
+                    # The investigation name is the text after "REZULTAT:" in the element
+                    element_text = result_element.get_text()
+                    investigation_match = re.search(r'REZULTAT:\s*(.*?)(?:\s*$)', element_text, re.IGNORECASE)
+                    study_title = ""
+                    if investigation_match:
+                        study_title = investigation_match.group(1).strip()
+
+                    # Find the next div sibling which contains the actual result
+                    result_div = result_element.find_next('div')
+                    study_result = ""
+                    if result_div:
+                        # Check if the div contains only a single <b> tag as its child
+                        div_children = list(result_div.children)
+                        # Filter out text nodes that contain only whitespace
+                        element_children = [child for child in div_children if hasattr(child, 'name') and child.name]
+                        if len(element_children) == 1 and element_children[0].name == 'b':
+                            # If the only child is a <b> tag, use its content directly
+                            study_result = html_to_markdown(str(element_children[0]))
+                        else:
+                            # Otherwise, process the entire div
+                            study_result = html_to_markdown(str(result_div))
+
+                    # Add to reports list
+                    # Process investigation name to identify study type and region
+                    study_type, region = identify_study_type_and_region(study_title)
+                    study = {
                             "title": study_title,
                             "result": study_result,
                             "type": study_type,
                             "region": region
                         }
-                        studies.append(study)
+                    studies.append(study)
+                except Exception as e:
+                    logger.error(f"Error parsing individual report: {e}")
+                    continue
             data.store_list("studies", studies)
+
 
             # Store urgency flag
             data.store("request.is_urgent", "~URGENTA~" in html_content)
