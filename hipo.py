@@ -2046,6 +2046,185 @@ class HipoClientDiagnosticReport(HipoClient):
             logger.error(f"Error parsing report data: {e}")
             return {}
 
+    def fhir_response(self, parsed_data: HipoData[str, Any], **kwargs) -> Dict[str, Any]:
+        """Convert parsed diagnostic report data to FHIR DiagnosticReport resource.
+
+        Transforms parsed diagnostic report data into a FHIR-compatible DiagnosticReport
+        resource with proper structure, references, coding systems, and extensions.
+
+        Args:
+            parsed_data: Parsed diagnostic report data from parse_data method
+            **kwargs: Additional arguments including 'http_request' for host information
+                     and 'id' for report ID
+
+        Returns:
+            FHIR DiagnosticReport resource as dictionary
+        """
+        # Extract http_request from kwargs if available
+        http_request = kwargs.get('http_request')
+        
+        # Get report ID from the request URL parameters
+        report_id = kwargs.get('id', '')
+        
+        try:
+            # Create FHIR DiagnosticReport resource
+            fhir_report = {
+                "resourceType": "DiagnosticReport",
+                "id": report_id,
+                "status": "final",
+                "code": {
+                    "coding": [
+                        {
+                            "system": f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/report-types" if http_request else "http://example.com/fhir/CodeSystem/report-types",
+                            "code": "imaging-report",
+                            "display": "Imaging Report"
+                        }
+                    ],
+                    "text": "Imaging Report"
+                },
+                "subject": {
+                    "reference": f"Patient/{parsed_data.get('patient.id', '')}"
+                }
+            }
+
+            # Add basedOn reference to ServiceRequest if available
+            if report_id:
+                fhir_report["basedOn"] = {
+                    "reference": f"ServiceRequest/{report_id}"
+                }
+
+            # Add effective date if available
+            request_datetime = parsed_data.get("request.datetime")
+            if request_datetime:
+                fhir_report["effectiveDateTime"] = request_datetime
+
+            # Add performer if available
+            medic = parsed_data.get("checkin.medic")
+            if medic:
+                fhir_report["performer"] = [
+                    {
+                        "display": medic
+                    }
+                ]
+
+            # Add results interpreter if clinical comments are available
+            clinical_comments = parsed_data.get("request.clinical_comments")
+            if clinical_comments:
+                fhir_report["resultsInterpreter"] = [
+                    {
+                        "display": clinical_comments
+                    }
+                ]
+
+            # Add results if studies are available
+            studies = parsed_data.get("studies")
+            if studies:
+                fhir_report["result"] = [
+                    {
+                        "reference": f"Observation/{report_id}"
+                    }
+                ]
+
+                # Add presentedForm with study results
+                fhir_report["presentedForm"] = []
+                for study in studies:
+                    if isinstance(study, dict) and study.get("result"):
+                        fhir_report["presentedForm"].append(
+                            {
+                                "contentType": "text/markdown",
+                                "data": study["result"],
+                                "type": study.get("type", ""),
+                                "region": study.get("region", "")
+                            }
+                        )
+
+                # Add conclusion from first study result
+                if studies and isinstance(studies, list) and len(studies) > 0:
+                    first_study = studies[0]
+                    if isinstance(first_study, dict) and first_study.get("result"):
+                        fhir_report["conclusion"] = first_study["result"]
+
+            # Add extensions for additional data
+            extensions = []
+
+            # Add requester information
+            requester = parsed_data.get("request.medic")
+            if requester:
+                extensions.append({
+                    "url": f"{http_request.scheme}://{http_request.host}/fhir/StructureDefinition/diagnostic-report-requester" if http_request else "http://example.com/fhir/StructureDefinition/diagnostic-report-requester",
+                    "valueString": requester
+                })
+
+            # Add admission ID if available
+            admission_id = parsed_data.get("checkin.id")
+            if admission_id:
+                extensions.append({
+                    "url": f"{http_request.scheme}://{http_request.host}/fhir/StructureDefinition/diagnostic-report-encounter" if http_request else "http://example.com/fhir/StructureDefinition/diagnostic-report-encounter",
+                    "valueString": admission_id if not isinstance(admission_id, list) else admission_id[0] if len(admission_id) > 0 else ""
+                })
+
+            # Add barcode if available
+            barcode = parsed_data.get("request.barcode")
+            if barcode:
+                extensions.append({
+                    "url": f"{http_request.scheme}://{http_request.host}/fhir/StructureDefinition/diagnostic-report-barcode" if http_request else "http://example.com/fhir/StructureDefinition/diagnostic-report-barcode",
+                    "valueString": barcode
+                })
+
+            # Add diagnosis if available
+            diagnosis = parsed_data.get("checkin.diagnosis")
+            if diagnosis:
+                extensions.append({
+                    "url": f"{http_request.scheme}://{http_request.host}/fhir/StructureDefinition/diagnostic-report-diagnosis" if http_request else "http://example.com/fhir/StructureDefinition/diagnostic-report-diagnosis",
+                    "valueString": diagnosis
+                })
+
+            # Add ICD10 code if available
+            icd10 = parsed_data.get("request.icd10")
+            if icd10:
+                extensions.append({
+                    "url": f"{http_request.scheme}://{http_request.host}/fhir/StructureDefinition/diagnostic-report-icd10" if http_request else "http://example.com/fhir/StructureDefinition/diagnostic-report-icd10",
+                    "valueString": icd10
+                })
+
+            # Add lab comments if available
+            lab_comments = parsed_data.get("request.lab_comments")
+            if lab_comments:
+                extensions.append({
+                    "url": f"{http_request.scheme}://{http_request.host}/fhir/StructureDefinition/diagnostic-report-lab-comments" if http_request else "http://example.com/fhir/StructureDefinition/diagnostic-report-lab-comments",
+                    "valueString": lab_comments
+                })
+
+            # Add justification if available
+            justification = parsed_data.get("request.justification")
+            if justification:
+                extensions.append({
+                    "url": f"{http_request.scheme}://{http_request.host}/fhir/StructureDefinition/diagnostic-report-justification" if http_request else "http://example.com/fhir/StructureDefinition/diagnostic-report-justification",
+                    "valueString": justification
+                })
+
+            if extensions:
+                fhir_report["extension"] = extensions
+
+            # Add identifiers
+            identifiers = []
+
+            # Add barcode as identifier if available
+            if barcode:
+                identifiers.append({
+                    "system": f"{http_request.scheme}://{http_request.host}/fhir/NamingSystem/barcode" if http_request else "http://example.com/fhir/NamingSystem/barcode",
+                    "value": barcode
+                })
+
+            if identifiers:
+                fhir_report["identifier"] = identifiers
+
+            return fhir_report
+
+        except Exception as e:
+            logger.error(f"Error converting diagnostic report data to FHIR: {e}")
+            return {}
+
 
 class HipoClientCheckout(HipoClient):
     """Specialized client for checkout-related operations in the Hipocrate medical system.
