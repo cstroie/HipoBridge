@@ -1935,7 +1935,7 @@ class HipoClientDiagnosticReport(HipoClient):
             if not self.is_expected_page(soup, 'Cerere de investigatii paraclinice'):
                 # Log snippet of response for debugging
                 data.set_error("Unexpected page for Diagnostic Report")
-                logger.warning(f"{data['message']}: {self.get_title()}...")
+                logger.warning(f"{data['message']}: {self.get_title(soup)}")
                 return data
 
             # Extract patient name from the table with patient data
@@ -2062,7 +2062,7 @@ class HipoClientDiagnosticReport(HipoClient):
 
         except Exception as e:
             logger.error(f"Error parsing report data: {e}")
-            return {}
+            return HipoData(status="success", message=f"{e})
 
     def fhir_response(self, parsed_data: HipoData[str, Any], **kwargs) -> Dict[str, Any]:
         """Convert parsed diagnostic report data to FHIR DiagnosticReport resource.
@@ -2241,7 +2241,7 @@ class HipoClientDiagnosticReport(HipoClient):
 
         except Exception as e:
             logger.error(f"Error converting diagnostic report data to FHIR: {e}")
-            return {}
+            return HipoData(status="success", message=f"{e})
 
 
 class HipoClientCheckout(HipoClient):
