@@ -42,6 +42,8 @@ from typing import Any, Dict, List, Optional
 from extractors import extract_id_from_link, extract_ids_from_links, extract_text_ids_from_links, extract_selected_from_dropdown, extract_tabular_data, extract_text_after_label, extract_text_from_element, extract_textarea_after_label, extract_value_from_input
 from extractors import parse_cnp
 
+from markdown import html_to_markdown, markdown_to_html
+
 # Import FHIR classes
 from fhir import ServiceRequest as FHIRServiceRequest, CodeableConcept, Reference, Patient as FHIRPatient
 
@@ -1615,301 +1617,6 @@ class HipoClientPatientSearch(HipoClientPatient):
         # Return the patients dict
         return data
 
-class HipoClientCheckout(HipoClient):
-    """Specialized client for checkout-related operations in the Hipocrate medical system.
-
-    Handles retrieval and parsing of patient discharge/checkout information from
-    the Hipocrate system, including admission details, discharge summaries,
-    diagnoses, and physician information.
-    """
-
-    def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
-        """Initialize the checkout client.
-
-        Args:
-            service_url: Base URL of the Hipocrate service
-            request: Optional request object to extract credentials from
-        """
-        # Initialize the parent
-        super().__init__(service_url = service_url, request = request)
-        # The request endpoint
-        self.request_url = "/files/checkout.asp?id={id}"
-
-    def parse_data(self, html_content: str, **kwargs) -> HipoData:
-        """Parse HTML checkout content and extract structured data.
-
-        Extracts patient information and medical data from checkout HTML content.
-        This function parses discharge/checkout forms from the Hipocrate system
-        to extract structured data about patient encounters.
-
-        Args:
-            html_content: HTML content of the checkout page
-            **kwargs: Additional arguments including 'id' for checkout ID
-
-        Returns:
-            HipoData containing parsed checkout data organized in sections:
-            - patient: Patient information (name, id, cnp, gender, date, age)
-            - presentation: Presentation/visit information
-            - checkin: Admission information (id, physician, ward, diagnosis, date, time, datetime)
-            - checkout: Discharge information (date, time, datetime, epicrisis, diagnosis, 
-                    physician, ward, surgery, recommendations, icd10)
-        """
-        # Initialize result dictionary
-        data = HipoData(status="success", message="")
-
-        try:
-            # Parse HTML content with BeautifulSoup
-            soup = BeautifulSoup(html_content, 'html.parser')
-
-            # Check if this is the correct page by looking for title
-            if not self.is_expected_page(soup, 'FISA EXTERNARE'):
-                data.set_error("Page is not a discharge page")
-                logger.warning("Page is not a discharge page")
-                return data
-
-            # Extract patient name and ID from the link
-            patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id='))
-            if patient_link:
-                data.store("patient.name", patient_link.get_text())
-                # Extract patient ID from href
-                data.store("patient.id", extract_id_from_link(patient_link))
-
-            # Extract patient CNP
-            data.store("patient.cnp", extract_text_after_label(soup, r'CNP\s*:', 'tr'))
-            if data.get("patient.cnp"):
-                parsed_cnp = parse_cnp(data.get("patient.cnp"))
-                data.store("patient.gender", parsed_cnp.get("gender"))
-                data.store("patient.date", parsed_cnp.get("birth_date"))
-                data.store("patient.age", parsed_cnp.get("age"))
-
-
-            # Extract presentation ID
-            presentation_ids = extract_ids_from_links(soup, r'presentation\.asp\?id=(\d+)')
-            if presentation_ids:
-                data.store("presentation.id", presentation_ids)
-
-
-            # Extract admission ID
-            checkin_ids = extract_ids_from_links(soup, r'checkin\.asp\?id=(\d+)')
-            if checkin_ids:
-                data.store("checkin.id", checkin_ids)
-
-            # Extract physician
-            data.store("checkin.physician", extract_text_after_label(soup, r'Medic\s*:', 'tr'))
-
-            # Extract ward
-            data.store("checkin.ward", extract_text_after_label(soup, r'Sectie\s*:', 'tr'))
-
-            # Extract checkin diagnostic
-            data.store("checkin.diagnosis", extract_text_after_label(soup, r'Diagnostic\s*:', 'tr'))
-
-            # Extract checkin date and time from input fields
-            data.store("checkin.date", extract_value_from_input(soup, id='sCIDate'))
-            data.store("checkin.time", extract_value_from_input(soup, id='sCITime'))
-            
-            # Create combined checkin datetime
-            checkin_date = data.get("checkin.date")
-            checkin_time = data.get("checkin.time")
-            if checkin_date and checkin_time:
-                data.store("checkin.datetime", f'{checkin_date} {checkin_time}')
-
-
-            # Extract checkout date and time from input fields
-            data.store("checkout.date", extract_value_from_input(soup, id='sCODate'))
-            data.store("checkout.time", extract_value_from_input(soup, id='sCOTime'))
-            
-            # Create combined checkout datetime
-            checkout_date = data.get("checkout.date")
-            checkout_time = data.get("checkout.time")
-            if checkout_date and checkout_time:
-                data.store("checkout.datetime", f'{checkout_date} {checkout_time}')
-
-            # Extract epicrisis (textarea with id "sEpicrisysHtmlArea")
-            data.store("checkout.epicrisis", extract_text_from_element(soup, 'sEpicrisys'))
-
-            # Extract diagnostic (textarea after 'Diagnostic externare')
-            data.store("checkout.diagnosis", extract_textarea_after_label(soup, r'Diagnostic externare[^:]*:'))
-
-            # Extract physician
-            data.store("checkout.physician", extract_selected_from_dropdown(soup, name='iCOMedicID'))
-
-            # Extract ward
-            data.store("checkout.ward", extract_selected_from_dropdown(soup, name='sSectionCode'))
-
-            # Extract surgery (textarea with id "sBOProtocolHtmlArea")
-            data.store("checkout.surgery", extract_text_from_element(soup, 'sBOProtocol'))
-
-            # Extract recommendations (textarea with id 'sRecommendationsHtmlArea')
-            data.store("checkout.recommendations", extract_text_from_element(soup, 'sRecommendations'))
-
-            # Extract ICD10 diagnostic from textarea with name "sCODiagnosis"
-            data.store("checkout.icd10", extract_text_from_element(soup, name='sCODiagnosis'))
-
-            # Add the id, if provided
-            if 'id' in kwargs:
-                data.store("checkout.id", kwargs["id"])
-
-            # Return the extracted data
-            return data
-
-        except Exception as e:
-            logger.error(f"Error parsing checkout data: {e}")
-            data.set_error(str(e))
-            return data
-
-    def fhir_response(self, parsed_data: HipoData[str, Any], **kwargs) -> Dict[str, Any]:
-        """Convert parsed checkout data to FHIR Encounter resource.
-
-        Transforms parsed checkout data into a FHIR-compatible Encounter resource
-        with proper structure, references, and coding systems.
-
-        Args:
-            parsed_data: Parsed checkout data from parse_data method
-            **kwargs: Additional arguments including 'id' for encounter ID
-
-        Returns:
-            FHIR Encounter resource as dictionary
-        """
-        encounter_id = parsed_data.get('checkout.id', '')
-        # Create enhanced FHIR Encounter resource
-        fhir_encounter = {
-            "resourceType": "Encounter",
-            "id": encounter_id,
-            "status": "discharged",
-            "type": [
-                {
-                    "coding": [
-                        {
-                            "system": "http://snomed.info/sct",
-                            "code": "305056002",
-                            "display": "Admission to hospital"
-                        }
-                    ]
-                }
-            ],
-            "subject": {
-                "reference": f"Patient/{parsed_data.get('patient.id', '')}"
-            },
-            "participant": []
-        }
-
-        # Add performer if available (from checkout physician)
-        checkout_physician = parsed_data.get("checkout.physician")
-        if checkout_physician:
-            fhir_encounter["participant"].append({
-                "type": [
-                    {
-                        "coding": [
-                            {
-                                "system": "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
-                                "code": "ATND",
-                                "display": "attender"
-                            }
-                        ]
-                    }
-                ],
-                "individual": {
-                    "display": checkout_physician
-                }
-            })
-
-        # Add reason (admission diagnostic) if available
-        admission_diagnosis = parsed_data.get("checkin.diagnosis")
-        if admission_diagnosis:
-            fhir_encounter["reasonCode"] = [
-                {
-                    "text": admission_diagnosis
-                }
-            ]
-
-        # Add text summary if epicrisis exists
-        epicrisis = parsed_data.get("checkout.epicrisis")
-        if epicrisis:
-            # Also add as a note
-            fhir_encounter["note"] = [
-                {
-                    "text": epicrisis
-                }
-            ]
-
-        # Add diagnosis if available
-        if admission_diagnosis:
-            fhir_encounter["diagnosis"] = [
-                {
-                    "condition": {
-                        "reference": f"Condition/admission-{encounter_id}",
-                        "display": admission_diagnosis
-                    },
-                    "use": {
-                        "coding": [
-                            {
-                                "system": "http://terminology.hl7.org/CodeSystem/diagnosis-role",
-                                "code": "AD",
-                                "display": "Admission diagnosis"
-                            }
-                        ]
-                    }
-                }
-            ]
-
-        # Add discharge diagnosis if available
-        discharge_diagnosis = parsed_data.get("checkout.diagnosis")
-        if discharge_diagnosis:
-            if "diagnosis" not in fhir_encounter:
-                fhir_encounter["diagnosis"] = []
-            fhir_encounter["diagnosis"].append(
-                {
-                    "condition": {
-                        "reference": f"Condition/discharge-{encounter_id}",
-                        "display": discharge_diagnosis
-                    },
-                    "use": {
-                        "coding": [
-                            {
-                                "system": "http://terminology.hl7.org/CodeSystem/diagnosis-role",
-                                "code": "DD",
-                                "display": "Discharge diagnosis"
-                            }
-                        ]
-                    }
-                }
-            )
-
-        # Add period for admission and discharge times
-        checkin_datetime = parsed_data.get("checkin.datetime")
-        checkout_datetime = parsed_data.get("checkout.datetime")
-        if checkin_datetime or checkout_datetime:
-            period = {}
-            if checkin_datetime:
-                period["start"] = checkin_datetime
-            if checkout_datetime:
-                period["end"] = checkout_datetime
-            fhir_encounter["period"] = period
-
-        # Add location/ward information
-        checkin_ward = parsed_data.get("checkin.ward")
-        checkout_ward = parsed_data.get("checkout.ward")
-        if checkin_ward or checkout_ward:
-            location = []
-            if checkin_ward:
-                location.append({
-                    "location": {
-                        "display": checkin_ward
-                    },
-                    "status": "active"
-                })
-            if checkout_ward and checkout_ward != checkin_ward:
-                location.append({
-                    "location": {
-                        "display": checkout_ward
-                    },
-                    "status": "completed"
-                })
-            if location:
-                fhir_encounter["location"] = location
-
-        return fhir_encounter
-
 
 class HipoClientServiceRequest(HipoClient):
     """Specialized client for service request related operations in the Hipocrate medical system.
@@ -1934,7 +1641,7 @@ class HipoClientServiceRequest(HipoClient):
         """Parse HTML service request content and extract structured data.
 
         Extracts patient information and medical data from service request HTML content,
-        including physician information, diagnosis, imaging studies, and request details.
+        including medic information, diagnosis, imaging studies, and request details.
 
         Args:
             html_content: HTML content of the service request page
@@ -1943,7 +1650,7 @@ class HipoClientServiceRequest(HipoClient):
         Returns:
             HipoData containing parsed service request data organized in sections:
             - patient: Patient information (name, id)
-            - checkin: Admission information (physician, id, diagnosis)
+            - checkin: Admission information (medic, id, diagnosis)
             - request: Request information (clinical_comments, lab_comments, datetime, is_urgent)
             - studies: List of requested imaging studies
         """
@@ -1965,8 +1672,401 @@ class HipoClientServiceRequest(HipoClient):
             #    data.set_error("Could not extract patient ID from service request")
             #    return data
 
-            # Extract physician
-            data.store("checkin.physician", extract_text_after_label(soup, r'Medicul:', stop_at=r'-'))
+            # Extract medic
+            data.store("checkin.medic", extract_text_after_label(soup, r'Medicul:', stop_at=r'-'))
+
+            # Extract admission ID from the "Back" link
+            data.store("checkin.id", extract_ids_from_links(soup, r'/checkin\.asp\?id=([^&"]+)'))
+
+            # Extract diagnosis
+            data.store("checkin.diagnosis", extract_text_after_label(soup, r'Diagnostic:', 'td'))
+
+            # Extract comments (clinical and lab)
+            comment_headers = soup.find_all('td', class_='tdnplus', string=re.compile(r'Comentariile', re.IGNORECASE))
+            if len(comment_headers) >= 2:
+                # Get the next row which contains the actual comments
+                comment_row = comment_headers[0].parent.find_next_sibling('tr')
+                if comment_row:
+                    comment_tds = comment_row.find_all('td', class_='tdn')
+                    if len(comment_tds) >= 2:
+                        data.store("request.clinical_comments", comment_tds[0].get_text().strip())
+                        data.store("request.lab_comments", comment_tds[1].get_text().strip())
+
+            # Extract imaging studies from the table
+            studies_rows = soup.find_all('tr')
+            studies = []
+            for row in studies_rows:
+                cells = row.find_all('td')
+                if len(cells) >= 3:
+                    # Check if this is a studies row (has numbering in first cell)
+                    first_cell_text = cells[0].get_text().strip()
+                    if first_cell_text and first_cell_text.isdigit():
+                        study_text = cells[1].get_text().strip()
+                        if study_text:
+                            # Get study type and region
+                            study_type, region = identify_study_type_and_region(study_text)
+                            studies.append({"id": f"{first_cell_text}",
+                                            "title": study_text,
+                                            "type": study_type,
+                                            "region": region
+                            })
+            data.store_list("studies", studies)
+
+            # Extract request datetime (Data si ora cererii)
+            data.store("request.datetime", extract_text_after_label(soup, r'Data si ora cererii:', stop_at=r'Receptionat'))
+
+            # Extract request urgency
+            data.store("request.is_urgent", "~URGENTA~" in html_content)
+
+            # Return the data
+            return data
+        
+        except Exception as e:
+            logger.error(f"Error parsing service request data: {e}")
+            data.set_error(str(e))
+            return data
+
+    def fhir_response(self, parsed_data: HipoData[str, Any], **kwargs) -> Dict[str, Any]:
+        """Convert parsed service request data to FHIR ServiceRequest resource.
+
+        Transforms parsed service request data into a FHIR-compatible ServiceRequest
+        resource with proper structure, references, coding systems, and extensions.
+
+        Args:
+            parsed_data: Parsed service request data from parse_data method
+            **kwargs: Additional arguments including 'http_request' for host information
+                     and 'id' for service request ID
+
+        Returns:
+            FHIR ServiceRequest resource as dictionary
+        """
+        # Extract http_request from kwargs if available
+        http_request = kwargs.get('http_request')
+        
+        # Get service request ID from the request URL parameters
+        service_request_id = kwargs.get('id', '')
+        
+        try:
+            # Create FHIR ServiceRequest resource using the FHIR class
+            fhir_service_request = FHIRServiceRequest(
+                id=service_request_id,
+                status="active",
+                intent="order",
+                priority="urgent" if parsed_data.get("request.is_urgent", False) else "routine"
+            )
+
+            # Create subject reference
+            patient_id = parsed_data.get("patient.id")
+            subject = Reference(
+                reference=f"Patient/{patient_id}"
+            )
+
+            # Add patient name to subject if available
+            patient_name = parsed_data.get("patient.name")
+            if patient_name:
+                subject["display"] = patient_name
+            fhir_service_request["subject"] = subject
+
+            # Create codeable concept for the service type
+            if http_request:
+                system_url = f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/service-types"
+            else:
+                system_url = "http://example.com/fhir/CodeSystem/service-types"
+                
+            code = CodeableConcept(
+                coding=[{
+                    "system": system_url,
+                    "code": "imaging-study",
+                    "display": "Imaging Study"
+                }],
+                text="Imaging Study Request"
+            )
+            fhir_service_request["code"] = code
+
+            # Add requester if available (requesting doctor)
+            medic = parsed_data.get("checkin.medic")
+            if medic:
+                fhir_service_request["requester"] = Reference(display=medic)
+
+            # Add encounter if we can derive it
+            admission_id = parsed_data.get("checkin.id")
+            if admission_id:
+                # Handle case where admission_id might be a list
+                if isinstance(admission_id, list) and len(admission_id) > 0:
+                    admission_id = admission_id[0]
+                fhir_service_request["encounter"] = Reference(
+                    reference=f"Encounter/{admission_id}"
+                )
+
+            # Add reason code if diagnosis is available
+            diagnosis = parsed_data.get("checkin.diagnosis")
+            if diagnosis:
+                # Try to extract ICD-10 code from the diagnosis text
+                # Format is usually "CODE Description"
+                diagnosis_match = re.match(r'^(\d{3,4})\s+(.+)$', diagnosis)
+                if diagnosis_match:
+                    condition = Reference(
+                        reference=f"Condition/{diagnosis_match.group(1)}",
+                        display=diagnosis_match.group(2)
+                    )
+                else:
+                    # If no code found, use the entire diagnosis as display text
+                    condition = Reference(display=diagnosis)
+                fhir_service_request["reason"] = [condition]
+
+            # Add reason reference if clinical comments are available
+            clinical_comments = parsed_data.get("request.clinical_comments")
+            if clinical_comments:
+                fhir_service_request["supportingInfo"] = [{
+                    "display": clinical_comments
+                }]
+
+            # Add note for lab comments
+            lab_comments = parsed_data.get("request.lab_comments")
+            if lab_comments:
+                fhir_service_request["note"] = [{
+                    "text": lab_comments
+                }]
+
+            # Add order details for imaging studies
+            studies = parsed_data.get("studies")
+            if studies:
+                order_details = []
+                if http_request:
+                    study_system_url = f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/study-codes"
+                else:
+                    study_system_url = "http://example.com/fhir/CodeSystem/study-codes"
+                         
+                for study_info in studies:
+                    code = study_info.get("id")
+                    description = study_info.get("description", "") if isinstance(study_info, dict) else str(study_info)
+                    order_detail = CodeableConcept(
+                        coding=[{
+                            "system": study_system_url,
+                            "code": f"study-{code}",
+                            "display": description
+                        }],
+                        text=description
+                    )
+                    order_details.append(order_detail)
+                fhir_service_request["orderDetail"] = order_details
+
+            # Add authoredOn if request datetime is available
+            request_datetime = parsed_data.get("request.datetime")
+            if request_datetime:
+                # Parse the datetime using our parse_date_time function
+                parsed_dt = parse_date_time(request_datetime)
+                if parsed_dt:
+                    # Convert to ISO format
+                    fhir_service_request["authoredOn"] = parsed_dt.isoformat()
+                else:
+                    # If parsing fails, keep the original string
+                    fhir_service_request["authoredOn"] = request_datetime
+
+            return fhir_service_request.to_dict()
+        except Exception as e:
+            logger.error(f"Error converting service request data: {e}")
+            return {}
+
+
+
+class HipoClientDiagnosticReport(HipoClient):
+    """Specialized client for service request related operations in the Hipocrate medical system.
+
+    Handles retrieval and parsing of medical service requests including laboratory
+    orders, imaging requests, and other medical service requisitions.
+    """
+
+    def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
+        """Initialize the service request client.
+
+        Args:
+            service_url: Base URL of the Hipocrate service
+            request: Optional request object to extract credentials from
+        """
+        # Initialize the parent
+        super().__init__(service_url = service_url, request = request)
+        # The request endpoint
+        self.request_url = "/Analyse/LabRequest/edit.asp?id={id}"
+
+    def parse_data(self, html_content: str, **kwargs) -> HipoData:
+        """Parse HTML service request content and extract structured data.
+
+        Extracts patient information and medical data from service request HTML content,
+        including medic information, diagnosis, imaging studies, and request details.
+
+        Args:
+            html_content: HTML content of the service request page
+            **kwargs: Additional arguments
+
+        Returns:
+            HipoData containing parsed service request data organized in sections:
+            - patient: Patient information (name, id)
+            - checkin: Admission information (medic, id, diagnosis)
+            - request: Request information (clinical_comments, lab_comments, datetime, is_urgent)
+            - studies: List of requested imaging studies
+        """
+        # Initialize result dictionary
+        data = HipoData(status="success", message="")
+
+        try:
+            # Parse HTML content with BeautifulSoup
+            soup = BeautifulSoup(html_content, 'html.parser')
+
+            # Check if this is a diagnostic request/report page
+            if not self.is_expected_page(soup, 'Cerere de investigatii paraclinice'):
+                # Log snippet of response for debugging
+                data.set_error("Backend returned an unexpected page")
+                logger.warning(f"Backend returned an unexpected page: {html_content[:200]}...")
+                return data
+
+            # Extract patient name from the table with patient data
+            data.store("patient.name", extract_text_after_label(soup, r'Nume:', 'tr', stop_at=r'\['))
+
+            # Extract patient CNP from the table with patient data
+            patient_cnp = extract_value_from_input(soup, id="strCNP")
+            data.store("patient.cnp", patient_cnp)
+            if patient_cnp:
+                parsed_cnp = parse_cnp(patient_cnp)
+                data.store("patient.gender", parsed_cnp.get("gender", ""))
+                data.store("patient.birth_date", parsed_cnp.get("birth_date", ""))
+                data.store("patient.age", parsed_cnp.get("age", ""))
+
+            # Extract patient code from the table with patient data
+            patient_ids = extract_ids_from_links(soup, r'/pacient/edit\.asp\?id=(\d+)')
+            if patient_ids:
+                data.store("patient.id", patient_ids[0] if isinstance(patient_ids, list) else patient_ids)
+            
+            # Extract checkin ID
+            data.store("checkin.id", extract_ids_from_links(soup, r'/files/checkin\.asp\?id=(\d+)'))
+
+            # Extract barcode
+            data.store("request.barcode", extract_text_after_label(soup, r'Cerere de investigatii (?!paraclinice)'))
+
+            # Extract medic
+            data.store("checkin.medic", extract_text_after_label(soup, r'Medic:', 'tr'))
+
+            # Extract the clinical comments
+            data.store("checkin.diagnosis", extract_text_after_label(soup, r'prezumtiv:', 'tr'))
+
+            # Extract the clinical comments
+            data.store("request.clinical_comments", extract_text_after_label(soup, r'Informatii suplimentare:', 'tr', stop_at=r'Motiv'))
+
+            # Extract the lab comments
+            data.store("request.lab_comments", extract_text_from_element(soup, id="strComments"))
+
+            # Extract the justification
+            data.store("request.justification", extract_text_from_element(soup, id="strJustificare"))
+
+            # Extract ICD10 coded diagnosis
+            data.store("request.icd10", extract_text_after_label(soup, r'Diagnostic:', 'tr'))
+
+            # Extract requester and request date and time
+            req = extract_text_after_label(soup, r'Ceruta:', 'tr')
+            if req and '-' in req:
+                try:
+                    request_medic, request_datetime = req.split('-', 1)
+                    data.store("request.medic", request_medic)
+                    # Try to parse the datetime
+                    dt = parse_date_time(request_datetime)
+                    if dt:
+                        data.store("request.datetime", dt.isoformat())
+                    else:
+                        # If parsing fails, keep the original string
+                        data.store("request.datetime", request_datetime.strip())
+                except ValueError:
+                    # Handle case where split doesn't work as expected
+                    data.store("request.info", req)
+
+            # Extract performer (validator) from the domain section
+            validator = extract_text_after_label(soup, r'Validat de:', 'td', stop_at=r'Data')
+            if validator:
+                data.store("validation.validator", validator)
+
+            # Extract validation datetime
+            validation_datetime = extract_value_from_input(soup, id="dataefectuarii")
+            if validation_datetime:
+                # Try to parse the datetime
+                dt = parse_date_time(validation_datetime)
+                if dt:
+                    data.store("validation.datetime", dt.isoformat())
+                else:
+                    # If parsing fails, keep the original string
+                    data.store("validation.datetime", validation_datetime)
+            
+            # For each strAnalyseExec input, find the parent 'td' and extract examination name from first 'b' element
+            studies = []
+            for input_elem in soup.find_all('input', {'name': 'strAnalyseExec'}):
+                parent_td = input_elem.find_parent('td')
+                if parent_td:
+                    first_b = parent_td.find('b')
+                    if first_b:
+                        study_title = first_b.get_text(strip=True)
+                    else:
+                        study_title = parent_td.get_text(strip=True)
+                    # Find the 'table' parent and then the 'center' sibling
+                    parent_table = parent_td.find_parent('table')
+                    container = parent_table.find_next_sibling('center')
+                    study_result = None
+                    if container:
+                        # In 'center' there is another table.
+                        # The rows containing 'rezultat' in first 'td' have the result in second 'td'
+                        for row in container.find_all('tr'):
+                            cells = row.find_all('td')
+                            if len(cells) >= 2:
+                                if cells[0].get_text(strip=True).lower() == "rezultat":
+                                    # Filter out text nodes that contain only whitespace
+                                    subelements = [child for child in cells[1] if hasattr(child, 'name') and child.name]
+                                    if len(subelements) == 1 and subelements[0].name == 'b':
+                                        # If the only child is a <b> tag, use its content directly
+                                        study_result = html_to_markdown(str(subelements[0]))
+                                    else:
+                                        # Otherwise, process the entire div
+                                        study_result = html_to_markdown(str(cells[1]))
+                    # Append the study if the data is valid
+                    if study_title and study_result:
+                        # Get study type and region
+                        study_type, region = identify_study_type_and_region(study_title)
+                        study = {
+                            "title": study_title,
+                            "result": study_result,
+                            "type": study_type,
+                            "region": region
+                        }
+                        studies.append(study)
+            data.store_list("studies", studies)
+
+            # Store urgency flag
+            data.store("request.is_urgent", "~URGENTA~" in html_content)
+
+            # Return the parsed report data
+            return data
+
+        except Exception as e:
+            logger.error(f"Error parsing report data: {e}")
+            return {}
+
+
+
+
+
+        try:
+            # Parse HTML content
+            soup = BeautifulSoup(html_content, 'html.parser')
+
+            # Extract patient name
+            data.store("patient.name", extract_text_after_label(soup, r'Nume Pacient:'))
+
+            # Extract patient ID
+            patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id='))
+            if patient_link:
+                data.store("patient.id", extract_id_from_link(patient_link))
+            #else:
+            #    data.set_error("Could not extract patient ID from service request")
+            #    return data
+
+            # Extract medic
+            data.store("checkin.medic", extract_text_after_label(soup, r'Medicul:', stop_at=r'-'))
 
             # Extract admission ID from the "Back" link
             data.store("checkin.id", extract_ids_from_links(soup, r'/checkin\.asp\?id=([^&"]+)'))
@@ -2077,9 +2177,9 @@ class HipoClientServiceRequest(HipoClient):
             fhir_service_request["code"] = code
 
             # Add requester if available (requesting doctor)
-            physician = parsed_data.get("checkin.physician")
-            if physician:
-                fhir_service_request["requester"] = Reference(display=physician)
+            medic = parsed_data.get("checkin.medic")
+            if medic:
+                fhir_service_request["requester"] = Reference(display=medic)
 
             # Add encounter if we can derive it
             admission_id = parsed_data.get("checkin.id")
@@ -2160,3 +2260,298 @@ class HipoClientServiceRequest(HipoClient):
         except Exception as e:
             logger.error(f"Error converting service request data: {e}")
             return {}
+
+class HipoClientCheckout(HipoClient):
+    """Specialized client for checkout-related operations in the Hipocrate medical system.
+
+    Handles retrieval and parsing of patient discharge/checkout information from
+    the Hipocrate system, including admission details, discharge summaries,
+    diagnoses, and medic information.
+    """
+
+    def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
+        """Initialize the checkout client.
+
+        Args:
+            service_url: Base URL of the Hipocrate service
+            request: Optional request object to extract credentials from
+        """
+        # Initialize the parent
+        super().__init__(service_url = service_url, request = request)
+        # The request endpoint
+        self.request_url = "/files/checkout.asp?id={id}"
+
+    def parse_data(self, html_content: str, **kwargs) -> HipoData:
+        """Parse HTML checkout content and extract structured data.
+
+        Extracts patient information and medical data from checkout HTML content.
+        This function parses discharge/checkout forms from the Hipocrate system
+        to extract structured data about patient encounters.
+
+        Args:
+            html_content: HTML content of the checkout page
+            **kwargs: Additional arguments including 'id' for checkout ID
+
+        Returns:
+            HipoData containing parsed checkout data organized in sections:
+            - patient: Patient information (name, id, cnp, gender, date, age)
+            - presentation: Presentation/visit information
+            - checkin: Admission information (id, medic, ward, diagnosis, date, time, datetime)
+            - checkout: Discharge information (date, time, datetime, epicrisis, diagnosis, 
+                    medic, ward, surgery, recommendations, icd10)
+        """
+        # Initialize result dictionary
+        data = HipoData(status="success", message="")
+
+        try:
+            # Parse HTML content with BeautifulSoup
+            soup = BeautifulSoup(html_content, 'html.parser')
+
+            # Check if this is the correct page by looking for title
+            if not self.is_expected_page(soup, 'FISA EXTERNARE'):
+                data.set_error("Page is not a discharge page")
+                logger.warning("Page is not a discharge page")
+                return data
+
+            # Extract patient name and ID from the link
+            patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id='))
+            if patient_link:
+                data.store("patient.name", patient_link.get_text())
+                # Extract patient ID from href
+                data.store("patient.id", extract_id_from_link(patient_link))
+
+            # Extract patient CNP
+            data.store("patient.cnp", extract_text_after_label(soup, r'CNP\s*:', 'tr'))
+            if data.get("patient.cnp"):
+                parsed_cnp = parse_cnp(data.get("patient.cnp"))
+                data.store("patient.gender", parsed_cnp.get("gender"))
+                data.store("patient.date", parsed_cnp.get("birth_date"))
+                data.store("patient.age", parsed_cnp.get("age"))
+
+
+            # Extract presentation ID
+            presentation_ids = extract_ids_from_links(soup, r'presentation\.asp\?id=(\d+)')
+            if presentation_ids:
+                data.store("presentation.id", presentation_ids)
+
+
+            # Extract admission ID
+            checkin_ids = extract_ids_from_links(soup, r'checkin\.asp\?id=(\d+)')
+            if checkin_ids:
+                data.store("checkin.id", checkin_ids)
+
+            # Extract medic
+            data.store("checkin.medic", extract_text_after_label(soup, r'Medic\s*:', 'tr'))
+
+            # Extract ward
+            data.store("checkin.ward", extract_text_after_label(soup, r'Sectie\s*:', 'tr'))
+
+            # Extract checkin diagnostic
+            data.store("checkin.diagnosis", extract_text_after_label(soup, r'Diagnostic\s*:', 'tr'))
+
+            # Extract checkin date and time from input fields
+            data.store("checkin.date", extract_value_from_input(soup, id='sCIDate'))
+            data.store("checkin.time", extract_value_from_input(soup, id='sCITime'))
+            
+            # Create combined checkin datetime
+            checkin_date = data.get("checkin.date")
+            checkin_time = data.get("checkin.time")
+            if checkin_date and checkin_time:
+                data.store("checkin.datetime", f'{checkin_date} {checkin_time}')
+
+
+            # Extract checkout date and time from input fields
+            data.store("checkout.date", extract_value_from_input(soup, id='sCODate'))
+            data.store("checkout.time", extract_value_from_input(soup, id='sCOTime'))
+            
+            # Create combined checkout datetime
+            checkout_date = data.get("checkout.date")
+            checkout_time = data.get("checkout.time")
+            if checkout_date and checkout_time:
+                data.store("checkout.datetime", f'{checkout_date} {checkout_time}')
+
+            # Extract epicrisis (textarea with id "sEpicrisysHtmlArea")
+            data.store("checkout.epicrisis", extract_text_from_element(soup, 'sEpicrisys'))
+
+            # Extract diagnostic (textarea after 'Diagnostic externare')
+            data.store("checkout.diagnosis", extract_textarea_after_label(soup, r'Diagnostic externare[^:]*:'))
+
+            # Extract medic
+            data.store("checkout.medic", extract_selected_from_dropdown(soup, name='iCOMedicID'))
+
+            # Extract ward
+            data.store("checkout.ward", extract_selected_from_dropdown(soup, name='sSectionCode'))
+
+            # Extract surgery (textarea with id "sBOProtocolHtmlArea")
+            data.store("checkout.surgery", extract_text_from_element(soup, 'sBOProtocol'))
+
+            # Extract recommendations (textarea with id 'sRecommendationsHtmlArea')
+            data.store("checkout.recommendations", extract_text_from_element(soup, 'sRecommendations'))
+
+            # Extract ICD10 diagnostic from textarea with name "sCODiagnosis"
+            data.store("checkout.icd10", extract_text_from_element(soup, name='sCODiagnosis'))
+
+            # Add the id, if provided
+            if 'id' in kwargs:
+                data.store("checkout.id", kwargs["id"])
+
+            # Return the extracted data
+            return data
+
+        except Exception as e:
+            logger.error(f"Error parsing checkout data: {e}")
+            data.set_error(str(e))
+            return data
+
+    def fhir_response(self, parsed_data: HipoData[str, Any], **kwargs) -> Dict[str, Any]:
+        """Convert parsed checkout data to FHIR Encounter resource.
+
+        Transforms parsed checkout data into a FHIR-compatible Encounter resource
+        with proper structure, references, and coding systems.
+
+        Args:
+            parsed_data: Parsed checkout data from parse_data method
+            **kwargs: Additional arguments including 'id' for encounter ID
+
+        Returns:
+            FHIR Encounter resource as dictionary
+        """
+        encounter_id = parsed_data.get('checkout.id', '')
+        # Create enhanced FHIR Encounter resource
+        fhir_encounter = {
+            "resourceType": "Encounter",
+            "id": encounter_id,
+            "status": "discharged",
+            "type": [
+                {
+                    "coding": [
+                        {
+                            "system": "http://snomed.info/sct",
+                            "code": "305056002",
+                            "display": "Admission to hospital"
+                        }
+                    ]
+                }
+            ],
+            "subject": {
+                "reference": f"Patient/{parsed_data.get('patient.id', '')}"
+            },
+            "participant": []
+        }
+
+        # Add performer if available (from checkout medic)
+        checkout_medic = parsed_data.get("checkout.medic")
+        if checkout_medic:
+            fhir_encounter["participant"].append({
+                "type": [
+                    {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
+                                "code": "ATND",
+                                "display": "attender"
+                            }
+                        ]
+                    }
+                ],
+                "individual": {
+                    "display": checkout_medic
+                }
+            })
+
+        # Add reason (admission diagnostic) if available
+        admission_diagnosis = parsed_data.get("checkin.diagnosis")
+        if admission_diagnosis:
+            fhir_encounter["reasonCode"] = [
+                {
+                    "text": admission_diagnosis
+                }
+            ]
+
+        # Add text summary if epicrisis exists
+        epicrisis = parsed_data.get("checkout.epicrisis")
+        if epicrisis:
+            # Also add as a note
+            fhir_encounter["note"] = [
+                {
+                    "text": epicrisis
+                }
+            ]
+
+        # Add diagnosis if available
+        if admission_diagnosis:
+            fhir_encounter["diagnosis"] = [
+                {
+                    "condition": {
+                        "reference": f"Condition/admission-{encounter_id}",
+                        "display": admission_diagnosis
+                    },
+                    "use": {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/diagnosis-role",
+                                "code": "AD",
+                                "display": "Admission diagnosis"
+                            }
+                        ]
+                    }
+                }
+            ]
+
+        # Add discharge diagnosis if available
+        discharge_diagnosis = parsed_data.get("checkout.diagnosis")
+        if discharge_diagnosis:
+            if "diagnosis" not in fhir_encounter:
+                fhir_encounter["diagnosis"] = []
+            fhir_encounter["diagnosis"].append(
+                {
+                    "condition": {
+                        "reference": f"Condition/discharge-{encounter_id}",
+                        "display": discharge_diagnosis
+                    },
+                    "use": {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/diagnosis-role",
+                                "code": "DD",
+                                "display": "Discharge diagnosis"
+                            }
+                        ]
+                    }
+                }
+            )
+
+        # Add period for admission and discharge times
+        checkin_datetime = parsed_data.get("checkin.datetime")
+        checkout_datetime = parsed_data.get("checkout.datetime")
+        if checkin_datetime or checkout_datetime:
+            period = {}
+            if checkin_datetime:
+                period["start"] = checkin_datetime
+            if checkout_datetime:
+                period["end"] = checkout_datetime
+            fhir_encounter["period"] = period
+
+        # Add location/ward information
+        checkin_ward = parsed_data.get("checkin.ward")
+        checkout_ward = parsed_data.get("checkout.ward")
+        if checkin_ward or checkout_ward:
+            location = []
+            if checkin_ward:
+                location.append({
+                    "location": {
+                        "display": checkin_ward
+                    },
+                    "status": "active"
+                })
+            if checkout_ward and checkout_ward != checkin_ward:
+                location.append({
+                    "location": {
+                        "display": checkout_ward
+                    },
+                    "status": "completed"
+                })
+            if location:
+                fhir_encounter["location"] = location
+
+        return fhir_encounter

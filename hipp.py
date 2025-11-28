@@ -44,7 +44,7 @@ import base64
 # Import FHIR classes
 from fhir import ServiceRequest as FHIRServiceRequest, CodeableConcept, Coding, Reference, CodeableReference, Condition, Patient as FHIRPatient
 
-from hipo import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientCheckout, HipoClientServiceRequest
+from hipo import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientCheckout
 from hipo import HipoData, user_session_manager, identify_study_type_and_region
 
 from extractors import extract_id_from_link, extract_ids_from_links, extract_selected_from_dropdown, extract_tabular_data, extract_text_after_label, extract_text_from_element, extract_textarea_after_label, extract_value_from_input
@@ -1834,6 +1834,41 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
 
 
 @require_auth
+async def get_report(request):
+    """Retrieve diagnostic report by ID.
+
+    Gets service request information from the Hipocrate service and parses
+    the medical data into structured format.
+
+    Args:
+        request
+
+    Returns:
+        JSON response with service request data or error information
+    """
+    # Extract service request ID from path
+    id = request.match_info.get('id')
+    if not id:
+        return create_error_response("Diagnostic report ID is required")
+    logger.info(f"Retrieving diagnostic report with ID: {id}")
+
+    try:
+        # Create a new HipoClient instance
+        client = HipoClientDiagnosticReport(SERVICE_URL, request)
+
+        # Retrieve and parse the page
+        parsed_data = await client.fetch_and_parse(id=id)
+
+        # Check for errors in the response
+        status = 200 if parsed_data.get("status") == "success" else 404
+        
+        # Return the response
+        return web.json_response(parsed_data, status = status)
+
+    except Exception as e:
+        return create_error_response("Diagnostic report retrieval failed", 500, {"exception": str(e)})
+
+@require_auth
 async def get_request(request):
     """Retrieve service request information by ID.
 
@@ -2440,8 +2475,9 @@ async def init_app():
     # API endpoints
     app.router.add_get('/api/patient', search_patient)
     app.router.add_get('/api/patient/{id}', get_patient)
-    app.router.add_get('/api/checkout/{id}', get_checkout)
     app.router.add_get('/api/request/{id}', get_request)
+    app.router.add_get('/api/report/{id}', get_report)
+    app.router.add_get('/api/checkout/{id}', get_checkout)
     # FHIR-compatible endpoints
     app.router.add_get('/fhir/Patient', search_fhir_patient)
     app.router.add_get('/fhir/Patient/{id}', get_fhir_patient)
