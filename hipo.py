@@ -2406,9 +2406,9 @@ class HipoClientDiagnosticReport(HipoClient):
             return HipoData(status="success", message=f"{e}")
 
     def fhir_response(self, parsed_data: HipoData[str, Any], **kwargs) -> Dict[str, Any]:
-        """Convert parsed diagnostic report data to FHIR ImagingStudy resource.
+        """Convert parsed diagnostic report data to FHIR DiagnosticReport resource.
 
-        Transforms parsed diagnostic report data into a FHIR-compatible ImagingStudy
+        Transforms parsed diagnostic report data into a FHIR-compatible DiagnosticReport
         resource with proper structure, references, coding systems, and extensions.
 
         Args:
@@ -2582,7 +2582,7 @@ class HipoClientDiagnosticReport(HipoClient):
 
         except Exception as e:
             logger.error(f"Error converting diagnostic report data to FHIR: {e}")
-            return HipoData(status="success", message=f"{e}")
+            return {}
 
 
 class HipoClientCheckout(HipoClient):
