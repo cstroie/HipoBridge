@@ -1166,14 +1166,16 @@ class HipoClient:
 
             # Check for errors in the response
             if parsed_data.get("status") == "error":
-                return None, parsed_data.get("message")
+                return parsed_data
 
             # Convert parsed data to FHIR resource
-            fhir_data = self.fhir_response(parsed_data, **kwargs)
-            return fhir_data, None
+            parsed_data['fhir'] = self.fhir_response(parsed_data, **kwargs)
+            return parsed_data
 
         except Exception as e:
-            return None, create_error_response("Data retrieval failed", 500, {"exception": str(e)})
+            data = {"status": "error", "message": "Data retrieval failed", "exception": str(e)}
+            logger.error(data["message"])
+            return data
 
 class HipoClientPatient(HipoClient):
     """Specialized client for patient related operations in the Hipocrate medical system.
@@ -2062,7 +2064,7 @@ class HipoClientDiagnosticReport(HipoClient):
 
         except Exception as e:
             logger.error(f"Error parsing report data: {e}")
-            return HipoData(status="success", message=f"{e})
+            return HipoData(status="success", message=f"{e}")
 
     def fhir_response(self, parsed_data: HipoData[str, Any], **kwargs) -> Dict[str, Any]:
         """Convert parsed diagnostic report data to FHIR DiagnosticReport resource.
@@ -2241,7 +2243,7 @@ class HipoClientDiagnosticReport(HipoClient):
 
         except Exception as e:
             logger.error(f"Error converting diagnostic report data to FHIR: {e}")
-            return HipoData(status="success", message=f"{e})
+            return HipoData(status="success", message=f"{e}")
 
 
 class HipoClientCheckout(HipoClient):
