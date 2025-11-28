@@ -959,6 +959,25 @@ class HipoClient:
             full_url = f'{self.service_url}/{url}'
         return full_url
 
+    def get_title(self, html_content: str) -> str:
+        """Extract the title from HTML content.
+
+        Args:
+            html_content: HTML content to extract title from
+
+        Returns:
+            Title text or empty string if not found
+        """
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            title_tag = soup.find('title')
+            if title_tag:
+                return title_tag.get_text().strip()
+            return ""
+        except Exception as e:
+            logger.error(f"Error extracting title: {e}")
+            return ""
+
     async def post_form(self, url, data=None):
         """Submit a form to the Hipocrate service, following redirects.
 
