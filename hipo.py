@@ -2439,7 +2439,7 @@ class HipoClientDiagnosticReport(HipoClient):
                             "display": "Imaging Report"
                         }
                     ],
-                    "text": "Imaging Report"
+                    "text": "Diagnostic Report"
                 },
                 "subject": {
                     "reference": f"Patient/{parsed_data.get('patient.id', '')}"
@@ -2458,20 +2458,20 @@ class HipoClientDiagnosticReport(HipoClient):
                 fhir_report["effectiveDateTime"] = request_datetime
 
             # Add performer if available
-            medic = parsed_data.get("checkin.medic")
-            if medic:
+            performer = parsed_data.get("study.performer")
+            if performer:
                 fhir_report["performer"] = [
                     {
-                        "display": medic
+                        "display": performer
                     }
                 ]
 
-            # Add results interpreter if clinical comments are available
-            clinical_comments = parsed_data.get("request.clinical_comments")
-            if clinical_comments:
+            # Add results interpreter
+            medic = parsed_data.get("study.medic")
+            if medic:
                 fhir_report["resultsInterpreter"] = [
                     {
-                        "display": clinical_comments
+                        "display": medic
                     }
                 ]
 
@@ -2496,12 +2496,6 @@ class HipoClientDiagnosticReport(HipoClient):
                                 "region": study.get("region", "")
                             }
                         )
-
-                # Add conclusion from first study result
-                if studies and isinstance(studies, list) and len(studies) > 0:
-                    first_study = studies[0]
-                    if isinstance(first_study, dict) and first_study.get("result"):
-                        fhir_report["conclusion"] = first_study["result"]
 
             # Add extensions for additional data
             extensions = []
