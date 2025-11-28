@@ -250,14 +250,13 @@ async def get_fhir_patient(request):
         client = HipoClientPatient(SERVICE_URL, request)
 
         # Retrieve and parse the page, then convert to FHIR resource
-        fhir_response, error_response = await client.fetch_repond_fhir(id=id)
+        response = await client.fetch_repond_fhir(id=id)
 
         # Check for errors in the response
-        if error_response:
-            return error_response
+        status = 200 if response.get("status") == "success" else 404
         
         # Return the response
-        return web.json_response(fhir_response)
+        return web.json_response(response["fhir"], status = status)
 
     except Exception as e:
         return create_error_response("Patient retrieval failed", 500, {"exception": str(e)})
@@ -796,14 +795,13 @@ async def get_fhir_diagnostic_report(request):
         client = HipoClientDiagnosticReport(SERVICE_URL, request)
 
         # Retrieve and parse the page, then convert to FHIR resource
-        fhir_response, error_response = await client.fetch_repond_fhir(id=id)
+        response = await client.fetch_repond_fhir(id=id)
 
         # Check for errors in the response
-        if error_response:
-            return error_response
+        status = 200 if response.get("status") == "success" else 404
         
         # Return the response
-        return web.json_response(fhir_response)
+        return web.json_response(response.get("fhir", response), status = status)
 
     except Exception as e:
         return create_error_response("Diagnostic report retrieval failed", 500, {"exception": str(e)})
