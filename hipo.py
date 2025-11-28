@@ -977,6 +977,24 @@ class HipoClient:
             logger.error(f"Error extracting title: {e}")
             return ""
 
+    def get_error(self, soup: BeautifulSoup) -> str:
+        """Extract error message from a BeautifulSoup object.
+
+        Args:
+            soup: BeautifulSoup object to extract error message from
+
+        Returns:
+            Error message text or empty string if not found
+        """
+        try:
+            error_div = soup.find('div', id='divError')
+            if error_div:
+                return error_div.get_text().strip()
+            return ""
+        except Exception as e:
+            logger.error(f"Error extracting error message: {e}")
+            return ""
+
     async def post_form(self, url, data=None):
         """Submit a form to the Hipocrate service, following redirects.
 
