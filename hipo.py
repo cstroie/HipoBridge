@@ -2253,7 +2253,7 @@ class HipoClientDiagnosticReport(HipoClient):
         # Initialize the parent
         super().__init__(service_url = service_url, request = request)
         # The request endpoint
-        self.request_url = f"/analyse/Reports/analyseFile.asp?id={id}"
+        self.request_url = "/analyse/Reports/analyseFile.asp?id={id}"
 
     def parse_data(self, html_content: str, **kwargs) -> HipoData:
         """Parse HTML service request content and extract structured data.
@@ -2280,52 +2280,36 @@ class HipoClientDiagnosticReport(HipoClient):
             soup = BeautifulSoup(html_content, 'html.parser')
 
             # Check if this is a diagnostic request/report page
-            if not self.is_expected_page(soup, 'Cerere de investigatii paraclinice'):
+            if not self.is_expected_page(soup, 'Buletin de investigatii paraclinice'):
                 # Log snippet of response for debugging
-                data.set_error(f"Unexpected page for ImagingStudy: {self.get_title(soup)}")
+                data.set_error(f"Unexpected page for DiagnosticReport: {self.get_title(soup)}")
                 logger.warning(f"{data['message']}: {self.get_error(soup)}")
                 return data
 
             # Extract patient name from the table with patient data
-            data.store("patient.name", extract_text_after_label(soup, r'Nume:', 'tr', stop_at=r'\['))
-
-            # Extract patient CNP from the table with patient data
-            patient_cnp = extract_value_from_input(soup, id="strCNP")
-            data.store("patient.cnp", patient_cnp)
-            if patient_cnp:
-                parsed_cnp = parse_cnp(patient_cnp)
-                data.store("patient.gender", parsed_cnp.get("gender", ""))
-                data.store("patient.birth_date", parsed_cnp.get("birth_date", ""))
-                data.store("patient.age", parsed_cnp.get("age", ""))
-
-            # Extract patient code from the table with patient data
-            patient_ids = extract_ids_from_links(soup, r'/pacient/edit\.asp\?id=(\d+)')
-            if patient_ids:
-                data.store("patient.id", patient_ids[0] if isinstance(patient_ids, list) else patient_ids)
-            
-            # Extract checkin ID
-            data.store("checkin.id", extract_ids_from_links(soup, r'/files/checkin\.asp\?id=(\d+)'))
+            data.store("patient.name", extract_text_after_label(soup, r'PACIENT:', 'td', stop_at=r'Varsta'))
 
             # Extract barcode
-            data.store("request.barcode", extract_text_after_label(soup, r'Cerere de investigatii (?!paraclinice)'))
+            data.store("request.barcode", extract_text_after_label(soup, r'Nr.: '))
 
             # Extract medic
-            data.store("checkin.medic", extract_text_after_label(soup, r'Medic:', 'tr'))
+            data.store("checkin.medic", extract_text_after_label(soup, r'Solicitat de:', 'td'))
 
             # Extract the clinical comments
-            data.store("checkin.diagnosis", extract_text_after_label(soup, r'prezumtiv:', 'tr'))
+            data.store("checkin.diagnosis", extract_text_after_label(soup, r'Diagnostic:', 'tr'))
+
+            # Extract medic
+            data.store("request.medic", extract_text_after_label(soup, r'TRIMIS DE:\s*MEDIC', 'tr', stop_at=r'SECTIA'))
 
             # Extract the clinical comments
-            data.store("request.clinical_comments", extract_text_after_label(soup, r'Informatii suplimentare:', 'tr', stop_at=r'Motiv'))
+            data.store("request.clinical_comments", extract_text_after_label(soup, r'DG\.PREZUMTIV:', 'td'))
 
             # Extract the lab comments
-            data.store("request.lab_comments", extract_text_from_element(soup, id="strComments"))
+            data.store("request.lab_comments", extract_text_after_label(soup, r'INDICATII SPECIALE:', 'td'))
 
-            # Extract the justification
-            data.store("request.justification", extract_text_from_element(soup, id="strJustificare"))
+            # Extract performer (Efectuata de catre:)
+            data.store("study.performer", extract_text_after_label(soup, r'Efectuata de catre:'))
 
-            # Extract ICD10 coded diagnosis
-            data.store("request.icd10", extract_text_after_label(soup, r'Diagnostic:', 'tr'))
 
             # Extract requester and request date and time
             req = extract_text_after_label(soup, r'Ceruta:', 'tr')
