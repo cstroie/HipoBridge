@@ -1936,7 +1936,7 @@ class HipoClientDiagnosticReport(HipoClient):
             if not self.is_expected_page(soup, 'Cerere de investigatii paraclinice'):
                 # Log snippet of response for debugging
                 data.set_error("Unexpected page for Diagnostic Report")
-                logger.warning(f"{data['message']}: {html_content[:200]}...")
+                logger.warning(f"{data['message']}: {self.get_title()}...")
                 return data
 
             # Extract patient name from the table with patient data
