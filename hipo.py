@@ -1938,10 +1938,10 @@ class HipoClientServiceRequest(HipoClient):
 
 
 class HipoClientImagingStudy(HipoClient):
-    """Specialized client for service request related operations in the Hipocrate medical system.
+    """Specialized client for imaging study related operations in the Hipocrate medical system.
 
-    Handles retrieval and parsing of medical service requests including laboratory
-    orders, imaging requests, and other medical service requisitions.
+    Handles retrieval and parsing of medical imaging studies including radiology,
+    ultrasound, CT, and MRI examination requests and results.
     """
 
     def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
@@ -2266,10 +2266,10 @@ class HipoClientImagingStudy(HipoClient):
 
 
 class HipoClientDiagnosticReport(HipoClient):
-    """Specialized client for service request related operations in the Hipocrate medical system.
+    """Specialized client for diagnostic report related operations in the Hipocrate medical system.
 
-    Handles retrieval and parsing of medical service requests including laboratory
-    orders, imaging requests, and other medical service requisitions.
+    Handles retrieval and parsing of diagnostic reports including laboratory results,
+    imaging study reports, and other diagnostic examination results.
     """
 
     def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
