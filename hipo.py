@@ -2084,6 +2084,157 @@ class HipoClientImagingStudy(HipoClient):
             logger.error(f"Error parsing report data: {e}")
             return HipoData(status="success", message=f"{e}")
 
+    def fhir_response(self, parsed_data: HipoData[str, Any], **kwargs) -> Dict[str, Any]:
+        """Convert parsed imaging study data to FHIR ImagingStudy resource.
+
+        Transforms parsed imaging study data into a FHIR-compatible ImagingStudy
+        resource with proper structure, references, coding systems, and extensions.
+
+        Args:
+            parsed_data: Parsed imaging study data from parse_data method
+            **kwargs: Additional arguments including 'http_request' for host information
+                     and 'id' for study ID
+
+        Returns:
+            FHIR ImagingStudy resource as dictionary
+        """
+        # Extract http_request from kwargs if available
+        http_request = kwargs.get('http_request')
+        
+        # Get study ID from the request URL parameters
+        study_id = kwargs.get('id', '')
+        
+        try:
+            # Create FHIR ImagingStudy resource
+            fhir_imaging_study = {
+                "resourceType": "ImagingStudy",
+                "id": study_id,
+                "status": "available",
+                "subject": {
+                    "reference": f"Patient/{parsed_data.get('patient.id', '')}"
+                },
+                "basedOn": {
+                    "reference": f"ServiceRequest/{study_id}"
+                },
+                "started": parsed_data.get("request.datetime", datetime.now().isoformat()),
+                "series": []
+            }
+
+            # Add modality if available in studies
+            studies = parsed_data.get("studies", [])
+            if studies and len(studies) > 0 and isinstance(studies[0], dict):
+                first_study = studies[0]
+                study_type = first_study.get("type", "").upper()
+                if study_type:
+                    # Map study types to DICOM modality codes
+                    modality_mapping = {
+                        "radio": "CR",  # Computed Radiography
+                        "eco": "US",    # Ultrasound
+                        "ct": "CT",     # Computed Tomography
+                        "mri": "MR",    # Magnetic Resonance
+                    }
+                    modality_code = modality_mapping.get(study_type, "OT")  # Other
+                    fhir_imaging_study["modality"] = {
+                        "system": "http://dicom.nema.org/resources/ontology/DCM",
+                        "code": modality_code,
+                        "display": modality_code
+                    }
+
+            # Add patient information if available
+            if parsed_data.get("patient.name"):
+                fhir_imaging_study["identifier"] = [{
+                    "system": f"{http_request.scheme}://{http_request.host}/fhir/NamingSystem/patient-name" if http_request else "http://example.com/fhir/NamingSystem/patient-name",
+                    "value": parsed_data.get("patient.name")
+                }]
+
+            if parsed_data.get("patient.cnp"):
+                if "identifier" not in fhir_imaging_study:
+                    fhir_imaging_study["identifier"] = []
+                fhir_imaging_study["identifier"].append({
+                    "system": f"{http_request.scheme}://{http_request.host}/fhir/NamingSystem/patient-cnp" if http_request else "http://example.com/fhir/NamingSystem/patient-cnp",
+                    "value": parsed_data.get("patient.cnp")
+                })
+
+            # Add description from first study
+            if studies and len(studies) > 0 and isinstance(studies[0], dict):
+                fhir_imaging_study["description"] = studies[0].get("title", "Imaging Study")
+
+            # Add performer if available
+            if parsed_data.get("checkin.medic"):
+                fhir_imaging_study["performer"] = [
+                    {
+                        "actor": {
+                            "display": parsed_data.get("checkin.medic")
+                        }
+                    }
+                ]
+
+            # Add referrer if requesting medic is available
+            if parsed_data.get("request.medic"):
+                fhir_imaging_study["referrer"] = {
+                    "display": parsed_data.get("request.medic")
+                }
+
+            # Add series for each study
+            if studies:
+                for i, study in enumerate(studies):
+                    if not isinstance(study, dict):
+                        continue
+                        
+                    series = {
+                        "uid": f"urn:oid:1.2.840.99999999.1.{study_id}.{i+1}",
+                        "number": i+1,
+                        "modality": {
+                            "system": "http://dicom.nema.org/resources/ontology/DCM",
+                            "code": "OT",  # Other
+                            "display": "Other"
+                        },
+                        "description": study.get("title", "Imaging Study"),
+                        "started": parsed_data.get("request.datetime", datetime.now().isoformat()),
+                        "instance": []
+                    }
+                    
+                    # Use the study modality for the series if available
+                    study_type = study.get("type", "").upper()
+                    if study_type:
+                        modality_mapping = {
+                            "radio": "CR",  # Computed Radiography
+                            "eco": "US",    # Ultrasound
+                            "ct": "CT",     # Computed Tomography
+                            "mri": "MR",    # Magnetic Resonance
+                        }
+                        series_modality = modality_mapping.get(study_type.lower(), "OT")
+                        series["modality"] = {
+                            "system": "http://dicom.nema.org/resources/ontology/DCM",
+                            "code": series_modality,
+                            "display": series_modality
+                        }
+                        
+                    # Add the instance
+                    fhir_imaging_study["series"].append(series)
+
+            # Add reason for study if diagnosis is available
+            if parsed_data.get("checkin.diagnosis"):
+                fhir_imaging_study["reason"] = [
+                    {
+                        "text": parsed_data.get("checkin.diagnosis")
+                    }
+                ]
+
+            # Add note if clinical comments are available
+            if parsed_data.get("request.clinical_comments"):
+                fhir_imaging_study["note"] = [
+                    {
+                        "text": parsed_data.get("request.clinical_comments")
+                    }
+                ]
+
+            return fhir_imaging_study
+
+        except Exception as e:
+            logger.error(f"Error converting imaging study data to FHIR: {e}")
+            return {}
+
 
 class HipoClientDiagnosticReport(HipoClient):
     """Specialized client for service request related operations in the Hipocrate medical system.
