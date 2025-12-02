@@ -523,10 +523,10 @@
                 }
             }
         },
-        "/fhir/Observation": {
+        "/fhir/ServiceRequest": {
             "get": {
-                "summary": "Get patient analyses",
-                "description": "Retrieve all analyses for a patient as FHIR Observation resources with optional filtering by type and datetime",
+                "summary": "Get patient service requests",
+                "description": "Retrieve all service requests for a patient as FHIR ServiceRequest resources with optional filtering by type, region and datetime",
                 "parameters": [
                     {
                         "name": "patient",
@@ -547,6 +547,15 @@
                         }
                     },
                     {
+                        "name": "region",
+                        "in": "query",
+                        "required": false,
+                        "description": "Anatomical region to filter by",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
                         "name": "dt",
                         "in": "query",
                         "required": false,
@@ -559,7 +568,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Patient analyses as FHIR Bundle of Observation resources",
+                        "description": "Patient service requests as FHIR Bundle of ServiceRequest resources",
                         "content": {
                             "application/fhir+json": {
                                 "schema": {
@@ -579,7 +588,7 @@
                                                         "properties": {
                                                             "resourceType": {
                                                                 "type": "string",
-                                                                "example": "Observation"
+                                                                "example": "ServiceRequest"
                                                             }
                                                         }
                                                     }
@@ -634,16 +643,16 @@
                 }
             }
         },
-        "/fhir/Observation/{id}": {
+        "/fhir/ServiceRequest/{id}": {
             "get": {
-                "summary": "Get a single observation",
-                "description": "Retrieve a single observation by ID as FHIR Observation resource",
+                "summary": "Get a single service request",
+                "description": "Retrieve a single service request by ID as FHIR ServiceRequest resource",
                 "parameters": [
                     {
                         "name": "id",
                         "in": "path",
                         "required": true,
-                        "description": "Observation ID",
+                        "description": "ServiceRequest ID",
                         "schema": {
                             "type": "string"
                         }
@@ -651,7 +660,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Observation as FHIR Observation resource",
+                        "description": "ServiceRequest as FHIR ServiceRequest resource",
                         "content": {
                             "application/fhir+json": {
                                 "schema": {
@@ -659,7 +668,7 @@
                                     "properties": {
                                         "resourceType": {
                                             "type": "string",
-                                            "example": "Observation"
+                                            "example": "ServiceRequest"
                                         },
                                         "id": {
                                             "type": "string"
@@ -667,8 +676,11 @@
                                         "status": {
                                             "type": "string"
                                         },
-                                        "category": {
-                                            "type": "array"
+                                        "intent": {
+                                            "type": "string"
+                                        },
+                                        "priority": {
+                                            "type": "string"
                                         },
                                         "code": {
                                             "type": "object"
@@ -676,13 +688,10 @@
                                         "subject": {
                                             "type": "object"
                                         },
-                                        "effectiveDateTime": {
+                                        "authoredOn": {
                                             "type": "string"
                                         },
-                                        "performer": {
-                                            "type": "array"
-                                        },
-                                        "note": {
+                                        "bodySite": {
                                             "type": "array"
                                         }
                                     }
@@ -691,7 +700,7 @@
                         }
                     },
                     "400": {
-                        "description": "Missing observation ID",
+                        "description": "Missing service request ID",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -703,7 +712,7 @@
                                         },
                                         "message": {
                                             "type": "string",
-                                            "example": "Observation ID is required"
+                                            "example": "Service request ID is required"
                                         }
                                     }
                                 }
