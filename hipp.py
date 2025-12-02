@@ -44,6 +44,7 @@ import base64
 # Import FHIR classes
 from fhir import ServiceRequest as FHIRServiceRequest, CodeableConcept, Coding, Reference, CodeableReference, Condition, Patient as FHIRPatient
 
+from hipo import ANALYSIS_TYPES
 from hipo import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientImagingStudy, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientServiceRequestSearch, HipoClientCheckout
 from hipo import HipoData, user_session_manager, identify_study_type_and_region
 
@@ -70,46 +71,6 @@ DEFAULT_CONFIG = {
     }
 }
 
-
-# Analysis types dictionary for reuse across functions
-ANALYSIS_TYPES = {
-    "radio": {
-        "display": "Radiology",
-        "definition": "Radiology"
-    },
-    "ct": {
-        "display": "CT Scan",
-        "definition": "Computed Tomography"
-    },
-    "irm": {
-        "display": "MRI",
-        "definition": "Magnetic Resonance Imaging"
-    },
-    "eco": {
-        "display": "Ultrasound",
-        "definition": "Echography"
-    },
-    "lab": {
-        "display": "Laboratory",
-        "definition": "Laboratory tests"
-    },
-    "lac": {
-        "display": "Angiography and Cardiac Catheterization",
-        "definition": "Angiography and Cardiac Catheterization"
-    },
-    "lii": {
-        "display": "Interventional Radiology",
-        "definition": "Interventional Radiology"
-    },
-    "rads": {
-        "display": "Fluoroscopy and CEUS",
-        "definition": "Fluoroscopy and Contrast-Enhanced Ultrasound"
-    },
-    "apa": {
-        "display": "Anatomopathology",
-        "definition": "Anatomopathology"
-    }
-}
 
 
 

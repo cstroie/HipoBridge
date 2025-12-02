@@ -54,6 +54,51 @@ logging.basicConfig(
 )
 logger = logging.getLogger('HipoClient')
 
+
+
+# Analysis types dictionary for reuse across functions
+ANALYSIS_TYPES = {
+    "radio": {
+        "display": "Radiology",
+        "definition": "Radiology"
+    },
+    "ct": {
+        "display": "CT Scan",
+        "definition": "Computed Tomography"
+    },
+    "irm": {
+        "display": "MRI",
+        "definition": "Magnetic Resonance Imaging"
+    },
+    "eco": {
+        "display": "Ultrasound",
+        "definition": "Echography"
+    },
+    "lab": {
+        "display": "Laboratory",
+        "definition": "Laboratory tests"
+    },
+    "lac": {
+        "display": "Angiography and Cardiac Catheterization",
+        "definition": "Angiography and Cardiac Catheterization"
+    },
+    "lii": {
+        "display": "Interventional Radiology",
+        "definition": "Interventional Radiology"
+    },
+    "rads": {
+        "display": "Fluoroscopy and CEUS",
+        "definition": "Fluoroscopy and Contrast-Enhanced Ultrasound"
+    },
+    "apa": {
+        "display": "Anatomopathology",
+        "definition": "Anatomopathology"
+    }
+}
+
+
+
+
 # Load region identification rules from config file
 def load_region_rules():
     """Load region identification rules from regions.cfg file."""
@@ -482,20 +527,29 @@ class HipoData(dict):
             # Auto-unwrap single element lists
             if isinstance(value, list) and len(value) == 1:
                 value = value[0]
+            # Convert datetime to iso format
+            if isinstance(value, datetime):
+                value = value.isoformat()
             # Auto-strip string values
             if isinstance(value, str):
                 value = value.strip()
-                
-            data[sub_key] = value
+            # Do not store None
+            if value is not None:
+                data[sub_key] = value
         else:
             # Store directly in root
             # Auto-unwrap single element lists
             if isinstance(value, list) and len(value) == 1:
                 value = value[0]
+            # Convert datetime to iso format
+            if isinstance(value, datetime):
+                value = value.isoformat()
             # Auto-strip string values
             if isinstance(value, str):
                 value = value.strip()
-            self[key] = value
+            # Do not store None
+            if value is not None:
+                self[key] = value
     
     def store_list(self, key: str, value: str = None) -> None:
         """Store a value in the dictionary with automatic data processing.
@@ -1956,7 +2010,8 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
         # Initialize the parent
         super().__init__(service_url = service_url, request = request)
         # The request endpoint
-        self.request_url = "/pacient/analyses.asp?type=PA&pacid={id}"
+        self.request_url = "/pacient/analyses.asp?type=PA&pacid={pacid}"
+        #self.request_url = "/Patient/analysesEpisod.asp?strAN={year}&&pacid={pacid}"
 
     async def search(self, patient_id, **kwargs):
         """Search for patients by various criteria.
@@ -1979,7 +2034,7 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
             self.request_url += "&full=yes"
 
         # Create the specific request url
-        url = self.request_url.format(id=patient_id)
+        url = self.request_url.format(pacid=patient_id)
         try:
             # Retrieve the page
             response_text, success, error_response = await self.get_page(url)
@@ -2017,53 +2072,99 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
         # Initialize result dictionary
         data = HipoData(status="success", message="")
 
-
-
-
-
-
-
-
-        # Return the service requests
-        return data
-    
-
-    def parse_multiple_patients_data(self, html_content: str) -> HipoData:
-        """Parse HTML content for multiple patient search results and extract patient data.
-
-        Extracts patient names, CNP, and ids from search results page with multiple patients.
-
-        Args:
-            html_content: HTML content of the search results page
-
-        Returns:
-            HipoData containing patient search results
-        """
-        # Initialize empty dict for patients
-        data = HipoData(status="success", message="", patients = {})
-
         try:
             # Parse HTML content with BeautifulSoup
             soup = BeautifulSoup(html_content, 'html.parser')
 
             # Check if this is a search results page by looking for 'Fisier' in title
-            if not self.is_expected_page(soup, 'Fisier'):
+            if not self.is_expected_page(soup, 'Cereri de Laborator'):
                 # Return empty list if not expected page
-                data.set_error(f"Unexpected page for PatientSearch: {self.get_title(soup)}")
+                data.set_error(f"Unexpected page for ServiceRequestSearch: {self.get_title(soup)}")
                 logger.warning(f"{data['message']}: {self.get_error(soup)}")
                 return data
 
-            # Find all links with the pattern javascript:Edit('patient_id')
-            pattern = r"javascript:Edit\('([^']+)'\);"
-            data["patients"] = extract_text_ids_from_links(soup, pattern)
+            # Extract patient name and ID from the link
+            patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id='))
+            if patient_link:
+                data.store("patient.name", patient_link.get_text())
+                # Extract patient ID from href
+                data.store("patient.id", extract_id_from_link(patient_link))
+
+            # Extract patient CNP
+            data.store("patient.cnp", extract_text_after_label(soup, r'CNP\s*:', 'tr'))
+            if data.get("patient.cnp"):
+                parsed_cnp = parse_cnp(data.get("patient.cnp"))
+                data.store("patient.gender", parsed_cnp.get("gender"))
+                data.store("patient.date", parsed_cnp.get("birth_date"))
+                data.store("patient.age", parsed_cnp.get("age"))
+            
+            requests = {}
+            for link in soup.find_all('a', href=re.compile(r'analyseFile\.asp\?id=\d+')):
+                # Extract request ID
+                request_id = extract_id_from_link(link, r'id=(\d+)')
+                if not request_id:
+                    continue
+
+                # Keep each request data in HopoData
+                request = HipoData(id=request_id, type="unknown")
+
+                # Find the parent table row
+                parent_row = link.find_parent('tr')
+                if not parent_row:
+                    # If no parent row, just add the ID without type
+                    requests[request_id] = request
+                    continue
+
+                cells = parent_row.find_all('td')
+                if len(cells) >= 8:
+                    # Cell 0: Checkbox (ignore)
+                    # Cell 1: Report link (already processed)
+                    # Cell 2: Barcode (ignore)
+                    # Cell 3: Checkin code
+                    request.store('checkin', extract_id_from_link(cells[3], r'/files/checkin\.asp\?id=(\d+)'))
+                    request.store('checkup', extract_id_from_link(cells[3], r'/files/checkup\.asp\?cuid=(\d+)'))
+
+                    # Cell 4: Date
+                    date_text = cells[4].get_text().strip()
+                    if date_text:
+                        # Try to parse the datetime
+                        dt = parse_date_time(date_text)
+                        if dt:
+                            request.store("datetime", dt.isoformat())
+                        else:
+                            # If parsing fails, keep the original string
+                            request.store("datetime", date_text.strip())
+
+                    # Cell 5: Priority
+                    request.store("is_urgent", "urgent" in cells[5].get_text().lower())
+
+                    # Cell 6: Analysis type
+                    type_text = cells[6].get_text().strip()
+                    # Look for pattern like 'XXXX-Radio', 'XXXX-lab', etc.
+                    type_match = re.search(r'\d{4}-(\w+)', type_text)
+                    if type_match:
+                        extracted_type = type_match.group(1).lower()
+                        # Check if the extracted type is in our known analysis types
+                        if extracted_type in ANALYSIS_TYPES:
+                            request.store("type", extracted_type)
+                        else:
+                            request.store("type", "other")
+                    else:
+                        request.store("type", "other")
+
+                    # Cell 7: Requesting doctor
+                    request.store('medic', cells[7].get_text())
+                # Append the reuqest data to the requests list
+                requests[request_id] = request
+            # Store the requests
+            data.store('requests', requests)
 
         except Exception as e:
             logger.error(f"Error parsing multiple patients data: {e}")
             data.set_error(str(e))
 
-        # Return the patients dict
+        # Return the service requests
         return data
-
 
 
 class HipoClientImagingStudy(HipoClient):
