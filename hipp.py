@@ -112,8 +112,11 @@ ANALYSIS_TYPES = {
 }
 
 
+
+
 # Authentication helpers
 # ###########################################################################
+
 
 def get_basic_auth(request):
     """Extract basic auth credentials from request.
@@ -153,6 +156,10 @@ def require_auth(handler):
     return wrapper
 
 
+
+
+# Endpoints
+# ###########################################################################
 
 
 @require_auth
@@ -322,7 +329,42 @@ async def get_fhir_patient(request):
 
 
 @require_auth
-async def get_fhir_diagnostic_report(request):
+async def get_request(request):
+    """Retrieve service request information by ID.
+
+    Gets service request information from the Hipocrate service and parses
+    the medical data into structured format.
+
+    Args:
+        request
+
+    Returns:
+        JSON response with service request data or error information
+    """
+    # Extract service request ID from path
+    id = request.match_info.get('id')
+    if not id:
+        return create_error_response("Service request ID is required")
+    logger.info(f"Retrieving service request with ID: {id}")
+
+    try:
+        # Create a new HipoClient instance
+        client = HipoClientServiceRequest(SERVICE_URL, request)
+
+        # Retrieve and parse the page
+        parsed_data = await client.fetch_and_parse(id=id)
+
+        # Check for errors in the response
+        status = 200 if parsed_data.get("status") == "success" else 404
+        
+        # Return the response
+        return web.json_response(parsed_data, status = status)
+
+    except Exception as e:
+        return create_error_response("Service request retrieval failed", 500, {"exception": str(e)})
+
+@require_auth
+async def get_fhir_service_request(request):
     """Retrieve service request information by ID.
 
     Gets service request information from the Hipocrate service and parses
@@ -334,28 +376,68 @@ async def get_fhir_diagnostic_report(request):
 
     Returns:
         JSON response with service request data or error information
+
+    See:
+        https://build.fhir.org/servicerequest.html
     """
-    # Extract diagnostic report ID from path
+    # Extract service request ID from path
     id = request.match_info.get('id')
     if not id:
-        return create_error_response("Diagnostic report ID is required")
-    logger.info(f"Retrieving diagnostic report with ID: {id}")
+        return create_error_response("Service request ID is required")
+    logger.info(f"Retrieving service request with ID: {id}")
 
     try:
         # Create a new HipoClient instance with credentials
-        client = HipoClientDiagnosticReport(SERVICE_URL, request)
+        client = HipoClientServiceRequest(SERVICE_URL, request)
 
         # Retrieve and parse the page, then convert to FHIR resource
-        response = await client.fetch_repond_fhir(id=id)
+        fhir_response, error_response = await client.fetch_repond_fhir(id=id)
 
         # Check for errors in the response
-        status = 200 if response.get("status") == "success" else 404
+        if error_response:
+            return error_response
         
         # Return the response
-        return web.json_response(response.get("fhir", response), status = status)
+        return web.json_response(fhir_response)
 
     except Exception as e:
-        return create_error_response("Diagnostic report retrieval failed", 500, {"exception": str(e)})
+        return create_error_response("Service request retrieval failed", 500, {"exception": str(e)})
+
+
+@require_auth
+async def get_study(request):
+    """Retrieve imaging study by ID.
+
+    Gets service request information from the Hipocrate service and parses
+    the medical data into structured format.
+
+    Args:
+        request
+
+    Returns:
+        JSON response with service request data or error information
+    """
+    # Extract service request ID from path
+    id = request.match_info.get('id')
+    if not id:
+        return create_error_response("Imaging study ID is required")
+    logger.info(f"Retrieving imaging study with ID: {id}")
+
+    try:
+        # Create a new HipoClient instance
+        client = HipoClientImagingStudy(SERVICE_URL, request)
+
+        # Retrieve and parse the page
+        parsed_data = await client.fetch_and_parse(id=id)
+
+        # Check for errors in the response
+        status = 200 if parsed_data.get("status") == "success" else 404
+        
+        # Return the response
+        return web.json_response(parsed_data, status = status)
+
+    except Exception as e:
+        return create_error_response("Imaging study retrieval failed", 500, {"exception": str(e)})
 
 @require_auth
 async def get_fhir_imaging_study(request):
@@ -393,449 +475,162 @@ async def get_fhir_imaging_study(request):
     except Exception as e:
         return create_error_response("Imaging study retrieval failed", 500, {"exception": str(e)})
 
-def parse_report(html_content: str) -> Dict[str, Any]:
-    """Parse HTML report content and extract structured data from report.html format.
-
-    Extracts patient information, examination details, and report results
-    from HTML report content in the specific format shown in report.html.
-    This function parses laboratory reports from the Hipocrate system
-    to extract structured data about patient observations.
-
-    Args:
-        html_content: HTML content of the report
-
-    Returns:
-        Dictionary containing parsed report data organized in sections:
-        - patient: Patient information (name, id, cnp, gender, age, birth_date)
-        - request: Request information (physician, datetime, barcode, admission_id, diagnosis,
-                  clinical_comments, lab_comments, justification, icd10)
-        - validation: Validation information (validator, datetime)
-        - procedures: List of procedures with their results
-        Returns empty dict if parsing fails.
-    """
-    # Initialize result dictionary
-    data = HipoData()
-
-    try:
-        # Parse HTML content with BeautifulSoup
-        soup = BeautifulSoup(html_content, 'html.parser')
-
-        # Extract patient name from the table with patient data
-        data.store("patient.name", extract_text_after_label(soup, r'Nume:', 'tr', stop_at=r'\['))
-
-        # Extract patient CNP from the table with patient data
-        patient_cnp = extract_value_from_input(soup, id="strCNP")
-        data.store("patient.cnp", patient_cnp)
-        if patient_cnp:
-            parsed_cnp = parse_cnp(patient_cnp)
-            data.store("patient.gender", parsed_cnp.get("gender", ""))
-            data.store("patient.birth_date", parsed_cnp.get("birth_date", ""))
-            data.store("patient.age", parsed_cnp.get("age", ""))
-
-        # Extract patient code from the table with patient data
-        patient_ids = extract_ids_from_links(soup, r'/pacient/edit\.asp\?id=(\d+)')
-        if patient_ids:
-            data.store("patient.id", patient_ids[0] if isinstance(patient_ids, list) else patient_ids)
-        
-        # Extract admission ID
-        admission_ids = extract_ids_from_links(soup, r'/files/checkin\.asp\?id=(\d+)')
-        if admission_ids:
-            data.store("request.admission_id", admission_ids[0] if isinstance(admission_ids, list) else admission_ids)
-
-        # Extract barcode
-        data.store("request.barcode", extract_text_after_label(soup, r'Cerere de investigatii (?!paraclinice)'))
-
-        # Extract physician
-        data.store("request.physician", extract_text_after_label(soup, r'Medic:', 'tr'))
-
-        # Extract the clinical comments
-        data.store("request.diagnosis", extract_text_after_label(soup, r'prezumtiv:', 'tr'))
-
-        # Extract the clinical comments
-        data.store("request.clinical_comments", extract_text_after_label(soup, r'Informatii suplimentare:', 'tr', stop_at=r'Motiv'))
-
-        # Extract the lab comments
-        data.store("request.lab_comments", extract_text_from_element(soup, id="strComments"))
-
-        # Extract the justification
-        data.store("request.justification", extract_text_from_element(soup, id="strJustificare"))
-
-        # Extract ICD10 coded diagnosis
-        data.store("request.icd10", extract_text_after_label(soup, r'Diagnostic:', 'tr'))
-
-        # Extract requester and request date and time
-        req = extract_text_after_label(soup, r'Ceruta:', 'tr')
-        if req and '-' in req:
-            try:
-                request_physician, request_datetime = req.split('-', 1)
-                data.store("request.request_physician", request_physician.strip())
-                # Try to parse the datetime
-                dt = parse_date_time(request_datetime)
-                if dt:
-                    data.store("request.request_datetime", dt.isoformat())
-                else:
-                    # If parsing fails, keep the original string
-                    data.store("request.request_datetime", request_datetime.strip())
-            except ValueError:
-                # Handle case where split doesn't work as expected
-                data.store("request.request_info", req)
-
-        # Extract performer (validator) from the domain section
-        validator = extract_text_after_label(soup, r'Validat de:', 'td', stop_at=r'Data')
-        if validator:
-            data.store("validation.validator", validator)
-
-        # Extract validation datetime
-        validation_datetime = extract_value_from_input(soup, id="dataefectuarii")
-        if validation_datetime:
-            # Try to parse the datetime
-            dt = parse_date_time(validation_datetime)
-            if dt:
-                data.store("validation.datetime", dt.isoformat())
-            else:
-                # If parsing fails, keep the original string
-                data.store("validation.datetime", validation_datetime)
-        
-        # For each strAnalyseExec input, find the parent 'td' and extract examination name from first 'b' element
-        procedures = []
-        for input_elem in soup.find_all('input', {'name': 'strAnalyseExec'}):
-            parent_td = input_elem.find_parent('td')
-            if parent_td:
-                first_b = parent_td.find('b')
-                # Find the 'table' parent and then the 'center' sibling
-                parent_table = parent_td.find_parent('table')
-                container = parent_table.find_next_sibling('center')
-                procedure_result = None
-                if container:
-                    # In 'center' there is another table.
-                    # The rows containing 'rezultat' in first 'td' have the result in second 'td'
-                    for row in container.find_all('tr'):
-                        cells = row.find_all('td')
-                        if len(cells) >= 2:
-                            if cells[0].get_text(strip=True).lower() == "rezultat":
-                                # Filter out text nodes that contain only whitespace
-                                subelements = [child for child in cells[1] if hasattr(child, 'name') and child.name]
-                                if len(subelements) == 1 and subelements[0].name == 'b':
-                                    # If the only child is a <b> tag, use its content directly
-                                    procedure_result = html_to_markdown(str(subelements[0]))
-                                else:
-                                    # Otherwise, process the entire div
-                                    procedure_result = html_to_markdown(str(cells[1]))
-                # Append the procedure if the data is valid
-                if first_b and procedure_result:
-                    procedure = {
-                        "title": first_b.get_text(strip=True),
-                        "result": procedure_result,
-                        "type": "",
-                        "region": ""
-                    }
-                    procedures.append(procedure)
-        
-        if procedures:
-            data.store("procedures", procedures)
-
-        # Store urgency flag
-        data.store("is_urgent", "~URGENTA~" in html_content)
-
-        # Return the parsed report data
-        return data
-
-    except Exception as e:
-        logger.error(f"Error parsing report data: {e}")
-        return {}
-
-
-def create_fhir_imaging_study(report_data: Dict[str, Any], request) -> Dict[str, Any]:
-    """Convert report data to FHIR ImagingStudy resource format.
-
-    Args:
-        report_data: Report data from parse_report_data
-        request: The HTTP request object to get the host
-
-    Returns:
-        FHIR ImagingStudy resource
-    """
-    # Create FHIR ImagingStudy resource
-    fhir_imaging_study = {
-        "resourceType": "ImagingStudy",
-        "id": report_data["report_id"],
-        "status": "available",
-        "subject": {
-            "reference": f"Patient/{report_data.get('patient_id', '')}"
-        },
-        "basedOn": {
-            "reference": f"ServiceRequest/{report_data.get('report_id')}"
-        },
-        "started": report_data["datetime"].isoformat() if report_data.get("datetime") else datetime.now().isoformat(),
-        "series": []
-    }
-
-    # Add modality if available
-    if report_data.get("modality"):
-        fhir_imaging_study["modality"] = {
-            "system": "http://dicom.nema.org/resources/ontology/DCM",
-            "code": report_data["modality"].upper(),
-            "display": report_data["modality"].upper()
-        }
-
-    # Add patient information if available
-    if report_data.get("patient_name"):
-        fhir_imaging_study["identifier"] = [{
-            "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-name",
-            "value": report_data["patient_name"]
-        }]
-
-    if report_data.get("patient_cnp"):
-        if "identifier" not in fhir_imaging_study:
-            fhir_imaging_study["identifier"] = []
-        fhir_imaging_study["identifier"].append({
-            "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-cnp",
-            "value": report_data["patient_cnp"]
-        })
-
-    # Add description from examination
-    if report_data.get("examination"):
-        fhir_imaging_study["description"] = report_data["examination"]
-
-    # Add performer if available
-    if report_data.get("performer"):
-        fhir_imaging_study["performer"] = [
-            {
-                "actor": {
-                    "display": report_data["performer"]
-                }
-            }
-        ]
-
-    # Add referrer if referring physician is available
-    if report_data.get("referring_physician"):
-        fhir_imaging_study["referrer"] = {
-            "display": report_data["referring_physician"]
-        }
-
-    # Add series for each report
-    if report_data.get("reports"):
-        for i, report in enumerate(report_data["reports"]):
-            series = {
-                "uid": f"urn:oid:1.2.840.99999999.1.{report_data['report_id']}.{i+1}",
-                "number": i+1,
-                "modality": {
-                    "system": "http://dicom.nema.org/resources/ontology/DCM",
-                    "code": "OT",  # Other
-                    "display": "Other"
-                },
-                "description": report.get("investigation", "Imaging Study"),
-                "started": report_data["datetime"].isoformat() if report_data.get("datetime") else datetime.now().isoformat(),
-                "instance": []
-            }
-            # Use the study modality for the series if available, otherwise default to OT
-            series_modality = report_data.get("modality", "OT")
-            series["modality"] = {
-                "system": "http://dicom.nema.org/resources/ontology/DCM",
-                "code": series_modality.upper(),
-                "display": series_modality.upper()
-            }
-            # Add the instance
-            fhir_imaging_study["series"].append(series)
-
-    # Add reason for study if referral information is available
-    if report_data.get("referral_reason") or report_data.get("referral_code"):
-        reason_text = ""
-        if report_data.get("referral_code"):
-            reason_text += f"Code: {report_data['referral_code']}"
-        if report_data.get("referral_reason"):
-            if reason_text:
-                reason_text += " - "
-            reason_text += report_data["referral_reason"]
-
-        fhir_imaging_study["reason"] = [
-            {
-                "text": reason_text
-            }
-        ]
-
-    # Add note if presumptive diagnosis is available
-    if report_data.get("presumptive_diagnosis"):
-        fhir_imaging_study["note"] = [
-            {
-                "text": report_data["presumptive_diagnosis"]
-            }
-        ]
-
-    # Add description if special _indications are available
-    if report_data.get("special_indications"):
-        fhir_imaging_study["description"] = report_data["presumptive_diagnosis"]
-
-    return fhir_imaging_study
 
 @require_auth
-async def get_fhir_observation(request):
-    """Retrieve a single observation by ID.
+async def get_report(request):
+    """Retrieve diagnostic report by ID.
 
-    Gets detailed information for a specific observation from the Hipocrate service.
+    Gets service request information from the Hipocrate service and parses
+    the medical data into structured format.
 
     Args:
-        request: The incoming HTTP request with 'id' path parameter for observation ID
+        request
+
+    Returns:
+        JSON response with service request data or error information
+    """
+    # Extract service request ID from path
+    id = request.match_info.get('id')
+    if not id:
+        return create_error_response("Diagnostic report ID is required")
+    logger.info(f"Retrieving diagnostic report with ID: {id}")
+
+    try:
+        # Create a new HipoClient instance
+        client = HipoClientDiagnosticReport(SERVICE_URL, request)
+
+        if request.query.get('debug') == 'page':
+            result = await client.debug_page(id=id)
+            return web.Response(body = result, content_type="text/html")
+
+        # Retrieve and parse the page
+        parsed_data = await client.fetch_and_parse(id=id)
+
+        # Check for errors in the response
+        status = 200 if parsed_data.get("status") == "success" else 404
+        
+        # Return the response
+        return web.json_response(parsed_data, status = status)
+
+    except Exception as e:
+        return create_error_response("Diagnostic report retrieval failed", 500, {"exception": str(e)})
+
+@require_auth
+async def get_fhir_diagnostic_report(request):
+    """Retrieve service request information by ID.
+
+    Gets service request information from the Hipocrate service and parses
+    the medical data into structured format.
+
+    Args:
+        request: The incoming HTTP request with 'id' path parameter for service request ID
                  and basic auth credentials for authentication
 
     Returns:
-        JSON response with observation data or error information
+        JSON response with service request data or error information
     """
-    # Extract observation ID from path
+    # Extract diagnostic report ID from path
     id = request.match_info.get('id')
     if not id:
-        return create_error_response("Observation ID is required")
-    logger.info(f"Retrieving observation with ID: {id}")
-
-    # Create a new HipoClient instance with credentials
-    client = HipoClient(SERVICE_URL, request)
+        return create_error_response("Diagnostic report ID is required")
+    logger.info(f"Retrieving diagnostic report with ID: {id}")
 
     try:
-        # The observation endpoint
-        #request_url = f"/analyse/Reports/analyseFile_4212-lab.asp?fullpacient=yes&id={id}&section=4212-lab"
-        request_url = f"/analyse/labrequest/edit.asp?id={id}"
+        # Create a new HipoClient instance with credentials
+        client = HipoClientDiagnosticReport(SERVICE_URL, request)
 
-        # Retrieve the page
-        response_text, success, error_response = await client.get_page(request_url)
+        # Retrieve and parse the page, then convert to FHIR resource
+        response = await client.fetch_repond_fhir(id=id)
 
         # Check for errors in the response
-        if not success:
-            return error_response
+        status = 200 if response.get("status") == "success" else 404
+        
+        # Return the response
+        return web.json_response(response.get("fhir", response), status = status)
 
-        # Return Observation
-        report_data = parse_report(response_text)
-        report_data['report_id'] = id
-        fhir_response = create_fhir_observation(report_data, request)
+    except Exception as e:
+        return create_error_response("Diagnostic report retrieval failed", 500, {"exception": str(e)})
+
+
+@require_auth
+async def get_checkout(request):
+    """Retrieve checkout information by ID.
+
+    Gets checkout information from the Hipocrate service and parses
+    the medical data into structured format.
+
+    Args:
+        request
+
+    Returns:
+        JSON response with checkout data or error information
+    """
+    # Extract encounter ID from path
+    id = request.match_info.get('id')
+    if not id:
+        return create_error_response("Checkout ID is required")
+    logger.info(f"Retrieving checkout with ID: {id}")
+
+    try:
+        # Create a new HipoClient instance
+        client = HipoClientCheckout(SERVICE_URL, request)
+
+        # Retrieve and parse the page
+        parsed_data = await client.fetch_and_parse(id=id)
+
+        # Check for errors in the response
+        status = 200 if parsed_data.get("status") == "success" else 404
+        
+        # Return the response
+        return web.json_response(parsed_data, status = status)
+
+    except Exception as e:
+        return create_error_response("Checkout retrieval failed", 500, {"exception": str(e)})
+
+@require_auth
+async def get_fhir_encounter(request):
+    """Retrieve encounter information by ID.
+
+    Gets encounter information from the Hipocrate service and parses
+    the medical data into structured format.
+
+    Args:
+        request: The incoming HTTP request with 'identifier' query parameter for encounter ID
+                 and basic auth credentials for authentication
+
+    Returns:
+        JSON response with encounter data or error information
+
+    See:
+        https://build.fhir.org/encounter.html
+    """
+    # Extract encounter ID from path
+    id = request.match_info.get('id')
+    if not id:
+        return create_error_response("Encounter ID is required")
+    logger.info(f"Retrieving encounter with ID: {id}")
+
+    try:
+        # Create a new HipoClient instance with credentials
+        client = HipoClientCheckout(SERVICE_URL, request)
+
+        # Retrieve and parse the page, then convert to FHIR resource
+        fhir_response, error_response = await client.fetch_repond_fhir(id=id)
+
+        # Check for errors in the response
+        if error_response:
+            return error_response
+        
+        # Return the response
         return web.json_response(fhir_response)
 
     except Exception as e:
-        return create_error_response("Observation retrieval failed", 500, {"exception": str(e)})
+        return create_error_response("Encounter retrieval failed", 500, {"exception": str(e)})
 
-def create_fhir_observation(report_data: Dict[str, Any], request) -> Dict[str, Any]:
-    """Convert report data to FHIR Observation resource format.
 
-    Args:
-        report_data: Report data from parse_report_data
-        request: The HTTP request object to get the host
 
-    Returns:
-        FHIR Observation resource
-    """
-    # Create FHIR Observation resource
-    fhir_observation = {
-        "resourceType": "Observation",
-        "id": report_data["report_id"],
-        "status": "final",
-        "code": {
-            "coding": [
-                {
-                    "system": f"{request.scheme}://{request.host}/fhir/CodeSystem/analysis-types",
-                    "code": "unknown",
-                    "display": "Analysis"
-                }
-            ],
-            "text": report_data.get("examination", "Analysis")
-        },
-        "subject": {
-            "reference": f"Patient/{report_data.get('patient_id', '')}"
-        },
-        "basedOn": {
-            "reference": f"ServiceRequest/{report_data.get('report_id')}"
-        },
-    }
 
-    # Add effective datetime if available
-    if report_data.get("request_datetime"):
-        fhir_observation["effectiveDateTime"] = report_data["request_datetime"]
-    elif report_data.get("validation_datetime"):
-        fhir_observation["effectiveDateTime"] = report_data["validation_datetime"]
 
-    # Add performer if available
-    if report_data.get("performer"):
-        fhir_observation["performer"] = [
-            {
-                "display": report_data["performer"]
-            }
-        ]
-    elif report_data.get("validator"):
-        fhir_observation["performer"] = [
-            {
-                "display": report_data["validator"]
-            }
-        ]
-
-    # Add value/comment if available
-    if report_data.get("reports"):
-        fhir_observation["note"] = []
-        for report in report_data["reports"]:
-            fhir_observation["note"].append(
-                {
-                    "text": report["result"]
-                }
-            )
-
-    # Add extensions for additional data
-    extensions = []
-
-    # Add physician information
-    if report_data.get("physician"):
-        extensions.append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/observation-requester",
-            "valueString": report_data["physician"]
-        })
-
-    # Add admission ID if available
-    if report_data.get("admission_id"):
-        extensions.append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/observation-encounter",
-            "valueString": report_data["admission_id"]
-        })
-
-    # Add barcode if available
-    if report_data.get("barcode"):
-        extensions.append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/observation-barcode",
-            "valueString": report_data["barcode"]
-        })
-
-    # Add clinical comments if available
-    if report_data.get("clinical_comments"):
-        extensions.append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/observation-clinical-comments",
-            "valueString": report_data["clinical_comments"]
-        })
-
-    # Add lab comments if available
-    if report_data.get("lab_comments"):
-        extensions.append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/observation-lab-comments",
-            "valueString": report_data["lab_comments"]
-        })
-
-    # Add diagnosis if available
-    if report_data.get("diagnosis"):
-        extensions.append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/observation-diagnosis",
-            "valueString": report_data["diagnosis"]
-        })
-
-    if extensions:
-        fhir_observation["extension"] = extensions
-
-    # Add identifiers
-    identifiers = []
-
-    # Add barcode as identifier if available
-    if report_data.get("barcode"):
-        identifiers.append({
-            "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/barcode",
-            "value": report_data["barcode"]
-        })
-
-    if identifiers:
-        fhir_observation["identifier"] = identifiers
-
-    return fhir_observation
 
 @require_auth
 async def search_fhir_observation(request):
@@ -1110,233 +905,6 @@ def parse_analyses_data(html_content: str) -> Dict[str, Any]:
 
 
 
-@require_auth
-async def get_study(request):
-    """Retrieve imaging study by ID.
-
-    Gets service request information from the Hipocrate service and parses
-    the medical data into structured format.
-
-    Args:
-        request
-
-    Returns:
-        JSON response with service request data or error information
-    """
-    # Extract service request ID from path
-    id = request.match_info.get('id')
-    if not id:
-        return create_error_response("Imaging study ID is required")
-    logger.info(f"Retrieving imaging study with ID: {id}")
-
-    try:
-        # Create a new HipoClient instance
-        client = HipoClientImagingStudy(SERVICE_URL, request)
-
-        # Retrieve and parse the page
-        parsed_data = await client.fetch_and_parse(id=id)
-
-        # Check for errors in the response
-        status = 200 if parsed_data.get("status") == "success" else 404
-        
-        # Return the response
-        return web.json_response(parsed_data, status = status)
-
-    except Exception as e:
-        return create_error_response("Imaging study retrieval failed", 500, {"exception": str(e)})
-
-@require_auth
-async def get_report(request):
-    """Retrieve diagnostic report by ID.
-
-    Gets service request information from the Hipocrate service and parses
-    the medical data into structured format.
-
-    Args:
-        request
-
-    Returns:
-        JSON response with service request data or error information
-    """
-    # Extract service request ID from path
-    id = request.match_info.get('id')
-    if not id:
-        return create_error_response("Diagnostic report ID is required")
-    logger.info(f"Retrieving diagnostic report with ID: {id}")
-
-    try:
-        # Create a new HipoClient instance
-        client = HipoClientDiagnosticReport(SERVICE_URL, request)
-
-        if request.query.get('debug') == 'page':
-            result = await client.debug_page(id=id)
-            return web.Response(body = result, content_type="text/html")
-
-        # Retrieve and parse the page
-        parsed_data = await client.fetch_and_parse(id=id)
-
-        # Check for errors in the response
-        status = 200 if parsed_data.get("status") == "success" else 404
-        
-        # Return the response
-        return web.json_response(parsed_data, status = status)
-
-    except Exception as e:
-        return create_error_response("Diagnostic report retrieval failed", 500, {"exception": str(e)})
-
-@require_auth
-async def get_request(request):
-    """Retrieve service request information by ID.
-
-    Gets service request information from the Hipocrate service and parses
-    the medical data into structured format.
-
-    Args:
-        request
-
-    Returns:
-        JSON response with service request data or error information
-    """
-    # Extract service request ID from path
-    id = request.match_info.get('id')
-    if not id:
-        return create_error_response("Service request ID is required")
-    logger.info(f"Retrieving service request with ID: {id}")
-
-    try:
-        # Create a new HipoClient instance
-        client = HipoClientServiceRequest(SERVICE_URL, request)
-
-        # Retrieve and parse the page
-        parsed_data = await client.fetch_and_parse(id=id)
-
-        # Check for errors in the response
-        status = 200 if parsed_data.get("status") == "success" else 404
-        
-        # Return the response
-        return web.json_response(parsed_data, status = status)
-
-    except Exception as e:
-        return create_error_response("Service request retrieval failed", 500, {"exception": str(e)})
-
-@require_auth
-async def get_fhir_service_request(request):
-    """Retrieve service request information by ID.
-
-    Gets service request information from the Hipocrate service and parses
-    the medical data into structured format.
-
-    Args:
-        request: The incoming HTTP request with 'id' path parameter for service request ID
-                 and basic auth credentials for authentication
-
-    Returns:
-        JSON response with service request data or error information
-
-    See:
-        https://build.fhir.org/servicerequest.html
-    """
-    # Extract service request ID from path
-    id = request.match_info.get('id')
-    if not id:
-        return create_error_response("Service request ID is required")
-    logger.info(f"Retrieving service request with ID: {id}")
-
-    try:
-        # Create a new HipoClient instance with credentials
-        client = HipoClientServiceRequest(SERVICE_URL, request)
-
-        # Retrieve and parse the page, then convert to FHIR resource
-        fhir_response, error_response = await client.fetch_repond_fhir(id=id)
-
-        # Check for errors in the response
-        if error_response:
-            return error_response
-        
-        # Return the response
-        return web.json_response(fhir_response)
-
-    except Exception as e:
-        return create_error_response("Service request retrieval failed", 500, {"exception": str(e)})
-
-
-
-
-@require_auth
-async def get_checkout(request):
-    """Retrieve checkout information by ID.
-
-    Gets checkout information from the Hipocrate service and parses
-    the medical data into structured format.
-
-    Args:
-        request
-
-    Returns:
-        JSON response with checkout data or error information
-    """
-    # Extract encounter ID from path
-    id = request.match_info.get('id')
-    if not id:
-        return create_error_response("Checkout ID is required")
-    logger.info(f"Retrieving checkout with ID: {id}")
-
-    try:
-        # Create a new HipoClient instance
-        client = HipoClientCheckout(SERVICE_URL, request)
-
-        # Retrieve and parse the page
-        parsed_data = await client.fetch_and_parse(id=id)
-
-        # Check for errors in the response
-        status = 200 if parsed_data.get("status") == "success" else 404
-        
-        # Return the response
-        return web.json_response(parsed_data, status = status)
-
-    except Exception as e:
-        return create_error_response("Checkout retrieval failed", 500, {"exception": str(e)})
-
-@require_auth
-async def get_fhir_encounter(request):
-    """Retrieve encounter information by ID.
-
-    Gets encounter information from the Hipocrate service and parses
-    the medical data into structured format.
-
-    Args:
-        request: The incoming HTTP request with 'identifier' query parameter for encounter ID
-                 and basic auth credentials for authentication
-
-    Returns:
-        JSON response with encounter data or error information
-
-    See:
-        https://build.fhir.org/encounter.html
-    """
-    # Extract encounter ID from path
-    id = request.match_info.get('id')
-    if not id:
-        return create_error_response("Encounter ID is required")
-    logger.info(f"Retrieving encounter with ID: {id}")
-
-    try:
-        # Create a new HipoClient instance with credentials
-        client = HipoClientCheckout(SERVICE_URL, request)
-
-        # Retrieve and parse the page, then convert to FHIR resource
-        fhir_response, error_response = await client.fetch_repond_fhir(id=id)
-
-        # Check for errors in the response
-        if error_response:
-            return error_response
-        
-        # Return the response
-        return web.json_response(fhir_response)
-
-    except Exception as e:
-        return create_error_response("Encounter retrieval failed", 500, {"exception": str(e)})
-
 
 
 async def serve_fhir_analysis_types(request):
@@ -1485,59 +1053,6 @@ async def serve_fhir_metadata(request):
 
 
 
-
-def parse_date_time(date_str: str) -> Optional[datetime]:
-    """Parse a date string in the format '30 Aug 2025 19:25:00'.
-
-    Args:
-        date_str: Date string to parse
-
-    Returns:
-        datetime object if parsing successful, None otherwise
-    """
-    try:
-        # Handle common date formats like "30 Aug 2025 19:25:00"
-        # Create a mapping for month abbreviations to numbers
-        month_mapping = {
-            'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
-            'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12,
-            'Ian': 1, 'Mai': 5, 'Iun': 6, 'Iul': 7  # Romanian month abbreviations
-        }
-
-        # Split the date string into components
-        parts = date_str.strip().split()
-        if len(parts) != 4:
-            return None
-
-        day = int(parts[0])
-        month_abbr = parts[1]
-        year = int(parts[2])
-        time_part = parts[3]
-
-        # Get month number from mapping
-        if month_abbr not in month_mapping:
-            return None
-        month = month_mapping[month_abbr]
-
-        # Parse time
-        time_parts = time_part.split(':')
-        if len(time_parts) == 2:
-            hour = int(time_parts[0])
-            minute = int(time_parts[1])
-            second = 0
-        elif len(time_parts) == 3:
-            hour = int(time_parts[0])
-            minute = int(time_parts[1])
-            second = int(time_parts[2])
-        else:
-            return None
-
-        # Create datetime object
-        return datetime(year, month, day, hour, minute, second)
-    except (ValueError, IndexError, TypeError):
-        # If parsing fails, return None
-        return None
-
 async def serve_md2html(request):
     """Convert markdown text to HTML.
 
@@ -1568,24 +1083,6 @@ async def serve_md2html(request):
         return create_error_response("Markdown conversion failed", 500, {"exception": str(e)})
 
 
-def validate_cnp(cnp: str) -> bool:
-    """Validate a Romanian CNP (Personal Numerical Code).
-
-    Checks if the provided string is a valid Romanian CNP by verifying:
-    - Length (13 digits)
-    - Gender digit (1-8)
-    - Date components (year, month, day)
-    - County code (1-52, excluding 47-50)
-    - Control digit using checksum algorithm
-
-    Args:
-        cnp: The CNP to validate
-
-    Returns:
-        True if CNP is valid, False otherwise
-    """
-    parsed_data = parse_cnp(cnp)
-    return parsed_data.get("valid", False)
 
 @require_auth
 async def serve_validate_cnp(request):
@@ -1803,7 +1300,7 @@ async def init_app():
     app.router.add_get('/fhir/DiagnosticReport/{id}', get_fhir_diagnostic_report)
     app.router.add_get('/fhir/Encounter/{id}', get_fhir_encounter)
     app.router.add_get('/fhir/Observation', search_fhir_observation)
-    app.router.add_get('/fhir/Observation/{id}', get_fhir_observation)
+    
     app.router.add_get('/fhir/ValueSet/cnp', serve_validate_cnp)
     app.router.add_post('/fhir/md2html', serve_md2html)
     app.router.add_get('/fhir/CodeSystem/analysis-types', serve_fhir_analysis_types)
