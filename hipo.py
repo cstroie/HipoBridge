@@ -174,7 +174,7 @@ def identify_study_type_and_region(desc: str) -> tuple:
     if not desc:
         return 'other', 'unknown'
     
-    desc_lower = desc.lower()
+    desc_lower = desc.strip().lower()
     
     # Check if it's an MRI study (contains REZONANTA MAGNETICA)
     if 'rezonanta' in desc_lower:
@@ -509,6 +509,18 @@ class HipoData(dict):
         - Otherwise: Store key-value pair directly in root dict
         - Sections are created automatically if they don't exist
         """
+        # Auto-unwrap single element lists
+        if isinstance(value, list):
+            if len(value) > 0 :
+                value = value[0]
+            else:
+                value = None
+        # Convert datetime to iso format
+        if isinstance(value, datetime):
+            value = value.isoformat()
+        # Auto-strip string values
+        if isinstance(value, str):
+            value = value.strip()
         # Check if key has dot notation for nested storage
         if '.' in key:
             section, sub_key = key.split('.', 1)
@@ -523,30 +535,11 @@ class HipoData(dict):
                 self[section] = {"": self[section]}
             
             data = self[section]
-            
-            # Auto-unwrap single element lists
-            if isinstance(value, list) and len(value) == 1:
-                value = value[0]
-            # Convert datetime to iso format
-            if isinstance(value, datetime):
-                value = value.isoformat()
-            # Auto-strip string values
-            if isinstance(value, str):
-                value = value.strip()
             # Do not store None
             if value is not None:
                 data[sub_key] = value
         else:
             # Store directly in root
-            # Auto-unwrap single element lists
-            if isinstance(value, list) and len(value) == 1:
-                value = value[0]
-            # Convert datetime to iso format
-            if isinstance(value, datetime):
-                value = value.isoformat()
-            # Auto-strip string values
-            if isinstance(value, str):
-                value = value.strip()
             # Do not store None
             if value is not None:
                 self[key] = value
@@ -2115,14 +2108,15 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                     requests[request_id] = request
                     continue
 
+                # Get all the cells in row
                 cells = parent_row.find_all('td')
                 if len(cells) >= 8:
                     # Cell 0: Checkbox (ignore)
                     # Cell 1: Report link (already processed)
-                    # Cell 2: Barcode (ignore)
-                    # Cell 3: Checkin code
-                    request.store('checkin', extract_id_from_link(cells[3], r'/files/checkin\.asp\?id=(\d+)'))
-                    request.store('checkup', extract_id_from_link(cells[3], r'/files/checkup\.asp\?cuid=(\d+)'))
+                    # Cell 2: Barcode and registry code
+                    # Cell 3: Checkin/Checkup code
+                    request.store('checkin', extract_ids_from_links(cells[3], r'checkin\.asp\?id=(\d+)'))
+                    request.store('checkup', extract_ids_from_links(cells[3], r'checkup\.asp\?cuid=(\d+)'))
 
                     # Cell 4: Date
                     date_text = cells[4].get_text().strip()
@@ -2154,6 +2148,25 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
 
                     # Cell 7: Requesting doctor
                     request.store('medic', cells[7].get_text())
+
+                    # Cell 8: barcode
+                    request.store('barcode', cells[8].get_text())
+
+                #  Find the next sibling 'tr' to identify the exam types and regions
+                exams_row = parent_row.find_next_sibling('tr')
+                # Find all cells in this row
+                cells = exams_row.find_all('td')
+                if len(cells) >= 2:
+                    exams = cells[1].get_text().split(';')
+                    regions = []
+                    for exam in exams:
+                        study_type, region = identify_study_type_and_region(exam)
+                        if region != 'unknown':
+                            regions.append(region)
+                    # Store the regions
+                    if regions:
+                        request.store_list('regions', regions)
+
                 # Append the reuqest data to the requests list
                 requests[request_id] = request
             # Store the requests
