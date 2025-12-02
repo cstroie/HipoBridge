@@ -67,7 +67,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // Search for patient using FHIR API
-            const searchResponse = await fetch(`/fhir/Patient?q=${encodeURIComponent(cnp)}`);
+            const searchResponse = await fetch(`/api/patient?q=${encodeURIComponent(cnp)}`);
             
             if (!searchResponse.ok) {
                 if (searchResponse.status === 401) {
@@ -101,7 +101,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 patientCode = firstPatient.id;
                 
                 // Get full patient data using FHIR API
-                const patientResponse = await fetch(`/fhir/Patient/${patientCode}`);
+                const patientResponse = await fetch(`/api/patient/${patientCode}`);
                 if (patientResponse.ok) {
                     patientData = await patientResponse.json();
                 } else {
@@ -123,7 +123,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Get analyses using FHIR API
             showToast('Loading diagnostic reports...', 'success');
-            const analysesResponse = await fetch(`/fhir/Observation?patient=${patientCode}&full=yes`);
+            const analysesResponse = await fetch(`/api/request?patient=${patientCode}&full=yes`);
             
             if (!analysesResponse.ok) {
                 if (analysesResponse.status === 401) {
@@ -151,7 +151,7 @@ document.addEventListener('DOMContentLoaded', function() {
             for (const checkoutId of checkoutIds) {
                 try {
                     showToast(`Loading epicrisis data for checkout ${checkoutId}...`, 'success');
-                    const checkoutResponse = await fetch(`/fhir/Encounter/${checkoutId}`);
+                    const checkoutResponse = await fetch(`/api/checkout/${checkoutId}`);
                     
                     if (checkoutResponse.ok) {
                         const checkoutData = await checkoutResponse.json();
@@ -298,7 +298,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     async function convertMarkdownToHtml(markdownText) {
         try {
-            const response = await fetch('/fhir/md2html', {
+            const response = await fetch('/api/md2html', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -402,7 +402,7 @@ document.addEventListener('DOMContentLoaded', function() {
     async function viewImagingStudy(studyId, reportId) {
         try {
             // Fetch imaging study data using FHIR API
-            const studyResponse = await fetch(`/fhir/ImagingStudy/${studyId}`);
+            const studyResponse = await fetch(`/api/study/${studyId}`);
             
             if (studyResponse.ok) {
                 const studyData = await studyResponse.json();
@@ -577,7 +577,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (['radio', 'ct', 'irm', 'eco', 'lac', 'lii', 'rads'].includes(analysisType)) {
                     try {
                         // Fetch report data using FHIR API - now using the observation ID directly
-                        const reportResponse = await fetch(`/fhir/DiagnosticReport/${observation.id}`);
+                        const reportResponse = await fetch(`/api/report/${observation.id}`);
                         
                         if (reportResponse.ok) {
                             const reportData = await reportResponse.json();
@@ -691,7 +691,7 @@ document.addEventListener('DOMContentLoaded', function() {
         for (const checkoutId of checkoutIds) {
             try {
                 showToast(`Loading epicrisis data for checkout ${checkoutId}...`, 'success');
-                const checkoutResponse = await fetch(`/fhir/Encounter/${checkoutId}`);
+                const checkoutResponse = await fetch(`/api/checkout/${checkoutId}`);
                 
                 if (checkoutResponse.ok) {
                     const checkoutData = await checkoutResponse.json();
