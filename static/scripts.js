@@ -67,7 +67,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // Search for patient using FHIR API
-            const searchResponse = await fetch(`/api/patient?q=${encodeURIComponent(cnp)}`);
+            const searchResponse = await fetch(`/fhir/Patient?q=${encodeURIComponent(cnp)}`);
             
             if (!searchResponse.ok) {
                 if (searchResponse.status === 401) {
@@ -101,7 +101,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 patientCode = firstPatient.id;
                 
                 // Get full patient data using FHIR API
-                const patientResponse = await fetch(`/api/patient/${patientCode}`);
+                const patientResponse = await fetch(`/fhir/Patient/${patientCode}`);
                 if (patientResponse.ok) {
                     patientData = await patientResponse.json();
                 } else {
