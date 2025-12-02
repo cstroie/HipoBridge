@@ -2024,12 +2024,13 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
         """Search for service requests by patient ID.
 
         Retrieves all service requests associated with a specific patient.
+        If no type is specified, filters by year extracted from the 'dt' parameter.
 
         Args:
             patient_id: Patient identifier
             **kwargs: Additional arguments (e.g., 'full' for complete data, 
                      'type' for filtering by request type, 'region' for filtering by region,
-                     'dt' for filtering by datetime)
+                     'dt' for filtering by datetime - year will be extracted from this)
 
         Returns:
             HipoData containing service requests or error information
