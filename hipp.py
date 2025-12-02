@@ -234,25 +234,9 @@ async def search_fhir_patient(request):
                 "entry": []
             }
             for patient_id, patient_name in parsed_data['patients'].items():
-                # Split patient name into family and given names
-                name_parts = patient_name.split()
-                family_name = name_parts[0] if len(name_parts) > 0 else ""
-                given_names = name_parts[1:] if len(name_parts) > 1 else []
-                # Create FHIR Patient resource
-                fhir_patient = {
-                    "resourceType": "Patient",
-                    "id": patient_id,
-                    "name": [
-                        {
-                            "use": "official",
-                            "family": family_name,
-                            "given": given_names
-                        }
-                    ]
-                }
                 # Add entry to bundle
                 bundle["entry"].append({
-                    "resource": fhir_patient
+                    "resource": client.fhir_response(HipoData(patient={'name': patient_name, 'id': patient_id}))
                 })
             parsed_data['fhir'] = bundle
         else:

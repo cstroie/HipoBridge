@@ -1387,16 +1387,18 @@ class HipoClientPatient(HipoClient):
                 given_names = name_parts[1:] if len(name_parts) > 1 else []
 
             # Use already extracted gender and birth date if available
-            gender = parsed_data.get("patient.sex", "unknown")
+            gender = parsed_data.get("patient.sex", "")
             birth_date = parsed_data.get("patient.birth_date", "")
 
             # Create FHIR Patient resource using the FHIR class
             fhir_patient = FHIRPatient(
                 id=parsed_data.get("patient.id", patient_id),
                 active=True,
-                gender=gender,
-                birthDate=birth_date
             )
+            if gender:
+                fhir_patient["gender"] = gender
+            if birth_date:
+                fhir_patient["birthDate"] = birth_date
 
             # Add name
             name = {
