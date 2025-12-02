@@ -12,6 +12,9 @@ Key features:
 - HipoClientPatientSearch: Specialized client for patient search operations
 - HipoClientCheckout: Specialized client for patient discharge/checkout data
 - HipoClientServiceRequest: Specialized client for medical service requests
+- HipoClientServiceRequestSearch: Specialized client for service request search operations
+- HipoClientImagingStudy: Specialized client for imaging study data
+- HipoClientDiagnosticReport: Specialized client for diagnostic report data
 - Automatic session management with cookie handling
 - Response caching with LRU eviction and timeout
 - FHIR-compatible data structure conversion
@@ -2007,17 +2010,18 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
         #self.request_url = "/Patient/analysesEpisod.asp?strAN={year}&&pacid={pacid}"
 
     async def search(self, patient_id, **kwargs):
-        """Search for patients by various criteria.
+        """Search for service requests by patient ID.
 
-        Handles searching for patients by name, CNP, partial CNP, or patient code.
-        Automatically determines the search type based on the input format.
+        Retrieves all service requests associated with a specific patient.
 
         Args:
-            patient_id: 
-            **kwargs: Additional arguments
+            patient_id: Patient identifier
+            **kwargs: Additional arguments (e.g., 'full' for complete data, 
+                     'type' for filtering by request type, 'region' for filtering by region,
+                     'dt' for filtering by datetime)
 
         Returns:
-            HipoData containing search results or error information
+            HipoData containing service requests or error information
         """
         # Initialize result data
         data = HipoData(status="success", message="")
