@@ -158,7 +158,6 @@ async def search_patient(request):
     except Exception as e:
         return create_error_response("Patient retrieval failed", 500, {"exception": str(e)})
 
-
 @require_auth
 async def search_fhir_patient(request):
     """Retrieve patient information by ID.
@@ -289,7 +288,6 @@ async def get_fhir_patient(request):
         return create_error_response("Patient retrieval failed", 500, {"exception": str(e)})
 
 
-
 @require_auth
 async def search_request(request):
     """Retrieve service requests for patient.
@@ -331,6 +329,95 @@ async def search_request(request):
     except Exception as e:
         return create_error_response("Service requests retrieval failed", 500, {"exception": str(e)})
 
+@require_auth
+async def search_fhir_service_request(request):
+    """Retrieve patient information by ID.
+
+    Gets patient information from the Hipocrate service and extracts
+    associated admission and discharge IDs.
+
+    Args:
+        request: The incoming HTTP request with 'id' query parameter for patient ID
+                 and basic auth credentials for authentication
+
+    Returns:
+        JSON response with patient data or error information
+    """
+    # Get search parameter from query string
+    patient_id = request.query.get('patient', '')
+    if not patient_id:
+        return create_error_response("Patient ID is required")
+    logger.info(f"Retrieving service requests for patient with ID: {patient_id}")
+
+    # Get optional parameters
+    exam_type = request.query.get('type')
+    exam_region = request.query.get('region')
+    exam_datetime = request.query.get('dt')
+    full_data = request.query.get('full', 'no').lower() == 'yes'
+
+    try:
+        # Create a new HipoClient instance with credentials
+        client = HipoClientServiceRequestSearch(SERVICE_URL, request)
+
+        # Retrieve and parse the page
+        parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime, full=full_data)
+
+        # Check for errors in the response
+        status = 200 if parsed_data.get("status") == "success" else 404
+
+        # Check if there are more in response
+        if 'requests' in parsed_data and len(parsed_data['requests']) > 0:
+            # Convert multiple patients to FHIR Bundle
+            bundle = {
+                "resourceType": "Bundle",
+                "type": "searchset",
+                "total": len(parsed_data['requests']),
+                "entry": []
+            }
+
+
+            for req in parsed_data['requests']:
+                fhir_observation = {
+                    "resourceType": "Observation",
+                    "id": req["id"],
+                    "status": "final",
+                    "code": {
+                        "coding": [
+                            {
+                                "system": f"{request.scheme}://{request.host}/fhir/CodeSystem/analysis-types",
+                                "code": req["type"],
+                                "display": ANALYSIS_TYPES[req["type"]]["display"]
+                            }
+                        ],
+                        "text": ANALYSIS_TYPES[req["type"]]["definition"]
+                    },
+                    "subject": {
+                        "reference": f"Patient/{patient_id}"
+                    },
+                    "basedOn": {
+                        "reference": f"ServiceRequest/{req.get('id')}"
+                    },
+                }
+                # Add effective datetime if available
+                if req.get("datetime"):
+                    fhir_observation["effectiveDateTime"] = req["datetime"]
+
+            bundle["entry"].append({
+                "resource": fhir_observation
+            })
+
+
+
+
+            parsed_data['fhir'] = bundle
+        else:
+            parsed_data['fhir'] = {}
+       
+        # Return the response
+        return web.json_response(parsed_data["fhir"], status = status)
+
+    except Exception as e:
+        return create_error_response("Patient retrieval failed", 500, {"exception": str(e)})
 
 
 @require_auth
@@ -1301,6 +1388,7 @@ async def init_app():
     # FHIR-compatible endpoints
     app.router.add_get('/fhir/Patient', search_fhir_patient)
     app.router.add_get('/fhir/Patient/{id}', get_fhir_patient)
+    app.router.add_get('/fhir/ServiceRequest', search_fhir_service_request)
     app.router.add_get('/fhir/ServiceRequest/{id}', get_fhir_service_request)
     app.router.add_get('/fhir/ImagingStudy/{id}', get_fhir_imaging_study)
     app.router.add_get('/fhir/DiagnosticReport/{id}', get_fhir_diagnostic_report)
