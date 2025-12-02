@@ -376,31 +376,33 @@ async def search_fhir_service_request(request):
             }
 
             for req in parsed_data['requests']:
-                fhir_service_request = {
-                    "resourceType": "ServiceRequest",
-                    "id": req["id"],
-                    "status": "active",
-                    "intent": "order",
-                    "code": {
-                        "coding": [
-                            {
-                                "system": f"{request.scheme}://{request.host}/fhir/CodeSystem/analysis-types",
-                                "code": req["type"],
-                                "display": ANALYSIS_TYPES[req["type"]]["display"]
-                            }
-                        ],
-                        "text": ANALYSIS_TYPES[req["type"]]["definition"]
-                    },
-                    "subject": {
-                        "reference": f"Patient/{patient_id}"
-                    }
-                }
+                # Create FHIR ServiceRequest using the FHIR class
+                fhir_service_request = FHIRServiceRequest(
+                    id=req["id"],
+                    status="active",
+                    intent="order",
+                    priority="urgent" if req.get("is_urgent") else "routine"
+                )
+                
+                # Add subject reference
+                fhir_service_request["subject"] = Reference(
+                    reference=f"Patient/{patient_id}"
+                )
+                
+                # Add code
+                fhir_service_request["code"] = CodeableConcept(
+                    coding=[{
+                        "system": f"{request.scheme}://{request.host}/fhir/CodeSystem/analysis-types",
+                        "code": req["type"],
+                        "display": ANALYSIS_TYPES[req["type"]]["display"]
+                    }],
+                    text=ANALYSIS_TYPES[req["type"]]["definition"]
+                )
+                
                 # Add effective datetime if available
                 if req.get("datetime"):
                     fhir_service_request["authoredOn"] = req["datetime"]
-                # Add priority if urgent
-                if req.get("is_urgent"):
-                    fhir_service_request["priority"] = "urgent"
+                
                 # Add region information if available
                 if req.get("regions"):
                     fhir_service_request["bodySite"] = []
@@ -408,9 +410,10 @@ async def search_fhir_service_request(request):
                         fhir_service_request["bodySite"].append({
                             "text": region
                         })
+                
                 # Append the entry
                 bundle["entry"].append({
-                    "resource": fhir_service_request
+                    "resource": fhir_service_request.to_dict()
                 })
 
             parsed_data['fhir'] = bundle
