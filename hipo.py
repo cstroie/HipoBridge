@@ -2130,9 +2130,9 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                 data.store("patient.gender", parsed_cnp.get("gender"))
                 data.store("patient.date", parsed_cnp.get("birth_date"))
                 data.store("patient.age", parsed_cnp.get("age"))
-            
+
             requests = []
-            for link in soup.find_all('a', href=re.compile(r'analyseFile\.asp\?id=\d+')):
+            for link in soup.find_all('a', href=re.compile(r'analyseFile\.asp')):
                 # Extract request ID
                 request_id = extract_id_from_link(link, r'id=(\d+)')
                 if not request_id:
@@ -2153,7 +2153,15 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                 if len(cells) >= 8:
                     # Cell 0: Checkbox (ignore)
                     # Cell 1: Report link (already processed)
-                    # Cell 2: Barcode and registry code
+                    # Cell 2: Barcode and type
+                    barcode, exam_type = cells[2].get_text(strip=True).split(' - ', 1)
+                    type_match = re.search(r'\d{4}-(\w+)', exam_type.strip())
+                    if type_match:
+                        extracted_type = type_match.group(1).lower()
+                        # Check if the extracted type is in our known analysis types
+                        if extracted_type in ANALYSIS_TYPES:
+                            request.store("type", extracted_type)
+
                     # Cell 3: Checkin/Checkup code
                     request.store('checkin', extract_ids_from_links(cells[3], r'checkin\.asp\?id=(\d+)'))
                     request.store('checkup', extract_ids_from_links(cells[3], r'checkup\.asp\?cuid=(\d+)'))
@@ -2181,10 +2189,6 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                         # Check if the extracted type is in our known analysis types
                         if extracted_type in ANALYSIS_TYPES:
                             request.store("type", extracted_type)
-                        else:
-                            request.store("type", "other")
-                    else:
-                        request.store("type", "other")
 
                     # Cell 7: Requesting doctor
                     request.store('medic', cells[7].get_text())
