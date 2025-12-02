@@ -46,9 +46,8 @@ from fhir import ServiceRequest as FHIRServiceRequest, CodeableConcept, Coding, 
 
 from hipo import ANALYSIS_TYPES
 from hipo import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientImagingStudy, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientServiceRequestSearch, HipoClientCheckout
-from hipo import HipoData, user_session_manager, identify_study_type_and_region
+from hipo import HipoData, user_session_manager
 
-from extractors import extract_id_from_link, extract_ids_from_links, extract_selected_from_dropdown, extract_tabular_data, extract_text_after_label, extract_text_from_element, extract_textarea_after_label, extract_value_from_input
 from extractors import parse_cnp
 
 from markdown import html_to_markdown, markdown_to_html
@@ -70,8 +69,6 @@ DEFAULT_CONFIG = {
         'service_url': 'http://127.0.0.1/hipocrate'
     }
 }
-
-
 
 
 
@@ -115,7 +112,6 @@ def require_auth(handler):
         return await handler(request)
     # End of wrapper function
     return wrapper
-
 
 
 
@@ -733,9 +729,6 @@ async def get_fhir_encounter(request):
 
     except Exception as e:
         return create_error_response("Encounter retrieval failed", 500, {"exception": str(e)})
-
-
-
 
 
 
