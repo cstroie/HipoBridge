@@ -1164,35 +1164,6 @@ class HipoClient:
             data.set_error("Data retrieval failed")
             return data
 
-    async def debug_page(self, *args, max_redirects=5, **kwargs):
-        """Generic method to fetch data from an endpoint and return raw HTML.
-
-        This method provides a reusable way to fetch raw HTML content from any endpoint
-        without parsing it. Useful for debugging purposes.
-
-        Args:
-            max_redirects: Maximum number of redirects to follow (default: 5)
-            **kwargs: Arguments for URL formatting
-
-        Returns:
-            String containing raw HTML content or error information
-        """
-        # Create the specific request url
-        url = self.request_url.format(**kwargs)
-        try:
-            # Retrieve the page
-            response_text, success, error_response = await self.get_page(url, max_redirects)
-
-            # Check for errors in the response
-            if not success:
-                return f"Error: {error_response}"
-
-            # Return the raw HTML content
-            return response_text
-
-        except Exception as e:
-            return f"Error: Data retrieval failed - {str(e)}"
-
     async def fetch_repond_fhir(self, *args, max_redirects=5, **kwargs):
         """Generic method to fetch data from an endpoint and convert it to FHIR format.
 
@@ -1223,6 +1194,37 @@ class HipoClient:
             data = {"status": "error", "message": "Data retrieval failed", "exception": str(e)}
             logger.error(data["message"])
             return data
+
+    async def debug_page(self, *args, max_redirects=5, **kwargs):
+        """Generic method to fetch data from an endpoint and return raw HTML.
+
+        This method provides a reusable way to fetch raw HTML content from any endpoint
+        without parsing it. Useful for debugging purposes.
+
+        Args:
+            max_redirects: Maximum number of redirects to follow (default: 5)
+            **kwargs: Arguments for URL formatting
+
+        Returns:
+            String containing raw HTML content or error information
+        """
+        # Create the specific request url
+        url = self.request_url.format(**kwargs)
+        try:
+            # Retrieve the page
+            response_text, success, error_response = await self.get_page(url, max_redirects)
+
+            # Check for errors in the response
+            if not success:
+                return f"Error: {error_response}"
+
+            # Return the raw HTML content
+            return response_text
+
+        except Exception as e:
+            return f"Error: Data retrieval failed - {str(e)}"
+
+
 
 class HipoClientPatient(HipoClient):
     """Specialized client for patient related operations in the Hipocrate medical system.
@@ -1626,7 +1628,7 @@ class HipoClientPatientSearch(HipoClientPatient):
             # Try to parse as multiple patients page
             parsed_data = self.parse_multiple_patients_data(response_text, **kwargs)
             if parsed_data and parsed_data.get("status") == "success":
-                return parsed_data         
+                return parsed_data
             
             data.set_error("Patient not found")
             return data
@@ -1634,7 +1636,6 @@ class HipoClientPatientSearch(HipoClientPatient):
         except Exception as e:
             data.set_error(f"Patient search failed: {str(e)}")
             return data
-
 
     def parse_one_patient_data(self, html_content: str, **kwargs) -> HipoData:
         """Parse HTML content for a single patient page.

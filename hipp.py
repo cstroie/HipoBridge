@@ -190,6 +190,81 @@ async def search_patient(request):
     except Exception as e:
         return create_error_response("Patient retrieval failed", 500, {"exception": str(e)})
 
+
+@require_auth
+async def search_fhir_patient(request):
+    """Retrieve patient information by ID.
+
+    Gets patient information from the Hipocrate service and extracts
+    associated admission and discharge IDs.
+
+    Args:
+        request: The incoming HTTP request with 'id' query parameter for patient ID
+                 and basic auth credentials for authentication
+
+    Returns:
+        JSON response with patient data or error information
+    """
+    # Get search parameter from query string
+    search_term = request.query.get('q', '')
+    if not search_term:
+        return create_error_response("Search term is required")
+    logger.info(f"Searching for patients with term: {search_term}")
+
+    try:
+        # Create a new HipoClient instance with credentials
+        client = HipoClientPatientSearch(SERVICE_URL, request)
+
+        # Retrieve and parse the page
+        parsed_data = await client.search(search_term)
+
+        # Check for errors in the response
+        status = 200 if parsed_data.get("status") == "success" else 404
+
+        # Check if there is one patient or there are more in response
+        if 'patient' in parsed_data:
+            # Convert parsed data to FHIR resource
+            parsed_data['fhir'] = client.fhir_response(parsed_data)
+        elif 'patients' in parsed_data and len(parsed_data['patients']) > 0:
+            # Convert multiple patients to FHIR Bundle
+            bundle = {
+                "resourceType": "Bundle",
+                "type": "searchset",
+                "total": len(parsed_data['patients']),
+                "entry": []
+            }
+            for patient_id, patient_name in parsed_data['patients'].items():
+                # Split patient name into family and given names
+                name_parts = patient_name.split()
+                family_name = name_parts[0] if len(name_parts) > 0 else ""
+                given_names = name_parts[1:] if len(name_parts) > 1 else []
+                # Create FHIR Patient resource
+                fhir_patient = {
+                    "resourceType": "Patient",
+                    "id": patient_id,
+                    "name": [
+                        {
+                            "use": "official",
+                            "family": family_name,
+                            "given": given_names
+                        }
+                    ]
+                }
+                # Add entry to bundle
+                bundle["entry"].append({
+                    "resource": fhir_patient
+                })
+            parsed_data['fhir'] = bundle
+        else:
+            parsed_data['fhir'] = {}
+        
+        # Return the response
+        return web.json_response(parsed_data["fhir"], status = status)
+
+    except Exception as e:
+        return create_error_response("Patient retrieval failed", 500, {"exception": str(e)})
+
+
 @require_auth
 async def get_patient(request):
     """Retrieve service request information by ID.
@@ -261,514 +336,6 @@ async def get_fhir_patient(request):
     except Exception as e:
         return create_error_response("Patient retrieval failed", 500, {"exception": str(e)})
 
-@require_auth
-async def search_fhir_patient(request):
-    """Search for patients by name or other criteria.
-
-    Performs a patient search on the Hipocrate service using the provided search term.
-    Can return either a single patient result or multiple patient results.
-    If the search term ends with *, it's treated as a partial CNP search.
-
-    Args:
-        request: The incoming HTTP request with 'q' query parameter for search term
-                 and basic auth credentials for authentication
-
-    Returns:
-        JSON response with search results or error information
-    """
-    # Get search parameter from query string
-    search_term = request.query.get('q', '')
-    if not search_term:
-        return create_error_response("Search term is required")
-    logger.info(f"Searching for patients with term: {search_term}")
-
-    # Create a new HipoClient instance with credentials
-    client = HipoClient(SERVICE_URL, request)
-
-    try:
-        # Determine search type based on input
-        search_type = "name"  # default
-
-        # Check if search term is numeric
-        if search_term.isdigit():
-            # If it's 13 digits, validate as CNP
-            if len(search_term) == 13:
-                if validate_cnp(search_term):
-                    search_type = "cnp"
-                    logger.info(f"Performing CNP search for: {search_term}")
-                else:
-                    # Not a valid CNP, treat as patient code
-                    search_type = "code"
-                    logger.info(f"Performing patient code search for: {search_term}")
-            else:
-                # Numeric but not 13 digits, treat as patient code
-                search_type = "code"
-                logger.info(f"Performing patient code search for: {search_term}")
-        else:
-            # Check if search term ends with *, treat as partial CNP
-            if search_term.endswith('*'):
-                # Validate that the part before * is all digits
-                prefix = search_term[:-1]
-                if prefix.isdigit() and len(prefix) < 13:
-                    search_type = "partial_cnp"
-                    logger.info(f"Performing partial CNP search for: {search_term}")
-                else:
-                    # Not a valid partial CNP, treat as name search
-                    search_type = "name"
-                    logger.info(f"Searching for patients by name: {search_term}")
-            else:
-                # Not numeric, treat as name search
-                search_type = "name"
-                logger.info(f"Searching for patients by name: {search_term}")
-
-        # Prepare full search data as captured in the POST request
-        search_data = {
-            "hdnSearchType": "1",
-            "pageNo": "1",
-            "strDescription": search_term if search_type in ["name", "code", "cnp", "partial_cnp"] else "",
-            "strLastName": "",
-            "strFirstName": "",
-            "strCodePres": "",
-            "strCNP": "",
-            "strSDate": "",
-            "strEDate": "",
-            "strProfessionID": "",
-            "strSex": "",
-            "strReference": "",
-            "selSection": "0",
-            "selDoctor": "",
-            "intDiagnosisP": "",
-            "DiagnosisP": "",
-            "intDiagnosisPDRG": "",
-            "DiagnosisPDRG": "",
-            "searchWhat": "PA",
-            "strShowLastFile": "1",
-            "strCheckedIn": "-1",
-            "strCODQR": "",
-            "btnCODQR": "IMPORTA COD QR",
-            "btnCODQRClear": "STERGE COD QR",
-            "hdnQRSave": "",
-            "IdQR": ""
-        }
-
-        # Make search request to the patient search page
-        request_url = f"/files/search.asp?what=PA"
-
-        # Post the request
-        response_text, success, error_response = await client.post_form(request_url, search_data)
-
-        # Check for errors in the response
-        if not success:
-            return error_response
-
-
-        ## Try to parse as single patient page first
-        patient_data = parse_patient_data(response_text)
-        if patient_data and patient_data.get("patient_id") and not patient_data.get("error"):
-            fhir_patient = create_fhir_patient(patient_data, request)
-            return web.json_response(fhir_patient)
-
-        # Try to parse as multiple patients page
-        multiple_patients_data = parse_multiple_patients_data(response_text)
-        if multiple_patients_data and len(multiple_patients_data) > 0:
-            # Convert multiple patients to FHIR Bundle
-            bundle = {
-                "resourceType": "Bundle",
-                "type": "searchset",
-                "total": len(multiple_patients_data),
-                "entry": []
-            }
-            for patient_id, patient_name in multiple_patients_data.items():
-                # Split patient name into family and given names
-                name_parts = patient_name.split()
-                family_name = name_parts[0] if len(name_parts) > 0 else ""
-                given_names = name_parts[1:] if len(name_parts) > 1 else []
-                # Create FHIR Patient resource
-                fhir_patient = {
-                    "resourceType": "Patient",
-                    "id": patient_id,
-                    "name": [
-                        {
-                            "use": "official",
-                            "family": family_name,
-                            "given": given_names
-                        }
-                    ]
-                }
-                # Add entry to bundle
-                bundle["entry"].append({
-                    "resource": fhir_patient
-                })
-            return web.json_response(bundle)
-
-        # Check if we're on a "no results" page
-        # TODO This is not working
-        if "nu a fost gasit" in response_text.lower() or "no results" in response_text.lower():
-            # Return empty FHIR Bundle
-            bundle = {
-                "resourceType": "Bundle",
-                "type": "searchset",
-                "total": 0,
-                "entry": []
-            }
-            return web.json_response(bundle)
-
-        # Log a snippet of the response for debugging
-        return create_error_response(
-            "Unable to parse patient search results",
-            500,
-            {"text": response_text[:300] + "..."}
-        )
-
-    except Exception as e:
-        return create_error_response("Patient search failed", 500, {"exception": str(e)})
-
-def parse_patient_data(html_content: str) -> Dict[str, Any]:
-    """Parse HTML content for a single patient page and extract patient data.
-
-    Extracts patient name, CNP, id, and associated encounter/admission/discharge IDs
-    from a single patient page HTML content.
-
-    Args:
-        html_content: HTML content of the single patient page
-
-    Returns:
-        Dictionary containing parsed patient data, or empty dict if not a patient page
-        Returns {"error": "Invalid patient id"} if patient name is empty
-    """
-    # Initialize empty patient data dictionary
-    patient_data = {}
-
-    # Inner function to extract data from input elements
-    def get_data_from(data_key: str, input_id: str) -> None:
-        input_element = soup.find('input', id=input_id)
-        if input_element:
-            patient_data[data_key] = input_element.get('value', '').strip()
-
-    try:
-        # Parse HTML content with BeautifulSoup
-        soup = BeautifulSoup(html_content, 'html.parser')
-
-        # Check if this is a single patient page by looking for 'Date pasaportale' in title
-        if not is_expected_page(soup, 'Date pasaportale'):
-            # Log snnippet of response for debugging
-            return create_error_response("Backend returned an unexpected page", 500, {"text": html_content[:200] + "..."})
-
-        # Check if there is patient data on page by getting the name from the div with id "div_navbar"
-        navbar_div = soup.find('div', id='div_navbar')
-        if not navbar_div:
-            return create_error_response("Invalid patient id", 404)
-        patient_name_from_navbar = navbar_div.get_text().strip()
-        if not patient_name_from_navbar:
-            return create_error_response("Patient name from navbar is empty, invalid patient id", 404)
-
-        # Patient name
-        patient_data["patient_name"] = patient_name_from_navbar
-
-        # Extract patient name from input elements
-        get_data_from("family_name", "strNume")
-        get_data_from("given_name", "strPrenume")
-        if patient_data.get("family_name") and patient_data.get("given_name"):
-            patient_data["patient_name"] = f"{patient_data['family_name']} {patient_data['given_name']}".strip()
-
-        # Extract patient CNP from input element with id "strCNP"
-        get_data_from("patient_cnp", "strCNP")
-
-        # Extract patient id from hidden input with id "hdnCodeID"
-        get_data_from("patient_id", "hdnCodeID")
-
-        # Extract CID
-        get_data_from("cid", "strCID")
-
-        # Extract phone
-        get_data_from("phone", "strTelefon")
-
-        # Extract email
-        get_data_from("email", "strEmail")
-
-        # Extract weight
-        get_data_from("weight", "strGreutate")
-
-        # Extract height
-        get_data_from("height", "strInaltime")
-
-        # Extract MCP
-        get_data_from("mcp", "strmcp")
-
-        # Extract address from SELECT with id strDomLegal_LocId
-        address_select = soup.find('select', id='strDomLegal_LocId')
-        if address_select:
-            selected_option = address_select.find('option', selected=True)
-            if selected_option:
-                patient_data["address"] = selected_option.get_text().strip()
-
-        # Derive sex and birth date from CNP if available
-        if patient_data.get("patient_cnp"):
-            parsed_cnp = parse_cnp(patient_data["patient_cnp"])
-            if parsed_cnp.get("valid"):
-                patient_data["sex"] = parsed_cnp.get("gender", "unknown")
-                patient_data["birth_date"] = parsed_cnp.get("birth_date", "")
-
-        # If we couldn't derive birth date from CNP, try to get it from strDataNastere input
-        if not patient_data.get("birth_date"):
-            birth_date_input = soup.find('input', id='strDataNastere', type='text')
-            if birth_date_input:
-                birth_date_value = birth_date_input.get('value', '').strip()
-                # Convert DD/MM/YYYY format to YYYY-MM-DD
-                if birth_date_value and re.match(r'\d{2}/\d{2}/\d{4}', birth_date_value):
-                    try:
-                        day, month, year = birth_date_value.split('/')
-                        patient_data["birth_date"] = f"{year}-{month}-{day}"
-                    except Exception:
-                        pass  # Keep birth_date empty if parsing fails
-
-        # Extract encounters / presentations
-        encounter_ids = extract_ids_from_links(soup, r'../files/presentation\.asp\?id=(\d+)')
-        if encounter_ids:
-            patient_data["encounters"] = encounter_ids
-
-        # Extract admissions / checkins
-        admission_ids = extract_ids_from_links(soup, r'../files/checkin\.asp\?id=(\d+)')
-        if admission_ids:
-            patient_data["admissions"] = admission_ids
-
-        # Extract discharges / checkouts
-        discharge_ids = extract_ids_from_links(soup, r'../files/checkout\.asp\?id=(\d+)')
-        if discharge_ids:
-            patient_data["discharges"] = discharge_ids
-
-        # Return the extracted patient data
-        return patient_data
-    except Exception as e:
-        logger.error(f"Error parsing patient data: {e}")
-        return {}
-
-def parse_multiple_patients_data(html_content: str) -> Dict[str, Any]:
-    """Parse HTML content for multiple patient search results and extract patient data.
-
-    Extracts patient names, CNP, and ids from search results page with multiple patients.
-
-    Args:
-        html_content: HTML content of the search results page
-
-    Returns:
-        List of dictionaries containing patient data (name, ID only)
-    """
-    # Initialize empty list for patients
-    patients = {}
-
-    try:
-        # Parse HTML content with BeautifulSoup
-        soup = BeautifulSoup(html_content, 'html.parser')
-
-        # Check if this is a search results page by looking for 'Fisier' in title
-        if not is_expected_page(soup, 'Fisier'):
-            # Log snippet of response for debugging
-            #logger.debug(f"Response text snippet: {html_content[:200]}...")
-            # Return empty list if not expected page
-            return patients
-
-        # Find all links with the pattern javascript:Edit('patient_id')
-        pattern = r"javascript:Edit\('([^']+)'\);"
-        for link in soup.find_all('a', href=re.compile(pattern)):
-            # Extract patient id from href
-            patient_id = extract_id_from_link(link, pattern)
-            if not patient_id:
-                continue
-
-            # Extract patient name from the link text
-            patient_name = link.get_text().strip().upper()
-            if patient_name == patient_id:
-                # If name is same as id, skip this entry (the data is duplicated in Hipocrate)
-                continue
-
-            # Add patient data to list
-            patients[patient_id] = patient_name
-        # Return the list of patients
-        return patients
-
-    except Exception as e:
-        logger.error(f"Error parsing multiple patients data: {e}")
-        return patients
-
-def create_fhir_patient(patient_data: Dict[str, Any], request) -> Dict[str, Any]:
-    """Convert patient data to FHIR Patient resource format.
-
-    Args:
-        patient_data: Patient data from parse_patient_data
-        request: The HTTP request object to get the host
-
-    Returns:
-        FHIR Patient resource
-    """
-    # Use already extracted family name and given name if available
-    family_name = patient_data.get("family_name", "")
-    given_names = [patient_data.get("given_name", "")] if patient_data.get("given_name") else []
-
-    # Fallback to parsing from full name if family/given names are not available
-    if not family_name and not given_names:
-        name_parts = patient_data.get("patient_name", "").split()
-        family_name = name_parts[0] if len(name_parts) > 0 else ""
-        given_names = name_parts[1:] if len(name_parts) > 1 else []
-
-    # Use already extracted gender and birth date if available
-    gender = patient_data.get("sex", "unknown")
-    birth_date = patient_data.get("birth_date", "")
-
-    # Create FHIR Patient resource using the FHIR class
-    fhir_patient = FHIRPatient(
-        id=patient_data.get("patient_id", ""),
-        active=True,
-        gender=gender,
-        birthDate=birth_date
-    )
-
-    # Add name
-    name = {
-        "use": "official",
-        "family": family_name,
-        "given": given_names
-    }
-    fhir_patient["name"] = [name]
-
-    # Add telecom information if available
-    telecom = []
-    if patient_data.get("phone", None):
-        telecom.append({
-            "system": "phone",
-            "value": patient_data["phone"]
-        })
-
-    if patient_data.get("email", None):
-        telecom.append({
-            "system": "email",
-            "value": patient_data["email"]
-        })
-
-    if telecom:
-        fhir_patient["telecom"] = telecom
-
-    # Add address information if available
-    address = []
-    if patient_data.get("address", None):
-        address.append({
-            "text": patient_data["address"]
-        })
-
-    if address:
-        fhir_patient["address"] = address
-
-    # Add extensions for additional patient data
-    extensions = []
-
-    # Add weight if available
-    if patient_data.get("weight", None):
-        extensions.append({
-            "url": "http://hl7.org/fhir/us/vitals/StructureDefinition/body-weight",
-            "valueString": patient_data["weight"]
-        })
-
-    # Add height if available
-    if patient_data.get("height", None):
-        extensions.append({
-            "url": "http://hl7.org/fhir/us/vitals/StructureDefinition/height",
-            "valueString": patient_data["height"]
-        })
-
-    # Add extensions for encounter/admission/discharge IDs
-    if "encounters" in patient_data:
-        extensions.append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/encounter-ids",
-            "valueString": ",".join(patient_data["encounters"])
-        })
-    if "admissions" in patient_data:
-        extensions.append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/admission-ids",
-            "valueString": ",".join(patient_data["admissions"])
-        })
-    if "discharges" in patient_data:
-        extensions.append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/discharge-ids",
-            "valueString": ",".join(patient_data["discharges"])
-        })
-
-    if extensions:
-        fhir_patient["extension"] = extensions
-
-    # Add identifiers
-    identifiers = []
-
-    # Add CNP as identifier if available
-    if patient_data.get("patient_cnp", None):
-        identifiers.append({
-            "use": "official",
-            "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-cnp",
-            "value": patient_data["patient_cnp"]
-        })
-
-    # Add CID if available
-    if patient_data.get("cid", None):
-        identifiers.append({
-            "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-cid",
-            "value": patient_data["cid"]
-        })
-
-    # Add MCP if available
-    if patient_data.get("mcp", None):
-        identifiers.append({
-            "system": f"{request.scheme}://{request.host}/fhir/NamingSystem/patient-mcp",
-            "value": patient_data["mcp"]
-        })
-
-    if identifiers:
-        fhir_patient["identifier"] = identifiers
-
-    # Return the FHIR Patient resource as dict
-    return fhir_patient.to_dict()
-
-
-@require_auth
-async def get_fhir_diagnostic_report_OLD(request):
-    """Retrieve a diagnostic report by ID, following redirect chains.
-
-    Gets a diagnostic report from the Hipocrate service, following any redirects to
-    retrieve the final report data, then parses it into structured format.
-
-    Args:
-        request: The incoming HTTP request with 'id' path parameter for report ID
-                 and basic auth credentials for authentication
-
-    Returns:
-        JSON response with diagnostic report data or error information
-    """
-    # Extract report ID from path
-    id = request.match_info.get('id')
-    if not id:
-        return create_error_response("Report ID is required")
-    logger.info(f"Retrieving report with ID: {id}")
-
-    # Create a new HipoClient instance with credentials
-    client = HipoClient(SERVICE_URL, request)
-
-    try:
-        # The report endpoint
-        request_url = f"/analyse/Reports/analyseFile.asp?id={id}"
-
-        # Retrieve the page
-        response_text, success, error_response = await client.get_page(request_url)
-
-        # Check for errors in the response
-        if not success:
-            return error_response
-
-        # Return DiagnosticReport
-        report_data = parse_report_data(response_text)
-        report_data['report_id'] = id
-        fhir_response = create_fhir_diagnostic_report(report_data, request)
-        return web.json_response(fhir_response)
-
-    except Exception as e:
-        return create_error_response("Report retrieval failed", 500, {"exception": str(e)})
 
 @require_auth
 async def get_fhir_diagnostic_report(request):
@@ -841,191 +408,6 @@ async def get_fhir_imaging_study(request):
 
     except Exception as e:
         return create_error_response("Imaging study retrieval failed", 500, {"exception": str(e)})
-
-
-def parse_report_data(html_content: str) -> Dict[str, Any]:
-    """Parse HTML report content and extract structured data.
-
-    Extracts patient information, examination details, and report results
-    from HTML report content.
-
-    Args:
-        html_content: HTML content of the report
-
-    Returns:
-        Dictionary containing parsed report data
-    """
-    # Initialize report data dictionary
-    report_data = {
-        "patient_name": "",
-        "age": "",
-        "gender": "",
-        "patient_cnp": "",
-        "patient_id": "",
-        "datetime": "",
-        "date": "",
-        "time": "",
-        "examination": "",
-        "reports": [],
-        "performer": ""
-    }
-
-    try:
-        # Parse HTML content with BeautifulSoup
-        soup = BeautifulSoup(html_content, 'html.parser')
-
-        # Extract text content for pattern matching
-        text_content = soup.get_text()
-
-        # Extract patient name
-        name_match = re.search(r'(?:Nume:|PACIENT:)\s*([^\n\r<>&]+?)(?:\s+VARSTA:|\s+SEX:|\s+C\.N\.P:|\s+COD\s+PACIENT:)', text_content, re.IGNORECASE)
-        if name_match:
-            report_data["patient_name"] = re.sub(r'\s+', ' ', name_match.group(1).strip())
-        else:
-            # Fallback pattern if the above doesn't match
-            name_match = re.search(r'(?:Nume:|PACIENT:)\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
-            if name_match:
-                report_data["patient_name"] = re.sub(r'\s+', ' ', name_match.group(1).strip())
-
-        # Extract age
-        age_match = re.search(r'Varsta:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
-        if age_match:
-            report_data["age"] = re.sub(r'\s+', ' ', age_match.group(1).strip())
-
-        # Extract gender
-        gender_match = re.search(r'Sex:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
-        if gender_match:
-            report_data["gender"] = re.sub(r'\s+', ' ', gender_match.group(1).strip())
-
-        # Extract patient CNP
-        cnp_match = re.search(r'C\.N\.P:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
-        if cnp_match:
-            report_data["patient_cnp"] = re.sub(r'\s+', ' ', cnp_match.group(1).strip())
-
-        # Extract patient code
-        code_match = re.search(r'Cod pacient:\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
-        if code_match:
-            report_data["patient_id"] = re.sub(r'\s+', ' ', code_match.group(1).strip())
-
-        # Extract date and time
-        datetime_match = re.search(r'(?:Data si ora recoltarii:|Data investigatiei:)\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
-        dt = None  # Initialize dt variable
-        if datetime_match:
-            datetime_str = re.sub(r'\s+', ' ', datetime_match.group(1).strip())
-            # Try to parse date and time
-            try:
-                # Handle common date formats
-                if re.match(r'\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}', datetime_str):
-                    dt = datetime.strptime(datetime_str, '%d/%m/%Y %H:%M:%S')
-                elif re.match(r'\d{2}/\d{2}/\d{4}', datetime_str):
-                    dt = datetime.strptime(datetime_str, '%d/%m/%Y')
-            except ValueError:
-                # If parsing fails, leave date/time fields empty
-                pass
-        report_data["datetime"] = dt
-
-        # Extract performer (Efectuata de catre:)
-        performer_match = re.search(r'(?:Efectuata de catre:)\s*([^\n\r<>&]+)', text_content, re.IGNORECASE)
-        if performer_match:
-            report_data["performer"] = re.sub(r'\s+', ' ', performer_match.group(1).strip())
-
-        # Extract fields using the helper function
-        report_data["examination"] = extract_text_after_label(soup, r'EXAMINARE EFECTUATA:', 'td')
-
-        # Extract modality from examination text
-        examination_text = report_data["examination"].lower() if report_data["examination"] else ""
-        modality_mapping = {
-            'radiografia': 'CR',    # Computed Radiography
-            'ultrasonografia': 'US',    # Ultrasound
-            'tomografia': 'CT',    # Computed Tomography
-            'rezonanta': 'MR',    # Magnetic Resonance
-            'angiografia': 'XA',    # X-Ray Angiography
-            'cisto': 'RF'     # Radio Fluoroscopy
-        }
-
-        # Check if any modality code is in the examination text
-        for key, modality in modality_mapping.items():
-            if key in examination_text:
-                report_data["modality"] = modality
-                break
-
-        report_data["referral_reason"] = extract_text_after_label(soup, r'DIAGNOSTIC DE TRIMITERE:', 'td')
-        report_data["presumptive_diagnosis"] = extract_text_after_label(soup, r'DG\.PREZUMTIV:', 'td')
-        report_data["special_indications"] = extract_text_after_label(soup, r'INDICATII SPECIALE:', 'td')
-        report_data["referring_physician"] = extract_text_after_label(soup, r'TRIMIS DE:\s*MEDIC', 'td', stop_at=r'SECTIA')
-
-        # Parse referral code and reason if we have referral data
-        if report_data["referral_reason"]:
-            # Split into code and text - first part numeric is the code, rest is the reason
-            parts = report_data["referral_reason"].split(' ', 1)
-            if parts:
-                # Check if first part is numeric (the code)
-                if parts[0].isdigit():
-                    report_data["referral_code"] = parts[0]
-                    report_data["referral_reason"] = parts[1].strip() if len(parts) > 1 else ""
-
-        # Extract multiple reports: find all elements with text starting with "REZULTAT:"
-        for result_element in soup.find_all(string=re.compile(r'^REZULTAT:', re.IGNORECASE)):
-            try:
-                # The investigation name is the text after "REZULTAT:" in the element
-                element_text = result_element.get_text()
-                investigation_match = re.search(r'REZULTAT:\s*(.*?)(?:\s*$)', element_text, re.IGNORECASE)
-                investigation_name = ""
-                if investigation_match:
-                    investigation_name = investigation_match.group(1).strip()
-
-                # Find the next div sibling which contains the actual result
-                result_div = result_element.find_next('div')
-                result_content = ""
-                if result_div:
-                    # Check if the div contains only a single <b> tag as its child
-                    div_children = list(result_div.children)
-                    # Filter out text nodes that contain only whitespace
-                    element_children = [child for child in div_children if hasattr(child, 'name') and child.name]
-                    if len(element_children) == 1 and element_children[0].name == 'b':
-                        # If the only child is a <b> tag, use its content directly
-                        result_content = html_to_markdown(str(element_children[0]))
-                    else:
-                        # Otherwise, process the entire div
-                        result_content = html_to_markdown(str(result_div))
-
-                # Add to reports list
-                # Process investigation name to identify study type and region
-                study_type, region = identify_study_type_and_region(investigation_name)
-                report_data["reports"].append({
-                    "investigation": investigation_name,
-                    "result": result_content,
-                    "type": study_type,
-                    "region": region
-                })
-            except Exception as e:
-                logger.error(f"Error parsing individual report: {e}")
-                continue
-
-        # Extract interpreter (MEDIC, or Medic validator:)
-        # Handle both plain text and HTML formatted interpreter names
-        interpreter_patterns = [
-            r'(?:MEDIC,|Medic validator:)\s*([^\n\r<>&]+)',
-            r'(?:MEDIC,|Medic validator:)\s*<b[^>]*>([^<]+)</b>',
-            r'(?:MEDIC,|Medic validator:)[^>]*>\s*([^\n\r<>&]+)'
-        ]
-        interpreter_name = ""
-        for pattern in interpreter_patterns:
-            interpreter_match = re.search(pattern, html_content, re.IGNORECASE)
-            if interpreter_match:
-                interpreter_name = interpreter_match.group(1).strip()
-                # Clean up HTML entities and extra whitespace
-                interpreter_name = html.unescape(interpreter_name)
-                interpreter_name = re.sub(r'\s+', ' ', interpreter_name)
-                break
-        if interpreter_name:
-            report_data["interpreter"] = interpreter_name
-        # Return the parsed report data
-        return report_data
-
-    except Exception as e:
-        logger.error(f"Error parsing report data: {e}")
-        return {}
 
 def parse_report(html_content: str) -> Dict[str, Any]:
     """Parse HTML report content and extract structured data from report.html format.
@@ -1178,125 +560,6 @@ def parse_report(html_content: str) -> Dict[str, Any]:
         logger.error(f"Error parsing report data: {e}")
         return {}
 
-
-def create_fhir_diagnostic_report_OLD(report_data: Dict[str, Any], request) -> Dict[str, Any]:
-    # Create enhanced FHIR DiagnosticReport resource
-    fhir_report = {
-        "resourceType": "DiagnosticReport",
-        "id": report_data["report_id"],
-        "status": "final",
-        "code": {
-            "coding": [
-                {
-                    "system": f"{request.scheme}://{request.host}/fhir/CodeSystem/report-types",
-                    "code": "imaging-report",
-                    "display": "Imaging Report"
-                }
-            ],
-            "text": report_data.get("examination", "Imaging Report")
-        },
-        "subject": {
-            "reference": f"Patient/{report_data.get('patient_id', '')}"
-        },
-        "basedOn": {
-            "reference": f"ServiceRequest/{report_data.get('report_id')}"
-        },
-        "imagingStudy": {
-            "reference": f"ImagingStudy/{report_data['report_id']}"
-        },
-
-    }
-
-    # Add effective date if available
-    if report_data.get("datetime"):
-        # Ensure datetime is in proper ISO format
-        if isinstance(report_data["datetime"], datetime):
-            fhir_report["effectiveDateTime"] = report_data["datetime"].isoformat()
-        else:
-            fhir_report["effectiveDateTime"] = report_data["datetime"]
-
-    # Add performer if available
-    if report_data.get("performer"):
-        fhir_report["performer"] = [
-            {
-                "display": report_data["performer"]
-            }
-        ]
-
-    # Add results interpreter if available
-    if report_data.get("interpreter"):
-        fhir_report["resultsInterpreter"] = [
-            {
-                "display": report_data["interpreter"]
-            }
-        ]
-
-    # Add results if available
-    if report_data.get("reports"):
-        fhir_report["result"] = [
-            {
-                "reference": f"Observation/{report_data['report_id']}"
-            }
-        ]
-
-        # Add full report text from the first report result
-        fhir_report["presentedForm"] = []
-        for report in report_data["reports"]:
-            # Convert HTML to markdown - no need to encode as base64 since it's text
-            markdown_content = html_to_markdown(report["result"])
-                        
-            fhir_report["presentedForm"].append(
-                {
-                    "contentType": "text/markdown",
-                    "data": markdown_content,
-                    "type": report['type'],
-                    "region": report['region']
-                }
-            )
-
-        # Add the first report's result text to conclusion
-        first_report_result = report_data["reports"][0]["result"] if report_data["reports"] else ""
-        fhir_report["conclusion"] = html_to_markdown(first_report_result)
-
-    # Add media references placeholder
-    fhir_report["media"] = []
-
-    # Add extensions for referer and reason code/text if available
-    extensions = []
-
-    # Add referer if available
-    if report_data.get("referring_physician"):
-        extensions.append({
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/diagnostic-report-referer",
-            "valueString": report_data["referring_physician"]
-        })
-
-    # Add reason code and text if available
-    if report_data.get("referral_code") or report_data.get("referral_reason"):
-        reason_extension = {
-            "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/diagnostic-report-reason",
-            "extension": []
-        }
-
-        if report_data.get("referral_code"):
-            reason_extension["extension"].append({
-                "url": "code",
-                "valueString": report_data["referral_code"]
-            })
-
-        if report_data.get("referral_reason"):
-            reason_extension["extension"].append({
-                "url": "text",
-                "valueString": report_data["referral_reason"]
-            })
-
-        extensions.append(reason_extension)
-
-    if extensions:
-        fhir_report["extension"] = extensions
-
-    # Return the FHIR Patient resource
-    return fhir_report
 
 def create_fhir_imaging_study(report_data: Dict[str, Any], request) -> Dict[str, Any]:
     """Convert report data to FHIR ImagingStudy resource format.
