@@ -754,6 +754,7 @@ async def serve_fhir_analysis_types(request):
             "definition": details["definition"]
         })
 
+    # Create FHIR CodeSystem using the FHIR class structure
     code_system = {
         "resourceType": "CodeSystem",
         "id": "analysis-types",
