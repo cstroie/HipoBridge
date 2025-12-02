@@ -1939,6 +1939,132 @@ class HipoClientServiceRequest(HipoClient):
             return {}
 
 
+class HipoClientServiceRequestSearch(HipoClientServiceRequest):
+    """Specialized client for patient search operations in the Hipocrate medical system.
+
+    Handles searching for patients by various criteria including name, CNP (personal identification number),
+    partial CNP, and patient code. Supports both single patient and multiple patient result parsing.
+    """
+
+    def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
+        """Initialize the patient search client.
+
+        Args:
+            service_url: Base URL of the Hipocrate service
+            request: Optional request object to extract credentials from
+        """
+        # Initialize the parent
+        super().__init__(service_url = service_url, request = request)
+        # The request endpoint
+        self.request_url = "/pacient/analyses.asp?type=PA&pacid={id}"
+
+    async def search(self, patient_id, **kwargs):
+        """Search for patients by various criteria.
+
+        Handles searching for patients by name, CNP, partial CNP, or patient code.
+        Automatically determines the search type based on the input format.
+
+        Args:
+            patient_id: 
+            **kwargs: Additional arguments
+
+        Returns:
+            HipoData containing search results or error information
+        """
+        # Initialize result data
+        data = HipoData(status="success", message="")
+
+        # Add full=yes parameter if requested
+        if kwargs.get('full'):
+            self.request_url += "&full=yes"
+
+        # Create the specific request url
+        url = self.request_url.format(id=patient_id)
+        try:
+            # Retrieve the page
+            response_text, success, error_response = await self.get_page(url)
+
+            # Check for errors in the response
+            if not success:
+                data.set_error(error_response)
+                return data
+
+            # Parse the data using the parser function
+            parsed_data = self.parse_data(response_text, **kwargs)
+            return parsed_data
+
+        except Exception as e:
+            data.set_error("Data retrieval failed")
+            return data
+
+    def parse_data(self, html_content: str, **kwargs) -> HipoData:
+        """Parse HTML service request content and extract structured data.
+
+        Extracts patient information and medical data from service request HTML content,
+        including medic information, diagnosis, imaging studies, and request details.
+
+        Args:
+            html_content: HTML content of the service request page
+            **kwargs: Additional arguments
+
+        Returns:
+            HipoData containing parsed service request data organized in sections:
+            - patient: Patient information (name, id)
+            - checkin: Admission information (medic, id, diagnosis)
+            - request: Request information (clinical_comments, lab_comments, datetime, is_urgent)
+            - studies: List of requested imaging studies
+        """
+        # Initialize result dictionary
+        data = HipoData(status="success", message="")
+
+
+
+
+
+
+
+
+        # Return the service requests
+        return data
+    
+
+    def parse_multiple_patients_data(self, html_content: str) -> HipoData:
+        """Parse HTML content for multiple patient search results and extract patient data.
+
+        Extracts patient names, CNP, and ids from search results page with multiple patients.
+
+        Args:
+            html_content: HTML content of the search results page
+
+        Returns:
+            HipoData containing patient search results
+        """
+        # Initialize empty dict for patients
+        data = HipoData(status="success", message="", patients = {})
+
+        try:
+            # Parse HTML content with BeautifulSoup
+            soup = BeautifulSoup(html_content, 'html.parser')
+
+            # Check if this is a search results page by looking for 'Fisier' in title
+            if not self.is_expected_page(soup, 'Fisier'):
+                # Return empty list if not expected page
+                data.set_error(f"Unexpected page for PatientSearch: {self.get_title(soup)}")
+                logger.warning(f"{data['message']}: {self.get_error(soup)}")
+                return data
+
+            # Find all links with the pattern javascript:Edit('patient_id')
+            pattern = r"javascript:Edit\('([^']+)'\);"
+            data["patients"] = extract_text_ids_from_links(soup, pattern)
+
+        except Exception as e:
+            logger.error(f"Error parsing multiple patients data: {e}")
+            data.set_error(str(e))
+
+        # Return the patients dict
+        return data
+
+
 
 class HipoClientImagingStudy(HipoClient):
     """Specialized client for imaging study related operations in the Hipocrate medical system.

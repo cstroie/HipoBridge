@@ -44,7 +44,7 @@ import base64
 # Import FHIR classes
 from fhir import ServiceRequest as FHIRServiceRequest, CodeableConcept, Coding, Reference, CodeableReference, Condition, Patient as FHIRPatient
 
-from hipo import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientImagingStudy, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientCheckout
+from hipo import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientImagingStudy, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientServiceRequestSearch, HipoClientCheckout
 from hipo import HipoData, user_session_manager, identify_study_type_and_region
 
 from extractors import extract_id_from_link, extract_ids_from_links, extract_selected_from_dropdown, extract_tabular_data, extract_text_after_label, extract_text_from_element, extract_textarea_after_label, extract_value_from_input
@@ -326,6 +326,50 @@ async def get_fhir_patient(request):
 
     except Exception as e:
         return create_error_response("Patient retrieval failed", 500, {"exception": str(e)})
+
+
+
+@require_auth
+async def search_request(request):
+    """Retrieve service requests for patient.
+
+    Gets service request information from the Hipocrate service and parses
+    the medical data into structured format.
+
+    Args:
+        request
+
+    Returns:
+        JSON response with service request data or error information
+    """
+    # Get search parameter from query string
+    patient_id = request.query.get('patient', '')
+    if not patient_id:
+        return create_error_response("Patient ID is required")
+    logger.info(f"Retrieving service requests for patient with ID: {patient_id}")
+
+    # Get optional parameters
+    exam_type = request.query.get('type')
+    exam_region = request.query.get('region')
+    exam_datetime = request.query.get('dt')
+    full_data = request.query.get('full', 'no').lower() == 'yes'
+
+    try:
+        # Create a new HipoClient instance with credentials
+        client = HipoClientServiceRequestSearch(SERVICE_URL, request)
+
+        # Retrieve and parse the page
+        parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime, full=full_data)
+
+        # Check for errors in the response
+        status = 200 if parsed_data.get("status") == "success" else 404
+        
+        # Return the response
+        return web.json_response(parsed_data, status = status)
+
+    except Exception as e:
+        return create_error_response("Service requests retrieval failed", 500, {"exception": str(e)})
+
 
 
 @require_auth
@@ -1288,6 +1332,7 @@ async def init_app():
     # API endpoints
     app.router.add_get('/api/patient', search_patient)
     app.router.add_get('/api/patient/{id}', get_patient)
+    app.router.add_get('/api/request', search_request)
     app.router.add_get('/api/request/{id}', get_request)
     app.router.add_get('/api/study/{id}', get_study)
     app.router.add_get('/api/report/{id}', get_report)
