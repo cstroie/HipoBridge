@@ -375,7 +375,6 @@ async def search_fhir_service_request(request):
                 "entry": []
             }
 
-
             for req in parsed_data['requests']:
                 fhir_observation = {
                     "resourceType": "Observation",
@@ -401,13 +400,10 @@ async def search_fhir_service_request(request):
                 # Add effective datetime if available
                 if req.get("datetime"):
                     fhir_observation["effectiveDateTime"] = req["datetime"]
-
-            bundle["entry"].append({
-                "resource": fhir_observation
-            })
-
-
-
+                # Append the entry
+                bundle["entry"].append({
+                    "resource": fhir_observation
+                })
 
             parsed_data['fhir'] = bundle
         else:
