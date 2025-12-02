@@ -125,16 +125,17 @@ def require_auth(handler):
 
 @require_auth
 async def search_patient(request):
-    """Retrieve service request information by ID.
+    """Search for patients by name, CNP, or patient code.
 
-    Gets service request information from the Hipocrate service and parses
-    the medical data into structured format.
+    Searches for patients in the Hipocrate service using various search criteria
+    and returns matching patient information.
 
     Args:
-        request
+        request: The incoming HTTP request with 'q' query parameter for search term
+                 and basic auth credentials for authentication
 
     Returns:
-        JSON response with service request data or error information
+        JSON response with patient search results or error information
     """
     # Get search parameter from query string
     search_term = request.query.get('q', '')
@@ -160,17 +161,17 @@ async def search_patient(request):
 
 @require_auth
 async def search_fhir_patient(request):
-    """Retrieve patient information by ID.
+    """Search for patients and return FHIR-formatted results.
 
-    Gets patient information from the Hipocrate service and extracts
-    associated admission and discharge IDs.
+    Searches for patients in the Hipocrate service and returns results
+    in FHIR Patient resource format.
 
     Args:
-        request: The incoming HTTP request with 'id' query parameter for patient ID
+        request: The incoming HTTP request with 'q' query parameter for search term
                  and basic auth credentials for authentication
 
     Returns:
-        JSON response with patient data or error information
+        JSON response with FHIR Patient resources or error information
     """
     # Get search parameter from query string
     search_term = request.query.get('q', '')
@@ -218,22 +219,23 @@ async def search_fhir_patient(request):
 
 @require_auth
 async def get_patient(request):
-    """Retrieve service request information by ID.
+    """Retrieve patient information by ID.
 
-    Gets service request information from the Hipocrate service and parses
-    the medical data into structured format.
+    Gets detailed patient information from the Hipocrate service including
+    personal data, contact information, and related encounter IDs.
 
     Args:
-        request
+        request: The incoming HTTP request with 'id' path parameter for patient ID
+                 and basic auth credentials for authentication
 
     Returns:
-        JSON response with service request data or error information
+        JSON response with patient data or error information
     """
-    # Extract service request ID from path
+    # Extract patient ID from path
     id = request.match_info.get('id')
     if not id:
-        return create_error_response("Service request ID is required")
-    logger.info(f"Retrieving service request with ID: {id}")
+        return create_error_response("Patient ID is required")
+    logger.info(f"Retrieving patient with ID: {id}")
 
     try:
         # Create a new HipoClient instance with credentials
@@ -290,13 +292,15 @@ async def get_fhir_patient(request):
 
 @require_auth
 async def search_request(request):
-    """Retrieve service requests for patient.
+    """Search for service requests for a specific patient.
 
-    Gets service request information from the Hipocrate service and parses
-    the medical data into structured format.
+    Gets service requests (medical examinations, lab tests, imaging studies) 
+    for a patient from the Hipocrate service.
 
     Args:
-        request
+        request: The incoming HTTP request with 'patient' query parameter for patient ID
+                 and optional 'type', 'region', 'dt', and 'full' parameters
+                 and basic auth credentials for authentication
 
     Returns:
         JSON response with service request data or error information
@@ -429,13 +433,14 @@ async def search_fhir_service_request(request):
 
 @require_auth
 async def get_request(request):
-    """Retrieve service request information by ID.
+    """Retrieve detailed service request information by ID.
 
-    Gets service request information from the Hipocrate service and parses
-    the medical data into structured format.
+    Gets detailed service request information from the Hipocrate service including
+    medical data, diagnosis, and related studies.
 
     Args:
-        request
+        request: The incoming HTTP request with 'id' path parameter for service request ID
+                 and basic auth credentials for authentication
 
     Returns:
         JSON response with service request data or error information
@@ -505,18 +510,19 @@ async def get_fhir_service_request(request):
 
 @require_auth
 async def get_study(request):
-    """Retrieve imaging study by ID.
+    """Retrieve imaging study information by ID.
 
-    Gets service request information from the Hipocrate service and parses
+    Gets imaging study information from the Hipocrate service and parses
     the medical data into structured format.
 
     Args:
-        request
+        request: The incoming HTTP request with 'id' path parameter for imaging study ID
+                 and basic auth credentials for authentication
 
     Returns:
-        JSON response with service request data or error information
+        JSON response with imaging study data or error information
     """
-    # Extract service request ID from path
+    # Extract imaging study ID from path
     id = request.match_info.get('id')
     if not id:
         return create_error_response("Imaging study ID is required")
@@ -579,16 +585,17 @@ async def get_fhir_imaging_study(request):
 async def get_report(request):
     """Retrieve diagnostic report by ID.
 
-    Gets service request information from the Hipocrate service and parses
+    Gets diagnostic report information from the Hipocrate service and parses
     the medical data into structured format.
 
     Args:
-        request
+        request: The incoming HTTP request with 'id' path parameter for diagnostic report ID
+                 and basic auth credentials for authentication
 
     Returns:
-        JSON response with service request data or error information
+        JSON response with diagnostic report data or error information
     """
-    # Extract service request ID from path
+    # Extract diagnostic report ID from path
     id = request.match_info.get('id')
     if not id:
         return create_error_response("Diagnostic report ID is required")
@@ -653,18 +660,19 @@ async def get_fhir_diagnostic_report(request):
 
 @require_auth
 async def get_checkout(request):
-    """Retrieve checkout information by ID.
+    """Retrieve checkout (discharge) information by ID.
 
-    Gets checkout information from the Hipocrate service and parses
+    Gets checkout/discharge information from the Hipocrate service and parses
     the medical data into structured format.
 
     Args:
-        request
+        request: The incoming HTTP request with 'id' path parameter for checkout ID
+                 and basic auth credentials for authentication
 
     Returns:
         JSON response with checkout data or error information
     """
-    # Extract encounter ID from path
+    # Extract checkout ID from path
     id = request.match_info.get('id')
     if not id:
         return create_error_response("Checkout ID is required")
