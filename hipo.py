@@ -2091,7 +2091,7 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                 data.store("patient.date", parsed_cnp.get("birth_date"))
                 data.store("patient.age", parsed_cnp.get("age"))
             
-            requests = {}
+            requests = []
             for link in soup.find_all('a', href=re.compile(r'analyseFile\.asp\?id=\d+')):
                 # Extract request ID
                 request_id = extract_id_from_link(link, r'id=(\d+)')
@@ -2099,7 +2099,7 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                     continue
 
                 # Keep each request data in HopoData
-                request = HipoData(id=request_id, type="unknown")
+                request = HipoData(id=request_id, type="unknown", regions=[])
 
                 # Find the parent table row
                 parent_row = link.find_parent('tr')
@@ -2167,13 +2167,56 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                     if regions:
                         request.store_list('regions', regions)
 
+                # Filter by type
+                if kwargs.get('type') and kwargs['type'] != request['type']:
+                    continue
+                    
+                # Filter by region
+                if kwargs.get('region') and not kwargs['region'] in request['regions']:
+                    continue
+
                 # Append the reuqest data to the requests list
-                requests[request_id] = request
+                requests.append(request)
+
+            # Filter requests by datetime
+            if kwargs.get('dt'):
+                # Parse the datetime string to match against analysis datetimes
+                try:
+                    target_dt = datetime.fromisoformat(kwargs['dt'].replace('Z', '+00:00'))
+                    # Start with a date range from one day earlier to one day after
+                    hours_range = 24
+                    max_attempts = 10
+
+                    for attempt in range(max_attempts):
+                        start_dt = target_dt - timedelta(hours=hours_range)
+                        end_dt = target_dt + timedelta(hours=hours_range)
+
+                        filtered_requests = []
+                        for req in requests:
+                            if "datetime" in req and start_dt <= datetime.fromisoformat(req["datetime"]) <= end_dt:
+                                filtered_requests.append(req)
+
+                        # If we found exactly one request, return it
+                        if len(filtered_requests) == 1:
+                            requests = filtered_requests
+                            break
+                        # If we found multiple requests, reduce the time range and try again
+                        elif len(filtered_requests) > 1 and attempt < max_attempts - 1:
+                            hours_range = hours_range / 2
+                            continue
+                        # If no requests or on final attempt, return what we found
+                        else:
+                            requests = filtered_requests
+                            break
+
+                except ValueError:
+                    data.set_error(f"Invalid datetime format: {kwargs['dt']}")
+
             # Store the requests
-            data.store('requests', requests)
+            data.store_list('requests', requests)
 
         except Exception as e:
-            logger.error(f"Error parsing multiple patients data: {e}")
+            logger.error(f"Error parsing service requests data: {e}")
             data.set_error(str(e))
 
         # Return the service requests
