@@ -401,6 +401,13 @@ async def search_fhir_service_request(request):
                 # Add priority if urgent
                 if req.get("is_urgent"):
                     fhir_service_request["priority"] = "urgent"
+                # Add region information if available
+                if req.get("regions"):
+                    fhir_service_request["bodySite"] = []
+                    for region in req["regions"]:
+                        fhir_service_request["bodySite"].append({
+                            "text": region
+                        })
                 # Append the entry
                 bundle["entry"].append({
                     "resource": fhir_service_request
