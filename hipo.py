@@ -63,39 +63,48 @@ logger = logging.getLogger('HipoClient')
 ANALYSIS_TYPES = {
     "radio": {
         "display": "Radiology",
-        "definition": "Radiology"
+        "definition": "Radiology",
+        "domain": 36
     },
     "ct": {
         "display": "CT Scan",
-        "definition": "Computed Tomography"
+        "definition": "Computed Tomography",
+        "domain": 32
     },
     "irm": {
         "display": "MRI",
-        "definition": "Magnetic Resonance Imaging"
+        "definition": "Magnetic Resonance Imaging",
+        "domain": 36
     },
     "eco": {
         "display": "Ultrasound",
-        "definition": "Echography"
+        "definition": "Echography",
+        "domain": 33
     },
     "lab": {
         "display": "Laboratory",
-        "definition": "Laboratory tests"
+        "definition": "Laboratory tests",
+        "domain": 36
     },
     "lac": {
         "display": "Angiography and Cardiac Catheterization",
-        "definition": "Angiography and Cardiac Catheterization"
+        "definition": "Angiography and Cardiac Catheterization",
+        "domain": 36
     },
     "lii": {
         "display": "Interventional Radiology",
-        "definition": "Interventional Radiology"
+        "definition": "Interventional Radiology",
+        "domain": 36
     },
     "rads": {
         "display": "Fluoroscopy and CEUS",
-        "definition": "Fluoroscopy and Contrast-Enhanced Ultrasound"
+        "definition": "Fluoroscopy and Contrast-Enhanced Ultrasound",
+        "domain": 37
     },
     "apa": {
         "display": "Anatomopathology",
-        "definition": "Anatomopathology"
+        "definition": "Anatomopathology",
+        "domain": 36
     }
 }
 
@@ -2006,8 +2015,10 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
         # Initialize the parent
         super().__init__(service_url = service_url, request = request)
         # The request endpoint
-        self.request_url = "/pacient/analyses.asp?type=PA&pacid={pacid}"
+        #self.request_url = "/pacient/analyses.asp?type=PA&pacid={pacid}"
         #self.request_url = "/Patient/analysesEpisod.asp?strAN={year}&&pacid={pacid}"
+        #self.request_url = "/Pacient/analysesEpisod.asp?pacid={pacid}&strDomeniu=36"
+        self.request_url = "/Pacient/analysesEpisod.asp?pacid={pacid}"
 
     async def search(self, patient_id, **kwargs):
         """Search for service requests by patient ID.
@@ -2032,6 +2043,15 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
 
         # Create the specific request url
         url = self.request_url.format(pacid=patient_id)
+
+        # Filter by type in request
+        if kwargs.get('type'):
+            # Append the domain
+            url += f"&strDomeniu={ANALYSIS_TYPES[kwargs['type']]['domain']}"
+        else:
+            # Append the year
+            url += f"&strAN={year}"
+        
         try:
             # Retrieve the page
             response_text, success, error_response = await self.get_page(url)
