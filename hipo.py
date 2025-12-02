@@ -2049,7 +2049,23 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
             # Append the domain
             url += f"&strDomeniu={ANALYSIS_TYPES[kwargs['type']]['domain']}"
         else:
-            # Append the year
+            # Append the year extracted from dt parameter
+            dt_param = kwargs.get('dt')
+            if dt_param:
+                try:
+                    # Parse the datetime string to extract year
+                    from datetime import datetime
+                    if 'T' in dt_param:
+                        dt_obj = datetime.fromisoformat(dt_param.replace('Z', '+00:00'))
+                    else:
+                        dt_obj = datetime.strptime(dt_param, '%Y-%m-%d')
+                    year = dt_obj.year
+                except (ValueError, TypeError):
+                    # Fallback to current year if parsing fails
+                    year = datetime.now().year
+            else:
+                # Fallback to current year if no dt parameter
+                year = datetime.now().year
             url += f"&strAN={year}"
         
         try:
