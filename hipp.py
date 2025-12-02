@@ -844,7 +844,7 @@ async def serve_fhir_metadata(request):
                         ]
                     },
                     {
-                        "type": "Observation",
+                        "type": "ServiceRequest",
                         "interaction": [
                             {"code": "read"},
                             {"code": "search-type"}
