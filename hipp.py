@@ -376,10 +376,11 @@ async def search_fhir_service_request(request):
             }
 
             for req in parsed_data['requests']:
-                fhir_observation = {
-                    "resourceType": "Observation",
+                fhir_service_request = {
+                    "resourceType": "ServiceRequest",
                     "id": req["id"],
-                    "status": "final",
+                    "status": "active",
+                    "intent": "order",
                     "code": {
                         "coding": [
                             {
@@ -392,17 +393,17 @@ async def search_fhir_service_request(request):
                     },
                     "subject": {
                         "reference": f"Patient/{patient_id}"
-                    },
-                    "basedOn": {
-                        "reference": f"ServiceRequest/{req.get('id')}"
-                    },
+                    }
                 }
                 # Add effective datetime if available
                 if req.get("datetime"):
-                    fhir_observation["effectiveDateTime"] = req["datetime"]
+                    fhir_service_request["authoredOn"] = req["datetime"]
+                # Add priority if urgent
+                if req.get("is_urgent"):
+                    fhir_service_request["priority"] = "urgent"
                 # Append the entry
                 bundle["entry"].append({
-                    "resource": fhir_observation
+                    "resource": fhir_service_request
                 })
 
             parsed_data['fhir'] = bundle
