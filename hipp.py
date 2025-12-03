@@ -1034,11 +1034,18 @@ def fhir_response(data) -> web.Response:
     """Create a FHIR-compatible JSON response from dict or FHIR Resource objects.
 
     Args:
-        data: Response data as dict or FHIR Resource object
+        data: Response data as dict, FHIR Resource object, or string
 
     Returns:
         JSON response with appropriate FHIR content type and status code
     """
+    # Handle string data as error message
+    if isinstance(data, str):
+        operation_outcome = OperationOutcome.from_error(message=data, code="processing", severity="error")
+        response_data = operation_outcome.to_dict()
+        headers = {'Content-Type': 'application/fhir+json'}
+        return web.json_response(response_data, status=500, headers=headers)
+    
     # Handle FHIR Resource objects by converting to dict
     if hasattr(data, 'to_dict'):
         response_data = data.to_dict()
