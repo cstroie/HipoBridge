@@ -479,11 +479,11 @@ async def get_fhir_service_request(request):
         client = HipoClientServiceRequest(SERVICE_URL, request)
 
         # Retrieve and parse the page, then convert to FHIR resource
-        fhir_response, error_response = await client.fetch_repond_fhir(id=id)
+        fhir_response, error_resp = await client.fetch_repond_fhir(id=id)
 
         # Check for errors in the response
-        if error_response:
-            return error_response
+        if error_resp:
+            return error_resp
         
         # Return the response
         return web.json_response(fhir_response)
@@ -697,11 +697,11 @@ async def get_fhir_encounter(request):
         client = HipoClientCheckout(SERVICE_URL, request)
 
         # Retrieve and parse the page, then convert to FHIR resource
-        fhir_response, error_response = await client.fetch_repond_fhir(id=id)
+        fhir_response, error_resp = await client.fetch_repond_fhir(id=id)
 
         # Check for errors in the response
-        if error_response:
-            return error_response
+        if error_resp:
+            return error_resp
         
         # Return the response
         return web.json_response(fhir_response)
