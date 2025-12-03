@@ -2041,6 +2041,8 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
         Returns:
             HipoData containing service requests or error information
         """
+        from datetime import datetime as datetime_module
+        
         # Initialize result data
         data = HipoData(status="success", message="")
 
@@ -2061,18 +2063,17 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
             if dt_param:
                 try:
                     # Parse the datetime string to extract year
-                    from datetime import datetime
                     if 'T' in dt_param:
-                        dt_obj = datetime.fromisoformat(dt_param.replace('Z', '+00:00'))
+                        dt_obj = datetime_module.fromisoformat(dt_param.replace('Z', '+00:00'))
                     else:
-                        dt_obj = datetime.strptime(dt_param, '%Y-%m-%d')
+                        dt_obj = datetime_module.strptime(dt_param, '%Y-%m-%d')
                     year = dt_obj.year
                 except (ValueError, TypeError):
                     # Fallback to current year if parsing fails
-                    year = datetime.now().year
+                    year = datetime_module.now().year
             else:
                 # Fallback to current year if no dt parameter
-                year = datetime.now().year
+                year = datetime_module.now().year
             url += f"&strAN={year}"
         
         try:
