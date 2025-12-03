@@ -276,7 +276,7 @@ def parse_date_time(date_str: str) -> Optional[datetime]:
         return None
 
 
-def create_error_response(message: str, status_code: int = 400, details: Dict[str, Any] = None) -> web.Response:
+def error_response(message: str, status_code: int = 400, details: Dict[str, Any] = None) -> web.Response:
     """Create a standardized error response for web API endpoints.
 
     Generates consistent JSON error responses with appropriate logging based
@@ -951,9 +951,9 @@ class HipoClient:
                     response_text = await _make_request(use_retry_headers=True)
                     # Check again if still on login page
                     if self.is_login_page(response_text):
-                        return None, False, create_error_response("Authentication failed after retry", 401)
+                        return None, False, error_response("Authentication failed after retry", 401)
                 else:
-                    return None, False, create_error_response("Re-authentication failed", 401)
+                    return None, False, error_response("Re-authentication failed", 401)
 
             # Cache the response for GET requests
             if method == "GET":
@@ -962,7 +962,7 @@ class HipoClient:
             # If we reach here, we have a valid response
             return response_text, True, None
         except Exception as e:
-            return None, False, create_error_response(str(e), 500, {"URL": url})
+            return None, False, error_response(str(e), 500, {"URL": url})
 
     async def handle_response_encoding(self, response):
         """Handle response encoding for the Hipocrate service.
@@ -1138,7 +1138,7 @@ class HipoClient:
                 # Handle 302 redirect
                 location = response.headers.get("Location")
                 if not location:
-                    return None, False, create_error_response("Redirect without location header", 500)
+                    return None, False, error_response("Redirect without location header", 500)
 
                 # Construct the full URL for the redirect
                 if location.startswith("/"):
@@ -1158,7 +1158,7 @@ class HipoClient:
                 redirect_count += 1
 
         # If we've exceeded the maximum redirects
-        return None, False, create_error_response(f"Exceeded maximum redirects ({max_redirects})", 500)
+        return None, False, error_response(f"Exceeded maximum redirects ({max_redirects})", 500)
 
     def parse_data(self, html_content: str, **kwargs) -> HipoData:
         """Parse HTML content and extract structured data.
