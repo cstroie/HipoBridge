@@ -2798,6 +2798,11 @@ class HipoClientDiagnosticReport(HipoClient):
                 request_datetime = parsed_data.get("request.datetime")
                 if request_datetime:
                     fhir_report["effectiveDateTime"] = request_datetime
+                else:
+                    # Try to get datetime from checkin if available
+                    checkin_datetime = parsed_data.get("checkin.datetime")
+                    if checkin_datetime:
+                        fhir_report["effectiveDateTime"] = checkin_datetime
 
             # Add performer if available
             performer = parsed_data.get("study.performer")
