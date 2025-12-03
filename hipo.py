@@ -1234,25 +1234,32 @@ class HipoClient:
             **kwargs: Arguments for URL formatting and parsing
 
         Returns:
-            Tuple of (fhir_data, error_response) where one will be None
+            FHIR resource object or OperationOutcome in case of error
         """
-
         try:
             # Retrieve and parse the page
             parsed_data = await self.fetch_and_parse(**kwargs)
 
             # Check for errors in the response
             if parsed_data.get("status") == "error":
-                return parsed_data
+                # Return OperationOutcome for errors
+                from fhir import OperationOutcome
+                return OperationOutcome.from_error(
+                    message=parsed_data.get("message", "Unknown error"),
+                    code="processing",
+                    severity="error"
+                ).to_dict(), None
 
             # Convert parsed data to FHIR resource
-            parsed_data['fhir'] = self.fhir_response(parsed_data, **kwargs)
-            return parsed_data
+            fhir_resource = self.fhir_response(parsed_data, **kwargs)
+            return fhir_resource, None
 
         except Exception as e:
-            data = {"status": "error", "message": "Data retrieval failed", "exception": str(e)}
-            logger.error(data["message"])
-            return data
+            # Return OperationOutcome for exceptions
+            from fhir import OperationOutcome
+            outcome = OperationOutcome.from_exception(e, code="exception")
+            logger.error(f"Data retrieval failed: {str(e)}")
+            return outcome.to_dict(), None
 
     async def debug_page(self, *args, max_redirects=5, **kwargs):
         """Generic method to fetch data from an endpoint and return raw HTML.
