@@ -43,7 +43,7 @@ import base64
 
 # Import FHIR classes
 from fhir import ServiceRequest as FHIRServiceRequest, CodeableConcept, Coding, Reference, CodeableReference, Condition, Patient as FHIRPatient
-from fhir import OperationOutcome
+from fhir import OperationOutcome, Bundle
 
 from hipo import ANALYSIS_TYPES
 from hipo import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientImagingStudy, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientServiceRequestSearch, HipoClientCheckout
@@ -414,18 +414,14 @@ async def get_request(request):
         return error_response("Service request ID is required")
     logger.info(f"Retrieving service request with ID: {id}")
 
-    try:
-        # Create a new HipoClient instance
-        client = HipoClientServiceRequest(SERVICE_URL, request)
+    # Create a new HipoClient instance
+    client = HipoClientServiceRequest(SERVICE_URL, request)
 
-        # Retrieve and parse the page
-        parsed_data = await client.fetch_and_parse(id=id)
+    # Retrieve and parse the page
+    parsed_data = await client.fetch_and_parse(id=id)
 
-        # Return the response
-        return json_response(parsed_data)
-
-    except Exception as e:
-        return error_response("Service request retrieval failed", 500, {"exception": str(e)})
+    # Return the response
+    return json_response(parsed_data)
 
 @require_auth
 async def get_fhir_service_request(request):
