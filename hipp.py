@@ -179,9 +179,6 @@ async def search_fhir_patient(request):
         # Retrieve and parse the page
         parsed_data = await client.search(search_term)
 
-        # Check for errors in the response
-        status = 200 if parsed_data.get("status") == "success" else 404
-
         # Check if there is one patient or there are more in response
         if 'patient' in parsed_data:
             # Convert parsed data to FHIR resource
@@ -204,7 +201,7 @@ async def search_fhir_patient(request):
             parsed_data['fhir'] = {}
         
         # Return the response
-        return web.json_response(parsed_data["fhir"], status = status)
+        return json_response(parsed_data)
 
     except Exception as e:
         return error_response("Patient retrieval failed", 500, {"exception": str(e)})
@@ -270,11 +267,8 @@ async def get_fhir_patient(request):
         # Retrieve and parse the page, then convert to FHIR resource
         response = await client.fetch_repond_fhir(id=id)
 
-        # Check for errors in the response
-        status = 200 if response.get("status") == "success" else 404
-        
         # Return the response
-        return web.json_response(response["fhir"], status = status)
+        return json_response(response)
 
     except Exception as e:
         return error_response("Patient retrieval failed", 500, {"exception": str(e)})
@@ -353,9 +347,6 @@ async def search_fhir_service_request(request):
         # Retrieve and parse the page
         parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime, full=full_data)
 
-        # Check for errors in the response
-        status = 200 if parsed_data.get("status") == "success" else 404
-
         # Check if there are more in response
         if 'requests' in parsed_data and len(parsed_data['requests']) > 0:
             # Convert multiple patients to FHIR Bundle
@@ -412,7 +403,7 @@ async def search_fhir_service_request(request):
             parsed_data['fhir'] = {}
        
         # Return the response
-        return web.json_response(parsed_data["fhir"], status = status)
+        return json_response(parsed_data)
 
     except Exception as e:
         return error_response("Patient retrieval failed", 500, {"exception": str(e)})
@@ -552,11 +543,8 @@ async def get_fhir_imaging_study(request):
         # Retrieve and parse the page, then convert to FHIR resource
         response = await client.fetch_repond_fhir(id=id)
 
-        # Check for errors in the response
-        status = 200 if response.get("status") == "success" else 404
-        
         # Return the response
-        return web.json_response(response.get("fhir", response), status = status)
+        return json_response(response)
 
     except Exception as e:
         return error_response("Imaging study retrieval failed", 500, {"exception": str(e)})
@@ -627,11 +615,8 @@ async def get_fhir_diagnostic_report(request):
         # Retrieve and parse the page, then convert to FHIR resource
         response = await client.fetch_repond_fhir(id=id)
 
-        # Check for errors in the response
-        status = 200 if response.get("status") == "success" else 404
-        
         # Return the response
-        return web.json_response(response.get("fhir", response), status = status)
+        return json_response(response)
 
     except Exception as e:
         return error_response("Diagnostic report retrieval failed", 500, {"exception": str(e)})
