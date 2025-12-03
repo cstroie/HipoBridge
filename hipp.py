@@ -586,9 +586,10 @@ async def get_report(request):
         # Create a new HipoClient instance
         client = HipoClientDiagnosticReport(SERVICE_URL, request)
 
-        if request.query.get('debug') == 'page':
-            result = await client.debug_page(id=id)
-            return web.Response(body = result, content_type="text/html")
+        # Check if debug response is requested
+        debug_resp = await debug_response(client, request, id=id)
+        if debug_resp:
+            return debug_resp
 
         # Retrieve and parse the page
         parsed_data = await client.fetch_and_parse(id=id)
@@ -1026,6 +1027,24 @@ def json_response(data: Dict[str, Any]) -> web.Response:
     """
     status = 200 if data.get("status") == "success" else 404
     return web.json_response(data, status=status)
+
+
+async def debug_response(client, request, **kwargs) -> web.Response:
+    """Handle debug page responses when debug parameter is present.
+
+    Args:
+        client: HipoClient instance
+        request: The incoming HTTP request
+        **kwargs: Arguments to pass to debug_page method
+
+    Returns:
+        HTML response with raw page content if debug=page parameter is present,
+        None otherwise
+    """
+    if request.query.get('debug') == 'page':
+        result = await client.debug_page(**kwargs)
+        return web.Response(body=result, content_type="text/html")
+    return None
 
 
 def load_config():
