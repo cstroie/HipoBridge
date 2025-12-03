@@ -327,7 +327,7 @@ async def search_fhir_service_request(request):
     # Check if there are requests in response
     if 'requests' in parsed_data and len(parsed_data['requests']) > 0:
         # Convert multiple patients to FHIR Bundle
-        fhir_data = {
+        response = {
             "resourceType": "Bundle",
             "type": "searchset",
             "total": len(parsed_data['requests']),
@@ -371,20 +371,20 @@ async def search_fhir_service_request(request):
                     })
             
             # Append the entry
-            fhir_data["entry"].append({
+            response["entry"].append({
                 "resource": fhir_service_request.to_dict()
             })
         
-        # Return the response
-        return web_fhir_response(fhir_data)
     else:
         # Create OperationOutcome for no requests found
-        outcome = OperationOutcome.from_error(
+        response = OperationOutcome.from_error(
             message="No service requests found for the specified patient",
             code="not-found",
             severity="information"
         )
-        return web_fhir_response(outcome.to_dict())
+
+    # Return the response
+    return web_fhir_response(response)
 
 
 @require_auth
