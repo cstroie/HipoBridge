@@ -136,7 +136,7 @@ async def search_patient(request):
     # Get search parameter from query string
     search_term = request.query.get('q', '')
     if not search_term:
-        return create_error_response("Search term is required")
+        return error_response("Search term is required")
     logger.info(f"Searching for patients with term: {search_term}")
 
     try:
@@ -153,7 +153,7 @@ async def search_patient(request):
         return web.json_response(parsed_data, status = status)
 
     except Exception as e:
-        return create_error_response("Patient retrieval failed", 500, {"exception": str(e)})
+        return error_response("Patient retrieval failed", 500, {"exception": str(e)})
 
 @require_auth
 async def search_fhir_patient(request):
@@ -172,7 +172,7 @@ async def search_fhir_patient(request):
     # Get search parameter from query string
     search_term = request.query.get('q', '')
     if not search_term:
-        return create_error_response("Search term is required")
+        return error_response("Search term is required")
     logger.info(f"Searching for patients with term: {search_term}")
 
     try:
@@ -210,7 +210,7 @@ async def search_fhir_patient(request):
         return web.json_response(parsed_data["fhir"], status = status)
 
     except Exception as e:
-        return create_error_response("Patient retrieval failed", 500, {"exception": str(e)})
+        return error_response("Patient retrieval failed", 500, {"exception": str(e)})
 
 
 @require_auth
@@ -230,7 +230,7 @@ async def get_patient(request):
     # Extract patient ID from path
     id = request.match_info.get('id')
     if not id:
-        return create_error_response("Patient ID is required")
+        return error_response("Patient ID is required")
     logger.info(f"Retrieving patient with ID: {id}")
 
     try:
@@ -247,7 +247,7 @@ async def get_patient(request):
         return web.json_response(parsed_data, status = status)
 
     except Exception as e:
-        return create_error_response("Patient retrieval failed", 500, {"exception": str(e)})
+        return error_response("Patient retrieval failed", 500, {"exception": str(e)})
 
 @require_auth
 async def get_fhir_patient(request):
@@ -266,7 +266,7 @@ async def get_fhir_patient(request):
     # Get patient ID from request path
     id = request.match_info.get('id')
     if not id:
-        return create_error_response("Patient ID is required")
+        return error_response("Patient ID is required")
     logger.info(f"Retrieving patient with ID: {id}")
 
     try:
@@ -283,7 +283,7 @@ async def get_fhir_patient(request):
         return web.json_response(response["fhir"], status = status)
 
     except Exception as e:
-        return create_error_response("Patient retrieval failed", 500, {"exception": str(e)})
+        return error_response("Patient retrieval failed", 500, {"exception": str(e)})
 
 
 @require_auth
@@ -304,7 +304,7 @@ async def search_request(request):
     # Get search parameter from query string
     patient_id = request.query.get('patient', '')
     if not patient_id:
-        return create_error_response("Patient ID is required")
+        return error_response("Patient ID is required")
     logger.info(f"Retrieving service requests for patient with ID: {patient_id}")
 
     # Get optional parameters
@@ -327,7 +327,7 @@ async def search_request(request):
         return web.json_response(parsed_data, status = status)
 
     except Exception as e:
-        return create_error_response("Service requests retrieval failed", 500, {"exception": str(e)})
+        return error_response("Service requests retrieval failed", 500, {"exception": str(e)})
 
 @require_auth
 async def search_fhir_service_request(request):
@@ -346,7 +346,7 @@ async def search_fhir_service_request(request):
     # Get search parameter from query string
     patient_id = request.query.get('patient', '')
     if not patient_id:
-        return create_error_response("Patient ID is required")
+        return error_response("Patient ID is required")
     logger.info(f"Retrieving service requests for patient with ID: {patient_id}")
 
     # Get optional parameters
@@ -424,7 +424,7 @@ async def search_fhir_service_request(request):
         return web.json_response(parsed_data["fhir"], status = status)
 
     except Exception as e:
-        return create_error_response("Patient retrieval failed", 500, {"exception": str(e)})
+        return error_response("Patient retrieval failed", 500, {"exception": str(e)})
 
 
 @require_auth
@@ -444,7 +444,7 @@ async def get_request(request):
     # Extract service request ID from path
     id = request.match_info.get('id')
     if not id:
-        return create_error_response("Service request ID is required")
+        return error_response("Service request ID is required")
     logger.info(f"Retrieving service request with ID: {id}")
 
     try:
@@ -461,7 +461,7 @@ async def get_request(request):
         return web.json_response(parsed_data, status = status)
 
     except Exception as e:
-        return create_error_response("Service request retrieval failed", 500, {"exception": str(e)})
+        return error_response("Service request retrieval failed", 500, {"exception": str(e)})
 
 @require_auth
 async def get_fhir_service_request(request):
@@ -483,7 +483,7 @@ async def get_fhir_service_request(request):
     # Extract service request ID from path
     id = request.match_info.get('id')
     if not id:
-        return create_error_response("Service request ID is required")
+        return error_response("Service request ID is required")
     logger.info(f"Retrieving service request with ID: {id}")
 
     try:
@@ -501,7 +501,7 @@ async def get_fhir_service_request(request):
         return web.json_response(fhir_response)
 
     except Exception as e:
-        return create_error_response("Service request retrieval failed", 500, {"exception": str(e)})
+        return error_response("Service request retrieval failed", 500, {"exception": str(e)})
 
 
 @require_auth
@@ -521,7 +521,7 @@ async def get_study(request):
     # Extract imaging study ID from path
     id = request.match_info.get('id')
     if not id:
-        return create_error_response("Imaging study ID is required")
+        return error_response("Imaging study ID is required")
     logger.info(f"Retrieving imaging study with ID: {id}")
 
     try:
@@ -538,7 +538,7 @@ async def get_study(request):
         return web.json_response(parsed_data, status = status)
 
     except Exception as e:
-        return create_error_response("Imaging study retrieval failed", 500, {"exception": str(e)})
+        return error_response("Imaging study retrieval failed", 500, {"exception": str(e)})
 
 @require_auth
 async def get_fhir_imaging_study(request):
@@ -557,7 +557,7 @@ async def get_fhir_imaging_study(request):
     # Extract imaging study ID from path
     id = request.match_info.get('id')
     if not id:
-        return create_error_response("Imaging study ID is required")
+        return error_response("Imaging study ID is required")
     logger.info(f"Retrieving imaging study with ID: {id}")
 
     try:
@@ -574,7 +574,7 @@ async def get_fhir_imaging_study(request):
         return web.json_response(response.get("fhir", response), status = status)
 
     except Exception as e:
-        return create_error_response("Imaging study retrieval failed", 500, {"exception": str(e)})
+        return error_response("Imaging study retrieval failed", 500, {"exception": str(e)})
 
 
 @require_auth
@@ -594,7 +594,7 @@ async def get_report(request):
     # Extract diagnostic report ID from path
     id = request.match_info.get('id')
     if not id:
-        return create_error_response("Diagnostic report ID is required")
+        return error_response("Diagnostic report ID is required")
     logger.info(f"Retrieving diagnostic report with ID: {id}")
 
     try:
@@ -615,7 +615,7 @@ async def get_report(request):
         return web.json_response(parsed_data, status = status)
 
     except Exception as e:
-        return create_error_response("Diagnostic report retrieval failed", 500, {"exception": str(e)})
+        return error_response("Diagnostic report retrieval failed", 500, {"exception": str(e)})
 
 @require_auth
 async def get_fhir_diagnostic_report(request):
@@ -634,7 +634,7 @@ async def get_fhir_diagnostic_report(request):
     # Extract diagnostic report ID from path
     id = request.match_info.get('id')
     if not id:
-        return create_error_response("Diagnostic report ID is required")
+        return error_response("Diagnostic report ID is required")
     logger.info(f"Retrieving diagnostic report with ID: {id}")
 
     try:
@@ -651,7 +651,7 @@ async def get_fhir_diagnostic_report(request):
         return web.json_response(response.get("fhir", response), status = status)
 
     except Exception as e:
-        return create_error_response("Diagnostic report retrieval failed", 500, {"exception": str(e)})
+        return error_response("Diagnostic report retrieval failed", 500, {"exception": str(e)})
 
 
 @require_auth
@@ -671,7 +671,7 @@ async def get_checkout(request):
     # Extract checkout ID from path
     id = request.match_info.get('id')
     if not id:
-        return create_error_response("Checkout ID is required")
+        return error_response("Checkout ID is required")
     logger.info(f"Retrieving checkout with ID: {id}")
 
     try:
@@ -688,7 +688,7 @@ async def get_checkout(request):
         return web.json_response(parsed_data, status = status)
 
     except Exception as e:
-        return create_error_response("Checkout retrieval failed", 500, {"exception": str(e)})
+        return error_response("Checkout retrieval failed", 500, {"exception": str(e)})
 
 @require_auth
 async def get_fhir_encounter(request):
@@ -710,7 +710,7 @@ async def get_fhir_encounter(request):
     # Extract encounter ID from path
     id = request.match_info.get('id')
     if not id:
-        return create_error_response("Encounter ID is required")
+        return error_response("Encounter ID is required")
     logger.info(f"Retrieving encounter with ID: {id}")
 
     try:
@@ -728,7 +728,7 @@ async def get_fhir_encounter(request):
         return web.json_response(fhir_response)
 
     except Exception as e:
-        return create_error_response("Encounter retrieval failed", 500, {"exception": str(e)})
+        return error_response("Encounter retrieval failed", 500, {"exception": str(e)})
 
 
 
@@ -795,9 +795,9 @@ async def serve_spec(request):
         spec["servers"][0]["url"] = f"{request.scheme}://{request.host}"
         return web.json_response(spec)
     except FileNotFoundError:
-        return create_error_response("Specification file not found", 500)
+        return error_response("Specification file not found", 500)
     except json.JSONDecodeError as e:
-        return create_error_response("Error parsing specification file", 500)
+        return error_response("Error parsing specification file", 500)
 
 
 async def serve_fhir_metadata(request):
@@ -904,9 +904,9 @@ async def serve_md2html(request):
             "html": html_content
         })
     except json.JSONDecodeError:
-        return create_error_response("Invalid JSON data")
+        return error_response("Invalid JSON data")
     except Exception as e:
-        return create_error_response("Markdown conversion failed", 500, {"exception": str(e)})
+        return error_response("Markdown conversion failed", 500, {"exception": str(e)})
 
 
 
@@ -928,7 +928,7 @@ async def serve_validate_cnp(request):
     cnp = request.query.get('id')
 
     if not cnp:
-        return create_error_response("CNP is required")
+        return error_response("CNP is required")
 
     logger.info(f"Validating CNP: {cnp}")
 
@@ -1009,7 +1009,7 @@ def is_expected_page(soup: BeautifulSoup, expected_title_text: str) -> bool:
     title = soup.find('title')
     return title and expected_title_text in title.get_text()
 
-def create_error_response(message: str, status_code: int = 400, details: Dict[str, Any] = None) -> web.Response:
+def error_response(message: str, status_code: int = 400, details: Dict[str, Any] = None) -> web.Response:
     """Create a standardized error response.
 
     Args:
