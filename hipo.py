@@ -2791,9 +2791,13 @@ class HipoClientDiagnosticReport(HipoClient):
                 }
 
             # Add effective date if available
-            request_datetime = parsed_data.get("request.datetime")
-            if request_datetime:
-                fhir_report["effectiveDateTime"] = request_datetime
+            study_datetime = parsed_data.get("study.datetime")
+            if study_datetime:
+                fhir_report["effectiveDateTime"] = study_datetime
+            else:
+                request_datetime = parsed_data.get("request.datetime")
+                if request_datetime:
+                    fhir_report["effectiveDateTime"] = request_datetime
 
             # Add performer if available
             performer = parsed_data.get("study.performer")
