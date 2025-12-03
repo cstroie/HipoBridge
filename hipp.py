@@ -181,14 +181,13 @@ async def search_fhir_patient(request):
         response = client.fhir_response(parsed_data)
     elif 'patients' in parsed_data and len(parsed_data['patients']) > 0:
         # Convert multiple patients to FHIR Bundle using the Bundle class
-        bundle = Bundle(
+        response = Bundle(
             type="searchset",
             total=len(parsed_data['patients'])
         )
         for patient_id, patient_name in parsed_data['patients'].items():
             patient_resource = client.fhir_response(HipoData(patient={'name': patient_name, 'id': patient_id}))
-            bundle.append_entry(resource=patient_resource)
-        response = bundle
+            response.append_entry(resource=patient_resource)
     else:
         # Create OperationOutcome for no patients found
         response = OperationOutcome.from_error(
@@ -331,7 +330,7 @@ async def search_fhir_service_request(request):
     # Check if there are requests in response
     if 'requests' in parsed_data and len(parsed_data['requests']) > 0:
         # Convert multiple patients to FHIR Bundle using the Bundle class
-        bundle = Bundle(
+        response = Bundle(
             type="searchset",
             total=len(parsed_data['requests'])
         )
@@ -373,9 +372,8 @@ async def search_fhir_service_request(request):
                     })
             
             # Append the entry to the bundle
-            bundle.append_entry(resource=fhir_service_request)
+            response.append_entry(resource=fhir_service_request)
         
-        response = bundle
     else:
         # Create OperationOutcome for no requests found
         response = OperationOutcome.from_error(
@@ -437,25 +435,17 @@ async def get_fhir_service_request(request):
     # Extract service request ID from path
     id = request.match_info.get('id')
     if not id:
-        return error_response("Service request ID is required")
+        return web_fhir_response("Service request ID is required")
     logger.info(f"Retrieving service request with ID: {id}")
 
-    try:
-        # Create a new HipoClient instance with credentials
-        client = HipoClientServiceRequest(SERVICE_URL, request)
+    # Create a new HipoClient instance with credentials
+    client = HipoClientServiceRequest(SERVICE_URL, request)
 
-        # Retrieve and parse the page, then convert to FHIR resource
-        fhir_response, error_resp = await client.fetch_repond_fhir(id=id)
-
-        # Check for errors in the response
-        if error_resp:
-            return error_resp
-        
-        # Return the response
-        return web.json_response(fhir_response)
-
-    except Exception as e:
-        return error_response("Service request retrieval failed", 500, {"exception": str(e)})
+    # Retrieve and parse the page, then convert to FHIR resource
+    response = await client.fetch_repond_fhir(id=id)
+    
+    # Return the response
+    return web_fhir_response(response)
 
 
 @require_auth
@@ -478,18 +468,14 @@ async def get_study(request):
         return error_response("Imaging study ID is required")
     logger.info(f"Retrieving imaging study with ID: {id}")
 
-    try:
-        # Create a new HipoClient instance
-        client = HipoClientImagingStudy(SERVICE_URL, request)
+    # Create a new HipoClient instance
+    client = HipoClientImagingStudy(SERVICE_URL, request)
 
-        # Retrieve and parse the page
-        parsed_data = await client.fetch_and_parse(id=id)
+    # Retrieve and parse the page
+    parsed_data = await client.fetch_and_parse(id=id)
 
-        # Return the response
-        return json_response(parsed_data)
-
-    except Exception as e:
-        return error_response("Imaging study retrieval failed", 500, {"exception": str(e)})
+    # Return the response
+    return json_response(parsed_data)
 
 @require_auth
 async def get_fhir_imaging_study(request):
@@ -508,21 +494,17 @@ async def get_fhir_imaging_study(request):
     # Extract imaging study ID from path
     id = request.match_info.get('id')
     if not id:
-        return error_response("Imaging study ID is required")
+        return web_fhir_response("Imaging study ID is required")
     logger.info(f"Retrieving imaging study with ID: {id}")
 
-    try:
-        # Create a new HipoClient instance with credentials
-        client = HipoClientImagingStudy(SERVICE_URL, request)
+    # Create a new HipoClient instance with credentials
+    client = HipoClientImagingStudy(SERVICE_URL, request)
 
-        # Retrieve and parse the page, then convert to FHIR resource
-        response = await client.fetch_repond_fhir(id=id)
+    # Retrieve and parse the page, then convert to FHIR resource
+    response = await client.fetch_repond_fhir(id=id)
 
-        # Return the response
-        return json_response(response)
-
-    except Exception as e:
-        return error_response("Imaging study retrieval failed", 500, {"exception": str(e)})
+    # Return the response
+    return web_fhir_response(response)
 
 
 @require_auth
@@ -545,23 +527,19 @@ async def get_report(request):
         return error_response("Diagnostic report ID is required")
     logger.info(f"Retrieving diagnostic report with ID: {id}")
 
-    try:
-        # Create a new HipoClient instance
-        client = HipoClientDiagnosticReport(SERVICE_URL, request)
+    # Create a new HipoClient instance
+    client = HipoClientDiagnosticReport(SERVICE_URL, request)
 
-        # Check if debug response is requested
-        debug_resp = await debug_response(client, request, id=id)
-        if debug_resp:
-            return debug_resp
+    # Check if debug response is requested
+    debug_resp = await debug_response(client, request, id=id)
+    if debug_resp:
+        return debug_resp
 
-        # Retrieve and parse the page
-        parsed_data = await client.fetch_and_parse(id=id)
+    # Retrieve and parse the page
+    parsed_data = await client.fetch_and_parse(id=id)
 
-        # Return the response
-        return json_response(parsed_data)
-
-    except Exception as e:
-        return error_response("Diagnostic report retrieval failed", 500, {"exception": str(e)})
+    # Return the response
+    return json_response(parsed_data)
 
 @require_auth
 async def get_fhir_diagnostic_report(request):
@@ -580,21 +558,17 @@ async def get_fhir_diagnostic_report(request):
     # Extract diagnostic report ID from path
     id = request.match_info.get('id')
     if not id:
-        return error_response("Diagnostic report ID is required")
+        return web_fhir_response("Diagnostic report ID is required")
     logger.info(f"Retrieving diagnostic report with ID: {id}")
 
-    try:
-        # Create a new HipoClient instance with credentials
-        client = HipoClientDiagnosticReport(SERVICE_URL, request)
+    # Create a new HipoClient instance with credentials
+    client = HipoClientDiagnosticReport(SERVICE_URL, request)
 
-        # Retrieve and parse the page, then convert to FHIR resource
-        response = await client.fetch_repond_fhir(id=id)
+    # Retrieve and parse the page, then convert to FHIR resource
+    response = await client.fetch_repond_fhir(id=id)
 
-        # Return the response
-        return json_response(response)
-
-    except Exception as e:
-        return error_response("Diagnostic report retrieval failed", 500, {"exception": str(e)})
+    # Return the response
+    return web_fhir_response(response)
 
 
 @require_auth
@@ -617,18 +591,14 @@ async def get_checkout(request):
         return error_response("Checkout ID is required")
     logger.info(f"Retrieving checkout with ID: {id}")
 
-    try:
-        # Create a new HipoClient instance
-        client = HipoClientCheckout(SERVICE_URL, request)
+    # Create a new HipoClient instance
+    client = HipoClientCheckout(SERVICE_URL, request)
 
-        # Retrieve and parse the page
-        parsed_data = await client.fetch_and_parse(id=id)
+    # Retrieve and parse the page
+    parsed_data = await client.fetch_and_parse(id=id)
 
-        # Return the response
-        return json_response(parsed_data)
-
-    except Exception as e:
-        return error_response("Checkout retrieval failed", 500, {"exception": str(e)})
+    # Return the response
+    return json_response(parsed_data)
 
 @require_auth
 async def get_fhir_encounter(request):
@@ -650,25 +620,17 @@ async def get_fhir_encounter(request):
     # Extract encounter ID from path
     id = request.match_info.get('id')
     if not id:
-        return error_response("Encounter ID is required")
+        return web_fhir_response("Encounter ID is required")
     logger.info(f"Retrieving encounter with ID: {id}")
 
-    try:
-        # Create a new HipoClient instance with credentials
-        client = HipoClientCheckout(SERVICE_URL, request)
+    # Create a new HipoClient instance with credentials
+    client = HipoClientCheckout(SERVICE_URL, request)
 
-        # Retrieve and parse the page, then convert to FHIR resource
-        fhir_response, error_resp = await client.fetch_repond_fhir(id=id)
-
-        # Check for errors in the response
-        if error_resp:
-            return error_resp
-        
-        # Return the response
-        return web.json_response(fhir_response)
-
-    except Exception as e:
-        return error_response("Encounter retrieval failed", 500, {"exception": str(e)})
+    # Retrieve and parse the page, then convert to FHIR resource
+    response = await client.fetch_repond_fhir(id=id)
+    
+    # Return the response
+    return web_fhir_response(response)
 
 
 
@@ -1020,19 +982,13 @@ def web_fhir_response(data) -> web.Response:
     if isinstance(data, str):
         operation_outcome = OperationOutcome.from_error(message=data, code="processing", severity="error")
         response_data = operation_outcome.to_dict()
-        headers = {'Content-Type': 'application/fhir+json'}
-        return web.json_response(response_data, status=500, headers=headers)
+        return web.json_response(response_data, status=500)
     
     # Handle FHIR Resource objects by converting to dict
     if hasattr(data, 'to_dict'):
         response_data = data.to_dict()
     else:
         response_data = data
-    
-    # Set appropriate FHIR content type
-    headers = {
-        'Content-Type': 'application/fhir+json'
-    }
     
     # Determine status code based on resource content
     status_code = 200
@@ -1049,7 +1005,7 @@ def web_fhir_response(data) -> web.Response:
         elif response_data.get('status') == 'error':
             status_code = 404
     
-    return web.json_response(response_data, status=status_code, headers=headers)
+    return web.json_response(response_data, status=status_code)
 
 
 def load_config():

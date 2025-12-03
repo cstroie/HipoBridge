@@ -49,6 +49,7 @@ from markdown import html_to_markdown, markdown_to_html
 
 # Import FHIR classes
 from fhir import ServiceRequest as FHIRServiceRequest, CodeableConcept, Reference, Patient as FHIRPatient
+from fhir import OperationOutcome
 
 # Configure logging
 logging.basicConfig(
@@ -1243,23 +1244,21 @@ class HipoClient:
             # Check for errors in the response
             if parsed_data.get("status") == "error":
                 # Return OperationOutcome for errors
-                from fhir import OperationOutcome
                 return OperationOutcome.from_error(
                     message=parsed_data.get("message", "Unknown error"),
                     code="processing",
                     severity="error"
-                ).to_dict(), None
+                )
 
             # Convert parsed data to FHIR resource
             fhir_resource = self.fhir_response(parsed_data, **kwargs)
-            return fhir_resource, None
+            return fhir_resource
 
         except Exception as e:
             # Return OperationOutcome for exceptions
-            from fhir import OperationOutcome
             outcome = OperationOutcome.from_exception(e, code="exception")
             logger.error(f"Data retrieval failed: {str(e)}")
-            return outcome.to_dict(), None
+            return outcome
 
     async def debug_page(self, *args, max_redirects=5, **kwargs):
         """Generic method to fetch data from an endpoint and return raw HTML.
