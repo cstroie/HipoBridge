@@ -1,19 +1,19 @@
 .error {
-    background: #ffebee;
+    background: var(--form-element-background-color);
     color: var(--contrast);
     padding: 1rem;
     border-radius: var(--border-radius);
-    border-left: 5px solid #e74c3c;
+    border-left: 5px solid var(--error-border-color);
     margin: 1.5rem 0;
     display: none;
 }
 
 .success {
-    background: #e8f5e9;
+    background: var(--form-element-background-color);
     color: var(--contrast);
     padding: 1rem;
     border-radius: var(--border-radius);
-    border-left: 5px solid #27ae60;
+    border-left: 5px solid var(--success-border-color);
     margin: 1.5rem 0;
     display: none;
 }
@@ -27,9 +27,9 @@
 #noAnalyses {
     text-align: center;
     padding: 2rem;
-    background-color: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 0.375rem;
+    background-color: var(--card-background-color);
+    border: 1px solid var(--card-border-color);
+    border-radius: var(--border-radius);
     margin: 1rem 0;
     display: none;
 }
@@ -47,20 +47,20 @@
 
 .toast {
     padding: 12px 20px;
-    border-radius: 4px;
-    color: white;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    border-radius: var(--border-radius);
+    color: var(--primary-inverse);
+    box-shadow: 0 2px 5px var(--card-box-shadow);
     animation: slideIn 0.3s, fadeOut 0.5s 2.5s forwards;
     max-width: 300px;
     font-size: 14px;
 }
 
 .toast-success {
-    background-color: #4caf50;
+    background-color: var(--success-background-color);
 }
 
 .toast-error {
-    background-color: #f44336;
+    background-color: var(--error-background-color);
 }
 
 @keyframes slideIn {
