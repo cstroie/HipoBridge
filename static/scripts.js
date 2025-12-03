@@ -282,8 +282,9 @@ document.addEventListener('DOMContentLoaded', function() {
             document.body.appendChild(toastContainer);
         }
         
-        // Create toast element
-        const toast = document.createElement('div');
+        // Use template for toast
+        const toastTemplate = document.getElementById('toast-template');
+        const toast = toastTemplate.content.cloneNode(true).querySelector('.toast');
         toast.className = `toast toast-${type}`;
         toast.textContent = message;
         
@@ -292,7 +293,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Remove toast after animation completes
         setTimeout(() => {
-            toast.remove();
+            if (toast.parentNode) {
+                toast.parentNode.removeChild(toast);
+            }
         }, 3000);
     }
     
@@ -423,101 +426,95 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Function to display imaging study in a modal
     function displayImagingStudyModal(studyData, studyId, reportId) {
-        // Use PicoCSS modal
-        const modal = document.createElement('dialog');
+        // Use template for modal
+        const modalTemplate = document.getElementById('imaging-study-modal-template');
+        const modal = modalTemplate.content.cloneNode(true).querySelector('dialog');
         modal.id = 'imagingStudyModal';
-        modal.className = 'modal';
         
-        let content = `
-            <article>
-                <header>
-                    <h2>Imaging Study #${studyId}</h2>
-                    <button class="close" aria-label="Close" rel="prev"></button>
-                </header>
-                <main>
-        `;
+        // Set modal title
+        modal.querySelector('h2').textContent = `Imaging Study #${studyId}`;
         
-        // Study metadata
-        content += `<div class="study-section">`;
-        content += `<h3>Study Information</h3>`;
+        // Populate study information
+        const studyInfo = modal.querySelector('.study-info');
         
         if (studyData.started) {
-            content += `<p><strong>Started:</strong> ${studyData.started}</p>`;
+            const p = document.createElement('p');
+            p.innerHTML = `<strong>Started:</strong> ${studyData.started}`;
+            studyInfo.appendChild(p);
         }
         
         if (studyData.modality) {
-            content += `<p><strong>Modality:</strong> ${studyData.modality.display || studyData.modality.code || 'N/A'}</p>`;
+            const p = document.createElement('p');
+            p.innerHTML = `<strong>Modality:</strong> ${studyData.modality.display || studyData.modality.code || 'N/A'}`;
+            studyInfo.appendChild(p);
         }
         
         if (studyData.description) {
-            content += `<p><strong>Description:</strong> ${studyData.description}</p>`;
+            const p = document.createElement('p');
+            p.innerHTML = `<strong>Description:</strong> ${studyData.description}`;
+            studyInfo.appendChild(p);
         }
         
         // Performer information
         if (studyData.performer && studyData.performer.length > 0) {
-            content += `<p><strong>Performer:</strong> ${studyData.performer[0].actor?.display || 'N/A'}</p>`;
+            const p = document.createElement('p');
+            p.innerHTML = `<strong>Performer:</strong> ${studyData.performer[0].actor?.display || 'N/A'}`;
+            studyInfo.appendChild(p);
         }
         
         // Referrer information
         if (studyData.referrer) {
-            content += `<p><strong>Referrer:</strong> ${studyData.referrer.display || 'N/A'}</p>`;
+            const p = document.createElement('p');
+            p.innerHTML = `<strong>Referrer:</strong> ${studyData.referrer.display || 'N/A'}`;
+            studyInfo.appendChild(p);
         }
         
         // Reason information
         if (studyData.reason && studyData.reason.length > 0) {
-            content += `<p><strong>Reason:</strong> ${studyData.reason[0].text || 'N/A'}</p>`;
+            const p = document.createElement('p');
+            p.innerHTML = `<strong>Reason:</strong> ${studyData.reason[0].text || 'N/A'}`;
+            studyInfo.appendChild(p);
         }
         
         // Note information
         if (studyData.note && studyData.note.length > 0) {
-            content += `<p><strong>Note:</strong> ${studyData.note[0].text || 'N/A'}</p>`;
+            const p = document.createElement('p');
+            p.innerHTML = `<strong>Note:</strong> ${studyData.note[0].text || 'N/A'}`;
+            studyInfo.appendChild(p);
         }
-        
-        content += `</div>`;
         
         // Series information
+        const seriesList = modal.querySelector('.series-list');
         if (studyData.series && studyData.series.length > 0) {
-            content += `<section class="study-section">`;
-            content += `<h3>Series</h3>`;
-            content += `<ul>`;
-            
             studyData.series.forEach((series, index) => {
-                content += `<li><strong>Series ${series.number || index + 1}:</strong> ${series.description || 'N/A'}`;
+                const li = document.createElement('li');
+                li.innerHTML = `<strong>Series ${series.number || index + 1}:</strong> ${series.description || 'N/A'}`;
                 if (series.modality) {
-                    content += ` (Modality: ${series.modality.display || series.modality.code || 'N/A'})`;
+                    li.innerHTML += ` (Modality: ${series.modality.display || series.modality.code || 'N/A'})`;
                 }
-                content += `</li>`;
+                seriesList.appendChild(li);
             });
-            
-            content += `</ul>`;
-            content += `</section>`;
         }
         
-        // Link back to report
-        content += `<section class="study-section">`;
-        content += `<p><a href="#" onclick="closeImagingStudyModal(); return false;">Back to Report #${reportId}</a></p>`;
-        content += `</section>`;
-        
-        content += `
-                </main>
-                <footer>
-                    <button class="secondary" data-close-modal>Close</button>
-                </footer>
-            </article>
-        `;
-        
-        modal.innerHTML = content;
-        document.body.appendChild(modal);
+        // Set back to report link
+        const backLink = modal.querySelector('.back-to-report');
+        backLink.href = '#';
+        backLink.textContent = `Back to Report #${reportId}`;
+        backLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            closeImagingStudyModal();
+        });
         
         // Add event listeners for closing the modal
         const closeButtons = modal.querySelectorAll('[data-close-modal], .close');
         closeButtons.forEach(button => {
             button.addEventListener('click', () => {
-                modal.remove();
+                document.body.removeChild(modal);
             });
         });
         
-        // Show modal
+        // Add modal to document and show
+        document.body.appendChild(modal);
         modal.showModal();
     }
     
@@ -562,16 +559,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     continue;
                 }
                 
-                const analysisCard = document.createElement('article');
+                // Use template for analysis card
+                const cardTemplate = document.getElementById('analysis-card-template');
+                const analysisCard = cardTemplate.content.cloneNode(true).querySelector('article');
                 analysisCard.className = `analysis-card ${analysisType}`;
                 
-                // Start building the card content
-                let cardContent = `
-                    <header>
-                        <h4>${analysisText} report #${serviceRequest.id}</h4>
-                    </header>
-                    <main>
-                `;
+                // Set card header
+                analysisCard.querySelector('h4').textContent = `${analysisText} report #${serviceRequest.id}`;
                 
                 // For imaging analyses, fetch and display report content
                 if (['radio', 'ct', 'irm', 'eco', 'lac', 'lii', 'rads'].includes(analysisType)) {
@@ -584,68 +578,92 @@ document.addEventListener('DOMContentLoaded', function() {
                             showToast(`Report data loaded for service request ${serviceRequest.id}`, 'success');
                             
                             // Add report metadata (date/time and performer) if available
+                            const reportMeta = analysisCard.querySelector('.report-meta');
                             if (reportData.effectiveDateTime || (reportData.performer && reportData.performer.length > 0)) {
-                                cardContent += `<div class="report-meta">`;
                                 if (reportData.effectiveDateTime) {
                                     // Parse ISO datetime and format it nicely
                                     const dateTime = new Date(reportData.effectiveDateTime);
                                     const formattedDate = dateTime.toLocaleDateString('en-GB');
                                     const formattedTime = dateTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-                                    cardContent += `<p><strong>Date/Time:</strong> ${formattedDate} ${formattedTime}</p>`;
+                                    const p = document.createElement('p');
+                                    p.innerHTML = `<strong>Date/Time:</strong> ${formattedDate} ${formattedTime}`;
+                                    reportMeta.appendChild(p);
                                 }
                                 if (reportData.performer && reportData.performer.length > 0) {
-                                    cardContent += `<p><strong>Performer:</strong> ${reportData.performer[0].display || ''}</p>`;
+                                    const p = document.createElement('p');
+                                    p.innerHTML = `<strong>Performer:</strong> ${reportData.performer[0].display || ''}`;
+                                    reportMeta.appendChild(p);
                                 }
                                 // Add interpreter if available
                                 if (reportData.resultsInterpreter && reportData.resultsInterpreter.length > 0) {
-                                    cardContent += `<p><strong>Interpreter:</strong> ${reportData.resultsInterpreter[0].display || ''}</p>`;
+                                    const p = document.createElement('p');
+                                    p.innerHTML = `<strong>Interpreter:</strong> ${reportData.resultsInterpreter[0].display || ''}`;
+                                    reportMeta.appendChild(p);
                                 }
-                                cardContent += `</div>`;
                             }
                             
                             // Add report content to the card - now using presentedForm or conclusion
-                            cardContent += `<div class="report-preview" id="report-${serviceRequest.id}">`;
+                            const reportPreview = analysisCard.querySelector('.report-preview');
+                            reportPreview.id = `report-${serviceRequest.id}`;
+                            
                             if (reportData.presentedForm && reportData.presentedForm.length > 0) {
                                 // Process all presentedForm entries
                                 for (const form of reportData.presentedForm) {
                                     // Add a header for each result
                                     if (form.title) {
-                                        cardContent += `<h5>${form.title}</h5>`;
+                                        const h5 = document.createElement('h5');
+                                        h5.textContent = form.title;
+                                        reportPreview.appendChild(h5);
                                     }
                                     
                                     if (form.contentType === 'text/plain' && form.data) {
-                                        cardContent += `<pre>${form.data}</pre>`;
+                                        const pre = document.createElement('pre');
+                                        pre.textContent = form.data;
+                                        reportPreview.appendChild(pre);
                                     } else if (form.contentType === 'text/markdown' && form.data) {
                                         try {
                                             const htmlResult = await convertMarkdownToHtml(form.data);
-                                            cardContent += `<div>${htmlResult}</div>`;
+                                            const div = document.createElement('div');
+                                            div.innerHTML = htmlResult;
+                                            reportPreview.appendChild(div);
                                         } catch (err) {
                                             console.error('Error converting markdown:', err);
-                                            cardContent += `<pre>${form.data}</pre>`;
+                                            const pre = document.createElement('pre');
+                                            pre.textContent = form.data;
+                                            reportPreview.appendChild(pre);
                                         }
                                     } else if (form.contentType === 'text/html' && form.data) {
-                                        cardContent += `<div>${form.data}</div>`;
+                                        const div = document.createElement('div');
+                                        div.innerHTML = form.data;
+                                        reportPreview.appendChild(div);
                                     }
                                 }
                             } else if (reportData.conclusion) {
                                 try {
                                     const htmlResult = await convertMarkdownToHtml(reportData.conclusion);
-                                    cardContent += `<div>${htmlResult}</div>`;
+                                    const div = document.createElement('div');
+                                    div.innerHTML = htmlResult;
+                                    reportPreview.appendChild(div);
                                 } catch (err) {
                                     console.error('Error converting report markdown:', err);
-                                    cardContent += `<p>${reportData.conclusion}</p>`;
+                                    const p = document.createElement('p');
+                                    p.textContent = reportData.conclusion;
+                                    reportPreview.appendChild(p);
                                 }
                             }
-                            cardContent += `</div>`;
                             
                             // Add link to ImagingStudy if available
+                            const imagingStudyLink = analysisCard.querySelector('.imaging-study-link');
                             if (reportData.imagingStudy) {
                                 const studyId = reportData.imagingStudy.reference.split('/')[1];
-                                cardContent += `<div class="imaging-study-link">
-                                    <a href="#" onclick="viewImagingStudy('${studyId}', '${serviceRequest.id}'); return false;">
-                                        View Imaging Study #${studyId}
-                                    </a>
-                                </div>`;
+                                const a = document.createElement('a');
+                                a.href = '#';
+                                a.textContent = `View Imaging Study #${studyId}`;
+                                a.addEventListener('click', function(e) {
+                                    e.preventDefault();
+                                    viewImagingStudy(studyId, serviceRequest.id);
+                                });
+                                imagingStudyLink.appendChild(a);
                             }
                         } else {
                             showToast(`Error loading report data for service request ${serviceRequest.id}`, 'error');
@@ -656,11 +674,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
                 
-                cardContent += `
-                    </main>
-                `;
-                
-                analysisCard.innerHTML = cardContent;
                 analysesGrid.appendChild(analysisCard);
                 
                 // Force UI update to display the report immediately
