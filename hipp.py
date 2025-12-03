@@ -271,7 +271,10 @@ async def get_fhir_patient(request):
         return json_response(response)
 
     except Exception as e:
-        return error_response("Patient retrieval failed", 500, {"exception": str(e)})
+        # Return OperationOutcome for exceptions
+        from fhir import OperationOutcome
+        outcome = OperationOutcome.from_exception(e, code="exception")
+        return web.json_response(outcome.to_dict(), status=500)
 
 
 @require_auth
