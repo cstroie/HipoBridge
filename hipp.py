@@ -1030,6 +1030,44 @@ async def debug_response(client, request, **kwargs) -> web.Response:
     return None
 
 
+def fhir_response(data) -> web.Response:
+    """Create a FHIR-compatible JSON response from dict or FHIR Resource objects.
+
+    Args:
+        data: Response data as dict or FHIR Resource object
+
+    Returns:
+        JSON response with appropriate FHIR content type and status code
+    """
+    # Handle FHIR Resource objects by converting to dict
+    if hasattr(data, 'to_dict'):
+        response_data = data.to_dict()
+    else:
+        response_data = data
+    
+    # Set appropriate FHIR content type
+    headers = {
+        'Content-Type': 'application/fhir+json'
+    }
+    
+    # Determine status code based on resource content
+    status_code = 200
+    if isinstance(response_data, dict):
+        # Check for OperationOutcome with errors
+        if response_data.get('resourceType') == 'OperationOutcome':
+            if any(issue.get('severity') in ['error', 'fatal'] 
+                   for issue in response_data.get('issue', [])):
+                status_code = 500
+            elif any(issue.get('severity') == 'warning' 
+                     for issue in response_data.get('issue', [])):
+                status_code = 400
+        # Check for other error indicators
+        elif response_data.get('status') == 'error':
+            status_code = 404
+    
+    return web.json_response(response_data, status=status_code, headers=headers)
+
+
 def load_config():
     """Load configuration from hipp.cfg and local.cfg (if exists).
 
