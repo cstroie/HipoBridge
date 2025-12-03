@@ -644,3 +644,93 @@ class DiagnosticReport(Resource):
         }
         super().__init__(data)
 
+
+class Issue(Resource):
+    def __init__(self, 
+                 severity: str,
+                 code: str,
+                 details: Optional[Dict[str, Any]] = None,
+                 diagnostics: Optional[str] = None,
+                 location: Optional[List[str]] = None,
+                 expression: Optional[List[str]] = None):
+        data = {
+            "severity": severity,           # fatal | error | warning | information | success
+            "code": code,                   # Error or warning code
+            "details": details,             # Additional details about the error
+            "diagnostics": diagnostics,     # Additional diagnostic information about the issue
+            "location": location,           # Deprecated: Path of element(s) related to issue
+            "expression": expression        # FHIRPath of element(s) related to issue
+        }
+        super().__init__(data)
+
+
+class OperationOutcome(Resource):
+    def __init__(self,
+                 id: Optional[str] = None,
+                 issue: Optional[List[Dict[str, Any]]] = None):
+        data = {
+            "resourceType": "OperationOutcome",   # Resource type
+            "id": id,                             # Logical id of this artifact
+            "issue": issue                        # A single issue associated with the action
+        }
+        super().__init__(data)
+    
+    @classmethod
+    def from_error(cls, message: str, code: str = "exception", severity: str = "error", 
+                   diagnostics: Optional[str] = None, location: Optional[List[str]] = None,
+                   expression: Optional[List[str]] = None):
+        """Create an OperationOutcome from an error message."""
+        issue = Issue(
+            severity=severity,
+            code=code,
+            details={"text": message},
+            diagnostics=diagnostics,
+            location=location,
+            expression=expression
+        )
+        return cls(issue=[issue.to_dict()])
+    
+    @classmethod
+    def from_exception(cls, exception: Exception, code: str = "exception", 
+                       diagnostics: Optional[str] = None):
+        """Create an OperationOutcome from an exception."""
+        return cls.from_error(
+            message=str(exception),
+            code=code,
+            severity="error",
+            diagnostics=diagnostics or f"Exception type: {type(exception).__name__}"
+        )
+    
+    def add_issue(self, severity: str, code: str, message: str,
+                  diagnostics: Optional[str] = None, location: Optional[List[str]] = None,
+                  expression: Optional[List[str]] = None):
+        """Add an issue to the OperationOutcome."""
+        issue = Issue(
+            severity=severity,
+            code=code,
+            details={"text": message},
+            diagnostics=diagnostics,
+            location=location,
+            expression=expression
+        )
+        
+        if self.data.get("issue") is None:
+            self.data["issue"] = []
+        self.data["issue"].append(issue.to_dict())
+    
+    def has_errors(self) -> bool:
+        """Check if the OperationOutcome has any error or fatal issues."""
+        issues = self.data.get("issue", [])
+        for issue in issues:
+            if issue.get("severity") in ["error", "fatal"]:
+                return True
+        return False
+    
+    def has_warnings(self) -> bool:
+        """Check if the OperationOutcome has any warning issues."""
+        issues = self.data.get("issue", [])
+        for issue in issues:
+            if issue.get("severity") == "warning":
+                return True
+        return False
+
