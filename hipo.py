@@ -2021,10 +2021,8 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
         # Initialize the parent
         super().__init__(service_url = service_url, request = request)
         # The request endpoint
-        #self.request_url = "/pacient/analyses.asp?type=PA&pacid={pacid}"
-        #self.request_url = "/Patient/analysesEpisod.asp?strAN={year}&&pacid={pacid}"
-        #self.request_url = "/Pacient/analysesEpisod.asp?pacid={pacid}&strDomeniu=36"
-        self.request_url = "/Pacient/analysesEpisod.asp?pacid={pacid}"
+        self.request_url_all = "/pacient/analyses.asp?type=PA&pacid={pacid}"
+        self.request_url_episode = "/Pacient/analysesEpisod.asp?pacid={pacid}"
 
     async def search(self, patient_id, **kwargs):
         """Search for service requests by patient ID.
@@ -2046,18 +2044,13 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
         # Initialize result data
         data = HipoData(status="success", message="")
 
-        # Add full=yes parameter if requested
-        if kwargs.get('full'):
-            self.request_url += "&full=yes"
-
-        # Create the specific request url
-        url = self.request_url.format(pacid=patient_id)
-
+        # Choose the request URL for episode
+        self.request_url = self.request_url_episode
         # Filter by type in request
         if kwargs.get('type'):
             # Append the domain
-            url += f"&strDomeniu={ANALYSIS_TYPES[kwargs['type']]['domain']}"
-        else:
+            self.request_url += f"&strDomeniu={ANALYSIS_TYPES[kwargs['type']]['domain']}"
+        elif kwargs.get('dt'):
             # Append the year extracted from dt parameter
             dt_param = kwargs.get('dt')
             if dt_param:
@@ -2074,7 +2067,16 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
             else:
                 # Fallback to current year if no dt parameter
                 year = datetime_module.now().year
-            url += f"&strAN={year}"
+            self.request_url += f"&strAN={year}"
+        else:
+            # Choose the request URL for all analyses
+            self.request_url = self.request_url_all
+            # Add full=yes parameter if requested
+            if kwargs.get('full'):
+                self.request_url += "&full=yes"
+
+        # Create the specific request url
+        url = self.request_url.format(pacid=patient_id)
         
         try:
             # Retrieve the page

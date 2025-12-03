@@ -648,7 +648,7 @@ async def serve_spec(request):
             spec = json.load(f)
         # Update the server URL with the current PORT
         spec["servers"][0]["url"] = f"{request.scheme}://{request.host}"
-        return web.web_json_response(spec)
+        return web.json_response(spec)
     except FileNotFoundError:
         return web_error_response("Specification file not found", 500)
     except json.JSONDecodeError as e:
@@ -909,7 +909,7 @@ def web_error_response(message: str, status_code: int = 400, details: Dict[str, 
     if details:
         response_data["details"] = details
     # Return JSON response with appropriate status code
-    return web.web_json_response(response_data, status=status_code)
+    return web.json_response(response_data, status=status_code)
 
 
 def web_json_response(data: Dict[str, Any]) -> web.Response:
@@ -922,7 +922,7 @@ def web_json_response(data: Dict[str, Any]) -> web.Response:
         JSON response with 200 for success, 404 for error
     """
     status = 200 if data.get("status") == "success" else 404
-    return web.web_json_response(data, status=status)
+    return web.json_response(data, status=status)
 
 
 async def web_debug_response(client, request, **kwargs) -> web.Response:
@@ -956,7 +956,7 @@ def web_fhir_response(data) -> web.Response:
     if isinstance(data, str):
         operation_outcome = OperationOutcome.from_error(message=data, code="processing", severity="error")
         response_data = operation_outcome.to_dict()
-        return web.web_json_response(response_data, status=500)
+        return web.json_response(response_data, status=500)
     
     # Handle FHIR Resource objects by converting to dict
     if hasattr(data, 'to_dict'):
@@ -979,7 +979,7 @@ def web_fhir_response(data) -> web.Response:
         elif response_data.get('status') == 'error':
             status_code = 404
     
-    return web.web_json_response(response_data, status=status_code)
+    return web.json_response(response_data, status=status_code)
 
 
 def load_config():

@@ -1,156 +1,156 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HippoBridge - Medical Patient Data Analyzer</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.slate.min.css">
-    <link rel="stylesheet" href="/static/styles.css">
-</head>
-<body class="container">
-    <header>
-        <h1>HippoBridge</h1>
-        <p>Medical Patient Data Analyzer</p>
-    </header>
-    <main>
-        <article>
-            <hgroup>
-                <h2>Patient Analysis</h2>
-                <p>Enter a 13-digit Romanian CNP, patient code, or partial CNP (ending with *) to retrieve patient information and medical analyses.</p>
-            </hgroup>
-            
-            <form id="cnpForm">
-                <label for="cnpInput">Patient Identifier:</label>
-                <div class="group">
-                    <input type="text" id="cnpInput" name="cnp" placeholder="e.g., 1234567890123, 1234567*, patient code, or patient name" required>
-                    <button type="submit" id="analyzeBtn">Retrieve Patient Data</button>
-                </div>
-            </form>
-            <div class="error" id="error"></div>
-            <div class="success" id="success"></div>
-        </article>
-        <article class="results" id="results" style="display: none;">
-            <hgroup>
-                <h2>Patient Information</h2>
-                <p>Patient ID: <span id="patientId"></span></p>
-            </hgroup>
-            <main>
-                <div class="grid">
-                    <article>
-                        <strong>Name</strong>
-                        <span id="patientName"></span>
-                    </article>
-                    <article>
-                        <strong>Patient Code</strong>
-                        <span id="patientCode"></span>
-                    </article>
-                    <article>
-                        <strong>CNP</strong>
-                        <span id="patientCnp"></span>
-                    </article>
-                    <article>
-                        <strong>Gender</strong>
-                        <span id="patientGender"></span>
-                    </article>
-                </div>
-                <div class="grid">
-                    <article>
-                        <strong>Birth Date</strong>
-                        <span id="patientBirthDate"></span>
-                    </article>
-                    <article>
-                        <strong>Phone</strong>
-                        <span id="patientPhone"></span>
-                    </article>
-                    <article>
-                        <strong>Email</strong>
-                        <span id="patientEmail"></span>
-                    </article>
-                    <article>
-                        <strong>Address</strong>
-                        <span id="patientAddress"></span>
-                    </article>
-                </div>
-            </main>
-        </article>
-        <article id="epicrisisSection" style="display: none;">
-            <header>
-                <h3>Most Recent Epicrisis</h3>
-                <p id="epicrisisDate"></p>
-            </header>
-            <main id="epicrisisContent" style="background: var(--muted-background-color); padding: 0.75rem; border-radius: var(--border-radius);"></main>
-        </article>
-                
-                <main id="analysesContainer" style="display: none;">
-                        <div class="no-data" id="noAnalyses">
-                            <p>No analyses found for this patient</p>
-                        </div>
-                        <div id="analysesGrid"></div>
-                </main>
-                
-                <footer class="grid">
-                        <article>
-                            <strong>Presentations</strong>
-                            <span id="presentationsCount">0</span>
-                        </article>
-                        <article>
-                            <strong>Checkins</strong>
-                            <span id="checkinsCount">0</span>
-                        </article>
-                        <article>
-                            <strong>Checkouts</strong>
-                            <span id="checkoutsCount">0</span>
-                            <div id="checkoutIdsList" style="margin-top: 0.5rem; font-size: 0.9em;"></div>
-                        </article>
-                </footer>
-
-    </main>
-
-    <!-- Templates for dynamic content -->
-    <template id="analysis-card-template">
-        <article class="analysis-card">
-            <header>
-                <h4></h4>
-            </header>
-            <main>
-                <div class="report-meta"></div>
-                <div class="report-preview"></div>
-                <div class="imaging-study-link"></div>
-            </main>
-        </article>
-    </template>
-
-    <template id="toast-template">
-        <div class="toast"></div>
-    </template>
-
-    <template id="imaging-study-modal-template">
-        <dialog class="modal">
+<html lang="en" data-theme="auto">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>HippoBridge - Medical Patient Data Analyzer</title>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.slate.min.css">
+        <link rel="stylesheet" href="/static/styles.css">
+    </head>
+    <body class="container">
+        <hgroup>
+            <h1>HippoBridge</h1>
+            <p>Medical Patient Data Analyzer</p>
+        </hgroup>
+        <main>
             <article>
-                <header>
-                    <h2></h2>
-                    <button class="close" aria-label="Close" rel="prev"></button>
-                </header>
-                <main>
-                    <div class="study-section">
-                        <h3>Study Information</h3>
-                        <div class="study-info"></div>
+                <hgroup>
+                    <h2>Patient Analysis</h2>
+                    <p>Enter a 13-digit Romanian CNP, patient code, or partial CNP (ending with *) to retrieve patient information and medical analyses.</p>
+                </hgroup>
+                
+                <form id="cnpForm">
+                    <label for="cnpInput">Patient Identifier:</label>
+                    <div class="group">
+                        <input type="text" id="cnpInput" name="cnp" placeholder="e.g., 1234567890123, 1234567*, patient code, or patient name" required>
+                        <button type="submit" id="analyzeBtn">Retrieve Patient Data</button>
                     </div>
-                    <section class="study-section">
-                        <h3>Series</h3>
-                        <ul class="series-list"></ul>
-                    </section>
-                    <section class="study-section">
-                        <p><a href="#" class="back-to-report">Back to Report</a></p>
-                    </section>
-                </main>
-                <footer>
-                    <button class="secondary" data-close-modal>Close</button>
-                </footer>
+                </form>
+                <div class="error" id="error"></div>
+                <div class="success" id="success"></div>
             </article>
-        </dialog>
-    </template>
+            <article class="results" id="results" style="display: none;">
+                <hgroup>
+                    <h2>Patient Information</h2>
+                    <p>Patient ID: <span id="patientId"></span></p>
+                </hgroup>
+                <main>
+                    <div class="grid">
+                        <article>
+                            <strong>Name</strong>
+                            <span id="patientName"></span>
+                        </article>
+                        <article>
+                            <strong>Patient Code</strong>
+                            <span id="patientCode"></span>
+                        </article>
+                        <article>
+                            <strong>CNP</strong>
+                            <span id="patientCnp"></span>
+                        </article>
+                        <article>
+                            <strong>Gender</strong>
+                            <span id="patientGender"></span>
+                        </article>
+                    </div>
+                    <div class="grid">
+                        <article>
+                            <strong>Birth Date</strong>
+                            <span id="patientBirthDate"></span>
+                        </article>
+                        <article>
+                            <strong>Phone</strong>
+                            <span id="patientPhone"></span>
+                        </article>
+                        <article>
+                            <strong>Email</strong>
+                            <span id="patientEmail"></span>
+                        </article>
+                        <article>
+                            <strong>Address</strong>
+                            <span id="patientAddress"></span>
+                        </article>
+                    </div>
+                </main>
+            </article>
+            <article id="epicrisisSection" style="display: none;">
+                <header>
+                    <h3>Most Recent Epicrisis</h3>
+                    <p id="epicrisisDate"></p>
+                </header>
+                <main id="epicrisisContent" style="background: var(--muted-background-color); padding: 0.75rem; border-radius: var(--border-radius);"></main>
+            </article>
+                    
+            <main id="analysesContainer" style="display: none;">
+                    <div class="no-data" id="noAnalyses">
+                        <p>No analyses found for this patient</p>
+                    </div>
+                    <div id="analysesGrid"></div>
+            </main>
+            
+            <footer class="grid">
+                    <article>
+                        <strong>Presentations</strong>
+                        <span id="presentationsCount">0</span>
+                    </article>
+                    <article>
+                        <strong>Checkins</strong>
+                        <span id="checkinsCount">0</span>
+                    </article>
+                    <article>
+                        <strong>Checkouts</strong>
+                        <span id="checkoutsCount">0</span>
+                        <div id="checkoutIdsList" style="margin-top: 0.5rem; font-size: 0.9em;"></div>
+                    </article>
+            </footer>
+        </main>
 
-    <script src="/static/scripts.js"></script>
-</body>
+        <!-- Templates for dynamic content -->
+        <template id="analysis-card-template">
+            <article class="analysis-card">
+                <hgroup>
+                    <h4></h4>
+                    <p></p>
+                </hgroup>
+                <main>
+                    <div class="report-meta"></div>
+                    <div class="report-preview"></div>
+                    <div class="imaging-study-link"></div>
+                </main>
+            </article>
+        </template>
+
+        <template id="toast-template">
+            <div class="toast"></div>
+        </template>
+
+        <template id="imaging-study-modal-template">
+            <dialog class="modal">
+                <article>
+                    <header>
+                        <h2></h2>
+                        <button class="close" aria-label="Close" rel="prev"></button>
+                    </header>
+                    <main>
+                        <div class="study-section">
+                            <h3>Study Information</h3>
+                            <div class="study-info"></div>
+                        </div>
+                        <section class="study-section">
+                            <h3>Series</h3>
+                            <ul class="series-list"></ul>
+                        </section>
+                        <section class="study-section">
+                            <p><a href="#" class="back-to-report">Back to Report</a></p>
+                        </section>
+                    </main>
+                    <footer>
+                        <button class="secondary" data-close-modal>Close</button>
+                    </footer>
+                </article>
+            </dialog>
+        </template>
+
+        <script src="/static/scripts.js"></script>
+    </body>
 </html>
