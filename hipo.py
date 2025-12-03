@@ -74,7 +74,7 @@ ANALYSIS_TYPES = {
     "irm": {
         "display": "MRI",
         "definition": "Magnetic Resonance Imaging",
-        "domain": 36
+        "domain": 34
     },
     "eco": {
         "display": "Ultrasound",
@@ -84,17 +84,17 @@ ANALYSIS_TYPES = {
     "lab": {
         "display": "Laboratory",
         "definition": "Laboratory tests",
-        "domain": 36
+        "domain": 0
     },
     "lac": {
         "display": "Angiography and Cardiac Catheterization",
         "definition": "Angiography and Cardiac Catheterization",
-        "domain": 36
+        "domain": 0
     },
     "lii": {
         "display": "Interventional Radiology",
         "definition": "Interventional Radiology",
-        "domain": 36
+        "domain": 0
     },
     "rads": {
         "display": "Fluoroscopy and CEUS",
@@ -104,7 +104,7 @@ ANALYSIS_TYPES = {
     "apa": {
         "display": "Anatomopathology",
         "definition": "Anatomopathology",
-        "domain": 36
+        "domain": 0
     }
 }
 
