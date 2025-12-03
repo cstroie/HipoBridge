@@ -43,7 +43,7 @@ import base64
 
 # Import FHIR classes
 from fhir import ServiceRequest as FHIRServiceRequest, CodeableConcept, Coding, Reference, CodeableReference, Condition, Patient as FHIRPatient
-from fhir import OperationOutcome, Bundle
+from fhir import OperationOutcome, Bundle, Resource
 
 from hipo import ANALYSIS_TYPES
 from hipo import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientImagingStudy, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientServiceRequestSearch, HipoClientCheckout
