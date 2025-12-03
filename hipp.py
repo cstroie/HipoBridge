@@ -146,11 +146,8 @@ async def search_patient(request):
         # Retrieve and parse the page
         parsed_data = await client.search(search_term)
 
-        # Check for errors in the response
-        status = 200 if parsed_data.get("status") == "success" else 404
-        
         # Return the response
-        return web.json_response(parsed_data, status = status)
+        return json_response(parsed_data)
 
     except Exception as e:
         return error_response("Patient retrieval failed", 500, {"exception": str(e)})
@@ -240,11 +237,8 @@ async def get_patient(request):
         # Retrieve and parse the page
         parsed_data = await client.fetch_and_parse(id=id)
 
-        # Check for errors in the response
-        status = 200 if parsed_data.get("status") == "success" else 404
-        
         # Return the response
-        return web.json_response(parsed_data, status = status)
+        return json_response(parsed_data)
 
     except Exception as e:
         return error_response("Patient retrieval failed", 500, {"exception": str(e)})
@@ -320,11 +314,8 @@ async def search_request(request):
         # Retrieve and parse the page
         parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime, full=full_data)
 
-        # Check for errors in the response
-        status = 200 if parsed_data.get("status") == "success" else 404
-        
         # Return the response
-        return web.json_response(parsed_data, status = status)
+        return json_response(parsed_data)
 
     except Exception as e:
         return error_response("Service requests retrieval failed", 500, {"exception": str(e)})
@@ -454,11 +445,8 @@ async def get_request(request):
         # Retrieve and parse the page
         parsed_data = await client.fetch_and_parse(id=id)
 
-        # Check for errors in the response
-        status = 200 if parsed_data.get("status") == "success" else 404
-        
         # Return the response
-        return web.json_response(parsed_data, status = status)
+        return json_response(parsed_data)
 
     except Exception as e:
         return error_response("Service request retrieval failed", 500, {"exception": str(e)})
@@ -531,11 +519,8 @@ async def get_study(request):
         # Retrieve and parse the page
         parsed_data = await client.fetch_and_parse(id=id)
 
-        # Check for errors in the response
-        status = 200 if parsed_data.get("status") == "success" else 404
-        
         # Return the response
-        return web.json_response(parsed_data, status = status)
+        return json_response(parsed_data)
 
     except Exception as e:
         return error_response("Imaging study retrieval failed", 500, {"exception": str(e)})
@@ -608,11 +593,8 @@ async def get_report(request):
         # Retrieve and parse the page
         parsed_data = await client.fetch_and_parse(id=id)
 
-        # Check for errors in the response
-        status = 200 if parsed_data.get("status") == "success" else 404
-        
         # Return the response
-        return web.json_response(parsed_data, status = status)
+        return json_response(parsed_data)
 
     except Exception as e:
         return error_response("Diagnostic report retrieval failed", 500, {"exception": str(e)})
@@ -681,11 +663,8 @@ async def get_checkout(request):
         # Retrieve and parse the page
         parsed_data = await client.fetch_and_parse(id=id)
 
-        # Check for errors in the response
-        status = 200 if parsed_data.get("status") == "success" else 404
-        
         # Return the response
-        return web.json_response(parsed_data, status = status)
+        return json_response(parsed_data)
 
     except Exception as e:
         return error_response("Checkout retrieval failed", 500, {"exception": str(e)})
@@ -1034,6 +1013,19 @@ def error_response(message: str, status_code: int = 400, details: Dict[str, Any]
         response_data["details"] = details
     # Return JSON response with appropriate status code
     return web.json_response(response_data, status=status_code)
+
+
+def json_response(data: Dict[str, Any]) -> web.Response:
+    """Create a JSON response with appropriate status code based on data status.
+
+    Args:
+        data: Response data dictionary with 'status' field
+
+    Returns:
+        JSON response with 200 for success, 404 for error
+    """
+    status = 200 if data.get("status") == "success" else 404
+    return web.json_response(data, status=status)
 
 
 def load_config():
