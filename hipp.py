@@ -713,8 +713,8 @@ async def serve_fhir_metadata(request):
     """
     logger.info("GET /fhir/Metadata endpoint accessed")
 
-    # Create a basic FHIR CapabilityStatement
-    capability_statement = {
+    # Create a basic FHIR CapabilityStatement using the Resource class
+    capability_statement = Resource({
         "resourceType": "CapabilityStatement",
         "id": "hipobridge-fhir-capability-statement",
         "url": f"{request.scheme}://{request.host}/fhir/Metadata",
@@ -772,7 +772,7 @@ async def serve_fhir_metadata(request):
                 ]
             }
         ]
-    }
+    })
 
     return web_fhir_response(capability_statement)
 
