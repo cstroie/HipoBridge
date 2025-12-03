@@ -180,18 +180,15 @@ async def search_fhir_patient(request):
         # Convert parsed data to FHIR resource
         response = client.fhir_response(parsed_data)
     elif 'patients' in parsed_data and len(parsed_data['patients']) > 0:
-        # Convert multiple patients to FHIR Bundle
-        response = {
-            "resourceType": "Bundle",
-            "type": "searchset",
-            "total": len(parsed_data['patients']),
-            "entry": []
-        }
+        # Convert multiple patients to FHIR Bundle using the Bundle class
+        bundle = Bundle(
+            type="searchset",
+            total=len(parsed_data['patients'])
+        )
         for patient_id, patient_name in parsed_data['patients'].items():
-            # Add entry to bundle
-            response["entry"].append({
-                "resource": client.fhir_response(HipoData(patient={'name': patient_name, 'id': patient_id}))
-            })
+            patient_resource = client.fhir_response(HipoData(patient={'name': patient_name, 'id': patient_id}))
+            bundle.append_entry(resource=patient_resource)
+        response = bundle
     else:
         # Create OperationOutcome for no patients found
         response = OperationOutcome.from_error(
@@ -333,13 +330,11 @@ async def search_fhir_service_request(request):
 
     # Check if there are requests in response
     if 'requests' in parsed_data and len(parsed_data['requests']) > 0:
-        # Convert multiple patients to FHIR Bundle
-        response = {
-            "resourceType": "Bundle",
-            "type": "searchset",
-            "total": len(parsed_data['requests']),
-            "entry": []
-        }
+        # Convert multiple patients to FHIR Bundle using the Bundle class
+        bundle = Bundle(
+            type="searchset",
+            total=len(parsed_data['requests'])
+        )
 
         for req in parsed_data['requests']:
             # Create FHIR ServiceRequest using the FHIR class
@@ -377,11 +372,10 @@ async def search_fhir_service_request(request):
                         "text": region
                     })
             
-            # Append the entry
-            response["entry"].append({
-                "resource": fhir_service_request.to_dict()
-            })
+            # Append the entry to the bundle
+            bundle.append_entry(resource=fhir_service_request)
         
+        response = bundle
     else:
         # Create OperationOutcome for no requests found
         response = OperationOutcome.from_error(
