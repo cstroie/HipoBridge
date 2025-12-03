@@ -633,50 +633,6 @@ async def get_fhir_encounter(request):
     return web_fhir_response(response)
 
 
-
-async def serve_fhir_analysis_types(request):
-    """Serve the analysis types terminology.
-
-    Returns a FHIR CodeSystem resource defining the analysis types used in the hospital system.
-
-    Args:
-        request: The incoming HTTP request
-
-    Returns:
-        JSON response with CodeSystem resource
-    """
-    logger.info("GET /fhir/CodeSystem/analysis-types endpoint accessed")
-
-    # Build concepts list using for loop
-    concepts = []
-    for code, details in ANALYSIS_TYPES.items():
-        concepts.append({
-            "code": code,
-            "display": details["display"],
-            "definition": details["definition"]
-        })
-
-    # Create FHIR CodeSystem using the FHIR Resource class
-    code_system = Resource({
-        "resourceType": "CodeSystem",
-        "id": "analysis-types",
-        "url": f"{request.scheme}://{request.host}/fhir/CodeSystem/analysis-types",
-        "version": "1.0.0",
-        "name": "HospitalAnalysisTypes",
-        "title": "Hospital Analysis Types",
-        "status": "active",
-        "experimental": False,
-        "date": datetime.now().strftime('%Y-%m-%d'),
-        "publisher": "Hospital System",
-        "description": "Code system for analysis types used in the hospital",
-        "caseSensitive": True,
-        "content": "complete",
-        "concept": concepts
-    })
-
-    return web_fhir_response(code_system)
-
-
 async def serve_spec(request):
     """Serve the OpenAPI specification.
 
@@ -700,6 +656,48 @@ async def serve_spec(request):
         return web_error_response("Specification file not found", 500)
     except json.JSONDecodeError as e:
         return web_error_response("Error parsing specification file", 500)
+
+
+async def serve_fhir_analysis_types(request):
+    """Serve the analysis types terminology.
+
+    Returns a FHIR CodeSystem resource defining the analysis types used in the hospital system.
+
+    Args:
+        request: The incoming HTTP request
+
+    Returns:
+        JSON response with CodeSystem resource
+    """
+    # Build concepts list
+    concepts = []
+    for code, details in ANALYSIS_TYPES.items():
+        concepts.append({
+            "code": code,
+            "display": details["display"],
+            "definition": details["definition"]
+        })
+
+    # Create FHIR CodeSystem using the FHIR Resource class
+    code_system = Resource({
+        "resourceType": "CodeSystem",
+        "id": "analysis-types",
+        "url": f"{request.scheme}://{request.host}/fhir/CodeSystem/analysis-types",
+        "version": "1.0.0",
+        "name": "HipocrateAnalysisTypes",
+        "title": "Hipocrate Analysis Types",
+        "status": "active",
+        "experimental": False,
+        "date": datetime.now().strftime('%Y-%m-%d'),
+        "publisher": "Hipocrate",
+        "description": "Code system for analysis types used by the Hipocrate",
+        "caseSensitive": True,
+        "content": "complete",
+        "concept": concepts
+    })
+
+    # Return the response
+    return web_fhir_response(code_system)
 
 
 async def serve_fhir_metadata(request):
