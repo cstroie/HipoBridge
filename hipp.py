@@ -196,7 +196,7 @@ async def search_fhir_patient(request):
                 bundle["entry"].append({
                     "resource": client.fhir_response(HipoData(patient={'name': patient_name, 'id': patient_id}))
                 })
-            parsed_data['fhir'] = fhir_data
+            parsed_data['fhir'] = bundle
         else:
             parsed_data['fhir'] = {}
         
@@ -402,7 +402,7 @@ async def search_fhir_service_request(request):
                     "resource": fhir_service_request.to_dict()
                 })
 
-            parsed_data['fhir'] = bundle
+            parsed_data['fhir'] = fhir_data
         else:
             parsed_data['fhir'] = {}
        
