@@ -1,5 +1,5 @@
 .error {
-    background: var(--form-element-background-color);
+    background: var(--pico-secondary-background);
     color: var(--contrast);
     padding: 1rem;
     border-radius: var(--border-radius);
@@ -9,7 +9,7 @@
 }
 
 .success {
-    background: var(--form-element-background-color);
+    background: var(--pico-primary-background);
     color: var(--contrast);
     padding: 1rem;
     border-radius: var(--border-radius);
@@ -56,11 +56,11 @@
 }
 
 .toast-success {
-    background-color: var(--primary);
+    background-color: var(--pico-primary-background);
 }
 
 .toast-error {
-    background-color: var(--error-background-color);
+    background-color: var(--pico-secondary-background);
 }
 
 @keyframes slideIn {
