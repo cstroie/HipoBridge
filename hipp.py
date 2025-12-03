@@ -137,7 +137,7 @@ async def search_patient(request):
     # Get search parameter from query string
     search_term = request.query.get('q', '')
     if not search_term:
-        return error_response("Search term is required")
+        return web_error_response("Search term is required")
     logger.info(f"Searching for patients with term: {search_term}")
 
     # Create a new HipoClient instance with credentials
@@ -147,7 +147,7 @@ async def search_patient(request):
     parsed_data = await client.search(search_term)
 
     # Return the response
-    return json_response(parsed_data)
+    return web_json_response(parsed_data)
 
 @require_auth
 async def search_fhir_patient(request):
@@ -217,7 +217,7 @@ async def get_patient(request):
     # Extract patient ID from path
     id = request.match_info.get('id')
     if not id:
-        return error_response("Patient ID is required")
+        return web_error_response("Patient ID is required")
     logger.info(f"Retrieving patient with ID: {id}")
 
     # Create a new HipoClient instance with credentials
@@ -227,7 +227,7 @@ async def get_patient(request):
     parsed_data = await client.fetch_and_parse(id=id)
 
     # Return the response
-    return json_response(parsed_data)
+    return web_json_response(parsed_data)
 
 @require_auth
 async def get_fhir_patient(request):
@@ -277,7 +277,7 @@ async def search_request(request):
     # Get search parameter from query string
     patient_id = request.query.get('patient', '')
     if not patient_id:
-        return error_response("Patient ID is required")
+        return web_error_response("Patient ID is required")
     logger.info(f"Retrieving service requests for patient with ID: {patient_id}")
 
     # Get optional parameters
@@ -293,7 +293,7 @@ async def search_request(request):
     parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime, full=full_data)
 
     # Return the response
-    return json_response(parsed_data)
+    return web_json_response(parsed_data)
 
 @require_auth
 async def search_fhir_service_request(request):
@@ -403,7 +403,7 @@ async def get_request(request):
     # Extract service request ID from path
     id = request.match_info.get('id')
     if not id:
-        return error_response("Service request ID is required")
+        return web_error_response("Service request ID is required")
     logger.info(f"Retrieving service request with ID: {id}")
 
     # Create a new HipoClient instance
@@ -413,7 +413,7 @@ async def get_request(request):
     parsed_data = await client.fetch_and_parse(id=id)
 
     # Return the response
-    return json_response(parsed_data)
+    return web_json_response(parsed_data)
 
 @require_auth
 async def get_fhir_service_request(request):
@@ -465,7 +465,7 @@ async def get_study(request):
     # Extract imaging study ID from path
     id = request.match_info.get('id')
     if not id:
-        return error_response("Imaging study ID is required")
+        return web_error_response("Imaging study ID is required")
     logger.info(f"Retrieving imaging study with ID: {id}")
 
     # Create a new HipoClient instance
@@ -475,7 +475,7 @@ async def get_study(request):
     parsed_data = await client.fetch_and_parse(id=id)
 
     # Return the response
-    return json_response(parsed_data)
+    return web_json_response(parsed_data)
 
 @require_auth
 async def get_fhir_imaging_study(request):
@@ -524,14 +524,14 @@ async def get_report(request):
     # Extract diagnostic report ID from path
     id = request.match_info.get('id')
     if not id:
-        return error_response("Diagnostic report ID is required")
+        return web_error_response("Diagnostic report ID is required")
     logger.info(f"Retrieving diagnostic report with ID: {id}")
 
     # Create a new HipoClient instance
     client = HipoClientDiagnosticReport(SERVICE_URL, request)
 
     # Check if debug response is requested
-    debug_resp = await debug_response(client, request, id=id)
+    debug_resp = await web_debug_response(client, request, id=id)
     if debug_resp:
         return debug_resp
 
@@ -539,7 +539,7 @@ async def get_report(request):
     parsed_data = await client.fetch_and_parse(id=id)
 
     # Return the response
-    return json_response(parsed_data)
+    return web_json_response(parsed_data)
 
 @require_auth
 async def get_fhir_diagnostic_report(request):
@@ -588,7 +588,7 @@ async def get_checkout(request):
     # Extract checkout ID from path
     id = request.match_info.get('id')
     if not id:
-        return error_response("Checkout ID is required")
+        return web_error_response("Checkout ID is required")
     logger.info(f"Retrieving checkout with ID: {id}")
 
     # Create a new HipoClient instance
@@ -598,7 +598,7 @@ async def get_checkout(request):
     parsed_data = await client.fetch_and_parse(id=id)
 
     # Return the response
-    return json_response(parsed_data)
+    return web_json_response(parsed_data)
 
 @require_auth
 async def get_fhir_encounter(request):
@@ -674,7 +674,7 @@ async def serve_fhir_analysis_types(request):
         "concept": concepts
     }
 
-    return web.json_response(code_system)
+    return web_fhir_response(code_system)
 
 
 async def serve_spec(request):
@@ -695,11 +695,11 @@ async def serve_spec(request):
             spec = json.load(f)
         # Update the server URL with the current PORT
         spec["servers"][0]["url"] = f"{request.scheme}://{request.host}"
-        return web.json_response(spec)
+        return web.web_json_response(spec)
     except FileNotFoundError:
-        return error_response("Specification file not found", 500)
+        return web_error_response("Specification file not found", 500)
     except json.JSONDecodeError as e:
-        return error_response("Error parsing specification file", 500)
+        return web_error_response("Error parsing specification file", 500)
 
 
 async def serve_fhir_metadata(request):
@@ -776,7 +776,7 @@ async def serve_fhir_metadata(request):
         ]
     }
 
-    return web.json_response(capability_statement)
+    return web_fhir_response(capability_statement)
 
 
 
@@ -801,14 +801,14 @@ async def serve_md2html(request):
 
         html_content = markdown_to_html(markdown_text)
 
-        return web.json_response({
+        return web.web_json_response({
             "status": "success",
             "html": html_content
         })
     except json.JSONDecodeError:
-        return error_response("Invalid JSON data")
+        return web_error_response("Invalid JSON data")
     except Exception as e:
-        return error_response("Markdown conversion failed", 500, {"exception": str(e)})
+        return web_error_response("Markdown conversion failed", 500, {"exception": str(e)})
 
 
 
@@ -830,7 +830,7 @@ async def serve_validate_cnp(request):
     cnp = request.query.get('id')
 
     if not cnp:
-        return error_response("CNP is required")
+        return web_error_response("CNP is required")
 
     logger.info(f"Validating CNP: {cnp}")
 
@@ -854,7 +854,7 @@ async def serve_validate_cnp(request):
             "control_digit": parsed_data.get("control_digit")
         })
 
-    return web.json_response(response_data)
+    return web.web_json_response(response_data)
 
 
 
@@ -911,7 +911,7 @@ def is_expected_page(soup: BeautifulSoup, expected_title_text: str) -> bool:
     title = soup.find('title')
     return title and expected_title_text in title.get_text()
 
-def error_response(message: str, status_code: int = 400, details: Dict[str, Any] = None) -> web.Response:
+def web_error_response(message: str, status_code: int = 400, details: Dict[str, Any] = None) -> web.Response:
     """Create a standardized error response.
 
     Args:
@@ -935,10 +935,10 @@ def error_response(message: str, status_code: int = 400, details: Dict[str, Any]
     if details:
         response_data["details"] = details
     # Return JSON response with appropriate status code
-    return web.json_response(response_data, status=status_code)
+    return web.web_json_response(response_data, status=status_code)
 
 
-def json_response(data: Dict[str, Any]) -> web.Response:
+def web_json_response(data: Dict[str, Any]) -> web.Response:
     """Create a JSON response with appropriate status code based on data status.
 
     Args:
@@ -948,10 +948,10 @@ def json_response(data: Dict[str, Any]) -> web.Response:
         JSON response with 200 for success, 404 for error
     """
     status = 200 if data.get("status") == "success" else 404
-    return web.json_response(data, status=status)
+    return web.web_json_response(data, status=status)
 
 
-async def debug_response(client, request, **kwargs) -> web.Response:
+async def web_debug_response(client, request, **kwargs) -> web.Response:
     """Handle debug page responses when debug parameter is present.
 
     Args:
@@ -982,7 +982,7 @@ def web_fhir_response(data) -> web.Response:
     if isinstance(data, str):
         operation_outcome = OperationOutcome.from_error(message=data, code="processing", severity="error")
         response_data = operation_outcome.to_dict()
-        return web.json_response(response_data, status=500)
+        return web.web_json_response(response_data, status=500)
     
     # Handle FHIR Resource objects by converting to dict
     if hasattr(data, 'to_dict'):
@@ -1005,7 +1005,7 @@ def web_fhir_response(data) -> web.Response:
         elif response_data.get('status') == 'error':
             status_code = 404
     
-    return web.json_response(response_data, status=status_code)
+    return web.web_json_response(response_data, status=status_code)
 
 
 def load_config():
