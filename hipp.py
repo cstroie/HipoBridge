@@ -267,8 +267,8 @@ async def get_fhir_patient(request):
     # Retrieve and parse the page, then convert to FHIR resource
     response = await client.fetch_repond_fhir(id=id)
 
-    # Return the response
-    return json_response(response)
+    # Return the response using fhir_response helper
+    return fhir_response(response)
 
 
 @require_auth
