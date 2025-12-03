@@ -324,7 +324,7 @@ async def search_fhir_service_request(request):
     # Retrieve and parse the page
     parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime, full=full_data)
 
-    # Check if there are more in response
+    # Check if there are requests in response
     if 'requests' in parsed_data and len(parsed_data['requests']) > 0:
         # Convert multiple patients to FHIR Bundle
         fhir_data = {
@@ -374,9 +374,17 @@ async def search_fhir_service_request(request):
             fhir_data["entry"].append({
                 "resource": fhir_service_request.to_dict()
             })
-    
-    # Return the response
-    return web_fhir_response(fhir_data)
+        
+        # Return the response
+        return web_fhir_response(fhir_data)
+    else:
+        # Create OperationOutcome for no requests found
+        outcome = OperationOutcome.from_error(
+            message="No service requests found for the specified patient",
+            code="not-found",
+            severity="information"
+        )
+        return web_fhir_response(outcome.to_dict())
 
 
 @require_auth
