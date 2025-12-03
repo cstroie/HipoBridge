@@ -346,11 +346,12 @@ async def search_fhir_service_request(request):
 
         # Retrieve and parse the page
         parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime, full=full_data)
+        fhir_data = HipoData(status = parsed_data['status'], message = parsed_data['message'])
 
         # Check if there are more in response
         if 'requests' in parsed_data and len(parsed_data['requests']) > 0:
             # Convert multiple patients to FHIR Bundle
-            bundle = {
+            fhir_data = {
                 "resourceType": "Bundle",
                 "type": "searchset",
                 "total": len(parsed_data['requests']),
@@ -394,7 +395,7 @@ async def search_fhir_service_request(request):
                         })
                 
                 # Append the entry
-                bundle["entry"].append({
+                fhir_data["entry"].append({
                     "resource": fhir_service_request.to_dict()
                 })
 
@@ -403,7 +404,7 @@ async def search_fhir_service_request(request):
             parsed_data['fhir'] = {}
        
         # Return the response
-        return json_response(parsed_data)
+        return json_response(fhir_data)
 
     except Exception as e:
         return error_response("Patient retrieval failed", 500, {"exception": str(e)})
