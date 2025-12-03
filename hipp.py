@@ -140,18 +140,14 @@ async def search_patient(request):
         return error_response("Search term is required")
     logger.info(f"Searching for patients with term: {search_term}")
 
-    try:
-        # Create a new HipoClient instance with credentials
-        client = HipoClientPatientSearch(SERVICE_URL, request)
+    # Create a new HipoClient instance with credentials
+    client = HipoClientPatientSearch(SERVICE_URL, request)
 
-        # Retrieve and parse the page
-        parsed_data = await client.search(search_term)
+    # Retrieve and parse the page
+    parsed_data = await client.search(search_term)
 
-        # Return the response
-        return json_response(parsed_data)
-
-    except Exception as e:
-        return error_response("Patient retrieval failed", 500, {"exception": str(e)})
+    # Return the response
+    return json_response(parsed_data)
 
 @require_auth
 async def search_fhir_patient(request):
@@ -170,42 +166,35 @@ async def search_fhir_patient(request):
     # Get search parameter from query string
     search_term = request.query.get('q', '')
     if not search_term:
-        return error_response("Search term is required")
+        return web_fhir_response("Search term is required")
     logger.info(f"Searching for patients with term: {search_term}")
 
-    try:
-        # Create a new HipoClient instance with credentials
-        client = HipoClientPatientSearch(SERVICE_URL, request)
+    # Create a new HipoClient instance with credentials
+    client = HipoClientPatientSearch(SERVICE_URL, request)
 
-        # Retrieve and parse the page
-        parsed_data = await client.search(search_term)
+    # Retrieve and parse the page
+    parsed_data = await client.search(search_term)
 
-        # Check if there is one patient or there are more in response
-        if 'patient' in parsed_data:
-            # Convert parsed data to FHIR resource
-            parsed_data['fhir'] = client.fhir_response(parsed_data)
-        elif 'patients' in parsed_data and len(parsed_data['patients']) > 0:
-            # Convert multiple patients to FHIR Bundle
-            bundle = {
-                "resourceType": "Bundle",
-                "type": "searchset",
-                "total": len(parsed_data['patients']),
-                "entry": []
-            }
-            for patient_id, patient_name in parsed_data['patients'].items():
-                # Add entry to bundle
-                bundle["entry"].append({
-                    "resource": client.fhir_response(HipoData(patient={'name': patient_name, 'id': patient_id}))
-                })
-            parsed_data['fhir'] = bundle
-        else:
-            parsed_data['fhir'] = {}
-        
-        # Return the response
-        return json_response(parsed_data)
-
-    except Exception as e:
-        return error_response("Patient retrieval failed", 500, {"exception": str(e)})
+    # Check if there is one patient or there are more in response
+    if 'patient' in parsed_data:
+        # Convert parsed data to FHIR resource
+        response = client.fhir_response(parsed_data)
+    elif 'patients' in parsed_data and len(parsed_data['patients']) > 0:
+        # Convert multiple patients to FHIR Bundle
+        response = {
+            "resourceType": "Bundle",
+            "type": "searchset",
+            "total": len(parsed_data['patients']),
+            "entry": []
+        }
+        for patient_id, patient_name in parsed_data['patients'].items():
+            # Add entry to bundle
+            response["entry"].append({
+                "resource": client.fhir_response(HipoData(patient={'name': patient_name, 'id': patient_id}))
+            })
+    
+    # Return the response
+    return web_fhir_response(response)
 
 
 @require_auth
@@ -228,18 +217,14 @@ async def get_patient(request):
         return error_response("Patient ID is required")
     logger.info(f"Retrieving patient with ID: {id}")
 
-    try:
-        # Create a new HipoClient instance with credentials
-        client = HipoClientPatient(SERVICE_URL, request)
+    # Create a new HipoClient instance with credentials
+    client = HipoClientPatient(SERVICE_URL, request)
 
-        # Retrieve and parse the page
-        parsed_data = await client.fetch_and_parse(id=id)
+    # Retrieve and parse the page
+    parsed_data = await client.fetch_and_parse(id=id)
 
-        # Return the response
-        return json_response(parsed_data)
-
-    except Exception as e:
-        return error_response("Patient retrieval failed", 500, {"exception": str(e)})
+    # Return the response
+    return json_response(parsed_data)
 
 @require_auth
 async def get_fhir_patient(request):
@@ -258,7 +243,7 @@ async def get_fhir_patient(request):
     # Get patient ID from request path
     id = request.match_info.get('id')
     if not id:
-        return error_response("Patient ID is required")
+        return web_fhir_response("Patient ID is required")
     logger.info(f"Retrieving patient with ID: {id}")
 
     # Create a new HipoClient instance with credentials
@@ -267,8 +252,8 @@ async def get_fhir_patient(request):
     # Retrieve and parse the page, then convert to FHIR resource
     response = await client.fetch_repond_fhir(id=id)
 
-    # Return the response using fhir_response helper
-    return fhir_response(response)
+    # Return the response using web_fhir_response helper
+    return web_fhir_response(response)
 
 
 @require_auth
@@ -298,18 +283,14 @@ async def search_request(request):
     exam_datetime = request.query.get('dt')
     full_data = request.query.get('full', 'no').lower() == 'yes'
 
-    try:
-        # Create a new HipoClient instance with credentials
-        client = HipoClientServiceRequestSearch(SERVICE_URL, request)
+    # Create a new HipoClient instance with credentials
+    client = HipoClientServiceRequestSearch(SERVICE_URL, request)
 
-        # Retrieve and parse the page
-        parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime, full=full_data)
+    # Retrieve and parse the page
+    parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime, full=full_data)
 
-        # Return the response
-        return json_response(parsed_data)
-
-    except Exception as e:
-        return error_response("Service requests retrieval failed", 500, {"exception": str(e)})
+    # Return the response
+    return json_response(parsed_data)
 
 @require_auth
 async def search_fhir_service_request(request):
@@ -328,7 +309,7 @@ async def search_fhir_service_request(request):
     # Get search parameter from query string
     patient_id = request.query.get('patient', '')
     if not patient_id:
-        return error_response("Patient ID is required")
+        return web_fhir_response("Patient ID is required")
     logger.info(f"Retrieving service requests for patient with ID: {patient_id}")
 
     # Get optional parameters
@@ -337,74 +318,65 @@ async def search_fhir_service_request(request):
     exam_datetime = request.query.get('dt')
     full_data = request.query.get('full', 'no').lower() == 'yes'
 
-    try:
-        # Create a new HipoClient instance with credentials
-        client = HipoClientServiceRequestSearch(SERVICE_URL, request)
+    # Create a new HipoClient instance with credentials
+    client = HipoClientServiceRequestSearch(SERVICE_URL, request)
 
-        # Retrieve and parse the page
-        parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime, full=full_data)
-        fhir_data = HipoData(status = parsed_data['status'], message = parsed_data['message'])
+    # Retrieve and parse the page
+    parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime, full=full_data)
 
-        # Check if there are more in response
-        if 'requests' in parsed_data and len(parsed_data['requests']) > 0:
-            # Convert multiple patients to FHIR Bundle
-            fhir_data = {
-                "resourceType": "Bundle",
-                "type": "searchset",
-                "total": len(parsed_data['requests']),
-                "entry": []
-            }
+    # Check if there are more in response
+    if 'requests' in parsed_data and len(parsed_data['requests']) > 0:
+        # Convert multiple patients to FHIR Bundle
+        fhir_data = {
+            "resourceType": "Bundle",
+            "type": "searchset",
+            "total": len(parsed_data['requests']),
+            "entry": []
+        }
 
-            for req in parsed_data['requests']:
-                # Create FHIR ServiceRequest using the FHIR class
-                fhir_service_request = FHIRServiceRequest(
-                    id=req["id"],
-                    status="active",
-                    intent="order",
-                    priority="urgent" if req.get("is_urgent") else "routine"
-                )
-                
-                # Add subject reference
-                fhir_service_request["subject"] = Reference(
-                    reference=f"Patient/{patient_id}"
-                )
-                
-                # Add code
-                fhir_service_request["code"] = CodeableConcept(
-                    coding=[{
-                        "system": f"{request.scheme}://{request.host}/fhir/CodeSystem/analysis-types",
-                        "code": req["type"],
-                        "display": ANALYSIS_TYPES[req["type"]]["display"]
-                    }],
-                    text=ANALYSIS_TYPES[req["type"]]["definition"]
-                )
-                
-                # Add effective datetime if available
-                if req.get("datetime"):
-                    fhir_service_request["authoredOn"] = req["datetime"]
-                
-                # Add region information if available
-                if req.get("regions"):
-                    fhir_service_request["bodySite"] = []
-                    for region in req["regions"]:
-                        fhir_service_request["bodySite"].append({
-                            "text": region
-                        })
-                
-                # Append the entry
-                fhir_data["entry"].append({
-                    "resource": fhir_service_request.to_dict()
-                })
-
-            parsed_data['fhir'] = fhir_data
-        else:
-            parsed_data['fhir'] = {}
-       
-        # Return the response
-        return json_response(fhir_data)
-
-    except Exception as e:
-        return error_response("Patient retrieval failed", 500, {"exception": str(e)})
+        for req in parsed_data['requests']:
+            # Create FHIR ServiceRequest using the FHIR class
+            fhir_service_request = FHIRServiceRequest(
+                id=req["id"],
+                status="active",
+                intent="order",
+                priority="urgent" if req.get("is_urgent") else "routine"
+            )
+            
+            # Add subject reference
+            fhir_service_request["subject"] = Reference(
+                reference=f"Patient/{patient_id}"
+            )
+            
+            # Add code
+            fhir_service_request["code"] = CodeableConcept(
+                coding=[{
+                    "system": f"{request.scheme}://{request.host}/fhir/CodeSystem/analysis-types",
+                    "code": req["type"],
+                    "display": ANALYSIS_TYPES[req["type"]]["display"]
+                }],
+                text=ANALYSIS_TYPES[req["type"]]["definition"]
+            )
+            
+            # Add effective datetime if available
+            if req.get("datetime"):
+                fhir_service_request["authoredOn"] = req["datetime"]
+            
+            # Add region information if available
+            if req.get("regions"):
+                fhir_service_request["bodySite"] = []
+                for region in req["regions"]:
+                    fhir_service_request["bodySite"].append({
+                        "text": region
+                    })
+            
+            # Append the entry
+            fhir_data["entry"].append({
+                "resource": fhir_service_request.to_dict()
+            })
+    
+    # Return the response
+    return web_fhir_response(fhir_data)
 
 
 @require_auth
@@ -1030,7 +1002,7 @@ async def debug_response(client, request, **kwargs) -> web.Response:
     return None
 
 
-def fhir_response(data) -> web.Response:
+def web_fhir_response(data) -> web.Response:
     """Create a FHIR-compatible JSON response from dict or FHIR Resource objects.
 
     Args:
