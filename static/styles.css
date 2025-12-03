@@ -56,7 +56,7 @@
 }
 
 .toast-success {
-    background-color: var(--success-background-color);
+    background-color: var(--primary);
 }
 
 .toast-error {
