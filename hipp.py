@@ -656,8 +656,8 @@ async def serve_fhir_analysis_types(request):
             "definition": details["definition"]
         })
 
-    # Create FHIR CodeSystem using the FHIR class structure
-    code_system = {
+    # Create FHIR CodeSystem using the FHIR Resource class
+    code_system = Resource({
         "resourceType": "CodeSystem",
         "id": "analysis-types",
         "url": f"{request.scheme}://{request.host}/fhir/CodeSystem/analysis-types",
@@ -672,7 +672,7 @@ async def serve_fhir_analysis_types(request):
         "caseSensitive": True,
         "content": "complete",
         "concept": concepts
-    }
+    })
 
     return web_fhir_response(code_system)
 
