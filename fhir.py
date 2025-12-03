@@ -664,6 +664,72 @@ class Issue(Resource):
         super().__init__(data)
 
 
+class Bundle(Resource):
+    def __init__(self,
+                 id: Optional[str] = None,
+                 identifier: Optional[Dict[str, Any]] = None,
+                 type: Optional[str] = None,
+                 timestamp: Optional[str] = None,
+                 total: Optional[int] = None,
+                 link: Optional[List[Dict[str, Any]]] = None,
+                 entry: Optional[List[Dict[str, Any]]] = None,
+                 signature: Optional[Dict[str, Any]] = None,
+                 issues: Optional[Dict[str, Any]] = None):
+        data = {
+            "resourceType": "Bundle",           # Resource type
+            "id": id,                           # Logical id of this artifact
+            "identifier": identifier,           # Persistent identifier for the bundle
+            "type": type,                       # document | message | transaction | transaction-response | batch | batch-response | history | searchset | collection | subscription-notification
+            "timestamp": timestamp,             # When the bundle was assembled
+            "total": total,                     # Total matches across all pages
+            "link": link,                       # Links related to this Bundle
+            "entry": entry,                     # Entry in the bundle - will have a resource or information
+            "signature": signature,             # Digital Signature (deprecated: use Provenance Signatures)
+            "issues": issues                    # OperationOutcome with issues about the Bundle
+        }
+        super().__init__(data)
+    
+    def append_entry(self, resource: Resource, fullUrl: Optional[str] = None, 
+                     search: Optional[Dict[str, Any]] = None, request: Optional[Dict[str, Any]] = None,
+                     response: Optional[Dict[str, Any]] = None, entry_link: Optional[List[Dict[str, Any]]] = None):
+        """Append an entry to the bundle.
+        
+        Args:
+            resource: The resource to add to the bundle
+            fullUrl: URI for resource (e.g. the absolute URL server address, URI for UUID/OID, etc.)
+            search: Search related information
+            request: Additional execution information (transaction/batch/history)
+            response: Results of execution (transaction/batch/history)
+            entry_link: Links related to this entry
+        """
+        entry = {
+            "resource": resource.to_dict() if hasattr(resource, 'to_dict') else resource
+        }
+        
+        if fullUrl:
+            entry["fullUrl"] = fullUrl
+        if search:
+            entry["search"] = search
+        if request:
+            entry["request"] = request
+        if response:
+            entry["response"] = response
+        if entry_link:
+            entry["link"] = entry_link
+            
+        if self.data.get("entry") is None:
+            self.data["entry"] = []
+        self.data["entry"].append(entry)
+    
+    def set_total(self, total: int):
+        """Set the total number of matches across all pages."""
+        self.data["total"] = total
+    
+    def get_entry_count(self) -> int:
+        """Get the number of entries in the bundle."""
+        return len(self.data.get("entry", []))
+
+
 class OperationOutcome(Resource):
     def __init__(self,
                  id: Optional[str] = None,
