@@ -1,19 +1,19 @@
 .error {
     background: var(--pico-secondary-background);
-    color: var(--contrast);
+    color: var(--pico-contrast-inverse);
     padding: 1rem;
-    border-radius: var(--border-radius);
-    border-left: 5px solid var(--error-border-color);
+    border-radius: var(--pico-border-radius);
+    border-left: 5px solid var(--pico-form-element-invalid-border-color);
     margin: 1.5rem 0;
     display: none;
 }
 
 .success {
     background: var(--pico-primary-background);
-    color: var(--contrast);
+    color: var(--pico-primary-inverse);
     padding: 1rem;
-    border-radius: var(--border-radius);
-    border-left: 5px solid var(--success-border-color);
+    border-radius: var(--pico-border-radius);
+    border-left: 5px solid var(--pico-form-element-valid-border-color);
     margin: 1.5rem 0;
     display: none;
 }
@@ -21,15 +21,15 @@
 .no-data {
     text-align: center;
     padding: 2.5rem 1.5rem;
-    color: var(--muted-color);
+    color: var(--pico-muted-color);
 }
 
 #noAnalyses {
     text-align: center;
     padding: 2rem;
-    background-color: var(--card-background-color);
-    border: 1px solid var(--card-border-color);
-    border-radius: var(--border-radius);
+    background-color: var(--pico-card-background-color);
+    border: 1px solid var(--pico-card-border-color);
+    border-radius: var(--pico-border-radius);
     margin: 1rem 0;
     display: none;
 }
@@ -47,9 +47,9 @@
 
 .toast {
     padding: 12px 20px;
-    border-radius: var(--border-radius);
-    color: var(--primary-inverse);
-    box-shadow: 0 2px 5px var(--card-box-shadow);
+    border-radius: var(--pico-border-radius);
+    color: var(--pico-primary-inverse);
+    box-shadow: var(--pico-box-shadow);
     animation: slideIn 0.3s, fadeOut 0.5s 2.5s forwards;
     max-width: 300px;
     font-size: 14px;
