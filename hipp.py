@@ -43,6 +43,7 @@ import base64
 
 # Import FHIR classes
 from fhir import ServiceRequest as FHIRServiceRequest, CodeableConcept, Coding, Reference, CodeableReference, Condition, Patient as FHIRPatient
+from fhir import OperationOutcome
 
 from hipo import ANALYSIS_TYPES
 from hipo import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientImagingStudy, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientServiceRequestSearch, HipoClientCheckout
@@ -260,21 +261,14 @@ async def get_fhir_patient(request):
         return error_response("Patient ID is required")
     logger.info(f"Retrieving patient with ID: {id}")
 
-    try:
-        # Create a new HipoClient instance with credentials
-        client = HipoClientPatient(SERVICE_URL, request)
+    # Create a new HipoClient instance with credentials
+    client = HipoClientPatient(SERVICE_URL, request)
 
-        # Retrieve and parse the page, then convert to FHIR resource
-        response = await client.fetch_repond_fhir(id=id)
+    # Retrieve and parse the page, then convert to FHIR resource
+    response = await client.fetch_repond_fhir(id=id)
 
-        # Return the response
-        return json_response(response)
-
-    except Exception as e:
-        # Return OperationOutcome for exceptions
-        from fhir import OperationOutcome
-        outcome = OperationOutcome.from_exception(e, code="exception")
-        return web.json_response(outcome.to_dict(), status=500)
+    # Return the response
+    return json_response(response)
 
 
 @require_auth
