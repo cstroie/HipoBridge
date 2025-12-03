@@ -538,23 +538,23 @@ document.addEventListener('DOMContentLoaded', function() {
         const analysesGrid = document.getElementById('analysesGrid');
         const noAnalyses = document.getElementById('noAnalyses');
         
-        // Check if we have a FHIR Bundle of Observations
+        // Check if we have a FHIR Bundle of ServiceRequests
         if (analysesData.resourceType === "Bundle" && analysesData.entry && analysesData.entry.length > 0) {
             noAnalyses.style.display = 'none';
             
-            // Process each observation - only display imaging analyses
+            // Process each service request - only display imaging analyses
             for (const entry of analysesData.entry) {
-                const observation = entry.resource;
+                const serviceRequest = entry.resource;
                 
-                // Extract type from observation code
+                // Extract type from service request code
                 let analysisType = 'unknown';
-                if (observation.code && observation.code.coding && observation.code.coding.length > 0) {
-                    analysisType = observation.code.coding[0].code || 'unknown';
+                if (serviceRequest.code && serviceRequest.code.coding && serviceRequest.code.coding.length > 0) {
+                    analysisType = serviceRequest.code.coding[0].code || 'unknown';
                 }
-                // Extract display text from observation display
+                // Extract display text from service request display
                 let analysisText = 'analysis';
-                if (observation.code && observation.code.coding && observation.code.coding.length > 0) {
-                    analysisText = observation.code.coding[0].display || 'analysis';
+                if (serviceRequest.code && serviceRequest.code.coding && serviceRequest.code.coding.length > 0) {
+                    analysisText = serviceRequest.code.coding[0].display || 'analysis';
                 }
                 
                 // Display analyses with imaging types 'radio', 'ct', 'irm', 'eco', 'lac', 'lii', 'rads'
@@ -568,7 +568,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Start building the card content
                 let cardContent = `
                     <header>
-                        <h4>${analysisText} report #${observation.id}</h4>
+                        <h4>${analysisText} report #${serviceRequest.id}</h4>
                     </header>
                     <main>
                 `;
@@ -576,12 +576,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 // For imaging analyses, fetch and display report content
                 if (['radio', 'ct', 'irm', 'eco', 'lac', 'lii', 'rads'].includes(analysisType)) {
                     try {
-                        // Fetch report data using FHIR API - now using the observation ID directly
-                        const reportResponse = await fetch(`/fhir/DiagnosticReport/${observation.id}`);
+                        // Fetch report data using FHIR API - now using the service request ID directly
+                        const reportResponse = await fetch(`/fhir/DiagnosticReport/${serviceRequest.id}`);
                         
                         if (reportResponse.ok) {
                             const reportData = await reportResponse.json();
-                            showToast(`Report data loaded for observation ${observation.id}`, 'success');
+                            showToast(`Report data loaded for service request ${serviceRequest.id}`, 'success');
                             
                             // Add report metadata (date/time and performer) if available
                             if (reportData.effectiveDateTime || (reportData.performer && reportData.performer.length > 0)) {
@@ -604,7 +604,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             }
                             
                             // Add report content to the card - now using presentedForm or conclusion
-                            cardContent += `<div class="report-preview" id="report-${observation.id}">`;
+                            cardContent += `<div class="report-preview" id="report-${serviceRequest.id}">`;
                             if (reportData.presentedForm && reportData.presentedForm.length > 0) {
                                 // Process all presentedForm entries
                                 for (const form of reportData.presentedForm) {
@@ -642,17 +642,17 @@ document.addEventListener('DOMContentLoaded', function() {
                             if (reportData.imagingStudy) {
                                 const studyId = reportData.imagingStudy.reference.split('/')[1];
                                 cardContent += `<div class="imaging-study-link">
-                                    <a href="#" onclick="viewImagingStudy('${studyId}', '${observation.id}'); return false;">
+                                    <a href="#" onclick="viewImagingStudy('${studyId}', '${serviceRequest.id}'); return false;">
                                         View Imaging Study #${studyId}
                                     </a>
                                 </div>`;
                             }
                         } else {
-                            showToast(`Error loading report data for observation ${observation.id}`, 'error');
+                            showToast(`Error loading report data for service request ${serviceRequest.id}`, 'error');
                         }
                     } catch (err) {
                         console.error('Error fetching report data:', err);
-                        showToast(`Error loading report data for observation ${observation.id}`, 'error');
+                        showToast(`Error loading report data for service request ${serviceRequest.id}`, 'error');
                     }
                 }
                 
