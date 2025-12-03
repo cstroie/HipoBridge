@@ -192,6 +192,13 @@ async def search_fhir_patient(request):
             response["entry"].append({
                 "resource": client.fhir_response(HipoData(patient={'name': patient_name, 'id': patient_id}))
             })
+    else:
+        # Create OperationOutcome for no patients found
+        response = OperationOutcome.from_error(
+            message="No patients found for the specified search criteria",
+            code="not-found",
+            severity="information"
+        )
     
     # Return the response
     return web_fhir_response(response)
