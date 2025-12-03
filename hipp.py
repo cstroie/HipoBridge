@@ -50,7 +50,6 @@ from hipo import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoCli
 from hipo import HipoData, user_session_manager
 
 from extractors import parse_cnp
-
 from markdown import html_to_markdown, markdown_to_html
 
 # Configure logging
@@ -75,7 +74,6 @@ DEFAULT_CONFIG = {
 
 # Authentication helpers
 # ###########################################################################
-
 
 def get_basic_auth(request):
     """Extract basic auth credentials from request.
@@ -118,7 +116,6 @@ def require_auth(handler):
 
 # Endpoints
 # ###########################################################################
-
 
 @require_auth
 async def search_patient(request):
@@ -774,9 +771,8 @@ async def serve_fhir_metadata(request):
         ]
     })
 
+    # Return the response
     return web_fhir_response(capability_statement)
-
-
 
 
 async def serve_md2html(request):
@@ -790,16 +786,17 @@ async def serve_md2html(request):
     Returns:
         JSON response with HTML content
     """
-    logger.info("POST /fhir/md2html endpoint accessed")
 
     try:
         # Get markdown text from request body
         data = await request.json()
         markdown_text = data.get('text', '')
 
+        # Convert to HTML
         html_content = markdown_to_html(markdown_text)
 
-        return web.web_json_response({
+        # Return the response
+        return web_json_response({
             "status": "success",
             "html": html_content
         })
@@ -807,7 +804,6 @@ async def serve_md2html(request):
         return web_error_response("Invalid JSON data")
     except Exception as e:
         return web_error_response("Markdown conversion failed", 500, {"exception": str(e)})
-
 
 
 @require_auth
@@ -822,14 +818,10 @@ async def serve_validate_cnp(request):
     Returns:
         JSON response with validation result and parsed data
     """
-    logger.info("GET /fhir/ValueSet/cnp endpoint accessed")
-
     # Get CNP from query string
     cnp = request.query.get('id')
-
     if not cnp:
         return web_error_response("CNP is required")
-
     logger.info(f"Validating CNP: {cnp}")
 
     # Parse CNP to get detailed information
@@ -852,8 +844,8 @@ async def serve_validate_cnp(request):
             "control_digit": parsed_data.get("control_digit")
         })
 
-    return web.web_json_response(response_data)
-
+    # Return the response
+    return web_json_response(response_data)
 
 
 @require_auth
@@ -869,8 +861,6 @@ async def serve_web_page(request):
     Returns:
         HTML response with the web interface or 401 if not authenticated
     """
-    logger.info("Root endpoint accessed")
-
     # Get credentials from request (added by decorator)
     username, password = request.auth_credentials
 
@@ -894,20 +884,6 @@ async def serve_web_page(request):
     await response.write(html_content.encode('utf-8'))
     return response
 
-
-
-def is_expected_page(soup: BeautifulSoup, expected_title_text: str) -> bool:
-    """Check if the parsed HTML content is the expected page by looking for specific text in the title.
-
-    Args:
-        soup: BeautifulSoup object of the parsed HTML content
-        expected_title_text: Text that should be present in the page title
-
-    Returns:
-        True if the page title contains the expected text, False otherwise
-    """
-    title = soup.find('title')
-    return title and expected_title_text in title.get_text()
 
 def web_error_response(message: str, status_code: int = 400, details: Dict[str, Any] = None) -> web.Response:
     """Create a standardized error response.
