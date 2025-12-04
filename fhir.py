@@ -664,6 +664,74 @@ class Issue(Resource):
         super().__init__(data)
 
 
+class Encounter(Resource):
+    def __init__(self,
+                 id: Optional[str] = None,
+                 identifier: Optional[List[Dict[str, Any]]] = None,
+                 status: Optional[str] = None,
+                 businessStatus: Optional[List[Dict[str, Any]]] = None,
+                 class_: Optional[List[Dict[str, Any]]] = None,
+                 priority: Optional[Dict[str, Any]] = None,
+                 type: Optional[List[Dict[str, Any]]] = None,
+                 serviceType: Optional[List[Dict[str, Any]]] = None,
+                 subject: Optional[Dict[str, Any]] = None,
+                 subjectStatus: Optional[Dict[str, Any]] = None,
+                 episodeOfCare: Optional[List[Dict[str, Any]]] = None,
+                 basedOn: Optional[List[Dict[str, Any]]] = None,
+                 careTeam: Optional[List[Dict[str, Any]]] = None,
+                 partOf: Optional[Dict[str, Any]] = None,
+                 serviceProvider: Optional[Dict[str, Any]] = None,
+                 participant: Optional[List[Dict[str, Any]]] = None,
+                 appointment: Optional[List[Dict[str, Any]]] = None,
+                 virtualService: Optional[List[Dict[str, Any]]] = None,
+                 actualPeriod: Optional[Dict[str, Any]] = None,
+                 plannedStartDate: Optional[str] = None,
+                 plannedEndDate: Optional[str] = None,
+                 length: Optional[Dict[str, Any]] = None,
+                 reason: Optional[List[Dict[str, Any]]] = None,
+                 diagnosis: Optional[List[Dict[str, Any]]] = None,
+                 account: Optional[List[Dict[str, Any]]] = None,
+                 dietPreference: Optional[List[Dict[str, Any]]] = None,
+                 specialArrangement: Optional[List[Dict[str, Any]]] = None,
+                 specialCourtesy: Optional[List[Dict[str, Any]]] = None,
+                 admission: Optional[Dict[str, Any]] = None,
+                 location: Optional[List[Dict[str, Any]]] = None):
+        data = {
+            "resourceType": "Encounter",              # Resource type
+            "id": id,                                 # Logical id of this artifact
+            "identifier": identifier,                 # Identifier(s) by which this encounter is known
+            "status": status,                         # planned | in-progress | on-hold | discharged | completed | cancelled | discontinued | entered-in-error | unknown
+            "businessStatus": businessStatus,         # A granular, workflows specific set of statuses that apply to the encounter
+            "class": class_,                          # Classification of patient encounter context - e.g. Inpatient, outpatient
+            "priority": priority,                     # Indicates the urgency of the encounter
+            "type": type,                             # Specific type of encounter (e.g. e-mail consultation, surgical day-care, ...)
+            "serviceType": serviceType,               # Specific type of service
+            "subject": subject,                       # The patient or group related to this encounter
+            "subjectStatus": subjectStatus,           # The current status of the subject in relation to the Encounter
+            "episodeOfCare": episodeOfCare,           # Episode(s) of care that this encounter should be recorded against
+            "basedOn": basedOn,                       # The request that initiated this encounter
+            "careTeam": careTeam,                     # The group(s) that are allocated to participate in this encounter
+            "partOf": partOf,                         # Another Encounter this encounter is part of
+            "serviceProvider": serviceProvider,       # The organization (facility) responsible for this encounter
+            "participant": participant,               # List of participants involved in the encounter
+            "appointment": appointment,               # The appointment that scheduled this encounter
+            "virtualService": virtualService,         # Connection details of a virtual service (e.g. conference call)
+            "actualPeriod": actualPeriod,             # The actual start and end time of the encounter
+            "plannedStartDate": plannedStartDate,     # The planned start date/time (or admission date) of the encounter
+            "plannedEndDate": plannedEndDate,         # The planned end date/time (or discharge date) of the encounter
+            "length": length,                         # Actual quantity of time the encounter lasted (less time absent)
+            "reason": reason,                         # The list of medical reasons that are expected to be addressed during the episode of care
+            "diagnosis": diagnosis,                   # The list of diagnosis relevant to this encounter
+            "account": account,                       # The set of accounts that may be used for billing for this Encounter
+            "dietPreference": dietPreference,         # Diet preferences reported by the patient
+            "specialArrangement": specialArrangement, # Wheelchair, translator, stretcher, etc
+            "specialCourtesy": specialCourtesy,       # Special courtesies (VIP, board member)
+            "admission": admission,                   # Details about the admission to a healthcare service
+            "location": location                      # List of locations where the patient has been
+        }
+        super().__init__(data)
+
+
 class Bundle(Resource):
     def __init__(self,
                  id: Optional[str] = None,
