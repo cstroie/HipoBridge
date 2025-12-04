@@ -41,7 +41,7 @@ class Resource(MutableMapping):
 
 class Coding(Resource):
     def __init__(self, system: Optional[str] = None, version: Optional[str] = None, code: Optional[str] = None, 
-                 display: Optional[str] = None, userSelected: Optional[bool] = None):
+                 display: Optional[str] = None, userSelected: Optional[bool] = None, **kwargs):
         data = {
             "system": system,             # Identity of the terminology system
             "version": version,           # Version of the system - if relevant
@@ -49,7 +49,7 @@ class Coding(Resource):
             "display": display,           # Representation defined by the system
             "userSelected": userSelected  # If this coding was chosen directly by the user
         }
-        super().__init__(data)
+        super().__init__(data, **kwargs)
 
 
 class CodeableReference(Resource):
