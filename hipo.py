@@ -1030,6 +1030,11 @@ class HipoClient:
         try:
             error_div = soup.find('div', id='divError')
             if error_div:
+                # Get the first child div which contains the actual error/success message
+                first_child_div = error_div.find('div')
+                if first_child_div:
+                    return first_child_div.get_text().strip()
+                # Fallback to getting text from the parent div
                 return error_div.get_text().strip()
             return ""
         except Exception as e:
