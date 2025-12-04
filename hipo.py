@@ -1102,7 +1102,7 @@ class HipoClient:
             max_redirects: Maximum number of redirects to follow (default: 5)
 
         Returns:
-            Tuple of (response_text, success, error_response) where success is boolean
+            Tuple of (page_content, error_message) where error_message is None if no error
         """
         # Construct the full URL if a relative path is provided
         current_url = self.get_full_url(url)
@@ -1123,7 +1123,8 @@ class HipoClient:
 
             # Check for errors in the response
             if not success:
-                return None, False, error_response
+                error_msg = error_response.get("message", "Unknown error") if isinstance(error_response, dict) else str(error_response)
+                return None, error_msg
             logger.info(f"Page retrieved in {duration:.2f} seconds")
 
             # Check if this is the final response (not a redirect)
@@ -1134,12 +1135,12 @@ class HipoClient:
                 # If we get the final data (not a redirect), break the loop
                 if response.status != 302:
                     logger.info(f"Page retrieval completed successfully after {redirect_count} redirects")
-                    return response_text, True, None
+                    return response_text, None
 
                 # Handle 302 redirect
                 location = response.headers.get("Location")
                 if not location:
-                    return None, False, error_response("Redirect without location header", 500)
+                    return None, "Redirect without location header"
 
                 # Construct the full URL for the redirect
                 if location.startswith("/"):
@@ -1159,7 +1160,7 @@ class HipoClient:
                 redirect_count += 1
 
         # If we've exceeded the maximum redirects
-        return None, False, error_response(f"Exceeded maximum redirects ({max_redirects})", 500)
+        return None, f"Exceeded maximum redirects ({max_redirects})"
 
     def parse_data(self, html_content: str, **kwargs) -> HipoData:
         """Parse HTML content and extract structured data.
