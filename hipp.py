@@ -28,29 +28,24 @@ License: GPL-3.0
 Version: 1.0.0
 """
 import os
-import asyncio
-import aiohttp
 from aiohttp import web
 from typing import Dict, Any, Optional, List
 import json
 import logging
-import re
-from bs4 import BeautifulSoup
-import html
 from datetime import datetime, timedelta
 import configparser
 import base64
 
 # Import FHIR classes
-from fhir import ServiceRequest as FHIRServiceRequest, CodeableConcept, Coding, Reference, CodeableReference, Condition, Patient as FHIRPatient
-from fhir import OperationOutcome, Bundle, Resource
+from fhir import OperationOutcome, Resource
 
-from hipo import ANALYSIS_TYPES
-from hipo import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientImagingStudy, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientServiceRequestSearch, HipoClientCheckout
-from hipo import HipoData, user_session_manager
+from hipoclient import ANALYSIS_TYPES
+from hipoclient import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientImagingStudy, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientServiceRequestSearch, HipoClientCheckout
+from hipoclient import user_session_manager
+from hipodata import HipoData
 
 from extractors import parse_cnp
-from markdown import html_to_markdown, markdown_to_html
+from markdown import markdown_to_html
 
 # Configure logging
 logging.basicConfig(
