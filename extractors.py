@@ -26,6 +26,69 @@ logging.basicConfig(
 logger = logging.getLogger('HipoExtractor')
 
 
+def parse_date_time(date_str: str) -> Optional[datetime]:
+    """Parse a date string in the format '30 Aug 2025 19:25:00'.
+
+    Handles common date formats used in medical records including both English
+    and Romanian month abbreviations.
+
+    Args:
+        date_str: Date string to parse in format like "30 Aug 2025 19:25:00"
+
+    Returns:
+        datetime object if parsing successful, None otherwise
+    """
+    try:
+        # First try to parse DD/MM/YYYY HH:MM:SS format
+        if '/' in date_str and len(date_str) == 19:  # DD/MM/YYYY HH:MM:SS
+            try:
+                return datetime.strptime(date_str.strip(), '%d/%m/%Y %H:%M:%S')
+            except ValueError:
+                pass  # Continue to other formats
+        
+        # Handle common date formats like "30 Aug 2025 19:25:00"
+        # Create a mapping for month abbreviations to numbers
+        month_mapping: Dict[str, int] = {
+            'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
+            'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12,
+            'Ian': 1, 'Mai': 5, 'Iun': 6, 'Iul': 7  # Romanian month abbreviations
+        }
+
+        # Split the date string into components
+        parts = date_str.strip().split()
+        if len(parts) != 4:
+            return None
+
+        day = int(parts[0])
+        month_abbr = parts[1]
+        year = int(parts[2])
+        time_part = parts[3]
+
+        # Get month number from mapping
+        if month_abbr not in month_mapping:
+            return None
+        month = month_mapping[month_abbr]
+
+        # Parse time
+        time_parts = time_part.split(':')
+        if len(time_parts) == 2:
+            hour = int(time_parts[0])
+            minute = int(time_parts[1])
+            second = 0
+        elif len(time_parts) == 3:
+            hour = int(time_parts[0])
+            minute = int(time_parts[1])
+            second = int(time_parts[2])
+        else:
+            return None
+
+        # Create datetime object
+        return datetime(year, month, day, hour, minute, second)
+    except (ValueError, IndexError, TypeError):
+        # If parsing fails, return None
+        return None
+
+
 def parse_cnp(cnp: str) -> Dict[str, Any]:
     """Parse a Romanian CNP (Personal Numerical Code) and extract meaningful data.
 
