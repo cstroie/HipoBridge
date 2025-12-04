@@ -6,13 +6,9 @@ from collections.abc import MutableMapping
 
 
 class Resource(MutableMapping):
-    def __init__(self, data, **kwargs):
+    def __init__(self, **kwargs):
         # Filter out None values from data
-        self.data = {k: v for k, v in data.items() if v is not None}
-        # Add any additional keyword arguments
-        for k, v in kwargs.items():
-            if v is not None:
-                self.data[k] = v
+        self.data = {k: v for k, v in kwargs.items() if v is not None}
     
     def __getitem__(self, key):
         return self.data[key]
