@@ -28,9 +28,8 @@ The module handles the complexities of web scraping medical data including:
 - Data validation and normalization
 """
 
-import asyncio
 import aiohttp
-from aiohttp import web, BasicAuth
+from aiohttp import web
 from yarl import URL
 import logging
 import re
@@ -40,6 +39,7 @@ from datetime import datetime, timedelta
 import configparser
 
 from typing import Any, Dict, List, Optional
+from collections.abc import MutableMapping
 
 
 from extractors import extract_id_from_link, extract_ids_from_links, extract_text_ids_from_links, extract_selected_from_dropdown, extract_tabular_data, extract_text_after_label, extract_text_from_element, extract_textarea_after_label, extract_value_from_input
@@ -625,7 +625,7 @@ class HipoClient:
     use cases rather than used directly.
     """
 
-    def __init__(self, service_url: str, request=None):
+    def __init__(self, service_url: str, request: Optional[web.Request] = None):
         """Initialize the Hipocrate client.
 
         Args:
@@ -643,8 +643,8 @@ class HipoClient:
         self.session = None
         
         # Extract credentials from request if provided
-        if request and hasattr(request, 'auth_credentials'):
-            self.username, self.password = request.auth_credentials
+        if self.request and hasattr(self.request, 'auth_credentials'):
+            self.username, self.password = self.request.auth_credentials
 
     def set_credentials(self, username: str, password: str):
         """Set the username and password for authentication.
@@ -1846,8 +1846,8 @@ class HipoClientServiceRequest(HipoClient):
         Returns:
             FHIR ServiceRequest resource as dictionary
         """
-        # Extract http_request from kwargs if available
-        http_request = kwargs.get('http_request')
+        # Extract http_request from kwargs if available, otherwise use self.request
+        http_request = kwargs.get('http_request', self.request)
         
         # Get service request ID from the request URL parameters
         service_request_id = kwargs.get('id', '')
@@ -2126,7 +2126,7 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                 parent_row = link.find_parent('tr')
                 if not parent_row:
                     # If no parent row, just add the ID without type
-                    requests[request_id] = request
+                    requests.append(request)
                     continue
 
                 # Get all the cells in row
@@ -2438,8 +2438,8 @@ class HipoClientImagingStudy(HipoClient):
         Returns:
             FHIR ImagingStudy resource as dictionary
         """
-        # Extract http_request from kwargs if available
-        http_request = kwargs.get('http_request')
+        # Extract http_request from kwargs if available, otherwise use self.request
+        http_request = kwargs.get('http_request', self.request)
         
         # Get study ID from the request URL parameters
         study_id = kwargs.get('id', '')
@@ -2730,8 +2730,8 @@ class HipoClientDiagnosticReport(HipoClient):
         Returns:
             FHIR DiagnosticReport resource as dictionary
         """
-        # Extract http_request from kwargs if available
-        http_request = kwargs.get('http_request')
+        # Extract http_request from kwargs if available, otherwise use self.request
+        http_request = kwargs.get('http_request', self.request)
         
         # Get report ID from the request URL parameters
         report_id = kwargs.get('id', '')
