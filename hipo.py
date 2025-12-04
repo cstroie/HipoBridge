@@ -49,7 +49,7 @@ from markdown import html_to_markdown, markdown_to_html
 
 # Import FHIR classes
 from fhir import ServiceRequest as FHIRServiceRequest, CodeableConcept, Reference, Patient as FHIRPatient
-from fhir import OperationOutcome
+from fhir import OperationOutcome, ImagingStudy as FHIRImagingStudy
 
 # Configure logging
 logging.basicConfig(
@@ -2453,7 +2453,7 @@ class HipoClientImagingStudy(HipoClient):
             logger.error(f"Error parsing report data: {e}")
             return HipoData(status="success", message=f"{e}")
 
-    def fhir_response(self, parsed_data: HipoData[str, Any], **kwargs) -> Dict[str, Any]:
+    def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRImagingStudy, OperationOutcome]:
         """Convert parsed imaging study data to FHIR ImagingStudy resource.
 
         Transforms parsed imaging study data into a FHIR-compatible ImagingStudy
@@ -2465,7 +2465,7 @@ class HipoClientImagingStudy(HipoClient):
                      and 'id' for study ID
 
         Returns:
-            FHIR ImagingStudy resource as dictionary
+            FHIR ImagingStudy resource or OperationOutcome in case of error
         """
         # Extract http_request from kwargs if available, otherwise use self.request
         http_request = kwargs.get('http_request', self.request)
@@ -2474,20 +2474,33 @@ class HipoClientImagingStudy(HipoClient):
         study_id = kwargs.get('id', '')
         
         try:
-            # Create FHIR ImagingStudy resource
-            fhir_imaging_study = {
-                "resourceType": "ImagingStudy",
-                "id": study_id,
-                "status": "available",
-                "subject": {
+            # Check for errors in parsed data
+            if parsed_data.get("status") == "error":
+                return OperationOutcome.from_error(
+                    message=parsed_data.get("message", "Error in parsed imaging study data"),
+                    code="processing",
+                    severity="error"
+                )
+
+            # Create FHIR ImagingStudy resource using the FHIR class
+            fhir_imaging_study = FHIRImagingStudy(
+                id=study_id,
+                status="available",
+                subject={
                     "reference": f"Patient/{parsed_data.get('patient.id', '')}"
-                },
-                "basedOn": {
+                }
+            )
+
+            # Add basedOn reference if available
+            if study_id:
+                fhir_imaging_study["basedOn"] = [{
                     "reference": f"ServiceRequest/{study_id}"
-                },
-                "started": parsed_data.get("request.datetime", datetime.now().isoformat()),
-                "series": []
-            }
+                }]
+
+            # Add started datetime if available
+            request_datetime = parsed_data.get("request.datetime")
+            if request_datetime:
+                fhir_imaging_study["started"] = request_datetime
 
             # Add modality if available in studies
             studies = parsed_data.get("studies", [])
@@ -2502,27 +2515,29 @@ class HipoClientImagingStudy(HipoClient):
                         "ct": "CT",     # Computed Tomography
                         "mri": "MR",    # Magnetic Resonance
                     }
-                    modality_code = modality_mapping.get(study_type, "OT")  # Other
-                    fhir_imaging_study["modality"] = {
+                    modality_code = modality_mapping.get(study_type.lower(), "OT")  # Other
+                    fhir_imaging_study["modality"] = [{
                         "system": "http://dicom.nema.org/resources/ontology/DCM",
                         "code": modality_code,
                         "display": modality_code
-                    }
+                    }]
 
-            # Add patient information if available
+            # Add identifiers
+            identifiers = []
             if parsed_data.get("patient.name"):
-                fhir_imaging_study["identifier"] = [{
+                identifiers.append({
                     "system": f"{http_request.scheme}://{http_request.host}/fhir/NamingSystem/patient-name" if http_request else "http://example.com/fhir/NamingSystem/patient-name",
                     "value": parsed_data.get("patient.name")
-                }]
+                })
 
             if parsed_data.get("patient.cnp"):
-                if "identifier" not in fhir_imaging_study:
-                    fhir_imaging_study["identifier"] = []
-                fhir_imaging_study["identifier"].append({
+                identifiers.append({
                     "system": f"{http_request.scheme}://{http_request.host}/fhir/NamingSystem/patient-cnp" if http_request else "http://example.com/fhir/NamingSystem/patient-cnp",
                     "value": parsed_data.get("patient.cnp")
                 })
+
+            if identifiers:
+                fhir_imaging_study["identifier"] = identifiers
 
             # Add description from first study
             if studies and len(studies) > 0 and isinstance(studies[0], dict):
@@ -2545,6 +2560,7 @@ class HipoClientImagingStudy(HipoClient):
                 }
 
             # Add series for each study
+            series_list = []
             if studies:
                 for i, study in enumerate(studies):
                     if not isinstance(study, dict):
@@ -2558,10 +2574,12 @@ class HipoClientImagingStudy(HipoClient):
                             "code": "OT",  # Other
                             "display": "Other"
                         },
-                        "description": study.get("title", "Imaging Study"),
-                        "started": parsed_data.get("request.datetime", datetime.now().isoformat()),
-                        "instance": []
+                        "description": study.get("title", "Imaging Study")
                     }
+                    
+                    # Add started datetime if available
+                    if request_datetime:
+                        series["started"] = request_datetime
                     
                     # Use the study modality for the series if available
                     study_type = study.get("type", "").upper()
@@ -2579,8 +2597,10 @@ class HipoClientImagingStudy(HipoClient):
                             "display": series_modality
                         }
                         
-                    # Add the instance
-                    fhir_imaging_study["series"].append(series)
+                    series_list.append(series)
+
+            if series_list:
+                fhir_imaging_study["series"] = series_list
 
             # Add reason for study if diagnosis is available
             if parsed_data.get("checkin.diagnosis"):
@@ -2602,7 +2622,7 @@ class HipoClientImagingStudy(HipoClient):
 
         except Exception as e:
             logger.error(f"Error converting imaging study data to FHIR: {e}")
-            return {}
+            return OperationOutcome.from_exception(e, code="exception")
 
 
 class HipoClientDiagnosticReport(HipoClient):
