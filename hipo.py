@@ -49,7 +49,7 @@ from markdown import html_to_markdown, markdown_to_html
 
 # Import FHIR classes
 from fhir import ServiceRequest as FHIRServiceRequest, CodeableConcept, Reference, Patient as FHIRPatient
-from fhir import OperationOutcome, ImagingStudy as FHIRImagingStudy, DiagnosticReport as FHIRDiagnosticReport, Encounter as FHIREncounter
+from fhir import OperationOutcome, ImagingStudy as FHIRImagingStudy, DiagnosticReport as FHIRDiagnosticReport, Encounter as FHIREncounter, Bundle
 
 # Configure logging
 logging.basicConfig(
