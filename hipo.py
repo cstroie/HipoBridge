@@ -49,7 +49,7 @@ from markdown import html_to_markdown, markdown_to_html
 
 # Import FHIR classes
 from fhir import ServiceRequest as FHIRServiceRequest, CodeableConcept, Reference, Patient as FHIRPatient
-from fhir import OperationOutcome, ImagingStudy as FHIRImagingStudy
+from fhir import OperationOutcome, ImagingStudy as FHIRImagingStudy, DiagnosticReport as FHIRDiagnosticReport
 
 # Configure logging
 logging.basicConfig(
@@ -2765,7 +2765,7 @@ class HipoClientDiagnosticReport(HipoClient):
             logger.error(f"Error parsing report data: {e}")
             return HipoData(status="success", message=f"{e}")
 
-    def fhir_response(self, parsed_data: HipoData[str, Any], **kwargs) -> Dict[str, Any]:
+    def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRDiagnosticReport, OperationOutcome]:
         """Convert parsed diagnostic report data to FHIR DiagnosticReport resource.
 
         Transforms parsed diagnostic report data into a FHIR-compatible DiagnosticReport
@@ -2777,7 +2777,7 @@ class HipoClientDiagnosticReport(HipoClient):
                      and 'id' for report ID
 
         Returns:
-            FHIR DiagnosticReport resource as dictionary
+            FHIR DiagnosticReport resource or OperationOutcome in case of error
         """
         # Extract http_request from kwargs if available, otherwise use self.request
         http_request = kwargs.get('http_request', self.request)
@@ -2786,12 +2786,19 @@ class HipoClientDiagnosticReport(HipoClient):
         report_id = kwargs.get('id', '')
         
         try:
-            # Create FHIR DiagnosticReport resource
-            fhir_report = {
-                "resourceType": "DiagnosticReport",
-                "id": report_id,
-                "status": "final",
-                "code": {
+            # Check for errors in parsed data
+            if parsed_data.get("status") == "error":
+                return OperationOutcome.from_error(
+                    message=parsed_data.get("message", "Error in parsed diagnostic report data"),
+                    code="processing",
+                    severity="error"
+                )
+
+            # Create FHIR DiagnosticReport resource using the FHIR class
+            fhir_report = FHIRDiagnosticReport(
+                id=report_id,
+                status="final",
+                code={
                     "coding": [
                         {
                             "system": f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/report-types" if http_request else "http://example.com/fhir/CodeSystem/report-types",
@@ -2801,16 +2808,16 @@ class HipoClientDiagnosticReport(HipoClient):
                     ],
                     "text": "Diagnostic Report"
                 },
-                "subject": {
+                subject={
                     "reference": f"Patient/{parsed_data.get('patient.id', '')}"
                 }
-            }
+            )
 
             # Add basedOn reference to ServiceRequest if available
             if report_id:
-                fhir_report["basedOn"] = {
+                fhir_report["basedOn"] = [{
                     "reference": f"ServiceRequest/{report_id}"
-                }
+                }]
 
             # Add effective date if available
             study_datetime = parsed_data.get("study.datetime")
@@ -2945,7 +2952,7 @@ class HipoClientDiagnosticReport(HipoClient):
 
         except Exception as e:
             logger.error(f"Error converting diagnostic report data to FHIR: {e}")
-            return {}
+            return OperationOutcome.from_exception(e, code="exception")
 
 
 class HipoClientCheckout(HipoClient):
