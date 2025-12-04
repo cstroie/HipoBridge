@@ -212,7 +212,9 @@ def extract_id_from_link(link_element, id_pattern: str = r'id=([^&"]+)') -> Opti
         href = link_element.get('href', '')
         id_match = re.search(id_pattern, href)
         if id_match:
-            return id_match.group(1)
+            content = id_match.group(1)
+            logger.debug(f"Extracted id for link pattern '{id_pattern}': {content}")
+            return content
     return None
 
 def extract_ids_from_links(soup: BeautifulSoup, id_pattern: str = r'id=([^&"]+)') -> List[str]:
@@ -231,6 +233,8 @@ def extract_ids_from_links(soup: BeautifulSoup, id_pattern: str = r'id=([^&"]+)'
         id_match = re.search(id_pattern, href)
         if id_match:
             ids_list.append(id_match.group(1))
+    if ids_list:
+        logger.debug(f"Extracted ids for link pattern '{id_pattern}': {','.join(ids_list)}")
     return ids_list
 
 def extract_text_ids_from_links(soup: BeautifulSoup, id_pattern: str = r'id=([^&"]+)') -> dict:
@@ -254,6 +258,8 @@ def extract_text_ids_from_links(soup: BeautifulSoup, id_pattern: str = r'id=([^&
         if text == id:
             continue
         result[id] = text
+    #if result:
+    #    logger.debug(f"Extracted text and link for pattern '{id_pattern}': {','.join([v for k,v in result.items()])}")
     return result
 
 def extract_value_from_input(soup: 'BeautifulSoup', id: str = None, name: str = None) -> str:
