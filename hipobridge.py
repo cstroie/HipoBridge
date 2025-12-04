@@ -18,8 +18,8 @@ Key Features:
 - Configuration via file with environment variable overrides
 
 Configuration:
-- Server settings (host, port) in hipp.cfg
-- Hipocrate service URL in hipp.cfg
+- Server settings (host, port) in hipobridge.cfg
+- Hipocrate service URL in hipobridge.cfg
 - Credentials via HYP_USER and HYP_PASS environment variables
 - Local overrides in local.cfg (optional)
 
@@ -941,7 +941,7 @@ def web_fhir_response(data) -> web.Response:
 
 
 def load_config():
-    """Load configuration from hipp.cfg and local.cfg (if exists).
+    """Load configuration from hipobridge.cfg and local.cfg (if exists).
 
     Returns:
         dict: Configuration dictionary with merged settings
@@ -952,15 +952,15 @@ def load_config():
     config.read_dict(DEFAULT_CONFIG)
 
     # Load main config file
-    if os.path.exists('hipp.cfg'):
-        logger.info("Loading hipp.cfg configuration")
-        config.read('hipp.cfg')
+    if os.path.exists('hipobridge.cfg'):
+        logger.info("Loading hipobridge.cfg configuration")
+        config.read('hipobridge.cfg')
     else:
-        logger.info("hipp.cfg not found, using default configuration")
+        logger.info("hipobridge.cfg not found, using default configuration")
 
-    # Load local config if exists (will override hipp.cfg)
+    # Load local config if exists (will override hipobridge.cfg)
     if os.path.exists('local.cfg'):
-        logger.info("Loading local.cfg configuration (overrides hipp.cfg)")
+        logger.info("Loading local.cfg configuration (overrides hipobridge.cfg)")
         config.read('local.cfg')
 
     return config
