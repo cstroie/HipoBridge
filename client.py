@@ -17,6 +17,10 @@ BASE_URL = "http://localhost:44660"
 cnp_cache = {}
 cache_max_size = 1000  # Maximum number of entries to cache
 
+# FHIR resource types
+FHIR_PATIENT = "Patient"
+FHIR_BUNDLE = "Bundle"
+
 async def _make_api_request(session: aiohttp.ClientSession, method: str, url: str, data: dict = None) -> tuple:
     """Make an API request and return the response data and success status.
     
@@ -124,7 +128,7 @@ async def search_patients(session: aiohttp.ClientSession, search_term: str, fhir
             if response.status == 200:
                 data = await response.json()
                 # Handle FHIR response
-                if data.get("resourceType") == "Bundle":
+                if data.get("resourceType") == FHIR_BUNDLE:
                     print(f"Patient search successful! Found {data.get('total', 0)} patients (FHIR Bundle)")
                     entries = data.get("entry", [])
                     for i, entry in enumerate(entries, 1):
@@ -138,7 +142,7 @@ async def search_patients(session: aiohttp.ClientSession, search_term: str, fhir
                             family = name.get("family", "")
                             display_name = f"{given} {family}".strip() or "Unknown"
                         print(f"  {i}. {display_name} (ID: {patient_id})")
-                elif data.get("resourceType") == "Patient":
+                elif data.get("resourceType") == FHIR_PATIENT:
                     print("Patient search successful! Found single patient (FHIR Patient)")
                     names = data.get("name", [])
                     display_name = "Unknown"
@@ -459,7 +463,7 @@ async def get_patient_code_from_cnp(session: aiohttp.ClientSession, cnp: str) ->
         return None
     
     # Handle FHIR response
-    if data.get("resourceType") == "Bundle":
+    if data.get("resourceType") == FHIR_BUNDLE:
         entries = data.get("entry", [])
         if entries:
             # Use the first patient's code
@@ -473,7 +477,7 @@ async def get_patient_code_from_cnp(session: aiohttp.ClientSession, cnp: str) ->
                 return patient_code
         print("No patient code found in search results")
         return None
-    elif data.get("resourceType") == "Patient":
+    elif data.get("resourceType") == FHIR_PATIENT:
         patient_code = data.get("id")
         if patient_code:
             print(f"Found patient code: {patient_code}")
@@ -511,7 +515,7 @@ async def search_patient_code_by_partial_cnp(session: aiohttp.ClientSession, par
         return None
     
     # Handle FHIR response
-    if data.get("resourceType") == "Bundle":
+    if data.get("resourceType") == FHIR_BUNDLE:
         entries = data.get("entry", [])
         if entries:
             # Use the first patient's code
@@ -522,7 +526,7 @@ async def search_patient_code_by_partial_cnp(session: aiohttp.ClientSession, par
                 return patient_code
         print("No patient code found in search results")
         return None
-    elif data.get("resourceType") == "Patient":
+    elif data.get("resourceType") == FHIR_PATIENT:
         patient_code = data.get("id")
         if patient_code:
             print(f"Found patient code: {patient_code}")
@@ -548,26 +552,11 @@ async def get_patient(session: aiohttp.ClientSession, patient_id: str) -> bool:
     Returns:
         bool: True if retrieval was successful, False otherwise
     """
-    # Check if patient_id is a 13-digit CNP
-    if patient_id.isdigit() and len(patient_id) == 13:
-        print(f"Detected 13-digit ID, checking if it's a valid CNP: {patient_id}")
-        patient_code = await get_patient_code_from_cnp(session, patient_id)
-        if patient_code:
-            patient_id = patient_code
-            print(f"Using patient code {patient_id} for retrieval")
-        else:
-            print("Could not resolve CNP to patient code, using original ID")
-    # Check if patient_id ends with *, treat as partial CNP
-    elif patient_id.endswith('*'):
-        partial_cnp = patient_id[:-1]  # Remove the asterisk
-        if partial_cnp:  # Make sure there's something left
-            print(f"Detected partial CNP search: {partial_cnp}")
-            patient_code = await search_patient_code_by_partial_cnp(session, partial_cnp)
-            if patient_code:
-                patient_id = patient_code
-                print(f"Using patient code {patient_id} for retrieval")
-            else:
-                print("Could not find patient with partial CNP, using original ID")
+    # Process patient ID (CNP validation, partial CNP search)
+    processed_id = await _process_patient_id(session, patient_id)
+    if processed_id:
+        patient_id = processed_id
+        print(f"Using patient code {patient_id} for retrieval")
     
     print(f"Retrieving patient with ID: {patient_id}")
     
@@ -666,26 +655,11 @@ async def get_analyses(session: aiohttp.ClientSession, patient_id: str, analysis
     Returns:
         bool: True if retrieval was successful, False otherwise
     """
-    # Check if patient_id is a 13-digit CNP
-    if patient_id.isdigit() and len(patient_id) == 13:
-        print(f"Detected 13-digit ID, checking if it's a valid CNP: {patient_id}")
-        patient_code = await get_patient_code_from_cnp(session, patient_id)
-        if patient_code:
-            patient_id = patient_code
-            print(f"Using patient code {patient_id} for analyses retrieval")
-        else:
-            print("Could not resolve CNP to patient code, using original ID")
-    # Check if patient_id ends with *, treat as partial CNP
-    elif patient_id.endswith('*'):
-        partial_cnp = patient_id[:-1]  # Remove the asterisk
-        if partial_cnp:  # Make sure there's something left
-            print(f"Detected partial CNP search: {partial_cnp}")
-            patient_code = await search_patient_code_by_partial_cnp(session, partial_cnp)
-            if patient_code:
-                patient_id = patient_code
-                print(f"Using patient code {patient_id} for analyses retrieval")
-            else:
-                print("Could not find patient with partial CNP, using original ID")
+    # Process patient ID (CNP validation, partial CNP search)
+    processed_id = await _process_patient_id(session, patient_id)
+    if processed_id:
+        patient_id = processed_id
+        print(f"Using patient code {patient_id} for analyses retrieval")
     
     # Build URL with optional parameters
     url = f"{BASE_URL}/fhir/Observation?patient={patient_id}"
@@ -709,7 +683,7 @@ async def get_analyses(session: aiohttp.ClientSession, patient_id: str, analysis
     print("Analyses retrieval successful!")
     
     # Handle FHIR Bundle of Observations
-    if data.get("resourceType") == "Bundle":
+    if data.get("resourceType") == FHIR_BUNDLE:
         entries = data.get("entry", [])
         print(f"\nAnalyses ({len(entries)} found):")
         
@@ -766,6 +740,38 @@ async def validate_cnp(session: aiohttp.ClientSession, cnp: str) -> bool:
     is_valid = data.get("valid", False)
     print(f"CNP validation result: {'Valid' if is_valid else 'Invalid'}")
     return True
+
+async def _process_patient_id(session: aiohttp.ClientSession, patient_id: str) -> str:
+    """Process patient ID by validating CNP or searching for partial CNP.
+    
+    Args:
+        session (aiohttp.ClientSession): The HTTP session to use for requests
+        patient_id (str): The patient ID, CNP, or partial CNP to process
+        
+    Returns:
+        str: The processed patient code if successful, None otherwise
+    """
+    # Check if patient_id is a 13-digit CNP
+    if patient_id.isdigit() and len(patient_id) == 13:
+        print(f"Detected 13-digit ID, checking if it's a valid CNP: {patient_id}")
+        patient_code = await get_patient_code_from_cnp(session, patient_id)
+        if patient_code:
+            return patient_code
+        else:
+            print("Could not resolve CNP to patient code, using original ID")
+            return None
+    # Check if patient_id ends with *, treat as partial CNP
+    elif patient_id.endswith('*'):
+        partial_cnp = patient_id[:-1]  # Remove the asterisk
+        if partial_cnp:  # Make sure there's something left
+            print(f"Detected partial CNP search: {partial_cnp}")
+            patient_code = await search_patient_code_by_partial_cnp(session, partial_cnp)
+            if patient_code:
+                return patient_code
+            else:
+                print("Could not find patient with partial CNP, using original ID")
+                return None
+    return None
 
 async def main():
     """Main function to parse arguments and run the HippoBridge client.
