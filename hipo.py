@@ -2273,19 +2273,26 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                     request.store('barcode', cells[8].get_text())
 
                 #  Find the next sibling 'tr' to identify the exam types and regions
-                exams_row = parent_row.find_next_sibling('tr')
-                # Find all cells in this row
-                cells = exams_row.find_all('td')
-                if len(cells) >= 2:
-                    exams = cells[1].get_text().split(';')
-                    regions = []
-                    for exam in exams:
-                        study_type, region = identify_study_type_and_region(exam)
-                        if region != 'unknown':
-                            regions.append(region)
-                    # Store the regions
-                    if regions:
-                        request.store_list('regions', regions)
+                try:
+                    exams_row = parent_row.find_next_sibling('tr')
+                    if exams_row:
+                        # Find all cells in this row
+                        cells = exams_row.find_all('td')
+                        if len(cells) >= 2:
+                            exams_text = cells[1].get_text()
+                            if exams_text:
+                                exams = exams_text.split(';')
+                                regions = []
+                                for exam in exams:
+                                    study_type, region = identify_study_type_and_region(exam)
+                                    if region != 'unknown':
+                                        regions.append(region)
+                                # Store the regions
+                                if regions:
+                                    request.store_list('regions', regions)
+                except Exception as e:
+                    logger.warning(f"Error processing exam regions for request {request_id}: {e}")
+                    # Continue with empty regions
 
                 # Filter by type
                 if kwargs.get('type') and kwargs['type'] != request['type']:
@@ -2873,37 +2880,39 @@ class HipoClientDiagnosticReport(HipoClient):
             for result_element in soup.find_all(string=re.compile(r'^REZULTAT:', re.IGNORECASE)):
                 try:
                     # The investigation name is the text after "REZULTAT:" in the element
-                    element_text = result_element.get_text()
+                    element_text = result_element.get_text() if hasattr(result_element, 'get_text') else str(result_element)
                     investigation_match = re.search(r'REZULTAT:\s*(.*?)(?:\s*$)', element_text, re.IGNORECASE)
                     study_title = ""
                     if investigation_match:
                         study_title = investigation_match.group(1).strip()
 
                     # Find the next div sibling which contains the actual result
-                    result_div = result_element.find_next('div')
                     study_result = ""
-                    if result_div:
-                        # Check if the div contains only a single <b> tag as its child
-                        div_children = list(result_div.children)
-                        # Filter out text nodes that contain only whitespace
-                        element_children = [child for child in div_children if hasattr(child, 'name') and child.name]
-                        if len(element_children) == 1 and element_children[0].name == 'b':
-                            # If the only child is a <b> tag, use its content directly
-                            study_result = html_to_markdown(str(element_children[0]))
-                        else:
-                            # Otherwise, process the entire div
-                            study_result = html_to_markdown(str(result_div))
+                    if hasattr(result_element, 'find_next'):
+                        result_div = result_element.find_next('div')
+                        if result_div:
+                            # Check if the div contains only a single <b> tag as its child
+                            div_children = list(result_div.children)
+                            # Filter out text nodes that contain only whitespace
+                            element_children = [child for child in div_children if hasattr(child, 'name') and child.name]
+                            if len(element_children) == 1 and element_children[0].name == 'b':
+                                # If the only child is a <b> tag, use its content directly
+                                study_result = html_to_markdown(str(element_children[0]))
+                            else:
+                                # Otherwise, process the entire div
+                                study_result = html_to_markdown(str(result_div))
 
-                    # Add to reports list
-                    # Process investigation name to identify study type and region
-                    study_type, region = identify_study_type_and_region(study_title)
-                    study = {
-                            "title": study_title,
-                            "result": study_result,
-                            "type": study_type,
-                            "region": region
-                        }
-                    studies.append(study)
+                    # Add to reports list if we have valid data
+                    if study_title or study_result:
+                        # Process investigation name to identify study type and region
+                        study_type, region = identify_study_type_and_region(study_title)
+                        study = {
+                                "title": study_title,
+                                "result": study_result,
+                                "type": study_type,
+                                "region": region
+                            }
+                        studies.append(study)
                 except Exception as e:
                     logger.error(f"Error parsing individual report: {e}")
                     continue
