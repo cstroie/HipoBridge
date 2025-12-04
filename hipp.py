@@ -177,14 +177,8 @@ async def search_fhir_patient(request):
         # Convert parsed data to FHIR resource
         response = client.fhir_response(parsed_data)
     elif 'patients' in parsed_data and len(parsed_data['patients']) > 0:
-        # Convert multiple patients to FHIR Bundle using the Bundle class
-        response = Bundle(
-            type="searchset",
-            total=len(parsed_data['patients'])
-        )
-        for patient_id, patient_name in parsed_data['patients'].items():
-            patient_resource = client.fhir_response(HipoData(patient={'name': patient_name, 'id': patient_id}))
-            response.append_entry(resource=patient_resource)
+        # Convert multiple patients to FHIR Bundle using the new method
+        response = client.fhir_bundle_response(parsed_data, http_request=request)
     else:
         # Create OperationOutcome for no patients found
         response = OperationOutcome.from_error(
