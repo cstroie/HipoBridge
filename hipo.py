@@ -2566,32 +2566,39 @@ class HipoClientImagingStudy(HipoClient):
             # For each strAnalyseExec input, find the parent 'td' and extract examination name from first 'b' element
             studies = []
             for input_elem in soup.find_all('input', {'name': 'strAnalyseExec'}):
-                parent_td = input_elem.find_parent('td')
-                if parent_td:
-                    first_b = parent_td.find('b')
-                    if first_b:
-                        study_title = first_b.get_text(strip=True)
-                    else:
-                        study_title = parent_td.get_text(strip=True)
-                    # Find the 'table' parent and then the 'center' sibling
-                    parent_table = parent_td.find_parent('table')
-                    container = parent_table.find_next_sibling('center')
+                try:
+                    study_title = ""
                     study_result = None
-                    if container:
-                        # In 'center' there is another table.
-                        # The rows containing 'rezultat' in first 'td' have the result in second 'td'
-                        for row in container.find_all('tr'):
-                            cells = row.find_all('td')
-                            if len(cells) >= 2:
-                                if cells[0].get_text(strip=True).lower() == "rezultat":
-                                    # Filter out text nodes that contain only whitespace
-                                    subelements = [child for child in cells[1] if hasattr(child, 'name') and child.name]
-                                    if len(subelements) == 1 and subelements[0].name == 'b':
-                                        # If the only child is a <b> tag, use its content directly
-                                        study_result = html_to_markdown(str(subelements[0]))
-                                    else:
-                                        # Otherwise, process the entire div
-                                        study_result = html_to_markdown(str(cells[1]))
+                    
+                    parent_td = input_elem.find_parent('td')
+                    if parent_td:
+                        first_b = parent_td.find('b')
+                        if first_b:
+                            study_title = first_b.get_text(strip=True)
+                        else:
+                            study_title = parent_td.get_text(strip=True)
+                            
+                    # Find the 'table' parent and then the 'center' sibling
+                    if parent_td:
+                        parent_table = parent_td.find_parent('table')
+                        if parent_table:
+                            container = parent_table.find_next_sibling('center')
+                            if container:
+                                # In 'center' there is another table.
+                                # The rows containing 'rezultat' in first 'td' have the result in second 'td'
+                                for row in container.find_all('tr'):
+                                    cells = row.find_all('td')
+                                    if len(cells) >= 2:
+                                        if cells[0].get_text(strip=True).lower() == "rezultat":
+                                            # Filter out text nodes that contain only whitespace
+                                            subelements = [child for child in cells[1] if hasattr(child, 'name') and child.name]
+                                            if len(subelements) == 1 and subelements[0].name == 'b':
+                                                # If the only child is a <b> tag, use its content directly
+                                                study_result = html_to_markdown(str(subelements[0]))
+                                            else:
+                                                # Otherwise, process the entire div
+                                                study_result = html_to_markdown(str(cells[1]))
+                    
                     # Append the study if the data is valid
                     if study_title and study_result:
                         # Get study type and region
@@ -2603,6 +2610,9 @@ class HipoClientImagingStudy(HipoClient):
                             "region": region
                         }
                         studies.append(study)
+                except Exception as e:
+                    logger.warning(f"Error processing study for input element: {e}")
+                    # Continue processing other studies
             data.store_list("studies", studies)
 
             # Store urgency flag
