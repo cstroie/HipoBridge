@@ -484,7 +484,7 @@ class HipoData(dict):
                 value = value[0]
             else:
                 value = None
-        # Convert datetime to iso format
+        # Convert date_time to iso format
         if isinstance(value, datetime):
             value = value.isoformat()
         # Auto-strip string values
@@ -1824,7 +1824,7 @@ class HipoClientServiceRequest(HipoClient):
             HipoData containing parsed service request data organized in sections:
             - patient: Patient information (name, id)
             - checkin: Admission information (medic, id, diagnosis)
-            - request: Request information (clinical_comments, lab_comments, datetime, is_urgent)
+            - request: Request information (clinical_comments, lab_comments, date_time, is_urgent)
             - studies: List of requested imaging studies
         """
         # Initialize result dictionary
@@ -1885,8 +1885,8 @@ class HipoClientServiceRequest(HipoClient):
                             })
             data.store_list("studies", studies)
 
-            # Extract request datetime (Data si ora cererii)
-            data.store("request.datetime", extract_text_after_label(soup, r'Data si ora cererii:', stop_at=r'Receptionat'))
+            # Extract request date_time (Data si ora cererii)
+            data.store("request.date_time", extract_text_after_label(soup, r'Data si ora cererii:', stop_at=r'Receptionat'))
 
             # Extract request urgency
             data.store("request.is_urgent", "~URGENTA~" in html_content)
@@ -2032,17 +2032,17 @@ class HipoClientServiceRequest(HipoClient):
                     order_details.append(order_detail)
                 fhir_service_request["orderDetail"] = order_details
 
-            # Add authoredOn if request datetime is available
-            request_datetime = parsed_data.get("request.datetime")
-            if request_datetime:
-                # Parse the datetime using our parse_date_time function
-                parsed_dt = parse_date_time(request_datetime)
+            # Add authoredOn if request date_time is available
+            request_date_time = parsed_data.get("request.date_time")
+            if request_date_time:
+                # Parse the date_time using our parse_date_time function
+                parsed_dt = parse_date_time(request_date_time)
                 if parsed_dt:
                     # Convert to ISO format
                     fhir_service_request["authoredOn"] = parsed_dt.isoformat()
                 else:
                     # If parsing fails, keep the original string
-                    fhir_service_request["authoredOn"] = request_datetime
+                    fhir_service_request["authoredOn"] = request_date_time
 
             return fhir_service_request
         except Exception as e:
@@ -2080,7 +2080,7 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
             patient_id: Patient identifier
             **kwargs: Additional arguments (e.g., 'full' for complete data, 
                      'type' for filtering by request type, 'region' for filtering by region,
-                     'dt' for filtering by datetime - year will be extracted from this)
+                     'dt' for filtering by date_time - year will be extracted from this)
 
         Returns:
             HipoData containing service requests or error information
@@ -2100,7 +2100,7 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                 dt_param = kwargs.get('dt')
                 if dt_param:
                     try:
-                        # Parse the datetime string to extract year
+                        # Parse the date_time string to extract year
                         if 'T' in dt_param:
                             dt_obj = datetime.fromisoformat(dt_param.replace('Z', '+00:00'))
                         else:
@@ -2160,7 +2160,7 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
             HipoData containing parsed service request data organized in sections:
             - patient: Patient information (name, id)
             - checkin: Admission information (medic, id, diagnosis)
-            - request: Request information (clinical_comments, lab_comments, datetime, is_urgent)
+            - request: Request information (clinical_comments, lab_comments, date_time, is_urgent)
             - studies: List of requested imaging studies
         """
         # Initialize result dictionary
@@ -2240,13 +2240,13 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                     # Cell 4: Date
                     date_text = cells[4].get_text().strip()
                     if date_text:
-                        # Try to parse the datetime
+                        # Try to parse the date_time
                         dt = parse_date_time(date_text)
                         if dt:
-                            request.store("datetime", dt.isoformat())
+                            request.store("date_time", dt.isoformat())
                         else:
                             # If parsing fails, keep the original string
-                            request.store("datetime", date_text.strip())
+                            request.store("date_time", date_text.strip())
 
                     # Cell 5: Priority
                     request.store("is_urgent", "urgent" in cells[5].get_text().lower())
@@ -2293,9 +2293,9 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                 # Append the reuqest data to the requests list
                 requests.append(request)
 
-            # Filter requests by datetime
+            # Filter requests by date_time
             if kwargs.get('dt'):
-                # Parse the datetime string to match against analysis datetimes
+                # Parse the date_time string to match against analysis datetimes
                 try:
                     target_dt = datetime.fromisoformat(kwargs['dt'].replace('Z', '+00:00'))
                     # Start with a date range from one day earlier to one day after
@@ -2308,7 +2308,7 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
 
                         filtered_requests = []
                         for req in requests:
-                            if "datetime" in req and start_dt <= datetime.fromisoformat(req["datetime"]) <= end_dt:
+                            if "date_time" in req and start_dt <= datetime.fromisoformat(req["date_time"]) <= end_dt:
                                 filtered_requests.append(req)
 
                         # If we found exactly one request, return it
@@ -2325,7 +2325,7 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                             break
 
                 except ValueError:
-                    data.set_error(f"Invalid datetime format: {kwargs['dt']}")
+                    data.set_error(f"Invalid date_time format: {kwargs['dt']}")
 
             # Store the requests
             data.store_list('requests', requests)
@@ -2398,9 +2398,9 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                         text=ANALYSIS_TYPES[req["type"]]["definition"]
                     )
                     
-                    # Add effective datetime if available
-                    if req.get("datetime"):
-                        fhir_service_request["authoredOn"] = req["datetime"]
+                    # Add effective date_time if available
+                    if req.get("date_time"):
+                        fhir_service_request["authoredOn"] = req["date_time"]
                     
                     # Add region information if available
                     if req.get("regions"):
@@ -2460,7 +2460,7 @@ class HipoClientImagingStudy(HipoClient):
             HipoData containing parsed service request data organized in sections:
             - patient: Patient information (name, id)
             - checkin: Admission information (medic, id, diagnosis)
-            - request: Request information (clinical_comments, lab_comments, datetime, is_urgent)
+            - request: Request information (clinical_comments, lab_comments, date_time, is_urgent)
             - studies: List of requested imaging studies
         """
         # Initialize result dictionary
@@ -2522,15 +2522,15 @@ class HipoClientImagingStudy(HipoClient):
             req = extract_text_after_label(soup, r'Ceruta:', 'tr')
             if req and '-' in req:
                 try:
-                    request_medic, request_datetime = req.split('-', 1)
+                    request_medic, request_date_time = req.split('-', 1)
                     data.store("request.medic", request_medic)
-                    # Try to parse the datetime
-                    dt = parse_date_time(request_datetime)
+                    # Try to parse the date_time
+                    dt = parse_date_time(request_date_time)
                     if dt:
-                        data.store("request.datetime", dt.isoformat())
+                        data.store("request.date_time", dt.isoformat())
                     else:
                         # If parsing fails, keep the original string
-                        data.store("request.datetime", request_datetime.strip())
+                        data.store("request.date_time", request_date_time.strip())
                 except ValueError:
                     # Handle case where split doesn't work as expected
                     data.store("request.info", req)
@@ -2540,16 +2540,16 @@ class HipoClientImagingStudy(HipoClient):
             if validator:
                 data.store("validation.validator", validator)
 
-            # Extract validation datetime
+            # Extract validation date_time
             validation_datetime = extract_value_from_input(soup, id="dataefectuarii")
             if validation_datetime:
-                # Try to parse the datetime
+                # Try to parse the date_time
                 dt = parse_date_time(validation_datetime)
                 if dt:
-                    data.store("validation.datetime", dt.isoformat())
+                    data.store("validation.date_time", dt.isoformat())
                 else:
                     # If parsing fails, keep the original string
-                    data.store("validation.datetime", validation_datetime)
+                    data.store("validation.date_time", validation_datetime)
             
             # For each strAnalyseExec input, find the parent 'td' and extract examination name from first 'b' element
             studies = []
@@ -2647,10 +2647,10 @@ class HipoClientImagingStudy(HipoClient):
                     "reference": f"ServiceRequest/{study_id}"
                 }]
 
-            # Add started datetime if available
-            request_datetime = parsed_data.get("request.datetime")
-            if request_datetime:
-                fhir_imaging_study["started"] = request_datetime
+            # Add started date_time if available
+            request_date_time = parsed_data.get("request.date_time")
+            if request_date_time:
+                fhir_imaging_study["started"] = request_date_time
 
             # Add modality if available in studies
             studies = parsed_data.get("studies", [])
@@ -2727,9 +2727,9 @@ class HipoClientImagingStudy(HipoClient):
                         "description": study.get("title", "Imaging Study")
                     }
                     
-                    # Add started datetime if available
-                    if request_datetime:
-                        series["started"] = request_datetime
+                    # Add started date_time if available
+                    if request_date_time:
+                        series["started"] = request_date_time
                     
                     # Use the study modality for the series if available
                     study_type = study.get("type", "").upper()
@@ -2808,7 +2808,7 @@ class HipoClientDiagnosticReport(HipoClient):
             HipoData containing parsed service request data organized in sections:
             - patient: Patient information (name, id)
             - checkin: Admission information (medic, id, diagnosis)
-            - request: Request information (clinical_comments, lab_comments, datetime, is_urgent)
+            - request: Request information (clinical_comments, lab_comments, date_time, is_urgent)
             - studies: List of requested imaging studies
         """
         # Initialize result dictionary
@@ -2852,16 +2852,16 @@ class HipoClientDiagnosticReport(HipoClient):
             # Extract performer (validator) from the domain section
             data.store("study.medic", extract_text_after_label(soup, r'MEDIC,|Medic validator:', 'td', stop_at=r'Semnatura'))
 
-            # Extract study datetime
+            # Extract study date_time
             study_datetime = extract_text_after_label(soup, r'Data investigatiei:', stop_at=r'Efectuata')
             if study_datetime:
-                # Try to parse the datetime
+                # Try to parse the date_time
                 dt = parse_date_time(study_datetime)
                 if dt:
-                    data.store("study.datetime", dt.isoformat())
+                    data.store("study.date_time", dt.isoformat())
                 else:
                     # If parsing fails, keep the original string
-                    data.store("study.datetime", study_datetime)
+                    data.store("study.date_time", study_datetime)
 
             # Extract multiple reports: find all elements with text starting with "REZULTAT:"
             studies = []
@@ -2970,16 +2970,16 @@ class HipoClientDiagnosticReport(HipoClient):
                 }]
 
             # Add effective date if available
-            study_datetime = parsed_data.get("study.datetime")
+            study_datetime = parsed_data.get("study.date_time")
             if study_datetime:
                 fhir_report["effectiveDateTime"] = study_datetime
             else:
-                request_datetime = parsed_data.get("request.datetime")
-                if request_datetime:
-                    fhir_report["effectiveDateTime"] = request_datetime
+                request_date_time = parsed_data.get("request.date_time")
+                if request_date_time:
+                    fhir_report["effectiveDateTime"] = request_date_time
                 else:
-                    # Try to get datetime from checkin if available
-                    checkin_datetime = parsed_data.get("checkin.datetime")
+                    # Try to get date_time from checkin if available
+                    checkin_datetime = parsed_data.get("checkin.date_time")
                     if checkin_datetime:
                         fhir_report["effectiveDateTime"] = checkin_datetime
 
@@ -3140,8 +3140,8 @@ class HipoClientCheckout(HipoClient):
             HipoData containing parsed checkout data organized in sections:
             - patient: Patient information (name, id, cnp, gender, date, age)
             - presentation: Presentation/visit information
-            - checkin: Admission information (id, medic, ward, diagnosis, date, time, datetime)
-            - checkout: Discharge information (date, time, datetime, epicrisis, diagnosis, 
+            - checkin: Admission information (id, medic, ward, diagnosis, date, time, date_time)
+            - checkout: Discharge information (date, time, date_time, epicrisis, diagnosis, 
                     medic, ward, surgery, recommendations, icd10)
         """
         # Initialize result dictionary
@@ -3197,22 +3197,22 @@ class HipoClientCheckout(HipoClient):
             data.store("checkin.date", extract_value_from_input(soup, id='sCIDate'))
             data.store("checkin.time", extract_value_from_input(soup, id='sCITime'))
             
-            # Create combined checkin datetime
+            # Create combined checkin date_time
             checkin_date = data.get("checkin.date")
             checkin_time = data.get("checkin.time")
             if checkin_date and checkin_time:
-                data.store("checkin.datetime", f'{checkin_date} {checkin_time}')
+                data.store("checkin.date_time", f'{checkin_date} {checkin_time}')
 
 
             # Extract checkout date and time from input fields
             data.store("checkout.date", extract_value_from_input(soup, id='sCODate'))
             data.store("checkout.time", extract_value_from_input(soup, id='sCOTime'))
             
-            # Create combined checkout datetime
+            # Create combined checkout date_time
             checkout_date = data.get("checkout.date")
             checkout_time = data.get("checkout.time")
             if checkout_date and checkout_time:
-                data.store("checkout.datetime", f'{checkout_date} {checkout_time}')
+                data.store("checkout.date_time", f'{checkout_date} {checkout_time}')
 
             # Extract epicrisis (textarea with id "sEpicrisysHtmlArea")
             data.store("checkout.epicrisis", extract_text_from_element(soup, 'sEpicrisys'))
@@ -3376,8 +3376,8 @@ class HipoClientCheckout(HipoClient):
                 )
 
             # Add period for admission and discharge times
-            checkin_datetime = parsed_data.get("checkin.datetime")
-            checkout_datetime = parsed_data.get("checkout.datetime")
+            checkin_datetime = parsed_data.get("checkin.date_time")
+            checkout_datetime = parsed_data.get("checkout.date_time")
             if checkin_datetime or checkout_datetime:
                 period = {}
                 if checkin_datetime:
