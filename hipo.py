@@ -1066,7 +1066,7 @@ class HipoClient:
             data: Form data to submit
 
         Returns:
-            Tuple of (response_text, success, error_response) where success is boolean
+            Tuple of (page_content, error_message) where error_message is None if no error
         """
         # Construct the full URL if a relative path is provided
         current_url = self.get_full_url(url)
@@ -1084,11 +1084,12 @@ class HipoClient:
 
         # Check for errors in the response
         if not success:
-            return None, False, error_response
+            error_msg = error_response.get("message", "Unknown error") if isinstance(error_response, dict) else str(error_response)
+            return None, error_msg
         logger.info(f"Response received in {duration:.2f} seconds")
 
         # Return the final response
-        return response_text, True, None
+        return response_text, None
 
     async def get_page(self, url, max_redirects=5):
         """Retrieve a page from the Hipocrate service, following redirects.
