@@ -1734,6 +1734,62 @@ class HipoClientPatientSearch(HipoClientPatient):
         # Return the patients dict
         return data
 
+    def fhir_bundle_response(self, parsed_data: HipoData, **kwargs) -> Union[Bundle, OperationOutcome]:
+        """Convert parsed patient search data to FHIR Bundle of Patient resources.
+
+        Transforms parsed patient search data into a FHIR-compatible Bundle containing
+        Patient resources with proper structure, references, coding systems, and extensions.
+
+        Args:
+            parsed_data: Parsed patient search data from parse_multiple_patients_data method
+            **kwargs: Additional arguments including 'http_request' for host information
+
+        Returns:
+            FHIR Bundle resource containing Patients or OperationOutcome in case of error
+        """
+        # Extract http_request from kwargs if available, otherwise use self.request
+        http_request = kwargs.get('http_request', self.request)
+        
+        try:
+            # Check for errors in parsed data
+            if parsed_data.get("status") == "error":
+                return OperationOutcome.from_error(
+                    message=parsed_data.get("message", "Error in parsed patient search data"),
+                    code="processing",
+                    severity="error"
+                )
+
+            # Check if there are patients in response
+            if 'patients' in parsed_data and len(parsed_data['patients']) > 0:
+                # Convert multiple patients to FHIR Bundle using the Bundle class
+                response = Bundle(
+                    type="searchset",
+                    total=len(parsed_data['patients'])
+                )
+
+                for patient_id, patient_name in parsed_data['patients'].items():
+                    patient_resource = FHIRPatient(
+                        id=patient_id,
+                        name=[{
+                            "use": "official",
+                            "text": patient_name
+                        }]
+                    )
+                    response.append_entry(resource=patient_resource)
+                
+                return response
+            else:
+                # Create OperationOutcome for no patients found
+                return OperationOutcome.from_error(
+                    message="No patients found for the specified search criteria",
+                    code="not-found",
+                    severity="information"
+                )
+
+        except Exception as e:
+            logger.error(f"Error converting patient search data to FHIR Bundle: {e}")
+            return OperationOutcome.from_exception(e, code="exception")
+
 
 class HipoClientServiceRequest(HipoClient):
     """Specialized client for service request related operations in the Hipocrate medical system.
