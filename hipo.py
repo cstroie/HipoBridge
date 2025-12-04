@@ -1579,7 +1579,7 @@ class HipoClientPatientSearch(HipoClientPatient):
         # The request endpoint
         self.request_url = "/files/search.asp?what=PA"
 
-    async def search(self, search_term, **kwargs):
+    async def search(self, search_term: str, **kwargs) -> HipoData:
         """Search for patients by various criteria.
 
         Handles searching for patients by name, CNP, partial CNP, or patient code.
@@ -2014,7 +2014,7 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
         self.request_url_all = "/pacient/analyses.asp?type=PA&pacid={pacid}"
         self.request_url_episode = "/Pacient/analysesEpisod.asp?pacid={pacid}"
 
-    async def search(self, patient_id, **kwargs):
+    async def search(self, patient_id: str, **kwargs) -> HipoData:
         """Search for service requests by patient ID.
 
         Retrieves all service requests associated with a specific patient.
@@ -2028,9 +2028,7 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
 
         Returns:
             HipoData containing service requests or error information
-        """
-        from datetime import datetime as datetime_module
-        
+        """      
         # Initialize result data
         data = HipoData(status="success", message="")
 
@@ -2048,16 +2046,16 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                     try:
                         # Parse the datetime string to extract year
                         if 'T' in dt_param:
-                            dt_obj = datetime_module.fromisoformat(dt_param.replace('Z', '+00:00'))
+                            dt_obj = datetime.fromisoformat(dt_param.replace('Z', '+00:00'))
                         else:
-                            dt_obj = datetime_module.strptime(dt_param, '%Y-%m-%d')
+                            dt_obj = datetime.strptime(dt_param, '%Y-%m-%d')
                         year = dt_obj.year
                     except (ValueError, TypeError):
                         # Fallback to current year if parsing fails
-                        year = datetime_module.now().year
+                        year = datetime.now().year
                 else:
                     # Fallback to current year if no dt parameter
-                    year = datetime_module.now().year
+                    year = datetime.now().year
                 self.request_url += f"&strAN={year}"
             else:
                 # Choose the request URL for all analyses
