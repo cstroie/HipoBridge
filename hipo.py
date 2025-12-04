@@ -1144,8 +1144,7 @@ class HipoClient:
         Returns:
             HipoData containing parsed data
         """
-        data = HipoData(status = "success", message = "")
-        return data
+        return HipoData(status="error", message="No data")
 
     def fhir_response(self, parsed_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """Convert parsed data to FHIR-compatible format.
@@ -1159,7 +1158,7 @@ class HipoClient:
         Returns:
             Dictionary containing FHIR-compatible data
         """
-        return {}
+        return HipoData(status="error", message="No data")
 
     async def fetch_and_parse(self, *args, max_redirects=5, **kwargs):
         """Generic method to fetch data from an endpoint and parse it.
