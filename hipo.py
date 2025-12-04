@@ -2034,41 +2034,41 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
         # Initialize result data
         data = HipoData(status="success", message="")
 
-        # Choose the request URL for episode
-        self.request_url = self.request_url_episode
-        # Filter by type in request
-        if kwargs.get('type'):
-            # Append the domain
-            self.request_url += f"&strDomeniu={ANALYSIS_TYPES[kwargs['type']]['domain']}"
-        elif kwargs.get('dt'):
-            # Append the year extracted from dt parameter
-            dt_param = kwargs.get('dt')
-            if dt_param:
-                try:
-                    # Parse the datetime string to extract year
-                    if 'T' in dt_param:
-                        dt_obj = datetime_module.fromisoformat(dt_param.replace('Z', '+00:00'))
-                    else:
-                        dt_obj = datetime_module.strptime(dt_param, '%Y-%m-%d')
-                    year = dt_obj.year
-                except (ValueError, TypeError):
-                    # Fallback to current year if parsing fails
-                    year = datetime_module.now().year
-            else:
-                # Fallback to current year if no dt parameter
-                year = datetime_module.now().year
-            self.request_url += f"&strAN={year}"
-        else:
-            # Choose the request URL for all analyses
-            self.request_url = self.request_url_all
-            # Add full=yes parameter if requested
-            if kwargs.get('full'):
-                self.request_url += "&full=yes"
-
-        # Create the specific request url
-        url = self.request_url.format(pacid=patient_id)
-        
         try:
+            # Choose the request URL for episode
+            self.request_url = self.request_url_episode
+            # Filter by type in request
+            if kwargs.get('type'):
+                # Append the domain
+                self.request_url += f"&strDomeniu={ANALYSIS_TYPES[kwargs['type']]['domain']}"
+            elif kwargs.get('dt'):
+                # Append the year extracted from dt parameter
+                dt_param = kwargs.get('dt')
+                if dt_param:
+                    try:
+                        # Parse the datetime string to extract year
+                        if 'T' in dt_param:
+                            dt_obj = datetime_module.fromisoformat(dt_param.replace('Z', '+00:00'))
+                        else:
+                            dt_obj = datetime_module.strptime(dt_param, '%Y-%m-%d')
+                        year = dt_obj.year
+                    except (ValueError, TypeError):
+                        # Fallback to current year if parsing fails
+                        year = datetime_module.now().year
+                else:
+                    # Fallback to current year if no dt parameter
+                    year = datetime_module.now().year
+                self.request_url += f"&strAN={year}"
+            else:
+                # Choose the request URL for all analyses
+                self.request_url = self.request_url_all
+                # Add full=yes parameter if requested
+                if kwargs.get('full'):
+                    self.request_url += "&full=yes"
+
+            # Create the specific request url
+            url = self.request_url.format(pacid=patient_id)
+            
             # Retrieve the page
             response_text, error_message = await self.get_page(url)
 
@@ -2079,10 +2079,17 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
 
             # Parse the data using the parser function
             parsed_data = self.parse_data(response_text, **kwargs)
+            
+            # Ensure we always return a HipoData object
+            if not isinstance(parsed_data, HipoData):
+                result = HipoData(status="success", message="")
+                result.update(parsed_data)
+                return result
+                
             return parsed_data
 
         except Exception as e:
-            data.set_error("Data retrieval failed")
+            data.set_error(f"Data retrieval failed: {str(e)}")
             return data
 
     def parse_data(self, html_content: str, **kwargs) -> HipoData:
