@@ -676,22 +676,22 @@ async def serve_fhir_analysis_types(request):
         })
 
     # Create FHIR CodeSystem using the FHIR Resource class
-    code_system = Resource({
-        "resourceType": "CodeSystem",
-        "id": "analysis-types",
-        "url": f"{request.scheme}://{request.host}/fhir/CodeSystem/analysis-types",
-        "version": "1.0.0",
-        "name": "HipocrateAnalysisTypes",
-        "title": "Hipocrate Analysis Types",
-        "status": "active",
-        "experimental": False,
-        "date": datetime.now().strftime('%Y-%m-%d'),
-        "publisher": "Hipocrate",
-        "description": "Code system for analysis types used by the Hipocrate",
-        "caseSensitive": True,
-        "content": "complete",
-        "concept": concepts
-    })
+    code_system = Resource(
+        resourceType="CodeSystem",
+        id="analysis-types",
+        url=f"{request.scheme}://{request.host}/fhir/CodeSystem/analysis-types",
+        version="1.0.0",
+        name="HipocrateAnalysisTypes",
+        title="Hipocrate Analysis Types",
+        status="active",
+        experimental=False,
+        date=datetime.now().strftime('%Y-%m-%d'),
+        publisher="Hipocrate",
+        description="Code system for analysis types used by the Hipocrate",
+        caseSensitive=True,
+        content="complete",
+        concept=concepts
+    )
 
     # Return the response
     return web_fhir_response(code_system)
@@ -711,26 +711,26 @@ async def serve_fhir_metadata(request):
     logger.info("GET /fhir/Metadata endpoint accessed")
 
     # Create a basic FHIR CapabilityStatement using the Resource class
-    capability_statement = Resource({
-        "resourceType": "CapabilityStatement",
-        "id": "hipobridge-fhir-capability-statement",
-        "url": f"{request.scheme}://{request.host}/fhir/Metadata",
-        "version": "1.0.0",
-        "name": "HipoBridgeFHIRCapabilityStatement",
-        "title": "HipoBridge FHIR Capability Statement",
-        "status": "active",
-        "experimental": False,
-        "date": datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
-        "publisher": "HipoBridge",
-        "description": "This is the FHIR capability statement for the HipoBridge FHIR API",
-        "kind": "instance",
-        "software": {
+    capability_statement = Resource(
+        resourceType="CapabilityStatement",
+        id="hipobridge-fhir-capability-statement",
+        url=f"{request.scheme}://{request.host}/fhir/Metadata",
+        version="1.0.0",
+        name="HipoBridgeFHIRCapabilityStatement",
+        title="HipoBridge FHIR Capability Statement",
+        status="active",
+        experimental=False,
+        date=datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
+        publisher="HipoBridge",
+        description="This is the FHIR capability statement for the HipoBridge FHIR API",
+        kind="instance",
+        software={
             "name": "HipoBridge",
             "version": "1.0.0"
         },
-        "fhirVersion": "4.0.1",
-        "format": ["application/fhir+json", "application/json"],
-        "rest": [
+        fhirVersion="4.0.1",
+        format=["application/fhir+json", "application/json"],
+        rest=[
             {
                 "mode": "server",
                 "resource": [
@@ -769,7 +769,7 @@ async def serve_fhir_metadata(request):
                 ]
             }
         ]
-    })
+    )
 
     # Return the response
     return web_fhir_response(capability_statement)
