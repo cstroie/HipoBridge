@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Hipocrate medical system data retrieval client implementation.
 
-Copyright (C) 2024 Costin Stroie <costinstroie@eridu.eu.org>
+Copyright (C) 2025 Costin Stroie <costinstroie@eridu.eu.org>
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
