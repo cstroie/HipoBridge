@@ -1146,7 +1146,7 @@ class HipoClient:
         """
         return HipoData(status="error", message="No data")
 
-    def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[Dict[str, Any], OperationOutcome]:
+    def fhir_response(self, parsed_data: HipoData, **kwargs) -> OperationOutcome:
         """Convert parsed data to FHIR-compatible format.
 
         Abstract method to be implemented by subclasses for FHIR conversion.
