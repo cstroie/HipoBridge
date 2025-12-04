@@ -39,17 +39,23 @@ from datetime import datetime, timedelta
 import configparser
 
 from typing import Any, Dict, List, Optional, Tuple, Union
-from collections.abc import MutableMapping
 
 
 from extractors import extract_id_from_link, extract_ids_from_links, extract_text_ids_from_links, extract_selected_from_dropdown, extract_tabular_data, extract_text_after_label, extract_text_from_element, extract_textarea_after_label, extract_value_from_input
 from extractors import parse_cnp
 
-from markdown import html_to_markdown, markdown_to_html
+from markdown import html_to_markdown
 
 # Import FHIR classes
-from fhir import ServiceRequest as FHIRServiceRequest, CodeableConcept, Reference, Patient as FHIRPatient
-from fhir import OperationOutcome, ImagingStudy as FHIRImagingStudy, DiagnosticReport as FHIRDiagnosticReport, Encounter as FHIREncounter, Bundle
+from fhir import ServiceRequest as FHIRServiceRequest
+from fhir import CodeableConcept as FHIRCodeableConcept
+from fhir import Reference as FHIRReference
+from fhir import Patient as FHIRPatient
+from fhir import OperationOutcome as FHIROperationOutcome
+from fhir import ImagingStudy as FHIRImagingStudy
+from fhir import DiagnosticReport as FHIRDiagnosticReport
+from fhir import Encounter as FHIREncounter
+from fhir import Bundle as FHIRBundle
 
 # Configure logging
 logging.basicConfig(
@@ -1146,7 +1152,7 @@ class HipoClient:
         """
         return HipoData(status="error", message="No data")
 
-    def fhir_response(self, parsed_data: HipoData, **kwargs) -> OperationOutcome:
+    def fhir_response(self, parsed_data: HipoData, **kwargs) -> FHIROperationOutcome:
         """Convert parsed data to FHIR-compatible format.
 
         Abstract method to be implemented by subclasses for FHIR conversion.
@@ -1156,9 +1162,9 @@ class HipoClient:
             **kwargs: Additional arguments for FHIR conversion
 
         Returns:
-            Dictionary containing FHIR-compatible data or OperationOutcome for errors
+            Dictionary containing FHIR-compatible data or FHIROperationOutcome for errors
         """
-        return OperationOutcome.from_error(
+        return FHIROperationOutcome.from_error(
             message="No data",
             code="not-supported",
             severity="error"
@@ -1209,7 +1215,7 @@ class HipoClient:
             **kwargs: Arguments for URL formatting and parsing
 
         Returns:
-            FHIR resource object or OperationOutcome in case of error
+            FHIR resource object or FHIROperationOutcome in case of error
         """
         try:
             # Retrieve and parse the page
@@ -1217,8 +1223,8 @@ class HipoClient:
 
             # Check for errors in the response
             if parsed_data.get("status") == "error":
-                # Return OperationOutcome for errors
-                return OperationOutcome.from_error(
+                # Return FHIROperationOutcome for errors
+                return FHIROperationOutcome.from_error(
                     message=parsed_data.get("message", "Unknown error"),
                     code="processing",
                     severity="error"
@@ -1229,8 +1235,8 @@ class HipoClient:
             return fhir_resource
 
         except Exception as e:
-            # Return OperationOutcome for exceptions
-            outcome = OperationOutcome.from_exception(e, code="exception")
+            # Return FHIROperationOutcome for exceptions
+            outcome = FHIROperationOutcome.from_exception(e, code="exception")
             logger.error(f"Data retrieval failed: {str(e)}")
             return outcome
 
@@ -1394,7 +1400,7 @@ class HipoClientPatient(HipoClient):
             data.set_error(str(e))
             return data
 
-    def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRPatient, OperationOutcome]:
+    def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRPatient, FHIROperationOutcome]:
         """Convert parsed patient data to FHIR Patient resource.
 
         Transforms parsed patient data into a FHIR-compatible Patient
@@ -1406,7 +1412,7 @@ class HipoClientPatient(HipoClient):
                      and 'id' for patient ID
 
         Returns:
-            FHIR Patient resource or OperationOutcome in case of error
+            FHIR Patient resource or FHIROperationOutcome in case of error
         """
         # Extract http_request from kwargs if available, otherwise use self.request
         http_request = kwargs.get('http_request', self.request)
@@ -1417,7 +1423,7 @@ class HipoClientPatient(HipoClient):
         try:
             # Check for errors in parsed data
             if parsed_data.get("status") == "error":
-                return OperationOutcome.from_error(
+                return FHIROperationOutcome.from_error(
                     message=parsed_data.get("message", "Error in parsed patient data"),
                     code="processing",
                     severity="error"
@@ -1557,7 +1563,7 @@ class HipoClientPatient(HipoClient):
 
         except Exception as e:
             logger.error(f"Error converting patient data to FHIR: {e}")
-            return OperationOutcome.from_exception(e, code="exception")
+            return FHIROperationOutcome.from_exception(e, code="exception")
 
 
 class HipoClientPatientSearch(HipoClientPatient):
@@ -1734,10 +1740,10 @@ class HipoClientPatientSearch(HipoClientPatient):
         # Return the patients dict
         return data
 
-    def fhir_bundle_response(self, parsed_data: HipoData, **kwargs) -> Union[Bundle, OperationOutcome]:
-        """Convert parsed patient search data to FHIR Bundle of Patient resources.
+    def fhir_bundle_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRBundle, FHIROperationOutcome]:
+        """Convert parsed patient search data to FHIR FHIRBundle of Patient resources.
 
-        Transforms parsed patient search data into a FHIR-compatible Bundle containing
+        Transforms parsed patient search data into a FHIR-compatible FHIRBundle containing
         Patient resources with proper structure, references, coding systems, and extensions.
 
         Args:
@@ -1745,7 +1751,7 @@ class HipoClientPatientSearch(HipoClientPatient):
             **kwargs: Additional arguments including 'http_request' for host information
 
         Returns:
-            FHIR Bundle resource containing Patients or OperationOutcome in case of error
+            FHIR FHIRBundle resource containing Patients or FHIROperationOutcome in case of error
         """
         # Extract http_request from kwargs if available, otherwise use self.request
         http_request = kwargs.get('http_request', self.request)
@@ -1753,7 +1759,7 @@ class HipoClientPatientSearch(HipoClientPatient):
         try:
             # Check for errors in parsed data
             if parsed_data.get("status") == "error":
-                return OperationOutcome.from_error(
+                return FHIROperationOutcome.from_error(
                     message=parsed_data.get("message", "Error in parsed patient search data"),
                     code="processing",
                     severity="error"
@@ -1761,8 +1767,8 @@ class HipoClientPatientSearch(HipoClientPatient):
 
             # Check if there are patients in response
             if 'patients' in parsed_data and len(parsed_data['patients']) > 0:
-                # Convert multiple patients to FHIR Bundle using the Bundle class
-                response = Bundle(
+                # Convert multiple patients to FHIR FHIRBundle using the FHIRBundle class
+                response = FHIRBundle(
                     type="searchset",
                     total=len(parsed_data['patients'])
                 )
@@ -1779,16 +1785,16 @@ class HipoClientPatientSearch(HipoClientPatient):
                 
                 return response
             else:
-                # Create OperationOutcome for no patients found
-                return OperationOutcome.from_error(
+                # Create FHIROperationOutcome for no patients found
+                return FHIROperationOutcome.from_error(
                     message="No patients found for the specified search criteria",
                     code="not-found",
                     severity="information"
                 )
 
         except Exception as e:
-            logger.error(f"Error converting patient search data to FHIR Bundle: {e}")
-            return OperationOutcome.from_exception(e, code="exception")
+            logger.error(f"Error converting patient search data to FHIR FHIRBundle: {e}")
+            return FHIROperationOutcome.from_exception(e, code="exception")
 
 
 class HipoClientServiceRequest(HipoClient):
@@ -1899,7 +1905,7 @@ class HipoClientServiceRequest(HipoClient):
             data.set_error(str(e))
             return data
 
-    def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRServiceRequest, OperationOutcome]:
+    def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRServiceRequest, FHIROperationOutcome]:
         """Convert parsed service request data to FHIR ServiceRequest resource.
 
         Transforms parsed service request data into a FHIR-compatible ServiceRequest
@@ -1911,7 +1917,7 @@ class HipoClientServiceRequest(HipoClient):
                      and 'id' for service request ID
 
         Returns:
-            FHIR ServiceRequest resource or OperationOutcome in case of error
+            FHIR ServiceRequest resource or FHIROperationOutcome in case of error
         """
         # Extract http_request from kwargs if available, otherwise use self.request
         http_request = kwargs.get('http_request', self.request)
@@ -1922,7 +1928,7 @@ class HipoClientServiceRequest(HipoClient):
         try:
             # Check for errors in parsed data
             if parsed_data.get("status") == "error":
-                return OperationOutcome.from_error(
+                return FHIROperationOutcome.from_error(
                     message=parsed_data.get("message", "Error in parsed service request data"),
                     code="processing",
                     severity="error"
@@ -1938,7 +1944,7 @@ class HipoClientServiceRequest(HipoClient):
 
             # Create subject reference
             patient_id = parsed_data.get("patient.id")
-            subject = Reference(
+            subject = FHIRReference(
                 reference=f"Patient/{patient_id}"
             )
 
@@ -1954,7 +1960,7 @@ class HipoClientServiceRequest(HipoClient):
             else:
                 system_url = "http://example.com/fhir/CodeSystem/service-types"
                 
-            code = CodeableConcept(
+            code = FHIRCodeableConcept(
                 coding=[{
                     "system": system_url,
                     "code": "imaging-study",
@@ -1967,7 +1973,7 @@ class HipoClientServiceRequest(HipoClient):
             # Add requester if available (requesting doctor)
             medic = parsed_data.get("checkin.medic")
             if medic:
-                fhir_service_request["requester"] = Reference(display=medic)
+                fhir_service_request["requester"] = FHIRReference(display=medic)
 
             # Add encounter if we can derive it
             admission_id = parsed_data.get("checkin.id")
@@ -1975,7 +1981,7 @@ class HipoClientServiceRequest(HipoClient):
                 # Handle case where admission_id might be a list
                 if isinstance(admission_id, list) and len(admission_id) > 0:
                     admission_id = admission_id[0]
-                fhir_service_request["encounter"] = Reference(
+                fhir_service_request["encounter"] = FHIRReference(
                     reference=f"Encounter/{admission_id}"
                 )
 
@@ -1986,13 +1992,13 @@ class HipoClientServiceRequest(HipoClient):
                 # Format is usually "CODE Description"
                 diagnosis_match = re.match(r'^(\d{3,4})\s+(.+)$', diagnosis)
                 if diagnosis_match:
-                    condition = Reference(
+                    condition = FHIRReference(
                         reference=f"Condition/{diagnosis_match.group(1)}",
                         display=diagnosis_match.group(2)
                     )
                 else:
                     # If no code found, use the entire diagnosis as display text
-                    condition = Reference(display=diagnosis)
+                    condition = FHIRReference(display=diagnosis)
                 fhir_service_request["reason"] = [condition]
 
             # Add reason reference if clinical comments are available
@@ -2021,7 +2027,7 @@ class HipoClientServiceRequest(HipoClient):
                 for study_info in studies:
                     code = study_info.get("id")
                     description = study_info.get("description", "") if isinstance(study_info, dict) else str(study_info)
-                    order_detail = CodeableConcept(
+                    order_detail = FHIRCodeableConcept(
                         coding=[{
                             "system": study_system_url,
                             "code": f"study-{code}",
@@ -2047,7 +2053,7 @@ class HipoClientServiceRequest(HipoClient):
             return fhir_service_request
         except Exception as e:
             logger.error(f"Error converting service request data: {e}")
-            return OperationOutcome.from_exception(e, code="exception")
+            return FHIROperationOutcome.from_exception(e, code="exception")
 
 
 class HipoClientServiceRequestSearch(HipoClientServiceRequest):
@@ -2337,10 +2343,10 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
         # Return the service requests
         return data
 
-    def fhir_bundle_response(self, parsed_data: HipoData, **kwargs) -> Union[Bundle, OperationOutcome]:
-        """Convert parsed service request data to FHIR Bundle of ServiceRequest resources.
+    def fhir_bundle_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRBundle, FHIROperationOutcome]:
+        """Convert parsed service request data to FHIR FHIRBundle of ServiceRequest resources.
 
-        Transforms parsed service request data into a FHIR-compatible Bundle containing
+        Transforms parsed service request data into a FHIR-compatible FHIRBundle containing
         ServiceRequest resources with proper structure, references, coding systems, and extensions.
 
         Args:
@@ -2349,7 +2355,7 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                      and 'patient_id' for patient ID
 
         Returns:
-            FHIR Bundle resource containing ServiceRequests or OperationOutcome in case of error
+            FHIR FHIRBundle resource containing ServiceRequests or FHIROperationOutcome in case of error
         """
         # Extract http_request from kwargs if available, otherwise use self.request
         http_request = kwargs.get('http_request', self.request)
@@ -2360,7 +2366,7 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
         try:
             # Check for errors in parsed data
             if parsed_data.get("status") == "error":
-                return OperationOutcome.from_error(
+                return FHIROperationOutcome.from_error(
                     message=parsed_data.get("message", "Error in parsed service request data"),
                     code="processing",
                     severity="error"
@@ -2368,8 +2374,8 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
 
             # Check if there are requests in response
             if 'requests' in parsed_data and len(parsed_data['requests']) > 0:
-                # Convert multiple requests to FHIR Bundle using the Bundle class
-                response = Bundle(
+                # Convert multiple requests to FHIR FHIRBundle using the FHIRBundle class
+                response = FHIRBundle(
                     type="searchset",
                     total=len(parsed_data['requests'])
                 )
@@ -2384,12 +2390,12 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                     )
                     
                     # Add subject reference
-                    fhir_service_request["subject"] = Reference(
+                    fhir_service_request["subject"] = FHIRReference(
                         reference=f"Patient/{patient_id}"
                     )
                     
                     # Add code
-                    fhir_service_request["code"] = CodeableConcept(
+                    fhir_service_request["code"] = FHIRCodeableConcept(
                         coding=[{
                             "system": f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/analysis-types" if http_request else "http://example.com/fhir/CodeSystem/analysis-types",
                             "code": req["type"],
@@ -2415,16 +2421,16 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                 
                 return response
             else:
-                # Create OperationOutcome for no requests found
-                return OperationOutcome.from_error(
+                # Create FHIROperationOutcome for no requests found
+                return FHIROperationOutcome.from_error(
                     message="No service requests found for the specified patient",
                     code="not-found",
                     severity="information"
                 )
 
         except Exception as e:
-            logger.error(f"Error converting service request data to FHIR Bundle: {e}")
-            return OperationOutcome.from_exception(e, code="exception")
+            logger.error(f"Error converting service request data to FHIR FHIRBundle: {e}")
+            return FHIROperationOutcome.from_exception(e, code="exception")
 
 
 class HipoClientImagingStudy(HipoClient):
@@ -2603,7 +2609,7 @@ class HipoClientImagingStudy(HipoClient):
             logger.error(f"Error parsing report data: {e}")
             return HipoData(status="success", message=f"{e}")
 
-    def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRImagingStudy, OperationOutcome]:
+    def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRImagingStudy, FHIROperationOutcome]:
         """Convert parsed imaging study data to FHIR ImagingStudy resource.
 
         Transforms parsed imaging study data into a FHIR-compatible ImagingStudy
@@ -2615,7 +2621,7 @@ class HipoClientImagingStudy(HipoClient):
                      and 'id' for study ID
 
         Returns:
-            FHIR ImagingStudy resource or OperationOutcome in case of error
+            FHIR ImagingStudy resource or FHIROperationOutcome in case of error
         """
         # Extract http_request from kwargs if available, otherwise use self.request
         http_request = kwargs.get('http_request', self.request)
@@ -2626,7 +2632,7 @@ class HipoClientImagingStudy(HipoClient):
         try:
             # Check for errors in parsed data
             if parsed_data.get("status") == "error":
-                return OperationOutcome.from_error(
+                return FHIROperationOutcome.from_error(
                     message=parsed_data.get("message", "Error in parsed imaging study data"),
                     code="processing",
                     severity="error"
@@ -2772,7 +2778,7 @@ class HipoClientImagingStudy(HipoClient):
 
         except Exception as e:
             logger.error(f"Error converting imaging study data to FHIR: {e}")
-            return OperationOutcome.from_exception(e, code="exception")
+            return FHIROperationOutcome.from_exception(e, code="exception")
 
 
 class HipoClientDiagnosticReport(HipoClient):
@@ -2915,7 +2921,7 @@ class HipoClientDiagnosticReport(HipoClient):
             logger.error(f"Error parsing report data: {e}")
             return HipoData(status="success", message=f"{e}")
 
-    def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRDiagnosticReport, OperationOutcome]:
+    def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRDiagnosticReport, FHIROperationOutcome]:
         """Convert parsed diagnostic report data to FHIR DiagnosticReport resource.
 
         Transforms parsed diagnostic report data into a FHIR-compatible DiagnosticReport
@@ -2927,7 +2933,7 @@ class HipoClientDiagnosticReport(HipoClient):
                      and 'id' for report ID
 
         Returns:
-            FHIR DiagnosticReport resource or OperationOutcome in case of error
+            FHIR DiagnosticReport resource or FHIROperationOutcome in case of error
         """
         # Extract http_request from kwargs if available, otherwise use self.request
         http_request = kwargs.get('http_request', self.request)
@@ -2938,7 +2944,7 @@ class HipoClientDiagnosticReport(HipoClient):
         try:
             # Check for errors in parsed data
             if parsed_data.get("status") == "error":
-                return OperationOutcome.from_error(
+                return FHIROperationOutcome.from_error(
                     message=parsed_data.get("message", "Error in parsed diagnostic report data"),
                     code="processing",
                     severity="error"
@@ -3102,7 +3108,7 @@ class HipoClientDiagnosticReport(HipoClient):
 
         except Exception as e:
             logger.error(f"Error converting diagnostic report data to FHIR: {e}")
-            return OperationOutcome.from_exception(e, code="exception")
+            return FHIROperationOutcome.from_exception(e, code="exception")
 
 
 class HipoClientCheckout(HipoClient):
@@ -3247,7 +3253,7 @@ class HipoClientCheckout(HipoClient):
             data.set_error(str(e))
             return data
 
-    def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIREncounter, OperationOutcome]:
+    def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIREncounter, FHIROperationOutcome]:
         """Convert parsed checkout data to FHIR Encounter resource.
 
         Transforms parsed checkout data into a FHIR-compatible Encounter resource
@@ -3258,12 +3264,12 @@ class HipoClientCheckout(HipoClient):
             **kwargs: Additional arguments including 'id' for encounter ID
 
         Returns:
-            FHIR Encounter resource or OperationOutcome in case of error
+            FHIR Encounter resource or FHIROperationOutcome in case of error
         """
         try:
             # Check for errors in parsed data
             if parsed_data.get("status") == "error":
-                return OperationOutcome.from_error(
+                return FHIROperationOutcome.from_error(
                     message=parsed_data.get("message", "Error in parsed checkout data"),
                     code="processing",
                     severity="error"
@@ -3411,4 +3417,4 @@ class HipoClientCheckout(HipoClient):
             return fhir_encounter
         except Exception as e:
             logger.error(f"Error converting checkout data to FHIR: {e}")
-            return OperationOutcome.from_exception(e, code="exception")
+            return FHIROperationOutcome.from_exception(e, code="exception")
