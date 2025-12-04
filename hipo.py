@@ -2281,6 +2281,95 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
         # Return the service requests
         return data
 
+    def fhir_bundle_response(self, parsed_data: HipoData, **kwargs) -> Union[Bundle, OperationOutcome]:
+        """Convert parsed service request data to FHIR Bundle of ServiceRequest resources.
+
+        Transforms parsed service request data into a FHIR-compatible Bundle containing
+        ServiceRequest resources with proper structure, references, coding systems, and extensions.
+
+        Args:
+            parsed_data: Parsed service request data from parse_data method
+            **kwargs: Additional arguments including 'http_request' for host information
+                     and 'patient_id' for patient ID
+
+        Returns:
+            FHIR Bundle resource containing ServiceRequests or OperationOutcome in case of error
+        """
+        # Extract http_request from kwargs if available, otherwise use self.request
+        http_request = kwargs.get('http_request', self.request)
+        
+        # Get patient ID from kwargs
+        patient_id = kwargs.get('patient_id', '')
+        
+        try:
+            # Check for errors in parsed data
+            if parsed_data.get("status") == "error":
+                return OperationOutcome.from_error(
+                    message=parsed_data.get("message", "Error in parsed service request data"),
+                    code="processing",
+                    severity="error"
+                )
+
+            # Check if there are requests in response
+            if 'requests' in parsed_data and len(parsed_data['requests']) > 0:
+                # Convert multiple requests to FHIR Bundle using the Bundle class
+                response = Bundle(
+                    type="searchset",
+                    total=len(parsed_data['requests'])
+                )
+
+                for req in parsed_data['requests']:
+                    # Create FHIR ServiceRequest using the FHIR class
+                    fhir_service_request = FHIRServiceRequest(
+                        id=req["id"],
+                        status="active",
+                        intent="order",
+                        priority="urgent" if req.get("is_urgent") else "routine"
+                    )
+                    
+                    # Add subject reference
+                    fhir_service_request["subject"] = Reference(
+                        reference=f"Patient/{patient_id}"
+                    )
+                    
+                    # Add code
+                    fhir_service_request["code"] = CodeableConcept(
+                        coding=[{
+                            "system": f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/analysis-types" if http_request else "http://example.com/fhir/CodeSystem/analysis-types",
+                            "code": req["type"],
+                            "display": ANALYSIS_TYPES[req["type"]]["display"]
+                        }],
+                        text=ANALYSIS_TYPES[req["type"]]["definition"]
+                    )
+                    
+                    # Add effective datetime if available
+                    if req.get("datetime"):
+                        fhir_service_request["authoredOn"] = req["datetime"]
+                    
+                    # Add region information if available
+                    if req.get("regions"):
+                        fhir_service_request["bodySite"] = []
+                        for region in req["regions"]:
+                            fhir_service_request["bodySite"].append({
+                                "text": region
+                            })
+                    
+                    # Append the entry to the bundle
+                    response.append_entry(resource=fhir_service_request)
+                
+                return response
+            else:
+                # Create OperationOutcome for no requests found
+                return OperationOutcome.from_error(
+                    message="No service requests found for the specified patient",
+                    code="not-found",
+                    severity="information"
+                )
+
+        except Exception as e:
+            logger.error(f"Error converting service request data to FHIR Bundle: {e}")
+            return OperationOutcome.from_exception(e, code="exception")
+
 
 class HipoClientImagingStudy(HipoClient):
     """Specialized client for imaging study related operations in the Hipocrate medical system.

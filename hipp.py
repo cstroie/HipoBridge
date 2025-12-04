@@ -294,17 +294,18 @@ async def search_request(request):
 
 @require_auth
 async def search_fhir_service_request(request):
-    """Retrieve patient information by ID.
+    """Search for service requests and return FHIR-formatted results.
 
-    Gets patient information from the Hipocrate service and extracts
-    associated admission and discharge IDs.
+    Searches for service requests in the Hipocrate service and returns results
+    in FHIR ServiceRequest resource format.
 
     Args:
-        request: The incoming HTTP request with 'id' query parameter for patient ID
+        request: The incoming HTTP request with 'patient' query parameter for patient ID
+                 and optional 'type', 'region', 'dt', and 'full' parameters
                  and basic auth credentials for authentication
 
     Returns:
-        JSON response with patient data or error information
+        JSON response with FHIR ServiceRequest resources or error information
     """
     # Get search parameter from query string
     patient_id = request.query.get('patient', '')
@@ -324,60 +325,8 @@ async def search_fhir_service_request(request):
     # Retrieve and parse the page
     parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime, full=full_data)
 
-    # Check if there are requests in response
-    if 'requests' in parsed_data and len(parsed_data['requests']) > 0:
-        # Convert multiple patients to FHIR Bundle using the Bundle class
-        response = Bundle(
-            type="searchset",
-            total=len(parsed_data['requests'])
-        )
-
-        for req in parsed_data['requests']:
-            # Create FHIR ServiceRequest using the FHIR class
-            fhir_service_request = FHIRServiceRequest(
-                id=req["id"],
-                status="active",
-                intent="order",
-                priority="urgent" if req.get("is_urgent") else "routine"
-            )
-            
-            # Add subject reference
-            fhir_service_request["subject"] = Reference(
-                reference=f"Patient/{patient_id}"
-            )
-            
-            # Add code
-            fhir_service_request["code"] = CodeableConcept(
-                coding=[{
-                    "system": f"{request.scheme}://{request.host}/fhir/CodeSystem/analysis-types",
-                    "code": req["type"],
-                    "display": ANALYSIS_TYPES[req["type"]]["display"]
-                }],
-                text=ANALYSIS_TYPES[req["type"]]["definition"]
-            )
-            
-            # Add effective datetime if available
-            if req.get("datetime"):
-                fhir_service_request["authoredOn"] = req["datetime"]
-            
-            # Add region information if available
-            if req.get("regions"):
-                fhir_service_request["bodySite"] = []
-                for region in req["regions"]:
-                    fhir_service_request["bodySite"].append({
-                        "text": region
-                    })
-            
-            # Append the entry to the bundle
-            response.append_entry(resource=fhir_service_request)
-        
-    else:
-        # Create OperationOutcome for no requests found
-        response = OperationOutcome.from_error(
-            message="No service requests found for the specified patient",
-            code="not-found",
-            severity="information"
-        )
+    # Convert parsed data to FHIR Bundle using the new method
+    response = client.fhir_bundle_response(parsed_data, http_request=request, patient_id=patient_id)
 
     # Return the response
     return web_fhir_response(response)
