@@ -38,7 +38,7 @@ import html
 from datetime import datetime, timedelta
 import configparser
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 from collections.abc import MutableMapping
 
 
