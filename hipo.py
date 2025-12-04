@@ -1850,12 +1850,7 @@ class HipoClientServiceRequest(HipoClient):
             data.store("patient.name", extract_text_after_label(soup, r'Nume Pacient:'))
 
             # Extract patient ID
-            patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id='))
-            if patient_link:
-                data.store("patient.id", extract_id_from_link(patient_link))
-            else:
-                data.set_error("Could not extract patient ID from service request")
-                return data
+            data.store("patient.id", extract_ids_from_links(soup, r'../Pacient/edit\.asp\?id='))
 
             # Extract medic
             data.store("checkin.medic", extract_text_after_label(soup, r'Medicul:', stop_at=r'-'))
