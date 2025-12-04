@@ -900,7 +900,7 @@ class HipoClient:
             password: Password for login if needed
 
         Returns:
-            Tuple of (response_text, success, error_response) where success is boolean
+            Tuple of (page_content, error_message) where error_message is None if no error
         """
 
         async def _make_request(use_retry_headers=False):
@@ -932,7 +932,7 @@ class HipoClient:
         if method == "GET":
             cached_response = self.cache_get(url)
             if cached_response is not None:
-                return cached_response, True, None
+                return cached_response, None
 
         try:
             # Log current cookies before request
@@ -952,18 +952,18 @@ class HipoClient:
                     response_text = await _make_request(use_retry_headers=True)
                     # Check again if still on login page
                     if self.is_login_page(response_text):
-                        return None, False, error_response("Authentication failed after retry", 401)
+                        return None, "Authentication failed after retry"
                 else:
-                    return None, False, error_response("Re-authentication failed", 401)
+                    return None, "Re-authentication failed"
 
             # Cache the response for GET requests
             if method == "GET":
                 self.cache_put(url, response_text)
 
             # If we reach here, we have a valid response
-            return response_text, True, None
+            return response_text, None
         except Exception as e:
-            return None, False, error_response(str(e), 500, {"URL": url})
+            return None, str(e)
 
     async def handle_response_encoding(self, response):
         """Handle response encoding for the Hipocrate service.
