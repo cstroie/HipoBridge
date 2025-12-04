@@ -49,7 +49,7 @@ from markdown import html_to_markdown, markdown_to_html
 
 # Import FHIR classes
 from fhir import ServiceRequest as FHIRServiceRequest, CodeableConcept, Reference, Patient as FHIRPatient
-from fhir import OperationOutcome, ImagingStudy as FHIRImagingStudy, DiagnosticReport as FHIRDiagnosticReport
+from fhir import OperationOutcome, ImagingStudy as FHIRImagingStudy, DiagnosticReport as FHIRDiagnosticReport, Encounter as FHIREncounter
 
 # Configure logging
 logging.basicConfig(
@@ -3097,7 +3097,7 @@ class HipoClientCheckout(HipoClient):
             data.set_error(str(e))
             return data
 
-    def fhir_response(self, parsed_data: HipoData[str, Any], **kwargs) -> Dict[str, Any]:
+    def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIREncounter, OperationOutcome]:
         """Convert parsed checkout data to FHIR Encounter resource.
 
         Transforms parsed checkout data into a FHIR-compatible Encounter resource
@@ -3108,144 +3108,157 @@ class HipoClientCheckout(HipoClient):
             **kwargs: Additional arguments including 'id' for encounter ID
 
         Returns:
-            FHIR Encounter resource as dictionary
+            FHIR Encounter resource or OperationOutcome in case of error
         """
-        encounter_id = parsed_data.get('checkout.id', '')
-        # Create enhanced FHIR Encounter resource
-        fhir_encounter = {
-            "resourceType": "Encounter",
-            "id": encounter_id,
-            "status": "discharged",
-            "type": [
-                {
-                    "coding": [
-                        {
-                            "system": "http://snomed.info/sct",
-                            "code": "305056002",
-                            "display": "Admission to hospital"
-                        }
-                    ]
-                }
-            ],
-            "subject": {
-                "reference": f"Patient/{parsed_data.get('patient.id', '')}"
-            },
-            "participant": []
-        }
+        try:
+            # Check for errors in parsed data
+            if parsed_data.get("status") == "error":
+                return OperationOutcome.from_error(
+                    message=parsed_data.get("message", "Error in parsed checkout data"),
+                    code="processing",
+                    severity="error"
+                )
 
-        # Add performer if available (from checkout medic)
-        checkout_medic = parsed_data.get("checkout.medic")
-        if checkout_medic:
-            fhir_encounter["participant"].append({
-                "type": [
+            encounter_id = parsed_data.get('checkout.id', '')
+            # Create enhanced FHIR Encounter resource using the FHIR class
+            fhir_encounter = FHIREncounter(
+                id=encounter_id,
+                status="discharged",
+                type=[
                     {
                         "coding": [
                             {
-                                "system": "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
-                                "code": "ATND",
-                                "display": "attender"
+                                "system": "http://snomed.info/sct",
+                                "code": "305056002",
+                                "display": "Admission to hospital"
                             }
                         ]
                     }
                 ],
-                "individual": {
-                    "display": checkout_medic
-                }
-            })
-
-        # Add reason (admission diagnostic) if available
-        admission_diagnosis = parsed_data.get("checkin.diagnosis")
-        if admission_diagnosis:
-            fhir_encounter["reasonCode"] = [
-                {
-                    "text": admission_diagnosis
-                }
-            ]
-
-        # Add text summary if epicrisis exists
-        epicrisis = parsed_data.get("checkout.epicrisis")
-        if epicrisis:
-            # Also add as a note
-            fhir_encounter["note"] = [
-                {
-                    "text": epicrisis
-                }
-            ]
-
-        # Add diagnosis if available
-        if admission_diagnosis:
-            fhir_encounter["diagnosis"] = [
-                {
-                    "condition": {
-                        "reference": f"Condition/admission-{encounter_id}",
-                        "display": admission_diagnosis
-                    },
-                    "use": {
-                        "coding": [
-                            {
-                                "system": "http://terminology.hl7.org/CodeSystem/diagnosis-role",
-                                "code": "AD",
-                                "display": "Admission diagnosis"
-                            }
-                        ]
-                    }
-                }
-            ]
-
-        # Add discharge diagnosis if available
-        discharge_diagnosis = parsed_data.get("checkout.diagnosis")
-        if discharge_diagnosis:
-            if "diagnosis" not in fhir_encounter:
-                fhir_encounter["diagnosis"] = []
-            fhir_encounter["diagnosis"].append(
-                {
-                    "condition": {
-                        "reference": f"Condition/discharge-{encounter_id}",
-                        "display": discharge_diagnosis
-                    },
-                    "use": {
-                        "coding": [
-                            {
-                                "system": "http://terminology.hl7.org/CodeSystem/diagnosis-role",
-                                "code": "DD",
-                                "display": "Discharge diagnosis"
-                            }
-                        ]
-                    }
+                subject={
+                    "reference": f"Patient/{parsed_data.get('patient.id', '')}"
                 }
             )
+            
+            # Initialize participant array
+            fhir_encounter["participant"] = []
 
-        # Add period for admission and discharge times
-        checkin_datetime = parsed_data.get("checkin.datetime")
-        checkout_datetime = parsed_data.get("checkout.datetime")
-        if checkin_datetime or checkout_datetime:
-            period = {}
-            if checkin_datetime:
-                period["start"] = checkin_datetime
-            if checkout_datetime:
-                period["end"] = checkout_datetime
-            fhir_encounter["period"] = period
-
-        # Add location/ward information
-        checkin_ward = parsed_data.get("checkin.ward")
-        checkout_ward = parsed_data.get("checkout.ward")
-        if checkin_ward or checkout_ward:
-            location = []
-            if checkin_ward:
-                location.append({
-                    "location": {
-                        "display": checkin_ward
-                    },
-                    "status": "active"
+            # Add performer if available (from checkout medic)
+            checkout_medic = parsed_data.get("checkout.medic")
+            if checkout_medic:
+                fhir_encounter["participant"].append({
+                    "type": [
+                        {
+                            "coding": [
+                                {
+                                    "system": "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
+                                    "code": "ATND",
+                                    "display": "attender"
+                                }
+                            ]
+                        }
+                    ],
+                    "individual": {
+                        "display": checkout_medic
+                    }
                 })
-            if checkout_ward and checkout_ward != checkin_ward:
-                location.append({
-                    "location": {
-                        "display": checkout_ward
-                    },
-                    "status": "completed"
-                })
-            if location:
-                fhir_encounter["location"] = location
 
-        return fhir_encounter
+            # Add reason (admission diagnostic) if available
+            admission_diagnosis = parsed_data.get("checkin.diagnosis")
+            if admission_diagnosis:
+                fhir_encounter["reasonCode"] = [
+                    {
+                        "text": admission_diagnosis
+                    }
+                ]
+
+            # Add text summary if epicrisis exists
+            epicrisis = parsed_data.get("checkout.epicrisis")
+            if epicrisis:
+                # Also add as a note
+                fhir_encounter["note"] = [
+                    {
+                        "text": epicrisis
+                    }
+                ]
+
+            # Add diagnosis if available
+            if admission_diagnosis:
+                fhir_encounter["diagnosis"] = [
+                    {
+                        "condition": {
+                            "reference": f"Condition/admission-{encounter_id}",
+                            "display": admission_diagnosis
+                        },
+                        "use": {
+                            "coding": [
+                                {
+                                    "system": "http://terminology.hl7.org/CodeSystem/diagnosis-role",
+                                    "code": "AD",
+                                    "display": "Admission diagnosis"
+                                }
+                            ]
+                        }
+                    }
+                ]
+
+            # Add discharge diagnosis if available
+            discharge_diagnosis = parsed_data.get("checkout.diagnosis")
+            if discharge_diagnosis:
+                if "diagnosis" not in fhir_encounter:
+                    fhir_encounter["diagnosis"] = []
+                fhir_encounter["diagnosis"].append(
+                    {
+                        "condition": {
+                            "reference": f"Condition/discharge-{encounter_id}",
+                            "display": discharge_diagnosis
+                        },
+                        "use": {
+                            "coding": [
+                                {
+                                    "system": "http://terminology.hl7.org/CodeSystem/diagnosis-role",
+                                    "code": "DD",
+                                    "display": "Discharge diagnosis"
+                                }
+                            ]
+                        }
+                    }
+                )
+
+            # Add period for admission and discharge times
+            checkin_datetime = parsed_data.get("checkin.datetime")
+            checkout_datetime = parsed_data.get("checkout.datetime")
+            if checkin_datetime or checkout_datetime:
+                period = {}
+                if checkin_datetime:
+                    period["start"] = checkin_datetime
+                if checkout_datetime:
+                    period["end"] = checkout_datetime
+                fhir_encounter["period"] = period
+
+            # Add location/ward information
+            checkin_ward = parsed_data.get("checkin.ward")
+            checkout_ward = parsed_data.get("checkout.ward")
+            if checkin_ward or checkout_ward:
+                location = []
+                if checkin_ward:
+                    location.append({
+                        "location": {
+                            "display": checkin_ward
+                        },
+                        "status": "active"
+                    })
+                if checkout_ward and checkout_ward != checkin_ward:
+                    location.append({
+                        "location": {
+                            "display": checkout_ward
+                        },
+                        "status": "completed"
+                    })
+                if location:
+                    fhir_encounter["location"] = location
+
+            return fhir_encounter
+        except Exception as e:
+            logger.error(f"Error converting checkout data to FHIR: {e}")
+            return OperationOutcome.from_exception(e, code="exception")
