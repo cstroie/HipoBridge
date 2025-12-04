@@ -1843,7 +1843,7 @@ class HipoClientServiceRequest(HipoClient):
             data.set_error(str(e))
             return data
 
-    def fhir_response(self, parsed_data: HipoData[str, Any], **kwargs) -> Dict[str, Any]:
+    def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRServiceRequest, OperationOutcome]:
         """Convert parsed service request data to FHIR ServiceRequest resource.
 
         Transforms parsed service request data into a FHIR-compatible ServiceRequest
@@ -1855,7 +1855,7 @@ class HipoClientServiceRequest(HipoClient):
                      and 'id' for service request ID
 
         Returns:
-            FHIR ServiceRequest resource as dictionary
+            FHIR ServiceRequest resource or OperationOutcome in case of error
         """
         # Extract http_request from kwargs if available, otherwise use self.request
         http_request = kwargs.get('http_request', self.request)
@@ -1864,6 +1864,14 @@ class HipoClientServiceRequest(HipoClient):
         service_request_id = kwargs.get('id', '')
         
         try:
+            # Check for errors in parsed data
+            if parsed_data.get("status") == "error":
+                return OperationOutcome.from_error(
+                    message=parsed_data.get("message", "Error in parsed service request data"),
+                    code="processing",
+                    severity="error"
+                )
+
             # Create FHIR ServiceRequest resource using the FHIR class
             fhir_service_request = FHIRServiceRequest(
                 id=service_request_id,
@@ -1980,10 +1988,10 @@ class HipoClientServiceRequest(HipoClient):
                     # If parsing fails, keep the original string
                     fhir_service_request["authoredOn"] = request_datetime
 
-            return fhir_service_request.to_dict()
+            return fhir_service_request
         except Exception as e:
             logger.error(f"Error converting service request data: {e}")
-            return {}
+            return OperationOutcome.from_exception(e, code="exception")
 
 
 class HipoClientServiceRequestSearch(HipoClientServiceRequest):
