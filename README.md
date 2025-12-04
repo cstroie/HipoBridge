@@ -1,6 +1,6 @@
 # HippoBridge
 
-HippoBridge is a medical data integration system that provides a modern web interface and FHIR-compatible API for accessing patient information from the Hipocrate medical system. It bridges the gap between legacy medical systems and modern healthcare data standards.
+HippoBridge is a medical data integration system that provides a modern web interface and FHIR-compatible API for accessing patient information from the Hipocrate medical system. It bridges the gap between legacy medical systems and modern healthcare data standards, enabling interoperability through standardized FHIR resources while providing both programmatic and user-friendly access to medical data.
 
 ## Features
 
