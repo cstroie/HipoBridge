@@ -159,20 +159,6 @@ HEADERS = {
 }
 
 
-def contains_any_word(string, *words):
-    """
-    Check if any of the specified words are present in the given string.
-
-    Args:
-        string: String to search in
-        *words: Variable number of words to search for
-
-    Returns:
-        bool: True if any word is found in the string, False otherwise
-    """
-    return any(i in string.lower() for i in words)
-
-
 def identify_study_type_and_region(desc: str) -> tuple:
     """
     Identify the study type and anatomical region from the study description.
@@ -214,7 +200,7 @@ def identify_study_type_and_region(desc: str) -> tuple:
     # Identify region based on keywords
     region = 'unknown'
     for region_key, keywords in region_rules.items():
-        if contains_any_word(desc_lower, *keywords):
+        if any(i in desc_lower for i in keywords):
             region = region_key
             break
     
@@ -275,36 +261,6 @@ def parse_date_time(date_str: str) -> Optional[datetime]:
     except (ValueError, IndexError, TypeError):
         # If parsing fails, return None
         return None
-
-
-def error_response(message: str, status_code: int = 400, details: Dict[str, Any] = None) -> web.Response:
-    """Create a standardized error response for web API endpoints.
-
-    Generates consistent JSON error responses with appropriate logging based
-    on the HTTP status code (error level for 5xx, warning for 4xx).
-
-    Args:
-        message: Error message to include in response
-        status_code: HTTP status code (default: 400)
-        details: Additional error details to include in response
-
-    Returns:
-        Standardized JSON error response as web.Response
-    """
-    if status_code >= 500:
-        logger.error(f"{message}")
-    else:
-        logger.warning(f"{message}")
-    # Build response data
-    response_data = {
-        "status": "error",
-        "message": message
-    }
-    # Include additional details if provided
-    if details:
-        response_data["details"] = details
-    # Return JSON response with appropriate status code
-    return web.json_response(response_data, status=status_code)
 
 
 
@@ -1090,13 +1046,13 @@ class HipoClient:
 
         # Make the authenticated request
         start_time = datetime.now()
-        response_text, success, error_response = await self.make_authenticated_request(
+        response_text, error_response = await self.make_authenticated_request(
             current_url, "POST", data, self.username, self.password
         )
         duration = (datetime.now() - start_time).total_seconds()
 
         # Check for errors in the response
-        if not success:
+        if error_response:
             error_msg = error_response.get("message", "Unknown error") if isinstance(error_response, dict) else str(error_response)
             return None, error_msg
         logger.info(f"Response received in {duration:.2f} seconds")
@@ -1130,13 +1086,13 @@ class HipoClient:
         while redirect_count < max_redirects:
             # Make the authenticated request
             start_time = datetime.now()
-            response_text, success, error_response = await self.make_authenticated_request(
+            response_text, error_response = await self.make_authenticated_request(
                 current_url, "GET", None, self.username, self.password
             )
             duration = (datetime.now() - start_time).total_seconds()
 
             # Check for errors in the response
-            if not success:
+            if error_response:
                 error_msg = error_response.get("message", "Unknown error") if isinstance(error_response, dict) else str(error_response)
                 return None, error_msg
             logger.info(f"Page retrieved in {duration:.2f} seconds")
@@ -1224,11 +1180,11 @@ class HipoClient:
         url = self.request_url.format(**kwargs)
         try:
             # Retrieve the page
-            response_text, success, error_response = await self.get_page(url, max_redirects)
+            response_text, error_message = await self.get_page(url, max_redirects)
 
             # Check for errors in the response
-            if not success:
-                data.set_error(error_response)
+            if error_message:
+                data.set_error(error_message)
                 return data
 
             # Parse the data using the parser function
@@ -1292,17 +1248,17 @@ class HipoClient:
         url = self.request_url.format(**kwargs)
         try:
             # Retrieve the page
-            response_text, success, error_response = await self.get_page(url, max_redirects)
+            response_text, error_message = await self.get_page(url, max_redirects)
 
             # Check for errors in the response
-            if not success:
-                return f"Error: {error_response}"
+            if error_message:
+                return f"Page error: {error_message}"
 
             # Return the raw HTML content
             return response_text
 
         except Exception as e:
-            return f"Error: Data retrieval failed - {str(e)}"
+            return f"Page retrieval failed: {str(e)}"
 
 
 
@@ -1695,11 +1651,11 @@ class HipoClientPatientSearch(HipoClientPatient):
 
         try:
             # Post the request
-            response_text, success, error_response = await self.post_form(self.request_url, search_data)
+            response_text, error_message = await self.post_form(self.request_url, search_data)
 
             # Check for errors in the response
-            if not success:
-                data.set_error(error_response.get("message", "Unknown error during search"))
+            if error_message:
+                data.set_error(error_message)
                 return data
 
             # Parse the data using the patient parser function, for a single patient
@@ -2095,11 +2051,11 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
         
         try:
             # Retrieve the page
-            response_text, success, error_response = await self.get_page(url)
+            response_text, error_message = await self.get_page(url)
 
             # Check for errors in the response
-            if not success:
-                data.set_error(error_response)
+            if error_message:
+                data.set_error(error_message)
                 return data
 
             # Parse the data using the parser function
