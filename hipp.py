@@ -214,6 +214,11 @@ async def get_patient(request):
     # Create a new HipoClient instance with credentials
     client = HipoClientPatient(SERVICE_URL, request)
 
+    # Check if debug response is requested
+    debug_resp = await web_debug_response(client, request, id=id)
+    if debug_resp:
+        return debug_resp
+
     # Retrieve and parse the page
     parsed_data = await client.fetch_and_parse(id=id)
 
@@ -349,6 +354,11 @@ async def get_request(request):
     # Create a new HipoClient instance
     client = HipoClientServiceRequest(SERVICE_URL, request)
 
+    # Check if debug response is requested
+    debug_resp = await web_debug_response(client, request, id=id)
+    if debug_resp:
+        return debug_resp
+
     # Retrieve and parse the page
     parsed_data = await client.fetch_and_parse(id=id)
 
@@ -410,6 +420,11 @@ async def get_study(request):
 
     # Create a new HipoClient instance
     client = HipoClientImagingStudy(SERVICE_URL, request)
+
+    # Check if debug response is requested
+    debug_resp = await web_debug_response(client, request, id=id)
+    if debug_resp:
+        return debug_resp
 
     # Retrieve and parse the page
     parsed_data = await client.fetch_and_parse(id=id)
@@ -533,6 +548,11 @@ async def get_checkout(request):
 
     # Create a new HipoClient instance
     client = HipoClientCheckout(SERVICE_URL, request)
+
+    # Check if debug response is requested
+    debug_resp = await web_debug_response(client, request, id=id)
+    if debug_resp:
+        return debug_resp
 
     # Retrieve and parse the page
     parsed_data = await client.fetch_and_parse(id=id)
