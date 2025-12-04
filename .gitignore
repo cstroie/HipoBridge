@@ -1,3 +1,4 @@
 .aider*
 local.cfg
 samples/*
+__pycache__
