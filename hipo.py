@@ -1394,7 +1394,7 @@ class HipoClientPatient(HipoClient):
             data.set_error(str(e))
             return data
 
-    def fhir_response(self, parsed_data: HipoData[str, Any], **kwargs) -> Dict[str, Any]:
+    def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRPatient, OperationOutcome]:
         """Convert parsed patient data to FHIR Patient resource.
 
         Transforms parsed patient data into a FHIR-compatible Patient
@@ -1406,7 +1406,7 @@ class HipoClientPatient(HipoClient):
                      and 'id' for patient ID
 
         Returns:
-            FHIR Patient resource as dictionary
+            FHIR Patient resource or OperationOutcome in case of error
         """
         # Extract http_request from kwargs if available, otherwise use self.request
         http_request = kwargs.get('http_request', self.request)
@@ -1415,6 +1415,14 @@ class HipoClientPatient(HipoClient):
         patient_id = kwargs.get('id', '')
         
         try:
+            # Check for errors in parsed data
+            if parsed_data.get("status") == "error":
+                return OperationOutcome.from_error(
+                    message=parsed_data.get("message", "Error in parsed patient data"),
+                    code="processing",
+                    severity="error"
+                )
+
             # Use already extracted family name and given name if available
             family_name = parsed_data.get("patient.family_name", "")
             given_names = [parsed_data.get("patient.given_name", "")] if parsed_data.get("patient.given_name") else []
@@ -1544,12 +1552,12 @@ class HipoClientPatient(HipoClient):
             if identifiers:
                 fhir_patient["identifier"] = identifiers
 
-            # Return the FHIR Patient resource as dict
-            return fhir_patient.to_dict()
+            # Return the FHIR Patient resource
+            return fhir_patient
 
         except Exception as e:
             logger.error(f"Error converting patient data to FHIR: {e}")
-            return {}
+            return OperationOutcome.from_exception(e, code="exception")
 
 
 class HipoClientPatientSearch(HipoClientPatient):
