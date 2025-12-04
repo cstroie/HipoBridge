@@ -53,74 +53,74 @@ class Coding(Resource):
 
 
 class CodeableReference(Resource):
-    def __init__(self, concept: Optional[Dict[str, Any]] = None, reference: Optional[Dict[str, Any]] = None):
-        data = {
-            "concept": concept,         # Reference to a concept (by class)
-            "reference": reference      # Reference to a resource (by instance)
-        }
-        super().__init__(data)
+    def __init__(self, concept: Optional[Dict[str, Any]] = None, reference: Optional[Dict[str, Any]] = None, **kwargs):
+        super().__init__(
+            concept=concept,         # Reference to a concept (by class)
+            reference=reference,     # Reference to a resource (by instance)
+            **kwargs
+        )
 
 
 class CodeableConcept(Resource):
-    def __init__(self, coding: Optional[List[Dict[str, Any]]] = None, text: Optional[str] = None):
-        data = {
-            "coding": coding,           # Code defined by a terminology system
-            "text": text                # Plain text representation of the concept
-        }
-        super().__init__(data)
+    def __init__(self, coding: Optional[List[Dict[str, Any]]] = None, text: Optional[str] = None, **kwargs):
+        super().__init__(
+            coding=coding,           # Code defined by a terminology system
+            text=text,               # Plain text representation of the concept
+            **kwargs
+        )
 
 
 class Identifier(Resource):
     def __init__(self, use: Optional[str] = None, type: Optional[Dict[str, Any]] = None, 
                  system: Optional[str] = None, value: Optional[str] = None,
-                 period: Optional[Dict[str, Any]] = None, assigner: Optional[Dict[str, Any]] = None):
-        data = {
-            "use": use,                 # usual | official | temp | secondary | old (If known)
-            "type": type,               # Description of identifier
-            "system": system,           # The namespace for the identifier value
-            "value": value,             # The value that is unique
-            "period": period,           # Time period when id is/was valid for use
-            "assigner": assigner        # Organization that issued id (may be just text)
-        }
-        super().__init__(data)
+                 period: Optional[Dict[str, Any]] = None, assigner: Optional[Dict[str, Any]] = None, **kwargs):
+        super().__init__(
+            use=use,                 # usual | official | temp | secondary | old (If known)
+            type=type,               # Description of identifier
+            system=system,           # The namespace for the identifier value
+            value=value,             # The value that is unique
+            period=period,           # Time period when id is/was valid for use
+            assigner=assigner,       # Organization that issued id (may be just text)
+            **kwargs
+        )
 
 
 class HumanName(Resource):
     def __init__(self, use: Optional[str] = None, text: Optional[str] = None, 
                  family: Optional[str] = None, given: Optional[List[str]] = None,
                  prefix: Optional[List[str]] = None, suffix: Optional[List[str]] = None,
-                 period: Optional[Dict[str, Any]] = None):
-        data = {
-            "use": use,                 # usual | official | temp | nickname | anonymous | old | maiden
-            "text": text,               # Text representation of the full name
-            "family": family,           # Family name (often called 'Surname')
-            "given": given,             # Given names (not always 'first'). Includes middle names
-            "prefix": prefix,           # Parts that come before the name
-            "suffix": suffix,           # Parts that come after the name
-            "period": period            # Time period when name was/is in use
-        }
-        super().__init__(data)
+                 period: Optional[Dict[str, Any]] = None, **kwargs):
+        super().__init__(
+            use=use,                 # usual | official | temp | nickname | anonymous | old | maiden
+            text=text,               # Text representation of the full name
+            family=family,           # Family name (often called 'Surname')
+            given=given,             # Given names (not always 'first'). Includes middle names
+            prefix=prefix,           # Parts that come before the name
+            suffix=suffix,           # Parts that come after the name
+            period=period,           # Time period when name was/is in use
+            **kwargs
+        )
 
 
 class Reference(Resource):
     def __init__(self, reference: Optional[str] = None, type: Optional[str] = None,
-                 identifier: Optional[Dict[str, Any]] = None, display: Optional[str] = None):
-        data = {
-            "reference": reference,     # Literal reference, Relative, internal or absolute URL
-            "type": type,               # Type the reference refers to (e.g. "Patient") - must be a resource in resources
-            "identifier": identifier,   # Logical reference, when literal reference is not known
-            "display": display          # Text alternative for the resource
-        }
-        super().__init__(data)
+                 identifier: Optional[Dict[str, Any]] = None, display: Optional[str] = None, **kwargs):
+        super().__init__(
+            reference=reference,     # Literal reference, Relative, internal or absolute URL
+            type=type,               # Type the reference refers to (e.g. "Patient") - must be a resource in resources
+            identifier=identifier,   # Logical reference, when literal reference is not known
+            display=display,         # Text alternative for the resource
+            **kwargs
+        )
 
 
 class Period(Resource):
-    def __init__(self, start: Optional[str] = None, end: Optional[str] = None):
-        data = {
-            "start": start,             # Starting time with inclusive boundary
-            "end": end                  # End time with inclusive boundary, if not ongoing
-        }
-        super().__init__(data)
+    def __init__(self, start: Optional[str] = None, end: Optional[str] = None, **kwargs):
+        super().__init__(
+            start=start,             # Starting time with inclusive boundary
+            end=end,                 # End time with inclusive boundary, if not ongoing
+            **kwargs
+        )
 
 
 class Address(Resource):
@@ -128,46 +128,46 @@ class Address(Resource):
                  text: Optional[str] = None, line: Optional[List[str]] = None,
                  city: Optional[str] = None, district: Optional[str] = None,
                  state: Optional[str] = None, postalCode: Optional[str] = None,
-                 country: Optional[str] = None, period: Optional[Dict[str, Any]] = None):
-        data = {
-            "use": use,                 # home | work | temp | old | billing - purpose of this address
-            "type": type,               # postal | physical | both
-            "text": text,               # Text representation of the address
-            "line": line,               # Street name, number, direction & P.O. Box etc.
-            "city": city,               # Name of city, town etc.
-            "district": district,       # District name (aka county)
-            "state": state,             # Sub-unit of country (abbreviations ok)
-            "postalCode": postalCode,   # Postal code for area
-            "country": country,         # Country (e.g. may be ISO 3166 2 or 3 letter code)
-            "period": period            # Time period when address was/is in use
-        }
-        super().__init__(data)
+                 country: Optional[str] = None, period: Optional[Dict[str, Any]] = None, **kwargs):
+        super().__init__(
+            use=use,                 # home | work | temp | old | billing - purpose of this address
+            type=type,               # postal | physical | both
+            text=text,               # Text representation of the address
+            line=line,               # Street name, number, direction & P.O. Box etc.
+            city=city,               # Name of city, town etc.
+            district=district,       # District name (aka county)
+            state=state,             # Sub-unit of country (abbreviations ok)
+            postalCode=postalCode,   # Postal code for area
+            country=country,         # Country (e.g. may be ISO 3166 2 or 3 letter code)
+            period=period,           # Time period when address was/is in use
+            **kwargs
+        )
 
 
 class ContactPoint(Resource):
     def __init__(self, system: Optional[str] = None, value: Optional[str] = None,
                  use: Optional[str] = None, rank: Optional[int] = None,
-                 period: Optional[Dict[str, Any]] = None):
-        data = {
-            "system": system,           # phone | fax | email | pager | url | sms | other
-            "value": value,             # The actual contact point details
-            "use": use,                 # home | work | temp | old | mobile - purpose of this contact point
-            "rank": rank,               # Specify preferred order of use (1 = highest)
-            "period": period            # Time period when the contact point was/is in use
-        }
-        super().__init__(data)
+                 period: Optional[Dict[str, Any]] = None, **kwargs):
+        super().__init__(
+            system=system,           # phone | fax | email | pager | url | sms | other
+            value=value,             # The actual contact point details
+            use=use,                 # home | work | temp | old | mobile - purpose of this contact point
+            rank=rank,               # Specify preferred order of use (1 = highest)
+            period=period,           # Time period when the contact point was/is in use
+            **kwargs
+        )
 
 
 class Annotation(Resource):
     def __init__(self, authorReference: Optional[Dict[str, Any]] = None, authorString: Optional[str] = None,
-                 time: Optional[str] = None, text: Optional[str] = None):
-        data = {
-            "authorReference": authorReference,  # Individual responsible for the annotation
-            "authorString": authorString,        # Individual responsible for the annotation
-            "time": time,                        # When the annotation was made
-            "text": text                         # The annotation - text content (as markdown)
-        }
-        super().__init__(data)
+                 time: Optional[str] = None, text: Optional[str] = None, **kwargs):
+        super().__init__(
+            authorReference=authorReference,  # Individual responsible for the annotation
+            authorString=authorString,        # Individual responsible for the annotation
+            time=time,                        # When the annotation was made
+            text=text,                        # The annotation - text content (as markdown)
+            **kwargs
+        )
 
 
 class Patient(Resource):
@@ -190,30 +190,31 @@ class Patient(Resource):
                  communication: Optional[List[Dict[str, Any]]] = None,
                  generalPractitioner: Optional[List[Dict[str, Any]]] = None,
                  managingOrganization: Optional[Dict[str, Any]] = None,
-                 link: Optional[List[Dict[str, Any]]] = None):
-        data = {
-            "resourceType": "Patient",                          # Resource type
-            "id": id,                                           # Logical id of this artifact
-            "identifier": identifier,                           # An identifier for this patient
-            "active": active,                                   # Whether this patient's record is in active use
-            "name": name,                                       # A name associated with the patient
-            "telecom": telecom,                                 # A contact detail for the individual
-            "gender": gender,                                   # male | female | other | unknown
-            "birthDate": birthDate,                             # The date of birth for the individual
-            "deceasedBoolean": deceasedBoolean,                 # Indicates if the individual is deceased
-            "deceasedDateTime": deceasedDateTime,               # Indicates when the individual died
-            "address": address,                                 # An address for the individual
-            "maritalStatus": maritalStatus,                     # Marital (civil) status of a patient
-            "multipleBirthBoolean": multipleBirthBoolean,       # Whether patient is part of a multiple birth
-            "multipleBirthInteger": multipleBirthInteger,       # Whether patient is part of a multiple birth
-            "photo": photo,                                     # Image of the patient
-            "contact": contact,                                 # A contact party for the patient
-            "communication": communication,                     # A language which may be used to communicate with the patient
-            "generalPractitioner": generalPractitioner,         # Patient's nominated primary care provider
-            "managingOrganization": managingOrganization,       # Organization that is the custodian of the patient record
-            "link": link                                        # Link to another patient resource
-        }
-        super().__init__(data)
+                 link: Optional[List[Dict[str, Any]]] = None,
+                 **kwargs):
+        super().__init__(
+            resourceType="Patient",                          # Resource type
+            id=id,                                           # Logical id of this artifact
+            identifier=identifier,                           # An identifier for this patient
+            active=active,                                   # Whether this patient's record is in active use
+            name=name,                                       # A name associated with the patient
+            telecom=telecom,                                 # A contact detail for the individual
+            gender=gender,                                   # male | female | other | unknown
+            birthDate=birthDate,                             # The date of birth for the individual
+            deceasedBoolean=deceasedBoolean,                 # Indicates if the individual is deceased
+            deceasedDateTime=deceasedDateTime,               # Indicates when the individual died
+            address=address,                                 # An address for the individual
+            maritalStatus=maritalStatus,                     # Marital (civil) status of a patient
+            multipleBirthBoolean=multipleBirthBoolean,       # Whether patient is part of a multiple birth
+            multipleBirthInteger=multipleBirthInteger,       # Whether patient is part of a multiple birth
+            photo=photo,                                     # Image of the patient
+            contact=contact,                                 # A contact party for the patient
+            communication=communication,                     # A language which may be used to communicate with the patient
+            generalPractitioner=generalPractitioner,         # Patient's nominated primary care provider
+            managingOrganization=managingOrganization,       # Organization that is the custodian of the patient record
+            link=link,                                       # Link to another patient resource
+            **kwargs
+        )
 
 
 class Practitioner(Resource):
@@ -229,22 +230,23 @@ class Practitioner(Resource):
                  address: Optional[List[Dict[str, Any]]] = None,
                  photo: Optional[List[Dict[str, Any]]] = None,
                  qualification: Optional[List[Dict[str, Any]]] = None,
-                 communication: Optional[List[Dict[str, Any]]] = None):
-        data = {
-            "identifier": identifier,                           # An identifier for the person as this agent
-            "active": active,                                   # Whether this practitioner's record is in active use
-            "name": name,                                       # The name(s) associated with the practitioner
-            "telecom": telecom,                                 # A contact detail for the practitioner (that apply to all roles)
-            "gender": gender,                                   # male | female | other | unknown
-            "birthDate": birthDate,                             # The date  on which the practitioner was born
-            "deceasedBoolean": deceasedBoolean,                 # Indicates if the practitioner is deceased or not
-            "deceasedDateTime": deceasedDateTime,               # Indicates if the practitioner is deceased or not
-            "address": address,                                 # Address(es) of the practitioner that are not role specific (typically home address)
-            "photo": photo,                                     # Image of the person
-            "qualification": qualification,                     # Qualifications, certifications, accreditations, licenses, training, etc.
-            "communication": communication                      # A language which may be used to communicate with the practitioner
-        }
-        super().__init__(data)
+                 communication: Optional[List[Dict[str, Any]]] = None,
+                 **kwargs):
+        super().__init__(
+            identifier=identifier,                           # An identifier for the person as this agent
+            active=active,                                   # Whether this practitioner's record is in active use
+            name=name,                                       # The name(s) associated with the practitioner
+            telecom=telecom,                                 # A contact detail for the practitioner (that apply to all roles)
+            gender=gender,                                   # male | female | other | unknown
+            birthDate=birthDate,                             # The date  on which the practitioner was born
+            deceasedBoolean=deceasedBoolean,                 # Indicates if the practitioner is deceased or not
+            deceasedDateTime=deceasedDateTime,               # Indicates if the practitioner is deceased or not
+            address=address,                                 # Address(es) of the practitioner that are not role specific (typically home address)
+            photo=photo,                                     # Image of the person
+            qualification=qualification,                     # Qualifications, certifications, accreditations, licenses, training, etc.
+            communication=communication,                     # A language which may be used to communicate with the practitioner
+            **kwargs
+        )
 
 
 class OrderDetail(Resource):
@@ -252,14 +254,15 @@ class OrderDetail(Resource):
                  parameterFocusCodeableConcept: Optional[Dict[str, Any]] = None,
                  parameterFocusReference: Optional[Dict[str, Any]] = None,
                  parameterFocusCanonical: Optional[str] = None,
-                 parameter: Optional[List[Dict[str, Any]]] = None):
-        data = {
-            "parameterFocusCodeableConcept": parameterFocusCodeableConcept,  # The context of the order details by reference
-            "parameterFocusReference": parameterFocusReference,              # The context of the order details by reference
-            "parameterFocusCanonical": parameterFocusCanonical,              # The context of the order details by reference
-            "parameter": parameter                                           # The parameter details for the service being requested
-        }
-        super().__init__(data)
+                 parameter: Optional[List[Dict[str, Any]]] = None,
+                 **kwargs):
+        super().__init__(
+            parameterFocusCodeableConcept=parameterFocusCodeableConcept,  # The context of the order details by reference
+            parameterFocusReference=parameterFocusReference,              # The context of the order details by reference
+            parameterFocusCanonical=parameterFocusCanonical,              # The context of the order details by reference
+            parameter=parameter,                                           # The parameter details for the service being requested
+            **kwargs
+        )
 
 
 class ServiceRequest(Resource):
@@ -300,48 +303,49 @@ class ServiceRequest(Resource):
                  bodyStructure: Optional[Dict[str, Any]] = None,
                  note: Optional[List[Dict[str, Any]]] = None,
                  patientInstruction: Optional[List[Dict[str, Any]]] = None,
-                 relevantHistory: Optional[List[Dict[str, Any]]] = None):
-        data = {
-            "resourceType": "ServiceRequest",                   # Resource type
-            "id": id,                                           # Logical id of this artifact
-            "identifier": identifier,                           # Identifiers assigned to this order
-            "basedOn": basedOn,                                 # What request fulfills
-            "replaces": replaces,                               # What request replaces
-            "requisition": requisition,                         # Composite Request ID
-            "status": status,                                   # draft | active | on-hold | entered-in-error | ended | completed | revoked | unknown
-            "statusReason": statusReason,                       # Reason for current status
-            "intent": intent,                                   # proposal | solicit-offer | offer-response | plan | directive | order | original-order | reflex-order | filler-order | instance-order | option
-            "category": category,                               # Classification of service
-            "priority": priority,                               # routine | urgent | asap | stat
-            "doNotPerform": doNotPerform,                       # True if service/procedure should not be performed
-            "code": code,                                       # What is being requested/ordered
-            "orderDetail": orderDetail,                         # Additional information about the request
-            "quantityQuantity": quantityQuantity,               # Service amount
-            "quantityRatio": quantityRatio,                     # Service amount
-            "quantityRange": quantityRange,                     # Service amount
-            "subject": subject,                                 # Individual or Entity the service is ordered for
-            "focus": focus,                                     # What the service request is about, when it is not about the subject of record
-            "encounter": encounter,                             # Encounter in which the request was created
-            "occurrenceDateTime": occurrenceDateTime,           # When service should occur
-            "occurrencePeriod": occurrencePeriod,               # When service should occur
-            "occurrenceTiming": occurrenceTiming,               # When service should occur
-            "asNeeded": asNeeded,                               # Perform the service "as needed"
-            "asNeededFor": asNeededFor,                         # Specified criteria for the service
-            "authoredOn": authoredOn,                           # Date request signed
-            "requester": requester,                             # Who/what is requesting service
-            "performerType": performerType,                     # Performer role
-            "performer": performer,                             # Requested performer
-            "location": location,                               # Requested location
-            "reason": reason,                                   # Reason or indication for requesting the service
-            "insurance": insurance,                             # Associated insurance coverage
-            "supportingInfo": supportingInfo,                   # Additional clinical information
-            "specimen": specimen,                               # Procedure Samples
-            "bodyStructure": bodyStructure,                     # BodyStructure-based location on the body
-            "note": note,                                       # Comments
-            "patientInstruction": patientInstruction,           # Patient or consumer-oriented instructions
-            "relevantHistory": relevantHistory                  # Request provenance
-        }
-        super().__init__(data)
+                 relevantHistory: Optional[List[Dict[str, Any]]] = None,
+                 **kwargs):
+        super().__init__(
+            resourceType="ServiceRequest",                   # Resource type
+            id=id,                                           # Logical id of this artifact
+            identifier=identifier,                           # Identifiers assigned to this order
+            basedOn=basedOn,                                 # What request fulfills
+            replaces=replaces,                               # What request replaces
+            requisition=requisition,                         # Composite Request ID
+            status=status,                                   # draft | active | on-hold | entered-in-error | ended | completed | revoked | unknown
+            statusReason=statusReason,                       # Reason for current status
+            intent=intent,                                   # proposal | solicit-offer | offer-response | plan | directive | order | original-order | reflex-order | filler-order | instance-order | option
+            category=category,                               # Classification of service
+            priority=priority,                               # routine | urgent | asap | stat
+            doNotPerform=doNotPerform,                       # True if service/procedure should not be performed
+            code=code,                                       # What is being requested/ordered
+            orderDetail=orderDetail,                         # Additional information about the request
+            quantityQuantity=quantityQuantity,               # Service amount
+            quantityRatio=quantityRatio,                     # Service amount
+            quantityRange=quantityRange,                     # Service amount
+            subject=subject,                                 # Individual or Entity the service is ordered for
+            focus=focus,                                     # What the service request is about, when it is not about the subject of record
+            encounter=encounter,                             # Encounter in which the request was created
+            occurrenceDateTime=occurrenceDateTime,           # When service should occur
+            occurrencePeriod=occurrencePeriod,               # When service should occur
+            occurrenceTiming=occurrenceTiming,               # When service should occur
+            asNeeded=asNeeded,                               # Perform the service "as needed"
+            asNeededFor=asNeededFor,                         # Specified criteria for the service
+            authoredOn=authoredOn,                           # Date request signed
+            requester=requester,                             # Who/what is requesting service
+            performerType=performerType,                     # Performer role
+            performer=performer,                             # Requested performer
+            location=location,                               # Requested location
+            reason=reason,                                   # Reason or indication for requesting the service
+            insurance=insurance,                             # Associated insurance coverage
+            supportingInfo=supportingInfo,                   # Additional clinical information
+            specimen=specimen,                               # Procedure Samples
+            bodyStructure=bodyStructure,                     # BodyStructure-based location on the body
+            note=note,                                       # Comments
+            patientInstruction=patientInstruction,           # Patient or consumer-oriented instructions
+            relevantHistory=relevantHistory,                 # Request provenance
+            **kwargs
+        )
 
 
 class Condition(Resource):
@@ -371,37 +375,38 @@ class Condition(Resource):
                  asserter: Optional[Dict[str, Any]] = None,
                  stage: Optional[List[Dict[str, Any]]] = None,
                  evidence: Optional[List[Dict[str, Any]]] = None,
-                 note: Optional[List[Dict[str, Any]]] = None):
-        data = {
-            "resourceType": "Condition",                        # Resource type
-            "identifier": identifier,                           # External Ids for this condition
-            "clinicalStatus": clinicalStatus,                   # active | recurrence | relapse | inactive | remission | resolved | unknown
-            "verificationStatus": verificationStatus,           # unconfirmed | provisional | differential | confirmed | refuted | entered-in-error
-            "category": category,                               # problem-list-item | encounter-diagnosis
-            "severity": severity,                               # Subjective severity of condition
-            "code": code,                                       # Identification of the condition, problem or diagnosis
-            "bodySite": bodySite,                               # Anatomical location, if relevant
-            "bodyStructure": bodyStructure,                     # Anatomical body structure
-            "subject": subject,                                 # Who has the condition?
-            "encounter": encounter,                             # The Encounter during which this Condition was created
-            "onsetDateTime": onsetDateTime,                     # Estimated or actual date, date-time, or age
-            "onsetAge": onsetAge,                               # Estimated or actual date, date-time, or age
-            "onsetPeriod": onsetPeriod,                         # Estimated or actual date, date-time, or age
-            "onsetRange": onsetRange,                           # Estimated or actual date, date-time, or age
-            "onsetString": onsetString,                         # Estimated or actual date, date-time, or age
-            "abatementDateTime": abatementDateTime,             # When in resolution/remission
-            "abatementAge": abatementAge,                       # When in resolution/remission
-            "abatementPeriod": abatementPeriod,                 # When in resolution/remission
-            "abatementRange": abatementRange,                   # When in resolution/remission
-            "abatementString": abatementString,                 # When in resolution/remission
-            "recordedDate": recordedDate,                       # Date condition was first recorded
-            "recorder": recorder,                               # Who recorded the condition
-            "asserter": asserter,                               # Person or device that asserts this condition
-            "stage": stage,                                     # Stage/grade, usually assessed formally
-            "evidence": evidence,                               # Supporting evidence for the condition
-            "note": note                                        # Additional information about the Condition
-        }
-        super().__init__(data)
+                 note: Optional[List[Dict[str, Any]]] = None,
+                 **kwargs):
+        super().__init__(
+            resourceType="Condition",                        # Resource type
+            identifier=identifier,                           # External Ids for this condition
+            clinicalStatus=clinicalStatus,                   # active | recurrence | relapse | inactive | remission | resolved | unknown
+            verificationStatus=verificationStatus,           # unconfirmed | provisional | differential | confirmed | refuted | entered-in-error
+            category=category,                               # problem-list-item | encounter-diagnosis
+            severity=severity,                               # Subjective severity of condition
+            code=code,                                       # Identification of the condition, problem or diagnosis
+            bodySite=bodySite,                               # Anatomical location, if relevant
+            bodyStructure=bodyStructure,                     # Anatomical body structure
+            subject=subject,                                 # Who has the condition?
+            encounter=encounter,                             # The Encounter during which this Condition was created
+            onsetDateTime=onsetDateTime,                     # Estimated or actual date, date-time, or age
+            onsetAge=onsetAge,                               # Estimated or actual date, date-time, or age
+            onsetPeriod=onsetPeriod,                         # Estimated or actual date, date-time, or age
+            onsetRange=onsetRange,                           # Estimated or actual date, date-time, or age
+            onsetString=onsetString,                         # Estimated or actual date, date-time, or age
+            abatementDateTime=abatementDateTime,             # When in resolution/remission
+            abatementAge=abatementAge,                       # When in resolution/remission
+            abatementPeriod=abatementPeriod,                 # When in resolution/remission
+            abatementRange=abatementRange,                   # When in resolution/remission
+            abatementString=abatementString,                 # When in resolution/remission
+            recordedDate=recordedDate,                       # Date condition was first recorded
+            recorder=recorder,                               # Who recorded the condition
+            asserter=asserter,                               # Person or device that asserts this condition
+            stage=stage,                                     # Stage/grade, usually assessed formally
+            evidence=evidence,                               # Supporting evidence for the condition
+            note=note,                                       # Additional information about the Condition
+            **kwargs
+        )
 
 
 class Procedure(Resource):
@@ -438,54 +443,56 @@ class Procedure(Resource):
                  note: Optional[List[Dict[str, Any]]] = None,
                  focalDevice: Optional[List[Dict[str, Any]]] = None,
                  used: Optional[List[Dict[str, Any]]] = None,
-                 supportingInfo: Optional[List[Dict[str, Any]]] = None):
-        data = {
-            "identifier": identifier,                           # External Identifiers for this procedure
-            "basedOn": basedOn,                                 # A request for this procedure
-            "partOf": partOf,                                   # Part of referenced event
-            "status": status,                                   # preparation | in-progress | not-done | on-hold | stopped | completed | entered-in-error | unknown
-            "statusReason": statusReason,                       # Reason for current status
-            "category": category,                               # Classification of the procedure
-            "code": code,                                       # Identification of the procedure
-            "subject": subject,                                 # Individual or entity the procedure was performed on
-            "focus": focus,                                     # Who is the target of the procedure when it is not the subject of record only
-            "encounter": encounter,                             # The Encounter during which this Procedure was created
-            "occurrenceDateTime": occurrenceDateTime,           # When the procedure occurred or is occurring
-            "occurrencePeriod": occurrencePeriod,               # When the procedure occurred or is occurring
-            "occurrenceString": occurrenceString,               # When the procedure occurred or is occurring
-            "occurrenceAge": occurrenceAge,                     # When the procedure occurred or is occurring
-            "occurrenceRange": occurrenceRange,                 # When the procedure occurred or is occurring
-            "occurrenceTiming": occurrenceTiming,               # When the procedure occurred or is occurring
-            "recorded": recorded,                               # When the procedure was first captured in the subject's record
-            "recorder": recorder,                               # Who recorded the procedure
-            "reportedBoolean": reportedBoolean,                 # Reported rather than primary record
-            "reportedReference": reportedReference,             # Reported rather than primary record
-            "performer": performer,                             # Who performed the procedure and what they did
-            "location": location,                               # Where the procedure happened
-            "reason": reason,                                   # The justification that the procedure was performed
-            "bodySite": bodySite,                               # Target body sites
-            "bodyStructure": bodyStructure,                     # Target body structure
-            "outcome": outcome,                                 # The result of procedure
-            "report": report,                                   # Any report resulting from the procedure
-            "complication": complication,                       # Complication following the procedure
-            "followUp": followUp,                               # Instructions for follow up
-            "note": note,                                       # Additional information about the procedure
-            "focalDevice": focalDevice,                         # Manipulated, implanted, or removed device
-            "used": used,                                       # Items used during procedure
-            "supportingInfo": supportingInfo                    # Extra information relevant to the procedure
-        }
-        super().__init__(data)
+                 supportingInfo: Optional[List[Dict[str, Any]]] = None,
+                 **kwargs):
+        super().__init__(
+            identifier=identifier,                           # External Identifiers for this procedure
+            basedOn=basedOn,                                 # A request for this procedure
+            partOf=partOf,                                   # Part of referenced event
+            status=status,                                   # preparation | in-progress | not-done | on-hold | stopped | completed | entered-in-error | unknown
+            statusReason=statusReason,                       # Reason for current status
+            category=category,                               # Classification of the procedure
+            code=code,                                       # Identification of the procedure
+            subject=subject,                                 # Individual or entity the procedure was performed on
+            focus=focus,                                     # Who is the target of the procedure when it is not the subject of record only
+            encounter=encounter,                             # The Encounter during which this Procedure was created
+            occurrenceDateTime=occurrenceDateTime,           # When the procedure occurred or is occurring
+            occurrencePeriod=occurrencePeriod,               # When the procedure occurred or is occurring
+            occurrenceString=occurrenceString,               # When the procedure occurred or is occurring
+            occurrenceAge=occurrenceAge,                     # When the procedure occurred or is occurring
+            occurrenceRange=occurrenceRange,                 # When the procedure occurred or is occurring
+            occurrenceTiming=occurrenceTiming,               # When the procedure occurred or is occurring
+            recorded=recorded,                               # When the procedure was first captured in the subject's record
+            recorder=recorder,                               # Who recorded the procedure
+            reportedBoolean=reportedBoolean,                 # Reported rather than primary record
+            reportedReference=reportedReference,             # Reported rather than primary record
+            performer=performer,                             # Who performed the procedure and what they did
+            location=location,                               # Where the procedure happened
+            reason=reason,                                   # The justification that the procedure was performed
+            bodySite=bodySite,                               # Target body sites
+            bodyStructure=bodyStructure,                     # Target body structure
+            outcome=outcome,                                 # The result of procedure
+            report=report,                                   # Any report resulting from the procedure
+            complication=complication,                       # Complication following the procedure
+            followUp=followUp,                               # Instructions for follow up
+            note=note,                                       # Additional information about the procedure
+            focalDevice=focalDevice,                         # Manipulated, implanted, or removed device
+            used=used,                                       # Items used during procedure
+            supportingInfo=supportingInfo,                   # Extra information relevant to the procedure
+            **kwargs
+        )
 
 
 class Performer(Resource):
     def __init__(self,
                  function: Optional[Dict[str, Any]] = None,
-                 actor: Optional[Dict[str, Any]] = None):
-        data = {
-            "function": function,     # Type of performance
-            "actor": actor            # Who performed imaging study
-        }
-        super().__init__(data)
+                 actor: Optional[Dict[str, Any]] = None,
+                 **kwargs):
+        super().__init__(
+            function=function,     # Type of performance
+            actor=actor,           # Who performed imaging study
+            **kwargs
+        )
 
 
 class SOPInstance(Resource):
@@ -493,14 +500,15 @@ class SOPInstance(Resource):
                  uid: Optional[str] = None,
                  sopClass: Optional[str] = None,
                  number: Optional[int] = None,
-                 title: Optional[str] = None):
-        data = {
-            "uid": uid,               # DICOM SOP Instance UID
-            "sopClass": sopClass,     # DICOM class type
-            "number": number,         # The number of this instance in the series
-            "title": title            # Name or title of the instance
-        }
-        super().__init__(data)
+                 title: Optional[str] = None,
+                 **kwargs):
+        super().__init__(
+            uid=uid,               # DICOM SOP Instance UID
+            sopClass=sopClass,     # DICOM class type
+            number=number,         # The number of this instance in the series
+            title=title,           # Name or title of the instance
+            **kwargs
+        )
 
 
 class Series(Resource):
@@ -515,32 +523,34 @@ class Series(Resource):
                  specimen: Optional[List[Dict[str, Any]]] = None,
                  started: Optional[str] = None,
                  performer: Optional[List[Dict[str, Any]]] = None,
-                 instance: Optional[List[Dict[str, Any]]] = None):
-        data = {
-            "uid": uid,                           # DICOM Series Instance UID
-            "number": number,                     # Numeric identifier of this series
-            "modality": modality,                 # The modality used for this series
-            "description": description,           # Series Description or Classification
-            "numberOfInstances": numberOfInstances,  # Number of Series Related Instances
-            "endpoint": endpoint,                 # Series access endpoint
-            "bodySite": bodySite,                 # Body part examined
-            "specimen": specimen,                 # Specimen imaged
-            "started": started,                   # When the series started
-            "performer": performer,               # Who performed the series
-            "instance": instance                  # A single SOP instance from the series
-        }
-        super().__init__(data)
+                 instance: Optional[List[Dict[str, Any]]] = None,
+                 **kwargs):
+        super().__init__(
+            uid=uid,                           # DICOM Series Instance UID
+            number=number,                     # Numeric identifier of this series
+            modality=modality,                 # The modality used for this series
+            description=description,           # Series Description or Classification
+            numberOfInstances=numberOfInstances,  # Number of Series Related Instances
+            endpoint=endpoint,                 # Series access endpoint
+            bodySite=bodySite,                 # Body part examined
+            specimen=specimen,                 # Specimen imaged
+            started=started,                   # When the series started
+            performer=performer,               # Who performed the series
+            instance=instance,                 # A single SOP instance from the series
+            **kwargs
+        )
 
 
 class SupportingInfo(Resource):
     def __init__(self,
                  type: Optional[Dict[str, Any]] = None,
-                 reference: Optional[Dict[str, Any]] = None):
-        data = {
-            "type": type,                         # Supporting information role code
-            "reference": reference                # Supporting information reference
-        }
-        super().__init__(data)
+                 reference: Optional[Dict[str, Any]] = None,
+                 **kwargs):
+        super().__init__(
+            type=type,                         # Supporting information role code
+            reference=reference,               # Supporting information reference
+            **kwargs
+        )
 
 
 class ImagingStudy(Resource):
@@ -561,28 +571,29 @@ class ImagingStudy(Resource):
                  description: Optional[str] = None,
                  numberOfSeries: Optional[int] = None,
                  numberOfInstances: Optional[int] = None,
-                 series: Optional[List[Dict[str, Any]]] = None):
-        data = {
-            "resourceType": "ImagingStudy",       # Resource type
-            "identifier": identifier,             # Business identifier for imaging study
-            "status": status,                     # registered | available | cancelled | entered-in-error | unknown | inactive
-            "modality": modality,                 # The distinct values for series' modalities
-            "subject": subject,                   # Who or what is the subject of the study
-            "encounter": encounter,               # Encounter with which this imaging study is associated
-            "started": started,                   # When the study was started
-            "basedOn": basedOn,                   # Fulfills plan or order
-            "procedure": procedure,               # Imaging performed procedure(s)
-            "referrer": referrer,                 # Referring physician
-            "endpoint": endpoint,                 # Study access endpoint
-            "location": location,                 # Where imaging study occurred
-            "reason": reason,                     # Why was imaging study performed?
-            "note": note,                         # Comments made about the imaging study
-            "description": description,           # Study Description or Classification
-            "numberOfSeries": numberOfSeries,     # Number of Study Related Series
-            "numberOfInstances": numberOfInstances,  # Number of Study Related Instances
-            "series": series                      # The set of Series belonging to the study
-        }
-        super().__init__(data)
+                 series: Optional[List[Dict[str, Any]]] = None,
+                 **kwargs):
+        super().__init__(
+            resourceType="ImagingStudy",       # Resource type
+            identifier=identifier,             # Business identifier for imaging study
+            status=status,                     # registered | available | cancelled | entered-in-error | unknown | inactive
+            modality=modality,                 # The distinct values for series' modalities
+            subject=subject,                   # Who or what is the subject of the study
+            encounter=encounter,               # Encounter with which this imaging study is associated
+            started=started,                   # When the study was started
+            basedOn=basedOn,                   # Fulfills plan or order
+            procedure=procedure,               # Imaging performed procedure(s)
+            referrer=referrer,                 # Referring physician
+            endpoint=endpoint,                 # Study access endpoint
+            location=location,                 # Where imaging study occurred
+            reason=reason,                     # Why was imaging study performed?
+            note=note,                         # Comments made about the imaging study
+            description=description,           # Study Description or Classification
+            numberOfSeries=numberOfSeries,     # Number of Study Related Series
+            numberOfInstances=numberOfInstances,  # Number of Study Related Instances
+            series=series,                     # The set of Series belonging to the study
+            **kwargs
+        )
 
 
 class DiagnosticReport(Resource):
@@ -613,38 +624,39 @@ class DiagnosticReport(Resource):
                  recomendation: Optional[List[Dict[str, Any]]] = None,
                  presentedForm: Optional[List[Dict[str, Any]]] = None,
                  communication: Optional[List[Dict[str, Any]]] = None,
-                 comparison: Optional[Dict[str, Any]] = None):
-        data = {
-            "resourceType": "DiagnosticReport",   # Resource type
-            "id": id,                             # Logical id of this artifact
-            "identifier": identifier,             # Business identifier for report
-            "basedOn": basedOn,                   # What was requested
-            "status": status,                     # registered | partial | preliminary | modified | final | amended | corrected | appended | cancelled | entered-in-error | unknown
-            "category": category,                 # Service category
-            "code": code,                         # Name/Code for this diagnostic report
-            "subject": subject,                   # The subject of the report - usually, but not always, the patient
-            "relatesTo": relatesTo,               # Related DiagnosticReports
-            "encounter": encounter,               # Encounter associated with the DiagnosticReport
-            "effectiveDateTime": effectiveDateTime,  # Clinically relevant time/time-period for the results
-            "effectivePeriod": effectivePeriod,   # Clinically relevant time/time-period for the results
-            "issued": issued,                     # DateTime this version was made
-            "procedure": procedure,               # The performed procedure(s) from which the report was produced
-            "performer": performer,               # Responsible Diagnostic Service
-            "resultsInterpreter": resultsInterpreter,  # Who analyzed and reported the conclusions and interpretations
-            "specimen": specimen,                 # Specimens this report is based on
-            "result": result,                     # Observations
-            "note": note,                         # Comments about the diagnostic report
-            "study": study,                       # Reference to full details of an analysis associated with the diagnostic report
-            "supportingInfo": supportingInfo,     # Additional information supporting the diagnostic report
-            "composition": composition,           # Reference to a Composition resource for the DiagnosticReport structure
-            "conclusion": conclusion,             # Clinical conclusion (interpretation) of test results
-            "conclusionCode": conclusionCode,     # Codes and/or references for the clinical conclusion of test results
-            "recomendation": recomendation,       # Recommendations based on findings and interpretations
-            "presentedForm": presentedForm,       # Entire report as issued
-            "communication": communication,       # Communication initiated during the reporting process
-            "comparison": comparison              # Prior data and findings for comparison
-        }
-        super().__init__(data)
+                 comparison: Optional[Dict[str, Any]] = None,
+                 **kwargs):
+        super().__init__(
+            resourceType="DiagnosticReport",   # Resource type
+            id=id,                             # Logical id of this artifact
+            identifier=identifier,             # Business identifier for report
+            basedOn=basedOn,                   # What was requested
+            status=status,                     # registered | partial | preliminary | modified | final | amended | corrected | appended | cancelled | entered-in-error | unknown
+            category=category,                 # Service category
+            code=code,                         # Name/Code for this diagnostic report
+            subject=subject,                   # The subject of the report - usually, but not always, the patient
+            relatesTo=relatesTo,               # Related DiagnosticReports
+            encounter=encounter,               # Encounter associated with the DiagnosticReport
+            effectiveDateTime=effectiveDateTime,  # Clinically relevant time/time-period for the results
+            effectivePeriod=effectivePeriod,   # Clinically relevant time/time-period for the results
+            issued=issued,                     # DateTime this version was made
+            procedure=procedure,               # The performed procedure(s) from which the report was produced
+            performer=performer,               # Responsible Diagnostic Service
+            resultsInterpreter=resultsInterpreter,  # Who analyzed and reported the conclusions and interpretations
+            specimen=specimen,                 # Specimens this report is based on
+            result=result,                     # Observations
+            note=note,                         # Comments about the diagnostic report
+            study=study,                       # Reference to full details of an analysis associated with the diagnostic report
+            supportingInfo=supportingInfo,     # Additional information supporting the diagnostic report
+            composition=composition,           # Reference to a Composition resource for the DiagnosticReport structure
+            conclusion=conclusion,             # Clinical conclusion (interpretation) of test results
+            conclusionCode=conclusionCode,     # Codes and/or references for the clinical conclusion of test results
+            recomendation=recomendation,       # Recommendations based on findings and interpretations
+            presentedForm=presentedForm,       # Entire report as issued
+            communication=communication,       # Communication initiated during the reporting process
+            comparison=comparison,             # Prior data and findings for comparison
+            **kwargs
+        )
 
 
 class Issue(Resource):
@@ -654,16 +666,17 @@ class Issue(Resource):
                  details: Optional[Dict[str, Any]] = None,
                  diagnostics: Optional[str] = None,
                  location: Optional[List[str]] = None,
-                 expression: Optional[List[str]] = None):
-        data = {
-            "severity": severity,           # fatal | error | warning | information | success
-            "code": code,                   # Error or warning code
-            "details": details,             # Additional details about the error
-            "diagnostics": diagnostics,     # Additional diagnostic information about the issue
-            "location": location,           # Deprecated: Path of element(s) related to issue
-            "expression": expression        # FHIRPath of element(s) related to issue
-        }
-        super().__init__(data)
+                 expression: Optional[List[str]] = None,
+                 **kwargs):
+        super().__init__(
+            severity=severity,           # fatal | error | warning | information | success
+            code=code,                   # Error or warning code
+            details=details,             # Additional details about the error
+            diagnostics=diagnostics,     # Additional diagnostic information about the issue
+            location=location,           # Deprecated: Path of element(s) related to issue
+            expression=expression,       # FHIRPath of element(s) related to issue
+            **kwargs
+        )
 
 
 class Encounter(Resource):
@@ -697,41 +710,42 @@ class Encounter(Resource):
                  specialArrangement: Optional[List[Dict[str, Any]]] = None,
                  specialCourtesy: Optional[List[Dict[str, Any]]] = None,
                  admission: Optional[Dict[str, Any]] = None,
-                 location: Optional[List[Dict[str, Any]]] = None):
-        data = {
-            "resourceType": "Encounter",              # Resource type
-            "id": id,                                 # Logical id of this artifact
-            "identifier": identifier,                 # Identifier(s) by which this encounter is known
-            "status": status,                         # planned | in-progress | on-hold | discharged | completed | cancelled | discontinued | entered-in-error | unknown
-            "businessStatus": businessStatus,         # A granular, workflows specific set of statuses that apply to the encounter
-            "class": class_,                          # Classification of patient encounter context - e.g. Inpatient, outpatient
-            "priority": priority,                     # Indicates the urgency of the encounter
-            "type": type,                             # Specific type of encounter (e.g. e-mail consultation, surgical day-care, ...)
-            "serviceType": serviceType,               # Specific type of service
-            "subject": subject,                       # The patient or group related to this encounter
-            "subjectStatus": subjectStatus,           # The current status of the subject in relation to the Encounter
-            "episodeOfCare": episodeOfCare,           # Episode(s) of care that this encounter should be recorded against
-            "basedOn": basedOn,                       # The request that initiated this encounter
-            "careTeam": careTeam,                     # The group(s) that are allocated to participate in this encounter
-            "partOf": partOf,                         # Another Encounter this encounter is part of
-            "serviceProvider": serviceProvider,       # The organization (facility) responsible for this encounter
-            "participant": participant,               # List of participants involved in the encounter
-            "appointment": appointment,               # The appointment that scheduled this encounter
-            "virtualService": virtualService,         # Connection details of a virtual service (e.g. conference call)
-            "actualPeriod": actualPeriod,             # The actual start and end time of the encounter
-            "plannedStartDate": plannedStartDate,     # The planned start date/time (or admission date) of the encounter
-            "plannedEndDate": plannedEndDate,         # The planned end date/time (or discharge date) of the encounter
-            "length": length,                         # Actual quantity of time the encounter lasted (less time absent)
-            "reason": reason,                         # The list of medical reasons that are expected to be addressed during the episode of care
-            "diagnosis": diagnosis,                   # The list of diagnosis relevant to this encounter
-            "account": account,                       # The set of accounts that may be used for billing for this Encounter
-            "dietPreference": dietPreference,         # Diet preferences reported by the patient
-            "specialArrangement": specialArrangement, # Wheelchair, translator, stretcher, etc
-            "specialCourtesy": specialCourtesy,       # Special courtesies (VIP, board member)
-            "admission": admission,                   # Details about the admission to a healthcare service
-            "location": location                      # List of locations where the patient has been
-        }
-        super().__init__(data)
+                 location: Optional[List[Dict[str, Any]]] = None,
+                 **kwargs):
+        super().__init__(
+            resourceType="Encounter",              # Resource type
+            id=id,                                 # Logical id of this artifact
+            identifier=identifier,                 # Identifier(s) by which this encounter is known
+            status=status,                         # planned | in-progress | on-hold | discharged | completed | cancelled | discontinued | entered-in-error | unknown
+            businessStatus=businessStatus,         # A granular, workflows specific set of statuses that apply to the encounter
+            class_=class_,                         # Classification of patient encounter context - e.g. Inpatient, outpatient
+            priority=priority,                     # Indicates the urgency of the encounter
+            type=type,                             # Specific type of encounter (e.g. e-mail consultation, surgical day-care, ...)
+            serviceType=serviceType,               # Specific type of service
+            subject=subject,                       # The patient or group related to this encounter
+            subjectStatus=subjectStatus,           # The current status of the subject in relation to the Encounter
+            episodeOfCare=episodeOfCare,           # Episode(s) of care that this encounter should be recorded against
+            basedOn=basedOn,                       # The request that initiated this encounter
+            careTeam=careTeam,                     # The group(s) that are allocated to participate in this encounter
+            partOf=partOf,                         # Another Encounter this encounter is part of
+            serviceProvider=serviceProvider,       # The organization (facility) responsible for this encounter
+            participant=participant,               # List of participants involved in the encounter
+            appointment=appointment,               # The appointment that scheduled this encounter
+            virtualService=virtualService,         # Connection details of a virtual service (e.g. conference call)
+            actualPeriod=actualPeriod,             # The actual start and end time of the encounter
+            plannedStartDate=plannedStartDate,     # The planned start date/time (or admission date) of the encounter
+            plannedEndDate=plannedEndDate,         # The planned end date/time (or discharge date) of the encounter
+            length=length,                         # Actual quantity of time the encounter lasted (less time absent)
+            reason=reason,                         # The list of medical reasons that are expected to be addressed during the episode of care
+            diagnosis=diagnosis,                   # The list of diagnosis relevant to this encounter
+            account=account,                       # The set of accounts that may be used for billing for this Encounter
+            dietPreference=dietPreference,         # Diet preferences reported by the patient
+            specialArrangement=specialArrangement, # Wheelchair, translator, stretcher, etc
+            specialCourtesy=specialCourtesy,       # Special courtesies (VIP, board member)
+            admission=admission,                   # Details about the admission to a healthcare service
+            location=location,                     # List of locations where the patient has been
+            **kwargs
+        )
 
 
 class Bundle(Resource):
@@ -744,20 +758,21 @@ class Bundle(Resource):
                  link: Optional[List[Dict[str, Any]]] = None,
                  entry: Optional[List[Dict[str, Any]]] = None,
                  signature: Optional[Dict[str, Any]] = None,
-                 issues: Optional[Dict[str, Any]] = None):
-        data = {
-            "resourceType": "Bundle",           # Resource type
-            "id": id,                           # Logical id of this artifact
-            "identifier": identifier,           # Persistent identifier for the bundle
-            "type": type,                       # document | message | transaction | transaction-response | batch | batch-response | history | searchset | collection | subscription-notification
-            "timestamp": timestamp,             # When the bundle was assembled
-            "total": total,                     # Total matches across all pages
-            "link": link,                       # Links related to this Bundle
-            "entry": entry,                     # Entry in the bundle - will have a resource or information
-            "signature": signature,             # Digital Signature (deprecated: use Provenance Signatures)
-            "issues": issues                    # OperationOutcome with issues about the Bundle
-        }
-        super().__init__(data)
+                 issues: Optional[Dict[str, Any]] = None,
+                 **kwargs):
+        super().__init__(
+            resourceType="Bundle",           # Resource type
+            id=id,                           # Logical id of this artifact
+            identifier=identifier,           # Persistent identifier for the bundle
+            type=type,                       # document | message | transaction | transaction-response | batch | batch-response | history | searchset | collection | subscription-notification
+            timestamp=timestamp,             # When the bundle was assembled
+            total=total,                     # Total matches across all pages
+            link=link,                       # Links related to this Bundle
+            entry=entry,                     # Entry in the bundle - will have a resource or information
+            signature=signature,             # Digital Signature (deprecated: use Provenance Signatures)
+            issues=issues,                   # OperationOutcome with issues about the Bundle
+            **kwargs
+        )
     
     def append_entry(self, resource: Resource, fullUrl: Optional[str] = None, 
                      search: Optional[Dict[str, Any]] = None, request: Optional[Dict[str, Any]] = None,
@@ -803,13 +818,14 @@ class Bundle(Resource):
 class OperationOutcome(Resource):
     def __init__(self,
                  id: Optional[str] = None,
-                 issue: Optional[List[Dict[str, Any]]] = None):
-        data = {
-            "resourceType": "OperationOutcome",   # Resource type
-            "id": id,                             # Logical id of this artifact
-            "issue": issue                        # A single issue associated with the action
-        }
-        super().__init__(data)
+                 issue: Optional[List[Dict[str, Any]]] = None,
+                 **kwargs):
+        super().__init__(
+            resourceType="OperationOutcome",   # Resource type
+            id=id,                             # Logical id of this artifact
+            issue=issue,                       # A single issue associated with the action
+            **kwargs
+        )
     
     @classmethod
     def from_error(cls, message: str, code: str = "exception", severity: str = "error", 
