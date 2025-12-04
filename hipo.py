@@ -159,7 +159,7 @@ HEADERS = {
 }
 
 
-def identify_study_type_and_region(desc: str) -> tuple:
+def identify_study_type_and_region(desc: str) -> Tuple[str, str]:
     """
     Identify the study type and anatomical region from the study description.
 
@@ -222,7 +222,7 @@ def parse_date_time(date_str: str) -> Optional[datetime]:
     try:
         # Handle common date formats like "30 Aug 2025 19:25:00"
         # Create a mapping for month abbreviations to numbers
-        month_mapping = {
+        month_mapping: Dict[str, int] = {
             'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
             'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12,
             'Ian': 1, 'Mai': 5, 'Iun': 6, 'Iul': 7  # Romanian month abbreviations
