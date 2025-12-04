@@ -904,7 +904,20 @@ class HipoClient:
         """
 
         async def _make_request(use_retry_headers=False):
-            """Helper function to make a request with proper headers."""
+            """Helper function to make an HTTP request with proper headers and error handling.
+
+            This internal helper function handles the actual HTTP request execution,
+            including proper header management for GET and POST requests. For POST
+            requests, it carefully manages Content-Type headers to avoid conflicts
+            with aiohttp's automatic header setting.
+
+            Args:
+                use_retry_headers (bool): If True, removes Content-Type from headers
+                    to avoid conflicts during retry attempts. Default is False.
+
+            Returns:
+                str: The response text content, HTML unescaped
+            """
             if method == "GET":
                 logger.debug(f"Making GET request to: {url}")
                 async with self.session.get(url, headers=self.headers) as response:
