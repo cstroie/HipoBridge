@@ -2135,13 +2135,23 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                     # Cell 0: Checkbox (ignore)
                     # Cell 1: Report link (already processed)
                     # Cell 2: Barcode and type
-                    barcode, exam_type = cells[2].get_text(strip=True).split(' - ', 1)
-                    type_match = re.search(r'\d{4}-(\w+)', exam_type.strip())
-                    if type_match:
-                        extracted_type = type_match.group(1).lower()
-                        # Check if the extracted type is in our known analysis types
-                        if extracted_type in ANALYSIS_TYPES:
-                            request.store("type", extracted_type)
+                    cell_2_text = cells[2].get_text(strip=True)
+                    try:
+                        barcode, exam_type = cell_2_text.split(' - ', 1)
+                        type_match = re.search(r'\d{4}-(\w+)', exam_type.strip())
+                        if type_match:
+                            extracted_type = type_match.group(1).lower()
+                            # Check if the extracted type is in our known analysis types
+                            if extracted_type in ANALYSIS_TYPES:
+                                request.store("type", extracted_type)
+                    except ValueError:
+                        # Handle case where there's no ' - ' separator
+                        # Try to extract type directly from the text
+                        type_match = re.search(r'\d{4}-(\w+)', cell_2_text)
+                        if type_match:
+                            extracted_type = type_match.group(1).lower()
+                            if extracted_type in ANALYSIS_TYPES:
+                                request.store("type", extracted_type)
 
                     # Cell 3: Checkin/Checkup code
                     request.store('checkin', extract_ids_from_links(cells[3], r'checkin\.asp\?id=(\d+)'))
