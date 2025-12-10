@@ -1957,9 +1957,16 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                 data.store("patient.age", parsed_cnp.get("age"))
 
             requests = []
-            for link in soup.find_all('a', href=re.compile(r'analyseFile\.asp')):
-                # Extract request ID
-                request_id = extract_id_from_link(link, r'id=(\d+)')
+            # Find all links with onclick attribute containing redirect function
+            for link in soup.find_all('a', attrs={'onclick': True}):
+                onclick_attr = link.get('onclick', '')
+                # Check if onclick contains redirect function call
+                redirect_match = re.search(r'redirect\([^,]+,[^,]+,(\d+)', onclick_attr)
+                if not redirect_match:
+                    continue
+                    
+                # Extract request ID from intCodeID parameter (3rd parameter in redirect function)
+                request_id = redirect_match.group(1)
                 if not request_id:
                     continue
 
