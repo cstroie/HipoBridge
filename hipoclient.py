@@ -1958,6 +1958,8 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
 
             requests = []
             # Find all links with onclick attribute containing redirect function
+            #   function redirect(tip,tipPrintabil,intCodeID, isLabSynevo,barcode)
+            #   Example: <a href="#" id="myHref" onclick="redirect('Normal',3,1607394,0,'');return false;">Tipareste buletin recoltari>>></a>
             for link in soup.find_all('a', attrs={'onclick': True}):
                 onclick_attr = link.get('onclick', '')
                 # Check if onclick contains redirect function call
