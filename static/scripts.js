@@ -1150,7 +1150,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const reportsCountElement = document.createElement('span');
         reportsCountElement.className = 'badge badge-secondary';
         reportsCountElement.textContent = `Reports: 0`; // Will be updated when reports load
-        elements.presentationsCount.parentElement.appendChild(reportsCountElement);
+        if (elements.presentationsCount && elements.presentationsCount.parentElement) {
+            elements.presentationsCount.parentElement.appendChild(reportsCountElement);
+        }
     }
     
     // Enhanced checkout IDs display
