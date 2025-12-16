@@ -754,10 +754,37 @@ document.addEventListener('DOMContentLoaded', function() {
                             } else {
                                 dateElement.style.display = 'none';
                             }
+                            
+                            // Extract medic name from attender (ATND) participant and display in footer
+                            const footerElement = document.getElementById('epicrisisFooter');
+                            if (encounterData.participant && encounterData.participant.length > 0) {
+                                // Look for participant with ATND type
+                                const attenderParticipant = encounterData.participant.find(p => 
+                                    p.type && p.type.some(t => 
+                                        t.coding && t.coding.some(c => c.code === "ATND")
+                                    )
+                                );
+                                
+                                if (attenderParticipant && attenderParticipant.individual && attenderParticipant.individual.display) {
+                                    if (footerElement) {
+                                        footerElement.textContent = `Medic: ${attenderParticipant.individual.display}`;
+                                        footerElement.style.display = 'block';
+                                    }
+                                } else if (footerElement) {
+                                    footerElement.style.display = 'none';
+                                }
+                            } else if (footerElement) {
+                                footerElement.style.display = 'none';
+                            }
                         } catch (err) {
                             console.error('Error converting epicrisis markdown:', err);
                             document.getElementById('epicrisisContent').textContent = epicrisisText;
                             document.getElementById('epicrisisDate').style.display = 'none';
+                            // Hide footer on error
+                            const footerElement = document.getElementById('epicrisisFooter');
+                            if (footerElement) {
+                                footerElement.style.display = 'none';
+                            }
                         }
                         epicrisisSection.style.display = 'block';
                         
