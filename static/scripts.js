@@ -1199,14 +1199,10 @@ document.addEventListener('DOMContentLoaded', function() {
         elements.checkoutsCount.textContent = stats.discharges;
         console.log('Stats displayed - Encounters:', stats.encounters, 'Admissions:', stats.admissions, 'Discharges:', stats.discharges);
         
-        // Add reports count badge next to presentations count
-        const reportsCountElement = document.createElement('span');
-        reportsCountElement.className = 'badge badge-secondary';
-        reportsCountElement.textContent = `Reports: 0`; // Will be updated when reports load
-        reportsCountElement.id = 'reportsCount';
-        if (elements.presentationsCount && elements.presentationsCount.parentElement) {
-            elements.presentationsCount.parentElement.appendChild(reportsCountElement);
-            console.log('Reports count badge added');
+        // Update reports count if element exists
+        if (elements.reportsCount) {
+            elements.reportsCount.textContent = `Reports: 0`; // Will be updated when reports load
+            console.log('Reports count updated');
         }
     }
     
