@@ -28,18 +28,77 @@ document.addEventListener('DOMContentLoaded', function() {
         epicrisisDate: document.getElementById('epicrisisDate'),
         epicrisisTitle: document.getElementById('epicrisisTitle'),
         epicrisisFooter: document.getElementById('epicrisisFooter'),
-        epicrisisSection: document.getElementById('epicrisisSection')
+        epicrisisSection: document.getElementById('epicrisisSection'),
+        // Dashboard elements
+        dashboardTab: document.getElementById('dashboard-tab'),
+        patientChart: document.getElementById('patientChart'),
+        activityList: document.getElementById('activityList'),
+        alertsList: document.getElementById('alertsList'),
+        upcomingList: document.getElementById('upcomingList'),
+        // Header elements
+        quickSearch: document.getElementById('quickSearch'),
+        quickSearchBtn: document.getElementById('quickSearchBtn'),
+        themeToggle: document.getElementById('themeToggle'),
+        notificationsBtn: document.getElementById('notificationsBtn'),
+        notificationBadge: document.getElementById('notificationBadge'),
+        userMenuBtn: document.getElementById('userMenuBtn'),
+        userDropdown: document.getElementById('userDropdown'),
+        // Search examples
+        exampleBtns: document.querySelectorAll('.example-btn'),
+        // Header stats
+        activePatientsCount: document.getElementById('activePatientsCount'),
+        reportsToday: document.getElementById('reportsToday'),
+        criticalCases: document.getElementById('criticalCases'),
+        // Patient actions
+        exportPatientBtn: document.getElementById('exportPatientBtn'),
+        printPatientBtn: document.getElementById('printPatientBtn'),
+        // Analyses actions
+        analysesSearch: document.getElementById('analysesSearch'),
+        analysesFilter: document.getElementById('analysesFilter'),
+        refreshAnalysesBtn: document.getElementById('refreshAnalysesBtn'),
+        // Epicrisis actions
+        downloadEpicrisisBtn: document.getElementById('downloadEpicrisisBtn'),
+        printEpicrisisBtn: document.getElementById('printEpicrisisBtn'),
+        // Loading overlay
+        loadingOverlay: document.getElementById('loadingOverlay'),
+        // Recent searches
+        recentSearchesList: document.getElementById('recentSearchesList')
     };
     
-    // Tab navigation handler
-    elements.navItems.forEach(item => {
-        item.addEventListener('click', function(e) {
-            e.preventDefault();
-            switchTab(this.getAttribute('data-tab'));
-        });
-    });
+    // Initialize application
+    initApp();
     
-    // Initialize tabs - hide non-active tabs
+    function initApp() {
+        // Initialize theme
+        initTheme();
+        
+        // Initialize tabs
+        initializeTabs();
+        
+        // Initialize event listeners
+        initEventListeners();
+        
+        // Load recent searches
+        loadRecentSearches();
+        
+        // Initialize dashboard data
+        initDashboard();
+        
+        // Initialize header stats
+        updateHeaderStats();
+        
+        // Check for notifications
+        checkNotifications();
+    }
+    
+    function initTheme() {
+        const savedTheme = localStorage.getItem('theme') || 'auto';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+        
+        const themeIcon = elements.themeToggle.querySelector('i');
+        themeIcon.className = savedTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+    }
+    
     function initializeTabs() {
         elements.tabContents.forEach(tab => {
             if (!tab.classList.contains('active')) {
@@ -48,7 +107,109 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Switch between tabs
+    function initEventListeners() {
+        // Tab navigation
+        elements.navItems.forEach(item => {
+            item.addEventListener('click', function(e) {
+                e.preventDefault();
+                switchTab(this.getAttribute('data-tab'));
+            });
+        });
+        
+        // Back to search button
+        if (elements.backToSearchBtn) {
+            elements.backToSearchBtn.addEventListener('click', function() {
+                elements.form.reset();
+                clearResults();
+                switchTab('search');
+            });
+        }
+        
+        // Form submission
+        elements.form.addEventListener('submit', handleFormSubmit);
+        
+        // Quick search
+        if (elements.quickSearchBtn) {
+            elements.quickSearchBtn.addEventListener('click', function() {
+                const query = elements.quickSearch.value.trim();
+                if (query) {
+                    elements.cnpInput.value = query;
+                    elements.form.dispatchEvent(new Event('submit'));
+                }
+            });
+        }
+        
+        // Quick search enter key
+        if (elements.quickSearch) {
+            elements.quickSearch.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    elements.quickSearchBtn.click();
+                }
+            });
+        }
+        
+        // Theme toggle
+        if (elements.themeToggle) {
+            elements.themeToggle.addEventListener('click', toggleTheme);
+        }
+        
+        // Notifications
+        if (elements.notificationsBtn) {
+            elements.notificationsBtn.addEventListener('click', toggleNotifications);
+        }
+        
+        // User menu
+        if (elements.userMenuBtn) {
+            elements.userMenuBtn.addEventListener('click', toggleUserMenu);
+        }
+        
+        // Click outside to close dropdowns
+        document.addEventListener('click', function(e) {
+            if (!elements.userDropdown.contains(e.target) && e.target !== elements.userMenuBtn) {
+                elements.userDropdown.style.display = 'none';
+            }
+        });
+        
+        // Example buttons
+        elements.exampleBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const example = this.getAttribute('data-example');
+                elements.cnpInput.value = example;
+                showToast(`Using example: ${example}`, 'info');
+            });
+        });
+        
+        // Analyses search and filter
+        if (elements.analysesSearch) {
+            elements.analysesSearch.addEventListener('input', filterAnalyses);
+        }
+        
+        if (elements.analysesFilter) {
+            elements.analysesFilter.addEventListener('change', filterAnalyses);
+        }
+        
+        if (elements.refreshAnalysesBtn) {
+            elements.refreshAnalysesBtn.addEventListener('click', refreshAnalyses);
+        }
+        
+        // Export and print buttons
+        if (elements.exportPatientBtn) {
+            elements.exportPatientBtn.addEventListener('click', exportPatientData);
+        }
+        
+        if (elements.printPatientBtn) {
+            elements.printPatientBtn.addEventListener('click', printPatientData);
+        }
+        
+        if (elements.downloadEpicrisisBtn) {
+            elements.downloadEpicrisisBtn.addEventListener('click', downloadEpicrisis);
+        }
+        
+        if (elements.printEpicrisisBtn) {
+            elements.printEpicrisisBtn.addEventListener('click', printEpicrisis);
+        }
+    }
+    
     function switchTab(tabId) {
         // Update active nav item
         elements.navItems.forEach(nav => nav.classList.remove('active'));
@@ -66,19 +227,6 @@ document.addEventListener('DOMContentLoaded', function() {
             targetTab.classList.add('active');
             targetTab.style.display = 'block';
         }
-    }
-    
-    // Initialize tabs on load
-    initializeTabs();
-    
-    // Back to search button handler
-    if (elements.backToSearchBtn) {
-        elements.backToSearchBtn.addEventListener('click', function() {
-            // Reset form and clear results
-            elements.form.reset();
-            clearResults();
-            switchTab('search');
-        });
     }
     
     // Form submission handler
@@ -294,13 +442,15 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     function showLoading() {
-        analyzeBtn.disabled = true;
-        analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Searching...';
+        elements.loadingOverlay.style.display = 'flex';
+        elements.analyzeBtn.disabled = true;
+        elements.analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Searching...';
     }
     
     function hideLoading() {
-        analyzeBtn.disabled = false;
-        analyzeBtn.innerHTML = '<i class="fas fa-search"></i> Search Patient';
+        elements.loadingOverlay.style.display = 'none';
+        elements.analyzeBtn.disabled = false;
+        elements.analyzeBtn.innerHTML = '<i class="fas fa-search"></i> Search Patient';
     }
     
     function clearResults() {
@@ -341,6 +491,245 @@ document.addEventListener('DOMContentLoaded', function() {
             toastContainer.innerHTML = '';
         }
     }
+    
+    function initDashboard() {
+        // Initialize Chart.js for patient overview
+        if (elements.patientChart) {
+            const ctx = elements.patientChart.getContext('2d');
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Active', 'Discharged', 'Critical'],
+                    datasets: [{
+                        data: [75, 20, 5],
+                        backgroundColor: ['#36a2eb', '#ff6384', '#ffce56'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Initialize recent activity
+        if (elements.activityList) {
+            const activities = [
+                { icon: 'fa-user-injured', text: 'New patient admitted', time: '2 minutes ago' },
+                { icon: 'fa-file-medical', text: 'Lab report uploaded', time: '15 minutes ago' },
+                { icon: 'fa-x-ray', text: 'Imaging study completed', time: '1 hour ago' },
+                { icon: 'fa-prescription', text: 'Prescription updated', time: '3 hours ago' }
+            ];
+            
+            activities.forEach(activity => {
+                const div = document.createElement('div');
+                div.className = 'activity-item';
+                div.innerHTML = `
+                    <i class="fas ${activity.icon}"></i>
+                    <div>
+                        <div>${activity.text}</div>
+                        <small>${activity.time}</small>
+                    </div>
+                `;
+                elements.activityList.appendChild(div);
+            });
+        }
+        
+        // Initialize alerts
+        if (elements.alertsList) {
+            const alerts = [
+                { type: 'warning', icon: 'fa-exclamation-triangle', text: 'Patient vitals unstable', time: 'Just now' },
+                { type: 'info', icon: 'fa-info-circle', text: 'Lab results pending', time: '10 minutes ago' },
+                { type: 'danger', icon: 'fa-heartbeat', text: 'Critical blood pressure', time: '30 minutes ago' }
+            ];
+            
+            alerts.forEach(alert => {
+                const div = document.createElement('div');
+                div.className = `alert-item ${alert.type}`;
+                div.innerHTML = `
+                    <i class="fas ${alert.icon}"></i>
+                    <div>
+                        <div>${alert.text}</div>
+                        <small>${alert.time}</small>
+                    </div>
+                `;
+                elements.alertsList.appendChild(div);
+            });
+        }
+        
+        // Initialize upcoming
+        if (elements.upcomingList) {
+            const upcoming = [
+                { icon: 'fa-calendar-check', text: 'Follow-up appointment', time: 'Tomorrow, 10:00 AM' },
+                { icon: 'fa-syringe', text: 'Blood test scheduled', time: 'Friday, 2:00 PM' },
+                { icon: 'fa-x-ray', text: 'MRI scan', time: 'Next Monday, 9:00 AM' }
+            ];
+            
+            upcoming.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'upcoming-item';
+                div.innerHTML = `
+                    <i class="fas ${item.icon}"></i>
+                    <div>
+                        <div>${item.text}</div>
+                        <small>${item.time}</small>
+                    </div>
+                `;
+                elements.upcomingList.appendChild(div);
+            });
+        }
+    }
+    
+    function updateHeaderStats() {
+        // These would normally come from an API
+        const stats = {
+            activePatients: 1234,
+            reportsToday: 156,
+            criticalCases: 12
+        };
+        
+        if (elements.activePatientsCount) {
+            elements.activePatientsCount.textContent = stats.activePatients;
+        }
+        if (elements.reportsToday) {
+            elements.reportsToday.textContent = stats.reportsToday;
+        }
+        if (elements.criticalCases) {
+            elements.criticalCases.textContent = stats.criticalCases;
+        }
+    }
+    
+    function checkNotifications() {
+        // Simulate checking for notifications
+        const notifications = 3;
+        if (elements.notificationBadge) {
+            if (notifications > 0) {
+                elements.notificationBadge.textContent = notifications;
+                elements.notificationBadge.style.display = 'inline-block';
+            }
+        }
+    }
+    
+    function toggleTheme() {
+        const currentTheme = document.documentElement.getAttribute('data-theme');
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        
+        document.documentElement.setAttribute('data-theme', newTheme);
+        localStorage.setItem('theme', newTheme);
+        
+        const themeIcon = elements.themeToggle.querySelector('i');
+        themeIcon.className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+        
+        showToast(`Theme switched to ${newTheme}`, 'info');
+    }
+    
+    function toggleNotifications() {
+        showToast('Notifications feature coming soon', 'info');
+    }
+    
+    function toggleUserMenu() {
+        const isHidden = elements.userDropdown.style.display === 'none' || !elements.userDropdown.style.display;
+        elements.userDropdown.style.display = isHidden ? 'block' : 'none';
+    }
+    
+    function filterAnalyses() {
+        const searchTerm = elements.analysesSearch ? elements.analysesSearch.value.toLowerCase() : '';
+        const filterType = elements.analysesFilter ? elements.analysesFilter.value : 'all';
+        
+        const cards = elements.analysesGrid.querySelectorAll('.analysis-card');
+        cards.forEach(card => {
+            const type = card.className.match(/radio|ct|irm|eco|lac|lii|rads/)?.[0] || '';
+            const text = card.textContent.toLowerCase();
+            
+            const matchesSearch = searchTerm ? text.includes(searchTerm) : true;
+            const matchesType = filterType === 'all' || type === filterType;
+            
+            card.style.display = matchesSearch && matchesType ? 'block' : 'none';
+        });
+    }
+    
+    function refreshAnalyses() {
+        showToast('Refreshing analyses...', 'info');
+        // This would normally reload the analyses data
+    }
+    
+    function exportPatientData() {
+        showToast('Exporting patient data...', 'success');
+        // This would normally trigger a download
+    }
+    
+    function printPatientData() {
+        window.print();
+    }
+    
+    function downloadEpicrisis() {
+        showToast('Downloading epicrisis PDF...', 'success');
+        // This would normally trigger a PDF download
+    }
+    
+    function printEpicrisis() {
+        const printContent = elements.epicrisisContent.innerHTML;
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <html>
+                <head>
+                    <title>Epicrisis - ${elements.epicrisisTitle.textContent}</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; }
+                        h1 { color: #333; }
+                        .content { margin: 20px; }
+                    </style>
+                </head>
+                <body>
+                    <h1>${elements.epicrisisTitle.textContent}</h1>
+                    <div class="content">${printContent}</div>
+                </body>
+            </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+    }
+    
+    function loadRecentSearches() {
+        const recentSearches = JSON.parse(localStorage.getItem('recentSearches') || '[]');
+        if (elements.recentSearchesList) {
+            elements.recentSearchesList.innerHTML = '';
+            recentSearches.forEach(search => {
+                const div = document.createElement('div');
+                div.className = 'recent-item';
+                div.innerHTML = `
+                    <span>${search}</span>
+                    <button class="btn-icon btn-small" onclick="searchFromRecent('${search}')">
+                        <i class="fas fa-search"></i>
+                    </button>
+                `;
+                elements.recentSearchesList.appendChild(div);
+            });
+        }
+    }
+    
+    function addToRecentSearches(searchTerm) {
+        let recentSearches = JSON.parse(localStorage.getItem('recentSearches') || '[]');
+        // Remove if already exists
+        recentSearches = recentSearches.filter(search => search !== searchTerm);
+        // Add to beginning
+        recentSearches.unshift(searchTerm);
+        // Keep only last 5
+        recentSearches = recentSearches.slice(0, 5);
+        localStorage.setItem('recentSearches', JSON.stringify(recentSearches));
+        loadRecentSearches();
+    }
+    
+    // Make function available globally
+    window.searchFromRecent = function(searchTerm) {
+        elements.cnpInput.value = searchTerm;
+        elements.form.dispatchEvent(new Event('submit'));
+    };
     
     function showError(message) {
         console.error('Application error:', message);
@@ -422,6 +811,13 @@ document.addEventListener('DOMContentLoaded', function() {
         elements.patientGender.textContent = patientData.gender || 'N/A';
         elements.patientBirthDate.textContent = patientData.birthDate || 'N/A';
         
+        // Calculate age
+        const age = calculateAge(patientData.birthDate);
+        const ageElement = document.createElement('span');
+        ageElement.className = 'badge badge-info';
+        ageElement.textContent = `Age: ${age}`;
+        elements.patientName.appendChild(ageElement);
+        
         // Extract telecom information
         if (patientData.telecom) {
             const phone = patientData.telecom.find(t => t.system === 'phone');
@@ -454,6 +850,14 @@ document.addEventListener('DOMContentLoaded', function() {
         elements.checkinsCount.textContent = admissionCount;
         elements.checkoutsCount.textContent = dischargeCount;
         
+        // Calculate reports count
+        const reportsCount = analysesData.resourceType === "Bundle" && analysesData.entry 
+            ? analysesData.entry.length : 0;
+        const reportsCountElement = document.createElement('span');
+        reportsCountElement.className = 'badge badge-secondary';
+        reportsCountElement.textContent = `Reports: ${reportsCount}`;
+        elements.presentationsCount.parentElement.appendChild(reportsCountElement);
+        
         // Display checkout IDs list
         if (checkoutIds.length > 0) {
             elements.checkoutIdsList.innerHTML = `<strong><i class="fas fa-sign-out-alt"></i> Checkout IDs:</strong> ${checkoutIds.join(', ')}`;
@@ -465,6 +869,18 @@ document.addEventListener('DOMContentLoaded', function() {
         elements.epicrisisSection.style.display = 'none';
         elements.analysesGrid.innerHTML = '';
         elements.noAnalyses.style.display = 'none';
+    }
+    
+    function calculateAge(birthDate) {
+        if (!birthDate) return 'N/A';
+        const today = new Date();
+        const birth = new Date(birthDate);
+        let age = today.getFullYear() - birth.getFullYear();
+        const monthDiff = today.getMonth() - birth.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+            age--;
+        }
+        return age >= 0 ? age : 'N/A';
     }
     
     // Function to view imaging study
