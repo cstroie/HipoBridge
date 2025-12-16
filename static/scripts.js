@@ -815,8 +815,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function showError(message) {
         console.error('Application error:', message);
-        errorDiv.textContent = message;
-        errorDiv.style.display = 'block';
+        elements.errorDiv.textContent = message;
+        elements.errorDiv.style.display = 'block';
         hideLoading();
     }
     
