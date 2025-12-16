@@ -233,13 +233,11 @@ document.addEventListener('DOMContentLoaded', function() {
         // Clear patient data
         document.getElementById('patientId').textContent = '';
         document.getElementById('patientName').textContent = '';
-        document.getElementById('patientCode').textContent = '';
         document.getElementById('patientCnp').textContent = '';
         document.getElementById('patientGender').textContent = '';
         document.getElementById('patientBirthDate').textContent = '';
         document.getElementById('patientPhone').textContent = '';
         document.getElementById('patientEmail').textContent = '';
-        document.getElementById('patientAddress').textContent = '';
         document.getElementById('presentationsCount').textContent = '0';
         document.getElementById('checkinsCount').textContent = '0';
         document.getElementById('checkoutsCount').textContent = '0';
@@ -332,7 +330,6 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('patientName').textContent = (patientData.name && patientData.name[0]) 
             ? `${patientData.name[0].family || ''} ${patientData.name[0].given ? patientData.name[0].given.join(' ') : ''}` 
             : 'N/A';
-        document.getElementById('patientCode').textContent = patientData.id || 'N/A';
         document.getElementById('patientCnp').textContent = patientData.identifier 
             ? patientData.identifier.find(id => id.system && id.system.includes('cnp'))?.value || 'N/A' 
             : 'N/A';
@@ -348,13 +345,6 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             document.getElementById('patientPhone').textContent = 'N/A';
             document.getElementById('patientEmail').textContent = 'N/A';
-        }
-        
-        // Extract address information
-        if (patientData.address && patientData.address[0]) {
-            document.getElementById('patientAddress').textContent = patientData.address[0].text || 'N/A';
-        } else {
-            document.getElementById('patientAddress').textContent = 'N/A';
         }
         
         // Extract encounter/admission/discharge counts and IDs from extensions
