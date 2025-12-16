@@ -30,7 +30,6 @@ document.addEventListener('DOMContentLoaded', function() {
         epicrisisFooter: document.getElementById('epicrisisFooter'),
         epicrisisSection: document.getElementById('epicrisisSection'),
         // Dashboard elements
-        dashboardTab: document.getElementById('dashboard-tab'),
         patientChart: document.getElementById('patientChart'),
         activityList: document.getElementById('activityList'),
         alertsList: document.getElementById('alertsList'),
@@ -761,7 +760,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const cards = elements.analysesGrid.querySelectorAll('.analysis-card');
         cards.forEach(card => {
-            const type = card.className.match(/radio|ct|irm|eco|lac|lii|rads/)?.[0] || '';
+            const type = card.className.match(/radio|ct|irm|eco|rads/)?.[0] || '';
             const text = card.textContent.toLowerCase();
             
             const matchesSearch = searchTerm ? text.includes(searchTerm) : true;
