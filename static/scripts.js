@@ -742,7 +742,7 @@ document.addEventListener('DOMContentLoaded', function() {
         errorDiv.style.display = 'none';
     }
     
-    function showToast(message, type = 'success') {
+    function showToast(message, type = 'success', duration = 3000) {
         // Create toast container if it doesn't exist
         let toastContainer = document.getElementById('toast-container');
         if (!toastContainer) {
@@ -758,18 +758,93 @@ document.addEventListener('DOMContentLoaded', function() {
         toast.className = `toast toast-${type}`;
         
         // Add icon based on type
-        const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+        const iconMap = {
+            success: 'fa-check-circle',
+            error: 'fa-exclamation-circle',
+            warning: 'fa-exclamation-triangle',
+            info: 'fa-info-circle'
+        };
+        
+        const icon = iconMap[type] || 'fa-check-circle';
         toast.innerHTML = `<i class="fas ${icon}"></i> ${message}`;
         
         // Add toast to container
         toastContainer.appendChild(toast);
         
-        // Remove toast after animation completes
-        setTimeout(() => {
+        // Auto-remove toast after duration
+        const removeToast = () => {
             if (toast.parentNode) {
                 toast.parentNode.removeChild(toast);
             }
-        }, 3000);
+        };
+        
+        // Support for persistent toasts (duration = 0)
+        if (duration > 0) {
+            setTimeout(removeToast, duration);
+        }
+        
+        // Allow manual dismissal by clicking
+        toast.addEventListener('click', removeToast);
+        
+        return toast;
+    }
+    
+    // Enhanced error handling with better user feedback
+    function showError(message, details = null) {
+        console.error('Application error:', message);
+        
+        // Show user-friendly error message
+        elements.errorDiv.textContent = message;
+        elements.errorDiv.style.display = 'block';
+        
+        // Show detailed error in console if provided
+        if (details) {
+            console.error('Error details:', details);
+        }
+        
+        // Show toast notification
+        showToast(message, 'error', 5000);
+        
+        hideLoading();
+    }
+    
+    // Enhanced loading states
+    function showLoading(message = 'Loading patient data...') {
+        elements.loadingOverlay.style.display = 'flex';
+        elements.analyzeBtn.disabled = true;
+        elements.analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Searching...';
+        
+        // Update loading message if provided
+        const loadingMessage = document.querySelector('.loading-spinner p');
+        if (loadingMessage) {
+            loadingMessage.textContent = message;
+        }
+    }
+    
+    // Utility function for API error handling
+    function handleApiError(response, context = 'API request') {
+        const errorMessages = {
+            401: 'Authentication required. Please refresh the page and enter your credentials.',
+            403: 'Access forbidden. You do not have permission to access this resource.',
+            404: 'Resource not found. Please check the patient identifier and try again.',
+            500: 'Server error. Please try again later.',
+            503: 'Service unavailable. Please try again later.'
+        };
+        
+        const defaultMessage = `${context} failed. Please try again.`;
+        const message = errorMessages[response.status] || defaultMessage;
+        
+        showToast(message, 'error');
+        return message;
+    }
+    
+    // Utility function for network error handling
+    function handleNetworkError(error, context = 'Network request') {
+        console.error(`${context} failed:`, error);
+        
+        const message = 'Network error. Please check your connection and try again.';
+        showToast(message, 'error');
+        return message;
     }
     
     async function convertMarkdownToHtml(markdownText) {
@@ -800,75 +875,242 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function displayPatientData(patientData, analysesData, epicrisisData = null) {
-        // Display patient information
-        elements.patientId.textContent = patientData.id || 'N/A';
-        elements.patientName.innerHTML = `<i class="fas fa-user"></i> ${(patientData.name && patientData.name[0]) 
-            ? `${patientData.name[0].family || ''} ${patientData.name[0].given ? patientData.name[0].given.join(' ') : ''}` 
-            : 'N/A'}`;
-        elements.patientCnp.textContent = patientData.identifier 
-            ? patientData.identifier.find(id => id.system && id.system.includes('cnp'))?.value || 'N/A' 
-            : 'N/A';
-        elements.patientGender.textContent = patientData.gender || 'N/A';
-        elements.patientBirthDate.textContent = patientData.birthDate || 'N/A';
+        // Enhanced patient information display with better formatting
+        displayPatientBasicInfo(patientData);
         
-        // Calculate age
+        // Extract and display medical statistics
+        const stats = extractMedicalStats(patientData);
+        displayMedicalStats(stats);
+        
+        // Display checkout IDs list
+        const checkoutIds = extractCheckoutIds(patientData);
+        displayCheckoutIds(checkoutIds);
+        
+        // Initialize sections but keep them hidden until data is loaded
+        elements.epicrisisSection.style.display = 'none';
+        elements.analysesGrid.innerHTML = '';
+        elements.noAnalyses.style.display = 'none';
+        
+        // Update dashboard stats if available
+        updateDashboardStats(stats, analysesData);
+    }
+    
+    // Enhanced patient basic info display
+    function displayPatientBasicInfo(patientData) {
+        // Patient ID
+        elements.patientId.textContent = patientData.id || 'N/A';
+        
+        // Patient Name with enhanced formatting
+        const name = formatPatientName(patientData.name);
+        elements.patientName.innerHTML = `<i class="fas fa-user"></i> ${name}`;
+        
+        // Add age badge
         const age = calculateAge(patientData.birthDate);
         const ageElement = document.createElement('span');
         ageElement.className = 'badge badge-info';
         ageElement.textContent = `Age: ${age}`;
         elements.patientName.appendChild(ageElement);
         
-        // Extract telecom information
-        if (patientData.telecom) {
-            const phone = patientData.telecom.find(t => t.system === 'phone');
-            const email = patientData.telecom.find(t => t.system === 'email');
-            elements.patientPhone.textContent = phone ? phone.value : 'N/A';
-            elements.patientEmail.textContent = email ? email.value : 'N/A';
-        } else {
-            elements.patientPhone.textContent = 'N/A';
-            elements.patientEmail.textContent = 'N/A';
+        // CNP with validation
+        const cnp = extractCNP(patientData.identifier);
+        elements.patientCnp.textContent = cnp || 'N/A';
+        
+        // Gender with icons
+        const gender = formatGender(patientData.gender);
+        elements.patientGender.textContent = gender;
+        
+        // Birth date with formatting
+        elements.patientBirthDate.textContent = formatBirthDate(patientData.birthDate);
+        
+        // Contact information
+        const contactInfo = extractContactInfo(patientData.telecom);
+        elements.patientPhone.textContent = contactInfo.phone || 'N/A';
+        elements.patientEmail.textContent = contactInfo.email || 'N/A';
+    }
+    
+    // Enhanced name formatting
+    function formatPatientName(nameArray) {
+        if (!nameArray || nameArray.length === 0) {
+            return 'N/A';
         }
         
-        // Extract encounter/admission/discharge counts and IDs from extensions
-        let encounterCount = 0, admissionCount = 0, dischargeCount = 0;
-        let checkoutIds = [];
-        if (patientData.extension) {
-            const encounterExt = patientData.extension.find(ext => ext.url && ext.url.includes('encounter-ids'));
-            const admissionExt = patientData.extension.find(ext => ext.url && ext.url.includes('admission-ids'));
-            const checkoutExt = patientData.extension.find(ext => ext.url && ext.url.includes('checkout-ids'));
+        const name = nameArray[0];
+        const family = name.family || '';
+        const given = name.given ? name.given.join(' ') : '';
+        
+        if (family && given) {
+            return `${family}, ${given}`;
+        } else if (family) {
+            return family;
+        } else if (given) {
+            return given;
+        }
+        
+        return 'N/A';
+    }
+    
+    // Enhanced gender formatting with icons
+    function formatGender(gender) {
+        if (!gender) return 'N/A';
+        
+        const genderMap = {
+            'male': 'Male ♂',
+            'female': 'Female ♀',
+            'other': 'Other',
+            'unknown': 'Unknown'
+        };
+        
+        return genderMap[gender] || gender;
+    }
+    
+    // Enhanced birth date formatting
+    function formatBirthDate(birthDate) {
+        if (!birthDate) return 'N/A';
+        
+        try {
+            const date = new Date(birthDate);
+            return date.toLocaleDateString('en-GB', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            });
+        } catch (err) {
+            return birthDate;
+        }
+    }
+    
+    // Enhanced CNP extraction
+    function extractCNP(identifierArray) {
+        if (!identifierArray || !Array.isArray(identifierArray)) {
+            return null;
+        }
+        
+        const cnpIdentifier = identifierArray.find(id => 
+            id.system && id.system.includes('cnp')
+        );
+        
+        return cnpIdentifier ? cnpIdentifier.value : null;
+    }
+    
+    // Enhanced contact info extraction
+    function extractContactInfo(telecomArray) {
+        const result = { phone: null, email: null };
+        
+        if (!telecomArray || !Array.isArray(telecomArray)) {
+            return result;
+        }
+        
+        const phone = telecomArray.find(t => t.system === 'phone');
+        const email = telecomArray.find(t => t.system === 'email');
+        
+        result.phone = phone ? formatPhoneNumber(phone.value) : null;
+        result.email = email ? email.value : null;
+        
+        return result;
+    }
+    
+    // Enhanced phone number formatting
+    function formatPhoneNumber(phoneNumber) {
+        if (!phoneNumber) return null;
+        
+        // Remove all non-digit characters
+        const digits = phoneNumber.replace(/\D/g, '');
+        
+        // Format based on length
+        if (digits.length === 10) {
+            // Romanian phone number format
+            return `0 ${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`;
+        } else if (digits.length === 12 && digits.startsWith('40')) {
+            // International format with country code
+            return `+40 ${digits.slice(2, 5)} ${digits.slice(5, 8)} ${digits.slice(8)}`;
+        }
+        
+        return phoneNumber;
+    }
+    
+    // Enhanced medical statistics extraction
+    function extractMedicalStats(patientData) {
+        const stats = {
+            encounters: 0,
+            admissions: 0,
+            discharges: 0,
+            checkoutIds: []
+        };
+        
+        if (patientData.extension && Array.isArray(patientData.extension)) {
+            const encounterExt = patientData.extension.find(ext => 
+                ext.url && ext.url.includes('encounter-ids')
+            );
+            const admissionExt = patientData.extension.find(ext => 
+                ext.url && ext.url.includes('admission-ids')
+            );
+            const checkoutExt = patientData.extension.find(ext => 
+                ext.url && ext.url.includes('checkout-ids')
+            );
             
-            encounterCount = encounterExt ? encounterExt.valueString.split(',').filter(id => id).length : 0;
-            admissionCount = admissionExt ? admissionExt.valueString.split(',').filter(id => id).length : 0;
+            if (encounterExt && encounterExt.valueString) {
+                stats.encounters = encounterExt.valueString.split(',').filter(id => id.trim()).length;
+            }
             
-            if (checkoutExt) {
-                checkoutIds = checkoutExt.valueString.split(',').filter(id => id);
-                dischargeCount = checkoutIds.length;
+            if (admissionExt && admissionExt.valueString) {
+                stats.admissions = admissionExt.valueString.split(',').filter(id => id.trim()).length;
+            }
+            
+            if (checkoutExt && checkoutExt.valueString) {
+                stats.checkoutIds = checkoutExt.valueString.split(',').filter(id => id.trim());
+                stats.discharges = stats.checkoutIds.length;
             }
         }
         
-        elements.presentationsCount.textContent = encounterCount;
-        elements.checkinsCount.textContent = admissionCount;
-        elements.checkoutsCount.textContent = dischargeCount;
+        return stats;
+    }
+    
+    // Enhanced medical stats display
+    function displayMedicalStats(stats) {
+        elements.presentationsCount.textContent = stats.encounters;
+        elements.checkinsCount.textContent = stats.admissions;
+        elements.checkoutsCount.textContent = stats.discharges;
         
-        // Calculate reports count
-        const reportsCount = analysesData.resourceType === "Bundle" && analysesData.entry 
-            ? analysesData.entry.length : 0;
+        // Add reports count badge
         const reportsCountElement = document.createElement('span');
         reportsCountElement.className = 'badge badge-secondary';
-        reportsCountElement.textContent = `Reports: ${reportsCount}`;
+        reportsCountElement.textContent = `Reports: 0`; // Will be updated when reports load
         elements.presentationsCount.parentElement.appendChild(reportsCountElement);
-        
-        // Display checkout IDs list
-        if (checkoutIds.length > 0) {
-            elements.checkoutIdsList.innerHTML = `<strong><i class="fas fa-sign-out-alt"></i> Checkout IDs:</strong> ${checkoutIds.join(', ')}`;
-        } else {
+    }
+    
+    // Enhanced checkout IDs display
+    function displayCheckoutIds(checkoutIds) {
+        if (!checkoutIds || checkoutIds.length === 0) {
             elements.checkoutIdsList.innerHTML = '';
+            return;
         }
         
-        // Initialize sections but keep them hidden until data is loaded
-        elements.epicrisisSection.style.display = 'none';
-        elements.analysesGrid.innerHTML = '';
-        elements.noAnalyses.style.display = 'none';
+        const idsHtml = checkoutIds.map(id => 
+            `<span class="checkout-id">${id}</span>`
+        ).join(', ');
+        
+        elements.checkoutIdsList.innerHTML = `
+            <strong><i class="fas fa-sign-out-alt"></i> Checkout IDs:</strong> 
+            ${idsHtml}
+        `;
+    }
+    
+    // Enhanced dashboard stats update
+    function updateDashboardStats(stats, analysesData) {
+        // Update header stats if available
+        if (elements.activePatientsCount) {
+            elements.activePatientsCount.textContent = stats.encounters;
+        }
+        
+        // Update reports count when analyses load
+        if (elements.presentationsCount && elements.presentationsCount.parentElement) {
+            const reportsBadge = elements.presentationsCount.parentElement.querySelector('.badge-secondary');
+            if (reportsBadge) {
+                const reportsCount = analysesData.resourceType === "Bundle" && analysesData.entry 
+                    ? analysesData.entry.length : 0;
+                reportsBadge.textContent = `Reports: ${reportsCount}`;
+            }
+        }
     }
     
     function calculateAge(birthDate) {
@@ -1199,21 +1441,95 @@ document.addEventListener('DOMContentLoaded', function() {
         const analysisCard = cardTemplate.content.cloneNode(true).querySelector('article');
         analysisCard.className = `analysis-card ${analysisType}`;
         
-        // Set card header
-        analysisCard.querySelector('h4').innerHTML = `<i class="fas fa-file-medical"></i> ${analysisText} report #${serviceRequest.id}`;
+        // Set card header with enhanced formatting
+        const header = analysisCard.querySelector('h4');
+        header.innerHTML = `
+            <i class="fas fa-file-medical"></i> 
+            ${analysisText} 
+            <span class="report-id">#${serviceRequest.id}</span>
+        `;
         
-        // Set exam date if available
+        // Set exam date with enhanced formatting
         const examDateElement = analysisCard.querySelector('.exam-date');
         if (serviceRequest.authoredOn) {
-            const dateTime = new Date(serviceRequest.authoredOn);
-            const formattedDate = dateTime.toLocaleDateString('en-GB');
-            const formattedTime = dateTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-            examDateElement.innerHTML = `<i class="fas fa-calendar"></i> Date: ${formattedDate} ${formattedTime}`;
+            const formattedDate = formatDateWithTime(serviceRequest.authoredOn);
+            examDateElement.innerHTML = `<i class="fas fa-calendar"></i> ${formattedDate}`;
         } else {
             examDateElement.innerHTML = '<i class="fas fa-calendar"></i> Date: Unknown';
         }
         
+        // Add type badge
+        const typeBadge = analysisCard.querySelector('.type-text');
+        if (typeBadge) {
+            typeBadge.textContent = analysisText;
+        }
+        
+        // Add status indicator
+        const statusElement = analysisCard.querySelector('.status');
+        if (statusElement) {
+            statusElement.textContent = serviceRequest.status || 'Unknown';
+        }
+        
         return analysisCard;
+    }
+    
+    // Enhanced date formatting function
+    function formatDateWithTime(dateString) {
+        if (!dateString) return 'Unknown';
+        
+        try {
+            const date = new Date(dateString);
+            const dateOptions = { 
+                day: '2-digit', 
+                month: '2-digit', 
+                year: 'numeric' 
+            };
+            const timeOptions = { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            };
+            
+            const formattedDate = date.toLocaleDateString('en-GB', dateOptions);
+            const formattedTime = date.toLocaleTimeString('en-GB', timeOptions);
+            
+            return `${formattedDate} at ${formattedTime}`;
+        } catch (err) {
+            return dateString;
+        }
+    }
+    
+    // Enhanced report preview formatting
+    function formatReportPreview(reportText, maxLength = 200) {
+        if (!reportText) return 'No preview available';
+        
+        // Remove markdown formatting for preview
+        let cleanText = reportText.replace(/[#*_\[\]`]/g, '');
+        
+        // Truncate if too long
+        if (cleanText.length > maxLength) {
+            cleanText = cleanText.substring(0, maxLength) + '...';
+        }
+        
+        return cleanText;
+    }
+    
+    // Enhanced medic name formatting
+    function formatMedicName(medicData) {
+        if (!medicData) return 'Unknown';
+        
+        if (typeof medicData === 'string') {
+            return medicData;
+        }
+        
+        if (medicData.display) {
+            return medicData.display;
+        }
+        
+        if (medicData.name) {
+            return formatPatientName([medicData.name]);
+        }
+        
+        return 'Unknown';
     }
     
     // Function to load and display epicrisis progressively
