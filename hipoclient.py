@@ -1269,21 +1269,21 @@ class HipoClientPatient(HipoClient):
                 })
 
             # Add extensions for encounter/admission/discharge IDs
-            presentations = parsed_data.get("patient.presentation", [])
+            presentations = parsed_data.get("presentation", [])
             if presentations and http_request:
                 extensions.append({
                     "url": f"{http_request.scheme}://{http_request.host}/fhir/StructureDefinition/presentation-ids",
                     "valueString": ",".join(presentations) if isinstance(presentations, list) else str(presentations)
                 })
                 
-            checkins = parsed_data.get("patient.checkin", [])
+            checkins = parsed_data.get("checkin", [])
             if checkins and http_request:
                 extensions.append({
                     "url": f"{http_request.scheme}://{http_request.host}/fhir/StructureDefinition/checkin-ids",
                     "valueString": ",".join(checkins) if isinstance(checkins, list) else str(checkins)
                 })
                 
-            checkouts = parsed_data.get("patient.checkout", [])
+            checkouts = parsed_data.get("checkout", [])
             if checkouts and http_request:
                 extensions.append({
                     "url": f"{http_request.scheme}://{http_request.host}/fhir/StructureDefinition/checkout-ids",
