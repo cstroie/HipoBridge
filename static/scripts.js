@@ -1241,7 +1241,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (reportsCountElement) {
             const reportsCount = analysesData.resourceType === "Bundle" && analysesData.entry 
                 ? analysesData.entry.length : 0;
-            reportsCountElement.textContent = `Reports: ${reportsCount}`;
+            reportsCountElement.textContent = `${reportsCount}`;
             console.log('Reports count badge updated to:', reportsCount);
         } else {
             console.log('Reports count element not found');
