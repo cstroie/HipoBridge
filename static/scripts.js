@@ -589,28 +589,32 @@ document.addEventListener('DOMContentLoaded', function() {
                             const reportData = await reportResponse.json();
                             showToast(`Report data loaded for service request ${serviceRequest.id}`, 'success');
                             
-                            // Add report metadata (date/time and performer) if available
+                            // Add report metadata (date/time only) if available
                             const reportMeta = analysisCard.querySelector('.report-meta');
-                            if (reportData.effectiveDateTime || (reportData.performer && reportData.performer.length > 0)) {
-                                if (reportData.effectiveDateTime) {
-                                    // Parse ISO datetime and format it nicely
-                                    const dateTime = new Date(reportData.effectiveDateTime);
-                                    const formattedDate = dateTime.toLocaleDateString('en-GB');
-                                    const formattedTime = dateTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-                                    const p = document.createElement('p');
-                                    p.innerHTML = `<strong>Date/Time:</strong> ${formattedDate} ${formattedTime}`;
-                                    reportMeta.appendChild(p);
-                                }
+                            if (reportData.effectiveDateTime) {
+                                // Parse ISO datetime and format it nicely
+                                const dateTime = new Date(reportData.effectiveDateTime);
+                                const formattedDate = dateTime.toLocaleDateString('en-GB');
+                                const formattedTime = dateTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                                const p = document.createElement('p');
+                                p.innerHTML = `<strong>Date/Time:</strong> ${formattedDate} ${formattedTime}`;
+                                reportMeta.appendChild(p);
+                            }
+                            
+                            // Add performer and interpreter to footer if available
+                            const reportFooter = analysisCard.querySelector('.report-footer');
+                            if ((reportData.performer && reportData.performer.length > 0) || 
+                                (reportData.resultsInterpreter && reportData.resultsInterpreter.length > 0)) {
                                 if (reportData.performer && reportData.performer.length > 0) {
                                     const p = document.createElement('p');
                                     p.innerHTML = `<strong>Performer:</strong> ${reportData.performer[0].display || ''}`;
-                                    reportMeta.appendChild(p);
+                                    reportFooter.appendChild(p);
                                 }
                                 // Add interpreter if available
                                 if (reportData.resultsInterpreter && reportData.resultsInterpreter.length > 0) {
                                     const p = document.createElement('p');
                                     p.innerHTML = `<strong>Interpreter:</strong> ${reportData.resultsInterpreter[0].display || ''}`;
-                                    reportMeta.appendChild(p);
+                                    reportFooter.appendChild(p);
                                 }
                             }
                             
