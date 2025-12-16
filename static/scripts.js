@@ -1,77 +1,91 @@
 document.addEventListener('DOMContentLoaded', function() {
-    // DOM Elements
-    const form = document.getElementById('cnpForm');
-    const cnpInput = document.getElementById('cnpInput');
-    const analyzeBtn = document.getElementById('analyzeBtn');
-    const errorDiv = document.getElementById('error');
-    const backToSearchBtn = document.getElementById('backToSearch');
-    
-    // Tab navigation
-    const navItems = document.querySelectorAll('.nav-item');
-    const tabContents = document.querySelectorAll('.tab-content');
-    
-    // Hide all tab contents except search
-    tabContents.forEach(tab => {
-        if (!tab.classList.contains('active')) {
-            tab.style.display = 'none';
-        }
-    });
+    // DOM Elements - Cache selectors for better performance
+    const elements = {
+        form: document.getElementById('cnpForm'),
+        cnpInput: document.getElementById('cnpInput'),
+        analyzeBtn: document.getElementById('analyzeBtn'),
+        errorDiv: document.getElementById('error'),
+        backToSearchBtn: document.getElementById('backToSearch'),
+        navItems: document.querySelectorAll('.nav-item'),
+        tabContents: document.querySelectorAll('.tab-content'),
+        // Patient tab elements
+        patientId: document.getElementById('patientId'),
+        patientName: document.getElementById('patientName'),
+        patientCnp: document.getElementById('patientCnp'),
+        patientGender: document.getElementById('patientGender'),
+        patientBirthDate: document.getElementById('patientBirthDate'),
+        patientPhone: document.getElementById('patientPhone'),
+        patientEmail: document.getElementById('patientEmail'),
+        presentationsCount: document.getElementById('presentationsCount'),
+        checkinsCount: document.getElementById('checkinsCount'),
+        checkoutsCount: document.getElementById('checkoutsCount'),
+        checkoutIdsList: document.getElementById('checkoutIdsList'),
+        // Analyses tab elements
+        analysesGrid: document.getElementById('analysesGrid'),
+        noAnalyses: document.getElementById('noAnalyses'),
+        // Epicrisis tab elements
+        epicrisisContent: document.getElementById('epicrisisContent'),
+        epicrisisDate: document.getElementById('epicrisisDate'),
+        epicrisisTitle: document.getElementById('epicrisisTitle'),
+        epicrisisFooter: document.getElementById('epicrisisFooter'),
+        epicrisisSection: document.getElementById('epicrisisSection')
+    };
     
     // Tab navigation handler
-    navItems.forEach(item => {
+    elements.navItems.forEach(item => {
         item.addEventListener('click', function(e) {
             e.preventDefault();
-            
-            // Update active nav item
-            navItems.forEach(nav => nav.classList.remove('active'));
-            this.classList.add('active');
-            
-            // Show corresponding tab content
-            const tabId = this.getAttribute('data-tab');
-            tabContents.forEach(tab => {
-                tab.classList.remove('active');
-                tab.style.display = 'none';
-            });
-            
-            const targetTab = document.getElementById(`${tabId}-tab`);
-            if (targetTab) {
-                targetTab.classList.add('active');
-                targetTab.style.display = 'block';
-            }
+            switchTab(this.getAttribute('data-tab'));
         });
     });
     
-    // Back to search button handler
-    if (backToSearchBtn) {
-        backToSearchBtn.addEventListener('click', function() {
-            // Reset form
-            form.reset();
-            
-            // Switch to search tab
-            navItems.forEach(nav => nav.classList.remove('active'));
-            document.querySelector('.nav-item[data-tab="search"]').classList.add('active');
-            
-            tabContents.forEach(tab => {
-                tab.classList.remove('active');
+    // Initialize tabs - hide non-active tabs
+    function initializeTabs() {
+        elements.tabContents.forEach(tab => {
+            if (!tab.classList.contains('active')) {
                 tab.style.display = 'none';
-            });
-            
-            const searchTab = document.getElementById('search-tab');
-            if (searchTab) {
-                searchTab.classList.add('active');
-                searchTab.style.display = 'block';
             }
-            
-            // Clear results
+        });
+    }
+    
+    // Switch between tabs
+    function switchTab(tabId) {
+        // Update active nav item
+        elements.navItems.forEach(nav => nav.classList.remove('active'));
+        const activeNavItem = document.querySelector(`.nav-item[data-tab="${tabId}"]`);
+        if (activeNavItem) activeNavItem.classList.add('active');
+        
+        // Show corresponding tab content
+        elements.tabContents.forEach(tab => {
+            tab.classList.remove('active');
+            tab.style.display = 'none';
+        });
+        
+        const targetTab = document.getElementById(`${tabId}-tab`);
+        if (targetTab) {
+            targetTab.classList.add('active');
+            targetTab.style.display = 'block';
+        }
+    }
+    
+    // Initialize tabs on load
+    initializeTabs();
+    
+    // Back to search button handler
+    if (elements.backToSearchBtn) {
+        elements.backToSearchBtn.addEventListener('click', function() {
+            // Reset form and clear results
+            elements.form.reset();
             clearResults();
+            switchTab('search');
         });
     }
     
     // Form submission handler
-    form.addEventListener('submit', async function(e) {
+    elements.form.addEventListener('submit', async function(e) {
         e.preventDefault();
         
-        const cnp = cnpInput.value.trim();
+        const cnp = elements.cnpInput.value.trim();
         
         // Validate input - allow CNP (13 digits), partial CNP (digits followed by *), or patient name
         if (!cnp) {
@@ -83,10 +97,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const isCNPFormat = /^\d{13}$/.test(cnp);
         const isPartialCNPFormat = /^\d+\*$/.test(cnp);
             
-        // Clear previous results
+        // Clear previous results and show loading state
         clearResults();
-        
-        // Show loading state
         showLoading();
         hideError();
             
@@ -293,32 +305,35 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function clearResults() {
         // Clear patient data
-        document.getElementById('patientId').textContent = '';
-        document.getElementById('patientName').textContent = '';
-        document.getElementById('patientCnp').textContent = '';
-        document.getElementById('patientGender').textContent = '';
-        document.getElementById('patientBirthDate').textContent = '';
-        document.getElementById('patientPhone').textContent = '';
-        document.getElementById('patientEmail').textContent = '';
-        document.getElementById('presentationsCount').textContent = '0';
-        document.getElementById('checkinsCount').textContent = '0';
-        document.getElementById('checkoutsCount').textContent = '0';
-        document.getElementById('checkoutIdsList').innerHTML = '';
+        elements.patientId.textContent = '';
+        elements.patientName.textContent = '';
+        elements.patientCnp.textContent = '';
+        elements.patientGender.textContent = '';
+        elements.patientBirthDate.textContent = '';
+        elements.patientPhone.textContent = '';
+        elements.patientEmail.textContent = '';
+        elements.presentationsCount.textContent = '0';
+        elements.checkinsCount.textContent = '0';
+        elements.checkoutsCount.textContent = '0';
+        elements.checkoutIdsList.innerHTML = '';
         
         // Clear analyses
-        document.getElementById('analysesGrid').innerHTML = '';
-        document.getElementById('noAnalyses').style.display = 'none';
+        elements.analysesGrid.innerHTML = '';
+        elements.noAnalyses.style.display = 'none';
         
         // Clear epicrisis
-        document.getElementById('epicrisisContent').innerHTML = '';
-        document.getElementById('epicrisisDate').style.display = 'none';
-        document.getElementById('epicrisisTitle').textContent = 'DIAGNOSTIC';
-        document.getElementById('epicrisisFooter').style.display = 'none';
+        elements.epicrisisContent.innerHTML = '';
+        elements.epicrisisDate.style.display = 'none';
+        elements.epicrisisTitle.textContent = 'DIAGNOSTIC';
+        elements.epicrisisFooter.style.display = 'none';
+        elements.epicrisisSection.style.display = 'none';
         
         // Hide navigation tabs for patient data
-        document.querySelector('.nav-item[data-tab="patient"]').style.display = 'none';
-        document.querySelector('.nav-item[data-tab="analyses"]').style.display = 'none';
-        document.querySelector('.nav-item[data-tab="epicrisis"]').style.display = 'none';
+        elements.navItems.forEach(item => {
+            if (item.getAttribute('data-tab') !== 'search') {
+                item.style.display = 'none';
+            }
+        });
         
         // Clear any existing toasts
         const toastContainer = document.getElementById('toast-container');
@@ -395,27 +410,27 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    async function displayPatientData(patientData, analysesData, epicrisisData = null) {
+    function displayPatientData(patientData, analysesData, epicrisisData = null) {
         // Display patient information
-        document.getElementById('patientId').textContent = patientData.id || 'N/A';
-        document.getElementById('patientName').innerHTML = `<i class="fas fa-user"></i> ${(patientData.name && patientData.name[0]) 
+        elements.patientId.textContent = patientData.id || 'N/A';
+        elements.patientName.innerHTML = `<i class="fas fa-user"></i> ${(patientData.name && patientData.name[0]) 
             ? `${patientData.name[0].family || ''} ${patientData.name[0].given ? patientData.name[0].given.join(' ') : ''}` 
             : 'N/A'}`;
-        document.getElementById('patientCnp').textContent = patientData.identifier 
+        elements.patientCnp.textContent = patientData.identifier 
             ? patientData.identifier.find(id => id.system && id.system.includes('cnp'))?.value || 'N/A' 
             : 'N/A';
-        document.getElementById('patientGender').textContent = patientData.gender || 'N/A';
-        document.getElementById('patientBirthDate').textContent = patientData.birthDate || 'N/A';
+        elements.patientGender.textContent = patientData.gender || 'N/A';
+        elements.patientBirthDate.textContent = patientData.birthDate || 'N/A';
         
         // Extract telecom information
         if (patientData.telecom) {
             const phone = patientData.telecom.find(t => t.system === 'phone');
             const email = patientData.telecom.find(t => t.system === 'email');
-            document.getElementById('patientPhone').textContent = phone ? phone.value : 'N/A';
-            document.getElementById('patientEmail').textContent = email ? email.value : 'N/A';
+            elements.patientPhone.textContent = phone ? phone.value : 'N/A';
+            elements.patientEmail.textContent = email ? email.value : 'N/A';
         } else {
-            document.getElementById('patientPhone').textContent = 'N/A';
-            document.getElementById('patientEmail').textContent = 'N/A';
+            elements.patientPhone.textContent = 'N/A';
+            elements.patientEmail.textContent = 'N/A';
         }
         
         // Extract encounter/admission/discharge counts and IDs from extensions
@@ -435,25 +450,21 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        document.getElementById('presentationsCount').textContent = encounterCount;
-        document.getElementById('checkinsCount').textContent = admissionCount;
-        document.getElementById('checkoutsCount').textContent = dischargeCount;
+        elements.presentationsCount.textContent = encounterCount;
+        elements.checkinsCount.textContent = admissionCount;
+        elements.checkoutsCount.textContent = dischargeCount;
         
         // Display checkout IDs list
-        const checkoutIdsList = document.getElementById('checkoutIdsList');
         if (checkoutIds.length > 0) {
-            checkoutIdsList.innerHTML = `<strong><i class="fas fa-sign-out-alt"></i> Checkout IDs:</strong> ${checkoutIds.join(', ')}`;
+            elements.checkoutIdsList.innerHTML = `<strong><i class="fas fa-sign-out-alt"></i> Checkout IDs:</strong> ${checkoutIds.join(', ')}`;
         } else {
-            checkoutIdsList.innerHTML = '';
+            elements.checkoutIdsList.innerHTML = '';
         }
         
         // Initialize sections but keep them hidden until data is loaded
-        document.getElementById('epicrisisSection').style.display = 'none';
-        document.getElementById('analysesGrid').innerHTML = '';
-        document.getElementById('noAnalyses').style.display = 'none';
-        
-        // Force UI update to ensure patient card is displayed immediately
-        await new Promise(resolve => setTimeout(resolve, 0));
+        elements.epicrisisSection.style.display = 'none';
+        elements.analysesGrid.innerHTML = '';
+        elements.noAnalyses.style.display = 'none';
     }
     
     // Function to view imaging study
@@ -462,17 +473,18 @@ document.addEventListener('DOMContentLoaded', function() {
             // Fetch imaging study data using FHIR API
             const studyResponse = await fetch(`/fhir/ImagingStudy/${studyId}`);
             
-            if (studyResponse.ok) {
-                const studyData = await studyResponse.json();
-                displayImagingStudyModal(studyData, studyId, reportId);
-                showToast(`Imaging study ${studyId} loaded successfully`, 'success');
-            } else {
+            if (!studyResponse.ok) {
                 if (studyResponse.status === 401) {
                     showToast('Authentication required. Please refresh the page and enter your credentials.', 'error');
                 }
-                console.error('Error fetching imaging study data');
                 showToast(`Error loading imaging study ${studyId}`, 'error');
+                return;
             }
+            
+            const studyData = await studyResponse.json();
+            displayImagingStudyModal(studyData, studyId, reportId);
+            showToast(`Imaging study ${studyId} loaded successfully`, 'success');
+            
         } catch (err) {
             console.error('Error fetching imaging study:', err);
             showToast(`Error loading imaging study ${studyId}`, 'error');
@@ -491,65 +503,11 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Populate study information
         const studyInfo = modal.querySelector('.study-info');
+        populateStudyInfo(studyInfo, studyData);
         
-        if (studyData.started) {
-            const p = document.createElement('p');
-            p.innerHTML = `<strong><i class="fas fa-calendar"></i> Started:</strong> ${studyData.started}`;
-            studyInfo.appendChild(p);
-        }
-        
-        if (studyData.modality) {
-            const p = document.createElement('p');
-            p.innerHTML = `<strong><i class="fas fa-stethoscope"></i> Modality:</strong> ${studyData.modality.display || studyData.modality.code || 'N/A'}`;
-            studyInfo.appendChild(p);
-        }
-        
-        if (studyData.description) {
-            const p = document.createElement('p');
-            p.innerHTML = `<strong><i class="fas fa-file-medical"></i> Description:</strong> ${studyData.description}`;
-            studyInfo.appendChild(p);
-        }
-        
-        // Performer information
-        if (studyData.performer && studyData.performer.length > 0) {
-            const p = document.createElement('p');
-            p.innerHTML = `<strong><i class="fas fa-user-md"></i> Performer:</strong> ${studyData.performer[0].actor?.display || 'N/A'}`;
-            studyInfo.appendChild(p);
-        }
-        
-        // Referrer information
-        if (studyData.referrer) {
-            const p = document.createElement('p');
-            p.innerHTML = `<strong><i class="fas fa-user-check"></i> Referrer:</strong> ${studyData.referrer.display || 'N/A'}`;
-            studyInfo.appendChild(p);
-        }
-        
-        // Reason information
-        if (studyData.reason && studyData.reason.length > 0) {
-            const p = document.createElement('p');
-            p.innerHTML = `<strong><i class="fas fa-question-circle"></i> Reason:</strong> ${studyData.reason[0].text || 'N/A'}`;
-            studyInfo.appendChild(p);
-        }
-        
-        // Note information
-        if (studyData.note && studyData.note.length > 0) {
-            const p = document.createElement('p');
-            p.innerHTML = `<strong><i class="fas fa-sticky-note"></i> Note:</strong> ${studyData.note[0].text || 'N/A'}`;
-            studyInfo.appendChild(p);
-        }
-        
-        // Series information
+        // Populate series information
         const seriesList = modal.querySelector('.series-list');
-        if (studyData.series && studyData.series.length > 0) {
-            studyData.series.forEach((series, index) => {
-                const li = document.createElement('li');
-                li.innerHTML = `<strong><i class="fas fa-list-ol"></i> Series ${series.number || index + 1}:</strong> ${series.description || 'N/A'}`;
-                if (series.modality) {
-                    li.innerHTML += ` (Modality: ${series.modality.display || series.modality.code || 'N/A'})`;
-                }
-                seriesList.appendChild(li);
-            });
-        }
+        populateSeriesList(seriesList, studyData);
         
         // Set back to report link
         const backLink = modal.querySelector('.back-to-report');
@@ -573,6 +531,72 @@ document.addEventListener('DOMContentLoaded', function() {
         modal.showModal();
     }
     
+    // Helper function to populate study information
+    function populateStudyInfo(studyInfo, studyData) {
+        // Started date
+        if (studyData.started) {
+            const p = document.createElement('p');
+            p.innerHTML = `<strong><i class="fas fa-calendar"></i> Started:</strong> ${studyData.started}`;
+            studyInfo.appendChild(p);
+        }
+        
+        // Modality
+        if (studyData.modality) {
+            const p = document.createElement('p');
+            p.innerHTML = `<strong><i class="fas fa-stethoscope"></i> Modality:</strong> ${studyData.modality.display || studyData.modality.code || 'N/A'}`;
+            studyInfo.appendChild(p);
+        }
+        
+        // Description
+        if (studyData.description) {
+            const p = document.createElement('p');
+            p.innerHTML = `<strong><i class="fas fa-file-medical"></i> Description:</strong> ${studyData.description}`;
+            studyInfo.appendChild(p);
+        }
+        
+        // Performer
+        if (studyData.performer && studyData.performer.length > 0) {
+            const p = document.createElement('p');
+            p.innerHTML = `<strong><i class="fas fa-user-md"></i> Performer:</strong> ${studyData.performer[0].actor?.display || 'N/A'}`;
+            studyInfo.appendChild(p);
+        }
+        
+        // Referrer
+        if (studyData.referrer) {
+            const p = document.createElement('p');
+            p.innerHTML = `<strong><i class="fas fa-user-check"></i> Referrer:</strong> ${studyData.referrer.display || 'N/A'}`;
+            studyInfo.appendChild(p);
+        }
+        
+        // Reason
+        if (studyData.reason && studyData.reason.length > 0) {
+            const p = document.createElement('p');
+            p.innerHTML = `<strong><i class="fas fa-question-circle"></i> Reason:</strong> ${studyData.reason[0].text || 'N/A'}`;
+            studyInfo.appendChild(p);
+        }
+        
+        // Note
+        if (studyData.note && studyData.note.length > 0) {
+            const p = document.createElement('p');
+            p.innerHTML = `<strong><i class="fas fa-sticky-note"></i> Note:</strong> ${studyData.note[0].text || 'N/A'}`;
+            studyInfo.appendChild(p);
+        }
+    }
+    
+    // Helper function to populate series list
+    function populateSeriesList(seriesList, studyData) {
+        if (!studyData.series || studyData.series.length === 0) return;
+        
+        studyData.series.forEach((series, index) => {
+            const li = document.createElement('li');
+            li.innerHTML = `<strong><i class="fas fa-list-ol"></i> Series ${series.number || index + 1}:</strong> ${series.description || 'N/A'}`;
+            if (series.modality) {
+                li.innerHTML += ` (Modality: ${series.modality.display || series.modality.code || 'N/A'})`;
+            }
+            seriesList.appendChild(li);
+        });
+    }
+    
     // Function to close imaging study modal
     function closeImagingStudyModal() {
         const modal = document.getElementById('imagingStudyModal');
@@ -585,54 +609,70 @@ document.addEventListener('DOMContentLoaded', function() {
     window.viewImagingStudy = viewImagingStudy;
     window.closeImagingStudyModal = closeImagingStudyModal;
     
+    // Utility functions for better code organization
+    const Utils = {
+        // Debounce function for search input
+        debounce: (func, wait) => {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        },
+        
+        // Format date helper
+        formatDate: (dateString) => {
+            if (!dateString) return 'Unknown';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-GB');
+        },
+        
+        // Format time helper
+        formatTime: (dateString) => {
+            if (!dateString) return '';
+            const date = new Date(dateString);
+            return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        },
+        
+        // Check if element exists
+        elementExists: (selector) => {
+            return document.querySelector(selector) !== null;
+        }
+    };
+    
     // Function to load and display reports progressively
     async function loadAndDisplayReports(analysesData, patientData) {
-        const analysesGrid = document.getElementById('analysesGrid');
-        const noAnalyses = document.getElementById('noAnalyses');
-        
         // Check if we have a FHIR Bundle of ServiceRequests
         if (analysesData.resourceType === "Bundle" && analysesData.entry && analysesData.entry.length > 0) {
-            noAnalyses.style.display = 'none';
+            elements.noAnalyses.style.display = 'none';
             
-            // Process each service request - only display imaging analyses
-            for (const entry of analysesData.entry) {
+            // Filter for imaging analyses only
+            const imagingTypes = ['radio', 'ct', 'irm', 'eco', 'lac', 'lii', 'rads'];
+            const imagingEntries = analysesData.entry.filter(entry => {
+                const serviceRequest = entry.resource;
+                const analysisType = serviceRequest.code?.coding?.[0]?.code || 'unknown';
+                return imagingTypes.includes(analysisType);
+            });
+            
+            if (imagingEntries.length === 0) {
+                elements.noAnalyses.style.display = 'block';
+                return;
+            }
+            
+            // Process each service request
+            for (const entry of imagingEntries) {
                 const serviceRequest = entry.resource;
                 
-                // Extract type from service request code
-                let analysisType = 'unknown';
-                if (serviceRequest.code && serviceRequest.code.coding && serviceRequest.code.coding.length > 0) {
-                    analysisType = serviceRequest.code.coding[0].code || 'unknown';
-                }
-                // Extract display text from service request display
-                let analysisText = 'analysis';
-                if (serviceRequest.code && serviceRequest.code.coding && serviceRequest.code.coding.length > 0) {
-                    analysisText = serviceRequest.code.coding[0].display || 'analysis';
-                }
+                // Extract type and display text from service request code
+                const analysisType = serviceRequest.code?.coding?.[0]?.code || 'unknown';
+                const analysisText = serviceRequest.code?.coding?.[0]?.display || 'analysis';
                 
-                // Display analyses with imaging types 'radio', 'ct', 'irm', 'eco', 'lac', 'lii', 'rads'
-                if (!['radio', 'ct', 'irm', 'eco', 'lac', 'lii', 'rads'].includes(analysisType)) {
-                    continue;
-                }
-                
-                // Use template for analysis card
-                const cardTemplate = document.getElementById('analysis-card-template');
-                const analysisCard = cardTemplate.content.cloneNode(true).querySelector('article');
-                analysisCard.className = `analysis-card ${analysisType}`;
-                
-                // Set card header
-                analysisCard.querySelector('h4').innerHTML = `<i class="fas fa-file-medical"></i> ${analysisText} report #${serviceRequest.id}`;
-                
-                // Set exam date if available
-                const examDateElement = analysisCard.querySelector('.exam-date');
-                if (serviceRequest.authoredOn) {
-                    // Parse ISO datetime and format it nicely
-                    const dateTime = new Date(serviceRequest.authoredOn);
-                    const formattedDate = dateTime.toLocaleDateString('en-GB');
-                    const formattedTime = dateTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-                    examDateElement.innerHTML = `<i class="fas fa-calendar"></i> Date: ${formattedDate} ${formattedTime}`;
-                } else {
-                    examDateElement.innerHTML = '<i class="fas fa-calendar"></i> Date: Unknown';
-                }
+                // Create analysis card using template
+                const analysisCard = createAnalysisCard(serviceRequest, analysisType, analysisText);
                 
                 // For imaging analyses, fetch and display report content
                 if (['radio', 'ct', 'irm', 'eco', 'lac', 'lii', 'rads'].includes(analysisType)) {
@@ -727,137 +767,191 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
                 
-                analysesGrid.appendChild(analysisCard);
+                elements.analysesGrid.appendChild(analysisCard);
                 
                 // Force UI update to display the report immediately
                 await new Promise(resolve => setTimeout(resolve, 0));
             }
-            
-            // Check if we actually added any cards
-            if (analysesGrid.children.length === 0) {
-                noAnalyses.style.display = 'block';
-            }
         } else {
-            noAnalyses.style.display = 'block';
+            elements.noAnalyses.style.display = 'block';
         }
+    }
+    
+    // Helper function to create analysis card
+    function createAnalysisCard(serviceRequest, analysisType, analysisText) {
+        const cardTemplate = document.getElementById('analysis-card-template');
+        const analysisCard = cardTemplate.content.cloneNode(true).querySelector('article');
+        analysisCard.className = `analysis-card ${analysisType}`;
+        
+        // Set card header
+        analysisCard.querySelector('h4').innerHTML = `<i class="fas fa-file-medical"></i> ${analysisText} report #${serviceRequest.id}`;
+        
+        // Set exam date if available
+        const examDateElement = analysisCard.querySelector('.exam-date');
+        if (serviceRequest.authoredOn) {
+            const dateTime = new Date(serviceRequest.authoredOn);
+            const formattedDate = dateTime.toLocaleDateString('en-GB');
+            const formattedTime = dateTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+            examDateElement.innerHTML = `<i class="fas fa-calendar"></i> Date: ${formattedDate} ${formattedTime}`;
+        } else {
+            examDateElement.innerHTML = '<i class="fas fa-calendar"></i> Date: Unknown';
+        }
+        
+        return analysisCard;
     }
     
     // Function to load and display epicrisis progressively
     async function loadAndDisplayEpicrisis(patientData) {
         // Extract all checkout IDs from patient extensions
-        let checkoutIds = [];
-        if (patientData.extension) {
-            const checkoutExt = patientData.extension.find(ext => ext.url && ext.url.includes('checkout-ids'));
-            if (checkoutExt && checkoutExt.valueString) {
-                checkoutIds = checkoutExt.valueString.split(',').filter(id => id.trim());
-            }
+        const checkoutIds = extractCheckoutIds(patientData);
+        
+        if (checkoutIds.length === 0) {
+            elements.epicrisisSection.style.display = 'none';
+            return;
         }
         
         // Try to fetch epicrisis data for each checkout ID until we find a valid one
         for (const checkoutId of checkoutIds) {
-            try {
-                showToast(`Loading epicrisis data for checkout ${checkoutId}...`, 'success');
-                const encounterResponse = await fetch(`/fhir/Encounter/${checkoutId}`);
-                
-                if (encounterResponse.ok) {
-                    const encounterData = await encounterResponse.json();
-                    
-                    // Extract epicrisis from notes array
-                    let epicrisisText = '';
-                    if (encounterData.note && Array.isArray(encounterData.note)) {
-                        // Concatenate all note texts
-                        epicrisisText = encounterData.note.map(note => note.text || '').join('\n\n');
-                    }
-                    
-                    if (epicrisisText) {
-                        // Display epicrisis immediately
-                        const epicrisisSection = document.getElementById('epicrisisSection');
-                        const epicrisisTitle = document.getElementById('epicrisisTitle');
-                        try {
-                            const htmlContent = await convertMarkdownToHtml(epicrisisText);
-                            document.getElementById('epicrisisContent').innerHTML = htmlContent;
-                            
-                            // Set diagnosis title if available - prioritize discharge diagnosis
-                            let diagnosisText = 'DIAGNOSTIC';
-                            if (encounterData.diagnosis && encounterData.diagnosis.length > 0) {
-                                // Look for discharge diagnosis first (use code "DD")
-                                const dischargeDiagnosis = encounterData.diagnosis.find(d => 
-                                    d.use && d.use.coding && d.use.coding.some(c => c.code === "DD")
-                                );
-                                
-                                if (dischargeDiagnosis && dischargeDiagnosis.condition && dischargeDiagnosis.condition.display) {
-                                    diagnosisText = dischargeDiagnosis.condition.display;
-                                } else {
-                                    // Fallback to first diagnosis if no discharge diagnosis found
-                                    const firstDiagnosis = encounterData.diagnosis[0];
-                                    if (firstDiagnosis.condition && firstDiagnosis.condition.display) {
-                                        diagnosisText = firstDiagnosis.condition.display;
-                                    }
-                                }
-                            }
-                            epicrisisTitle.innerHTML = `<i class="fas fa-diagnoses"></i> Epicrisis: ${diagnosisText}`;
-                            
-                            // Display date if available
-                            const dateElement = document.getElementById('epicrisisDate');
-                            if (encounterData.period && encounterData.period.end) {
-                                // Parse ISO datetime and format it nicely
-                                const dateTime = new Date(encounterData.period.end);
-                                const formattedDate = dateTime.toLocaleDateString('en-GB');
-                                const formattedTime = dateTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-                                dateElement.innerHTML = `<i class="fas fa-calendar"></i> Date: ${formattedDate} ${formattedTime}`;
-                                dateElement.style.display = 'block';
-                            } else {
-                                dateElement.style.display = 'none';
-                            }
-                            
-                            // Extract medic name from attender (ATND) participant and display in footer
-                            const footerElement = document.getElementById('epicrisisFooter');
-                            if (encounterData.participant && encounterData.participant.length > 0) {
-                                // Look for participant with ATND type
-                                const attenderParticipant = encounterData.participant.find(p => 
-                                    p.type && p.type.some(t => 
-                                        t.coding && t.coding.some(c => c.code === "ATND")
-                                    )
-                                );
-                                
-                                if (attenderParticipant && attenderParticipant.individual && attenderParticipant.individual.display) {
-                                    if (footerElement) {
-                                        footerElement.innerHTML = `<i class="fas fa-user-md"></i> Medic: ${attenderParticipant.individual.display}`;
-                                        footerElement.style.display = 'block';
-                                    }
-                                } else if (footerElement) {
-                                    footerElement.style.display = 'none';
-                                }
-                            } else if (footerElement) {
-                                footerElement.style.display = 'none';
-                            }
-                        } catch (err) {
-                            console.error('Error converting epicrisis markdown:', err);
-                            document.getElementById('epicrisisContent').textContent = epicrisisText;
-                            document.getElementById('epicrisisDate').style.display = 'none';
-                            // Hide footer on error
-                            const footerElement = document.getElementById('epicrisisFooter');
-                            if (footerElement) {
-                                footerElement.style.display = 'none';
-                            }
-                        }
-                        epicrisisSection.style.display = 'block';
-                        
-                        // Force UI update to display the epicrisis immediately
-                        await new Promise(resolve => setTimeout(resolve, 0));
-                        
-                        showToast(`Valid epicrisis data loaded for checkout ${checkoutId}`, 'success');
-                        break; // Found a valid epicrisis, stop searching
-                    } else {
-                        showToast(`No epicrisis data found for checkout ${checkoutId}`, 'error');
-                    }
-                } else {
-                    showToast(`Not found epicrisis data for checkout ${checkoutId}`, 'error');
-                }
-            } catch (err) {
-                console.error('Error fetching encounter data:', err);
-                showToast(`Error loading epicrisis data for checkout ${checkoutId}`, 'error');
+            const success = await loadEpicrisisForCheckout(checkoutId);
+            if (success) {
+                showToast(`Valid epicrisis data loaded for checkout ${checkoutId}`, 'success');
+                break; // Found a valid epicrisis, stop searching
             }
+        }
+    }
+    
+    // Helper function to extract checkout IDs from patient data
+    function extractCheckoutIds(patientData) {
+        if (!patientData.extension) return [];
+        
+        const checkoutExt = patientData.extension.find(ext => ext.url && ext.url.includes('checkout-ids'));
+        if (!checkoutExt || !checkoutExt.valueString) return [];
+        
+        return checkoutExt.valueString.split(',').filter(id => id.trim());
+    }
+    
+    // Helper function to load epicrisis for a specific checkout
+    async function loadEpicrisisForCheckout(checkoutId) {
+        try {
+            showToast(`Loading epicrisis data for checkout ${checkoutId}...`, 'success');
+            const encounterResponse = await fetch(`/fhir/Encounter/${checkoutId}`);
+            
+            if (!encounterResponse.ok) {
+                showToast(`Not found epicrisis data for checkout ${checkoutId}`, 'error');
+                return false;
+            }
+            
+            const encounterData = await encounterResponse.json();
+            const epicrisisText = extractEpicrisisText(encounterData);
+            
+            if (!epicrisisText) {
+                showToast(`No epicrisis data found for checkout ${checkoutId}`, 'error');
+                return false;
+            }
+            
+            await displayEpicrisisData(encounterData, epicrisisText);
+            return true;
+            
+        } catch (err) {
+            console.error('Error fetching encounter data:', err);
+            showToast(`Error loading epicrisis data for checkout ${checkoutId}`, 'error');
+            return false;
+        }
+    }
+    
+    // Helper function to extract epicrisis text from encounter data
+    function extractEpicrisisText(encounterData) {
+        if (!encounterData.note || !Array.isArray(encounterData.note)) return '';
+        
+        // Concatenate all note texts
+        return encounterData.note.map(note => note.text || '').join('\n\n');
+    }
+    
+    // Helper function to display epicrisis data
+    async function displayEpicrisisData(encounterData, epicrisisText) {
+        try {
+            const htmlContent = await convertMarkdownToHtml(epicrisisText);
+            elements.epicrisisContent.innerHTML = htmlContent;
+            
+            // Set diagnosis title if available - prioritize discharge diagnosis
+            const diagnosisText = extractDiagnosisText(encounterData);
+            elements.epicrisisTitle.innerHTML = `<i class="fas fa-diagnoses"></i> Epicrisis: ${diagnosisText}`;
+            
+            // Display date if available
+            displayEpicrisisDate(encounterData);
+            
+            // Extract medic name from attender (ATND) participant and display in footer
+            displayMedicInfo(encounterData);
+            
+            elements.epicrisisSection.style.display = 'block';
+            
+            // Force UI update to display the epicrisis immediately
+            await new Promise(resolve => setTimeout(resolve, 0));
+            
+        } catch (err) {
+            console.error('Error converting epicrisis markdown:', err);
+            elements.epicrisisContent.textContent = epicrisisText;
+            elements.epicrisisDate.style.display = 'none';
+            elements.epicrisisFooter.style.display = 'none';
+        }
+    }
+    
+    // Helper function to extract diagnosis text
+    function extractDiagnosisText(encounterData) {
+        if (!encounterData.diagnosis || encounterData.diagnosis.length === 0) {
+            return 'DIAGNOSTIC';
+        }
+        
+        // Look for discharge diagnosis first (use code "DD")
+        const dischargeDiagnosis = encounterData.diagnosis.find(d => 
+            d.use && d.use.coding && d.use.coding.some(c => c.code === "DD")
+        );
+        
+        if (dischargeDiagnosis && dischargeDiagnosis.condition && dischargeDiagnosis.condition.display) {
+            return dischargeDiagnosis.condition.display;
+        }
+        
+        // Fallback to first diagnosis if no discharge diagnosis found
+        const firstDiagnosis = encounterData.diagnosis[0];
+        if (firstDiagnosis.condition && firstDiagnosis.condition.display) {
+            return firstDiagnosis.condition.display;
+        }
+        
+        return 'DIAGNOSTIC';
+    }
+    
+    // Helper function to display epicrisis date
+    function displayEpicrisisDate(encounterData) {
+        if (encounterData.period && encounterData.period.end) {
+            const dateTime = new Date(encounterData.period.end);
+            const formattedDate = dateTime.toLocaleDateString('en-GB');
+            const formattedTime = dateTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+            elements.epicrisisDate.innerHTML = `<i class="fas fa-calendar"></i> Date: ${formattedDate} ${formattedTime}`;
+            elements.epicrisisDate.style.display = 'block';
+        } else {
+            elements.epicrisisDate.style.display = 'none';
+        }
+    }
+    
+    // Helper function to display medic information
+    function displayMedicInfo(encounterData) {
+        if (!encounterData.participant || encounterData.participant.length === 0) {
+            elements.epicrisisFooter.style.display = 'none';
+            return;
+        }
+        
+        // Look for participant with ATND type
+        const attenderParticipant = encounterData.participant.find(p => 
+            p.type && p.type.some(t => 
+                t.coding && t.coding.some(c => c.code === "ATND")
+            )
+        );
+        
+        if (attenderParticipant && attenderParticipant.individual && attenderParticipant.individual.display) {
+            elements.epicrisisFooter.innerHTML = `<i class="fas fa-user-md"></i> Medic: ${attenderParticipant.individual.display}`;
+            elements.epicrisisFooter.style.display = 'block';
+        } else {
+            elements.epicrisisFooter.style.display = 'none';
         }
     }
 });

@@ -4,111 +4,119 @@
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>HippoBridge - Medical Patient Data Analyzer</title>
+        <meta name="description" content="Secure medical patient data analyzer for healthcare professionals">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌉</text></svg>">
+        <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌉</text></svg>">
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.slate.min.css">
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
         <link rel="stylesheet" href="/static/styles.css">
+        
+        <!-- Preload critical fonts and resources -->
+        <link rel="preload" href="/static/styles.css" as="style">
+        <link rel="preload" href="/static/scripts.js" as="script">
     </head>
     <body>
         <div class="layout-container">
             <!-- Sidebar Navigation -->
-            <nav class="sidebar">
+            <nav class="sidebar" aria-label="Main navigation">
                 <div class="sidebar-header">
-                    <h1><i class="fas fa-bridge"></i> HippoBridge</h1>
+                    <h1><i class="fas fa-bridge" aria-hidden="true"></i> HippoBridge</h1>
                     <p>Medical Data Analyzer</p>
                 </div>
-                <ul class="nav-menu">
-                    <li class="nav-item active" data-tab="search">
-                        <a href="#"><i class="fas fa-search"></i> Patient Search</a>
+                <ul class="nav-menu" role="tablist">
+                    <li class="nav-item active" data-tab="search" role="tab" aria-selected="true">
+                        <a href="#" aria-controls="search-tab"><i class="fas fa-search" aria-hidden="true"></i> Patient Search</a>
                     </li>
-                    <li class="nav-item" data-tab="patient" style="display: none;">
-                        <a href="#"><i class="fas fa-user-injured"></i> Patient Profile</a>
+                    <li class="nav-item" data-tab="patient" style="display: none;" role="tab" aria-selected="false">
+                        <a href="#" aria-controls="patient-tab"><i class="fas fa-user-injured" aria-hidden="true"></i> Patient Profile</a>
                     </li>
-                    <li class="nav-item" data-tab="analyses" style="display: none;">
-                        <a href="#"><i class="fas fa-file-medical"></i> Medical Analyses</a>
+                    <li class="nav-item" data-tab="analyses" style="display: none;" role="tab" aria-selected="false">
+                        <a href="#" aria-controls="analyses-tab"><i class="fas fa-file-medical" aria-hidden="true"></i> Medical Analyses</a>
                     </li>
-                    <li class="nav-item" data-tab="epicrisis" style="display: none;">
-                        <a href="#"><i class="fas fa-file-prescription"></i> Epicrisis</a>
+                    <li class="nav-item" data-tab="epicrisis" style="display: none;" role="tab" aria-selected="false">
+                        <a href="#" aria-controls="epicrisis-tab"><i class="fas fa-file-prescription" aria-hidden="true"></i> Epicrisis</a>
                     </li>
                 </ul>
                 <div class="sidebar-footer">
-                    <p><i class="fas fa-shield-alt"></i> Secure Medical System</p>
+                    <p><i class="fas fa-shield-alt" aria-hidden="true"></i> Secure Medical System</p>
                 </div>
             </nav>
 
             <!-- Main Content Area -->
             <main class="main-content">
                 <!-- Search Tab -->
-                <section id="search-tab" class="tab-content active">
+                <section id="search-tab" class="tab-content active" role="tabpanel" aria-labelledby="search-tab">
                     <article>
                         <hgroup>
-                            <h2><i class="fas fa-search"></i> Patient Search</h2>
+                            <h2><i class="fas fa-search" aria-hidden="true"></i> Patient Search</h2>
                             <p>Enter a 13-digit Romanian CNP, patient code, or partial CNP (ending with *) to retrieve patient information and medical analyses.</p>
                         </hgroup>
                         
-                        <form id="cnpForm">
+                        <form id="cnpForm" novalidate>
                             <label for="cnpInput">Patient Identifier:</label>
                             <div class="group">
-                                <input type="text" id="cnpInput" name="cnp" placeholder="e.g., 1234567890123, 1234567*, patient code, or patient name" required>
-                                <button type="submit" id="analyzeBtn"><i class="fas fa-search"></i> Search Patient</button>
+                                <input type="text" id="cnpInput" name="cnp" placeholder="e.g., 1234567890123, 1234567*, patient code, or patient name" required aria-describedby="cnpHelp">
+                                <button type="submit" id="analyzeBtn" aria-label="Search for patient"><i class="fas fa-search" aria-hidden="true"></i> Search Patient</button>
                             </div>
+                            <div id="cnpHelp" class="form-help">Valid formats: 13-digit CNP, partial CNP (digits + *), patient code, or patient name</div>
                         </form>
-                        <div class="error" id="error"></div>
-                        <div class="success" id="success"></div>
+                        <div class="error" id="error" role="alert" aria-live="polite"></div>
+                        <div class="success" id="success" role="status" aria-live="polite"></div>
                     </article>
                 </section>
 
                 <!-- Patient Profile Tab -->
-                <section id="patient-tab" class="tab-content">
-                    <article class="results patient-card">
+                <section id="patient-tab" class="tab-content" role="tabpanel" aria-labelledby="patient-tab" hidden>
+                    <article class="results patient-card" aria-live="polite">
                         <div class="patient-header">
                             <div>
-                                <h2 id="patientName"><i class="fas fa-user"></i> Patient Name</h2>
+                                <h2 id="patientName"><i class="fas fa-user" aria-hidden="true"></i> Patient Name</h2>
                                 <p class="patient-id">Patient ID: <span id="patientId"></span></p>
                             </div>
-                            <button id="backToSearch" class="secondary"><i class="fas fa-arrow-left"></i> New Search</button>
+                            <button id="backToSearch" class="secondary" aria-label="Start new search"><i class="fas fa-arrow-left" aria-hidden="true"></i> New Search</button>
                         </div>
                         
                         <div class="patient-info-grid">
                             <div class="patient-info-item">
-                                <span class="patient-info-label"><i class="fas fa-id-card"></i> CNP</span>
-                                <p class="patient-info-value" id="patientCnp"></p>
+                                <span class="patient-info-label"><i class="fas fa-id-card" aria-hidden="true"></i> CNP</span>
+                                <p class="patient-info-value" id="patientCnp" aria-label="Patient CNP"></p>
                             </div>
                             <div class="patient-info-item">
-                                <span class="patient-info-label"><i class="fas fa-venus-mars"></i> Gender</span>
-                                <p class="patient-info-value" id="patientGender"></p>
+                                <span class="patient-info-label"><i class="fas fa-venus-mars" aria-hidden="true"></i> Gender</span>
+                                <p class="patient-info-value" id="patientGender" aria-label="Patient gender"></p>
                             </div>
                             <div class="patient-info-item">
-                                <span class="patient-info-label"><i class="fas fa-birthday-cake"></i> Birth Date</span>
-                                <p class="patient-info-value" id="patientBirthDate"></p>
+                                <span class="patient-info-label"><i class="fas fa-birthday-cake" aria-hidden="true"></i> Birth Date</span>
+                                <p class="patient-info-value" id="patientBirthDate" aria-label="Patient birth date"></p>
                             </div>
                             <div class="patient-info-item">
-                                <span class="patient-info-label"><i class="fas fa-phone"></i> Phone</span>
-                                <p class="patient-info-value" id="patientPhone"></p>
+                                <span class="patient-info-label"><i class="fas fa-phone" aria-hidden="true"></i> Phone</span>
+                                <p class="patient-info-value" id="patientPhone" aria-label="Patient phone number"></p>
                             </div>
                             <div class="patient-info-item">
-                                <span class="patient-info-label"><i class="fas fa-envelope"></i> Email</span>
-                                <p class="patient-info-value" id="patientEmail"></p>
+                                <span class="patient-info-label"><i class="fas fa-envelope" aria-hidden="true"></i> Email</span>
+                                <p class="patient-info-value" id="patientEmail" aria-label="Patient email address"></p>
                             </div>
                         </div>
                         
-                        <div class="patient-stats">
-                            <div class="stat-card">
-                                <i class="fas fa-procedures stat-icon"></i>
+                        <div class="patient-stats" aria-label="Patient statistics">
+                            <div class="stat-card" aria-label="Number of presentations">
+                                <i class="fas fa-procedures stat-icon" aria-hidden="true"></i>
                                 <div class="stat-info">
                                     <span class="stat-value" id="presentationsCount">0</span>
                                     <span class="stat-label">Presentations</span>
                                 </div>
                             </div>
-                            <div class="stat-card">
-                                <i class="fas fa-sign-in-alt stat-icon"></i>
+                            <div class="stat-card" aria-label="Number of checkins">
+                                <i class="fas fa-sign-in-alt stat-icon" aria-hidden="true"></i>
                                 <div class="stat-info">
                                     <span class="stat-value" id="checkinsCount">0</span>
                                     <span class="stat-label">Checkins</span>
                                 </div>
                             </div>
-                            <div class="stat-card">
-                                <i class="fas fa-sign-out-alt stat-icon"></i>
+                            <div class="stat-card" aria-label="Number of checkouts">
+                                <i class="fas fa-sign-out-alt stat-icon" aria-hidden="true"></i>
                                 <div class="stat-info">
                                     <span class="stat-value" id="checkoutsCount">0</span>
                                     <span class="stat-label">Checkouts</span>
@@ -116,38 +124,38 @@
                             </div>
                         </div>
                         
-                        <div id="checkoutIdsList" class="checkout-ids"></div>
+                        <div id="checkoutIdsList" class="checkout-ids" aria-label="Checkout IDs"></div>
                     </article>
                 </section>
 
                 <!-- Medical Analyses Tab -->
-                <section id="analyses-tab" class="tab-content">
+                <section id="analyses-tab" class="tab-content" role="tabpanel" aria-labelledby="analyses-tab" hidden>
                     <hgroup>
-                        <h2><i class="fas fa-file-medical"></i> Medical Analyses</h2>
+                        <h2><i class="fas fa-file-medical" aria-hidden="true"></i> Medical Analyses</h2>
                         <p>Diagnostic reports and imaging studies for the patient</p>
                     </hgroup>
                     
-                    <div class="analyses-container">
-                        <div class="no-data" id="noAnalyses">
-                            <i class="fas fa-file-medical fa-3x"></i>
+                    <div class="analyses-container" aria-live="polite">
+                        <div class="no-data" id="noAnalyses" role="status" aria-label="No analyses available">
+                            <i class="fas fa-file-medical fa-3x" aria-hidden="true"></i>
                             <p>No analyses found for this patient</p>
                         </div>
-                        <div id="analysesGrid" class="analyses-grid"></div>
+                        <div id="analysesGrid" class="analyses-grid" aria-label="Medical analyses grid"></div>
                     </div>
                 </section>
 
                 <!-- Epicrisis Tab -->
-                <section id="epicrisis-tab" class="tab-content">
-                    <article id="epicrisisSection">
+                <section id="epicrisis-tab" class="tab-content" role="tabpanel" aria-labelledby="epicrisis-tab" hidden>
+                    <article id="epicrisisSection" aria-live="polite">
                         <div class="epicrisis-header">
                             <hgroup>
-                                <h2><i class="fas fa-file-prescription"></i> Epicrisis</h2>
+                                <h2><i class="fas fa-file-prescription" aria-hidden="true"></i> Epicrisis</h2>
                                 <h3 id="epicrisisTitle">DIAGNOSTIC</h3>
-                                <p id="epicrisisDate"></p>
+                                <p id="epicrisisDate" aria-label="Epicrisis date"></p>
                             </hgroup>
                         </div>
-                        <main id="epicrisisContent" class="epicrisis-content"></main>
-                        <footer id="epicrisisFooter" class="epicrisis-footer"></footer>
+                        <main id="epicrisisContent" class="epicrisis-content" aria-label="Epicrisis content"></main>
+                        <footer id="epicrisisFooter" class="epicrisis-footer" aria-label="Epicrisis footer"></footer>
                     </article>
                 </section>
             </main>
@@ -155,46 +163,46 @@
 
         <!-- Templates for dynamic content -->
         <template id="analysis-card-template">
-            <article class="analysis-card">
+            <article class="analysis-card" role="article">
                 <div class="analysis-header">
                     <h4></h4>
-                    <p class="exam-date"></p>
+                    <p class="exam-date" aria-label="Exam date"></p>
                 </div>
                 <div class="analysis-content">
-                    <div class="report-meta"></div>
-                    <div class="report-preview"></div>
-                    <div class="imaging-study-link"></div>
+                    <div class="report-meta" aria-label="Report metadata"></div>
+                    <div class="report-preview" aria-label="Report preview"></div>
+                    <div class="imaging-study-link" aria-label="Imaging study link"></div>
                 </div>
-                <footer class="report-footer"></footer>
+                <footer class="report-footer" aria-label="Report footer"></footer>
             </article>
         </template>
 
         <template id="toast-template">
-            <div class="toast"></div>
+            <div class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
         </template>
 
         <template id="imaging-study-modal-template">
-            <dialog class="modal">
+            <dialog class="modal" aria-modal="true" role="dialog">
                 <article>
                     <header>
                         <h2></h2>
-                        <button class="close" aria-label="Close" rel="prev"></button>
+                        <button class="close" aria-label="Close modal" rel="prev"></button>
                     </header>
                     <main>
                         <div class="study-section">
-                            <h3><i class="fas fa-info-circle"></i> Study Information</h3>
-                            <div class="study-info"></div>
+                            <h3><i class="fas fa-info-circle" aria-hidden="true"></i> Study Information</h3>
+                            <div class="study-info" aria-label="Study information"></div>
                         </div>
                         <section class="study-section">
-                            <h3><i class="fas fa-list"></i> Series</h3>
-                            <ul class="series-list"></ul>
+                            <h3><i class="fas fa-list" aria-hidden="true"></i> Series</h3>
+                            <ul class="series-list" aria-label="Series list"></ul>
                         </section>
                         <section class="study-section">
-                            <p><a href="#" class="back-to-report"><i class="fas fa-arrow-left"></i> Back to Report</a></p>
+                            <p><a href="#" class="back-to-report" aria-label="Back to report"><i class="fas fa-arrow-left" aria-hidden="true"></i> Back to Report</a></p>
                         </section>
                     </main>
                     <footer>
-                        <button class="secondary" data-close-modal><i class="fas fa-times"></i> Close</button>
+                        <button class="secondary" data-close-modal aria-label="Close modal"><i class="fas fa-times" aria-hidden="true"></i> Close</button>
                     </footer>
                 </article>
             </dialog>
