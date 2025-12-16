@@ -1,18 +1,70 @@
-
 document.addEventListener('DOMContentLoaded', function() {
+    // DOM Elements
     const form = document.getElementById('cnpForm');
     const cnpInput = document.getElementById('cnpInput');
     const analyzeBtn = document.getElementById('analyzeBtn');
     const errorDiv = document.getElementById('error');
-    const results = document.getElementById('results');
+    const backToSearchBtn = document.getElementById('backToSearch');
     
-    // Hide results container on page load
-    results.style.display = 'none';
+    // Tab navigation
+    const navItems = document.querySelectorAll('.nav-item');
+    const tabContents = document.querySelectorAll('.tab-content');
     
-    // Hide "No analyses found" message on page load
-    const noAnalyses = document.getElementById('noAnalyses');
-    if (noAnalyses) {
-        noAnalyses.style.display = 'none';
+    // Hide all tab contents except search
+    tabContents.forEach(tab => {
+        if (!tab.classList.contains('active')) {
+            tab.style.display = 'none';
+        }
+    });
+    
+    // Tab navigation handler
+    navItems.forEach(item => {
+        item.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Update active nav item
+            navItems.forEach(nav => nav.classList.remove('active'));
+            this.classList.add('active');
+            
+            // Show corresponding tab content
+            const tabId = this.getAttribute('data-tab');
+            tabContents.forEach(tab => {
+                tab.classList.remove('active');
+                tab.style.display = 'none';
+            });
+            
+            const targetTab = document.getElementById(`${tabId}-tab`);
+            if (targetTab) {
+                targetTab.classList.add('active');
+                targetTab.style.display = 'block';
+            }
+        });
+    });
+    
+    // Back to search button handler
+    if (backToSearchBtn) {
+        backToSearchBtn.addEventListener('click', function() {
+            // Reset form
+            form.reset();
+            
+            // Switch to search tab
+            navItems.forEach(nav => nav.classList.remove('active'));
+            document.querySelector('.nav-item[data-tab="search"]').classList.add('active');
+            
+            tabContents.forEach(tab => {
+                tab.classList.remove('active');
+                tab.style.display = 'none';
+            });
+            
+            const searchTab = document.getElementById('search-tab');
+            if (searchTab) {
+                searchTab.classList.add('active');
+                searchTab.style.display = 'block';
+            }
+            
+            // Clear results
+            clearResults();
+        });
     }
     
     // Form submission handler
@@ -205,6 +257,20 @@ document.addEventListener('DOMContentLoaded', function() {
             await loadAndDisplayReports(analysesData, patientData);
             await loadAndDisplayEpicrisis(patientData);
             
+            // Switch to patient profile tab
+            navItems.forEach(nav => nav.classList.remove('active'));
+            document.querySelector('.nav-item[data-tab="patient"]').classList.add('active');
+            document.querySelector('.nav-item[data-tab="analyses"]').style.display = 'block';
+            document.querySelector('.nav-item[data-tab="epicrisis"]').style.display = 'block';
+            
+            tabContents.forEach(tab => {
+                tab.classList.remove('active');
+                tab.style.display = 'none';
+            });
+            
+            document.getElementById('patient-tab').classList.add('active');
+            document.getElementById('patient-tab').style.display = 'block';
+            
             showToast('Analysis loading complete', 'success');
             
         } catch (err) {
@@ -217,19 +283,15 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function showLoading() {
         analyzeBtn.disabled = true;
+        analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Searching...';
     }
     
     function hideLoading() {
         analyzeBtn.disabled = false;
+        analyzeBtn.innerHTML = '<i class="fas fa-search"></i> Search Patient';
     }
     
     function clearResults() {
-        // Hide results container
-        results.style.display = 'none';
-        
-        // Hide analyses container
-        document.getElementById('analysesContainer').style.display = 'none';
-        
         // Clear patient data
         document.getElementById('patientId').textContent = '';
         document.getElementById('patientName').textContent = '';
@@ -250,7 +312,13 @@ document.addEventListener('DOMContentLoaded', function() {
         // Clear epicrisis
         document.getElementById('epicrisisContent').innerHTML = '';
         document.getElementById('epicrisisDate').style.display = 'none';
-        document.getElementById('epicrisisSection').style.display = 'none';
+        document.getElementById('epicrisisTitle').textContent = 'DIAGNOSTIC';
+        document.getElementById('epicrisisFooter').style.display = 'none';
+        
+        // Hide navigation tabs for patient data
+        document.querySelector('.nav-item[data-tab="patient"]').style.display = 'none';
+        document.querySelector('.nav-item[data-tab="analyses"]').style.display = 'none';
+        document.querySelector('.nav-item[data-tab="epicrisis"]').style.display = 'none';
         
         // Clear any existing toasts
         const toastContainer = document.getElementById('toast-container');
@@ -284,7 +352,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const toastTemplate = document.getElementById('toast-template');
         const toast = toastTemplate.content.cloneNode(true).querySelector('.toast');
         toast.className = `toast toast-${type}`;
-        toast.textContent = message;
+        
+        // Add icon based on type
+        const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+        toast.innerHTML = `<i class="fas ${icon}"></i> ${message}`;
         
         // Add toast to container
         toastContainer.appendChild(toast);
@@ -327,9 +398,9 @@ document.addEventListener('DOMContentLoaded', function() {
     async function displayPatientData(patientData, analysesData, epicrisisData = null) {
         // Display patient information
         document.getElementById('patientId').textContent = patientData.id || 'N/A';
-        document.getElementById('patientName').textContent = (patientData.name && patientData.name[0]) 
+        document.getElementById('patientName').innerHTML = `<i class="fas fa-user"></i> ${(patientData.name && patientData.name[0]) 
             ? `${patientData.name[0].family || ''} ${patientData.name[0].given ? patientData.name[0].given.join(' ') : ''}` 
-            : 'N/A';
+            : 'N/A'}`;
         document.getElementById('patientCnp').textContent = patientData.identifier 
             ? patientData.identifier.find(id => id.system && id.system.includes('cnp'))?.value || 'N/A' 
             : 'N/A';
@@ -371,7 +442,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Display checkout IDs list
         const checkoutIdsList = document.getElementById('checkoutIdsList');
         if (checkoutIds.length > 0) {
-            checkoutIdsList.innerHTML = `<strong>IDs:</strong> ${checkoutIds.join(', ')}`;
+            checkoutIdsList.innerHTML = `<strong><i class="fas fa-sign-out-alt"></i> Checkout IDs:</strong> ${checkoutIds.join(', ')}`;
         } else {
             checkoutIdsList.innerHTML = '';
         }
@@ -380,12 +451,6 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('epicrisisSection').style.display = 'none';
         document.getElementById('analysesGrid').innerHTML = '';
         document.getElementById('noAnalyses').style.display = 'none';
-        
-        // Show results container
-        results.style.display = 'block';
-        
-        // Show analyses container
-        document.getElementById('analysesContainer').style.display = 'block';
         
         // Force UI update to ensure patient card is displayed immediately
         await new Promise(resolve => setTimeout(resolve, 0));
@@ -422,54 +487,54 @@ document.addEventListener('DOMContentLoaded', function() {
         modal.id = 'imagingStudyModal';
         
         // Set modal title
-        modal.querySelector('h2').textContent = `Imaging Study #${studyId}`;
+        modal.querySelector('h2').innerHTML = `<i class="fas fa-x-ray"></i> Imaging Study #${studyId}`;
         
         // Populate study information
         const studyInfo = modal.querySelector('.study-info');
         
         if (studyData.started) {
             const p = document.createElement('p');
-            p.innerHTML = `<strong>Started:</strong> ${studyData.started}`;
+            p.innerHTML = `<strong><i class="fas fa-calendar"></i> Started:</strong> ${studyData.started}`;
             studyInfo.appendChild(p);
         }
         
         if (studyData.modality) {
             const p = document.createElement('p');
-            p.innerHTML = `<strong>Modality:</strong> ${studyData.modality.display || studyData.modality.code || 'N/A'}`;
+            p.innerHTML = `<strong><i class="fas fa-stethoscope"></i> Modality:</strong> ${studyData.modality.display || studyData.modality.code || 'N/A'}`;
             studyInfo.appendChild(p);
         }
         
         if (studyData.description) {
             const p = document.createElement('p');
-            p.innerHTML = `<strong>Description:</strong> ${studyData.description}`;
+            p.innerHTML = `<strong><i class="fas fa-file-medical"></i> Description:</strong> ${studyData.description}`;
             studyInfo.appendChild(p);
         }
         
         // Performer information
         if (studyData.performer && studyData.performer.length > 0) {
             const p = document.createElement('p');
-            p.innerHTML = `<strong>Performer:</strong> ${studyData.performer[0].actor?.display || 'N/A'}`;
+            p.innerHTML = `<strong><i class="fas fa-user-md"></i> Performer:</strong> ${studyData.performer[0].actor?.display || 'N/A'}`;
             studyInfo.appendChild(p);
         }
         
         // Referrer information
         if (studyData.referrer) {
             const p = document.createElement('p');
-            p.innerHTML = `<strong>Referrer:</strong> ${studyData.referrer.display || 'N/A'}`;
+            p.innerHTML = `<strong><i class="fas fa-user-check"></i> Referrer:</strong> ${studyData.referrer.display || 'N/A'}`;
             studyInfo.appendChild(p);
         }
         
         // Reason information
         if (studyData.reason && studyData.reason.length > 0) {
             const p = document.createElement('p');
-            p.innerHTML = `<strong>Reason:</strong> ${studyData.reason[0].text || 'N/A'}`;
+            p.innerHTML = `<strong><i class="fas fa-question-circle"></i> Reason:</strong> ${studyData.reason[0].text || 'N/A'}`;
             studyInfo.appendChild(p);
         }
         
         // Note information
         if (studyData.note && studyData.note.length > 0) {
             const p = document.createElement('p');
-            p.innerHTML = `<strong>Note:</strong> ${studyData.note[0].text || 'N/A'}`;
+            p.innerHTML = `<strong><i class="fas fa-sticky-note"></i> Note:</strong> ${studyData.note[0].text || 'N/A'}`;
             studyInfo.appendChild(p);
         }
         
@@ -478,7 +543,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (studyData.series && studyData.series.length > 0) {
             studyData.series.forEach((series, index) => {
                 const li = document.createElement('li');
-                li.innerHTML = `<strong>Series ${series.number || index + 1}:</strong> ${series.description || 'N/A'}`;
+                li.innerHTML = `<strong><i class="fas fa-list-ol"></i> Series ${series.number || index + 1}:</strong> ${series.description || 'N/A'}`;
                 if (series.modality) {
                     li.innerHTML += ` (Modality: ${series.modality.display || series.modality.code || 'N/A'})`;
                 }
@@ -489,7 +554,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Set back to report link
         const backLink = modal.querySelector('.back-to-report');
         backLink.href = '#';
-        backLink.textContent = `Back to Report #${reportId}`;
+        backLink.innerHTML = `<i class="fas fa-arrow-left"></i> Back to Report #${reportId}`;
         backLink.addEventListener('click', function(e) {
             e.preventDefault();
             closeImagingStudyModal();
@@ -555,7 +620,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 analysisCard.className = `analysis-card ${analysisType}`;
                 
                 // Set card header
-                analysisCard.querySelector('h4').textContent = `${analysisText} report #${serviceRequest.id}`;
+                analysisCard.querySelector('h4').innerHTML = `<i class="fas fa-file-medical"></i> ${analysisText} report #${serviceRequest.id}`;
                 
                 // Set exam date if available
                 const examDateElement = analysisCard.querySelector('.exam-date');
@@ -564,9 +629,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     const dateTime = new Date(serviceRequest.authoredOn);
                     const formattedDate = dateTime.toLocaleDateString('en-GB');
                     const formattedTime = dateTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-                    examDateElement.textContent = `Date: ${formattedDate} ${formattedTime}`;
+                    examDateElement.innerHTML = `<i class="fas fa-calendar"></i> Date: ${formattedDate} ${formattedTime}`;
                 } else {
-                    examDateElement.textContent = 'Date: Unknown';
+                    examDateElement.innerHTML = '<i class="fas fa-calendar"></i> Date: Unknown';
                 }
                 
                 // For imaging analyses, fetch and display report content
@@ -585,7 +650,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 // Add interpreter if available
                                 if (reportData.resultsInterpreter && reportData.resultsInterpreter.length > 0) {
                                     const p = document.createElement('p');
-                                    p.innerHTML = `<strong>Medic:</strong> ${reportData.resultsInterpreter[0].display || ''}`;
+                                    p.innerHTML = `<strong><i class="fas fa-user-md"></i> Medic:</strong> ${reportData.resultsInterpreter[0].display || ''}`;
                                     reportFooter.appendChild(p);
                                 }
                             }
@@ -600,7 +665,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                     // Add a header for each result
                                     if (form.title) {
                                         const h5 = document.createElement('h5');
-                                        h5.textContent = form.title;
+                                        h5.innerHTML = `<i class="fas fa-file-alt"></i> ${form.title}`;
                                         reportPreview.appendChild(h5);
                                     }
                                     
@@ -646,7 +711,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 const studyId = reportData.imagingStudy.reference.split('/')[1];
                                 const a = document.createElement('a');
                                 a.href = '#';
-                                a.textContent = `View Imaging Study #${studyId}`;
+                                a.innerHTML = `<i class="fas fa-x-ray"></i> View Imaging Study #${studyId}`;
                                 a.addEventListener('click', function(e) {
                                     e.preventDefault();
                                     viewImagingStudy(studyId, serviceRequest.id);
@@ -730,7 +795,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                     }
                                 }
                             }
-                            epicrisisTitle.textContent = `Epicrisis: ${diagnosisText}`;
+                            epicrisisTitle.innerHTML = `<i class="fas fa-diagnoses"></i> Epicrisis: ${diagnosisText}`;
                             
                             // Display date if available
                             const dateElement = document.getElementById('epicrisisDate');
@@ -739,7 +804,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 const dateTime = new Date(encounterData.period.end);
                                 const formattedDate = dateTime.toLocaleDateString('en-GB');
                                 const formattedTime = dateTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-                                dateElement.textContent = `Date: ${formattedDate} ${formattedTime}`;
+                                dateElement.innerHTML = `<i class="fas fa-calendar"></i> Date: ${formattedDate} ${formattedTime}`;
                                 dateElement.style.display = 'block';
                             } else {
                                 dateElement.style.display = 'none';
@@ -757,7 +822,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 
                                 if (attenderParticipant && attenderParticipant.individual && attenderParticipant.individual.display) {
                                     if (footerElement) {
-                                        footerElement.textContent = `Medic: ${attenderParticipant.individual.display}`;
+                                        footerElement.innerHTML = `<i class="fas fa-user-md"></i> Medic: ${attenderParticipant.individual.display}`;
                                         footerElement.style.display = 'block';
                                     }
                                 } else if (footerElement) {

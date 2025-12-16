@@ -1,3 +1,88 @@
+/* Layout */
+.layout-container {
+    display: flex;
+    min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+    width: 250px;
+    background: var(--pico-primary-background);
+    color: var(--pico-primary-inverse);
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+    z-index: 100;
+}
+
+.sidebar-header h1 {
+    font-size: 1.5rem;
+    margin: 0 0 0.5rem 0;
+}
+
+.sidebar-header p {
+    font-size: 0.9rem;
+    opacity: 0.8;
+    margin: 0;
+}
+
+.nav-menu {
+    list-style: none;
+    padding: 0;
+    margin: 2rem 0;
+    flex-grow: 1;
+}
+
+.nav-item {
+    margin-bottom: 0.5rem;
+}
+
+.nav-item a {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    color: var(--pico-primary-inverse);
+    text-decoration: none;
+    border-radius: var(--pico-border-radius);
+    transition: all 0.3s ease;
+}
+
+.nav-item a:hover,
+.nav-item.active a {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.nav-item a i {
+    margin-right: 0.75rem;
+    width: 20px;
+    text-align: center;
+}
+
+.sidebar-footer {
+    margin-top: auto;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    font-size: 0.8rem;
+    opacity: 0.8;
+}
+
+/* Main Content */
+.main-content {
+    flex: 1;
+    padding: 2rem;
+    overflow-y: auto;
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* Error and Success Messages */
 .error {
     background: var(--pico-secondary-background);
     color: var(--pico-contrast-inverse);
@@ -18,23 +103,25 @@
     display: none;
 }
 
-.no-data {
-    text-align: center;
-    padding: 2.5rem 1.5rem;
-    color: var(--pico-muted-color);
+/* Patient Profile */
+.patient-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--pico-table-border-color);
 }
 
-#noAnalyses {
-    text-align: center;
-    padding: 2rem;
-    background-color: var(--pico-card-background-color);
-    border: 1px solid var(--pico-card-border-color);
-    border-radius: var(--pico-border-radius);
-    margin: 1rem 0;
-    display: none;
+.patient-header h2 {
+    margin: 0;
+    font-size: 1.8rem;
 }
 
-/* Patient information card */
+.patient-header button {
+    align-self: center;
+}
+
 .patient-card {
     background: var(--pico-card-background-color);
     border: 1px solid var(--pico-card-border-color);
@@ -44,28 +131,11 @@
     box-shadow: var(--pico-box-shadow);
 }
 
-.patient-card hgroup {
-    margin-bottom: 1.5rem;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid var(--pico-table-border-color);
-}
-
-.patient-card h2 {
-    margin: 0;
-    font-size: 1.5rem;
-    color: var(--pico-primary);
-}
-
-.patient-card .patient-id {
-    margin: 0.25rem 0 0;
-    color: var(--pico-muted-color);
-    font-size: 0.9rem;
-}
-
 .patient-info-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 1.25rem;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
 }
 
 .patient-info-item {
@@ -88,6 +158,169 @@
     margin: 0;
 }
 
+/* Patient Stats */
+.patient-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-top: 2rem;
+}
+
+.stat-card {
+    background: var(--pico-secondary-background);
+    border-radius: var(--pico-border-radius);
+    padding: 1.5rem;
+    display: flex;
+    align-items: center;
+    color: var(--pico-contrast-inverse);
+}
+
+.stat-icon {
+    font-size: 2rem;
+    margin-right: 1rem;
+    opacity: 0.8;
+}
+
+.stat-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-value {
+    font-size: 1.8rem;
+    font-weight: bold;
+    margin-bottom: 0.25rem;
+}
+
+.stat-label {
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
+.checkout-ids {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    background: var(--pico-muted-background-color);
+    border-radius: var(--pico-border-radius);
+    font-size: 0.9rem;
+}
+
+/* Analyses */
+.analyses-container {
+    background: var(--pico-card-background-color);
+    border: 1px solid var(--pico-card-border-color);
+    border-radius: var(--pico-border-radius);
+    padding: 1.5rem;
+}
+
+.analyses-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+.no-data {
+    text-align: center;
+    padding: 3rem 1.5rem;
+    color: var(--pico-muted-color);
+}
+
+.no-data i {
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+#noAnalyses {
+    text-align: center;
+    padding: 3rem;
+    background-color: var(--pico-card-background-color);
+    border-radius: var(--pico-border-radius);
+    margin: 1rem 0;
+    display: none;
+}
+
+/* Analysis Cards */
+.analysis-card {
+    background: var(--pico-background-color);
+    border: 1px solid var(--pico-card-border-color);
+    border-radius: var(--pico-border-radius);
+    padding: 1.5rem;
+    box-shadow: var(--pico-box-shadow);
+    transition: transform 0.2s ease;
+}
+
+.analysis-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.analysis-header {
+    border-bottom: 1px solid var(--pico-table-border-color);
+    padding-bottom: 1rem;
+    margin-bottom: 1rem;
+}
+
+.analysis-header h4 {
+    margin: 0 0 0.5rem 0;
+    color: var(--pico-primary);
+}
+
+.exam-date {
+    color: var(--pico-muted-color);
+    font-size: 0.9rem;
+    margin: 0;
+}
+
+.analysis-content {
+    margin-bottom: 1rem;
+}
+
+.report-preview {
+    background: var(--pico-muted-background-color);
+    padding: 1rem;
+    border-radius: var(--pico-border-radius);
+    margin: 1rem 0;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.report-footer {
+    border-top: 1px solid var(--pico-table-border-color);
+    padding-top: 1rem;
+    font-size: 0.9rem;
+    color: var(--pico-muted-color);
+}
+
+/* Epicrisis */
+.epicrisis-header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--pico-table-border-color);
+}
+
+.epicrisis-header h2 {
+    margin: 0 0 0.5rem 0;
+}
+
+.epicrisis-header h3 {
+    margin: 0 0 0.5rem 0;
+    color: var(--pico-primary);
+}
+
+.epicrisis-content {
+    background: var(--pico-muted-background-color);
+    padding: 1.5rem;
+    border-radius: var(--pico-border-radius);
+    margin-bottom: 1rem;
+}
+
+.epicrisis-footer {
+    font-style: italic;
+    color: var(--pico-muted-color);
+    text-align: right;
+}
+
 /* Toast notifications */
 .toast-container {
     position: fixed;
@@ -105,8 +338,14 @@
     color: var(--pico-primary-inverse);
     box-shadow: var(--pico-box-shadow);
     animation: slideIn 0.3s, fadeOut 0.5s 2.5s forwards;
-    max-width: 300px;
+    max-width: 350px;
     font-size: 14px;
+    display: flex;
+    align-items: center;
+}
+
+.toast i {
+    margin-right: 10px;
 }
 
 .toast-success {
@@ -125,4 +364,61 @@
 @keyframes fadeOut {
     from { opacity: 1; }
     to { opacity: 0; }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .layout-container {
+        flex-direction: column;
+    }
+    
+    .sidebar {
+        width: 100%;
+        padding: 1rem;
+    }
+    
+    .nav-menu {
+        display: flex;
+        flex-wrap: wrap;
+        margin: 1rem 0;
+    }
+    
+    .nav-item {
+        margin: 0.25rem;
+    }
+    
+    .nav-item a {
+        padding: 0.5rem;
+        font-size: 0.9rem;
+    }
+    
+    .nav-item a i {
+        margin-right: 0.25rem;
+    }
+    
+    .sidebar-footer {
+        display: none;
+    }
+    
+    .main-content {
+        padding: 1rem;
+    }
+    
+    .patient-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .patient-header button {
+        margin-top: 1rem;
+        align-self: stretch;
+    }
+    
+    .patient-stats {
+        grid-template-columns: 1fr;
+    }
+    
+    .analyses-grid {
+        grid-template-columns: 1fr;
+    }
 }
