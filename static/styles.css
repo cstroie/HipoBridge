@@ -44,17 +44,28 @@
     box-shadow: var(--pico-box-shadow);
 }
 
-.patient-card h2 {
-    margin-top: 0;
-    padding-bottom: 0.5rem;
+.patient-card hgroup {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
     border-bottom: 1px solid var(--pico-table-border-color);
+}
+
+.patient-card h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    color: var(--pico-primary);
+}
+
+.patient-card .patient-id {
+    margin: 0.25rem 0 0;
+    color: var(--pico-muted-color);
+    font-size: 0.9rem;
 }
 
 .patient-info-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 1rem;
-    margin-top: 1rem;
+    gap: 1.25rem;
 }
 
 .patient-info-item {
@@ -63,14 +74,18 @@
 }
 
 .patient-info-label {
-    font-weight: bold;
-    font-size: 0.9em;
+    font-weight: 600;
+    font-size: 0.85rem;
     color: var(--pico-muted-color);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
     margin-bottom: 0.25rem;
 }
 
 .patient-info-value {
-    font-size: 1.1em;
+    font-size: 1.1rem;
+    color: var(--pico-color);
+    margin: 0;
 }
 
 /* Toast notifications */
