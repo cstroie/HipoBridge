@@ -29,39 +29,37 @@
                 <div class="error" id="error"></div>
                 <div class="success" id="success"></div>
             </article>
-            <article class="results" id="results" style="display: none;">
+            <article class="results patient-card" id="results" style="display: none;">
                 <hgroup>
                     <h2>Patient Information</h2>
                     <p>Patient ID: <span id="patientId"></span></p>
                 </hgroup>
                 <main>
-                    <div class="grid">
-                        <article>
-                            <strong>Name</strong>
-                            <span id="patientName"></span>
-                        </article>
-                        <article>
-                            <strong>CNP</strong>
-                            <span id="patientCnp"></span>
-                        </article>
-                        <article>
-                            <strong>Gender</strong>
-                            <span id="patientGender"></span>
-                        </article>
-                    </div>
-                    <div class="grid">
-                        <article>
-                            <strong>Birth Date</strong>
-                            <span id="patientBirthDate"></span>
-                        </article>
-                        <article>
-                            <strong>Phone</strong>
-                            <span id="patientPhone"></span>
-                        </article>
-                        <article>
-                            <strong>Email</strong>
-                            <span id="patientEmail"></span>
-                        </article>
+                    <div class="patient-info-grid">
+                        <div class="patient-info-item">
+                            <span class="patient-info-label">Name</span>
+                            <span class="patient-info-value" id="patientName"></span>
+                        </div>
+                        <div class="patient-info-item">
+                            <span class="patient-info-label">CNP</span>
+                            <span class="patient-info-value" id="patientCnp"></span>
+                        </div>
+                        <div class="patient-info-item">
+                            <span class="patient-info-label">Gender</span>
+                            <span class="patient-info-value" id="patientGender"></span>
+                        </div>
+                        <div class="patient-info-item">
+                            <span class="patient-info-label">Birth Date</span>
+                            <span class="patient-info-value" id="patientBirthDate"></span>
+                        </div>
+                        <div class="patient-info-item">
+                            <span class="patient-info-label">Phone</span>
+                            <span class="patient-info-value" id="patientPhone"></span>
+                        </div>
+                        <div class="patient-info-item">
+                            <span class="patient-info-label">Email</span>
+                            <span class="patient-info-value" id="patientEmail"></span>
+                        </div>
                     </div>
                 </main>
             </article>
