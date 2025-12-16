@@ -1203,7 +1203,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const reportsCountElement = document.createElement('span');
         reportsCountElement.className = 'badge badge-secondary';
         reportsCountElement.textContent = `Reports: 0`; // Will be updated when reports load
-        reportsCountElement.id = 'reportsCountBadge';
+        reportsCountElement.id = 'reportsCount';
         if (elements.presentationsCount && elements.presentationsCount.parentElement) {
             elements.presentationsCount.parentElement.appendChild(reportsCountElement);
             console.log('Reports count badge added');
@@ -1241,14 +1241,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Update reports count when analyses load
-        const reportsBadge = document.getElementById('reportsCountBadge');
-        if (reportsBadge) {
+        const reportsCountElement = document.getElementById('reportsCount');
+        if (reportsCountElement) {
             const reportsCount = analysesData.resourceType === "Bundle" && analysesData.entry 
                 ? analysesData.entry.length : 0;
-            reportsBadge.textContent = `Reports: ${reportsCount}`;
+            reportsCountElement.textContent = `Reports: ${reportsCount}`;
             console.log('Reports count badge updated to:', reportsCount);
         } else {
-            console.log('Reports badge not found');
+            console.log('Reports count element not found');
         }
     }
     
