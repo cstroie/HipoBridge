@@ -821,7 +821,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function hideError() {
-        errorDiv.style.display = 'none';
+        elements.errorDiv.style.display = 'none';
     }
     
     function showToast(message, type = 'success', duration = 3000) {
