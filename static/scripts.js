@@ -1625,7 +1625,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (typeText) typeText.textContent = analysisText;
         
         const header = article.querySelector('h4');
-        if (header) header.innerHTML = `<i class="fas fa-file-medical"></i> ${analysisText} <span class="report-id">#${serviceRequest.id}</span>`;
+        if (header) header.innerHTML = `<i class="fas fa-file-medical"></i> <span class="report-id">#${serviceRequest.id}</span>`;
         
         // Set exam date with enhanced formatting
         const examDateElement = article.querySelector('.exam-date');
