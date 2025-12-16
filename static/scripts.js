@@ -1199,7 +1199,7 @@ document.addEventListener('DOMContentLoaded', function() {
         elements.checkoutsCount.textContent = stats.discharges;
         console.log('Stats displayed - Encounters:', stats.encounters, 'Admissions:', stats.admissions, 'Discharges:', stats.discharges);
         
-        // Add reports count badge
+        // Add reports count badge next to presentations count
         const reportsCountElement = document.createElement('span');
         reportsCountElement.className = 'badge badge-secondary';
         reportsCountElement.textContent = `Reports: 0`; // Will be updated when reports load
@@ -1241,16 +1241,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Update reports count when analyses load
-        if (elements.presentationsCount && elements.presentationsCount.parentElement) {
-            const reportsBadge = elements.presentationsCount.parentElement.querySelector('.badge-secondary');
-            if (reportsBadge) {
-                const reportsCount = analysesData.resourceType === "Bundle" && analysesData.entry 
-                    ? analysesData.entry.length : 0;
-                reportsBadge.textContent = `Reports: ${reportsCount}`;
-                console.log('Reports count badge updated to:', reportsCount);
-            } else {
-                console.log('Reports badge not found');
-            }
+        const reportsBadge = document.getElementById('reportsCountBadge');
+        if (reportsBadge) {
+            const reportsCount = analysesData.resourceType === "Bundle" && analysesData.entry 
+                ? analysesData.entry.length : 0;
+            reportsBadge.textContent = `Reports: ${reportsCount}`;
+            console.log('Reports count badge updated to:', reportsCount);
+        } else {
+            console.log('Reports badge not found');
         }
     }
     
