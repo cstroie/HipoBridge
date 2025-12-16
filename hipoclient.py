@@ -2169,13 +2169,21 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                     )
                     
                     # Add code
+                    request_type = req["type"]
+                    if request_type in ANALYSIS_TYPES:
+                        code_display = ANALYSIS_TYPES[request_type]["display"]
+                        code_definition = ANALYSIS_TYPES[request_type]["definition"]
+                    else:
+                        code_display = request_type
+                        code_definition = request_type
+                    
                     fhir_service_request["code"] = FHIRCodeableConcept(
                         coding=[{
                             "system": f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/analysis-types" if http_request else "http://example.com/fhir/CodeSystem/analysis-types",
-                            "code": req["type"],
-                            "display": ANALYSIS_TYPES[req["type"]]["display"]
+                            "code": request_type,
+                            "display": code_display
                         }],
-                        text=ANALYSIS_TYPES[req["type"]]["definition"]
+                        text=code_definition
                     )
                     
                     # Add effective date_time if available
