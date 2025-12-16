@@ -1960,15 +1960,46 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
             # Find all links with onclick attribute containing redirect function
             #   function redirect(tip,tipPrintabil,intCodeID, isLabSynevo,barcode)
             #   Example: <a href="#" id="myHref" onclick="redirect('Normal',3,1607394,0,'');return false;">Tipareste buletin recoltari>>></a>
-            for link in soup.find_all('a', attrs={'onclick': True}):
+            onclick_links = soup.find_all('a', attrs={'onclick': True})
+            
+            # Find all links with href containing 'analyseFile.asp'
+            # Example: <a href="analyseFile.asp?id=1606238" target="_blank">Tipareste buletin rezultate>>></a>
+            href_links = soup.find_all('a', href=re.compile(r'analyseFile\.asp\?id=(\d+)'))
+            
+            # Combine both lists and remove duplicates based on ID
+            all_links = list(onclick_links)
+            
+            # Add href links that don't already exist in onclick links
+            for href_link in href_links:
+                href_id = extract_id_from_link(href_link, r'analyseFile\.asp\?id=(\d+)')
+                if href_id:
+                    # Check if this ID already exists in onclick links
+                    duplicate_found = False
+                    for onclick_link in onclick_links:
+                        onclick_attr = onclick_link.get('onclick', '')
+                        redirect_match = re.search(r'redirect\([^,]+,[^,]+,(\d+)', onclick_attr)
+                        if redirect_match and redirect_match.group(1) == href_id:
+                            duplicate_found = True
+                            break
+                    
+                    # If not a duplicate, add to all_links
+                    if not duplicate_found:
+                        all_links.append(href_link)
+            
+            for link in all_links:
+                # Extract request ID - either from onclick or href
+                request_id = None
                 onclick_attr = link.get('onclick', '')
+                
                 # Check if onclick contains redirect function call
                 redirect_match = re.search(r'redirect\([^,]+,[^,]+,(\d+)', onclick_attr)
-                if not redirect_match:
-                    continue
-                    
-                # Extract request ID from intCodeID parameter (3rd parameter in redirect function)
-                request_id = redirect_match.group(1)
+                if redirect_match:
+                    # Extract request ID from intCodeID parameter (3rd parameter in redirect function)
+                    request_id = redirect_match.group(1)
+                else:
+                    # Try to extract from href
+                    request_id = extract_id_from_link(link, r'analyseFile\.asp\?id=(\d+)')
+                
                 if not request_id:
                     continue
 
@@ -2070,7 +2101,7 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                 if kwargs.get('region') and not kwargs['region'] in request['regions']:
                     continue
 
-                # Append the reuqest data to the requests list
+                # Append the request data to the requests list
                 requests.append(request)
 
             # Filter requests by date_time
