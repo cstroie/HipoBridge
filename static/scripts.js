@@ -813,13 +813,6 @@ document.addEventListener('DOMContentLoaded', function() {
         elements.form.dispatchEvent(new Event('submit'));
     };
     
-    function showError(message) {
-        console.error('Application error:', message);
-        elements.errorDiv.textContent = message;
-        elements.errorDiv.style.display = 'block';
-        hideLoading();
-    }
-    
     function hideError() {
         elements.errorDiv.style.display = 'none';
     }
