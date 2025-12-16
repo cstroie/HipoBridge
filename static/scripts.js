@@ -236,6 +236,7 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
         
         const cnp = elements.cnpInput.value.trim();
+        console.log('Form submitted with CNP:', cnp);
         
         // Enhanced input validation
         if (!cnp) {
@@ -260,7 +261,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         try {
             // Enhanced search with better error handling
+            console.log('Starting patient search...');
             const searchResult = await performPatientSearch(cnp);
+            console.log('Patient search result:', searchResult);
             
             if (!searchResult.success) {
                 showToast(searchResult.message, 'error');
@@ -268,9 +271,13 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             const { patientData, patientCode } = searchResult;
+            console.log('Patient data retrieved:', patientData);
+            console.log('Patient code:', patientCode);
             
             // Get analyses using FHIR API with better error handling
+            console.log('Fetching analyses data for patient:', patientCode);
             const analysesResult = await fetchAnalysesData(patientCode);
+            console.log('Analyses data result:', analysesResult);
             
             if (!analysesResult.success) {
                 showToast(analysesResult.message, 'error');
@@ -278,21 +285,27 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             const analysesData = analysesResult.data;
+            console.log('Analyses data retrieved:', analysesData);
             
             // Display patient data first
+            console.log('Displaying patient data...');
             await displayPatientData(patientData, analysesData);
             
             // Load and display reports first, then epicrisis
+            console.log('Loading and displaying reports...');
             await loadAndDisplayReports(analysesData, patientData);
+            console.log('Loading and displaying epicrisis...');
             await loadAndDisplayEpicrisis(patientData);
             
             // Switch to patient profile tab with enhanced navigation
+            console.log('Switching to patient tab...');
             switchToPatientTab();
             
             showToast('Analysis loading complete', 'success');
+            console.log('All data loading complete');
             
         } catch (err) {
-            console.error('Error:', err);
+            console.error('Error in handleFormSubmit:', err);
             showToast('An unexpected error occurred. Please try again.', 'error');
         } finally {
             hideLoading();
@@ -494,11 +507,14 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Enhanced tab switching function
     function switchToPatientTab() {
+        console.log('Switching to patient tab');
+        
         // Update navigation
         elements.navItems.forEach(nav => nav.classList.remove('active'));
         const patientNavItem = document.querySelector('.nav-item[data-tab="patient"]');
         if (patientNavItem) {
             patientNavItem.classList.add('active');
+            console.log('Patient nav item activated');
         }
         
         // Show relevant tabs
@@ -507,6 +523,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const tabElement = document.querySelector(`.nav-item[data-tab="${tabName}"]`);
             if (tabElement) {
                 tabElement.style.display = 'block';
+                console.log(`Tab ${tabName} made visible`);
             }
         });
         
@@ -520,6 +537,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (patientTab) {
             patientTab.classList.add('active');
             patientTab.style.display = 'block';
+            patientTab.hidden = false;
+            console.log('Patient tab content activated and displayed');
         }
     }
     
@@ -950,15 +969,20 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function displayPatientData(patientData, analysesData, epicrisisData = null) {
+        console.log('Displaying patient data:', patientData);
+        console.log('Analyses data:', analysesData);
+        
         // Enhanced patient information display with better formatting
         displayPatientBasicInfo(patientData);
         
         // Extract and display medical statistics
         const stats = extractMedicalStats(patientData);
+        console.log('Extracted medical stats:', stats);
         displayMedicalStats(stats);
         
         // Display checkout IDs list
         const checkoutIds = extractCheckoutIds(patientData);
+        console.log('Checkout IDs:', checkoutIds);
         displayCheckoutIds(checkoutIds);
         
         // Initialize sections but keep them hidden until data is loaded
@@ -968,16 +992,22 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Update dashboard stats if available
         updateDashboardStats(stats, analysesData);
+        
+        console.log('Patient data display completed');
     }
     
     // Enhanced patient basic info display
     function displayPatientBasicInfo(patientData) {
+        console.log('Displaying patient basic info:', patientData);
+        
         // Patient ID
         elements.patientId.textContent = patientData.id || 'N/A';
+        console.log('Patient ID set to:', elements.patientId.textContent);
         
         // Patient Name with enhanced formatting
         const name = formatPatientName(patientData.name);
         elements.patientName.innerHTML = `<i class="fas fa-user"></i> ${name}`;
+        console.log('Patient name set to:', name);
         
         // Add age badge
         const age = calculateAge(patientData.birthDate);
@@ -985,22 +1015,27 @@ document.addEventListener('DOMContentLoaded', function() {
         ageElement.className = 'badge badge-info';
         ageElement.textContent = `Age: ${age}`;
         elements.patientName.appendChild(ageElement);
+        console.log('Age badge added:', age);
         
         // CNP with validation
         const cnp = extractCNP(patientData.identifier);
         elements.patientCnp.textContent = cnp || 'N/A';
+        console.log('CNP set to:', cnp);
         
         // Gender with icons
         const gender = formatGender(patientData.gender);
         elements.patientGender.textContent = gender;
+        console.log('Gender set to:', gender);
         
         // Birth date with formatting
         elements.patientBirthDate.textContent = formatBirthDate(patientData.birthDate);
+        console.log('Birth date set to:', elements.patientBirthDate.textContent);
         
         // Contact information
         const contactInfo = extractContactInfo(patientData.telecom);
         elements.patientPhone.textContent = contactInfo.phone || 'N/A';
         elements.patientEmail.textContent = contactInfo.email || 'N/A';
+        console.log('Contact info set - Phone:', contactInfo.phone, 'Email:', contactInfo.email);
     }
     
     // Enhanced name formatting
@@ -1142,23 +1177,29 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Enhanced medical stats display
     function displayMedicalStats(stats) {
+        console.log('Displaying medical stats:', stats);
         elements.presentationsCount.textContent = stats.encounters;
         elements.checkinsCount.textContent = stats.admissions;
         elements.checkoutsCount.textContent = stats.discharges;
+        console.log('Stats displayed - Encounters:', stats.encounters, 'Admissions:', stats.admissions, 'Discharges:', stats.discharges);
         
         // Add reports count badge
         const reportsCountElement = document.createElement('span');
         reportsCountElement.className = 'badge badge-secondary';
         reportsCountElement.textContent = `Reports: 0`; // Will be updated when reports load
+        reportsCountElement.id = 'reportsCountBadge';
         if (elements.presentationsCount && elements.presentationsCount.parentElement) {
             elements.presentationsCount.parentElement.appendChild(reportsCountElement);
+            console.log('Reports count badge added');
         }
     }
     
     // Enhanced checkout IDs display
     function displayCheckoutIds(checkoutIds) {
+        console.log('Displaying checkout IDs:', checkoutIds);
         if (!checkoutIds || checkoutIds.length === 0) {
             elements.checkoutIdsList.innerHTML = '';
+            console.log('No checkout IDs to display');
             return;
         }
         
@@ -1170,13 +1211,17 @@ document.addEventListener('DOMContentLoaded', function() {
             <strong><i class="fas fa-sign-out-alt"></i> Checkout IDs:</strong> 
             ${idsHtml}
         `;
+        console.log('Checkout IDs displayed');
     }
     
     // Enhanced dashboard stats update
     function updateDashboardStats(stats, analysesData) {
+        console.log('Updating dashboard stats - Stats:', stats, 'Analyses data:', analysesData);
+        
         // Update header stats if available
         if (elements.activePatientsCount) {
             elements.activePatientsCount.textContent = stats.encounters;
+            console.log('Active patients count updated to:', stats.encounters);
         }
         
         // Update reports count when analyses load
@@ -1186,6 +1231,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 const reportsCount = analysesData.resourceType === "Bundle" && analysesData.entry 
                     ? analysesData.entry.length : 0;
                 reportsBadge.textContent = `Reports: ${reportsCount}`;
+                console.log('Reports count badge updated to:', reportsCount);
+            } else {
+                console.log('Reports badge not found');
             }
         }
     }
