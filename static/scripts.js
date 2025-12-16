@@ -1565,29 +1565,38 @@ document.addEventListener('DOMContentLoaded', function() {
     function createAnalysisCard(serviceRequest, analysisType, analysisText) {
         console.log('Creating analysis card for:', serviceRequest, analysisType, analysisText);
         
-        const cardTemplate = document.getElementById('analysis-card-template');
-        if (!cardTemplate) {
-            console.error('Analysis card template not found');
-            return document.createElement('div'); // fallback
-        }
-        
-        const analysisCard = cardTemplate.content.cloneNode(true).querySelector('article');
-        if (!analysisCard) {
-            console.error('Failed to clone analysis card template');
-            return document.createElement('div'); // fallback
-        }
-        
+        // Create card element directly instead of using template
+        const analysisCard = document.createElement('article');
         analysisCard.className = `analysis-card ${analysisType}`;
         
-        // Set card header with enhanced formatting
-        const header = analysisCard.querySelector('h4');
-        if (header) {
-            header.innerHTML = `
-                <i class="fas fa-file-medical"></i> 
-                ${analysisText} 
-                <span class="report-id">#${serviceRequest.id}</span>
-            `;
-        }
+        // Create card structure
+        analysisCard.innerHTML = `
+            <div class="analysis-header">
+                <div class="analysis-type-badge">
+                    <i class="fas fa-file-medical"></i>
+                    <span class="type-text">${analysisText}</span>
+                </div>
+                <h4><i class="fas fa-file-medical"></i> ${analysisText} <span class="report-id">#${serviceRequest.id}</span></h4>
+                <div class="analysis-actions">
+                    <button class="btn-icon btn-small" title="View details">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="btn-icon btn-small" title="Download report">
+                        <i class="fas fa-download"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="analysis-meta">
+                <span class="meta-item"><i class="fas fa-calendar"></i> <span class="exam-date"></span></span>
+                <span class="meta-item"><i class="fas fa-user-md"></i> <span class="medic-name"></span></span>
+                <span class="meta-item"><i class="fas fa-clock"></i> <span class="status"></span></span>
+            </div>
+            <div class="analysis-content">
+                <div class="report-preview" aria-label="Report preview"></div>
+                <div class="imaging-study-link" aria-label="Imaging study link"></div>
+            </div>
+            <footer class="report-footer" aria-label="Report footer"></footer>
+        `;
         
         // Set exam date with enhanced formatting
         const examDateElement = analysisCard.querySelector('.exam-date');
@@ -1598,12 +1607,6 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 examDateElement.innerHTML = '<i class="fas fa-calendar"></i> Date: Unknown';
             }
-        }
-        
-        // Add type badge
-        const typeBadge = analysisCard.querySelector('.type-text');
-        if (typeBadge) {
-            typeBadge.textContent = analysisText;
         }
         
         // Add status indicator
