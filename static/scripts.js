@@ -1009,13 +1009,13 @@ document.addEventListener('DOMContentLoaded', function() {
         elements.patientName.innerHTML = `<i class="fas fa-user"></i> ${name}`;
         console.log('Patient name set to:', name);
         
-        // Add age badge
+        // Set age in the existing age badge
         const age = calculateAge(patientData.birthDate);
-        const ageElement = document.createElement('span');
-        ageElement.className = 'badge badge-info';
-        ageElement.textContent = `Age: ${age}`;
-        elements.patientName.appendChild(ageElement);
-        console.log('Age badge added:', age);
+        const ageBadge = document.querySelector('#patientAge');
+        if (ageBadge) {
+            ageBadge.textContent = `Age: ${age}`;
+        }
+        console.log('Age set to:', age);
         
         // CNP with validation
         const cnp = extractCNP(patientData.identifier);
