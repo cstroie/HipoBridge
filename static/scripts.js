@@ -1448,16 +1448,33 @@ document.addEventListener('DOMContentLoaded', function() {
     async function loadAndDisplayReports(analysesData, patientData) {
         console.log('Loading and displaying reports:', analysesData);
         
+        // Define the types of reports to include
+        const includedTypes = ['radio', 'ct', 'irm', 'eco', 'rads'];
+        
         // Check if we have a FHIR Bundle of ServiceRequests
         if (analysesData.resourceType === "Bundle" && analysesData.entry && analysesData.entry.length > 0) {
+            // Filter entries to only include specified types
+            const filteredEntries = analysesData.entry.filter(entry => {
+                const serviceRequest = entry.resource;
+                const analysisType = serviceRequest.code?.coding?.[0]?.code || 'unknown';
+                return includedTypes.includes(analysisType);
+            });
+            
+            if (filteredEntries.length === 0) {
+                elements.noAnalyses.style.display = 'block';
+                elements.analysesGrid.innerHTML = ''; // Clear any existing content
+                console.log('No matching analyses found after filtering');
+                return;
+            }
+            
             elements.noAnalyses.style.display = 'none';
-            console.log('Found', analysesData.entry.length, 'service requests');
+            console.log('Found', filteredEntries.length, 'matching service requests');
             
             // Clear existing content
             elements.analysesGrid.innerHTML = '';
             
-            // Process each service request
-            for (const entry of analysesData.entry) {
+            // Process each filtered service request
+            for (const entry of filteredEntries) {
                 const serviceRequest = entry.resource;
                 console.log('Processing service request:', serviceRequest);
                 
