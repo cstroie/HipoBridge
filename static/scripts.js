@@ -692,9 +692,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Extract all checkout IDs from patient extensions
         let checkoutIds = [];
         if (patientData.extension) {
-            const dischargeExt = patientData.extension.find(ext => ext.url && ext.url.includes('discharge-ids'));
-            if (dischargeExt && dischargeExt.valueString) {
-                checkoutIds = dischargeExt.valueString.split(',').filter(id => id.trim());
+            const checkoutExt = patientData.extension.find(ext => ext.url && ext.url.includes('checkout-ids'));
+            if (checkoutExt && checkoutExt.valueString) {
+                checkoutIds = checkoutExt.valueString.split(',').filter(id => id.trim());
             }
         }
         
@@ -702,28 +702,16 @@ document.addEventListener('DOMContentLoaded', function() {
         for (const checkoutId of checkoutIds) {
             try {
                 showToast(`Loading epicrisis data for checkout ${checkoutId}...`, 'success');
-                const checkoutResponse = await fetch(`/fhir/Encounter/${checkoutId}`);
+                const encounterResponse = await fetch(`/fhir/Encounter/${checkoutId}`);
                 
-                if (checkoutResponse.ok) {
-                    const checkoutData = await checkoutResponse.json();
-                    // Check if this checkout has valid epicrisis data
-                    // Handle both single resource and Bundle responses
-                    let encounterData = checkoutData;
-                    if (checkoutData.resourceType === "Bundle" && checkoutData.entry && checkoutData.entry.length > 0) {
-                        encounterData = checkoutData.entry[0].resource;
-                    }
+                if (encounterResponse.ok) {
+                    const encounterData = await encounterResponse.json();
                     
                     // Extract epicrisis from notes array
                     let epicrisisText = '';
                     if (encounterData.note && Array.isArray(encounterData.note)) {
                         // Concatenate all note texts
                         epicrisisText = encounterData.note.map(note => note.text || '').join('\n\n');
-                    }
-                    
-                    // Extract checkout date and time if available
-                    let checkoutDateTime = '';
-                    if (encounterData.period && encounterData.period.start) {
-                        checkoutDateTime = encounterData.period.start;
                     }
                     
                     if (epicrisisText) {
@@ -735,9 +723,9 @@ document.addEventListener('DOMContentLoaded', function() {
                             
                             // Display date if available
                             const dateElement = document.getElementById('epicrisisDate');
-                            if (encounterData.period && encounterData.period.start) {
+                            if (encounterData.period && encounterData.period.end) {
                                 // Parse ISO datetime and format it nicely
-                                const dateTime = new Date(encounterData.period.start);
+                                const dateTime = new Date(encounterData.period.end);
                                 const formattedDate = dateTime.toLocaleDateString('en-GB');
                                 const formattedTime = dateTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
                                 dateElement.textContent = `Date: ${formattedDate} ${formattedTime}`;
@@ -764,7 +752,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     showToast(`Not found epicrisis data for checkout ${checkoutId}`, 'error');
                 }
             } catch (err) {
-                console.error('Error fetching checkout data:', err);
+                console.error('Error fetching encounter data:', err);
                 showToast(`Error loading epicrisis data for checkout ${checkoutId}`, 'error');
             }
         }
