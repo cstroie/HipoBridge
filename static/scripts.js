@@ -531,6 +531,7 @@ document.addEventListener('DOMContentLoaded', function() {
         elements.tabContents.forEach(tab => {
             tab.classList.remove('active');
             tab.style.display = 'none';
+            tab.hidden = true;
         });
         
         const patientTab = document.getElementById('patient-tab');
@@ -539,6 +540,22 @@ document.addEventListener('DOMContentLoaded', function() {
             patientTab.style.display = 'block';
             patientTab.hidden = false;
             console.log('Patient tab content activated and displayed');
+        }
+        
+        // Also show the other tabs that should be visible after patient data is loaded
+        const analysesTab = document.getElementById('analyses-tab');
+        if (analysesTab) {
+            analysesTab.hidden = false;
+        }
+        
+        const epicrisisTab = document.getElementById('epicrisis-tab');
+        if (epicrisisTab) {
+            epicrisisTab.hidden = false;
+        }
+        
+        const dashboardTab = document.getElementById('dashboard-tab');
+        if (dashboardTab) {
+            dashboardTab.hidden = false;
         }
     }
     
