@@ -722,12 +722,22 @@ document.addEventListener('DOMContentLoaded', function() {
                             const htmlContent = await convertMarkdownToHtml(epicrisisText);
                             document.getElementById('epicrisisContent').innerHTML = htmlContent;
                             
-                            // Set diagnosis title if available
+                            // Set diagnosis title if available - prioritize discharge diagnosis
                             let diagnosisText = 'DIAGNOSTIC';
                             if (encounterData.diagnosis && encounterData.diagnosis.length > 0) {
-                                const diagnosis = encounterData.diagnosis[0];
-                                if (diagnosis.condition && diagnosis.condition.display) {
-                                    diagnosisText = diagnosis.condition.display;
+                                // Look for discharge diagnosis first (use code "DD")
+                                const dischargeDiagnosis = encounterData.diagnosis.find(d => 
+                                    d.use && d.use.coding && d.use.coding.some(c => c.code === "DD")
+                                );
+                                
+                                if (dischargeDiagnosis && dischargeDiagnosis.condition && dischargeDiagnosis.condition.display) {
+                                    diagnosisText = dischargeDiagnosis.condition.display;
+                                } else {
+                                    // Fallback to first diagnosis if no discharge diagnosis found
+                                    const firstDiagnosis = encounterData.diagnosis[0];
+                                    if (firstDiagnosis.condition && firstDiagnosis.condition.display) {
+                                        diagnosisText = firstDiagnosis.condition.display;
+                                    }
                                 }
                             }
                             epicrisisTitle.textContent = `Epicrisis: ${diagnosisText}`;
