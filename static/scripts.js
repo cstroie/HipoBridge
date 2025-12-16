@@ -1201,7 +1201,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Update reports count if element exists
         if (elements.reportsCount) {
-            elements.reportsCount.textContent = `Reports: 0`; // Will be updated when reports load
+            elements.reportsCount.textContent = '0'; // Will be updated when reports load
             console.log('Reports count updated');
         }
     }
