@@ -230,62 +230,162 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Form submission handler
-    elements.form.addEventListener('submit', async function(e) {
+    elements.form.addEventListener('submit', handleFormSubmit);
+    
+    async function handleFormSubmit(e) {
         e.preventDefault();
         
         const cnp = elements.cnpInput.value.trim();
         
-        // Validate input - allow CNP (13 digits), partial CNP (digits followed by *), or patient name
+        // Enhanced input validation
         if (!cnp) {
             showError('Please enter a valid patient identifier (CNP, partial CNP, patient code, or patient name)');
             return;
         }
         
-        // Check if it's a CNP format (13 digits) or partial CNP (digits followed by *)
-        const isCNPFormat = /^\d{13}$/.test(cnp);
-        const isPartialCNPFormat = /^\d+\*$/.test(cnp);
-            
+        // Enhanced validation with better error messages
+        const validation = validatePatientIdentifier(cnp);
+        if (!validation.isValid) {
+            showError(validation.message);
+            return;
+        }
+        
         // Clear previous results and show loading state
         clearResults();
         showLoading();
         hideError();
-            
+        
         // Notify user of search start
-        showToast('Starting patient search...', 'success');
-            
+        showToast('Starting patient search...', 'info');
+        
         try {
-            // Determine search type and notify user
-            if (isCNPFormat) {
-                showToast('Validating CNP...', 'success');
-                // Validate CNP using server-side FHIR API
-                try {
-                    const cnpResponse = await fetch(`/fhir/ValueSet/cnp?id=${cnp}`);
-                    const cnpData = await cnpResponse.json();
+            // Enhanced search with better error handling
+            const searchResult = await performPatientSearch(cnp);
             
-                    if (!cnpData.valid) {
-                        showToast('CNP is not valid, but proceeding with search...', 'error');
-                    } else {
-                        showToast('Valid CNP, retrieving patient information...', 'success');
-                    }
-                } catch (err) {
-                    console.error('Error validating CNP:', err);
-                    showToast('Error validating CNP, but proceeding with search...', 'error');
-                }
-            } else if (isPartialCNPFormat) {
-                showToast('Searching for patient with partial CNP...', 'success');
+            if (!searchResult.success) {
+                showToast(searchResult.message, 'error');
+                return;
+            }
+            
+            const { patientData, patientCode } = searchResult;
+            
+            // Get analyses using FHIR API with better error handling
+            const analysesResult = await fetchAnalysesData(patientCode);
+            
+            if (!analysesResult.success) {
+                showToast(analysesResult.message, 'error');
+                return;
+            }
+            
+            const analysesData = analysesResult.data;
+            
+            // Display patient data first
+            await displayPatientData(patientData, analysesData);
+            
+            // Load and display reports first, then epicrisis
+            await loadAndDisplayReports(analysesData, patientData);
+            await loadAndDisplayEpicrisis(patientData);
+            
+            // Switch to patient profile tab with enhanced navigation
+            switchToPatientTab();
+            
+            showToast('Analysis loading complete', 'success');
+            
+        } catch (err) {
+            console.error('Error:', err);
+            showToast('An unexpected error occurred. Please try again.', 'error');
+        } finally {
+            hideLoading();
+        }
+    }
+    
+    // Enhanced validation function
+    function validatePatientIdentifier(identifier) {
+        const trimmed = identifier.trim();
+        
+        if (!trimmed) {
+            return { isValid: false, message: 'Please enter a valid patient identifier.' };
+        }
+        
+        // CNP validation (13 digits)
+        if (/^\d{13}$/.test(trimmed)) {
+            return { 
+                isValid: true, 
+                type: 'cnp', 
+                message: 'Valid CNP format detected.' 
+            };
+        }
+        
+        // Partial CNP validation (digits followed by *)
+        if (/^\d+\*$/.test(trimmed)) {
+            return { 
+                isValid: true, 
+                type: 'partial_cnp', 
+                message: 'Partial CNP format detected.' 
+            };
+        }
+        
+        // Patient code validation (alphanumeric with common patterns)
+        if (/^[A-Za-z0-9\-_]+$/.test(trimmed)) {
+            return { 
+                isValid: true, 
+                type: 'code', 
+                message: 'Patient code format detected.' 
+            };
+        }
+        
+        // Patient name validation (letters, spaces, hyphens)
+        if (/^[A-Za-z\s\-\'\.]+$/.test(trimmed)) {
+            return { 
+                isValid: true, 
+                type: 'name', 
+                message: 'Patient name format detected.' 
+            };
+        }
+        
+        return { 
+            isValid: false, 
+            message: 'Invalid format. Please enter a valid CNP, partial CNP, patient code, or patient name.' 
+        };
+    }
+    
+    // Enhanced patient search function
+    async function performPatientSearch(identifier) {
+        try {
+            const validation = validatePatientIdentifier(identifier);
+            
+            // Show appropriate message based on search type
+            if (validation.type === 'cnp') {
+                showToast('Validating CNP...', 'info');
+                // CNP validation can be added here if needed
+            } else if (validation.type === 'partial_cnp') {
+                showToast('Searching with partial CNP...', 'info');
+            } else if (validation.type === 'code') {
+                showToast('Searching by patient code...', 'info');
             } else {
-                // For patient name/code searches
-                showToast('Searching for patient by name or code...', 'success');
+                showToast('Searching by patient name...', 'info');
             }
             
             // Search for patient using FHIR API
-            const searchResponse = await fetch(`/fhir/Patient?q=${encodeURIComponent(cnp)}`);
+            const searchResponse = await fetch(`/fhir/Patient?q=${encodeURIComponent(identifier)}`);
             
             if (!searchResponse.ok) {
                 if (searchResponse.status === 401) {
-                    showToast('Authentication required. Please refresh the page and enter your credentials.', 'error');
+                    return {
+                        success: false,
+                        message: 'Authentication required. Please refresh the page and enter your credentials.'
+                    };
                 }
-                throw new Error(`HTTP error! status: ${searchResponse.status}`);
+                if (searchResponse.status === 404) {
+                    return {
+                        success: false,
+                        message: 'No patient found with this identifier.'
+                    };
+                }
+                return {
+                    success: false,
+                    message: `Server error: ${searchResponse.status}`
+                };
             }
             
             const searchData = await searchResponse.json();
@@ -293,22 +393,13 @@ document.addEventListener('DOMContentLoaded', function() {
             let patientCode = null;
             let patientData = null;
             
-            // Check if it's a single patient (FHIR Patient resource) or multiple patients (FHIR Bundle)
+            // Handle different response types
             if (searchData.resourceType === "Patient") {
                 // Single patient
                 patientCode = searchData.id;
-                patientData = {
-                    id: searchData.id,
-                    name: searchData.name,
-                    identifier: searchData.identifier,
-                    gender: searchData.gender,
-                    birthDate: searchData.birthDate,
-                    extension: searchData.extension,
-                    telecom: searchData.telecom,
-                    address: searchData.address
-                };
+                patientData = searchData;
             } else if (searchData.resourceType === "Bundle" && searchData.entry && searchData.entry.length > 0) {
-                // Multiple patients in a bundle
+                // Multiple patients - use the first one
                 const firstPatient = searchData.entry[0].resource;
                 patientCode = firstPatient.id;
                 
@@ -317,129 +408,120 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (patientResponse.ok) {
                     patientData = await patientResponse.json();
                 } else {
-                    // Fallback if we can't get detailed patient data
                     patientData = firstPatient;
                 }
+                
+                // Show message if multiple patients found
+                if (searchData.entry.length > 1) {
+                    showToast(`Found ${searchData.entry.length} patients. Showing the first result.`, 'info');
+                }
             } else {
-                showToast('No patient found with this search term.', 'error');
-                return;
+                return {
+                    success: false,
+                    message: 'No patient data found.'
+                };
             }
             
             if (!patientCode || !patientData) {
-                console.error('Failed to retrieve patient data:', { patientCode, patientData });
-                showToast('Failed to retrieve patient data.', 'error');
-                return;
+                return {
+                    success: false,
+                    message: 'Failed to retrieve patient data.'
+                };
             }
             
             showToast('Patient information retrieved successfully', 'success');
             
-            // Get analyses using FHIR API
-            showToast('Loading diagnostic reports...', 'success');
+            return {
+                success: true,
+                patientData,
+                patientCode,
+                message: 'Patient search completed successfully.'
+            };
+            
+        } catch (err) {
+            console.error('Error in patient search:', err);
+            return {
+                success: false,
+                message: 'Network error. Please check your connection and try again.'
+            };
+        }
+    }
+    
+    // Enhanced analyses fetching function
+    async function fetchAnalysesData(patientCode) {
+        try {
+            showToast('Loading diagnostic reports...', 'info');
+            
             const analysesResponse = await fetch(`/fhir/ServiceRequest?patient=${patientCode}&full=yes`);
             
             if (!analysesResponse.ok) {
                 if (analysesResponse.status === 401) {
-                    showToast('Authentication required. Please refresh the page and enter your credentials.', 'error');
+                    return {
+                        success: false,
+                        message: 'Authentication required. Please refresh the page and enter your credentials.'
+                    };
                 }
-                showToast(`Error loading diagnostic reports`, 'error');
-                throw new Error(`HTTP error! status: ${analysesResponse.status}`);
+                if (analysesResponse.status === 404) {
+                    return {
+                        success: true, // Not an error, just no data
+                        data: { resourceType: "Bundle", entry: [] },
+                        message: 'No diagnostic reports found for this patient.'
+                    };
+                }
+                return {
+                    success: false,
+                    message: `Error loading diagnostic reports: ${analysesResponse.status}`
+                };
             }
             
             const analysesData = await analysesResponse.json();
             showToast('Patient diagnostic reports loaded successfully', 'success');
             
-            // Get the most recent valid checkout epicrisis using FHIR API
-            let epicrisisData = null;
-            // Extract all checkout IDs from patient extensions
-            let checkoutIds = [];
-            if (patientData.extension) {
-                const checkoutExt = patientData.extension.find(ext => ext.url && ext.url.includes('checkout-ids'));
-                if (checkoutExt && checkoutExt.valueString) {
-                    checkoutIds = checkoutExt.valueString.split(',').filter(id => id.trim());
-                }
-            }
-            
-            // Try to fetch epicrisis data for each checkout ID until we find a valid one
-            for (const checkoutId of checkoutIds) {
-                try {
-                    showToast(`Loading epicrisis data for checkout ${checkoutId}...`, 'success');
-                    const checkoutResponse = await fetch(`/api/checkout/${checkoutId}`);
-                    
-                    if (checkoutResponse.ok) {
-                        const checkoutData = await checkoutResponse.json();
-                        // Check if this checkout has valid epicrisis data
-                        // Handle both single resource and Bundle responses
-                        let encounterData = checkoutData;
-                        if (checkoutData.resourceType === "Bundle" && checkoutData.entry && checkoutData.entry.length > 0) {
-                            encounterData = checkoutData.entry[0].resource;
-                        }
-                        
-                        // Extract epicrisis from notes array
-                        let epicrisisText = '';
-                        if (encounterData.note && Array.isArray(encounterData.note)) {
-                            // Concatenate all note texts
-                            epicrisisText = encounterData.note.map(note => note.text || '').join('\n\n');
-                        }
-                            
-                        // Extract checkout date and time if available
-                        let checkoutDateTime = '';
-                        if (encounterData.period && encounterData.period.start) {
-                            checkoutDateTime = encounterData.period.start;
-                        }
-                        
-                        if (epicrisisText) {
-                            epicrisisData = {
-                                epicrisis: epicrisisText,
-                                date: encounterData.period ? encounterData.period.start : '',
-                                checkout_id: checkoutId
-                            };
-                            showToast(`Valid epicrisis data loaded for checkout ${checkoutId}`, 'success');
-                            break; // Found a valid epicrisis, stop searching
-                        } else {
-                            showToast(`No epicrisis data found for checkout ${checkoutId}`, 'error');
-                        }
-                    } else {
-                        if (checkoutResponse.status === 401) {
-                            showToast('Authentication required. Please refresh the page and enter your credentials.', 'error');
-                        }
-                        showToast(`Not found epicrisis data for checkout ${checkoutId}`, 'error');
-                    }
-                } catch (err) {
-                    console.error('Error fetching checkout data:', err);
-                    showToast(`Error loading epicrisis data for checkout ${checkoutId}`, 'error');
-                }
-            }
-            
-            // Display patient data first
-            await displayPatientData(patientData, analysesData, epicrisisData);
-            
-            // Load and display reports first, then epicrisis
-            await loadAndDisplayReports(analysesData, patientData);
-            await loadAndDisplayEpicrisis(patientData);
-            
-            // Switch to patient profile tab
-            navItems.forEach(nav => nav.classList.remove('active'));
-            document.querySelector('.nav-item[data-tab="patient"]').classList.add('active');
-            document.querySelector('.nav-item[data-tab="analyses"]').style.display = 'block';
-            document.querySelector('.nav-item[data-tab="epicrisis"]').style.display = 'block';
-            
-            tabContents.forEach(tab => {
-                tab.classList.remove('active');
-                tab.style.display = 'none';
-            });
-            
-            document.getElementById('patient-tab').classList.add('active');
-            document.getElementById('patient-tab').style.display = 'block';
-            
-            showToast('Analysis loading complete', 'success');
+            return {
+                success: true,
+                data: analysesData,
+                message: 'Diagnostic reports loaded successfully.'
+            };
             
         } catch (err) {
-            console.error('Error:', err);
-            showToast('An error occurred while analyzing the patient data', 'error');
-        } finally {
-            hideLoading();
+            console.error('Error fetching analyses:', err);
+            return {
+                success: false,
+                message: 'Failed to load diagnostic reports. Please try again.'
+            };
         }
-    });
+    }
+    
+    // Enhanced tab switching function
+    function switchToPatientTab() {
+        // Update navigation
+        elements.navItems.forEach(nav => nav.classList.remove('active'));
+        const patientNavItem = document.querySelector('.nav-item[data-tab="patient"]');
+        if (patientNavItem) {
+            patientNavItem.classList.add('active');
+        }
+        
+        // Show relevant tabs
+        const tabsToShow = ['patient', 'analyses', 'epicrisis', 'dashboard'];
+        tabsToShow.forEach(tabName => {
+            const tabElement = document.querySelector(`.nav-item[data-tab="${tabName}"]`);
+            if (tabElement) {
+                tabElement.style.display = 'block';
+            }
+        });
+        
+        // Update tab content display
+        elements.tabContents.forEach(tab => {
+            tab.classList.remove('active');
+            tab.style.display = 'none';
+        });
+        
+        const patientTab = document.getElementById('patient-tab');
+        if (patientTab) {
+            patientTab.classList.add('active');
+            patientTab.style.display = 'block';
+        }
+    }
     
     function showLoading() {
         elements.loadingOverlay.style.display = 'flex';
