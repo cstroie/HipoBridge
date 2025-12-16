@@ -141,9 +141,9 @@ document.addEventListener('DOMContentLoaded', function() {
             // Extract all checkout IDs from patient extensions
             let checkoutIds = [];
             if (patientData.extension) {
-                const dischargeExt = patientData.extension.find(ext => ext.url && ext.url.includes('discharge-ids'));
-                if (dischargeExt && dischargeExt.valueString) {
-                    checkoutIds = dischargeExt.valueString.split(',').filter(id => id.trim());
+                const checkoutExt = patientData.extension.find(ext => ext.url && ext.url.includes('checkout-ids'));
+                if (checkoutExt && checkoutExt.valueString) {
+                    checkoutIds = checkoutExt.valueString.split(',').filter(id => id.trim());
                 }
             }
             
@@ -363,13 +363,13 @@ document.addEventListener('DOMContentLoaded', function() {
         if (patientData.extension) {
             const encounterExt = patientData.extension.find(ext => ext.url && ext.url.includes('encounter-ids'));
             const admissionExt = patientData.extension.find(ext => ext.url && ext.url.includes('admission-ids'));
-            const dischargeExt = patientData.extension.find(ext => ext.url && ext.url.includes('discharge-ids'));
+            const checkoutExt = patientData.extension.find(ext => ext.url && ext.url.includes('checkout-ids'));
             
             encounterCount = encounterExt ? encounterExt.valueString.split(',').filter(id => id).length : 0;
             admissionCount = admissionExt ? admissionExt.valueString.split(',').filter(id => id).length : 0;
             
-            if (dischargeExt) {
-                checkoutIds = dischargeExt.valueString.split(',').filter(id => id);
+            if (checkoutExt) {
+                checkoutIds = checkoutExt.valueString.split(',').filter(id => id);
                 dischargeCount = checkoutIds.length;
             }
         }
