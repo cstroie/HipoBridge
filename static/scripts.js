@@ -717,9 +717,20 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (epicrisisText) {
                         // Display epicrisis immediately
                         const epicrisisSection = document.getElementById('epicrisisSection');
+                        const epicrisisTitle = document.getElementById('epicrisisTitle');
                         try {
                             const htmlContent = await convertMarkdownToHtml(epicrisisText);
                             document.getElementById('epicrisisContent').innerHTML = htmlContent;
+                            
+                            // Set diagnosis title if available
+                            let diagnosisText = 'DIAGNOSTIC';
+                            if (encounterData.diagnosis && encounterData.diagnosis.length > 0) {
+                                const diagnosis = encounterData.diagnosis[0];
+                                if (diagnosis.condition && diagnosis.condition.display) {
+                                    diagnosisText = diagnosis.condition.display;
+                                }
+                            }
+                            epicrisisTitle.textContent = `Epicrisis: ${diagnosisText}`;
                             
                             // Display date if available
                             const dateElement = document.getElementById('epicrisisDate');
