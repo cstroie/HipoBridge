@@ -1436,6 +1436,9 @@ document.addEventListener('DOMContentLoaded', function() {
             elements.noAnalyses.style.display = 'none';
             console.log('Found', analysesData.entry.length, 'service requests');
             
+            // Clear existing content
+            elements.analysesGrid.innerHTML = '';
+            
             // Process each service request
             for (const entry of analysesData.entry) {
                 const serviceRequest = entry.resource;
@@ -1448,6 +1451,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Create analysis card using template
                 const analysisCard = createAnalysisCard(serviceRequest, analysisType, analysisText);
+                console.log('Created analysis card:', analysisCard);
                 
                 // Fetch and display report content
                 try {
@@ -1462,13 +1466,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         // Add performer and interpreter to footer if available
                         const reportFooter = analysisCard.querySelector('.report-footer');
-                        if (reportData.resultsInterpreter && reportData.resultsInterpreter.length > 0) {
+                        if (reportFooter && reportData.resultsInterpreter && reportData.resultsInterpreter.length > 0) {
                             // Add interpreter if available
-                            if (reportData.resultsInterpreter && reportData.resultsInterpreter.length > 0) {
-                                const p = document.createElement('p');
-                                p.innerHTML = `<strong><i class="fas fa-user-md"></i> Medic:</strong> ${reportData.resultsInterpreter[0].display || ''}`;
-                                reportFooter.appendChild(p);
-                            }
+                            const p = document.createElement('p');
+                            p.innerHTML = `<strong><i class="fas fa-user-md"></i> Medic:</strong> ${reportData.resultsInterpreter[0].display || ''}`;
+                            reportFooter.appendChild(p);
                         }
                         
                         // Add report content to the card - now using presentedForm or conclusion
@@ -1550,14 +1552,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     showToast(`Error loading report data for service request ${serviceRequest.id}`, 'error');
                 }
                 
+                // Add the card to the grid
+                console.log('Adding analysis card to grid');
                 elements.analysesGrid.appendChild(analysisCard);
                 
                 // Force UI update to display the report immediately
                 await new Promise(resolve => setTimeout(resolve, 0));
             }
+            
+            console.log('Finished adding all analysis cards. Total cards:', elements.analysesGrid.children.length);
         } else {
             console.log('No analyses found, showing noAnalyses message');
             elements.noAnalyses.style.display = 'block';
+            elements.analysesGrid.innerHTML = ''; // Clear any existing content
         }
     }
     
@@ -1565,38 +1572,64 @@ document.addEventListener('DOMContentLoaded', function() {
     function createAnalysisCard(serviceRequest, analysisType, analysisText) {
         console.log('Creating analysis card for:', serviceRequest, analysisType, analysisText);
         
-        // Create card element directly instead of using template
-        const analysisCard = document.createElement('article');
+        // Try to use template first
+        const cardTemplate = document.getElementById('analysis-card-template');
+        let analysisCard;
+        
+        if (cardTemplate) {
+            console.log('Using template to create analysis card');
+            analysisCard = cardTemplate.content.cloneNode(true).querySelector('article');
+            if (!analysisCard) {
+                console.error('Failed to clone analysis card template');
+                // Fallback to creating element directly
+                analysisCard = document.createElement('article');
+            }
+        } else {
+            console.log('Template not found, creating element directly');
+            analysisCard = document.createElement('article');
+        }
+        
         analysisCard.className = `analysis-card ${analysisType}`;
         
-        // Create card structure
-        analysisCard.innerHTML = `
-            <div class="analysis-header">
-                <div class="analysis-type-badge">
-                    <i class="fas fa-file-medical"></i>
-                    <span class="type-text">${analysisText}</span>
+        // If we created the element directly or template failed, populate it
+        if (!cardTemplate || !cardTemplate.content.cloneNode(true).querySelector('article')) {
+            console.log('Populating card structure directly');
+            analysisCard.innerHTML = `
+                <div class="analysis-header">
+                    <div class="analysis-type-badge">
+                        <i class="fas fa-file-medical"></i>
+                        <span class="type-text">${analysisText}</span>
+                    </div>
+                    <h4><i class="fas fa-file-medical"></i> ${analysisText} <span class="report-id">#${serviceRequest.id}</span></h4>
+                    <div class="analysis-actions">
+                        <button class="btn-icon btn-small" title="View details">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn-icon btn-small" title="Download report">
+                            <i class="fas fa-download"></i>
+                        </button>
+                    </div>
                 </div>
-                <h4><i class="fas fa-file-medical"></i> ${analysisText} <span class="report-id">#${serviceRequest.id}</span></h4>
-                <div class="analysis-actions">
-                    <button class="btn-icon btn-small" title="View details">
-                        <i class="fas fa-eye"></i>
-                    </button>
-                    <button class="btn-icon btn-small" title="Download report">
-                        <i class="fas fa-download"></i>
-                    </button>
+                <div class="analysis-meta">
+                    <span class="meta-item"><i class="fas fa-calendar"></i> <span class="exam-date"></span></span>
+                    <span class="meta-item"><i class="fas fa-user-md"></i> <span class="medic-name"></span></span>
+                    <span class="meta-item"><i class="fas fa-clock"></i> <span class="status"></span></span>
                 </div>
-            </div>
-            <div class="analysis-meta">
-                <span class="meta-item"><i class="fas fa-calendar"></i> <span class="exam-date"></span></span>
-                <span class="meta-item"><i class="fas fa-user-md"></i> <span class="medic-name"></span></span>
-                <span class="meta-item"><i class="fas fa-clock"></i> <span class="status"></span></span>
-            </div>
-            <div class="analysis-content">
-                <div class="report-preview" aria-label="Report preview"></div>
-                <div class="imaging-study-link" aria-label="Imaging study link"></div>
-            </div>
-            <footer class="report-footer" aria-label="Report footer"></footer>
-        `;
+                <div class="analysis-content">
+                    <div class="report-preview" aria-label="Report preview"></div>
+                    <div class="imaging-study-link" aria-label="Imaging study link"></div>
+                </div>
+                <footer class="report-footer" aria-label="Report footer"></footer>
+            `;
+        } else {
+            // Populate template elements
+            console.log('Populating template elements');
+            const typeText = analysisCard.querySelector('.type-text');
+            if (typeText) typeText.textContent = analysisText;
+            
+            const header = analysisCard.querySelector('h4');
+            if (header) header.innerHTML = `<i class="fas fa-file-medical"></i> ${analysisText} <span class="report-id">#${serviceRequest.id}</span>`;
+        }
         
         // Set exam date with enhanced formatting
         const examDateElement = analysisCard.querySelector('.exam-date');
@@ -1621,6 +1654,7 @@ document.addEventListener('DOMContentLoaded', function() {
             medicNameElement.textContent = serviceRequest.requester.display || 'Unknown';
         }
         
+        console.log('Analysis card created successfully');
         return analysisCard;
     }
     
