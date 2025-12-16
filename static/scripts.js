@@ -1429,57 +1429,51 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Function to load and display reports progressively
     async function loadAndDisplayReports(analysesData, patientData) {
+        console.log('Loading and displaying reports:', analysesData);
+        
         // Check if we have a FHIR Bundle of ServiceRequests
         if (analysesData.resourceType === "Bundle" && analysesData.entry && analysesData.entry.length > 0) {
             elements.noAnalyses.style.display = 'none';
-            
-            // Filter for imaging analyses only
-            const imagingTypes = ['radio', 'ct', 'irm', 'eco', 'lac', 'lii', 'rads'];
-            const imagingEntries = analysesData.entry.filter(entry => {
-                const serviceRequest = entry.resource;
-                const analysisType = serviceRequest.code?.coding?.[0]?.code || 'unknown';
-                return imagingTypes.includes(analysisType);
-            });
-            
-            if (imagingEntries.length === 0) {
-                elements.noAnalyses.style.display = 'block';
-                return;
-            }
+            console.log('Found', analysesData.entry.length, 'service requests');
             
             // Process each service request
-            for (const entry of imagingEntries) {
+            for (const entry of analysesData.entry) {
                 const serviceRequest = entry.resource;
+                console.log('Processing service request:', serviceRequest);
                 
                 // Extract type and display text from service request code
                 const analysisType = serviceRequest.code?.coding?.[0]?.code || 'unknown';
                 const analysisText = serviceRequest.code?.coding?.[0]?.display || 'analysis';
+                console.log('Analysis type:', analysisType, 'Text:', analysisText);
                 
                 // Create analysis card using template
                 const analysisCard = createAnalysisCard(serviceRequest, analysisType, analysisText);
                 
-                // For imaging analyses, fetch and display report content
-                if (['radio', 'ct', 'irm', 'eco', 'lac', 'lii', 'rads'].includes(analysisType)) {
-                    try {
-                        // Fetch report data using FHIR API - now using the service request ID directly
-                        const reportResponse = await fetch(`/fhir/DiagnosticReport/${serviceRequest.id}`);
+                // Fetch and display report content
+                try {
+                    // Fetch report data using FHIR API - now using the service request ID directly
+                    console.log('Fetching diagnostic report for service request:', serviceRequest.id);
+                    const reportResponse = await fetch(`/fhir/DiagnosticReport/${serviceRequest.id}`);
+                    
+                    if (reportResponse.ok) {
+                        const reportData = await reportResponse.json();
+                        console.log('Report data loaded for service request', serviceRequest.id, ':', reportData);
+                        showToast(`Report data loaded for service request ${serviceRequest.id}`, 'success');
                         
-                        if (reportResponse.ok) {
-                            const reportData = await reportResponse.json();
-                            showToast(`Report data loaded for service request ${serviceRequest.id}`, 'success');
-                            
-                            // Add performer and interpreter to footer if available
-                            const reportFooter = analysisCard.querySelector('.report-footer');
+                        // Add performer and interpreter to footer if available
+                        const reportFooter = analysisCard.querySelector('.report-footer');
+                        if (reportData.resultsInterpreter && reportData.resultsInterpreter.length > 0) {
+                            // Add interpreter if available
                             if (reportData.resultsInterpreter && reportData.resultsInterpreter.length > 0) {
-                                // Add interpreter if available
-                                if (reportData.resultsInterpreter && reportData.resultsInterpreter.length > 0) {
-                                    const p = document.createElement('p');
-                                    p.innerHTML = `<strong><i class="fas fa-user-md"></i> Medic:</strong> ${reportData.resultsInterpreter[0].display || ''}`;
-                                    reportFooter.appendChild(p);
-                                }
+                                const p = document.createElement('p');
+                                p.innerHTML = `<strong><i class="fas fa-user-md"></i> Medic:</strong> ${reportData.resultsInterpreter[0].display || ''}`;
+                                reportFooter.appendChild(p);
                             }
-                            
-                            // Add report content to the card - now using presentedForm or conclusion
-                            const reportPreview = analysisCard.querySelector('.report-preview');
+                        }
+                        
+                        // Add report content to the card - now using presentedForm or conclusion
+                        const reportPreview = analysisCard.querySelector('.report-preview');
+                        if (reportPreview) {
                             reportPreview.id = `report-${serviceRequest.id}`;
                             
                             if (reportData.presentedForm && reportData.presentedForm.length > 0) {
@@ -1526,28 +1520,34 @@ document.addEventListener('DOMContentLoaded', function() {
                                     p.textContent = reportData.conclusion;
                                     reportPreview.appendChild(p);
                                 }
+                            } else {
+                                // If no content, show a message
+                                const p = document.createElement('p');
+                                p.textContent = 'No report content available';
+                                reportPreview.appendChild(p);
                             }
-                            
-                            // Add link to ImagingStudy if available
-                            const imagingStudyLink = analysisCard.querySelector('.imaging-study-link');
-                            if (reportData.imagingStudy) {
-                                const studyId = reportData.imagingStudy.reference.split('/')[1];
-                                const a = document.createElement('a');
-                                a.href = '#';
-                                a.innerHTML = `<i class="fas fa-x-ray"></i> View Imaging Study #${studyId}`;
-                                a.addEventListener('click', function(e) {
-                                    e.preventDefault();
-                                    viewImagingStudy(studyId, serviceRequest.id);
-                                });
-                                imagingStudyLink.appendChild(a);
-                            }
-                        } else {
-                            showToast(`Error loading report data for service request ${serviceRequest.id}`, 'error');
                         }
-                    } catch (err) {
-                        console.error('Error fetching report data:', err);
+                        
+                        // Add link to ImagingStudy if available
+                        const imagingStudyLink = analysisCard.querySelector('.imaging-study-link');
+                        if (imagingStudyLink && reportData.imagingStudy) {
+                            const studyId = reportData.imagingStudy.reference.split('/')[1];
+                            const a = document.createElement('a');
+                            a.href = '#';
+                            a.innerHTML = `<i class="fas fa-x-ray"></i> View Imaging Study #${studyId}`;
+                            a.addEventListener('click', function(e) {
+                                e.preventDefault();
+                                viewImagingStudy(studyId, serviceRequest.id);
+                            });
+                            imagingStudyLink.appendChild(a);
+                        }
+                    } else {
+                        console.log('Error loading report data for service request', serviceRequest.id, ':', reportResponse.status);
                         showToast(`Error loading report data for service request ${serviceRequest.id}`, 'error');
                     }
+                } catch (err) {
+                    console.error('Error fetching report data:', err);
+                    showToast(`Error loading report data for service request ${serviceRequest.id}`, 'error');
                 }
                 
                 elements.analysesGrid.appendChild(analysisCard);
@@ -1556,31 +1556,48 @@ document.addEventListener('DOMContentLoaded', function() {
                 await new Promise(resolve => setTimeout(resolve, 0));
             }
         } else {
+            console.log('No analyses found, showing noAnalyses message');
             elements.noAnalyses.style.display = 'block';
         }
     }
     
     // Helper function to create analysis card
     function createAnalysisCard(serviceRequest, analysisType, analysisText) {
+        console.log('Creating analysis card for:', serviceRequest, analysisType, analysisText);
+        
         const cardTemplate = document.getElementById('analysis-card-template');
+        if (!cardTemplate) {
+            console.error('Analysis card template not found');
+            return document.createElement('div'); // fallback
+        }
+        
         const analysisCard = cardTemplate.content.cloneNode(true).querySelector('article');
+        if (!analysisCard) {
+            console.error('Failed to clone analysis card template');
+            return document.createElement('div'); // fallback
+        }
+        
         analysisCard.className = `analysis-card ${analysisType}`;
         
         // Set card header with enhanced formatting
         const header = analysisCard.querySelector('h4');
-        header.innerHTML = `
-            <i class="fas fa-file-medical"></i> 
-            ${analysisText} 
-            <span class="report-id">#${serviceRequest.id}</span>
-        `;
+        if (header) {
+            header.innerHTML = `
+                <i class="fas fa-file-medical"></i> 
+                ${analysisText} 
+                <span class="report-id">#${serviceRequest.id}</span>
+            `;
+        }
         
         // Set exam date with enhanced formatting
         const examDateElement = analysisCard.querySelector('.exam-date');
-        if (serviceRequest.authoredOn) {
-            const formattedDate = formatDateWithTime(serviceRequest.authoredOn);
-            examDateElement.innerHTML = `<i class="fas fa-calendar"></i> ${formattedDate}`;
-        } else {
-            examDateElement.innerHTML = '<i class="fas fa-calendar"></i> Date: Unknown';
+        if (examDateElement) {
+            if (serviceRequest.authoredOn) {
+                const formattedDate = formatDateWithTime(serviceRequest.authoredOn);
+                examDateElement.innerHTML = `<i class="fas fa-calendar"></i> ${formattedDate}`;
+            } else {
+                examDateElement.innerHTML = '<i class="fas fa-calendar"></i> Date: Unknown';
+            }
         }
         
         // Add type badge
@@ -1593,6 +1610,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const statusElement = analysisCard.querySelector('.status');
         if (statusElement) {
             statusElement.textContent = serviceRequest.status || 'Unknown';
+        }
+        
+        // Add medic name if available
+        const medicNameElement = analysisCard.querySelector('.medic-name');
+        if (medicNameElement && serviceRequest.requester) {
+            medicNameElement.textContent = serviceRequest.requester.display || 'Unknown';
         }
         
         return analysisCard;
