@@ -567,6 +567,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Set card header
                 analysisCard.querySelector('h4').textContent = `${analysisText} report #${serviceRequest.id}`;
                 
+                // Set exam date if available
+                const examDateElement = analysisCard.querySelector('.exam-date');
+                if (serviceRequest.authoredOn) {
+                    // Parse ISO datetime and format it nicely
+                    const dateTime = new Date(serviceRequest.authoredOn);
+                    const formattedDate = dateTime.toLocaleDateString('en-GB');
+                    const formattedTime = dateTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                    examDateElement.textContent = `Date: ${formattedDate} ${formattedTime}`;
+                } else {
+                    examDateElement.textContent = 'Date: Unknown';
+                }
+                
                 // For imaging analyses, fetch and display report content
                 if (['radio', 'ct', 'irm', 'eco', 'lac', 'lii', 'rads'].includes(analysisType)) {
                     try {
