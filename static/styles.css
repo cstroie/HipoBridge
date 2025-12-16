@@ -1225,10 +1225,11 @@ select {
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     padding: 1.5rem;
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow-md);
     transition: all 0.3s ease;
     position: relative;
     overflow: hidden;
+    display: block;
 }
 
 .analysis-card::before {
@@ -1268,6 +1269,7 @@ select {
     background: var(--bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
+    flex-shrink: 0;
 }
 
 .analysis-type-badge i {
@@ -1284,11 +1286,13 @@ select {
     color: var(--text);
     font-size: 1.1rem;
     flex: 1;
+    word-break: break-word;
 }
 
 .analysis-actions {
     display: flex;
     gap: 0.5rem;
+    flex-shrink: 0;
 }
 
 .btn-small {
@@ -1313,6 +1317,49 @@ select {
     gap: 0.5rem;
     color: var(--text-light);
     font-size: 0.9rem;
+}
+
+.analysis-content {
+    margin-top: 1rem;
+}
+
+.report-preview {
+    margin-bottom: 1rem;
+    padding: 1rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    min-height: 50px;
+}
+
+.report-preview pre {
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.imaging-study-link {
+    margin-top: 0.5rem;
+}
+
+.imaging-study-link a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.imaging-study-link a:hover {
+    text-decoration: underline;
+}
+
+.report-footer {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
 }
 
 /* Epicrisis */
