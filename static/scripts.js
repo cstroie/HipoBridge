@@ -1508,17 +1508,21 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Helper function to fetch encounter data for a checkout ID
-    function fetchEncounterDataForCheckout(checkoutId) {
+    async function fetchEncounterDataForCheckout(checkoutId) {
         try {
-            // This would normally make an API call to fetch encounter data
-            // For now, we'll return null to simulate the data fetching
-            // In a real implementation, you would do:
-            // const response = await fetch(`/fhir/Encounter/${checkoutId}`);
-            // return await response.json();
+            const response = await fetch(`/fhir/Encounter/${checkoutId}`);
             
-            return null;
+            if (!response.ok) {
+                console.error(`Error fetching encounter data for checkout ${checkoutId}:`, response.status);
+                return null;
+            }
+            
+            const encounterData = await response.json();
+            console.log(`Encounter data fetched successfully for checkout ${checkoutId}:`, encounterData);
+            return encounterData;
+            
         } catch (error) {
-            console.error('Error fetching encounter data for checkout:', checkoutId, error);
+            console.error(`Error fetching encounter data for checkout ${checkoutId}:`, error);
             return null;
         }
     }
