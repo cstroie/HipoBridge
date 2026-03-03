@@ -1082,14 +1082,79 @@ document.addEventListener('DOMContentLoaded', function() {
         markdown += `**Total Admissions:** ${stats.admissions}\n\n`;
         markdown += `**Total Discharges:** ${stats.discharges}\n\n`;
         
-        // Checkout IDs
+        // Checkout IDs with detailed information
         if (stats.checkoutIds.length > 0) {
-            markdown += `## Checkout IDs\n\n`;
-            markdown += `**IDs:** ${stats.checkoutIds.join(', ')}\n\n`;
+            markdown += `## Checkout Details\n\n`;
+            stats.checkoutIds.forEach(checkoutId => {
+                markdown += `### Checkout #${checkoutId}\n\n`;
+                
+                // Fetch encounter data for this checkout ID
+                const encounterData = fetchEncounterDataForCheckout(checkoutId);
+                if (encounterData) {
+                    // Checkout Date
+                    if (encounterData.period && encounterData.period.end) {
+                        const checkoutDate = new Date(encounterData.period.end);
+                        const formattedDate = checkoutDate.toLocaleDateString('en-GB');
+                        const formattedTime = checkoutDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                        markdown += `**Checkout Date:** ${formattedDate} at ${formattedTime}\n\n`;
+                    }
+                    
+                    // Checkout Diagnosis
+                    const diagnosis = extractCheckoutDiagnosis(encounterData);
+                    if (diagnosis) {
+                        markdown += `**Checkout Diagnosis:** ${diagnosis}\n\n`;
+                    }
+                } else {
+                    markdown += `**Checkout Date:** Data not available\n\n`;
+                    markdown += `**Checkout Diagnosis:** Data not available\n\n`;
+                }
+                
+                markdown += `\n`;
+            });
         }
         
         console.log('Patient identification markdown generated successfully');
         return markdown;
+    }
+    
+    // Helper function to fetch encounter data for a checkout ID
+    function fetchEncounterDataForCheckout(checkoutId) {
+        try {
+            // This would normally make an API call to fetch encounter data
+            // For now, we'll return null to simulate the data fetching
+            // In a real implementation, you would do:
+            // const response = await fetch(`/fhir/Encounter/${checkoutId}`);
+            // return await response.json();
+            
+            return null;
+        } catch (error) {
+            console.error('Error fetching encounter data for checkout:', checkoutId, error);
+            return null;
+        }
+    }
+    
+    // Helper function to extract checkout diagnosis from encounter data
+    function extractCheckoutDiagnosis(encounterData) {
+        if (!encounterData || !encounterData.diagnosis || encounterData.diagnosis.length === 0) {
+            return null;
+        }
+        
+        // Look for discharge diagnosis first (use code "DD")
+        const dischargeDiagnosis = encounterData.diagnosis.find(d => 
+            d.use && d.use.coding && d.use.coding.some(c => c.code === "DD")
+        );
+        
+        if (dischargeDiagnosis && dischargeDiagnosis.condition && dischargeDiagnosis.condition.display) {
+            return dischargeDiagnosis.condition.display;
+        }
+        
+        // Fallback to first diagnosis if no discharge diagnosis found
+        const firstDiagnosis = encounterData.diagnosis[0];
+        if (firstDiagnosis.condition && firstDiagnosis.condition.display) {
+            return firstDiagnosis.condition.display;
+        }
+        
+        return null;
     }
     
     function loadRecentSearches() {
