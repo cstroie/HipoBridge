@@ -943,7 +943,7 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('Loading and displaying report data');
         
         // Display patient identification as markdown
-        await displayPatientIdentification(patientData);
+        await displayPatientReport(patientData);
         
         // Update report tab data
         updateReportTabData(patientData, extractMedicalStats(patientData), analysesData);
@@ -1005,7 +1005,7 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('Report data loading complete');
     }
     
-    async function displayPatientIdentification(patientData) {
+    async function displayPatientReport(patientData) {
         console.log('Displaying patient identification data');
         
         // Show loading state
@@ -1019,7 +1019,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         try {
             // Generate markdown content
-            const markdownContent = generatePatientIdentificationMarkdown(patientData);
+            const markdownContent = generatePatientReportMarkdown(patientData);
             console.log('Generated markdown content:', markdownContent);
             
             // Convert markdown to HTML
@@ -1041,7 +1041,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    function generatePatientIdentificationMarkdown(patientData) {
+    function generatePatientReportMarkdown(patientData) {
         console.log('Generating patient identification markdown');
         
         let markdown = '# Patient Identification\n\n';
