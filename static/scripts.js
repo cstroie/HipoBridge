@@ -918,14 +918,11 @@ document.addEventListener('DOMContentLoaded', function() {
     async function loadAndDisplayReport(patientData, analysesData) {
         console.log('Loading and displaying report data');
         
-        // Display patient identification as markdown
-        await displayPatientReport(patientData);
+        // Display patient report with analyses
+        await displayPatientReport(patientData, analysesData);
         
         // Update report tab data
         updateReportTabData(patientData, extractMedicalStats(patientData), analysesData);
-        
-        // Populate analyses grouped by modality
-        await populateAnalysesByModality(analysesData);
         
         // Populate epicrisis list
         await populateEpicrisisList(patientData);
@@ -960,9 +957,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     async function populateAnalysesByModality(analysesData) {
         console.log('Populating analyses by modality');
-        
-        const modalityContainer = elements.reportAnalysesByModality;
-        modalityContainer.innerHTML = '';
         
         // Define modality mapping
         const modalityMap = {
@@ -1007,67 +1001,51 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
         
-        // Create modality sections
+        // Generate markdown content
+        let markdown = '';
+        
         Object.keys(analysesByModality).forEach(modality => {
             const modalityInfo = modalityMap[modality];
             const analyses = analysesByModality[modality];
             
-            // Create modality section
-            const modalitySection = document.createElement('div');
-            modalitySection.className = 'modality-section';
-            modalitySection.innerHTML = `
-                <div class="modality-header">
-                    <i class="fas ${modalityInfo.icon}" style="color: ${modalityInfo.color}"></i>
-                    <h4>${modalityInfo.name}</h4>
-                    <span class="count">${analyses.length}</span>
-                </div>
-                <div class="modality-analyses"></div>
-            `;
+            // Add modality header
+            markdown += `## ${modalityInfo.name} (${analyses.length} analyses)\n\n`;
             
-            // Create analyses list
-            const analysesList = modalitySection.querySelector('.modality-analyses');
-            
+            // Add each analysis as a bullet list item
             analyses.forEach(analysis => {
-                const analysisItem = document.createElement('div');
-                analysisItem.className = 'analysis-item';
-                
                 const formattedDate = analysis.examDateString ? 
                     formatDateWithTime(analysis.examDateString) : 'Unknown';
                 
-                analysisItem.innerHTML = `
-                    <div class="analysis-header">
-                        <span class="analysis-type">${analysis.analysisText}</span>
-                        <span class="analysis-date">${formattedDate}</span>
-                    </div>
-                    <div class="analysis-id">ID: ${analysis.serviceRequest.id}</div>
-                    <div class="analysis-report" id="report-${analysis.serviceRequest.id}">
-                        <div class="loading-report">
-                            <i class="fas fa-spinner fa-spin"></i>
-                            <p>Loading report...</p>
-                        </div>
-                    </div>
-                `;
+                markdown += `- **${analysis.analysisText}** (${formattedDate})\n`;
+                markdown += `  - ID: ${analysis.serviceRequest.id}\n`;
                 
-                analysesList.appendChild(analysisItem);
+                // Add report content if available
+                const reportContent = getReportContent(analysis.serviceRequest.id);
+                if (reportContent) {
+                    markdown += `  - Report: ${reportContent.substring(0, 100)}${reportContent.length > 100 ? '...' : ''}\n`;
+                }
                 
-                // Fetch and display report content
-                fetchAndDisplayReportContent(analysis.serviceRequest.id, analysisItem);
+                markdown += `\n`;
             });
             
-            modalityContainer.appendChild(modalitySection);
+            markdown += `\n`;
         });
         
-        // If no analyses found, show no data message
+        // If no analyses found, add a message
         if (Object.keys(analysesByModality).length === 0) {
-            modalityContainer.innerHTML = `
-                <div class="no-data">
-                    <i class="fas fa-file-medical fa-2x" aria-hidden="true"></i>
-                    <p>No analyses available</p>
-                </div>
-            `;
+            markdown += '## No Analyses Available\n\n';
+            markdown += 'No diagnostic analyses found for this patient.\n\n';
         }
         
-        console.log('Analyses by modality populated successfully');
+        console.log('Analyses by modality markdown generated successfully');
+        return markdown;
+    }
+    
+    // Helper function to get report content for a service request
+    function getReportContent(serviceRequestId) {
+        // This would normally fetch and return the report content
+        // For now, return a placeholder
+        return `Report content for service request ${serviceRequestId}`;
     }
     
     async function populateEpicrisisList(patientData) {
@@ -1262,37 +1240,48 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    async function displayPatientReport(patientData) {
-        console.log('Displaying patient identification data');
+    async function displayPatientReport(patientData, analysesData) {
+        console.log('Displaying patient report data');
         
         // Show loading state
         const markdownContainer = elements.patientIdentificationMarkdown;
         markdownContainer.innerHTML = `
             <div class="loading-content">
                 <i class="fas fa-spinner fa-spin"></i>
-                <p>Loading patient identification data...</p>
+                <p>Loading patient report data...</p>
             </div>
         `;
         
         try {
-            // Generate markdown content
-            const markdownContent = generatePatientReportMarkdown(patientData);
-            console.log('Generated markdown content:', markdownContent);
+            // Generate patient identification markdown
+            const patientMarkdown = generatePatientReportMarkdown(patientData);
+            console.log('Generated patient markdown content:', patientMarkdown);
+            
+            // Generate analyses by modality markdown
+            let analysesMarkdown = '';
+            if (analysesData) {
+                analysesMarkdown = await populateAnalysesByModality(analysesData);
+                console.log('Generated analyses markdown content:', analysesMarkdown);
+            }
+            
+            // Combine markdown content
+            const combinedMarkdown = patientMarkdown + analysesMarkdown;
+            console.log('Combined markdown content:', combinedMarkdown);
             
             // Convert markdown to HTML
-            const htmlContent = await convertMarkdownToHtml(markdownContent);
+            const htmlContent = await convertMarkdownToHtml(combinedMarkdown);
             console.log('Converted markdown to HTML:', htmlContent);
             
             // Display the content
             markdownContainer.innerHTML = htmlContent;
-            console.log('Patient identification data displayed successfully');
+            console.log('Patient report data displayed successfully');
             
         } catch (error) {
-            console.error('Error displaying patient identification:', error);
+            console.error('Error displaying patient report:', error);
             markdownContainer.innerHTML = `
                 <div class="error-content">
                     <i class="fas fa-exclamation-triangle"></i>
-                    <p>Error loading patient identification data</p>
+                    <p>Error loading patient report data</p>
                 </div>
             `;
         }
