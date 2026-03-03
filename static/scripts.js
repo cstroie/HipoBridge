@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded', function() {
         epicrisisFooter: document.getElementById('epicrisisFooter'),
         epicrisisSection: document.getElementById('epicrisisSection'),
         // Report tab elements
+        patientIdentificationMarkdown: document.getElementById('patientIdentificationMarkdown'),
         reportPatientId: document.getElementById('reportPatientId'),
         reportPatientName: document.getElementById('reportPatientName'),
         reportPatientAge: document.getElementById('reportPatientAge'),
