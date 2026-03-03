@@ -1448,48 +1448,35 @@ document.addEventListener('DOMContentLoaded', function() {
     function generatePatientMarkdown(patientData) {
         console.log('Generating patient identification markdown');
         
-        let markdown = `### {formatPatientName(patientData.name)}\n\n`;
+        let markdown = `## ${formatPatientName(patientData.name)}\n\n`;
         
         // Patient ID
         markdown += `**ID:** ${patientData.id || 'N/A'}\n\n`;
-        
-        // Patient Name
-        markdown += `## Full Name\n\n`;
-        const name = formatPatientName(patientData.name);
-        markdown += `**Name:** ${name}\n\n`;
-        
         // Age and Gender
-        markdown += `## Demographics\n\n`;
         markdown += `**Age:** ${calculateAge(patientData.birthDate)}\n\n`;
         markdown += `**Gender:** ${formatGender(patientData.gender)}\n\n`;
-        
         // Birth Date
-        markdown += `## Birth Information\n\n`;
         markdown += `**Birth Date:** ${formatBirthDate(patientData.birthDate)}\n\n`;
-        
         // CNP
-        markdown += `## Identification Numbers\n\n`;
         const cnp = extractCNP(patientData.identifier);
         markdown += `**CNP:** ${cnp || 'N/A'}\n\n`;
-        
         // Contact Information
-        markdown += `## Contact Information\n\n`;
         const contactInfo = extractContactInfo(patientData.telecom);
         markdown += `**Phone:** ${contactInfo.phone || 'N/A'}\n\n`;
         markdown += `**Email:** ${contactInfo.email || 'N/A'}\n\n`;
         
         // Medical Statistics
         const stats = extractMedicalStats(patientData);
-        markdown += `## Medical Statistics\n\n`;
+        markdown += `### Medical Statistics\n\n`;
         markdown += `**Total Presentations:** ${stats.encounters}\n\n`;
         markdown += `**Total Admissions:** ${stats.admissions}\n\n`;
         markdown += `**Total Discharges:** ${stats.discharges}\n\n`;
         
         // Checkout IDs with detailed information
         if (stats.checkoutIds.length > 0) {
-            markdown += `## Checkout Details\n\n`;
+            markdown += `### Checkout Details\n\n`;
             stats.checkoutIds.forEach(checkoutId => {
-                markdown += `### Checkout #${checkoutId}\n\n`;
+                markdown += `#### Checkout #${checkoutId}\n\n`;
                 
                 // Fetch encounter data for this checkout ID
                 const encounterData = fetchEncounterDataForCheckout(checkoutId);
