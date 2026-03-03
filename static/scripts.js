@@ -36,6 +36,7 @@ document.addEventListener('DOMContentLoaded', function() {
         reportPatientAge: document.getElementById('reportPatientAge'),
         reportPatientGender: document.getElementById('reportPatientGender'),
         reportAnalysesByModality: document.getElementById('reportAnalysesByModality'),
+        reportEpicrisisList: document.getElementById('reportEpicrisisList'),
         reportTimeline: document.getElementById('reportTimeline'),
         generateReportBtn: document.getElementById('generateReportBtn'),
         printReportBtn: document.getElementById('printReportBtn'),
@@ -926,6 +927,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Populate analyses grouped by modality
         await populateAnalysesByModality(analysesData);
         
+        // Populate epicrisis list
+        await populateEpicrisisList(patientData);
+        
         // Populate timeline
         const checkoutIds = extractCheckoutIds(patientData);
         if (checkoutIds.length > 0) {
@@ -1065,6 +1069,136 @@ document.addEventListener('DOMContentLoaded', function() {
         
         console.log('Analyses by modality populated successfully');
     }
+    
+    async function populateEpicrisisList(patientData) {
+        console.log('Populating epicrisis list');
+        
+        const epicrisisContainer = elements.reportEpicrisisList;
+        epicrisisContainer.innerHTML = '';
+        
+        // Extract all checkout IDs from patient data
+        const checkoutIds = extractCheckoutIds(patientData);
+        
+        if (checkoutIds.length === 0) {
+            epicrisisContainer.innerHTML = `
+                <div class="no-data">
+                    <i class="fas fa-file-prescription fa-2x" aria-hidden="true"></i>
+                    <p>No epicrisis available</p>
+                </div>
+            `;
+            console.log('No checkout IDs found for epicrisis');
+            return;
+        }
+        
+        // Array to store epicrisis data
+        const epicrisisData = [];
+        
+        // Fetch epicrisis data for each checkout ID
+        for (const checkoutId of checkoutIds) {
+            try {
+                const encounterResponse = await fetch(`/fhir/Encounter/${checkoutId}`);
+                
+                if (encounterResponse.ok) {
+                    const encounterData = await encounterResponse.json();
+                    
+                    // Extract epicrisis text
+                    const epicrisisText = extractEpicrisisText(encounterData);
+                    
+                    if (epicrisisText) {
+                        // Extract diagnosis and date
+                        const diagnosis = extractDiagnosisText(encounterData);
+                        const checkoutDate = encounterData.period?.end ? new Date(encounterData.period.end) : null;
+                        
+                        epicrisisData.push({
+                            checkoutId,
+                            diagnosis,
+                            checkoutDate,
+                            epicrisisText,
+                            encounterData
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error(`Error fetching epicrisis for checkout ${checkoutId}:`, error);
+            }
+        }
+        
+        // Sort by date (most recent first)
+        epicrisisData.sort((a, b) => {
+            if (!a.checkoutDate || !b.checkoutDate) return 0;
+            return b.checkoutDate - a.checkoutDate;
+        });
+        
+        // Create epicrisis items
+        epicrisisData.forEach(epicrisis => {
+            const epicrisisItem = document.createElement('div');
+            epicrisisItem.className = 'epicrisis-item';
+            
+            const formattedDate = epicrisis.checkoutDate ? 
+                epicrisis.checkoutDate.toLocaleDateString('en-GB') : 'Unknown';
+            
+            epicrisisItem.innerHTML = `
+                <div class="epicrisis-header">
+                    <div class="epicrisis-title">
+                        <i class="fas fa-file-prescription"></i>
+                        <span>${epicrisis.diagnosis || 'DIAGNOSTIC'}</span>
+                    </div>
+                    <div class="epicrisis-date">
+                        <i class="fas fa-calendar"></i>
+                        ${formattedDate}
+                    </div>
+                </div>
+                <div class="epicrisis-content">
+                    <div class="epicrisis-preview">
+                        ${epicrisis.epicrisisText.substring(0, 200)}${epicrisis.epicrisisText.length > 200 ? '...' : ''}
+                    </div>
+                    <div class="epicrisis-actions">
+                        <button class="btn-icon btn-small" onclick="viewFullEpicrisis('${epicrisis.checkoutId}')" title="View full epicrisis">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn-icon btn-small" onclick="printEpicrisis('${epicrisis.checkoutId}')" title="Print epicrisis">
+                            <i class="fas fa-print"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            epicrisisContainer.appendChild(epicrisisItem);
+        });
+        
+        // If no epicrisis found, show no data message
+        if (epicrisisData.length === 0) {
+            epicrisisContainer.innerHTML = `
+                <div class="no-data">
+                    <i class="fas fa-file-prescription fa-2x" aria-hidden="true"></i>
+                    <p>No epicrisis available</p>
+                </div>
+            `;
+        }
+        
+        console.log('Epicrisis list populated successfully');
+    }
+    
+    // Helper function to extract epicrisis text from encounter data
+    function extractEpicrisisText(encounterData) {
+        if (!encounterData.note || !Array.isArray(encounterData.note)) return '';
+        
+        // Concatenate all note texts
+        return encounterData.note.map(note => note.text || '').join('\n\n');
+    }
+    
+    // Make functions available globally
+    window.viewFullEpicrisis = function(checkoutId) {
+        // This would open a modal or navigate to a detailed view
+        console.log('Viewing full epicrisis for checkout:', checkoutId);
+        showToast('Full epicrisis view feature coming soon', 'info');
+    };
+    
+    window.printEpicrisis = function(checkoutId) {
+        // This would print the epicrisis
+        console.log('Printing epicrisis for checkout:', checkoutId);
+        showToast('Print epicrisis feature coming soon', 'info');
+    };
     
     async function fetchAndDisplayReportContent(serviceRequestId, analysisItem) {
         try {
