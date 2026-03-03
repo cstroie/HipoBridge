@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', function() {
         epicrisisFooter: document.getElementById('epicrisisFooter'),
         epicrisisSection: document.getElementById('epicrisisSection'),
         // Report tab elements
-        patientIdentificationMarkdown: document.getElementById('patientIdentificationMarkdown'),
+        patientReportMarkdown: document.getElementById('patientReportMarkdown'),
         reportPatientId: document.getElementById('reportPatientId'),
         reportPatientName: document.getElementById('reportPatientName'),
         reportPatientAge: document.getElementById('reportPatientAge'),
@@ -871,7 +871,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function printReport() {
         // Get the patient identification markdown content
-        const markdownContainer = elements.patientIdentificationMarkdown;
+        const markdownContainer = elements.patientReportMarkdown;
         const markdownContent = markdownContainer.textContent || markdownContainer.innerText;
         
         const printContent = `
@@ -955,7 +955,7 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('Report data loading complete');
     }
     
-    async function populateAnalysesByModality(analysesData) {
+    async function populateAnalysesMarkdown(analysesData) {
         console.log('Populating analyses by modality');
         
         // Define modality mapping
@@ -1394,7 +1394,7 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('Displaying patient report data');
         
         // Show loading state
-        const markdownContainer = elements.patientIdentificationMarkdown;
+        const markdownContainer = elements.patientReportMarkdown;
         markdownContainer.innerHTML = `
             <div class="loading-content">
                 <i class="fas fa-spinner fa-spin"></i>
@@ -1404,13 +1404,13 @@ document.addEventListener('DOMContentLoaded', function() {
         
         try {
             // Generate patient identification markdown
-            const patientMarkdown = generatePatientReportMarkdown(patientData);
+            const patientMarkdown = generatePatientMarkdown(patientData);
             console.log('Generated patient markdown content:', patientMarkdown);
             
             // Generate analyses by modality markdown
             let analysesMarkdown = '';
             if (analysesData) {
-                analysesMarkdown = await populateAnalysesByModality(analysesData);
+                analysesMarkdown = await populateAnalysesMarkdown(analysesData);
                 console.log('Generated analyses markdown content:', analysesMarkdown);
             }
             
@@ -1445,13 +1445,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    function generatePatientReportMarkdown(patientData) {
+    function generatePatientMarkdown(patientData) {
         console.log('Generating patient identification markdown');
         
-        let markdown = '# Patient Identification\n\n';
+        let markdown = `### {formatPatientName(patientData.name)}\n\n`;
         
         // Patient ID
-        markdown += `## Patient ID\n\n`;
         markdown += `**ID:** ${patientData.id || 'N/A'}\n\n`;
         
         // Patient Name
