@@ -1104,24 +1104,57 @@ document.addEventListener('DOMContentLoaded', function() {
         if (epicrisisData.length > 0) {
             markdown += '## Epicrisis History\n\n';
             
-            epicrisisData.forEach(epicrisis => {
+            epicrisisData.forEach((epicrisis, index) => {
                 const formattedDate = epicrisis.checkoutDate ? 
                     epicrisis.checkoutDate.toLocaleDateString('en-GB') : 'Unknown';
                 
-                markdown += `### ${epicrisis.diagnosis || 'DIAGNOSTIC'} (${formattedDate})\n\n`;
+                markdown += `### Epicrisis #${index + 1}: ${epicrisis.diagnosis || 'DIAGNOSTIC'} (${formattedDate})\n\n`;
                 markdown += `**Checkout ID:** ${epicrisis.checkoutId}\n\n`;
                 
-                // Add epicrisis content
+                // Add full epicrisis content
                 if (epicrisis.epicrisisText) {
-                    // Add a preview of the epicrisis text
-                    const preview = epicrisis.epicrisisText.substring(0, 300);
-                    markdown += `**Preview:** ${preview}${epicrisis.epicrisisText.length > 300 ? '...' : ''}\n\n`;
-                    
-                    // Add a link to view full epicrisis (placeholder for future implementation)
-                    markdown += `**[View Full Epicrisis](#)**\n\n`;
+                    markdown += '#### Full Epicrisis Content\n\n';
+                    markdown += '```\n';
+                    markdown += epicrisis.epicrisisText;
+                    markdown += '\n```\n\n';
                 }
                 
-                markdown += `\n`;
+                // Add additional encounter details if available
+                if (epicrisis.encounterData) {
+                    const encounter = epicrisis.encounterData;
+                    
+                    // Add encounter period
+                    if (encounter.period && encounter.period.start) {
+                        const startDate = new Date(encounter.period.start);
+                        const formattedStartDate = startDate.toLocaleDateString('en-GB');
+                        markdown += `**Admission Date:** ${formattedStartDate}\n\n`;
+                    }
+                    
+                    // Add medic information
+                    if (encounter.participant && encounter.participant.length > 0) {
+                        const attender = encounter.participant.find(p => 
+                            p.type && p.type.some(t => 
+                                t.coding && t.coding.some(c => c.code === "ATND")
+                            )
+                        );
+                        
+                        if (attender && attender.individual && attender.individual.display) {
+                            markdown += `**Attending Medic:** ${attender.individual.display}\n\n`;
+                        }
+                    }
+                    
+                    // Add class if available
+                    if (encounter.class && encounter.class.display) {
+                        markdown += `**Encounter Class:** ${encounter.class.display}\n\n`;
+                    }
+                    
+                    // Add service type if available
+                    if (encounter.serviceType && encounter.serviceType.display) {
+                        markdown += `**Service Type:** ${encounter.serviceType.display}\n\n`;
+                    }
+                }
+                
+                markdown += '\n---\n\n';
             });
         } else {
             markdown += '## No Epicrisis Available\n\n';
