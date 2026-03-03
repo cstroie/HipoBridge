@@ -600,46 +600,46 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function clearResults() {
-        // Clear patient data
-        elements.patientId.textContent = '';
-        elements.patientName.textContent = '';
-        elements.patientCnp.textContent = '';
-        elements.patientGender.textContent = '';
-        elements.patientBirthDate.textContent = '';
-        elements.patientPhone.textContent = '';
-        elements.patientEmail.textContent = '';
-        elements.presentationsCount.textContent = '0';
-        elements.checkinsCount.textContent = '0';
-        elements.checkoutsCount.textContent = '0';
-        elements.checkoutIdsList.innerHTML = '';
+        // Clear patient data with null checks
+        if (elements.patientId) elements.patientId.textContent = '';
+        if (elements.patientName) elements.patientName.textContent = '';
+        if (elements.patientCnp) elements.patientCnp.textContent = '';
+        if (elements.patientGender) elements.patientGender.textContent = '';
+        if (elements.patientBirthDate) elements.patientBirthDate.textContent = '';
+        if (elements.patientPhone) elements.patientPhone.textContent = '';
+        if (elements.patientEmail) elements.patientEmail.textContent = '';
+        if (elements.presentationsCount) elements.presentationsCount.textContent = '0';
+        if (elements.checkinsCount) elements.checkinsCount.textContent = '0';
+        if (elements.checkoutsCount) elements.checkoutsCount.textContent = '0';
+        if (elements.checkoutIdsList) elements.checkoutIdsList.innerHTML = '';
         
-        // Clear analyses
-        elements.analysesGrid.innerHTML = '';
-        elements.noAnalyses.style.display = 'none';
+        // Clear analyses with null checks
+        if (elements.analysesGrid) elements.analysesGrid.innerHTML = '';
+        if (elements.noAnalyses) elements.noAnalyses.style.display = 'none';
         
-        // Clear epicrisis
-        elements.epicrisisContent.innerHTML = '';
-        elements.epicrisisDate.style.display = 'none';
-        elements.epicrisisTitle.textContent = 'DIAGNOSTIC';
-        elements.epicrisisFooter.style.display = 'none';
-        elements.epicrisisSection.style.display = 'none';
+        // Clear epicrisis with null checks
+        if (elements.epicrisisContent) elements.epicrisisContent.innerHTML = '';
+        if (elements.epicrisisDate) elements.epicrisisDate.style.display = 'none';
+        if (elements.epicrisisTitle) elements.epicrisisTitle.textContent = 'DIAGNOSTIC';
+        if (elements.epicrisisFooter) elements.epicrisisFooter.style.display = 'none';
+        if (elements.epicrisisSection) elements.epicrisisSection.style.display = 'none';
         
-        // Clear report
-        elements.reportPatientId.textContent = 'N/A';
-        elements.reportPatientName.textContent = 'N/A';
-        elements.reportPatientAge.textContent = 'N/A';
-        elements.reportPatientGender.textContent = 'N/A';
-        elements.reportPresentations.textContent = '0';
-        elements.reportAdmissions.textContent = '0';
-        elements.reportDischarges.textContent = '0';
-        elements.reportTotalReports.textContent = '0';
-        elements.reportRecentAnalyses.innerHTML = `
+        // Clear report with null checks
+        if (elements.reportPatientId) elements.reportPatientId.textContent = 'N/A';
+        if (elements.reportPatientName) elements.reportPatientName.textContent = 'N/A';
+        if (elements.reportPatientAge) elements.reportPatientAge.textContent = 'N/A';
+        if (elements.reportPatientGender) elements.reportPatientGender.textContent = 'N/A';
+        if (elements.reportPresentations) elements.reportPresentations.textContent = '0';
+        if (elements.reportAdmissions) elements.reportAdmissions.textContent = '0';
+        if (elements.reportDischarges) elements.reportDischarges.textContent = '0';
+        if (elements.reportTotalReports) elements.reportTotalReports.textContent = '0';
+        if (elements.reportRecentAnalyses) elements.reportRecentAnalyses.innerHTML = `
             <div class="no-data">
                 <i class="fas fa-file-medical fa-2x" aria-hidden="true"></i>
                 <p>No recent analyses available</p>
             </div>
         `;
-        elements.reportTimeline.innerHTML = `
+        if (elements.reportTimeline) elements.reportTimeline.innerHTML = `
             <div class="no-data">
                 <i class="fas fa-history fa-2x" aria-hidden="true"></i>
                 <p>No timeline data available</p>
