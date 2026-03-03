@@ -39,7 +39,7 @@ document.addEventListener('DOMContentLoaded', function() {
         reportAdmissions: document.getElementById('reportAdmissions'),
         reportDischarges: document.getElementById('reportDischarges'),
         reportTotalReports: document.getElementById('reportTotalReports'),
-        reportRecentAnalyses: document.getElementById('reportRecentAnalyses'),
+        reportAnalysesByModality: document.getElementById('reportAnalysesByModality'),
         reportTimeline: document.getElementById('reportTimeline'),
         generateReportBtn: document.getElementById('generateReportBtn'),
         printReportBtn: document.getElementById('printReportBtn'),
@@ -948,34 +948,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Update report tab data
         updateReportTabData(patientData, extractMedicalStats(patientData), analysesData);
         
-        // Populate recent analyses
-        if (analysesData.resourceType === "Bundle" && analysesData.entry && analysesData.entry.length > 0) {
-            elements.reportRecentAnalyses.innerHTML = '';
-            analysesData.entry.slice(0, 5).forEach(entry => {
-                const serviceRequest = entry.resource;
-                const analysisType = serviceRequest.code?.coding?.[0]?.code || 'unknown';
-                const analysisText = serviceRequest.code?.coding?.[0]?.display || 'analysis';
-                const examDate = serviceRequest.authoredOn ? formatDateWithTime(serviceRequest.authoredOn) : 'Unknown';
-                
-                const div = document.createElement('div');
-                div.className = 'analysis-item';
-                div.innerHTML = `
-                    <div class="analysis-header">
-                        <span class="analysis-type">${analysisText}</span>
-                        <span class="analysis-date">${examDate}</span>
-                    </div>
-                    <div class="analysis-id">ID: ${serviceRequest.id}</div>
-                `;
-                elements.reportRecentAnalyses.appendChild(div);
-            });
-        } else {
-            elements.reportRecentAnalyses.innerHTML = `
-                <div class="no-data">
-                    <i class="fas fa-file-medical fa-2x" aria-hidden="true"></i>
-                    <p>No recent analyses available</p>
-                </div>
-            `;
-        }
+        // Populate analyses grouped by modality
+        await populateAnalysesByModality(analysesData);
         
         // Populate timeline
         const checkoutIds = extractCheckoutIds(patientData);
@@ -1003,6 +977,180 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         console.log('Report data loading complete');
+    }
+    
+    async function populateAnalysesByModality(analysesData) {
+        console.log('Populating analyses by modality');
+        
+        const modalityContainer = elements.reportAnalysesByModality;
+        modalityContainer.innerHTML = '';
+        
+        // Define modality mapping
+        const modalityMap = {
+            'radio': { name: 'Radiography', icon: 'fa-x-ray', color: '#36a2eb' },
+            'ct': { name: 'CT Scan', icon: 'fa-computer', color: '#ff6384' },
+            'irm': { name: 'MRI', icon: 'fa-magnet', color: '#ffce56' },
+            'eco': { name: 'Ultrasound', icon: 'fa-heartbeat', color: '#4bc0c0' },
+            'rads': { name: 'Radiology', icon: 'fa-radiation', color: '#9966ff' }
+        };
+        
+        // Group analyses by modality
+        const analysesByModality = {};
+        
+        if (analysesData.resourceType === "Bundle" && analysesData.entry && analysesData.entry.length > 0) {
+            analysesData.entry.forEach(entry => {
+                const serviceRequest = entry.resource;
+                const analysisType = serviceRequest.code?.coding?.[0]?.code || 'unknown';
+                const analysisText = serviceRequest.code?.coding?.[0]?.display || 'analysis';
+                const examDate = serviceRequest.authoredOn ? new Date(serviceRequest.authoredOn) : null;
+                
+                // Skip unknown types
+                if (!modalityMap[analysisType]) return;
+                
+                if (!analysesByModality[analysisType]) {
+                    analysesByModality[analysisType] = [];
+                }
+                
+                analysesByModality[analysisType].push({
+                    serviceRequest,
+                    analysisText,
+                    examDate,
+                    examDateString: serviceRequest.authoredOn
+                });
+            });
+        }
+        
+        // Sort each modality group by date (most recent first)
+        Object.keys(analysesByModality).forEach(modality => {
+            analysesByModality[modality].sort((a, b) => {
+                if (!a.examDate || !b.examDate) return 0;
+                return b.examDate - a.examDate;
+            });
+        });
+        
+        // Create modality sections
+        Object.keys(analysesByModality).forEach(modality => {
+            const modalityInfo = modalityMap[modality];
+            const analyses = analysesByModality[modality];
+            
+            // Create modality section
+            const modalitySection = document.createElement('div');
+            modalitySection.className = 'modality-section';
+            modalitySection.innerHTML = `
+                <div class="modality-header">
+                    <i class="fas ${modalityInfo.icon}" style="color: ${modalityInfo.color}"></i>
+                    <h4>${modalityInfo.name}</h4>
+                    <span class="count">${analyses.length}</span>
+                </div>
+                <div class="modality-analyses"></div>
+            `;
+            
+            // Create analyses list
+            const analysesList = modalitySection.querySelector('.modality-analyses');
+            
+            analyses.forEach(analysis => {
+                const analysisItem = document.createElement('div');
+                analysisItem.className = 'analysis-item';
+                
+                const formattedDate = analysis.examDateString ? 
+                    formatDateWithTime(analysis.examDateString) : 'Unknown';
+                
+                analysisItem.innerHTML = `
+                    <div class="analysis-header">
+                        <span class="analysis-type">${analysis.analysisText}</span>
+                        <span class="analysis-date">${formattedDate}</span>
+                    </div>
+                    <div class="analysis-id">ID: ${analysis.serviceRequest.id}</div>
+                    <div class="analysis-report" id="report-${analysis.serviceRequest.id}">
+                        <div class="loading-report">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Loading report...</p>
+                        </div>
+                    </div>
+                `;
+                
+                analysesList.appendChild(analysisItem);
+                
+                // Fetch and display report content
+                fetchAndDisplayReportContent(analysis.serviceRequest.id, analysisItem);
+            });
+            
+            modalityContainer.appendChild(modalitySection);
+        });
+        
+        // If no analyses found, show no data message
+        if (Object.keys(analysesByModality).length === 0) {
+            modalityContainer.innerHTML = `
+                <div class="no-data">
+                    <i class="fas fa-file-medical fa-2x" aria-hidden="true"></i>
+                    <p>No analyses available</p>
+                </div>
+            `;
+        }
+        
+        console.log('Analyses by modality populated successfully');
+    }
+    
+    async function fetchAndDisplayReportContent(serviceRequestId, analysisItem) {
+        try {
+            const reportResponse = await fetch(`/fhir/DiagnosticReport/${serviceRequestId}`);
+            
+            if (!reportResponse.ok) {
+                console.log(`Report not found for service request ${serviceRequestId}`);
+                return;
+            }
+            
+            const reportData = await reportResponse.json();
+            const reportContainer = analysisItem.querySelector('.analysis-report');
+            
+            if (!reportContainer) return;
+            
+            // Clear loading state
+            reportContainer.innerHTML = '';
+            
+            // Display report content
+            if (reportData.conclusion) {
+                try {
+                    const htmlContent = await convertMarkdownToHtml(reportData.conclusion);
+                    reportContainer.innerHTML = htmlContent;
+                } catch (err) {
+                    console.error('Error converting report markdown:', err);
+                    reportContainer.innerHTML = `<p>${reportData.conclusion}</p>`;
+                }
+            } else if (reportData.presentedForm && reportData.presentedForm.length > 0) {
+                reportData.presentedForm.forEach(form => {
+                    if (form.contentType === 'text/plain' && form.data) {
+                        const pre = document.createElement('pre');
+                        pre.textContent = form.data;
+                        reportContainer.appendChild(pre);
+                    } else if (form.contentType === 'text/markdown' && form.data) {
+                        convertMarkdownToHtml(form.data).then(html => {
+                            const div = document.createElement('div');
+                            div.innerHTML = html;
+                            reportContainer.appendChild(div);
+                        }).catch(err => {
+                            console.error('Error converting markdown:', err);
+                            const pre = document.createElement('pre');
+                            pre.textContent = form.data;
+                            reportContainer.appendChild(pre);
+                        });
+                    } else if (form.contentType === 'text/html' && form.data) {
+                        const div = document.createElement('div');
+                        div.innerHTML = form.data;
+                        reportContainer.appendChild(div);
+                    }
+                });
+            } else {
+                reportContainer.innerHTML = '<p>No report content available</p>';
+            }
+            
+        } catch (err) {
+            console.error('Error fetching report content:', err);
+            const reportContainer = analysisItem.querySelector('.analysis-report');
+            if (reportContainer) {
+                reportContainer.innerHTML = '<p>Error loading report</p>';
+            }
+        }
     }
     
     async function displayPatientReport(patientData) {
