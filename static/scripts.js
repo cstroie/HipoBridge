@@ -468,6 +468,9 @@ document.addEventListener('DOMContentLoaded', function() {
             
             showToast('Patient information retrieved successfully', 'success');
             
+            // Add to recent searches with patient data
+            addToRecentSearches(identifier, patientData);
+            
             return {
                 success: true,
                 patientData,
@@ -1312,9 +1315,13 @@ document.addEventListener('DOMContentLoaded', function() {
             recentSearches.forEach(search => {
                 const div = document.createElement('div');
                 div.className = 'recent-item';
+                
+                const displayText = formatRecentSearchDisplay(search);
+                const searchTerm = typeof search === 'string' ? search : search.term;
+                
                 div.innerHTML = `
-                    <span>${search}</span>
-                    <button class="btn-icon btn-small" onclick="searchFromRecent('${search}')">
+                    <span>${displayText}</span>
+                    <button class="btn-icon btn-small" onclick="searchFromRecent('${searchTerm}')" title="Search for ${searchTerm}">
                         <i class="fas fa-search"></i>
                     </button>
                 `;
@@ -1323,16 +1330,37 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    function addToRecentSearches(searchTerm) {
+    function addToRecentSearches(searchTerm, patientData = null) {
         let recentSearches = JSON.parse(localStorage.getItem('recentSearches') || '[]');
-        // Remove if already exists
-        recentSearches = recentSearches.filter(search => search !== searchTerm);
+        
+        // Create a rich search object with more details
+        const searchItem = {
+            term: searchTerm,
+            timestamp: new Date().toISOString(),
+            patientId: patientData?.id || null,
+            patientName: patientData ? formatPatientName(patientData.name) : null,
+            type: identifySearchType(searchTerm)
+        };
+        
+        // Remove if exact term already exists
+        recentSearches = recentSearches.filter(search => search.term !== searchTerm);
+        
         // Add to beginning
-        recentSearches.unshift(searchTerm);
-        // Keep only last 5
-        recentSearches = recentSearches.slice(0, 5);
+        recentSearches.unshift(searchItem);
+        
+        // Keep only last 10 searches
+        recentSearches = recentSearches.slice(0, 10);
+        
         localStorage.setItem('recentSearches', JSON.stringify(recentSearches));
         loadRecentSearches();
+    }
+    
+    function identifySearchType(searchTerm) {
+        if (/^\d{13}$/.test(searchTerm)) return 'cnp';
+        if (/^\d+\*$/.test(searchTerm)) return 'partial_cnp';
+        if (/^[A-Za-z0-9\-_]+$/.test(searchTerm)) return 'code';
+        if (/^[A-Za-z\s\-\'\.]+$/.test(searchTerm)) return 'name';
+        return 'unknown';
     }
     
     // Make function available globally
@@ -1340,6 +1368,36 @@ document.addEventListener('DOMContentLoaded', function() {
         elements.cnpInput.value = searchTerm;
         elements.form.dispatchEvent(new Event('submit'));
     };
+    
+    // Function to format recent search display
+    function formatRecentSearchDisplay(searchItem) {
+        if (typeof searchItem === 'string') {
+            // Legacy format - just the search term
+            return searchItem;
+        }
+        
+        // New format - rich search object
+        let displayText = searchItem.term;
+        
+        // Add patient name if available
+        if (searchItem.patientName) {
+            displayText += ` - ${searchItem.patientName}`;
+        }
+        
+        // Add type indicator
+        const typeIcons = {
+            'cnp': 'fa-id-card',
+            'partial_cnp': 'fa-search',
+            'code': 'fa-barcode',
+            'name': 'fa-user',
+            'unknown': 'fa-question'
+        };
+        
+        const typeIcon = typeIcons[searchItem.type] || 'fa-question';
+        displayText = `<i class="fas ${typeIcon}"></i> ${displayText}`;
+        
+        return displayText;
+    }
     
     function hideError() {
         elements.errorDiv.style.display = 'none';
