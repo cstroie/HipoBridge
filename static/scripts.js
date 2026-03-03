@@ -873,6 +873,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function printReport() {
+        // Get the patient identification markdown content
+        const markdownContainer = elements.patientIdentificationMarkdown;
+        const markdownContent = markdownContainer.textContent || markdownContainer.innerText;
+        
         const printContent = `
             <html>
                 <head>
@@ -887,26 +891,17 @@ document.addEventListener('DOMContentLoaded', function() {
                         .stat-item { text-align: center; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
                         .stat-value { font-size: 24px; font-weight: bold; color: #007bff; }
                         .no-data { text-align: center; color: #666; font-style: italic; }
+                        .markdown-content { line-height: 1.6; }
+                        .markdown-content h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+                        .markdown-content h2 { color: #34495e; margin-top: 25px; margin-bottom: 15px; }
+                        .markdown-content strong { color: #2c3e50; }
                     </style>
                 </head>
                 <body>
                     <h1>Patient Report</h1>
                     
-                    <h2>Patient Summary</h2>
-                    <div class="summary-grid">
-                        <div class="summary-item">
-                            <strong>Patient ID:</strong> ${elements.reportPatientId.textContent}
-                        </div>
-                        <div class="summary-item">
-                            <strong>Full Name:</strong> ${elements.reportPatientName.textContent}
-                        </div>
-                        <div class="summary-item">
-                            <strong>Age:</strong> ${elements.reportPatientAge.textContent}
-                        </div>
-                        <div class="summary-item">
-                            <strong>Gender:</strong> ${elements.reportPatientGender.textContent}
-                        </div>
-                    </div>
+                    <h2>Patient Identification</h2>
+                    <div class="markdown-content">${markdownContent}</div>
                     
                     <h2>Medical Statistics</h2>
                     <div class="stats-grid">
@@ -945,6 +940,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     async function loadAndDisplayReport(patientData, analysesData) {
         console.log('Loading and displaying report data');
+        
+        // Display patient identification as markdown
+        await displayPatientIdentification(patientData);
         
         // Update report tab data
         updateReportTabData(patientData, extractMedicalStats(patientData), analysesData);
@@ -1004,6 +1002,93 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         console.log('Report data loading complete');
+    }
+    
+    async function displayPatientIdentification(patientData) {
+        console.log('Displaying patient identification data');
+        
+        // Show loading state
+        const markdownContainer = elements.patientIdentificationMarkdown;
+        markdownContainer.innerHTML = `
+            <div class="loading-content">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p>Loading patient identification data...</p>
+            </div>
+        `;
+        
+        try {
+            // Generate markdown content
+            const markdownContent = generatePatientIdentificationMarkdown(patientData);
+            console.log('Generated markdown content:', markdownContent);
+            
+            // Convert markdown to HTML
+            const htmlContent = await convertMarkdownToHtml(markdownContent);
+            console.log('Converted markdown to HTML:', htmlContent);
+            
+            // Display the content
+            markdownContainer.innerHTML = htmlContent;
+            console.log('Patient identification data displayed successfully');
+            
+        } catch (error) {
+            console.error('Error displaying patient identification:', error);
+            markdownContainer.innerHTML = `
+                <div class="error-content">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>Error loading patient identification data</p>
+                </div>
+            `;
+        }
+    }
+    
+    function generatePatientIdentificationMarkdown(patientData) {
+        console.log('Generating patient identification markdown');
+        
+        let markdown = '# Patient Identification\n\n';
+        
+        // Patient ID
+        markdown += `## Patient ID\n\n`;
+        markdown += `**ID:** ${patientData.id || 'N/A'}\n\n`;
+        
+        // Patient Name
+        markdown += `## Full Name\n\n`;
+        const name = formatPatientName(patientData.name);
+        markdown += `**Name:** ${name}\n\n`;
+        
+        // Age and Gender
+        markdown += `## Demographics\n\n`;
+        markdown += `**Age:** ${calculateAge(patientData.birthDate)}\n\n`;
+        markdown += `**Gender:** ${formatGender(patientData.gender)}\n\n`;
+        
+        // Birth Date
+        markdown += `## Birth Information\n\n`;
+        markdown += `**Birth Date:** ${formatBirthDate(patientData.birthDate)}\n\n`;
+        
+        // CNP
+        markdown += `## Identification Numbers\n\n`;
+        const cnp = extractCNP(patientData.identifier);
+        markdown += `**CNP:** ${cnp || 'N/A'}\n\n`;
+        
+        // Contact Information
+        markdown += `## Contact Information\n\n`;
+        const contactInfo = extractContactInfo(patientData.telecom);
+        markdown += `**Phone:** ${contactInfo.phone || 'N/A'}\n\n`;
+        markdown += `**Email:** ${contactInfo.email || 'N/A'}\n\n`;
+        
+        // Medical Statistics
+        const stats = extractMedicalStats(patientData);
+        markdown += `## Medical Statistics\n\n`;
+        markdown += `**Total Presentations:** ${stats.encounters}\n\n`;
+        markdown += `**Total Admissions:** ${stats.admissions}\n\n`;
+        markdown += `**Total Discharges:** ${stats.discharges}\n\n`;
+        
+        // Checkout IDs
+        if (stats.checkoutIds.length > 0) {
+            markdown += `## Checkout IDs\n\n`;
+            markdown += `**IDs:** ${stats.checkoutIds.join(', ')}\n\n`;
+        }
+        
+        console.log('Patient identification markdown generated successfully');
+        return markdown;
     }
     
     function loadRecentSearches() {

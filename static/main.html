@@ -379,97 +379,85 @@
                     </div>
                     
                     <div class="report-container" aria-live="polite">
-                        <div class="report-summary">
-                            <div class="report-card">
-                                <div class="card-header">
-                                    <h3><i class="fas fa-user-injured"></i> Patient Summary</h3>
-                                </div>
-                                <div class="card-content">
-                                    <div class="summary-grid">
-                                        <div class="summary-item">
-                                            <label>Patient ID:</label>
-                                            <span id="reportPatientId">N/A</span>
-                                        </div>
-                                        <div class="summary-item">
-                                            <label>Full Name:</label>
-                                            <span id="reportPatientName">N/A</span>
-                                        </div>
-                                        <div class="summary-item">
-                                            <label>Age:</label>
-                                            <span id="reportPatientAge">N/A</span>
-                                        </div>
-                                        <div class="summary-item">
-                                            <label>Gender:</label>
-                                            <span id="reportPatientGender">N/A</span>
-                                        </div>
+                        <!-- Patient Identification Section -->
+                        <div class="report-card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-id-card"></i> Patient Identification</h3>
+                            </div>
+                            <div class="card-content">
+                                <div id="patientIdentificationMarkdown" class="markdown-content">
+                                    <div class="loading-content">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                        <p>Loading patient identification data...</p>
                                     </div>
                                 </div>
                             </div>
-                            
-                            <div class="report-card">
-                                <div class="card-header">
-                                    <h3><i class="fas fa-chart-line"></i> Medical Statistics</h3>
-                                </div>
-                                <div class="card-content">
-                                    <div class="stats-grid">
-                                        <div class="stat-item">
-                                            <div class="stat-icon"><i class="fas fa-procedures"></i></div>
-                                            <div class="stat-content">
-                                                <div class="stat-label">Total Presentations</div>
-                                                <div class="stat-value" id="reportPresentations">0</div>
-                                            </div>
+                        </div>
+                        
+                        <!-- Medical Statistics Section -->
+                        <div class="report-card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-chart-line"></i> Medical Statistics</h3>
+                            </div>
+                            <div class="card-content">
+                                <div class="stats-grid">
+                                    <div class="stat-item">
+                                        <div class="stat-icon"><i class="fas fa-procedures"></i></div>
+                                        <div class="stat-content">
+                                            <div class="stat-label">Total Presentations</div>
+                                            <div class="stat-value" id="reportPresentations">0</div>
                                         </div>
-                                        <div class="stat-item">
-                                            <div class="stat-icon"><i class="fas fa-sign-in-alt"></i></div>
-                                            <div class="stat-content">
-                                                <div class="stat-label">Total Admissions</div>
-                                                <div class="stat-value" id="reportAdmissions">0</div>
-                                            </div>
+                                    </div>
+                                    <div class="stat-item">
+                                        <div class="stat-icon"><i class="fas fa-sign-in-alt"></i></div>
+                                        <div class="stat-content">
+                                            <div class="stat-label">Total Admissions</div>
+                                            <div class="stat-value" id="reportAdmissions">0</div>
                                         </div>
-                                        <div class="stat-item">
-                                            <div class="stat-icon"><i class="fas fa-sign-out-alt"></i></div>
-                                            <div class="stat-content">
-                                                <div class="stat-label">Total Discharges</div>
-                                                <div class="stat-value" id="reportDischarges">0</div>
-                                            </div>
+                                    </div>
+                                    <div class="stat-item">
+                                        <div class="stat-icon"><i class="fas fa-sign-out-alt"></i></div>
+                                        <div class="stat-content">
+                                            <div class="stat-label">Total Discharges</div>
+                                            <div class="stat-value" id="reportDischarges">0</div>
                                         </div>
-                                        <div class="stat-item">
-                                            <div class="stat-icon"><i class="fas fa-file-medical"></i></div>
-                                            <div class="stat-content">
-                                                <div class="stat-label">Total Reports</div>
-                                                <div class="stat-value" id="reportTotalReports">0</div>
-                                            </div>
+                                    </div>
+                                    <div class="stat-item">
+                                        <div class="stat-icon"><i class="fas fa-file-medical"></i></div>
+                                        <div class="stat-content">
+                                            <div class="stat-label">Total Reports</div>
+                                            <div class="stat-value" id="reportTotalReports">0</div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                         
-                        <div class="report-details">
-                            <div class="report-card">
-                                <div class="card-header">
-                                    <h3><i class="fas fa-list"></i> Recent Analyses</h3>
-                                </div>
-                                <div class="card-content">
-                                    <div id="reportRecentAnalyses" class="analyses-list">
-                                        <div class="no-data">
-                                            <i class="fas fa-file-medical fa-2x" aria-hidden="true"></i>
-                                            <p>No recent analyses available</p>
-                                        </div>
+                        <!-- Recent Analyses Section -->
+                        <div class="report-card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-list"></i> Recent Analyses</h3>
+                            </div>
+                            <div class="card-content">
+                                <div id="reportRecentAnalyses" class="analyses-list">
+                                    <div class="no-data">
+                                        <i class="fas fa-file-medical fa-2x" aria-hidden="true"></i>
+                                        <p>No recent analyses available</p>
                                     </div>
                                 </div>
                             </div>
-                            
-                            <div class="report-card">
-                                <div class="card-header">
-                                    <h3><i class="fas fa-calendar-alt"></i> Timeline</h3>
-                                </div>
-                                <div class="card-content">
-                                    <div id="reportTimeline" class="timeline">
-                                        <div class="no-data">
-                                            <i class="fas fa-history fa-2x" aria-hidden="true"></i>
-                                            <p>No timeline data available</p>
-                                        </div>
+                        </div>
+                        
+                        <!-- Timeline Section -->
+                        <div class="report-card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-calendar-alt"></i> Timeline</h3>
+                            </div>
+                            <div class="card-content">
+                                <div id="reportTimeline" class="timeline">
+                                    <div class="no-data">
+                                        <i class="fas fa-history fa-2x" aria-hidden="true"></i>
+                                        <p>No timeline data available</p>
                                     </div>
                                 </div>
                             </div>
