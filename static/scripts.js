@@ -1004,7 +1004,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Generate markdown content
         let markdown = '';
         
-        Object.keys(analysesByModality).forEach(modality => {
+        // Process each modality group
+        for (const modality of Object.keys(analysesByModality)) {
             const modalityInfo = modalityMap[modality];
             const analyses = analysesByModality[modality];
             
@@ -1012,24 +1013,25 @@ document.addEventListener('DOMContentLoaded', function() {
             markdown += `## ${modalityInfo.name} (${analyses.length} analyses)\n\n`;
             
             // Add each analysis as a bullet list item
-            analyses.forEach(analysis => {
+            for (const analysis of analyses) {
                 const formattedDate = analysis.examDateString ? 
                     formatDateWithTime(analysis.examDateString) : 'Unknown';
                 
                 markdown += `- **${analysis.analysisText}** (${formattedDate})\n`;
                 markdown += `  - ID: ${analysis.serviceRequest.id}\n`;
                 
-                // Add report content if available
-                const reportContent = getReportContent(analysis.serviceRequest.id);
+                // Fetch and add report content if available
+                const reportContent = await getReportContent(analysis.serviceRequest.id);
                 if (reportContent) {
-                    markdown += `  - Report: ${reportContent.substring(0, 100)}${reportContent.length > 100 ? '...' : ''}\n`;
+                    const preview = reportContent.substring(0, 100);
+                    markdown += `  - Report: ${preview}${reportContent.length > 100 ? '...' : ''}\n`;
                 }
                 
                 markdown += `\n`;
-            });
+            }
             
             markdown += `\n`;
-        });
+        }
         
         // If no analyses found, add a message
         if (Object.keys(analysesByModality).length === 0) {
@@ -1042,10 +1044,46 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Helper function to get report content for a service request
-    function getReportContent(serviceRequestId) {
-        // This would normally fetch and return the report content
-        // For now, return a placeholder
-        return `Report content for service request ${serviceRequestId}`;
+    async function getReportContent(serviceRequestId) {
+        try {
+            const reportResponse = await fetch(`/fhir/DiagnosticReport/${serviceRequestId}`);
+            
+            if (!reportResponse.ok) {
+                console.log(`Report not found for service request ${serviceRequestId}`);
+                return null;
+            }
+            
+            const reportData = await reportResponse.json();
+            
+            // Extract report content from different possible sources
+            if (reportData.conclusion) {
+                return reportData.conclusion;
+            } else if (reportData.presentedForm && reportData.presentedForm.length > 0) {
+                // Concatenate all presented form content
+                let content = '';
+                reportData.presentedForm.forEach(form => {
+                    if (form.data) {
+                        content += form.data + '\n\n';
+                    }
+                });
+                return content.trim();
+            } else if (reportData.result && reportData.result.length > 0) {
+                // Fallback to result array
+                let content = '';
+                reportData.result.forEach(result => {
+                    if (result.display) {
+                        content += result.display + '\n\n';
+                    }
+                });
+                return content.trim();
+            }
+            
+            return null;
+            
+        } catch (error) {
+            console.error(`Error fetching report content for service request ${serviceRequestId}:`, error);
+            return null;
+        }
     }
     
     async function generateEpicrisisMarkdown(patientData) {
