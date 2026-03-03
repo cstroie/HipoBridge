@@ -1512,21 +1512,37 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateReportTabData(patientData, stats, analysesData) {
         console.log('Updating report tab data');
         
-        // Update patient summary
-        elements.reportPatientId.textContent = patientData.id || 'N/A';
-        elements.reportPatientName.textContent = formatPatientName(patientData.name);
-        elements.reportPatientAge.textContent = calculateAge(patientData.birthDate);
-        elements.reportPatientGender.textContent = formatGender(patientData.gender);
+        // Update patient summary with null checks
+        if (elements.reportPatientId) {
+            elements.reportPatientId.textContent = patientData.id || 'N/A';
+        }
+        if (elements.reportPatientName) {
+            elements.reportPatientName.textContent = formatPatientName(patientData.name);
+        }
+        if (elements.reportPatientAge) {
+            elements.reportPatientAge.textContent = calculateAge(patientData.birthDate);
+        }
+        if (elements.reportPatientGender) {
+            elements.reportPatientGender.textContent = formatGender(patientData.gender);
+        }
         
-        // Update medical statistics
-        elements.reportPresentations.textContent = stats.encounters;
-        elements.reportAdmissions.textContent = stats.admissions;
-        elements.reportDischarges.textContent = stats.discharges;
+        // Update medical statistics with null checks
+        if (elements.reportPresentations) {
+            elements.reportPresentations.textContent = stats.encounters;
+        }
+        if (elements.reportAdmissions) {
+            elements.reportAdmissions.textContent = stats.admissions;
+        }
+        if (elements.reportDischarges) {
+            elements.reportDischarges.textContent = stats.discharges;
+        }
         
-        // Update total reports count
-        const totalReports = analysesData.resourceType === "Bundle" && analysesData.entry 
-            ? analysesData.entry.length : 0;
-        elements.reportTotalReports.textContent = totalReports;
+        // Update total reports count with null check
+        if (elements.reportTotalReports) {
+            const totalReports = analysesData.resourceType === "Bundle" && analysesData.entry 
+                ? analysesData.entry.length : 0;
+            elements.reportTotalReports.textContent = totalReports;
+        }
         
         console.log('Report tab data updated');
     }
