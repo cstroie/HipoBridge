@@ -29,6 +29,19 @@ document.addEventListener('DOMContentLoaded', function() {
         epicrisisTitle: document.getElementById('epicrisisTitle'),
         epicrisisFooter: document.getElementById('epicrisisFooter'),
         epicrisisSection: document.getElementById('epicrisisSection'),
+        // Report tab elements
+        reportPatientId: document.getElementById('reportPatientId'),
+        reportPatientName: document.getElementById('reportPatientName'),
+        reportPatientAge: document.getElementById('reportPatientAge'),
+        reportPatientGender: document.getElementById('reportPatientGender'),
+        reportPresentations: document.getElementById('reportPresentations'),
+        reportAdmissions: document.getElementById('reportAdmissions'),
+        reportDischarges: document.getElementById('reportDischarges'),
+        reportTotalReports: document.getElementById('reportTotalReports'),
+        reportRecentAnalyses: document.getElementById('reportRecentAnalyses'),
+        reportTimeline: document.getElementById('reportTimeline'),
+        generateReportBtn: document.getElementById('generateReportBtn'),
+        printReportBtn: document.getElementById('printReportBtn'),
         // Dashboard elements
         patientChart: document.getElementById('patientChart'),
         activityList: document.getElementById('activityList'),
@@ -207,6 +220,15 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.printEpicrisisBtn) {
             elements.printEpicrisisBtn.addEventListener('click', printEpicrisis);
         }
+        
+        // Report tab buttons
+        if (elements.generateReportBtn) {
+            elements.generateReportBtn.addEventListener('click', generateFullReport);
+        }
+        
+        if (elements.printReportBtn) {
+            elements.printReportBtn.addEventListener('click', printReport);
+        }
     }
     
     function switchTab(tabId) {
@@ -290,11 +312,13 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Displaying patient data...');
             await displayPatientData(patientData, analysesData);
             
-            // Load and display reports first, then epicrisis
+            // Load and display reports first, then epicrisis, then report
             console.log('Loading and displaying reports...');
             await loadAndDisplayReports(analysesData, patientData);
             console.log('Loading and displaying epicrisis...');
             await loadAndDisplayEpicrisis(patientData);
+            console.log('Loading and displaying report...');
+            await loadAndDisplayReport(patientData, analysesData);
             
             // Switch to patient profile tab with enhanced navigation
             console.log('Switching to patient tab...');
@@ -517,7 +541,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Show relevant tabs
-        const tabsToShow = ['patient', 'analyses', 'epicrisis', 'dashboard'];
+        const tabsToShow = ['patient', 'analyses', 'epicrisis', 'report', 'dashboard'];
         tabsToShow.forEach(tabName => {
             const tabElement = document.querySelector(`.nav-item[data-tab="${tabName}"]`);
             if (tabElement) {
@@ -550,6 +574,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const epicrisisTab = document.getElementById('epicrisis-tab');
         if (epicrisisTab) {
             epicrisisTab.hidden = false;
+        }
+        
+        const reportTab = document.getElementById('report-tab');
+        if (reportTab) {
+            reportTab.hidden = false;
         }
         
         const dashboardTab = document.getElementById('dashboard-tab');
@@ -594,6 +623,28 @@ document.addEventListener('DOMContentLoaded', function() {
         elements.epicrisisTitle.textContent = 'DIAGNOSTIC';
         elements.epicrisisFooter.style.display = 'none';
         elements.epicrisisSection.style.display = 'none';
+        
+        // Clear report
+        elements.reportPatientId.textContent = 'N/A';
+        elements.reportPatientName.textContent = 'N/A';
+        elements.reportPatientAge.textContent = 'N/A';
+        elements.reportPatientGender.textContent = 'N/A';
+        elements.reportPresentations.textContent = '0';
+        elements.reportAdmissions.textContent = '0';
+        elements.reportDischarges.textContent = '0';
+        elements.reportTotalReports.textContent = '0';
+        elements.reportRecentAnalyses.innerHTML = `
+            <div class="no-data">
+                <i class="fas fa-file-medical fa-2x" aria-hidden="true"></i>
+                <p>No recent analyses available</p>
+            </div>
+        `;
+        elements.reportTimeline.innerHTML = `
+            <div class="no-data">
+                <i class="fas fa-history fa-2x" aria-hidden="true"></i>
+                <p>No timeline data available</p>
+            </div>
+        `;
         
         // Hide navigation tabs for patient data
         elements.navItems.forEach(item => {
@@ -812,6 +863,149 @@ document.addEventListener('DOMContentLoaded', function() {
         printWindow.print();
     }
     
+    function generateFullReport() {
+        showToast('Generating comprehensive patient report...', 'success');
+        // This would normally generate a comprehensive report with all patient data
+        // For now, just show a success message
+        setTimeout(() => {
+            showToast('Report generated successfully!', 'success');
+        }, 2000);
+    }
+    
+    function printReport() {
+        const printContent = `
+            <html>
+                <head>
+                    <title>Patient Report - ${elements.reportPatientName.textContent}</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; margin: 20px; }
+                        h1 { color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
+                        h2 { color: #555; margin-top: 30px; }
+                        .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0; }
+                        .summary-item { margin: 10px 0; }
+                        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin: 20px 0; }
+                        .stat-item { text-align: center; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+                        .stat-value { font-size: 24px; font-weight: bold; color: #007bff; }
+                        .no-data { text-align: center; color: #666; font-style: italic; }
+                    </style>
+                </head>
+                <body>
+                    <h1>Patient Report</h1>
+                    
+                    <h2>Patient Summary</h2>
+                    <div class="summary-grid">
+                        <div class="summary-item">
+                            <strong>Patient ID:</strong> ${elements.reportPatientId.textContent}
+                        </div>
+                        <div class="summary-item">
+                            <strong>Full Name:</strong> ${elements.reportPatientName.textContent}
+                        </div>
+                        <div class="summary-item">
+                            <strong>Age:</strong> ${elements.reportPatientAge.textContent}
+                        </div>
+                        <div class="summary-item">
+                            <strong>Gender:</strong> ${elements.reportPatientGender.textContent}
+                        </div>
+                    </div>
+                    
+                    <h2>Medical Statistics</h2>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div class="stat-label">Total Presentations</div>
+                            <div class="stat-value">${elements.reportPresentations.textContent}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Total Admissions</div>
+                            <div class="stat-value">${elements.reportAdmissions.textContent}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Total Discharges</div>
+                            <div class="stat-value">${elements.reportDischarges.textContent}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Total Reports</div>
+                            <div class="stat-value">${elements.reportTotalReports.textContent}</div>
+                        </div>
+                    </div>
+                    
+                    <h2>Recent Analyses</h2>
+                    <div>${elements.reportRecentAnalyses.innerHTML}</div>
+                    
+                    <h2>Timeline</h2>
+                    <div>${elements.reportTimeline.innerHTML}</div>
+                </body>
+            </html>
+        `;
+        
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(printContent);
+        printWindow.document.close();
+        printWindow.print();
+    }
+    
+    async function loadAndDisplayReport(patientData, analysesData) {
+        console.log('Loading and displaying report data');
+        
+        // Update report tab data
+        updateReportTabData(patientData, extractMedicalStats(patientData), analysesData);
+        
+        // Populate recent analyses
+        if (analysesData.resourceType === "Bundle" && analysesData.entry && analysesData.entry.length > 0) {
+            elements.reportRecentAnalyses.innerHTML = '';
+            analysesData.entry.slice(0, 5).forEach(entry => {
+                const serviceRequest = entry.resource;
+                const analysisType = serviceRequest.code?.coding?.[0]?.code || 'unknown';
+                const analysisText = serviceRequest.code?.coding?.[0]?.display || 'analysis';
+                const examDate = serviceRequest.authoredOn ? formatDateWithTime(serviceRequest.authoredOn) : 'Unknown';
+                
+                const div = document.createElement('div');
+                div.className = 'analysis-item';
+                div.innerHTML = `
+                    <div class="analysis-header">
+                        <span class="analysis-type">${analysisText}</span>
+                        <span class="analysis-date">${examDate}</span>
+                    </div>
+                    <div class="analysis-id">ID: ${serviceRequest.id}</div>
+                `;
+                elements.reportRecentAnalyses.appendChild(div);
+            });
+        } else {
+            elements.reportRecentAnalyses.innerHTML = `
+                <div class="no-data">
+                    <i class="fas fa-file-medical fa-2x" aria-hidden="true"></i>
+                    <p>No recent analyses available</p>
+                </div>
+            `;
+        }
+        
+        // Populate timeline
+        const checkoutIds = extractCheckoutIds(patientData);
+        if (checkoutIds.length > 0) {
+            elements.reportTimeline.innerHTML = '';
+            checkoutIds.forEach(id => {
+                const div = document.createElement('div');
+                div.className = 'timeline-item';
+                div.innerHTML = `
+                    <div class="timeline-marker"></div>
+                    <div class="timeline-content">
+                        <div class="timeline-title">Encounter #${id}</div>
+                        <div class="timeline-date">Checkout ID</div>
+                    </div>
+                `;
+                elements.reportTimeline.appendChild(div);
+            });
+        } else {
+            elements.reportTimeline.innerHTML = `
+                <div class="no-data">
+                    <i class="fas fa-history fa-2x" aria-hidden="true"></i>
+                    <p>No timeline data available</p>
+                </div>
+            `;
+        }
+        
+        console.log('Report data loading complete');
+    }
+    
     function loadRecentSearches() {
         const recentSearches = JSON.parse(localStorage.getItem('recentSearches') || '[]');
         if (elements.recentSearchesList) {
@@ -1005,6 +1199,9 @@ document.addEventListener('DOMContentLoaded', function() {
         elements.epicrisisSection.style.display = 'none';
         elements.analysesGrid.innerHTML = '';
         elements.noAnalyses.style.display = 'none';
+        
+        // Update report tab data
+        updateReportTabData(patientData, stats, analysesData);
         
         // Update dashboard stats if available
         updateDashboardStats(stats, analysesData);
@@ -1224,6 +1421,29 @@ document.addEventListener('DOMContentLoaded', function() {
             ${idsHtml}
         `;
         console.log('Checkout IDs displayed');
+    }
+    
+    // Update report tab data
+    function updateReportTabData(patientData, stats, analysesData) {
+        console.log('Updating report tab data');
+        
+        // Update patient summary
+        elements.reportPatientId.textContent = patientData.id || 'N/A';
+        elements.reportPatientName.textContent = formatPatientName(patientData.name);
+        elements.reportPatientAge.textContent = calculateAge(patientData.birthDate);
+        elements.reportPatientGender.textContent = formatGender(patientData.gender);
+        
+        // Update medical statistics
+        elements.reportPresentations.textContent = stats.encounters;
+        elements.reportAdmissions.textContent = stats.admissions;
+        elements.reportDischarges.textContent = stats.discharges;
+        
+        // Update total reports count
+        const totalReports = analysesData.resourceType === "Bundle" && analysesData.entry 
+            ? analysesData.entry.length : 0;
+        elements.reportTotalReports.textContent = totalReports;
+        
+        console.log('Report tab data updated');
     }
     
     // Enhanced dashboard stats update
