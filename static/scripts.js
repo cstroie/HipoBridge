@@ -918,7 +918,7 @@ document.addEventListener('DOMContentLoaded', function() {
     async function loadAndDisplayReport(patientData, analysesData) {
         console.log('Loading and displaying report data');
         
-        // Display patient report with analyses
+        // Display patient report with analyses and epicrisis
         await displayPatientReport(patientData, analysesData);
         
         // Update report tab data
@@ -1046,6 +1046,90 @@ document.addEventListener('DOMContentLoaded', function() {
         // This would normally fetch and return the report content
         // For now, return a placeholder
         return `Report content for service request ${serviceRequestId}`;
+    }
+    
+    async function generateEpicrisisMarkdown(patientData) {
+        console.log('Generating epicrisis markdown');
+        
+        // Extract all checkout IDs from patient data
+        const checkoutIds = extractCheckoutIds(patientData);
+        
+        if (checkoutIds.length === 0) {
+            console.log('No checkout IDs found for epicrisis');
+            return '';
+        }
+        
+        let markdown = '';
+        
+        // Array to store epicrisis data
+        const epicrisisData = [];
+        
+        // Fetch epicrisis data for each checkout ID
+        for (const checkoutId of checkoutIds) {
+            try {
+                const encounterResponse = await fetch(`/fhir/Encounter/${checkoutId}`);
+                
+                if (encounterResponse.ok) {
+                    const encounterData = await encounterResponse.json();
+                    
+                    // Extract epicrisis text
+                    const epicrisisText = extractEpicrisisText(encounterData);
+                    
+                    if (epicrisisText) {
+                        // Extract diagnosis and date
+                        const diagnosis = extractDiagnosisText(encounterData);
+                        const checkoutDate = encounterData.period?.end ? new Date(encounterData.period.end) : null;
+                        
+                        epicrisisData.push({
+                            checkoutId,
+                            diagnosis,
+                            checkoutDate,
+                            epicrisisText,
+                            encounterData
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error(`Error fetching epicrisis for checkout ${checkoutId}:`, error);
+            }
+        }
+        
+        // Sort by date (most recent first)
+        epicrisisData.sort((a, b) => {
+            if (!a.checkoutDate || !b.checkoutDate) return 0;
+            return b.checkoutDate - a.checkoutDate;
+        });
+        
+        // Generate markdown for each epicrisis
+        if (epicrisisData.length > 0) {
+            markdown += '## Epicrisis History\n\n';
+            
+            epicrisisData.forEach(epicrisis => {
+                const formattedDate = epicrisis.checkoutDate ? 
+                    epicrisis.checkoutDate.toLocaleDateString('en-GB') : 'Unknown';
+                
+                markdown += `### ${epicrisis.diagnosis || 'DIAGNOSTIC'} (${formattedDate})\n\n`;
+                markdown += `**Checkout ID:** ${epicrisis.checkoutId}\n\n`;
+                
+                // Add epicrisis content
+                if (epicrisis.epicrisisText) {
+                    // Add a preview of the epicrisis text
+                    const preview = epicrisis.epicrisisText.substring(0, 300);
+                    markdown += `**Preview:** ${preview}${epicrisis.epicrisisText.length > 300 ? '...' : ''}\n\n`;
+                    
+                    // Add a link to view full epicrisis (placeholder for future implementation)
+                    markdown += `**[View Full Epicrisis](#)**\n\n`;
+                }
+                
+                markdown += `\n`;
+            });
+        } else {
+            markdown += '## No Epicrisis Available\n\n';
+            markdown += 'No epicrisis documents found for this patient.\n\n';
+        }
+        
+        console.log('Epicrisis markdown generated successfully');
+        return markdown;
     }
     
     async function populateEpicrisisList(patientData) {
@@ -1264,8 +1348,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log('Generated analyses markdown content:', analysesMarkdown);
             }
             
-            // Combine markdown content
-            const combinedMarkdown = patientMarkdown + analysesMarkdown;
+            // Generate epicrisis markdown
+            let epicrisisMarkdown = '';
+            const epicrisisData = await generateEpicrisisMarkdown(patientData);
+            if (epicrisisData) {
+                epicrisisMarkdown = epicrisisData;
+                console.log('Generated epicrisis markdown content:', epicrisisMarkdown);
+            }
+            
+            // Combine all markdown content
+            const combinedMarkdown = patientMarkdown + analysesMarkdown + epicrisisMarkdown;
             console.log('Combined markdown content:', combinedMarkdown);
             
             // Convert markdown to HTML
