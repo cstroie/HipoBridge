@@ -35,10 +35,6 @@ document.addEventListener('DOMContentLoaded', function() {
         reportPatientName: document.getElementById('reportPatientName'),
         reportPatientAge: document.getElementById('reportPatientAge'),
         reportPatientGender: document.getElementById('reportPatientGender'),
-        reportPresentations: document.getElementById('reportPresentations'),
-        reportAdmissions: document.getElementById('reportAdmissions'),
-        reportDischarges: document.getElementById('reportDischarges'),
-        reportTotalReports: document.getElementById('reportTotalReports'),
         reportAnalysesByModality: document.getElementById('reportAnalysesByModality'),
         reportTimeline: document.getElementById('reportTimeline'),
         generateReportBtn: document.getElementById('generateReportBtn'),
@@ -633,10 +629,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.reportPatientName) elements.reportPatientName.textContent = 'N/A';
         if (elements.reportPatientAge) elements.reportPatientAge.textContent = 'N/A';
         if (elements.reportPatientGender) elements.reportPatientGender.textContent = 'N/A';
-        if (elements.reportPresentations) elements.reportPresentations.textContent = '0';
-        if (elements.reportAdmissions) elements.reportAdmissions.textContent = '0';
-        if (elements.reportDischarges) elements.reportDischarges.textContent = '0';
-        if (elements.reportTotalReports) elements.reportTotalReports.textContent = '0';
         if (elements.reportRecentAnalyses) elements.reportRecentAnalyses.innerHTML = `
             <div class="no-data">
                 <i class="fas fa-file-medical fa-2x" aria-hidden="true"></i>
@@ -906,26 +898,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     <h2>Patient Identification</h2>
                     <div class="markdown-content">${markdownContent}</div>
-                    
-                    <h2>Medical Statistics</h2>
-                    <div class="stats-grid">
-                        <div class="stat-item">
-                            <div class="stat-label">Total Presentations</div>
-                            <div class="stat-value">${elements.reportPresentations.textContent}</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-label">Total Admissions</div>
-                            <div class="stat-value">${elements.reportAdmissions.textContent}</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-label">Total Discharges</div>
-                            <div class="stat-value">${elements.reportDischarges.textContent}</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-label">Total Reports</div>
-                            <div class="stat-value">${elements.reportTotalReports.textContent}</div>
-                        </div>
-                    </div>
                     
                     <h2>Recent Analyses</h2>
                     <div>${elements.reportRecentAnalyses.innerHTML}</div>
@@ -1796,24 +1768,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         if (elements.reportPatientGender) {
             elements.reportPatientGender.textContent = formatGender(patientData.gender);
-        }
-        
-        // Update medical statistics with null checks
-        if (elements.reportPresentations) {
-            elements.reportPresentations.textContent = stats.encounters;
-        }
-        if (elements.reportAdmissions) {
-            elements.reportAdmissions.textContent = stats.admissions;
-        }
-        if (elements.reportDischarges) {
-            elements.reportDischarges.textContent = stats.discharges;
-        }
-        
-        // Update total reports count with null check
-        if (elements.reportTotalReports) {
-            const totalReports = analysesData.resourceType === "Bundle" && analysesData.entry 
-                ? analysesData.entry.length : 0;
-            elements.reportTotalReports.textContent = totalReports;
         }
         
         console.log('Report tab data updated');
