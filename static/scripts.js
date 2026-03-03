@@ -1017,14 +1017,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 const formattedDate = analysis.examDateString ? 
                     formatDateWithTime(analysis.examDateString) : 'Unknown';
                 
-                markdown += `- **${analysis.analysisText}** (${formattedDate})\n`;
-                markdown += `  - ID: ${analysis.serviceRequest.id}\n`;
+                markdown += `### ${analysis.analysisText} ${analysis.serviceRequest.id} (${formattedDate})\n`;
                 
                 // Fetch and add report content if available
                 const reportContent = await getReportContent(analysis.serviceRequest.id);
                 if (reportContent) {
-                    const preview = reportContent.substring(0, 100);
-                    markdown += `  - Report: ${preview}${reportContent.length > 100 ? '...' : ''}\n`;
+                    markdown += `${reportContent}\n`;
                 }
                 
                 markdown += `\n`;
@@ -1151,10 +1149,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Add full epicrisis content
                 if (epicrisis.epicrisisText) {
-                    markdown += '#### Full Epicrisis Content\n\n';
-                    markdown += '```\n';
                     markdown += epicrisis.epicrisisText;
-                    markdown += '\n```\n\n';
                 }
                 
                 // Add additional encounter details if available
