@@ -72,6 +72,45 @@ document.addEventListener('DOMContentLoaded', function() {
         recentSearchesList: document.getElementById('recentSearchesList')
     };
     
+    // Simple in-memory cache for encounters and reports to avoid duplicate network calls
+    const cache = {
+        encounters: {},
+        reports: {}
+    };
+
+    // debug logging helper (set DEBUG=true during development to see logs)
+    const DEBUG = false;
+    function log(...args) { if (DEBUG) console.log(...args); }
+
+    // limit for simultaneous network requests (helpful when handling many IDs)
+    const MAX_CONCURRENT_REQUESTS = 5;
+
+    /**
+     * Map over an array with a concurrency limit.
+     * @param {Array} arr
+     * @param {number} limit
+     * @param {Function} asyncFn - receives (item, index) and returns a promise
+     * @returns {Promise<Array>} results in original order
+     */
+    async function limitedMap(arr, limit, asyncFn) {
+        const results = new Array(arr.length);
+        let idx = 0;
+        async function worker() {
+            while (idx < arr.length) {
+                const current = idx++;
+                try {
+                    results[current] = await asyncFn(arr[current], current);
+                } catch (err) {
+                    results[current] = null;
+                }
+            }
+        }
+        const workers = [];
+        for (let i = 0; i < limit; i++) workers.push(worker());
+        await Promise.all(workers);
+        return results;
+    }
+
     // Initialize application
     initApp();
     
@@ -249,7 +288,7 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
         
         const cnp = elements.cnpInput.value.trim();
-        console.log('Form submitted with CNP:', cnp);
+        log('Form submitted with CNP:', cnp);
         
         // Enhanced input validation
         if (!cnp) {
@@ -274,9 +313,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         try {
             // Enhanced search with better error handling
-            console.log('Starting patient search...');
+            log('Starting patient search...');
             const searchResult = await performPatientSearch(cnp);
-            console.log('Patient search result:', searchResult);
+            log('Patient search result:', searchResult);
             
             if (!searchResult.success) {
                 showToast(searchResult.message, 'error');
@@ -284,13 +323,13 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             const { patientData, patientCode } = searchResult;
-            console.log('Patient data retrieved:', patientData);
-            console.log('Patient code:', patientCode);
+            log('Patient data retrieved:', patientData);
+            log('Patient code:', patientCode);
             
             // Get analyses using FHIR API with better error handling
-            console.log('Fetching analyses data for patient:', patientCode);
+            log('Fetching analyses data for patient:', patientCode);
             const analysesResult = await fetchAnalysesData(patientCode);
-            console.log('Analyses data result:', analysesResult);
+            log('Analyses data result:', analysesResult);
             
             if (!analysesResult.success) {
                 showToast(analysesResult.message, 'error');
@@ -298,26 +337,26 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             const analysesData = analysesResult.data;
-            console.log('Analyses data retrieved:', analysesData);
+            log('Analyses data retrieved:', analysesData);
             
             // Display patient data first
-            console.log('Displaying patient data...');
+            log('Displaying patient data...');
             await displayPatientData(patientData, analysesData);
             
             // Load and display reports first, then epicrisis, then report
-            console.log('Loading and displaying reports...');
+            log('Loading and displaying reports...');
             await loadAndDisplayReports(analysesData, patientData);
-            console.log('Loading and displaying epicrisis...');
+            log('Loading and displaying epicrisis...');
             await loadAndDisplayEpicrisis(patientData);
-            console.log('Loading and displaying report...');
+            log('Loading and displaying report...');
             await loadAndDisplayReport(patientData, analysesData);
             
             // Switch to patient profile tab with enhanced navigation
-            console.log('Switching to patient tab...');
+            log('Switching to patient tab...');
             switchToPatientTab();
             
             showToast('Analysis loading complete', 'success');
-            console.log('All data loading complete');
+            log('All data loading complete');
             
         } catch (err) {
             console.error('Error in handleFormSubmit:', err);
@@ -525,14 +564,14 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Enhanced tab switching function
     function switchToPatientTab() {
-        console.log('Switching to patient tab');
+        log('Switching to patient tab');
         
         // Update navigation
         elements.navItems.forEach(nav => nav.classList.remove('active'));
         const patientNavItem = document.querySelector('.nav-item[data-tab="patient"]');
         if (patientNavItem) {
             patientNavItem.classList.add('active');
-            console.log('Patient nav item activated');
+            log('Patient nav item activated');
         }
         
         // Show relevant tabs
@@ -541,7 +580,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const tabElement = document.querySelector(`.nav-item[data-tab="${tabName}"]`);
             if (tabElement) {
                 tabElement.style.display = 'block';
-                console.log(`Tab ${tabName} made visible`);
+                log(`Tab ${tabName} made visible`);
             }
         });
         
@@ -557,7 +596,7 @@ document.addEventListener('DOMContentLoaded', function() {
             patientTab.classList.add('active');
             patientTab.style.display = 'block';
             patientTab.hidden = false;
-            console.log('Patient tab content activated and displayed');
+            log('Patient tab content activated and displayed');
         }
         
         // Also show the other tabs that should be visible after patient data is loaded
@@ -892,7 +931,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     async function loadAndDisplayReport(patientData, analysesData) {
-        console.log('Loading and displaying report data');
+        log('Loading and displaying report data');
         
         // Display patient report with analyses and epicrisis
         await displayPatientReport(patientData, analysesData);
@@ -900,11 +939,11 @@ document.addEventListener('DOMContentLoaded', function() {
         // Update report tab data
         updateReportTabData(patientData, extractMedicalStats(patientData), analysesData);
                 
-        console.log('Report data loading complete');
+        log('Report data loading complete');
     }
     
     async function populateAnalysesMarkdown(analysesData) {
-        console.log('Populating analyses by modality');
+        log('Populating analyses by modality');
         
         // Define modality mapping
         const modalityMap = {
@@ -960,21 +999,26 @@ document.addEventListener('DOMContentLoaded', function() {
             // Add modality header
             markdown += `## ${modalityInfo.name} (${analyses.length} analyses)\n\n`;
             
-            // Add each analysis as a bullet list item
-            for (const analysis of analyses) {
+            // fetch report contents for this group with limited concurrency
+            const reportContents = await limitedMap(
+                analyses.map(a => a.serviceRequest.id),
+                MAX_CONCURRENT_REQUESTS,
+                id => getReportContent(id)
+            );
+
+            analyses.forEach((analysis, idx) => {
                 const formattedDate = analysis.examDateString ? 
                     formatDateWithTime(analysis.examDateString) : 'Unknown';
                 
                 markdown += `### ${analysis.analysisText} ${analysis.serviceRequest.id} (${formattedDate})\n`;
                 
-                // Fetch and add report content if available
-                const reportContent = await getReportContent(analysis.serviceRequest.id);
+                const reportContent = reportContents[idx];
                 if (reportContent) {
                     markdown += `${reportContent}\n`;
                 }
                 
                 markdown += `\n`;
-            }
+            });
             
             markdown += `\n`;
         }
@@ -985,46 +1029,53 @@ document.addEventListener('DOMContentLoaded', function() {
             markdown += 'No diagnostic analyses found for this patient.\n\n';
         }
         
-        console.log('Analyses by modality markdown generated successfully');
+        log('Analyses by modality markdown generated successfully');
         return markdown;
     }
     
     // Helper function to get report content for a service request
     async function getReportContent(serviceRequestId) {
+        // check cache first
+        if (cache.reports[serviceRequestId]) {
+            return cache.reports[serviceRequestId];
+        }
+
         try {
             const reportResponse = await fetch(`/fhir/DiagnosticReport/${serviceRequestId}`);
             
             if (!reportResponse.ok) {
-                console.log(`Report not found for service request ${serviceRequestId}`);
+                log(`Report not found for service request ${serviceRequestId}`);
                 return null;
             }
             
             const reportData = await reportResponse.json();
-            
+            let content = null;
             // Extract report content from different possible sources
             if (reportData.conclusion) {
-                return reportData.conclusion;
+                content = reportData.conclusion;
             } else if (reportData.presentedForm && reportData.presentedForm.length > 0) {
                 // Concatenate all presented form content
-                let content = '';
+                content = '';
                 reportData.presentedForm.forEach(form => {
                     if (form.data) {
                         content += form.data + '\n\n';
                     }
                 });
-                return content.trim();
+                content = content.trim();
             } else if (reportData.result && reportData.result.length > 0) {
                 // Fallback to result array
-                let content = '';
+                content = '';
                 reportData.result.forEach(result => {
                     if (result.display) {
                         content += result.display + '\n\n';
                     }
                 });
-                return content.trim();
+                content = content.trim();
             }
-            
-            return null;
+
+            // cache result (even if null to avoid repeated attempts)
+            cache.reports[serviceRequestId] = content;
+            return content;
             
         } catch (error) {
             console.error(`Error fetching report content for service request ${serviceRequestId}:`, error);
@@ -1033,13 +1084,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     async function generateEpicrisisMarkdown(patientData) {
-        console.log('Generating epicrisis markdown');
+        log('Generating epicrisis markdown');
         
         // Extract all checkout IDs from patient data
         const checkoutIds = extractCheckoutIds(patientData);
         
         if (checkoutIds.length === 0) {
-            console.log('No checkout IDs found for epicrisis');
+            log('No checkout IDs found for epicrisis');
             return '';
         }
         
@@ -1048,34 +1099,37 @@ document.addEventListener('DOMContentLoaded', function() {
         // Array to store epicrisis data
         const epicrisisData = [];
         
-        // Fetch epicrisis data for each checkout ID
-        for (const checkoutId of checkoutIds) {
-            try {
-                const encounterData = await fetchEncounterDataForCheckout(checkoutId);
-                
-                if (encounterData) {
-                    
-                    // Extract epicrisis text
-                    const epicrisisText = extractEpicrisisText(encounterData);
-                    
-                    if (epicrisisText) {
-                        // Extract diagnosis and date
-                        const diagnosis = extractDiagnosisText(encounterData);
-                        const checkoutDate = encounterData.period?.end ? new Date(encounterData.period.end) : null;
-                        
-                        epicrisisData.push({
-                            checkoutId,
-                            diagnosis,
-                            checkoutDate,
-                            epicrisisText,
-                            encounterData
-                        });
-                    }
+        // Fetch all encounter data with limited concurrency
+        const encounters = await limitedMap(
+            checkoutIds,
+            MAX_CONCURRENT_REQUESTS,
+            async id => {
+                try {
+                    return await fetchEncounterDataForCheckout(id);
+                } catch (err) {
+                    console.error(`Error fetching epicrisis for checkout ${id}:`, err);
+                    return null;
                 }
-            } catch (error) {
-                console.error(`Error fetching epicrisis for checkout ${checkoutId}:`, error);
             }
-        }
+        );
+
+        encounters.forEach((encounterData, idx) => {
+            const checkoutId = checkoutIds[idx];
+            if (!encounterData) return;
+
+            const epicrisisText = extractEpicrisisText(encounterData);
+            if (epicrisisText) {
+                const diagnosis = extractDiagnosisText(encounterData);
+                const checkoutDate = encounterData.period?.end ? new Date(encounterData.period.end) : null;
+                epicrisisData.push({
+                    checkoutId,
+                    diagnosis,
+                    checkoutDate,
+                    epicrisisText,
+                    encounterData
+                });
+            }
+        });
         
         // Sort by date (most recent first)
         epicrisisData.sort((a, b) => {
@@ -1141,20 +1195,20 @@ document.addEventListener('DOMContentLoaded', function() {
             markdown += 'No epicrisis documents found for this patient.\n\n';
         }
         
-        console.log('Epicrisis markdown generated successfully');
+        log('Epicrisis markdown generated successfully');
         return markdown;
     }
        
     // Make functions available globally
     window.viewFullEpicrisis = function(checkoutId) {
         // This would open a modal or navigate to a detailed view
-        console.log('Viewing full epicrisis for checkout:', checkoutId);
+        log('Viewing full epicrisis for checkout:', checkoutId);
         showToast('Full epicrisis view feature coming soon', 'info');
     };
     
     window.printEpicrisis = function(checkoutId) {
         // This would print the epicrisis
-        console.log('Printing epicrisis for checkout:', checkoutId);
+        log('Printing epicrisis for checkout:', checkoutId);
         showToast('Print epicrisis feature coming soon', 'info');
     };
     
@@ -1163,7 +1217,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const reportResponse = await fetch(`/fhir/DiagnosticReport/${serviceRequestId}`);
             
             if (!reportResponse.ok) {
-                console.log(`Report not found for service request ${serviceRequestId}`);
+                log(`Report not found for service request ${serviceRequestId}`);
                 return;
             }
             
@@ -1210,7 +1264,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     async function displayPatientReport(patientData, analysesData) {
-        console.log('Displaying patient report data');
+        log('Displaying patient report data');
         
         // Show loading state
         const markdownContainer = elements.patientReportMarkdown;
@@ -1223,35 +1277,28 @@ document.addEventListener('DOMContentLoaded', function() {
         
         try {
             // Generate patient identification markdown
-            const patientMarkdown = generatePatientMarkdown(patientData);
-            console.log('Generated patient markdown content:', patientMarkdown);
-            
-            // Generate analyses by modality markdown
-            let analysesMarkdown = '';
-            if (analysesData) {
-                analysesMarkdown = await populateAnalysesMarkdown(analysesData);
-                console.log('Generated analyses markdown content:', analysesMarkdown);
-            }
-            
-            // Generate epicrisis markdown
-            let epicrisisMarkdown = '';
-            const epicrisisData = await generateEpicrisisMarkdown(patientData);
-            if (epicrisisData) {
-                epicrisisMarkdown = epicrisisData;
-                console.log('Generated epicrisis markdown content:', epicrisisMarkdown);
-            }
+            // run all markdown generators in parallel when possible
+            const [patientMarkdown, analysesMarkdown, epicrisisMarkdown] = await Promise.all([
+                generatePatientMarkdown(patientData),
+                analysesData ? populateAnalysesMarkdown(analysesData) : Promise.resolve(''),
+                generateEpicrisisMarkdown(patientData)
+            ]);
+
+            log('Generated patient markdown content:', patientMarkdown);
+            log('Generated analyses markdown content:', analysesMarkdown);
+            log('Generated epicrisis markdown content:', epicrisisMarkdown);
             
             // Combine all markdown content
             const combinedMarkdown = patientMarkdown + analysesMarkdown + epicrisisMarkdown;
-            console.log('Combined markdown content:', combinedMarkdown);
+            log('Combined markdown content:', combinedMarkdown);
             
             // Convert markdown to HTML using marked.js
             const htmlContent = marked.parse(combinedMarkdown);
-            console.log('Converted markdown to HTML:', htmlContent);
+            log('Converted markdown to HTML:', htmlContent);
             
             // Display the content
             markdownContainer.innerHTML = htmlContent;
-            console.log('Patient report data displayed successfully');
+            log('Patient report data displayed successfully');
             
         } catch (error) {
             console.error('Error displaying patient report:', error);
@@ -1264,8 +1311,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    function generatePatientMarkdown(patientData) {
-        console.log('Generating patient report markdown');
+    async function generatePatientMarkdown(patientData) {
+        log('Generating patient report markdown');
         
         let markdown = `## ${formatPatientName(patientData.name)}\n\n`;
         
@@ -1294,13 +1341,18 @@ document.addEventListener('DOMContentLoaded', function() {
         // Checkout IDs with detailed information
         if (stats.checkoutIds.length > 0) {
             markdown += `### Checkout Details\n\n`;
-            stats.checkoutIds.forEach(checkoutId => {
+            // fetch all encounters with limited concurrency
+            const encounters = await limitedMap(
+                stats.checkoutIds,
+                MAX_CONCURRENT_REQUESTS,
+                id => fetchEncounterDataForCheckout(id).catch(() => null)
+            );
+
+            encounters.forEach((encounterData, index) => {
+                const checkoutId = stats.checkoutIds[index];
                 markdown += `#### Checkout #${checkoutId}\n\n`;
-                
-                // Fetch encounter data for this checkout ID
-                const encounterData = fetchEncounterDataForCheckout(checkoutId);
+
                 if (encounterData) {
-                    console.log(encounterData);
                     // Checkout Date
                     if (encounterData.period && encounterData.period.end) {
                         const checkoutDate = new Date(encounterData.period.end);
@@ -1308,7 +1360,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         const formattedTime = checkoutDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
                         markdown += `**Checkout Date:** ${formattedDate} at ${formattedTime}\n\n`;
                     }
-                    
+
                     // Checkout Diagnosis
                     const diagnosis = extractCheckoutDiagnosis(encounterData);
                     if (diagnosis) {
@@ -1318,17 +1370,22 @@ document.addEventListener('DOMContentLoaded', function() {
                     markdown += `**Checkout Date:** Data not available\n\n`;
                     markdown += `**Checkout Diagnosis:** Data not available\n\n`;
                 }
-                
+
                 markdown += `\n`;
             });
         }
         
-        console.log('Patient report markdown generated successfully');
+        log('Patient report markdown generated successfully');
         return markdown;
     }
     
     // Helper function to fetch encounter data for a checkout ID
     async function fetchEncounterDataForCheckout(checkoutId) {
+        // check cache first
+        if (cache.encounters[checkoutId]) {
+            return cache.encounters[checkoutId];
+        }
+
         try {
             const response = await fetch(`/fhir/Encounter/${checkoutId}`);
             
@@ -1338,7 +1395,9 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             const encounterData = await response.json();
-            console.log(`Encounter data fetched successfully for checkout ${checkoutId}:`, encounterData);
+            // store in cache
+            cache.encounters[checkoutId] = encounterData;
+            log(`Encounter data fetched successfully for checkout ${checkoutId}:`, encounterData);
             return encounterData;
             
         } catch (error) {
@@ -1575,20 +1634,20 @@ document.addEventListener('DOMContentLoaded', function() {
     // marked.parse(markdownText) converts markdown to HTML
 
     function displayPatientData(patientData, analysesData, epicrisisData = null) {
-        console.log('Displaying patient data:', patientData);
-        console.log('Analyses data:', analysesData);
+        log('Displaying patient data:', patientData);
+        log('Analyses data:', analysesData);
         
         // Enhanced patient information display with better formatting
         displayPatientBasicInfo(patientData);
         
         // Extract and display medical statistics
         const stats = extractMedicalStats(patientData);
-        console.log('Extracted medical stats:', stats);
+        log('Extracted medical stats:', stats);
         displayMedicalStats(stats);
         
         // Display checkout IDs list
         const checkoutIds = extractCheckoutIds(patientData);
-        console.log('Checkout IDs:', checkoutIds);
+        log('Checkout IDs:', checkoutIds);
         displayCheckoutIds(checkoutIds);
         
         // Initialize sections but keep them hidden until data is loaded
@@ -1602,21 +1661,21 @@ document.addEventListener('DOMContentLoaded', function() {
         // Update dashboard stats if available
         updateDashboardStats(stats, analysesData);
         
-        console.log('Patient data display completed');
+        log('Patient data display completed');
     }
     
     // Enhanced patient basic info display
     function displayPatientBasicInfo(patientData) {
-        console.log('Displaying patient basic info:', patientData);
+        log('Displaying patient basic info:', patientData);
         
         // Patient ID
         elements.patientId.textContent = patientData.id || 'N/A';
-        console.log('Patient ID set to:', elements.patientId.textContent);
+        log('Patient ID set to:', elements.patientId.textContent);
         
         // Patient Name with enhanced formatting
         const name = formatPatientName(patientData.name);
         elements.patientName.innerHTML = `<i class="fas fa-user"></i> ${name}`;
-        console.log('Patient name set to:', name);
+        log('Patient name set to:', name);
         
         // Set age in the existing age badge
         const age = calculateAge(patientData.birthDate);
@@ -1624,27 +1683,27 @@ document.addEventListener('DOMContentLoaded', function() {
         if (ageBadge) {
             ageBadge.textContent = `Age: ${age}`;
         }
-        console.log('Age set to:', age);
+        log('Age set to:', age);
         
         // CNP with validation
         const cnp = extractCNP(patientData.identifier);
         elements.patientCnp.textContent = cnp || 'N/A';
-        console.log('CNP set to:', cnp);
+        log('CNP set to:', cnp);
         
         // Gender with icons
         const gender = formatGender(patientData.gender);
         elements.patientGender.textContent = gender;
-        console.log('Gender set to:', gender);
+        log('Gender set to:', gender);
         
         // Birth date with formatting
         elements.patientBirthDate.textContent = formatBirthDate(patientData.birthDate);
-        console.log('Birth date set to:', elements.patientBirthDate.textContent);
+        log('Birth date set to:', elements.patientBirthDate.textContent);
         
         // Contact information
         const contactInfo = extractContactInfo(patientData.telecom);
         elements.patientPhone.textContent = contactInfo.phone || 'N/A';
         elements.patientEmail.textContent = contactInfo.email || 'N/A';
-        console.log('Contact info set - Phone:', contactInfo.phone, 'Email:', contactInfo.email);
+        log('Contact info set - Phone:', contactInfo.phone, 'Email:', contactInfo.email);
     }
     
     // Enhanced name formatting
@@ -1786,25 +1845,25 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Enhanced medical stats display
     function displayMedicalStats(stats) {
-        console.log('Displaying medical stats:', stats);
+        log('Displaying medical stats:', stats);
         elements.presentationsCount.textContent = stats.encounters;
         elements.checkinsCount.textContent = stats.admissions;
         elements.checkoutsCount.textContent = stats.discharges;
-        console.log('Stats displayed - Encounters:', stats.encounters, 'Admissions:', stats.admissions, 'Discharges:', stats.discharges);
+        log('Stats displayed - Encounters:', stats.encounters, 'Admissions:', stats.admissions, 'Discharges:', stats.discharges);
         
         // Update reports count if element exists
         if (elements.reportsCount) {
             elements.reportsCount.textContent = '0'; // Will be updated when reports load
-            console.log('Reports count updated');
+            log('Reports count updated');
         }
     }
     
     // Enhanced checkout IDs display
     function displayCheckoutIds(checkoutIds) {
-        console.log('Displaying checkout IDs:', checkoutIds);
+        log('Displaying checkout IDs:', checkoutIds);
         if (!checkoutIds || checkoutIds.length === 0) {
             elements.checkoutIdsList.innerHTML = '';
-            console.log('No checkout IDs to display');
+            log('No checkout IDs to display');
             return;
         }
         
@@ -1816,12 +1875,12 @@ document.addEventListener('DOMContentLoaded', function() {
             <strong><i class="fas fa-sign-out-alt"></i> Checkout IDs:</strong> 
             ${idsHtml}
         `;
-        console.log('Checkout IDs displayed');
+        log('Checkout IDs displayed');
     }
     
     // Update report tab data
     function updateReportTabData(patientData, stats, analysesData) {
-        console.log('Updating report tab data');
+        log('Updating report tab data');
         
         // Update patient summary with null checks
         if (elements.reportPatientId) {
@@ -1837,17 +1896,17 @@ document.addEventListener('DOMContentLoaded', function() {
             elements.reportPatientGender.textContent = formatGender(patientData.gender);
         }
         
-        console.log('Report tab data updated');
+        log('Report tab data updated');
     }
     
     // Enhanced dashboard stats update
     function updateDashboardStats(stats, analysesData) {
-        console.log('Updating dashboard stats - Stats:', stats, 'Analyses data:', analysesData);
+        log('Updating dashboard stats - Stats:', stats, 'Analyses data:', analysesData);
         
         // Update header stats if available
         if (elements.activePatientsCount) {
             elements.activePatientsCount.textContent = stats.encounters;
-            console.log('Active patients count updated to:', stats.encounters);
+            log('Active patients count updated to:', stats.encounters);
         }
         
         // Update reports count when analyses load
@@ -1856,9 +1915,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const reportsCount = analysesData.resourceType === "Bundle" && analysesData.entry 
                 ? analysesData.entry.length : 0;
             reportsCountElement.textContent = `${reportsCount}`;
-            console.log('Reports count badge updated to:', reportsCount);
+            log('Reports count badge updated to:', reportsCount);
         } else {
-            console.log('Reports count element not found');
+            log('Reports count element not found');
         }
     }
     
@@ -2053,7 +2112,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Function to load and display reports progressively
     async function loadAndDisplayReports(analysesData, patientData) {
-        console.log('Loading and displaying reports:', analysesData);
+        log('Loading and displaying reports:', analysesData);
         
         // Define the types of reports to include
         const includedTypes = ['radio', 'ct', 'irm', 'eco', 'rads'];
@@ -2070,12 +2129,12 @@ document.addEventListener('DOMContentLoaded', function() {
             if (filteredEntries.length === 0) {
                 elements.noAnalyses.style.display = 'block';
                 elements.analysesGrid.innerHTML = ''; // Clear any existing content
-                console.log('No matching analyses found after filtering');
+                log('No matching analyses found after filtering');
                 return;
             }
             
             elements.noAnalyses.style.display = 'none';
-            console.log('Found', filteredEntries.length, 'matching service requests');
+            log('Found', filteredEntries.length, 'matching service requests');
             
             // Clear existing content
             elements.analysesGrid.innerHTML = '';
@@ -2083,26 +2142,26 @@ document.addEventListener('DOMContentLoaded', function() {
             // Process each filtered service request
             for (const entry of filteredEntries) {
                 const serviceRequest = entry.resource;
-                console.log('Processing service request:', serviceRequest);
+                log('Processing service request:', serviceRequest);
                 
                 // Extract type and display text from service request code
                 const analysisType = serviceRequest.code?.coding?.[0]?.code || 'unknown';
                 const analysisText = serviceRequest.code?.coding?.[0]?.display || 'analysis';
-                console.log('Analysis type:', analysisType, 'Text:', analysisText);
+                log('Analysis type:', analysisType, 'Text:', analysisText);
                 
                 // Create analysis card using template
                 const analysisCard = createAnalysisCard(serviceRequest, analysisType, analysisText);
-                console.log('Created analysis card:', analysisCard);
+                log('Created analysis card:', analysisCard);
                 
                 // Fetch and display report content
                 try {
                     // Fetch report data using FHIR API - now using the service request ID directly
-                    console.log('Fetching diagnostic report for service request:', serviceRequest.id);
+                    log('Fetching diagnostic report for service request:', serviceRequest.id);
                     const reportResponse = await fetch(`/fhir/DiagnosticReport/${serviceRequest.id}`);
                     
                     if (reportResponse.ok) {
                         const reportData = await reportResponse.json();
-                        console.log('Report data loaded for service request', serviceRequest.id, ':', reportData);
+                        log('Report data loaded for service request', serviceRequest.id, ':', reportData);
                         showToast(`Report data loaded for service request ${serviceRequest.id}`, 'success');
                         
                         // Add performer and interpreter to footer if available
@@ -2171,7 +2230,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             imagingStudyLink.appendChild(a);
                         }
                     } else {
-                        console.log('Error loading report data for service request', serviceRequest.id, ':', reportResponse.status);
+                        log('Error loading report data for service request', serviceRequest.id, ':', reportResponse.status);
                         showToast(`Error loading report data for service request ${serviceRequest.id}`, 'error');
                     }
                 } catch (err) {
@@ -2180,16 +2239,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 // Add the card to the grid
-                console.log('Adding analysis card to grid');
+                log('Adding analysis card to grid');
                 elements.analysesGrid.appendChild(analysisCard);
                 
                 // Force UI update to display the report immediately
                 await new Promise(resolve => setTimeout(resolve, 0));
             }
             
-            console.log('Finished adding all analysis cards. Total cards:', elements.analysesGrid.children.length);
+            log('Finished adding all analysis cards. Total cards:', elements.analysesGrid.children.length);
         } else {
-            console.log('No analyses found, showing noAnalyses message');
+            log('No analyses found, showing noAnalyses message');
             elements.noAnalyses.style.display = 'block';
             elements.analysesGrid.innerHTML = ''; // Clear any existing content
         }
@@ -2197,7 +2256,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Helper function to create analysis card
     function createAnalysisCard(serviceRequest, analysisType, analysisText) {
-        console.log('Creating analysis card for:', serviceRequest, analysisType, analysisText);
+        log('Creating analysis card for:', serviceRequest, analysisType, analysisText);
         
         // Always use template
         const cardTemplate = document.getElementById('analysis-card-template');
@@ -2216,7 +2275,7 @@ document.addEventListener('DOMContentLoaded', function() {
         article.className = `analysis-card ${analysisType}`;
         
         // Populate template elements
-        console.log('Populating template elements');
+        log('Populating template elements');
         const typeText = article.querySelector('.type-text');
         if (typeText) typeText.textContent = analysisText;
         
@@ -2246,7 +2305,7 @@ document.addEventListener('DOMContentLoaded', function() {
             medicNameElement.textContent = serviceRequest.requester.display || 'Unknown';
         }
         
-        console.log('Analysis card created successfully');
+        log('Analysis card created successfully');
         return article;
     }
     
