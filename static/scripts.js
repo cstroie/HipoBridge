@@ -1446,7 +1446,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function generatePatientMarkdown(patientData) {
-        console.log('Generating patient identification markdown');
+        console.log('Generating patient report markdown');
         
         let markdown = `## ${formatPatientName(patientData.name)}\n\n`;
         
@@ -1481,6 +1481,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Fetch encounter data for this checkout ID
                 const encounterData = fetchEncounterDataForCheckout(checkoutId);
                 if (encounterData) {
+                    console.log(encounterData);
                     // Checkout Date
                     if (encounterData.period && encounterData.period.end) {
                         const checkoutDate = new Date(encounterData.period.end);
@@ -1503,7 +1504,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
         
-        console.log('Patient identification markdown generated successfully');
+        console.log('Patient report markdown generated successfully');
         return markdown;
     }
     
