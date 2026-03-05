@@ -248,9 +248,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Form submission handler
-    elements.form.addEventListener('submit', handleFormSubmit);
-    
     async function handleFormSubmit(e) {
         e.preventDefault();
         
@@ -586,12 +583,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (dashboardTab) {
             dashboardTab.hidden = false;
         }
-    }
-    
-    function showLoading() {
-        elements.loadingOverlay.style.display = 'flex';
-        elements.analyzeBtn.disabled = true;
-        elements.analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Searching...';
     }
     
     function hideLoading() {
@@ -1103,10 +1094,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Fetch epicrisis data for each checkout ID
         for (const checkoutId of checkoutIds) {
             try {
-                const encounterResponse = await fetch(`/fhir/Encounter/${checkoutId}`);
+                const encounterData = await fetchEncounterDataForCheckout(checkoutId);
                 
-                if (encounterResponse.ok) {
-                    const encounterData = await encounterResponse.json();
+                if (encounterData) {
                     
                     // Extract epicrisis text
                     const epicrisisText = extractEpicrisisText(encounterData);
@@ -1224,10 +1214,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Fetch epicrisis data for each checkout ID
         for (const checkoutId of checkoutIds) {
             try {
-                const encounterResponse = await fetch(`/fhir/Encounter/${checkoutId}`);
+                const encounterData = await fetchEncounterDataForCheckout(checkoutId);
                 
-                if (encounterResponse.ok) {
-                    const encounterData = await encounterResponse.json();
+                if (encounterData) {
                     
                     // Extract epicrisis text
                     const epicrisisText = extractEpicrisisText(encounterData);
@@ -1307,14 +1296,6 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('Epicrisis list populated successfully');
     }
     
-    // Helper function to extract epicrisis text from encounter data
-    function extractEpicrisisText(encounterData) {
-        if (!encounterData.note || !Array.isArray(encounterData.note)) return '';
-        
-        // Concatenate all note texts
-        return encounterData.note.map(note => note.text || '').join('\n\n');
-    }
-    
     // Make functions available globally
     window.viewFullEpicrisis = function(checkoutId) {
         // This would open a modal or navigate to a detailed view
@@ -1347,13 +1328,8 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Display report content
             if (reportData.conclusion) {
-                try {
-                    const htmlContent = await convertMarkdownToHtml(reportData.conclusion);
-                    reportContainer.innerHTML = htmlContent;
-                } catch (err) {
-                    console.error('Error converting report markdown:', err);
-                    reportContainer.innerHTML = `<p>${reportData.conclusion}</p>`;
-                }
+                const htmlContent = marked.parse(reportData.conclusion);
+                reportContainer.innerHTML = htmlContent;
             } else if (reportData.presentedForm && reportData.presentedForm.length > 0) {
                 reportData.presentedForm.forEach(form => {
                     if (form.contentType === 'text/plain' && form.data) {
@@ -1361,16 +1337,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         pre.textContent = form.data;
                         reportContainer.appendChild(pre);
                     } else if (form.contentType === 'text/markdown' && form.data) {
-                        convertMarkdownToHtml(form.data).then(html => {
-                            const div = document.createElement('div');
-                            div.innerHTML = html;
-                            reportContainer.appendChild(div);
-                        }).catch(err => {
-                            console.error('Error converting markdown:', err);
-                            const pre = document.createElement('pre');
-                            pre.textContent = form.data;
-                            reportContainer.appendChild(pre);
-                        });
+                        const html = marked.parse(form.data);
+                        const div = document.createElement('div');
+                        div.innerHTML = html;
+                        reportContainer.appendChild(div);
                     } else if (form.contentType === 'text/html' && form.data) {
                         const div = document.createElement('div');
                         div.innerHTML = form.data;
@@ -1426,8 +1396,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const combinedMarkdown = patientMarkdown + analysesMarkdown + epicrisisMarkdown;
             console.log('Combined markdown content:', combinedMarkdown);
             
-            // Convert markdown to HTML
-            const htmlContent = await convertMarkdownToHtml(combinedMarkdown);
+            // Convert markdown to HTML using marked.js
+            const htmlContent = marked.parse(combinedMarkdown);
             console.log('Converted markdown to HTML:', htmlContent);
             
             // Display the content
@@ -1752,32 +1722,8 @@ document.addEventListener('DOMContentLoaded', function() {
         return message;
     }
     
-    async function convertMarkdownToHtml(markdownText) {
-        try {
-            const response = await fetch('/fhir/md2html', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ text: markdownText })
-            });
-            
-            if (response.status === 401) {
-                showToast('Authentication required. Please refresh the page and enter your credentials.', 'error');
-                throw new Error('Authentication required');
-            }
-            
-            const data = await response.json();
-            if (data.status === 'success') {
-                return data.html;
-            } else {
-                throw new Error('Markdown conversion failed');
-            }
-        } catch (err) {
-            console.error('Error converting markdown to HTML:', err);
-            return markdownText; // Return original text if conversion fails
-        }
-    }
+    // Markdown to HTML conversion now uses marked.js library
+    // marked.parse(markdownText) converts markdown to HTML
 
     function displayPatientData(patientData, analysesData, epicrisisData = null) {
         console.log('Displaying patient data:', patientData);
@@ -2339,17 +2285,10 @@ document.addEventListener('DOMContentLoaded', function() {
                                         pre.textContent = form.data;
                                         reportPreview.appendChild(pre);
                                     } else if (form.contentType === 'text/markdown' && form.data) {
-                                        try {
-                                            const htmlResult = await convertMarkdownToHtml(form.data);
-                                            const div = document.createElement('div');
-                                            div.innerHTML = htmlResult;
-                                            reportPreview.appendChild(div);
-                                        } catch (err) {
-                                            console.error('Error converting markdown:', err);
-                                            const pre = document.createElement('pre');
-                                            pre.textContent = form.data;
-                                            reportPreview.appendChild(pre);
-                                        }
+                                        const htmlResult = marked.parse(form.data);
+                                        const div = document.createElement('div');
+                                        div.innerHTML = htmlResult;
+                                        reportPreview.appendChild(div);
                                     } else if (form.contentType === 'text/html' && form.data) {
                                         const div = document.createElement('div');
                                         div.innerHTML = form.data;
@@ -2357,17 +2296,10 @@ document.addEventListener('DOMContentLoaded', function() {
                                     }
                                 }
                             } else if (reportData.conclusion) {
-                                try {
-                                    const htmlResult = await convertMarkdownToHtml(reportData.conclusion);
-                                    const div = document.createElement('div');
-                                    div.innerHTML = htmlResult;
-                                    reportPreview.appendChild(div);
-                                } catch (err) {
-                                    console.error('Error converting report markdown:', err);
-                                    const p = document.createElement('p');
-                                    p.textContent = reportData.conclusion;
-                                    reportPreview.appendChild(p);
-                                }
+                                const htmlResult = marked.parse(reportData.conclusion);
+                                const div = document.createElement('div');
+                                div.innerHTML = htmlResult;
+                                reportPreview.appendChild(div);
                             } else {
                                 // If no content, show a message
                                 const p = document.createElement('p');
@@ -2562,14 +2494,12 @@ document.addEventListener('DOMContentLoaded', function() {
     async function loadEpicrisisForCheckout(checkoutId) {
         try {
             showToast(`Loading epicrisis data for checkout ${checkoutId}...`, 'success');
-            const encounterResponse = await fetch(`/fhir/Encounter/${checkoutId}`);
+            const encounterData = await fetchEncounterDataForCheckout(checkoutId);
             
-            if (!encounterResponse.ok) {
+            if (!encounterData) {
                 showToast(`Not found epicrisis data for checkout ${checkoutId}`, 'error');
                 return false;
             }
-            
-            const encounterData = await encounterResponse.json();
             const epicrisisText = extractEpicrisisText(encounterData);
             
             if (!epicrisisText) {
@@ -2598,7 +2528,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Helper function to display epicrisis data
     async function displayEpicrisisData(encounterData, epicrisisText) {
         try {
-            const htmlContent = await convertMarkdownToHtml(epicrisisText);
+            const htmlContent = marked.parse(epicrisisText);
             elements.epicrisisContent.innerHTML = htmlContent;
             
             // Set diagnosis title if available - prioritize discharge diagnosis
