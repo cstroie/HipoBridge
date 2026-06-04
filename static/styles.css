@@ -375,6 +375,7 @@ small {
     font-size: var(--font-size-2xl);
     margin: 0;
     font-weight: var(--font-weight-bold);
+    color: white;
 }
 
 .brand-info p {
