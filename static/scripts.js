@@ -712,8 +712,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Display patient report with analyses and epicrisis
         await displayPatientReport(patientData, analysesData);
         
-        // Update report tab data
-        updateReportTabData(patientData, extractMedicalStats(patientData), analysesData);
                 
         log('Report data loading complete');
     }
@@ -880,8 +878,8 @@ document.addEventListener('DOMContentLoaded', function() {
             epicrisisData.push({
                 checkoutId: checkoutIds[idx],
                 diagnosis: extractDiagnosisText(encounterData),
-                admissionDate: encounterData.period?.start ? new Date(encounterData.period.start) : null,
-                dischargeDate: encounterData.period?.end   ? new Date(encounterData.period.end)   : null,
+                admissionDate: encounterData.period?.start || null,
+                dischargeDate: encounterData.period?.end   || null,
                 attender: (() => {
                     const p = encounterData.participant?.find(p =>
                         p.type?.some(t => t.coding?.some(c => c.code === 'ATND'))
@@ -895,7 +893,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         epicrisisData.sort((a, b) => {
             if (!a.dischargeDate || !b.dischargeDate) return 0;
-            return b.dischargeDate - a.dischargeDate;
+            return b.dischargeDate > a.dischargeDate ? 1 : -1;
         });
 
         if (epicrisisData.length === 0) return '';
@@ -903,8 +901,8 @@ document.addEventListener('DOMContentLoaded', function() {
         let markdown = '## Discharge Summaries\n\n';
 
         epicrisisData.forEach((ep, index) => {
-            const dischargeStr  = ep.dischargeDate  ? formatDate(ep.dischargeDate.toISOString())  : 'unknown';
-            const admissionStr  = ep.admissionDate  ? formatDate(ep.admissionDate.toISOString())  : 'unknown';
+            const dischargeStr  = ep.dischargeDate  ? formatDate(ep.dischargeDate)  : 'unknown';
+            const admissionStr  = ep.admissionDate  ? formatDate(ep.admissionDate)  : 'unknown';
             const diagnosis     = ep.diagnosis || 'Unspecified';
 
             markdown += `### ${index + 1}. ${diagnosis} — ${dischargeStr}\n\n`;
@@ -1875,12 +1873,10 @@ document.addEventListener('DOMContentLoaded', function() {
         // Build metadata line
         const meta = [];
         if (encounterData.period?.start) {
-            const d = new Date(encounterData.period.start);
-            meta.push(`**Admission:** ${d.toISOString().slice(0, 10)}`);
+            meta.push(`**Admission:** ${formatDate(encounterData.period.start)}`);
         }
         if (encounterData.period?.end) {
-            const d = new Date(encounterData.period.end);
-            meta.push(`**Discharge:** ${d.toISOString().slice(0, 10)}`);
+            meta.push(`**Discharge:** ${formatDate(encounterData.period.end)}`);
         }
         const attender = encounterData.participant?.find(p =>
             p.type?.some(t => t.coding?.some(c => c.code === 'ATND'))
