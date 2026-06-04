@@ -110,7 +110,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const savedTheme = localStorage.getItem('theme') || 'auto';
         document.documentElement.setAttribute('data-theme', savedTheme);
         const themeIcon = elements.themeToggle?.querySelector('i');
-        if (themeIcon) themeIcon.className = savedTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+        if (themeIcon) themeIcon.className = savedTheme === 'dark' ? 'fas fa-sun' : savedTheme === 'light' ? 'fas fa-moon' : 'fas fa-circle-half-stroke';
     }
     
     function initializeTabs() {
@@ -259,8 +259,20 @@ document.addEventListener('DOMContentLoaded', function() {
             log('Patient search result:', searchResult);
 
             if (!searchResult.success) {
-                showToast(searchResult.message, 'error');
-                return;
+                if (searchResult.needsSelection) {
+                    hideLoading();
+                    const chosen = await showPatientSelection(searchResult.candidates);
+                    if (!chosen) return; // user dismissed
+                    showLoading();
+                    setLoadingStep('Fetching selected patient record...');
+                    const r = await fetch(`/fhir/Patient/${chosen.id}`);
+                    searchResult.patientData = r.ok ? await r.json() : chosen;
+                    searchResult.patientCode = chosen.id;
+                    addToRecentSearches(cnp, searchResult.patientData);
+                } else {
+                    showToast(searchResult.message, 'error');
+                    return;
+                }
             }
 
             const { patientData, patientCode } = searchResult;
@@ -273,11 +285,10 @@ document.addEventListener('DOMContentLoaded', function() {
             log('Analyses data result:', analysesResult);
 
             if (!analysesResult.success) {
-                showToast(analysesResult.message, 'error');
-                return;
+                showToast(analysesResult.message + ' Showing patient data only.', 'warning');
             }
 
-            const analysesData = analysesResult.data;
+            const analysesData = analysesResult.data || { resourceType: 'Bundle', entry: [] };
             log('Analyses data retrieved:', analysesData);
 
             setLoadingStep('Building patient profile...');
@@ -365,33 +376,24 @@ document.addEventListener('DOMContentLoaded', function() {
             let patientCode = null;
             let patientData = null;
             
-            // Handle different response types
             if (searchData.resourceType === "Patient") {
-                // Single patient
                 patientCode = searchData.id;
                 patientData = searchData;
             } else if (searchData.resourceType === "Bundle" && searchData.entry && searchData.entry.length > 0) {
-                // Multiple patients - use the first one
-                const firstPatient = searchData.entry[0].resource;
-                patientCode = firstPatient.id;
-                
-                // Get full patient data using FHIR API
-                const patientResponse = await fetch(`/fhir/Patient/${patientCode}`);
-                if (patientResponse.ok) {
-                    patientData = await patientResponse.json();
+                if (searchData.entry.length === 1) {
+                    patientCode = searchData.entry[0].resource.id;
+                    const r = await fetch(`/fhir/Patient/${patientCode}`);
+                    patientData = r.ok ? await r.json() : searchData.entry[0].resource;
                 } else {
-                    patientData = firstPatient;
-                }
-                
-                // Show message if multiple patients found
-                if (searchData.entry.length > 1) {
-                    showToast(`Found ${searchData.entry.length} patients. Showing the first result.`, 'info');
+                    // Multiple matches — let the user choose
+                    return {
+                        success: false,
+                        needsSelection: true,
+                        candidates: searchData.entry.map(e => e.resource)
+                    };
                 }
             } else {
-                return {
-                    success: false,
-                    message: 'No patient data found.'
-                };
+                return { success: false, message: 'No patient data found.' };
             }
             
             if (!patientCode || !patientData) {
@@ -422,10 +424,47 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Enhanced analyses fetching function
+    function showPatientSelection(candidates) {
+        return new Promise(resolve => {
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-backdrop';
+            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:var(--z-overlay);display:flex;align-items:center;justify-content:center';
+
+            const box = document.createElement('div');
+            box.className = 'card';
+            box.style.cssText = 'min-width:320px;max-width:480px;max-height:70vh;overflow-y:auto;padding:var(--space-4)';
+
+            const heading = document.createElement('h3');
+            heading.textContent = `${candidates.length} patients found — select one:`;
+            box.appendChild(heading);
+
+            candidates.forEach(patient => {
+                const nameObj = Array.isArray(patient.name) ? patient.name[0] : patient.name;
+                const name = nameObj?.text || [nameObj?.family, ...(nameObj?.given || [])].filter(Boolean).join(' ') || patient.id;
+                const btn = document.createElement('button');
+                btn.className = 'btn-secondary';
+                btn.style.cssText = 'display:block;width:100%;margin-top:var(--space-2);text-align:left';
+                btn.textContent = name;
+                btn.addEventListener('click', () => { document.body.removeChild(overlay); resolve(patient); });
+                box.appendChild(btn);
+            });
+
+            const cancel = document.createElement('button');
+            cancel.className = 'btn-secondary';
+            cancel.style.cssText = 'display:block;width:100%;margin-top:var(--space-3)';
+            cancel.textContent = 'Cancel';
+            cancel.addEventListener('click', () => { document.body.removeChild(overlay); resolve(null); });
+            box.appendChild(cancel);
+
+            overlay.appendChild(box);
+            document.body.appendChild(overlay);
+        });
+    }
+
     async function fetchAnalysesData(patientCode) {
         try {
             
-            const analysesResponse = await fetch(`/fhir/ServiceRequest?patient=${patientCode}&full=yes`);
+            const analysesResponse = await fetch(`/fhir/ServiceRequest?patient=${patientCode}`);
             
             if (!analysesResponse.ok) {
                 if (analysesResponse.status === 401) {
@@ -565,15 +604,15 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function toggleTheme() {
-        const currentTheme = document.documentElement.getAttribute('data-theme');
-        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-        
+        const currentTheme = document.documentElement.getAttribute('data-theme') || 'auto';
+        const cycle = { auto: 'light', light: 'dark', dark: 'auto' };
+        const newTheme = cycle[currentTheme] || 'auto';
+
         document.documentElement.setAttribute('data-theme', newTheme);
         localStorage.setItem('theme', newTheme);
-        
+
         const themeIcon = elements.themeToggle.querySelector('i');
-        themeIcon.className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
-        
+        themeIcon.className = newTheme === 'dark' ? 'fas fa-sun' : newTheme === 'light' ? 'fas fa-moon' : 'fas fa-circle-half-stroke';
     }
     
     
@@ -584,7 +623,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const cards = elements.analysesGrid.querySelectorAll('.analysis-card');
         let visible = 0;
         cards.forEach(card => {
-            const type = card.className.match(/radio|ct|irm|eco|rads/)?.[0] || '';
+            const type = card.dataset.type || '';
             const text = card.textContent.toLowerCase();
             const show = (searchTerm ? text.includes(searchTerm) : true) &&
                          (filterType === 'all' || type === filterType);
@@ -1567,6 +1606,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         article.className = `analysis-card ${analysisType}`;
+        article.dataset.type = analysisType;
 
         // Modality icon
         const modality = MODALITY_INFO[analysisType] || { icon: 'fa-file-medical', label: analysisText };
@@ -1639,53 +1679,71 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch { return dateString; }
     }
     
-    // Function to load and display epicrisis progressively
-    async function loadAndDisplayEpicrisis(patientData) {
-        // Extract all checkout IDs from patient extensions
-        const checkoutIds = extractCheckoutIds(patientData);
-        
-        if (checkoutIds.length === 0) return;
-        
-        // Try to fetch epicrisis data for each checkout ID until we find a valid one
-        for (const checkoutId of checkoutIds) {
-            const success = await loadEpicrisisForCheckout(checkoutId);
-            if (success) {
-                break; // Found a valid epicrisis, stop searching
-            }
-        }
-    }
-    
-    // Helper function to extract checkout IDs from patient data
     function extractCheckoutIds(patientData) {
         if (!patientData.extension) return [];
-        
         const checkoutExt = patientData.extension.find(ext => ext.url && ext.url.includes('checkout-ids'));
         if (!checkoutExt || !checkoutExt.valueString) return [];
-        
         return checkoutExt.valueString.split(',').filter(id => id.trim());
     }
-    
-    // Helper function to load epicrisis for a specific checkout
-    async function loadEpicrisisForCheckout(checkoutId) {
-        try {
-            const encounterData = await fetchEncounterDataForCheckout(checkoutId);
-            if (!encounterData) return false;
-            const epicrisisText = extractEpicrisisText(encounterData);
-            if (!epicrisisText) return false;
-            await displayEpicrisisData(encounterData, epicrisisText);
-            return true;
-        } catch (err) {
-            console.error('Error fetching encounter data:', err);
-            return false;
-        }
-    }
-    
-    // Helper function to extract epicrisis text from encounter data
+
     function extractEpicrisisText(encounterData) {
         if (!encounterData.note || !Array.isArray(encounterData.note)) return '';
-        
-        // Concatenate all note texts
         return encounterData.note.map(note => note.text || '').join('\n\n');
+    }
+
+    async function loadAndDisplayEpicrisis(patientData) {
+        const checkoutIds = extractCheckoutIds(patientData);
+        if (checkoutIds.length === 0) return;
+
+        const encounters = await limitedMap(
+            checkoutIds,
+            MAX_CONCURRENT_REQUESTS,
+            async id => {
+                try { return await fetchEncounterDataForCheckout(id); }
+                catch { return null; }
+            }
+        );
+
+        // Keep only encounters that have an epicrisis, sorted most-recent-discharge first
+        const valid = encounters
+            .map((enc, i) => enc && extractEpicrisisText(enc) ? { enc, checkoutId: checkoutIds[i] } : null)
+            .filter(Boolean)
+            .sort((a, b) => {
+                const da = a.enc.period?.end || '';
+                const db = b.enc.period?.end || '';
+                return db > da ? 1 : -1;
+            });
+
+        if (valid.length === 0) return;
+
+        // Build a single markdown document for all encounters
+        let markdown = '';
+        valid.forEach((item, index) => {
+            const enc = item.enc;
+            const epicrisisText = extractEpicrisisText(enc);
+            const diagnosis = extractDiagnosisText(enc) || 'Epicrisis';
+            const meta = [];
+            if (enc.period?.start) meta.push(`**Admission:** ${formatDate(enc.period.start)}`);
+            if (enc.period?.end)   meta.push(`**Discharge:** ${formatDate(enc.period.end)}`);
+            const attender = enc.participant?.find(p =>
+                p.type?.some(t => t.coding?.some(c => c.code === 'ATND'))
+            );
+            if (attender?.individual?.display) meta.push(`**Attending:** ${attender.individual.display}`);
+            if (enc.serviceType?.display) meta.push(`**Service:** ${enc.serviceType.display}`);
+
+            if (valid.length === 1) {
+                markdown += `# ${diagnosis}\n\n`;
+            } else {
+                markdown += `## ${index + 1}. ${diagnosis}\n\n`;
+            }
+            if (meta.length) markdown += `${meta.join(' · ')}  \n\n`;
+            markdown += epicrisisText.trim() + '\n\n';
+            if (index < valid.length - 1) markdown += '---\n\n';
+        });
+
+        const htmlContent = marked.parse(markdown);
+        elements.epicrisisContent.innerHTML = htmlContent;
+        elements.epicrisisContent.dataset.markdown = markdown;
     }
     
     // Helper function to extract diagnosis text
@@ -1699,32 +1757,4 @@ document.addEventListener('DOMContentLoaded', function() {
             || null;
     }
 
-    // Render encounterData + epicrisisText into the epicrisis markdown-content container
-    function displayEpicrisisData(encounterData, epicrisisText) {
-        const diagnosis = extractDiagnosisText(encounterData) || 'Epicrisis';
-
-        // Build metadata line
-        const meta = [];
-        if (encounterData.period?.start) {
-            meta.push(`**Admission:** ${formatDate(encounterData.period.start)}`);
-        }
-        if (encounterData.period?.end) {
-            meta.push(`**Discharge:** ${formatDate(encounterData.period.end)}`);
-        }
-        const attender = encounterData.participant?.find(p =>
-            p.type?.some(t => t.coding?.some(c => c.code === 'ATND'))
-        );
-        if (attender?.individual?.display) {
-            meta.push(`**Attending:** ${attender.individual.display}`);
-        }
-        if (encounterData.serviceType?.display) {
-            meta.push(`**Service:** ${encounterData.serviceType.display}`);
-        }
-
-        const markdown = `# ${diagnosis}\n\n${meta.join(' · ')}  \n\n${epicrisisText.trim()}`;
-
-        const htmlContent = marked.parse(markdown);
-        elements.epicrisisContent.innerHTML = htmlContent;
-        elements.epicrisisContent.dataset.markdown = markdown;
-    }
 });

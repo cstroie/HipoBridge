@@ -49,12 +49,13 @@ def parse_date_time(date_str: str) -> Optional[datetime]:
         datetime object if parsing successful, None otherwise
     """
     try:
-        # First try to parse DD/MM/YYYY HH:MM:SS format
-        if '/' in date_str and len(date_str) == 19:  # DD/MM/YYYY HH:MM:SS
-            try:
-                return datetime.strptime(date_str.strip(), '%d/%m/%Y %H:%M:%S')
-            except ValueError:
-                pass  # Continue to other formats
+        # Try DD/MM/YYYY HH:MM:SS and DD/MM/YYYY HH:MM formats
+        if '/' in date_str:
+            for fmt in ('%d/%m/%Y %H:%M:%S', '%d/%m/%Y %H:%M', '%d/%m/%Y'):
+                try:
+                    return datetime.strptime(date_str.strip(), fmt)
+                except ValueError:
+                    pass
         
         # Handle common date formats like "30 Aug 2025 19:25:00"
         # Create a mapping for month abbreviations to numbers

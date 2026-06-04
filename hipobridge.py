@@ -163,10 +163,9 @@ async def search_request(request):
     exam_type = request.query.get('type')
     exam_region = request.query.get('region')
     exam_datetime = request.query.get('dt')
-    full_data = request.query.get('full', 'no').lower() == 'yes'
 
     client = HipoClientServiceRequestSearch(SERVICE_URL, request)
-    parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime, full=full_data)
+    parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime)
     return web_json_response(parsed_data)
 
 @require_auth
@@ -180,10 +179,9 @@ async def search_fhir_service_request(request):
     exam_type = request.query.get('type')
     exam_region = request.query.get('region')
     exam_datetime = request.query.get('dt')
-    full_data = request.query.get('full', 'no').lower() == 'yes'
 
     client = HipoClientServiceRequestSearch(SERVICE_URL, request)
-    parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime, full=full_data)
+    parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime)
     response = client.fhir_bundle_response(parsed_data, http_request=request, patient_id=patient_id)
     return web_fhir_response(response)
 
@@ -505,13 +503,14 @@ async def web_debug_response(client, request, **kwargs) -> web.Response:
 def web_fhir_response(data) -> web.Response:
     """Return a FHIR-typed JSON response.
 
-    Strings are wrapped in OperationOutcome (500). Resource objects are serialized
-    via to_dict(). Status code is derived from OperationOutcome severity.
+    Strings are wrapped in OperationOutcome (400 — caller omitted a required param).
+    Resource objects are serialized via to_dict(). HTTP status is derived from
+    OperationOutcome issue code: 'not-found' → 404, 'information' severity → 200,
+    other errors → 500, warnings → 400.
     """
     if isinstance(data, str):
-        operation_outcome = OperationOutcome.from_error(message=data, code="processing", severity="error")
-        response_data = operation_outcome.to_dict()
-        return web.json_response(response_data, status=500)
+        operation_outcome = OperationOutcome.from_error(message=data, code="required", severity="error")
+        return web.json_response(operation_outcome.to_dict(), status=400)
 
     if hasattr(data, 'to_dict'):
         response_data = data.to_dict()
@@ -519,16 +518,15 @@ def web_fhir_response(data) -> web.Response:
         response_data = data
 
     status_code = 200
-    if isinstance(response_data, dict):
-        if response_data.get('resourceType') == 'OperationOutcome':
-            if any(issue.get('severity') in ['error', 'fatal']
-                   for issue in response_data.get('issue', [])):
-                status_code = 500
-            elif any(issue.get('severity') == 'warning'
-                     for issue in response_data.get('issue', [])):
-                status_code = 400
-        elif response_data.get('status') == 'error':
+    if isinstance(response_data, dict) and response_data.get('resourceType') == 'OperationOutcome':
+        issues = response_data.get('issue', [])
+        if any(i.get('code') == 'not-found' for i in issues):
             status_code = 404
+        elif any(i.get('severity') in ['error', 'fatal'] for i in issues):
+            status_code = 500
+        elif any(i.get('severity') == 'warning' for i in issues):
+            status_code = 400
+        # 'information' severity (e.g. search returning zero results) stays 200
 
     return web.json_response(response_data, status=status_code)
 

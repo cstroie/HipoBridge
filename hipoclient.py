@@ -1396,34 +1396,23 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
         data = HipoData(status="success", message="")
 
         try:
-            self.request_url = self.request_url_episode
             if kwargs.get('type'):
-                self.request_url += f"&strDomeniu={ANALYSIS_TYPES[kwargs['type']]['domain']}"
+                request_url = self.request_url_episode + f"&strDomeniu={ANALYSIS_TYPES[kwargs['type']]['domain']}"
             elif kwargs.get('dt'):
-                # Append the year extracted from dt parameter
                 dt_param = kwargs.get('dt')
-                if dt_param:
-                    try:
-                        # Parse the date_time string to extract year
-                        if 'T' in dt_param:
-                            dt_obj = datetime.fromisoformat(dt_param.replace('Z', '+00:00'))
-                        else:
-                            dt_obj = datetime.strptime(dt_param, '%Y-%m-%d')
-                        year = dt_obj.year
-                    except (ValueError, TypeError):
-                        # Fallback to current year if parsing fails
-                        year = datetime.now().year
-                else:
-                    # Fallback to current year if no dt parameter
+                try:
+                    if 'T' in dt_param:
+                        dt_obj = datetime.fromisoformat(dt_param.replace('Z', '+00:00'))
+                    else:
+                        dt_obj = datetime.strptime(dt_param, '%Y-%m-%d')
+                    year = dt_obj.year
+                except (ValueError, TypeError):
                     year = datetime.now().year
-                self.request_url += f"&strAN={year}"
+                request_url = self.request_url_episode + f"&strAN={year}"
             else:
-                # Choose the request URL for all analyses
-                self.request_url = self.request_url_all
-                if kwargs.get('full'):
-                    self.request_url += "&full=yes"
+                request_url = self.request_url_all
 
-            url = self.request_url.format(pacid=patient_id)
+            url = request_url.format(pacid=patient_id)
             
             response_text, error_message = await self.get_page(url)
 
@@ -1615,8 +1604,8 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
             if kwargs.get('dt'):
                 # Parse the date_time string to match against analysis datetimes
                 try:
-                    target_dt = datetime.fromisoformat(kwargs['dt'].replace('Z', '+00:00'))
-                    # Start with a date range from one day earlier to one day after
+                    # Parse target; strip tzinfo so comparison with naive stored datetimes works
+                    target_dt = datetime.fromisoformat(kwargs['dt'].replace('Z', '+00:00')).replace(tzinfo=None)
                     hours_range = 24
                     max_attempts = 10
 
@@ -1629,20 +1618,17 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                             if "date_time" in req and start_dt <= datetime.fromisoformat(req["date_time"]) <= end_dt:
                                 filtered_requests.append(req)
 
-                        # If we found exactly one request, return it
                         if len(filtered_requests) == 1:
                             requests = filtered_requests
                             break
-                        # If we found multiple requests, reduce the time range and try again
                         elif len(filtered_requests) > 1 and attempt < max_attempts - 1:
                             hours_range = hours_range / 2
                             continue
-                        # If no requests or on final attempt, return what we found
                         else:
                             requests = filtered_requests
                             break
 
-                except ValueError:
+                except (ValueError, TypeError):
                     data.set_error(f"Invalid date_time format: {kwargs['dt']}")
 
             # Store the requests
@@ -2593,9 +2579,11 @@ class HipoClientCheckout(HipoClient):
             if checkin_datetime or checkout_datetime:
                 period = {}
                 if checkin_datetime:
-                    period["start"] = checkin_datetime
+                    dt = parse_date_time(checkin_datetime)
+                    period["start"] = dt.isoformat() if dt else checkin_datetime
                 if checkout_datetime:
-                    period["end"] = checkout_datetime
+                    dt = parse_date_time(checkout_datetime)
+                    period["end"] = dt.isoformat() if dt else checkout_datetime
                 fhir_encounter["period"] = period
 
             # Add location/ward information
