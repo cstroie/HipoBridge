@@ -243,45 +243,47 @@ _hipocrate_semaphore = asyncio.Semaphore(6)
 class UserSessionManager:
     """Manager for user-specific HTTP sessions with automatic cookie handling.
 
-    Handles creation, storage, and cleanup of aiohttp ClientSessions for
-    individual users, ensuring proper cookie management and resource cleanup.
+    Holds one aiohttp.ClientSession per username (for cookie reuse) plus one
+    asyncio.Lock per username so that concurrent requests never trigger two
+    simultaneous logins for the same user.
     """
 
     def __init__(self):
-        """Initialize the user session manager."""
         self.user_sessions: Dict[str, aiohttp.ClientSession] = {}
+        # Per-user lock: only one login sequence runs at a time per user
+        self._login_locks: Dict[str, asyncio.Lock] = {}
+        # Track which users have an established Hipocrate session
+        self._authenticated: Dict[str, bool] = {}
 
-    def get_user_session(self, username: str):
-        """Get or create a user-specific session with cookie support.
-
-        Retrieves an existing session for a user or creates a new one with
-        automatic cookie handling enabled.
-
-        Args:
-            username: Username to get session for
-
-        Returns:
-            aiohttp.ClientSession for the user with cookie jar enabled
-        """
+    def get_user_session(self, username: str) -> aiohttp.ClientSession:
+        """Get or create a user-specific aiohttp session with cookie support."""
         if username not in self.user_sessions or self.user_sessions[username].closed:
-            logger.debug(f"Creating new aiohttp ClientSession for user {username} with cookie support")
-            # Create session with automatic cookie handling
+            logger.debug(f"Creating new session for user {username}")
             self.user_sessions[username] = aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(unsafe=True))
-        else:
-            logger.debug(f"Reusing existing aiohttp ClientSession for user {username}")
+            self._authenticated[username] = False
         return self.user_sessions[username]
 
-    async def close_all_sessions(self):
-        """Close all user sessions and free associated resources.
+    def get_login_lock(self, username: str) -> asyncio.Lock:
+        """Return the per-user login lock, creating it on first access."""
+        if username not in self._login_locks:
+            self._login_locks[username] = asyncio.Lock()
+        return self._login_locks[username]
 
-        Closes all active aiohttp ClientSessions managed by this manager
-        to ensure proper cleanup of network resources.
-        """
+    def is_authenticated(self, username: str) -> bool:
+        """Return True if this user has an active Hipocrate session."""
+        return self._authenticated.get(username, False)
+
+    def set_authenticated(self, username: str, value: bool) -> None:
+        self._authenticated[username] = value
+
+    async def close_all_sessions(self):
+        """Close all user sessions and free associated resources."""
         logger.info("Closing all user sessions")
         for username, session in self.user_sessions.items():
             if session and not session.closed:
-                logger.debug(f"Closing aiohttp ClientSession for user {username}")
+                logger.debug(f"Closing session for user {username}")
                 await session.close()
+        self._authenticated.clear()
 
 
 # Global user session manager instance
@@ -418,100 +420,88 @@ class HipoClient:
             logger.debug("Detected login page")
         return is_login
 
-    async def login_if_needed(self, session, username: str, password: str) -> bool:
-        """Attempt to login to the Hipocrate service if needed.
+    async def login_if_needed(self, session, username: str, password: str, force: bool = False) -> bool:
+        """Ensure the user has an active Hipocrate session, logging in if necessary.
 
-        Checks if we're currently on the login page, and if so, performs login
-        using the provided credentials. Handles the complete login flow including
-        initial cookie setup and form submission.
+        Uses a per-user lock so that concurrent requests for the same user never
+        trigger two simultaneous login sequences. All login HTTP calls go through
+        the global semaphore so they count against the concurrency budget.
 
         Args:
-            session: The aiohttp session to use
-            username: Username for login
-            password: Password for login
+            session: The aiohttp session for this user
+            username: Hipocrate username
+            password: Hipocrate password
+            force: Skip the is-logged-in check and go straight to login.
+                   Pass True when the caller already knows the session is expired.
 
         Returns:
-            True if login was successful or not needed, False otherwise
+            True if the session is authenticated, False on failure
         """
-        logger.info("Attempting login if needed")
-
         if not username or not password:
             logger.warning("Username or password not set, skipping login")
             return False
 
-        try:
-            # First, check if we're already logged in by accessing main.asp
-            main_url = f"{self.service_url}/main.asp"
-            logger.debug(f"Checking if already logged in by accessing: {main_url}")
-            async with session.get(main_url, headers=self.headers) as main_response:
-                # Handle encoding properly - the service may not be using UTF-8
-                try:
-                    main_text = await self.handle_response_encoding(main_response)
-                except UnicodeDecodeError:
-                    # If UTF-8 fails, try to get raw bytes and decode with latin-1 or windows-1252
-                    raw_data = await main_response.read()
-                    try:
-                        main_text = raw_data.decode('windows-1252')
-                    except UnicodeDecodeError:
-                        main_text = raw_data.decode('latin-1')
-                logger.debug(f"Main page response status: {main_response.status}")
+        login_lock = user_session_manager.get_login_lock(username)
 
-                # If we're not on the login page, we're already logged in
-                if not self.is_login_page(main_text):
-                    logger.info("Already logged in, skipping login")
-                    return True
-
-            # If we're on the login page, proceed with login
-            logger.info("Not logged in, proceeding with login")
-
-            # First, access the default.asp page to get initial cookies
-            default_url = f"{self.service_url}/default.asp"
-            logger.debug(f"Accessing default page to get cookies: {default_url}")
-            async with session.get(default_url, headers=self.headers) as default_response:
-                logger.debug(f"Default page response status: {default_response.status}")
-
-            # Prepare login data to match browser submission
-            login_data = {
-                "id_recuperare_pwd_2": "",
-                "strUser": username,
-                "strPwd": password,
-                "cboLang": "ro"
-            }
-
-            # Add referer header for the login request
-            login_headers = self.headers.copy()
-            login_headers["Referer"] = default_url
-
-            # Use the correct login endpoint
-            login_url = f"{self.service_url}/security/logon.asp"
-            logger.debug(f"Submitting login form to {login_url}")
-            # Submit login form
-            async with session.post(
-                login_url,
-                data=login_data,
-                headers=login_headers
-            ) as login_response:
-                response_text = await self.handle_response_encoding(login_response)
-                logger.debug(f"Login response status: {login_response.status}")
-
-                # Log cookie information
-                if session.cookie_jar:
-                    cookies = session.cookie_jar.filter_cookies(URL(self.service_url))
-                    logger.debug(f"Session cookies after login: {len(cookies)} cookies")
-
-            # Check if login was successful (redirect to main.asp or not on login page)
-            if login_response.status == 302 and "main.asp" in login_response.headers.get("Location", ""):
-                logger.info("Login successful: redirected to main.asp")
+        async with login_lock:
+            # Another coroutine may have completed login while we were waiting
+            if not force and user_session_manager.is_authenticated(username):
+                logger.debug(f"User {username} already authenticated (lock released by peer)")
                 return True
-            elif not self.is_login_page(response_text):
-                logger.info("Login successful: not on login page")
-                return True
-            else:
-                logger.warning("Login failed: still on login page")
-            return False
-        except Exception as e:
-            logger.error(f"Login failed with exception: {e}")
-            return False
+
+            try:
+                if not force:
+                    # Check whether the existing session is still valid
+                    main_url = f"{self.service_url}/main.asp"
+                    logger.debug(f"Checking login state for {username}")
+                    async with _hipocrate_semaphore:
+                        async with session.get(main_url, headers=self.headers) as resp:
+                            main_text = await self.handle_response_encoding(resp)
+                    if not self.is_login_page(main_text):
+                        logger.info(f"User {username} already logged in")
+                        user_session_manager.set_authenticated(username, True)
+                        return True
+
+                logger.info(f"Logging in user {username}")
+
+                # Grab initial cookies from the default page
+                default_url = f"{self.service_url}/default.asp"
+                async with _hipocrate_semaphore:
+                    async with session.get(default_url, headers=self.headers) as resp:
+                        logger.debug(f"Default page status: {resp.status}")
+
+                login_data = {
+                    "id_recuperare_pwd_2": "",
+                    "strUser": username,
+                    "strPwd": password,
+                    "cboLang": "ro"
+                }
+                login_headers = {**self.headers, "Referer": default_url}
+                login_url = f"{self.service_url}/security/logon.asp"
+
+                async with _hipocrate_semaphore:
+                    async with session.post(login_url, data=login_data, headers=login_headers) as resp:
+                        response_text = await self.handle_response_encoding(resp)
+                        status = resp.status
+                        location = resp.headers.get("Location", "")
+                        logger.debug(f"Login response status: {status}")
+
+                success = (status == 302 and "main.asp" in location) or \
+                          (not self.is_login_page(response_text))
+
+                if success:
+                    logger.info(f"Login successful for user {username}")
+                    user_session_manager.set_authenticated(username, True)
+                else:
+                    logger.warning(f"Login failed for user {username}")
+                    user_session_manager.set_authenticated(username, False)
+
+                return success
+
+            except Exception as e:
+                logger.error(f"Login error for user {username}: {e}")
+                user_session_manager.set_authenticated(username, False)
+                return False
 
     async def make_authenticated_request(self, url, method="GET", data=None, username=None, password=None):
         """Make an authenticated request to the Hipocrate service with automatic login handling.
@@ -599,8 +589,9 @@ class HipoClient:
 
             # Check if we got redirected to login page (session expired)
             if self.is_login_page(response_text):
-                logger.warning(f"Session expired during request to {url}, attempting re-login")
-                login_success = await self.login_if_needed(self.session, username, password)
+                logger.warning(f"Session expired for {username}, re-logging in")
+                user_session_manager.set_authenticated(username, False)
+                login_success = await self.login_if_needed(self.session, username, password, force=True)
                 if login_success:
                     async with _hipocrate_semaphore:
                         response_text = await _make_request(use_retry_headers=True)
