@@ -57,46 +57,38 @@ def parse_date_time(date_str: str) -> Optional[datetime]:
                 except ValueError:
                     pass
         
-        # Handle common date formats like "30 Aug 2025 19:25:00"
-        # Create a mapping for month abbreviations to numbers
+        # Handle "DD Mon YYYY [HH:MM[:SS]]" with English and Romanian month abbreviations
         month_mapping: Dict[str, int] = {
             'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
             'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12,
-            'Ian': 1, 'Mai': 5, 'Iun': 6, 'Iul': 7  # Romanian month abbreviations
+            # Romanian abbreviations that differ from English
+            'Ian': 1, 'Mai': 5, 'Iun': 6, 'Iul': 7, 'Noi': 11,
         }
 
-        # Split the date string into components
         parts = date_str.strip().split()
-        if len(parts) != 4:
+        if len(parts) not in (3, 4):
             return None
 
         day = int(parts[0])
         month_abbr = parts[1]
         year = int(parts[2])
-        time_part = parts[3]
 
-        # Get month number from mapping
         if month_abbr not in month_mapping:
             return None
         month = month_mapping[month_abbr]
 
-        # Parse time
-        time_parts = time_part.split(':')
-        if len(time_parts) == 2:
-            hour = int(time_parts[0])
-            minute = int(time_parts[1])
-            second = 0
-        elif len(time_parts) == 3:
-            hour = int(time_parts[0])
-            minute = int(time_parts[1])
-            second = int(time_parts[2])
-        else:
-            return None
+        hour = minute = second = 0
+        if len(parts) == 4:
+            time_parts = parts[3].split(':')
+            if len(time_parts) == 2:
+                hour, minute = int(time_parts[0]), int(time_parts[1])
+            elif len(time_parts) == 3:
+                hour, minute, second = int(time_parts[0]), int(time_parts[1]), int(time_parts[2])
+            else:
+                return None
 
-        # Create datetime object
         return datetime(year, month, day, hour, minute, second)
     except (ValueError, IndexError, TypeError):
-        # If parsing fails, return None
         return None
 
 
@@ -172,14 +164,16 @@ def parse_cnp(cnp: str) -> Dict[str, Any]:
     # Validate date by trying to create a datetime object
     try:
         # Determine century based on gender digit
+        # 1/2 → born 1900–1999; 3/4 → born 1800–1899; 5/6 → born 2000+
+        # 7/8 → foreign residents: year is stored as-is (1900 if ≥ current year, else 2000)
         if gender_digit in [1, 2]:
             full_year = 1900 + year
         elif gender_digit in [3, 4]:
             full_year = 1800 + year
         elif gender_digit in [5, 6]:
             full_year = 2000 + year
-        else:  # 7, 8
-            full_year = 2000 + year  # For people born after 2000
+        else:  # 7, 8 — foreign residents; century is ambiguous, use heuristic
+            full_year = 1900 + year if year >= datetime.today().year % 100 else 2000 + year
 
         # Check if date is valid
         birth_date = datetime(full_year, month, day)
@@ -234,38 +228,25 @@ def extract_text_after_label(soup: BeautifulSoup, label_regex: str, element_tag:
         Extracted field content stripped of whitespace, or empty string if not found
     """
     try:
-        # Look for the element containing this label
         for label_element in soup.find_all(string=re.compile(label_regex, re.IGNORECASE)):
-            # Check if this is a comment
             if isinstance(label_element, Comment):
                 continue
-            # Determine the container element to extract text from
-            if element_tag is None:
-                container_element = label_element.parent
-            else:
-                container_element = label_element.find_parent(element_tag)
-            # If no container found, return empty
+            container_element = label_element.parent if element_tag is None else label_element.find_parent(element_tag)
             if not container_element:
-                return ""
-            # Extract text content from the container and clean it
-            # Remove the label part and get the rest
+                continue  # try next matching node
             container_text = container_element.get_text(separator=' ', strip=True)
-            # Find the label in the text and extract everything after it
             match = re.search(label_regex, container_text, re.IGNORECASE)
-            if match:
-                # Get the position after the matched label
-                label_end = match.end()
-                # Extract the content after the label
-                content = container_text[label_end:].strip()
-                # If stop_at pattern is provided, truncate content at that point
-                if stop_at:
-                    stop_match = re.search(stop_at, content, re.IGNORECASE)
-                    if stop_match:
-                        content = content[:stop_match.start()].strip()
-                # Return the cleaned content
-                logger.debug(f"Extracted content for label '{label_regex}': {content}")
-                return content
-        # If label not found, return empty
+            if not match:
+                continue
+            content = container_text[match.end():].strip()
+            if stop_at:
+                stop_match = re.search(stop_at, content, re.IGNORECASE)
+                if stop_match:
+                    content = content[:stop_match.start()].strip()
+            if not content:
+                continue  # empty result — try next candidate node
+            logger.debug(f"Extracted content for label '{label_regex}': {content}")
+            return content
         return ""
     except Exception as e:
         logger.error(f"Error extracting field with label '{label_regex}': {e}")
@@ -306,7 +287,7 @@ def extract_ids_from_links(soup: BeautifulSoup, id_pattern: str = r'id=([^&"]+)'
         href = item.get('href', '')
         id_match = re.search(id_pattern, href)
         if id_match:
-            ids_list.append(id_match.group(1))
+            ids_list.append(id_match.group(1) if id_match.lastindex else id_match.group(0))
     if ids_list:
         logger.debug(f"Extracted ids for link pattern '{id_pattern}': {','.join(ids_list)}")
     return ids_list
@@ -327,11 +308,11 @@ def extract_text_ids_from_links(soup: BeautifulSoup, id_pattern: str = r'id=([^&
         id_match = re.search(id_pattern, href)
         if not id_match:
             continue
-        id = id_match.group(1)
+        item_id = id_match.group(1) if id_match.lastindex else id_match.group(0)
         text = item.get_text().strip().upper()
-        if text == id:
+        if text == item_id:
             continue
-        result[id] = text
+        result[item_id] = text
     return result
 
 def extract_value_from_input(soup: 'BeautifulSoup', element_id: str = None, name: str = None) -> str:
@@ -449,58 +430,3 @@ def extract_textarea_after_label(soup: 'BeautifulSoup', label_regex: str) -> str
         logger.error(f"Error extracting textarea content after label '{label_regex}': {e}")
         return ""
 
-def extract_tabular_data(soup: BeautifulSoup, identifier: str, identifier_type: str = "text") -> List[List[str]]:
-    """Extract tabular data from an HTML table identified by text, id, or class.
-
-    Args:
-        soup: BeautifulSoup object of the parsed HTML content
-        identifier: The text, id, or class to identify the table
-        identifier_type: Type of identifier - "text", "id", or "class" (default: "text")
-
-    Returns:
-        List of rows, each row being a list of cell contents as plain text (may be empty)
-    """
-    try:
-        # Find the table based on the identifier type
-        table = None
-        if identifier_type == "text":
-            # Look for a table that contains the specified text
-            text_elements = soup.find_all(string=re.compile(re.escape(identifier), re.IGNORECASE))
-            for element in text_elements:
-                # Check if the text is in a table header or cell
-                parent = element.find_parent(['th', 'td', 'table'])
-                if parent and parent.name == 'table':
-                    table = parent
-                    break
-                elif parent:
-                    # Find the containing table
-                    table = parent.find_parent('table')
-                    if table:
-                        break
-        elif identifier_type == "id":
-            table = soup.find('table', id=identifier)
-        elif identifier_type == "class":
-            table = soup.find('table', class_=identifier)
-        
-        # If no table found, return empty list
-        if not table:
-            logger.debug(f"No table found with {identifier_type}: {identifier}")
-            return []
-        
-        # Extract rows and cells
-        rows = []
-        for row in table.find_all('tr'):
-            cells = []
-            for cell in row.find_all(['td', 'th']):
-                cell_text = cell.get_text(separator=' ', strip=True)
-                cells.append(cell_text)
-            # Only add non-empty rows
-            if cells:
-                rows.append(cells)
-        
-        logger.debug(f"Extracted {len(rows)} rows from table")
-        return rows
-        
-    except Exception as e:
-        logger.error(f"Error extracting tabular data: {e}")
-        return []
