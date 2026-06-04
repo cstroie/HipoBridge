@@ -132,6 +132,9 @@ body {
     background-color: var(--bg);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
 }
 
 /* Container */
@@ -522,6 +525,7 @@ small {
 
 /* Main Content */
 .main-content {
+    flex: 1;
     padding: 2rem 0 4rem;
 }
 
@@ -1265,7 +1269,7 @@ select {
     background: var(--card-bg);
     border-top: 1px solid var(--border);
     padding: 1rem 0;
-    margin-top: 4rem;
+    margin-top: auto;
 }
 
 .footer-bottom {
