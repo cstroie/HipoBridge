@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', function() {
         presentationsCount: document.getElementById('presentationsCount'),
         checkinsCount: document.getElementById('checkinsCount'),
         checkoutsCount: document.getElementById('checkoutsCount'),
+        reportsCount: document.getElementById('reportsCount'),
         checkoutIdsList: document.getElementById('checkoutIdsList'),
         // Analyses tab elements
         analysesGrid: document.getElementById('analysesGrid'),
@@ -31,10 +32,6 @@ document.addEventListener('DOMContentLoaded', function() {
         epicrisisSection: document.getElementById('epicrisisSection'),
         // Report tab elements
         patientReportMarkdown: document.getElementById('patientReportMarkdown'),
-        reportPatientId: document.getElementById('reportPatientId'),
-        reportPatientName: document.getElementById('reportPatientName'),
-        reportPatientAge: document.getElementById('reportPatientAge'),
-        reportPatientGender: document.getElementById('reportPatientGender'),
         copyReportBtn: document.getElementById('copyReportBtn'),
         // Dashboard elements
         patientChart: document.getElementById('patientChart'),
@@ -261,10 +258,16 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function switchTab(tabId) {
-        // Update active nav item
-        elements.navItems.forEach(nav => nav.classList.remove('active'));
+        // Update active nav item and aria-selected
+        elements.navItems.forEach(nav => {
+            nav.classList.remove('active');
+            nav.setAttribute('aria-selected', 'false');
+        });
         const activeNavItem = document.querySelector(`.nav-item[data-tab="${tabId}"]`);
-        if (activeNavItem) activeNavItem.classList.add('active');
+        if (activeNavItem) {
+            activeNavItem.classList.add('active');
+            activeNavItem.setAttribute('aria-selected', 'true');
+        }
         
         // Show corresponding tab content
         elements.tabContents.forEach(tab => {
@@ -647,17 +650,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.epicrisisFooter) elements.epicrisisFooter.style.display = 'none';
         if (elements.epicrisisSection) elements.epicrisisSection.style.display = 'none';
         
-        // Clear report with null checks
-        if (elements.reportPatientId) elements.reportPatientId.textContent = 'N/A';
-        if (elements.reportPatientName) elements.reportPatientName.textContent = 'N/A';
-        if (elements.reportPatientAge) elements.reportPatientAge.textContent = 'N/A';
-        if (elements.reportPatientGender) elements.reportPatientGender.textContent = 'N/A';
-        if (elements.reportRecentAnalyses) elements.reportRecentAnalyses.innerHTML = `
-            <div class="no-data">
-                <i class="fas fa-file-medical fa-2x" aria-hidden="true"></i>
-                <p>No recent analyses available</p>
-            </div>
-        `;
+        // Clear report tab
+        if (elements.patientReportMarkdown) elements.patientReportMarkdown.innerHTML = '';
         
         // Hide navigation tabs for patient data
         elements.navItems.forEach(item => {
@@ -1767,19 +1761,6 @@ document.addEventListener('DOMContentLoaded', function() {
         log('Updating report tab data');
         
         // Update patient summary with null checks
-        if (elements.reportPatientId) {
-            elements.reportPatientId.textContent = patientData.id || 'N/A';
-        }
-        if (elements.reportPatientName) {
-            elements.reportPatientName.textContent = formatPatientName(patientData.name);
-        }
-        if (elements.reportPatientAge) {
-            elements.reportPatientAge.textContent = calculateAge(patientData.birthDate);
-        }
-        if (elements.reportPatientGender) {
-            elements.reportPatientGender.textContent = formatGender(patientData.gender);
-        }
-        
         log('Report tab data updated');
     }
     
@@ -1794,14 +1775,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Update reports count when analyses load
-        const reportsCountElement = document.getElementById('reportsCount');
-        if (reportsCountElement) {
-            const reportsCount = analysesData.resourceType === "Bundle" && analysesData.entry 
+        if (elements.reportsCount) {
+            const reportsCount = analysesData.resourceType === "Bundle" && analysesData.entry
                 ? analysesData.entry.length : 0;
-            reportsCountElement.textContent = `${reportsCount}`;
-            log('Reports count badge updated to:', reportsCount);
-        } else {
-            log('Reports count element not found');
+            elements.reportsCount.textContent = `${reportsCount}`;
+            log('Reports count updated to:', reportsCount);
         }
     }
     

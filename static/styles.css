@@ -232,29 +232,6 @@ small {
     box-shadow: var(--shadow-lg);
 }
 
-.btn-secondary {
-    background: var(--card-bg);
-    color: var(--text);
-    border-color: var(--border);
-}
-
-.btn-secondary:hover {
-    background: var(--primary);
-    color: white;
-    border-color: var(--primary);
-}
-
-.btn-ghost {
-    background: transparent;
-    color: var(--text);
-    border-color: var(--border);
-}
-
-.btn-ghost:hover {
-    background: var(--primary);
-    color: white;
-    border-color: var(--primary);
-}
 
 .btn-icon {
     width: 40px;
@@ -645,14 +622,15 @@ small {
     color: white;
     padding: 0.5rem 0.75rem;
     font-size: 0.9rem;
-    min-width: 300px;
+    min-width: 200px;
+    width: 100%;
 }
 
 .search-quick input::placeholder {
     color: rgba(255, 255, 255, 0.7);
 }
 
-.btn-icon {
+.header .btn-icon {
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.2);
     color: white;
@@ -663,9 +641,11 @@ small {
     display: flex;
     align-items: center;
     justify-content: center;
+    width: auto;
+    height: auto;
 }
 
-.btn-icon:hover {
+.header .btn-icon:hover {
     background: rgba(255, 255, 255, 0.2);
     transform: translateY(-1px);
 }
@@ -686,7 +666,7 @@ small {
     right: 0;
     background: var(--card-bg);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: var(--radius-md);
     box-shadow: var(--shadow-lg);
     padding: 0.5rem;
     min-width: 200px;
@@ -713,7 +693,7 @@ small {
     background: var(--bg);
 }
 
-.badge {
+.header .badge {
     background: rgba(255, 255, 255, 0.2);
     padding: 0.25rem 0.5rem;
     border-radius: 999px;
@@ -827,7 +807,7 @@ small {
 .stat-item {
     background: var(--card-bg);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: var(--radius-md);
     padding: 1.5rem;
     display: flex;
     align-items: center;
@@ -924,7 +904,7 @@ small {
     width: 100%;
     padding: 1rem 1rem 1rem 2.5rem;
     border: 2px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: var(--radius-md);
     background: var(--card-bg);
     color: var(--text);
     font-size: 1rem;
@@ -942,7 +922,7 @@ small {
     color: white;
     border: none;
     padding: 1rem 1.5rem;
-    border-radius: var(--radius);
+    border-radius: var(--radius-md);
     font-weight: 600;
     cursor: pointer;
     transition: transform 0.3s ease, box-shadow 0.3s ease;
@@ -975,7 +955,7 @@ small {
 .example-btn {
     background: var(--bg);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: var(--radius-md);
     padding: 0.5rem;
     cursor: pointer;
     transition: all 0.3s ease;
@@ -1097,7 +1077,7 @@ small {
     color: var(--text);
     border: 1px solid var(--border);
     padding: 0.75rem 1rem;
-    border-radius: var(--radius);
+    border-radius: var(--radius-md);
     font-weight: 500;
     cursor: pointer;
     transition: all 0.3s ease;
@@ -1117,7 +1097,7 @@ small {
     color: var(--text);
     border: 1px solid var(--border);
     padding: 0.75rem 1rem;
-    border-radius: var(--radius);
+    border-radius: var(--radius-md);
     font-weight: 500;
     cursor: pointer;
     transition: all 0.3s ease;
@@ -1210,7 +1190,7 @@ small {
     gap: 0.5rem;
     background: var(--card-bg);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: var(--radius-md);
     padding: 0.5rem 1rem;
     margin-right: 1rem;
 }
@@ -1235,7 +1215,7 @@ small {
 select {
     background: var(--card-bg);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: var(--radius-md);
     padding: 0.5rem;
     color: var(--text);
     cursor: pointer;
@@ -1707,7 +1687,7 @@ select {
 
 .toast {
     padding: 12px 20px;
-    border-radius: var(--radius);
+    border-radius: var(--radius-md);
     color: white;
     box-shadow: var(--shadow-lg);
     animation: slideIn 0.3s ease-out;
