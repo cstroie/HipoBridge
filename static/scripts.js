@@ -357,12 +357,8 @@ document.addEventListener('DOMContentLoaded', function() {
         };
     }
     
-    // Enhanced patient search function
     async function performPatientSearch(identifier) {
         try {
-            const validation = validatePatientIdentifier(identifier);
-            
-            // Search for patient using FHIR API
             const searchResponse = await fetch(`/fhir/Patient?q=${encodeURIComponent(identifier)}`);
             
             if (!searchResponse.ok) {
@@ -1554,6 +1550,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             elements.noAnalyses.style.display = 'none';
+            if (elements.reportsCount) elements.reportsCount.textContent = filteredEntries.length;
             log('Found', filteredEntries.length, 'matching service requests');
             
             // Clear existing content
