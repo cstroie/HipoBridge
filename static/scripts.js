@@ -1700,11 +1700,11 @@ document.addEventListener('DOMContentLoaded', function() {
         };
         
         if (patientData.extension && Array.isArray(patientData.extension)) {
-            const encounterExt = patientData.extension.find(ext => 
-                ext.url && ext.url.includes('encounter-ids')
+            const encounterExt = patientData.extension.find(ext =>
+                ext.url && ext.url.includes('presentation-ids')
             );
-            const admissionExt = patientData.extension.find(ext => 
-                ext.url && ext.url.includes('admission-ids')
+            const admissionExt = patientData.extension.find(ext =>
+                ext.url && ext.url.includes('checkin-ids')
             );
             const checkoutExt = patientData.extension.find(ext => 
                 ext.url && ext.url.includes('checkout-ids')

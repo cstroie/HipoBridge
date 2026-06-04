@@ -999,25 +999,6 @@ async def on_cleanup(app):
     logger.info("Application cleanup")
     await user_session_manager.close_all_sessions()
 
-async def auth_middleware(app, handler):
-    """Authentication middleware that skips static files.
-    
-    Args:
-        app: The web application
-        handler: The request handler
-
-    Returns:
-        Middleware handler
-    """
-    async def middleware_handler(request):
-        # Skip authentication for static files
-        if request.path.startswith('/static/'):
-            return await handler(request)
-        # Apply authentication for other requests
-        return await handler(request)
-    # Return the middleware handler
-    return middleware_handler
-
 async def init_app():
     """Initialize the web application.
 
@@ -1028,7 +1009,7 @@ async def init_app():
     """
     logger.info("Initializing web application")
 
-    app = web.Application(middlewares=[auth_middleware])
+    app = web.Application()
     app.router.add_get('/', serve_web_page)
     # API endpoints
     app.router.add_get('/api/patient', search_patient)
@@ -1072,5 +1053,4 @@ HOST = config.get('server', 'host')
 # Run the application
 if __name__ == "__main__":
     logger.info(f"Starting HipoBridge server on {HOST}:{PORT}")
-    app = init_app()
-    web.run_app(app, host=HOST, port=PORT)
+    web.run_app(init_app(), host=HOST, port=PORT)

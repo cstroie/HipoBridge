@@ -275,7 +275,8 @@ class URLCache:
                 logger.debug(f"Expired cache entry removed for: {url}")
                 return None
         # Return cached response
-        logger.debug(f"Using cached response for: {url} (age: {(datetime.now() - self.timestamps[url]).total_seconds():.1f}s)")
+        age = (datetime.now() - self.timestamps[url]).total_seconds() if url in self.timestamps else -1
+        logger.debug(f"Using cached response for: {url} (age: {age:.1f}s)")
         return self.cache[url]
 
     def put(self, url: str, response_text: str) -> None:
@@ -327,8 +328,6 @@ class URLCache:
 url_cache = URLCache(max_size=100, timeout=10 * 60)
 
 # Simple in-memory cache for CNP to patient code mappings
-cnp_cache: Dict[str, str] = {}
-cache_max_size = 1000  # Maximum number of entries to cache
 
 
 

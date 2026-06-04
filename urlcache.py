@@ -62,7 +62,8 @@ class URLCache:
                 logger.debug(f"Expired cache entry removed for: {url}")
                 return None
         # Return cached response
-        logger.debug(f"Using cached response for: {url} (age: {(datetime.now() - self.timestamps[url]).total_seconds():.1f}s)")
+        age = (datetime.now() - self.timestamps[url]).total_seconds() if url in self.timestamps else -1
+        logger.debug(f"Using cached response for: {url} (age: {age:.1f}s)")
         return self.cache[url]
 
     def put(self, url: str, response_text: str) -> None:
