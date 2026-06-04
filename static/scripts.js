@@ -33,8 +33,6 @@ document.addEventListener('DOMContentLoaded', function() {
         quickSearch: document.getElementById('quickSearch'),
         quickSearchBtn: document.getElementById('quickSearchBtn'),
         themeToggle: document.getElementById('themeToggle'),
-        userMenuBtn: document.getElementById('userMenuBtn'),
-        userDropdown: document.getElementById('userDropdown'),
         // Search examples
         exampleBtns: document.querySelectorAll('.example-btn'),
         // Patient actions
@@ -168,17 +166,6 @@ document.addEventListener('DOMContentLoaded', function() {
             elements.themeToggle.addEventListener('click', toggleTheme);
         }
         
-        // User menu
-        if (elements.userMenuBtn) {
-            elements.userMenuBtn.addEventListener('click', toggleUserMenu);
-        }
-        
-        // Click outside to close dropdowns
-        document.addEventListener('click', function(e) {
-            if (!elements.userDropdown.contains(e.target) && e.target !== elements.userMenuBtn) {
-                elements.userDropdown.style.display = 'none';
-            }
-        });
         
         // Example buttons
         elements.exampleBtns.forEach(btn => {
@@ -630,10 +617,6 @@ document.addEventListener('DOMContentLoaded', function() {
         showToast(`Theme switched to ${newTheme}`, 'info');
     }
     
-    function toggleUserMenu() {
-        const isHidden = elements.userDropdown.style.display === 'none' || !elements.userDropdown.style.display;
-        elements.userDropdown.style.display = isHidden ? 'block' : 'none';
-    }
     
     function filterAnalyses() {
         const searchTerm = elements.analysesSearch ? elements.analysesSearch.value.toLowerCase() : '';
