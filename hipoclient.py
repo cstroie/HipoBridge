@@ -58,6 +58,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from extractors import extract_id_from_link, extract_ids_from_links, extract_text_ids_from_links, extract_selected_from_dropdown, extract_tabular_data, extract_text_after_label, extract_text_from_element, extract_textarea_after_label, extract_value_from_input
 from extractors import parse_cnp, parse_date_time
 from urlcache import URLCache
+import asyncio
 
 from markdown import html_to_markdown
 
@@ -233,7 +234,10 @@ def identify_study_type_and_region(desc: str) -> Tuple[str, str]:
 
 
 # Simple in-memory cache for HTTP responses (imported from urlcache module)
-url_cache = URLCache(max_size=100, timeout=10 * 60)
+url_cache = URLCache(max_size=500, timeout=30 * 60)
+
+# Global semaphore: cap total concurrent outbound requests to Hipocrate
+_hipocrate_semaphore = asyncio.Semaphore(6)
 
 
 class UserSessionManager:
@@ -565,41 +569,55 @@ class HipoClient:
                         logger.debug(f"POST response status: {response.status}")
             return html.unescape(response_text)
 
-        # Check if we have a cached response for GET requests
+        # For GET requests: check cache first, then deduplicate in-flight fetches
         if method == "GET":
             cached_response = self.cache_get(url)
             if cached_response is not None:
                 return cached_response, None
 
-        try:
-            # Log current cookies before request
-            if self.session.cookie_jar:
-                cookies = self.session.cookie_jar.filter_cookies(URL(self.service_url))
-                logger.debug(f"Using {len(cookies)} cookies for request to {url}")
+            # If another coroutine is already fetching this URL, wait for it
+            if self.url_cache.is_inflight(url):
+                logger.debug(f"Waiting for in-flight request: {url}")
+                await self.url_cache.wait_inflight(url)
+                # After the wait, the result should be cached
+                cached_response = self.cache_get(url)
+                if cached_response is not None:
+                    return cached_response, None
+                # Fell through (fetch failed for the other caller) — try ourselves
 
-            # Make the initial request
-            response_text = await _make_request()
+            # Mark URL as in-flight before fetching
+            inflight_event = self.url_cache.mark_inflight(url)
+
+        try:
+            # Limit concurrent outbound requests to Hipocrate
+            async with _hipocrate_semaphore:
+                if self.session.cookie_jar:
+                    cookies = self.session.cookie_jar.filter_cookies(URL(self.service_url))
+                    logger.debug(f"Using {len(cookies)} cookies for request to {url}")
+
+                response_text = await _make_request()
 
             # Check if we got redirected to login page (session expired)
             if self.is_login_page(response_text):
                 logger.warning(f"Session expired during request to {url}, attempting re-login")
                 login_success = await self.login_if_needed(self.session, username, password)
                 if login_success:
-                    # Retry the request with special headers for POST
-                    response_text = await _make_request(use_retry_headers=True)
-                    # Check again if still on login page
+                    async with _hipocrate_semaphore:
+                        response_text = await _make_request(use_retry_headers=True)
                     if self.is_login_page(response_text):
                         return None, "Authentication failed after retry"
                 else:
                     return None, "Re-authentication failed"
 
-            # Cache the response for GET requests
+            # Cache the response for GET requests and wake up any waiters
             if method == "GET":
                 self.cache_put(url, response_text)
+                self.url_cache.resolve_inflight(url)
 
-            # If we reach here, we have a valid response
             return response_text, None
         except Exception as e:
+            if method == "GET":
+                self.url_cache.resolve_inflight(url)
             return None, str(e)
 
     async def handle_response_encoding(self, response):
@@ -754,56 +772,19 @@ class HipoClient:
         if not self.session:
             self.session = self.get_user_session(self.username)
 
-        # Follow up to max_redirects redirects to get the final page data
-        redirect_count = 0
-        while redirect_count < max_redirects:
-            # Make the authenticated request
-            start_time = datetime.now()
-            response_text, error_response = await self.make_authenticated_request(
-                current_url, "GET", None, self.username, self.password
-            )
-            duration = (datetime.now() - start_time).total_seconds()
+        # aiohttp follows redirects automatically; a single authenticated request suffices
+        start_time = datetime.now()
+        response_text, error_response = await self.make_authenticated_request(
+            current_url, "GET", None, self.username, self.password
+        )
+        duration = (datetime.now() - start_time).total_seconds()
 
-            # Check for errors in the response
-            if error_response:
-                error_msg = error_response.get("message", "Unknown error") if isinstance(error_response, dict) else str(error_response)
-                return None, error_msg
-            logger.info(f"Page retrieved in {duration:.2f} seconds")
+        if error_response:
+            error_msg = error_response.get("message", "Unknown error") if isinstance(error_response, dict) else str(error_response)
+            return None, error_msg
 
-            # Check if this is the final response (not a redirect)
-            # We need to make a direct request to check the status code
-            async with self.session.get(current_url, headers=self.headers) as response:
-                logger.debug(f"Page request response status: {response.status}")
-
-                # If we get the final data (not a redirect), break the loop
-                if response.status != 302:
-                    logger.info(f"Page retrieval completed successfully after {redirect_count} redirects")
-                    return response_text, None
-
-                # Handle 302 redirect
-                location = response.headers.get("Location")
-                if not location:
-                    return None, "Redirect without location header"
-
-                # Construct the full URL for the redirect
-                if location.startswith("/"):
-                    # Relative path from root - need to extract scheme and host from current_url
-                    parsed_url = URL(current_url)
-                    base_url = f"{parsed_url.scheme}://{parsed_url.host}"
-                    current_url = f"{base_url}{location}"
-                elif location.startswith("http"):
-                    # Full URL
-                    current_url = location
-                else:
-                    # Relative path from current directory
-                    base_path = "/".join(current_url.split("/")[:-1])
-                    current_url = f"{base_path}/{location}"
-
-                logger.debug(f"Following redirect #{redirect_count + 1} to: {current_url}")
-                redirect_count += 1
-
-        # If we've exceeded the maximum redirects
-        return None, f"Exceeded maximum redirects ({max_redirects})"
+        logger.info(f"Page retrieved in {duration:.2f}s: {current_url}")
+        return response_text, None
 
     def parse_data(self, html_content: str, **kwargs) -> HipoData:
         """Parse HTML content and extract structured data.
