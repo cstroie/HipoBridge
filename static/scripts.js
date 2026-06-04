@@ -941,24 +941,14 @@ document.addEventListener('DOMContentLoaded', function() {
             const patientName = typeof search === 'object' ? search.patientName : null;
             const type = typeof search === 'object' ? search.type : 'unknown';
 
-            const div = document.createElement('div');
-            div.className = 'recent-item';
-            div.style.cursor = 'pointer';
-            div.title = `Search: ${searchTerm}`;
-
             const typeIcons = { cnp: 'fa-id-card', partial_cnp: 'fa-search', code: 'fa-barcode', name: 'fa-user', unknown: 'fa-question' };
-            const icon = document.createElement('i');
-            icon.className = `fas ${typeIcons[type] || 'fa-question'}`;
+            const tmpl = document.getElementById('recent-item-template');
+            const div = tmpl.content.cloneNode(true).querySelector('.recent-item');
+            div.title = `Search: ${searchTerm}`;
+            div.querySelector('i').className = `fas ${typeIcons[type] || 'fa-question'}`;
+            div.querySelector('span').textContent = patientName ? `${searchTerm} — ${patientName}` : searchTerm;
+            div.querySelector('button').setAttribute('aria-label', `Search ${searchTerm}`);
 
-            const label = document.createElement('span');
-            label.textContent = patientName ? `${searchTerm} — ${patientName}` : searchTerm;
-
-            const btn = document.createElement('button');
-            btn.className = 'btn-icon btn-small';
-            btn.setAttribute('aria-label', `Search ${searchTerm}`);
-            btn.innerHTML = '<i class="fas fa-search"></i>';
-
-            div.append(icon, label, btn);
             const trigger = () => { elements.cnpInput.value = searchTerm; elements.form.dispatchEvent(new Event('submit')); };
             div.addEventListener('click', trigger);
 
@@ -1010,21 +1000,18 @@ document.addEventListener('DOMContentLoaded', function() {
             document.body.appendChild(toastContainer);
         }
         
-        // Use template for toast
         const toastTemplate = document.getElementById('toast-template');
         const toast = toastTemplate.content.cloneNode(true).querySelector('.toast');
         toast.className = `toast toast-${type}`;
-        
-        // Add icon based on type
+
         const iconMap = {
             success: 'fa-check-circle',
             error: 'fa-exclamation-circle',
             warning: 'fa-exclamation-triangle',
             info: 'fa-info-circle'
         };
-        
-        const icon = iconMap[type] || 'fa-check-circle';
-        toast.innerHTML = `<i class="fas ${icon}"></i> ${message}`;
+        toast.querySelector('i').className = `fas ${iconMap[type] || 'fa-check-circle'}`;
+        toast.querySelector('.toast-message').textContent = message;
         
         // Add toast to container
         toastContainer.appendChild(toast);
@@ -1322,8 +1309,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const modal = modalTemplate.content.cloneNode(true).querySelector('dialog');
         modal.id = 'imagingStudyModal';
         
-        // Set modal title
-        modal.querySelector('h2').innerHTML = `<i class="fas fa-x-ray"></i> Imaging Study #${studyId}`;
+        modal.querySelector('.modal-title').textContent = `Imaging Study #${studyId}`;
         
         // Populate study information
         const studyInfo = modal.querySelector('.study-info');
@@ -1336,7 +1322,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Set back to report link
         const backLink = modal.querySelector('.back-to-report');
         backLink.href = '#';
-        backLink.innerHTML = `<i class="fas fa-arrow-left"></i> Back to Report #${reportId}`;
+        backLink.querySelector('.back-report-id').textContent = `#${reportId}`;
         backLink.addEventListener('click', function(e) {
             e.preventDefault();
             closeImagingStudyModal();
@@ -1355,67 +1341,42 @@ document.addEventListener('DOMContentLoaded', function() {
         modal.showModal();
     }
     
-    // Helper function to populate study information
+    function addStudyInfoRow(container, icon, label, value) {
+        const tmpl = document.getElementById('study-info-row-template');
+        const p = tmpl.content.cloneNode(true).querySelector('p');
+        p.querySelector('i').className = `fas ${icon}`;
+        p.querySelector('.row-label').textContent = `${label}:`;
+        p.querySelector('.row-value').textContent = value;
+        container.appendChild(p);
+    }
+
     function populateStudyInfo(studyInfo, studyData) {
-        // Started date
-        if (studyData.started) {
-            const p = document.createElement('p');
-            p.innerHTML = `<strong><i class="fas fa-calendar"></i> Started:</strong> ${formatDateWithTime(studyData.started)}`;
-            studyInfo.appendChild(p);
-        }
-        
-        // Modality
-        if (studyData.modality) {
-            const p = document.createElement('p');
-            p.innerHTML = `<strong><i class="fas fa-stethoscope"></i> Modality:</strong> ${studyData.modality.display || studyData.modality.code || 'N/A'}`;
-            studyInfo.appendChild(p);
-        }
-        
-        // Description
-        if (studyData.description) {
-            const p = document.createElement('p');
-            p.innerHTML = `<strong><i class="fas fa-file-medical"></i> Description:</strong> ${studyData.description}`;
-            studyInfo.appendChild(p);
-        }
-        
-        // Performer
-        if (studyData.performer && studyData.performer.length > 0) {
-            const p = document.createElement('p');
-            p.innerHTML = `<strong><i class="fas fa-user-md"></i> Performer:</strong> ${studyData.performer[0].actor?.display || 'N/A'}`;
-            studyInfo.appendChild(p);
-        }
-        
-        // Referrer
-        if (studyData.referrer) {
-            const p = document.createElement('p');
-            p.innerHTML = `<strong><i class="fas fa-user-check"></i> Referrer:</strong> ${studyData.referrer.display || 'N/A'}`;
-            studyInfo.appendChild(p);
-        }
-        
-        // Reason
-        if (studyData.reason && studyData.reason.length > 0) {
-            const p = document.createElement('p');
-            p.innerHTML = `<strong><i class="fas fa-question-circle"></i> Reason:</strong> ${studyData.reason[0].text || 'N/A'}`;
-            studyInfo.appendChild(p);
-        }
-        
-        // Note
-        if (studyData.note && studyData.note.length > 0) {
-            const p = document.createElement('p');
-            p.innerHTML = `<strong><i class="fas fa-sticky-note"></i> Note:</strong> ${studyData.note[0].text || 'N/A'}`;
-            studyInfo.appendChild(p);
-        }
+        if (studyData.started)
+            addStudyInfoRow(studyInfo, 'fa-calendar', 'Started', formatDateWithTime(studyData.started));
+        if (studyData.modality)
+            addStudyInfoRow(studyInfo, 'fa-stethoscope', 'Modality', studyData.modality.display || studyData.modality.code || 'N/A');
+        if (studyData.description)
+            addStudyInfoRow(studyInfo, 'fa-file-medical', 'Description', studyData.description);
+        if (studyData.performer?.length > 0)
+            addStudyInfoRow(studyInfo, 'fa-user-md', 'Performer', studyData.performer[0].actor?.display || 'N/A');
+        if (studyData.referrer)
+            addStudyInfoRow(studyInfo, 'fa-user-check', 'Referrer', studyData.referrer.display || 'N/A');
+        if (studyData.reason?.length > 0)
+            addStudyInfoRow(studyInfo, 'fa-question-circle', 'Reason', studyData.reason[0].text || 'N/A');
+        if (studyData.note?.length > 0)
+            addStudyInfoRow(studyInfo, 'fa-sticky-note', 'Note', studyData.note[0].text || 'N/A');
     }
     
-    // Helper function to populate series list
     function populateSeriesList(seriesList, studyData) {
         if (!studyData.series || studyData.series.length === 0) return;
-        
+        const tmpl = document.getElementById('series-item-template');
         studyData.series.forEach((series, index) => {
-            const li = document.createElement('li');
-            li.innerHTML = `<strong><i class="fas fa-list-ol"></i> Series ${series.number || index + 1}:</strong> ${series.description || 'N/A'}`;
+            const li = tmpl.content.cloneNode(true).querySelector('li');
+            li.querySelector('.series-label').textContent = `Series ${series.number || index + 1}:`;
+            li.querySelector('.series-desc').textContent = series.description || 'N/A';
+            const modalitySpan = li.querySelector('.series-modality');
             if (series.modality) {
-                li.innerHTML += ` (Modality: ${series.modality.display || series.modality.code || 'N/A'})`;
+                modalitySpan.textContent = ` (Modality: ${series.modality.display || series.modality.code || 'N/A'})`;
             }
             seriesList.appendChild(li);
         });
@@ -1548,9 +1509,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         const imagingStudyLink = analysisCard.querySelector('.imaging-study-link');
                         if (imagingStudyLink && reportData.imagingStudy) {
                             const studyId = reportData.imagingStudy.reference.split('/')[1];
-                            const a = document.createElement('a');
-                            a.href = '#';
-                            a.innerHTML = `<i class="fas fa-x-ray"></i> View Imaging Study #${studyId}`;
+                            const linkTmpl = document.getElementById('imaging-study-link-template');
+                            const a = linkTmpl.content.cloneNode(true).querySelector('a');
+                            a.querySelector('.study-ref-id').textContent = `#${studyId}`;
                             a.addEventListener('click', function(e) {
                                 e.preventDefault();
                                 viewImagingStudy(studyId, serviceRequest.id);

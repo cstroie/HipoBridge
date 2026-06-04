@@ -339,14 +339,37 @@
         </template>
 
         <template id="toast-template">
-            <div class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+            <div class="toast" role="status" aria-live="polite" aria-atomic="true">
+                <i class="fas"></i>
+                <span class="toast-message"></span>
+            </div>
+        </template>
+
+        <template id="recent-item-template">
+            <div class="recent-item" style="cursor:pointer">
+                <i class="fas"></i>
+                <span></span>
+                <button class="btn-icon btn-small"><i class="fas fa-search"></i></button>
+            </div>
+        </template>
+
+        <template id="study-info-row-template">
+            <p><strong><i class="fas"></i> <span class="row-label"></span></strong> <span class="row-value"></span></p>
+        </template>
+
+        <template id="imaging-study-link-template">
+            <a href="#" class="imaging-study-ref"><i class="fas fa-x-ray"></i> View Imaging Study <span class="study-ref-id"></span></a>
+        </template>
+
+        <template id="series-item-template">
+            <li><strong><i class="fas fa-list-ol"></i> <span class="series-label"></span></strong> <span class="series-desc"></span><span class="series-modality"></span></li>
         </template>
 
         <template id="imaging-study-modal-template">
             <dialog class="modal" aria-modal="true" role="dialog">
                 <article>
                     <header>
-                        <h2></h2>
+                        <h2><i class="fas fa-x-ray"></i> <span class="modal-title"></span></h2>
                         <button class="close" aria-label="Close modal">
                             <i class="fas fa-times"></i>
                         </button>
@@ -361,7 +384,7 @@
                             <ul class="series-list" aria-label="Series list"></ul>
                         </section>
                         <section class="study-section">
-                            <p><a href="#" class="back-to-report" aria-label="Back to report"><i class="fas fa-arrow-left"></i> Back to Report</a></p>
+                            <p><a href="#" class="back-to-report" aria-label="Back to report"><i class="fas fa-arrow-left"></i> Back to Report <span class="back-report-id"></span></a></p>
                         </section>
                     </div>
                     <footer>
