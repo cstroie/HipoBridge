@@ -621,73 +621,33 @@ document.addEventListener('DOMContentLoaded', function() {
         window.print();
     }
     
-    async function copyEpicrisisMarkdown() {
-        const markdown = elements.epicrisisContent?.dataset.markdown;
+    async function copyMarkdown(markdownEl, btn) {
+        const markdown = markdownEl?.dataset.markdown;
         if (!markdown) {
-            showToast('No epicrisis content to copy', 'warning');
+            showToast('No content to copy', 'warning');
             return;
         }
-
-        const confirm = () => {
-            const btn = elements.copyEpicrisisBtn;
-            const originalHTML = btn.innerHTML;
+        const flash = () => {
+            const orig = btn.innerHTML;
             btn.innerHTML = '<i class="fas fa-check"></i> <span>Copied!</span>';
-            setTimeout(() => { btn.innerHTML = originalHTML; }, 2000);
+            setTimeout(() => { btn.innerHTML = orig; }, 2000);
         };
-
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            try {
-                await navigator.clipboard.writeText(markdown);
-                confirm();
-                return;
-            } catch (err) { /* fall through */ }
+        if (navigator.clipboard?.writeText) {
+            try { await navigator.clipboard.writeText(markdown); flash(); return; }
+            catch (_) { /* fall through */ }
         }
-
         const ta = document.createElement('textarea');
         ta.value = markdown;
         ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
         document.body.appendChild(ta);
-        ta.focus();
-        ta.select();
+        ta.focus(); ta.select();
         const ok = document.execCommand('copy');
         document.body.removeChild(ta);
-        ok ? confirm() : showToast('Failed to copy to clipboard', 'error');
+        ok ? flash() : showToast('Failed to copy to clipboard', 'error');
     }
-    
-    async function copyReportMarkdown() {
-        const markdown = elements.patientReportMarkdown?.dataset.markdown;
-        if (!markdown) {
-            showToast('No report content to copy', 'warning');
-            return;
-        }
 
-        const confirm = () => {
-            const btn = elements.copyReportBtn;
-            const originalHTML = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-check"></i> <span>Copied!</span>';
-            setTimeout(() => { btn.innerHTML = originalHTML; }, 2000);
-        };
-
-        // Prefer modern clipboard API, fall back to execCommand for plain HTTP
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            try {
-                await navigator.clipboard.writeText(markdown);
-                confirm();
-                return;
-            } catch (err) { /* fall through */ }
-        }
-
-        // execCommand fallback
-        const ta = document.createElement('textarea');
-        ta.value = markdown;
-        ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
-        document.body.appendChild(ta);
-        ta.focus();
-        ta.select();
-        const ok = document.execCommand('copy');
-        document.body.removeChild(ta);
-        ok ? confirm() : showToast('Failed to copy to clipboard', 'error');
-    }
+    const copyEpicrisisMarkdown = () => copyMarkdown(elements.epicrisisContent, elements.copyEpicrisisBtn);
+    const copyReportMarkdown    = () => copyMarkdown(elements.patientReportMarkdown, elements.copyReportBtn);
     
     async function loadAndDisplayReport(patientData, analysesData) {
         log('Loading and displaying report data');
@@ -997,24 +957,36 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function loadRecentSearches() {
         const recentSearches = JSON.parse(localStorage.getItem('recentSearches') || '[]');
-        if (elements.recentSearchesList) {
-            elements.recentSearchesList.innerHTML = '';
-            recentSearches.forEach(search => {
-                const div = document.createElement('div');
-                div.className = 'recent-item';
-                
-                const displayText = formatRecentSearchDisplay(search);
-                const searchTerm = typeof search === 'string' ? search : search.term;
-                
-                div.innerHTML = `
-                    <span>${displayText}</span>
-                    <button class="btn-icon btn-small" onclick="searchFromRecent('${searchTerm}')" title="Search for ${searchTerm}">
-                        <i class="fas fa-search"></i>
-                    </button>
-                `;
-                elements.recentSearchesList.appendChild(div);
-            });
-        }
+        if (!elements.recentSearchesList) return;
+        elements.recentSearchesList.innerHTML = '';
+        recentSearches.forEach(search => {
+            const searchTerm = typeof search === 'string' ? search : search.term;
+            const patientName = typeof search === 'object' ? search.patientName : null;
+            const type = typeof search === 'object' ? search.type : 'unknown';
+
+            const div = document.createElement('div');
+            div.className = 'recent-item';
+            div.style.cursor = 'pointer';
+            div.title = `Search: ${searchTerm}`;
+
+            const typeIcons = { cnp: 'fa-id-card', partial_cnp: 'fa-search', code: 'fa-barcode', name: 'fa-user', unknown: 'fa-question' };
+            const icon = document.createElement('i');
+            icon.className = `fas ${typeIcons[type] || 'fa-question'}`;
+
+            const label = document.createElement('span');
+            label.textContent = patientName ? `${searchTerm} — ${patientName}` : searchTerm;
+
+            const btn = document.createElement('button');
+            btn.className = 'btn-icon btn-small';
+            btn.setAttribute('aria-label', `Search ${searchTerm}`);
+            btn.innerHTML = '<i class="fas fa-search"></i>';
+
+            div.append(icon, label, btn);
+            const trigger = () => { elements.cnpInput.value = searchTerm; elements.form.dispatchEvent(new Event('submit')); };
+            div.addEventListener('click', trigger);
+
+            elements.recentSearchesList.appendChild(div);
+        });
     }
     
     function addToRecentSearches(searchTerm, patientData = null) {
@@ -1043,47 +1015,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function identifySearchType(searchTerm) {
-        if (/^\d{13}$/.test(searchTerm)) return 'cnp';
-        if (/^\d+\*$/.test(searchTerm)) return 'partial_cnp';
-        if (/^[A-Za-z0-9\-_]+$/.test(searchTerm)) return 'code';
-        if (/^[A-Za-z\s\-\'\.]+$/.test(searchTerm)) return 'name';
-        return 'unknown';
-    }
-    
-    // Make function available globally
-    window.searchFromRecent = function(searchTerm) {
-        elements.cnpInput.value = searchTerm;
-        elements.form.dispatchEvent(new Event('submit'));
-    };
-    
-    // Function to format recent search display
-    function formatRecentSearchDisplay(searchItem) {
-        if (typeof searchItem === 'string') {
-            // Legacy format - just the search term
-            return searchItem;
-        }
-        
-        // New format - rich search object
-        let displayText = searchItem.term;
-        
-        // Add patient name if available
-        if (searchItem.patientName) {
-            displayText += ` - ${searchItem.patientName}`;
-        }
-        
-        // Add type indicator
-        const typeIcons = {
-            'cnp': 'fa-id-card',
-            'partial_cnp': 'fa-search',
-            'code': 'fa-barcode',
-            'name': 'fa-user',
-            'unknown': 'fa-question'
-        };
-        
-        const typeIcon = typeIcons[searchItem.type] || 'fa-question';
-        displayText = `<i class="fas ${typeIcon}"></i> ${displayText}`;
-        
-        return displayText;
+        const v = validatePatientIdentifier(searchTerm);
+        return v.isValid ? (v.type || 'unknown') : 'unknown';
     }
     
     function hideError() {

@@ -725,8 +725,8 @@ small {
 
 .recent-item {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    gap: 0.6rem;
     padding: 0.75rem;
     border: 1px solid var(--muted);
     border-radius: var(--radius-sm);
@@ -734,9 +734,19 @@ small {
     transition: background 0.2s ease;
 }
 
-.recent-item:hover {
+.recent-item span {
+    flex: 1;
+    font-size: var(--font-size-sm);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.recent-item:hover,
+.recent-item:hover * {
     background: var(--primary);
     color: white;
+    border-color: transparent;
 }
 
 /* Patient Overview */
