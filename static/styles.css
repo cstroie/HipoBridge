@@ -379,7 +379,6 @@ small {
 
 .brand-info p {
     margin: 0;
-    opacity: 0.9;
     font-size: var(--font-size-sm);
 }
 
