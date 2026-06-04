@@ -318,40 +318,17 @@ document.addEventListener('DOMContentLoaded', function() {
             return { isValid: false, message: 'Please enter a valid patient identifier.' };
         }
         
-        // CNP validation (13 digits)
-        if (/^\d{13}$/.test(trimmed)) {
-            return { 
-                isValid: true, 
-                type: 'cnp', 
-                message: 'Valid CNP format detected.' 
-            };
-        }
-        
-        // Partial CNP validation (digits followed by *)
-        if (/^\d+\*$/.test(trimmed)) {
-            return { 
-                isValid: true, 
-                type: 'partial_cnp', 
-                message: 'Partial CNP format detected.' 
-            };
-        }
+        if (/^\d{13}$/.test(trimmed)) return { isValid: true, type: 'cnp' };
+        if (/^\d+\*$/.test(trimmed))  return { isValid: true, type: 'partial_cnp' };
         
         // Patient code validation (alphanumeric with common patterns)
         if (/^[A-Za-z0-9\-_]+$/.test(trimmed)) {
-            return { 
-                isValid: true, 
-                type: 'code', 
-                message: 'Patient code format detected.' 
-            };
+            return { isValid: true, type: 'code' };
         }
-        
-        // Patient name validation (letters, spaces, hyphens)
-        if (/^[A-Za-z\s\-\'\.]+$/.test(trimmed)) {
-            return { 
-                isValid: true, 
-                type: 'name', 
-                message: 'Patient name format detected.' 
-            };
+
+        // Patient name validation — Unicode letters to support Romanian diacritics (ă â î ș ț etc.)
+        if (/^[\p{L}\s\-'\.]+$/u.test(trimmed)) {
+            return { isValid: true, type: 'name' };
         }
         
         return { 

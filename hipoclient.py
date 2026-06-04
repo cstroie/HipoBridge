@@ -962,7 +962,7 @@ class HipoClientPatient(HipoClient):
                 return data
 
             # Check if there is patient data on page by getting the name from the div with id "div_navbar"
-            patient_name_from_navbar = extract_text_from_element(soup, id='div_navbar')
+            patient_name_from_navbar = extract_text_from_element(soup, element_id='div_navbar')
             if not patient_name_from_navbar:
                 data.set_error("Patient name from navbar is empty, invalid patient id")
                 return data
@@ -971,38 +971,38 @@ class HipoClientPatient(HipoClient):
             data.store("patient.name", patient_name_from_navbar)
 
             # Extract patient name from input elements
-            data.store("patient.family_name", extract_value_from_input(soup, id="strNume"))
-            data.store("patient.given_name", extract_value_from_input(soup, id="strPrenume"))
+            data.store("patient.family_name", extract_value_from_input(soup, element_id="strNume"))
+            data.store("patient.given_name", extract_value_from_input(soup, element_id="strPrenume"))
             if data.get("patient.family_name") and data.get("patient.given_name"):
                 data.store("patient.name", f"{data.get('patient.family_name')} {data.get('patient.given_name')}")
 
 
             # Extract patient CNP from input element with id "strCNP"
-            data.store("patient.cnp", extract_value_from_input(soup, id="strCNP"))
+            data.store("patient.cnp", extract_value_from_input(soup, element_id="strCNP"))
 
             # Extract patient id from hidden input with id "hdnCodeID"
-            data.store("patient.id", extract_value_from_input(soup, id="hdnCodeID"))
+            data.store("patient.id", extract_value_from_input(soup, element_id="hdnCodeID"))
 
             # Extract CID
-            data.store("patient.cid", extract_value_from_input(soup, id="strCID"))
+            data.store("patient.cid", extract_value_from_input(soup, element_id="strCID"))
 
             # Extract phone
-            data.store("patient.phone", extract_value_from_input(soup, id="strTelefon"))
+            data.store("patient.phone", extract_value_from_input(soup, element_id="strTelefon"))
 
             # Extract email
-            data.store("patient.email", extract_value_from_input(soup, id="strEmail"))
+            data.store("patient.email", extract_value_from_input(soup, element_id="strEmail"))
 
             # Extract weight
-            data.store("patient.weight", extract_value_from_input(soup, id="strGreutate"))
+            data.store("patient.weight", extract_value_from_input(soup, element_id="strGreutate"))
 
             # Extract height
-            data.store("patient.height", extract_value_from_input(soup, id="strInaltime"))
+            data.store("patient.height", extract_value_from_input(soup, element_id="strInaltime"))
 
             # Extract MCP
-            data.store("patient.mcp", extract_value_from_input(soup, id="strmcp"))
+            data.store("patient.mcp", extract_value_from_input(soup, element_id="strmcp"))
 
             # Extract address from SELECT with id strDomLegal_LocId
-            data.store("patient.address", extract_selected_from_dropdown(soup, id='strDomLegal_LocId'))
+            data.store("patient.address", extract_selected_from_dropdown(soup, element_id='strDomLegal_LocId'))
 
             # Derive sex and birth date from CNP if available
             if data.get("patient.cnp"):
@@ -1013,7 +1013,7 @@ class HipoClientPatient(HipoClient):
 
             # If we couldn't derive birth date from CNP, try to get it from strDataNastere input
             if not data.get("patient.birth_date"):
-                birth_date = extract_value_from_input(soup, id='strDataNastere')
+                birth_date = extract_value_from_input(soup, element_id='strDataNastere')
                 if birth_date and re.match(r'\d{2}/\d{2}/\d{4}', birth_date):
                     # Convert DD/MM/YYYY format to YYYY-MM-DD
                     try:
@@ -2176,7 +2176,7 @@ class HipoClientImagingStudy(HipoClient):
             data.store("patient.name", extract_text_after_label(soup, r'Nume:', 'tr', stop_at=r'\['))
 
             # Extract patient CNP from the table with patient data
-            patient_cnp = extract_value_from_input(soup, id="strCNP")
+            patient_cnp = extract_value_from_input(soup, element_id="strCNP")
             data.store("patient.cnp", patient_cnp)
             if patient_cnp:
                 parsed_cnp = parse_cnp(patient_cnp)
@@ -2205,10 +2205,10 @@ class HipoClientImagingStudy(HipoClient):
             data.store("request.clinical_comments", extract_text_after_label(soup, r'Informatii suplimentare:', 'tr', stop_at=r'Motiv'))
 
             # Extract the lab comments
-            data.store("request.lab_comments", extract_text_from_element(soup, id="strComments"))
+            data.store("request.lab_comments", extract_text_from_element(soup, element_id="strComments"))
 
             # Extract the justification
-            data.store("request.justification", extract_text_from_element(soup, id="strJustificare"))
+            data.store("request.justification", extract_text_from_element(soup, element_id="strJustificare"))
 
             # Extract ICD10 coded diagnosis
             data.store("request.icd10", extract_text_after_label(soup, r'Diagnostic:', 'tr'))
@@ -2236,7 +2236,7 @@ class HipoClientImagingStudy(HipoClient):
                 data.store("validation.validator", validator)
 
             # Extract validation date_time
-            validation_datetime = extract_value_from_input(soup, id="dataefectuarii")
+            validation_datetime = extract_value_from_input(soup, element_id="dataefectuarii")
             if validation_datetime:
                 # Try to parse the date_time
                 dt = parse_date_time(validation_datetime)
@@ -2933,8 +2933,8 @@ class HipoClientCheckout(HipoClient):
             data.store("checkin.diagnosis", extract_text_after_label(soup, r'Diagnostic\s*:', 'tr'))
 
             # Extract checkin date and time from input fields
-            data.store("checkin.date", extract_value_from_input(soup, id='sCIDate'))
-            data.store("checkin.time", extract_value_from_input(soup, id='sCITime'))
+            data.store("checkin.date", extract_value_from_input(soup, element_id='sCIDate'))
+            data.store("checkin.time", extract_value_from_input(soup, element_id='sCITime'))
             
             # Create combined checkin date_time
             checkin_date = data.get("checkin.date")
@@ -2944,8 +2944,8 @@ class HipoClientCheckout(HipoClient):
 
 
             # Extract checkout date and time from input fields
-            data.store("checkout.date", extract_value_from_input(soup, id='sCODate'))
-            data.store("checkout.time", extract_value_from_input(soup, id='sCOTime'))
+            data.store("checkout.date", extract_value_from_input(soup, element_id='sCODate'))
+            data.store("checkout.time", extract_value_from_input(soup, element_id='sCOTime'))
             
             # Create combined checkout date_time
             checkout_date = data.get("checkout.date")

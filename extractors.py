@@ -336,102 +336,88 @@ def extract_text_ids_from_links(soup: BeautifulSoup, id_pattern: str = r'id=([^&
         if text == id:
             continue
         result[id] = text
-    #if result:
-    #    logger.debug(f"Extracted text and link for pattern '{id_pattern}': {','.join([v for k,v in result.items()])}")
     return result
 
-def extract_value_from_input(soup: 'BeautifulSoup', id: str = None, name: str = None) -> str:
+def extract_value_from_input(soup: 'BeautifulSoup', element_id: str = None, name: str = None) -> str:
     """Extract the value attribute from an HTML input element by its ID or name.
-    
+
     Args:
         soup: BeautifulSoup object of the parsed HTML content
-        id: HTML input element ID to extract value from
+        element_id: HTML input element ID to extract value from
         name: HTML input element name to extract value from
-        
+
     Returns:
         Value attribute content stripped of whitespace, or empty string if not found
     """
-    if not id and not name:
+    if not element_id and not name:
         return ""
-        
-    # Find element by either id or name
+
     if name:
         input_element = soup.find('input', attrs={'name': name})
-    else:  # default to id
-        input_element = soup.find('input', id=id)
-        
+    else:
+        input_element = soup.find('input', id=element_id)
+
     if input_element:
-        identifier = name if name else id
+        identifier = name if name else element_id
         content = input_element.get('value', '').strip()
         logger.debug(f"Extracted value from '{identifier}' (by {'name' if name else 'id'}): {content}")
         return content
     return ""
 
-def extract_text_from_element(soup: 'BeautifulSoup', id: str = None, name: str = None) -> str:
+def extract_text_from_element(soup: 'BeautifulSoup', element_id: str = None, name: str = None) -> str:
     """Extract text content from an HTML element by its ID or name.
-    
+
     For elements with simple text content, returns the text directly.
     For complex elements with nested HTML, converts to markdown format.
-    
+
     Args:
         soup: BeautifulSoup object of the parsed HTML content
-        id: HTML element ID to extract text from
+        element_id: HTML element ID to extract text from
         name: HTML element name to extract text from
-        
+
     Returns:
         Extracted text content or empty string if element not found or empty
     """
-    if not id and not name:
+    if not element_id and not name:
         return ""
-        
-    # Find element by either id or name
-    if name:
-        element = soup.find(attrs={'name': name})
-    else:  # default to id
-        element = soup.find(id=id)
-        
+
+    element = soup.find(attrs={'name': name}) if name else soup.find(id=element_id)
+
     if not element:
-        identifier = name if name else id
+        identifier = name if name else element_id
         logger.debug(f"Element with {'name' if name else 'id'} '{identifier}' not found")
         return ""
-        
-    # Try to get direct text content first
+
+    identifier = name if name else element_id
     if element.string:
-        identifier = name if name else id
         content = element.string.strip()
         logger.debug(f"Extracted direct text from '{identifier}' (by {'name' if name else 'id'}): {content}")
         return content
-    
-    # For elements with nested content, convert to markdown
-    identifier = name if name else id
+
     content = html_to_markdown(str(element))
-    logger.debug(f"Extracted markdown from '{identifier}' (by {'name' if name else 'id'}): {content[:50]}..." if len(content) > 50 else f"Extracted markdown from '{identifier}' (by {'name' if name else 'id'}): {content}")
+    logger.debug(f"Extracted markdown from '{identifier}': {content[:50]}{'...' if len(content) > 50 else ''}")
     return content
 
-def extract_selected_from_dropdown(soup: 'BeautifulSoup', id: str = None, name: str = None) -> str:
+def extract_selected_from_dropdown(soup: 'BeautifulSoup', element_id: str = None, name: str = None) -> str:
     """Extract the text of the selected option from a dropdown (select) element.
-    
+
     Args:
         soup: BeautifulSoup object of the parsed HTML content
-        id: HTML select element ID to extract selected option from
+        element_id: HTML select element ID to extract selected option from
         name: HTML select element name to extract selected option from
-        
+
     Returns:
         Text content of the selected option, or empty string if not found
     """
-    if not id and not name:
+    if not element_id and not name:
         return ""
-        
-    # Find element by either id or name
-    if name:
-        element = soup.find('select', attrs={'name': name})
-    else:  # default to id
-        element = soup.find('select', id=id)
-        
+
+    element = soup.find('select', attrs={'name': name}) if name else soup.find('select', id=element_id)
+
     if element:
         option = element.find('option', selected=True)
         if option:
-            identifier = name if name else id
+            identifier = name if name else element_id
             content = option.get_text().strip()
             logger.debug(f"Extracted text from '{identifier}' (by {'name' if name else 'id'}): {content}")
             return content
