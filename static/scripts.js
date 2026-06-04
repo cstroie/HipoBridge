@@ -35,8 +35,7 @@ document.addEventListener('DOMContentLoaded', function() {
         reportPatientName: document.getElementById('reportPatientName'),
         reportPatientAge: document.getElementById('reportPatientAge'),
         reportPatientGender: document.getElementById('reportPatientGender'),
-        generateReportBtn: document.getElementById('generateReportBtn'),
-        printReportBtn: document.getElementById('printReportBtn'),
+        copyReportBtn: document.getElementById('copyReportBtn'),
         // Dashboard elements
         patientChart: document.getElementById('patientChart'),
         activityList: document.getElementById('activityList'),
@@ -256,12 +255,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Report tab buttons
-        if (elements.generateReportBtn) {
-            elements.generateReportBtn.addEventListener('click', generateFullReport);
-        }
-        
-        if (elements.printReportBtn) {
-            elements.printReportBtn.addEventListener('click', printReport);
+        if (elements.copyReportBtn) {
+            elements.copyReportBtn.addEventListener('click', copyReportMarkdown);
         }
     }
     
@@ -881,53 +876,21 @@ document.addEventListener('DOMContentLoaded', function() {
         printWindow.print();
     }
     
-    function generateFullReport() {
-        showToast('Generating comprehensive patient report...', 'success');
-        // This would normally generate a comprehensive report with all patient data
-        // For now, just show a success message
-        setTimeout(() => {
-            showToast('Report generated successfully!', 'success');
-        }, 2000);
-    }
-    
-    function printReport() {
-        // Get the patient identification markdown content
-        const markdownContainer = elements.patientReportMarkdown;
-        const markdownContent = markdownContainer.textContent || markdownContainer.innerText;
-        
-        const printContent = `
-            <html>
-                <head>
-                    <title>Patient Report - ${elements.reportPatientName.textContent}</title>
-                    <style>
-                        body { font-family: Arial, sans-serif; margin: 20px; }
-                        h1 { color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
-                        h2 { color: #555; margin-top: 30px; }
-                        .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0; }
-                        .summary-item { margin: 10px 0; }
-                        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin: 20px 0; }
-                        .stat-item { text-align: center; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
-                        .stat-value { font-size: 24px; font-weight: bold; color: #007bff; }
-                        .no-data { text-align: center; color: #666; font-style: italic; }
-                        .markdown-content { line-height: 1.6; }
-                        .markdown-content h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
-                        .markdown-content h2 { color: #34495e; margin-top: 25px; margin-bottom: 15px; }
-                        .markdown-content strong { color: #2c3e50; }
-                    </style>
-                </head>
-                <body>
-                    <h1>Patient Report</h1>
-                    
-                    <h2>Patient Identification</h2>
-                    <div class="markdown-content">${markdownContent}</div>
-                </body>
-            </html>
-        `;
-        
-        const printWindow = window.open('', '_blank');
-        printWindow.document.write(printContent);
-        printWindow.document.close();
-        printWindow.print();
+    async function copyReportMarkdown() {
+        const markdown = elements.patientReportMarkdown?.dataset.markdown;
+        if (!markdown) {
+            showToast('No report content to copy', 'warning');
+            return;
+        }
+        try {
+            await navigator.clipboard.writeText(markdown);
+            const btn = elements.copyReportBtn;
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-check"></i> <span>Copied!</span>';
+            setTimeout(() => { btn.innerHTML = originalHTML; }, 2000);
+        } catch (err) {
+            showToast('Failed to copy to clipboard', 'error');
+        }
     }
     
     async function loadAndDisplayReport(patientData, analysesData) {
@@ -1241,8 +1204,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const htmlContent = marked.parse(combinedMarkdown);
             log('Converted markdown to HTML:', htmlContent);
             
-            // Display the content
+            // Display the content and stash raw markdown for clipboard
             markdownContainer.innerHTML = htmlContent;
+            markdownContainer.dataset.markdown = combinedMarkdown;
             log('Patient report data displayed successfully');
             
         } catch (error) {
