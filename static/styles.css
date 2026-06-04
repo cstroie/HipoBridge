@@ -1457,6 +1457,144 @@ select {
     border-left-color: var(--info);
 }
 
+/* Report loading placeholder */
+.markdown-content .loading-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 3rem 1rem;
+    color: var(--text-light);
+}
+
+.markdown-content .loading-content i {
+    font-size: 2rem;
+    color: var(--primary);
+}
+
+/* Markdown report content */
+.markdown-content {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 2rem;
+    line-height: 1.75;
+    color: var(--text);
+}
+
+.markdown-content h1 {
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--primary);
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1.5rem;
+    margin-top: 0;
+}
+
+.markdown-content h2 {
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+    border-left: 3px solid var(--primary);
+    padding-left: 0.75rem;
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+}
+
+.markdown-content h3 {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-light);
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.markdown-content p {
+    margin-bottom: 0.75rem;
+}
+
+.markdown-content strong {
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+}
+
+.markdown-content em {
+    color: var(--text-light);
+}
+
+.markdown-content ul,
+.markdown-content ol {
+    margin: 0.5rem 0 1rem 1.5rem;
+}
+
+.markdown-content li {
+    margin-bottom: 0.25rem;
+}
+
+.markdown-content hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 1.5rem 0;
+}
+
+.markdown-content blockquote {
+    border-left: 4px solid var(--primary-light);
+    padding: 0.5rem 1rem;
+    margin: 1rem 0;
+    background: var(--bg);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    color: var(--text-light);
+}
+
+.markdown-content code {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.1em 0.35em;
+    font-size: 0.9em;
+}
+
+.markdown-content pre {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    overflow-x: auto;
+    margin: 1rem 0;
+}
+
+.markdown-content pre code {
+    border: none;
+    padding: 0;
+    background: none;
+}
+
+.markdown-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: var(--font-size-sm);
+}
+
+.markdown-content th {
+    background: var(--bg);
+    font-weight: var(--font-weight-semibold);
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+}
+
+.markdown-content td {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+}
+
+.markdown-content tr:nth-child(even) td {
+    background: var(--bg);
+}
+
 /* Footer */
 .footer {
     background: var(--card-bg);
