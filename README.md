@@ -35,10 +35,10 @@ service_url = http://192.168.3.230/hipocrate
 
 Open `http://localhost:44660` to access the single-page app. Features:
 
-- Patient search by CNP, patient code, or name
-- Patient profile with analyses, diagnostic reports, and epicrisis
+- Patient search by CNP, patient code, or name; multiple results show a selection list
+- Patient profile with analyses, diagnostic reports, and epicrisis (all encounters, most-recent first)
 - Report tab — assembles a full clinical document (patient header + discharge summaries + imaging studies) formatted for LLM consumption
-- Dark/light theme toggle
+- Three-state theme toggle: auto (OS preference) → light → dark
 
 ## API
 
@@ -56,7 +56,7 @@ Key endpoints:
 ```
 GET  /fhir/Patient?q={search_term}
 GET  /fhir/Patient/{id}
-GET  /fhir/ServiceRequest?patient={id}
+GET  /fhir/ServiceRequest?patient={id}[&type={code}][&region={region}][&dt={iso_datetime}]
 GET  /fhir/ServiceRequest/{id}
 GET  /fhir/DiagnosticReport/{id}
 GET  /fhir/ImagingStudy/{id}

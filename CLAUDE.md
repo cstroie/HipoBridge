@@ -70,7 +70,7 @@ HTTP client
 Every subclass implements three methods:
 - `fetch_and_parse(**kwargs)` → `HipoData` (raw dict)
 - `fhir_response(parsed_data)` → FHIR resource object
-- `fetch_repond_fhir(**kwargs)` → calls both, returns FHIR resource directly
+- `fetch_respond_fhir(**kwargs)` → calls both, returns FHIR resource directly
 
 **Concurrency and caching** (critical — Hipocrate is a fragile legacy server):
 - `_hipocrate_semaphore = asyncio.Semaphore(6)` — global cap on concurrent outbound HTTP calls; all request paths including login go through this.
@@ -82,9 +82,16 @@ Every subclass implements three methods:
 
 **`hipodata.py`** — `HipoData(dict)` typed dict wrapper passed between the scraper and the FHIR converter. `store(key, value)` normalises values (strips strings, unwraps single-item lists, converts datetimes to ISO). Dot-notation keys (`"patient.id"`) create nested dicts automatically.
 
-**`extractors.py`** — stateless HTML-parsing helpers: `extract_text_after_label`, `extract_tabular_data`, `extract_id_from_link`, `parse_cnp`, `parse_date_time`, etc.
+**`extractors.py`** — stateless HTML-parsing helpers: `extract_text_after_label`, `extract_tabular_data`, `extract_id_from_link`, `parse_cnp`, `parse_date_time`, etc. `parse_date_time` handles `DD Mon YYYY HH:MM:SS` (Hipocrate format) and `DD/MM/YYYY`, `DD/MM/YYYY HH:MM`, `DD/MM/YYYY HH:MM:SS` — always returns a naive `datetime` with no tzinfo.
 
 **`markdown.py`** — bidirectional conversion: `html_to_markdown` (scraping Hipocrate HTML into report text) and `markdown_to_html` (exposed via `POST /fhir/md2html`).
+
+### Error handling conventions
+
+- `web_fhir_response(str)` — wraps the string in an `OperationOutcome` and returns **400** (missing required parameter). Do not pass strings for server-side failures; build an `OperationOutcome` directly with the right severity.
+- `OperationOutcome` HTTP status mapping: `not-found` code → 404; `error`/`fatal` severity → 500; `warning` → 400; `information` → 200.
+- `HipoClientDiagnosticReport` and `HipoClientCheckout` override `fetch_and_parse` to evict the cache when the result is empty (report not yet written / epicrisis not yet filled).
+- Datetime comparisons in `parse_data` always use naive datetimes. If the caller supplies a TZ-aware string, strip `tzinfo` before comparing (`datetime.replace(tzinfo=None)`).
 
 ### Frontend (`static/`)
 
@@ -93,12 +100,16 @@ Single-page app: `main.html` + `scripts.js` + `styles.css` + `marked.js`.
 - All API calls use `/fhir/*` endpoints with Basic Auth in the `Authorization` header.
 - `marked.js` renders markdown in the Epicrisis and Report tabs.
 - Both the **Epicrisis** and **Report** tabs use the same `.markdown-content` CSS class and the same Copy Markdown button pattern. Raw markdown is stored in `element.dataset.markdown` after render; the clipboard button reads from there with an `execCommand` fallback for plain HTTP.
-- The **Report** tab assembles a clinical document (patient header → discharge summaries → imaging studies) structured for LLM consumption. The Epicrisis tab renders a single encounter as a markdown doc (diagnosis heading + metadata line + full text).
+- The **Report** tab assembles a clinical document (patient header → discharge summaries → imaging studies) structured for LLM consumption. The **Epicrisis** tab renders all encounters with an epicrisis, sorted by most-recent discharge, as a single markdown document.
+- When a patient search returns multiple results, a selection overlay is shown — never pick `entry[0]` silently.
+- Analyses fetch failure is non-fatal: a warning toast is shown and the patient tab still loads.
 - Parallel fetches are throttled by `limitedMap(arr, MAX_CONCURRENT_REQUESTS=5, asyncFn)`.
 - All dates are normalised to `YYYY-MM-DD` (or `YYYY-MM-DD HH:MM` with time) via `formatDate()` / `formatDateWithTime()` regardless of how Hipocrate sends them. **Never call `new Date(hipocrate_string).toISOString()`** — Hipocrate sends non-ISO date strings that produce invalid `Date` objects and throw `RangeError`. Always pass raw strings through `formatDate()` / `formatDateWithTime()`, which have `isNaN` guards and try/catch.
 - Recent searches are persisted in `localStorage`.
 - All DOM elements are cached at startup in the `elements` object via `getElementById`. Never look up the same element inside a function that runs repeatedly.
-- Analysis cards use a `MODALITY_INFO` map (radio/ct/irm/eco/rads) for per-modality icon and label. Modality CSS is driven by per-type custom properties (`--modality-radio`, `--modality-ct`, etc.) with separate light/dark values to meet WCAG AA contrast.
+- Analysis cards use a `MODALITY_INFO` map (radio/ct/irm/eco/rads) for per-modality icon and label. Card type is stored in `article.dataset.type` and read by `filterAnalyses` — do not detect type from `className`. Modality CSS is driven by per-type custom properties (`--modality-radio`, `--modality-ct`, etc.) with separate light/dark values to meet WCAG AA contrast.
+- Dynamic HTML uses `<template>` elements in `main.html` and `cloneNode(true)` + `textContent`/`className` in JS. Do not use `innerHTML` with interpolated strings for new elements.
+- Theme cycles `auto → light → dark → auto` via `toggleTheme()`; `localStorage` key is `theme`.
 
 ### Dual API surface
 
