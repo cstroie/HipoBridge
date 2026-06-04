@@ -27,7 +27,7 @@ from typing import Dict, Any
 import json
 import logging
 import functools
-from datetime import datetime
+from datetime import datetime, timezone
 import configparser
 import base64
 
@@ -339,7 +339,7 @@ async def serve_fhir_analysis_types(request):
         title="Hipocrate Analysis Types",
         status="active",
         experimental=False,
-        date=datetime.now().strftime('%Y-%m-%d'),
+        date=datetime.now(timezone.utc).strftime('%Y-%m-%d'),
         publisher="Hipocrate",
         description="Code system for analysis types used by the Hipocrate",
         caseSensitive=True,
@@ -363,7 +363,7 @@ async def serve_fhir_metadata(request):
         title="HipoBridge FHIR Capability Statement",
         status="active",
         experimental=False,
-        date=datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
+        date=datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S'),
         publisher="HipoBridge",
         description="This is the FHIR capability statement for the HipoBridge FHIR API",
         kind="instance",
@@ -479,9 +479,9 @@ async def serve_web_page(request):
 def web_error_response(message: str, status_code: int = 400, details: Dict[str, Any] = None) -> web.Response:
     """Return a standardized JSON error response."""
     if status_code >= 500:
-        logger.error(f"{message}")
+        logger.error(message)
     else:
-        logger.warning(f"{message}")
+        logger.warning(message)
     response_data = {"status": "error", "message": message}
     if details:
         response_data["details"] = details

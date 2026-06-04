@@ -1004,39 +1004,28 @@ class HipoClientPatientSearch(HipoClientPatient):
         """
         data = HipoData(status="success", message="", patients=[])
 
-        search_type = "name"  # default
-
         if search_term.isdigit():
-            # If it's 13 digits, validate as CNP
             if len(search_term) == 13:
                 if parse_cnp(search_term).get("valid", False):
-                    search_type = "cnp"
                     logger.info(f"Performing CNP search for: {search_term}")
                 else:
-                    # Not a valid CNP, treat as patient code
-                    search_type = "code"
                     logger.info(f"Performing patient code search for: {search_term}")
             else:
-                search_type = "code"
                 logger.info(f"Performing patient code search for: {search_term}")
         else:
-            # Check if search term ends with *, treat as partial CNP
             if search_term.endswith('*'):
                 prefix = search_term[:-1]
                 if prefix.isdigit() and len(prefix) < 13:
-                    search_type = "partial_cnp"
                     logger.info(f"Performing partial CNP search for: {search_term}")
                 else:
-                    search_type = "name"
                     logger.info(f"Searching for patients by name: {search_term}")
             else:
-                search_type = "name"
                 logger.info(f"Searching for patients by name: {search_term}")
 
         search_data = {
             "hdnSearchType": "1",
             "pageNo": "1",
-            "strDescription": search_term if search_type in ["name", "code", "cnp", "partial_cnp"] else "",
+            "strDescription": search_term,
             "strLastName": "",
             "strFirstName": "",
             "strCodePres": "",
