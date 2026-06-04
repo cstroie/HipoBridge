@@ -647,8 +647,8 @@ document.addEventListener('DOMContentLoaded', function() {
         ok ? flash() : showToast('Failed to copy to clipboard', 'error');
     }
 
-    const copyEpicrisisMarkdown = () => copyMarkdown(elements.epicrisisContent, elements.copyEpicrisisBtn);
-    const copyReportMarkdown    = () => copyMarkdown(elements.patientReportMarkdown, elements.copyReportBtn);
+    function copyEpicrisisMarkdown() { return copyMarkdown(elements.epicrisisContent, elements.copyEpicrisisBtn); }
+    function copyReportMarkdown()    { return copyMarkdown(elements.patientReportMarkdown, elements.copyReportBtn); }
     
     async function loadAndDisplayReport(patientData, analysesData) {
         log('Loading and displaying report data');
