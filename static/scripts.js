@@ -20,7 +20,6 @@ document.addEventListener('DOMContentLoaded', function() {
         checkinsCount: document.getElementById('checkinsCount'),
         checkoutsCount: document.getElementById('checkoutsCount'),
         reportsCount: document.getElementById('reportsCount'),
-        checkoutIdsList: document.getElementById('checkoutIdsList'),
         // Analyses tab elements
         analysesGrid: document.getElementById('analysesGrid'),
         noAnalyses: document.getElementById('noAnalyses'),
@@ -30,25 +29,14 @@ document.addEventListener('DOMContentLoaded', function() {
         // Report tab elements
         patientReportMarkdown: document.getElementById('patientReportMarkdown'),
         copyReportBtn: document.getElementById('copyReportBtn'),
-        // Dashboard elements
-        patientChart: document.getElementById('patientChart'),
-        activityList: document.getElementById('activityList'),
-        alertsList: document.getElementById('alertsList'),
-        upcomingList: document.getElementById('upcomingList'),
         // Header elements
         quickSearch: document.getElementById('quickSearch'),
         quickSearchBtn: document.getElementById('quickSearchBtn'),
         themeToggle: document.getElementById('themeToggle'),
-        notificationsBtn: document.getElementById('notificationsBtn'),
-        notificationBadge: document.getElementById('notificationBadge'),
         userMenuBtn: document.getElementById('userMenuBtn'),
         userDropdown: document.getElementById('userDropdown'),
         // Search examples
         exampleBtns: document.querySelectorAll('.example-btn'),
-        // Header stats
-        activePatientsCount: document.getElementById('activePatientsCount'),
-        reportsToday: document.getElementById('reportsToday'),
-        criticalCases: document.getElementById('criticalCases'),
         // Patient actions
         printPatientBtn: document.getElementById('printPatientBtn'),
         // Analyses actions
@@ -116,14 +104,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Load recent searches
         loadRecentSearches();
         
-        // Initialize dashboard data
-        initDashboard();
-        
-        // Initialize header stats
-        updateHeaderStats();
-        
-        // Check for notifications
-        checkNotifications();
     }
     
     function initTheme() {
@@ -186,11 +166,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Theme toggle
         if (elements.themeToggle) {
             elements.themeToggle.addEventListener('click', toggleTheme);
-        }
-        
-        // Notifications
-        if (elements.notificationsBtn) {
-            elements.notificationsBtn.addEventListener('click', toggleNotifications);
         }
         
         // User menu
@@ -555,7 +530,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Show relevant tabs
-        const tabsToShow = ['patient', 'analyses', 'epicrisis', 'report', 'dashboard'];
+        const tabsToShow = ['patient', 'analyses', 'epicrisis', 'report'];
         tabsToShow.forEach(tabName => {
             const tabElement = document.querySelector(`.nav-item[data-tab="${tabName}"]`);
             if (tabElement) {
@@ -594,11 +569,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (reportTab) {
             reportTab.hidden = false;
         }
-        
-        const dashboardTab = document.getElementById('dashboard-tab');
-        if (dashboardTab) {
-            dashboardTab.hidden = false;
-        }
     }
     
     function hideLoading() {
@@ -619,7 +589,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.presentationsCount) elements.presentationsCount.textContent = '0';
         if (elements.checkinsCount) elements.checkinsCount.textContent = '0';
         if (elements.checkoutsCount) elements.checkoutsCount.textContent = '0';
-        if (elements.checkoutIdsList) elements.checkoutIdsList.innerHTML = '';
         
         // Clear analyses with null checks
         if (elements.analysesGrid) elements.analysesGrid.innerHTML = '';
@@ -648,129 +617,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    function initDashboard() {
-        // Initialize Chart.js for patient overview
-        if (elements.patientChart) {
-            const ctx = elements.patientChart.getContext('2d');
-            new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Active', 'Discharged', 'Critical'],
-                    datasets: [{
-                        data: [75, 20, 5],
-                        backgroundColor: ['#36a2eb', '#ff6384', '#ffce56'],
-                        borderWidth: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: {
-                            position: 'bottom'
-                        }
-                    }
-                }
-            });
-        }
-        
-        // Initialize recent activity
-        if (elements.activityList) {
-            const activities = [
-                { icon: 'fa-user-injured', text: 'New patient admitted', time: '2 minutes ago' },
-                { icon: 'fa-file-medical', text: 'Lab report uploaded', time: '15 minutes ago' },
-                { icon: 'fa-x-ray', text: 'Imaging study completed', time: '1 hour ago' },
-                { icon: 'fa-prescription', text: 'Prescription updated', time: '3 hours ago' }
-            ];
-            
-            activities.forEach(activity => {
-                const div = document.createElement('div');
-                div.className = 'activity-item';
-                div.innerHTML = `
-                    <i class="fas ${activity.icon}"></i>
-                    <div>
-                        <div>${activity.text}</div>
-                        <small>${activity.time}</small>
-                    </div>
-                `;
-                elements.activityList.appendChild(div);
-            });
-        }
-        
-        // Initialize alerts
-        if (elements.alertsList) {
-            const alerts = [
-                { type: 'warning', icon: 'fa-exclamation-triangle', text: 'Patient vitals unstable', time: 'Just now' },
-                { type: 'info', icon: 'fa-info-circle', text: 'Lab results pending', time: '10 minutes ago' },
-                { type: 'danger', icon: 'fa-heartbeat', text: 'Critical blood pressure', time: '30 minutes ago' }
-            ];
-            
-            alerts.forEach(alert => {
-                const div = document.createElement('div');
-                div.className = `alert-item ${alert.type}`;
-                div.innerHTML = `
-                    <i class="fas ${alert.icon}"></i>
-                    <div>
-                        <div>${alert.text}</div>
-                        <small>${alert.time}</small>
-                    </div>
-                `;
-                elements.alertsList.appendChild(div);
-            });
-        }
-        
-        // Initialize upcoming
-        if (elements.upcomingList) {
-            const upcoming = [
-                { icon: 'fa-calendar-check', text: 'Follow-up appointment', time: 'Tomorrow, 10:00 AM' },
-                { icon: 'fa-syringe', text: 'Blood test scheduled', time: 'Friday, 2:00 PM' },
-                { icon: 'fa-x-ray', text: 'MRI scan', time: 'Next Monday, 9:00 AM' }
-            ];
-            
-            upcoming.forEach(item => {
-                const div = document.createElement('div');
-                div.className = 'upcoming-item';
-                div.innerHTML = `
-                    <i class="fas ${item.icon}"></i>
-                    <div>
-                        <div>${item.text}</div>
-                        <small>${item.time}</small>
-                    </div>
-                `;
-                elements.upcomingList.appendChild(div);
-            });
-        }
-    }
-    
-    function updateHeaderStats() {
-        // These would normally come from an API
-        const stats = {
-            activePatients: 1234,
-            reportsToday: 156,
-            criticalCases: 12
-        };
-        
-        if (elements.activePatientsCount) {
-            elements.activePatientsCount.textContent = stats.activePatients;
-        }
-        if (elements.reportsToday) {
-            elements.reportsToday.textContent = stats.reportsToday;
-        }
-        if (elements.criticalCases) {
-            elements.criticalCases.textContent = stats.criticalCases;
-        }
-    }
-    
-    function checkNotifications() {
-        // Simulate checking for notifications
-        const notifications = 3;
-        if (elements.notificationBadge) {
-            if (notifications > 0) {
-                elements.notificationBadge.textContent = notifications;
-                elements.notificationBadge.style.display = 'inline-block';
-            }
-        }
-    }
-    
     function toggleTheme() {
         const currentTheme = document.documentElement.getAttribute('data-theme');
         const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
@@ -782,10 +628,6 @@ document.addEventListener('DOMContentLoaded', function() {
         themeIcon.className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
         
         showToast(`Theme switched to ${newTheme}`, 'info');
-    }
-    
-    function toggleNotifications() {
-        showToast('Notifications feature coming soon', 'info');
     }
     
     function toggleUserMenu() {
@@ -1409,18 +1251,9 @@ document.addEventListener('DOMContentLoaded', function() {
         log('Extracted medical stats:', stats);
         displayMedicalStats(stats);
         
-        // Display checkout IDs list
-        const checkoutIds = extractCheckoutIds(patientData);
-        log('Checkout IDs:', checkoutIds);
-        displayCheckoutIds(checkoutIds);
-        
         elements.analysesGrid.innerHTML = '';
         elements.noAnalyses.style.display = 'none';
-        
-        
-        // Update dashboard stats if available
-        updateDashboardStats(stats, analysesData);
-        
+
         log('Patient data display completed');
     }
     
@@ -1608,44 +1441,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Enhanced checkout IDs display
-    function displayCheckoutIds(checkoutIds) {
-        log('Displaying checkout IDs:', checkoutIds);
-        if (!checkoutIds || checkoutIds.length === 0) {
-            elements.checkoutIdsList.innerHTML = '';
-            log('No checkout IDs to display');
-            return;
-        }
-        
-        const idsHtml = checkoutIds.map(id => 
-            `<span class="checkout-id">${id}</span>`
-        ).join(', ');
-        
-        elements.checkoutIdsList.innerHTML = `
-            <strong><i class="fas fa-sign-out-alt"></i> Checkout IDs:</strong> 
-            ${idsHtml}
-        `;
-        log('Checkout IDs displayed');
-    }
-    
-    // Enhanced dashboard stats update
-    function updateDashboardStats(stats, analysesData) {
-        log('Updating dashboard stats - Stats:', stats, 'Analyses data:', analysesData);
-        
-        // Update header stats if available
-        if (elements.activePatientsCount) {
-            elements.activePatientsCount.textContent = stats.encounters;
-            log('Active patients count updated to:', stats.encounters);
-        }
-        
-        // Update reports count when analyses load
-        if (elements.reportsCount) {
-            const reportsCount = analysesData.resourceType === "Bundle" && analysesData.entry
-                ? analysesData.entry.length : 0;
-            elements.reportsCount.textContent = `${reportsCount}`;
-            log('Reports count updated to:', reportsCount);
-        }
-    }
     
     function calculateAge(birthDate) {
         if (!birthDate) return 'N/A';
@@ -1800,30 +1595,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Make functions available globally
     window.viewImagingStudy = viewImagingStudy;
     window.closeImagingStudyModal = closeImagingStudyModal;
-    
-    // Utility functions for better code organization
-    const Utils = {
-        // Debounce function for search input
-        debounce: (func, wait) => {
-            let timeout;
-            return function executedFunction(...args) {
-                const later = () => {
-                    clearTimeout(timeout);
-                    func(...args);
-                };
-                clearTimeout(timeout);
-                timeout = setTimeout(later, wait);
-            };
-        },
-        
-        formatDate,
-        formatDateWithTime,
-        
-        // Check if element exists
-        elementExists: (selector) => {
-            return document.querySelector(selector) !== null;
-        }
-    };
     
     // Function to load and display reports progressively
     async function loadAndDisplayReports(analysesData, patientData) {

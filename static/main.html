@@ -46,10 +46,6 @@
                             <button class="btn-icon" id="themeToggle" aria-label="Toggle theme">
                                 <i class="fas fa-moon"></i>
                             </button>
-                            <button class="btn-icon" id="notificationsBtn" aria-label="Notifications">
-                                <i class="fas fa-bell"></i>
-                                <span class="badge" id="notificationBadge" style="display: none;">0</span>
-                            </button>
                             <div class="user-menu">
                                 <button class="btn-icon" id="userMenuBtn" aria-label="User menu">
                                     <i class="fas fa-user-circle"></i>
@@ -107,12 +103,6 @@
                             <span>Report</span>
                         </a>
                     </li>
-                    <li class="nav-item" data-tab="dashboard" style="display: none;" role="tab" aria-selected="false">
-                        <a href="#" aria-controls="dashboard-tab" role="tab">
-                            <i class="fas fa-tachometer-alt"></i>
-                            <span>Dashboard</span>
-                        </a>
-                    </li>
                 </ul>
             </div>
         </nav>
@@ -127,30 +117,7 @@
                             <h1><i class="fas fa-stethoscope"></i> Welcome to HippoBridge</h1>
                             <p class="hero-subtitle">Advanced medical data analysis for healthcare professionals. Search for patients and access comprehensive medical records, diagnostic reports, and treatment histories.</p>
                         </div>
-                        <div class="hero-stats">
-                            <div class="stat-item">
-                                <div class="stat-icon"><i class="fas fa-user-injured"></i></div>
-                                <div class="stat-content">
-                                    <div class="stat-label">Active Patients</div>
-                                    <div class="stat-value" id="activePatientsCount">1,234</div>
-                                </div>
-                            </div>
-                            <div class="stat-item">
-                                <div class="stat-icon"><i class="fas fa-file-medical"></i></div>
-                                <div class="stat-content">
-                                    <div class="stat-label">Reports Today</div>
-                                    <div class="stat-value" id="reportsToday">156</div>
-                                </div>
-                            </div>
-                            <div class="stat-item">
-                                <div class="stat-icon"><i class="fas fa-heartbeat"></i></div>
-                                <div class="stat-content">
-                                    <div class="stat-label">Critical Cases</div>
-                                    <div class="stat-value stat-critical" id="criticalCases">12</div>
-                                </div>
-                            </div>
                         </div>
-                    </div>
 
                     <div class="search-section">
                         <div class="search-card">
@@ -285,7 +252,6 @@
                             </div>
                         </div>
                         
-                        <div id="checkoutIdsList" class="checkout-ids" aria-label="Checkout IDs"></div>
                     </div>
                 </section>
 
@@ -367,91 +333,14 @@
                     </article>
                 </section>
 
-                <!-- Dashboard Tab -->
-                <section id="dashboard-tab" class="tab-content" role="tabpanel" aria-labelledby="dashboard-tab" hidden>
-                    <div class="dashboard-grid">
-                        <div class="dashboard-card">
-                            <div class="card-header">
-                                <h3><i class="fas fa-chart-pie"></i> Patient Overview</h3>
-                            </div>
-                            <div class="card-content">
-                                <div class="chart-container">
-                                    <canvas id="patientChart" width="400" height="200"></canvas>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="dashboard-card">
-                            <div class="card-header">
-                                <h3><i class="fas fa-list"></i> Recent Activity</h3>
-                            </div>
-                            <div class="card-content">
-                                <div class="activity-list" id="activityList">
-                                    <!-- Activity items will be populated here -->
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="dashboard-card">
-                            <div class="card-header">
-                                <h3><i class="fas fa-exclamation-triangle"></i> Alerts</h3>
-                            </div>
-                            <div class="card-content">
-                                <div class="alerts-list" id="alertsList">
-                                    <!-- Alert items will be populated here -->
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="dashboard-card">
-                            <div class="card-header">
-                                <h3><i class="fas fa-calendar"></i> Upcoming</h3>
-                            </div>
-                            <div class="card-content">
-                                <div class="upcoming-list" id="upcomingList">
-                                    <!-- Upcoming items will be populated here -->
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
             </div>
         </main>
 
         <!-- Footer -->
         <footer class="footer">
             <div class="container">
-                <div class="footer-content">
-                    <div class="footer-section">
-                        <h4><i class="fas fa-bridge"></i> HippoBridge</h4>
-                        <p>Advanced medical data analysis platform for healthcare professionals.</p>
-                        <div class="social-links">
-                            <a href="#" aria-label="Facebook"><i class="fab fa-facebook"></i></a>
-                            <a href="#" aria-label="Twitter"><i class="fab fa-twitter"></i></a>
-                            <a href="#" aria-label="LinkedIn"><i class="fab fa-linkedin"></i></a>
-                            <a href="#" aria-label="GitHub"><i class="fab fa-github"></i></a>
-                        </div>
-                    </div>
-                    <div class="footer-section">
-                        <h4>Quick Links</h4>
-                        <ul>
-                            <li><a href="#"><i class="fas fa-question-circle"></i> Help Center</a></li>
-                            <li><a href="#"><i class="fas fa-shield-alt"></i> Security</a></li>
-                            <li><a href="#"><i class="fas fa-book"></i> Documentation</a></li>
-                            <li><a href="#"><i class="fas fa-bug"></i> Report Issue</a></li>
-                        </ul>
-                    </div>
-                    <div class="footer-section">
-                        <h4>Contact</h4>
-                        <ul class="contact-info">
-                            <li><i class="fas fa-envelope"></i> support@hippobridge.ro</li>
-                            <li><i class="fas fa-phone"></i> +40 21 123 4567</li>
-                            <li><i class="fas fa-map-marker-alt"></i> Bucharest, Romania</li>
-                        </ul>
-                    </div>
-                </div>
                 <div class="footer-bottom">
-                    <p>&copy; 2024 HippoBridge. All rights reserved. | <a href="#">Privacy Policy</a> | <a href="#">Terms of Service</a></p>
+                    <p><i class="fas fa-bridge"></i> HippoBridge &mdash; Medical Data Intelligence</p>
                 </div>
             </div>
         </footer>
@@ -527,7 +416,6 @@
             </div>
         </div>
 
-        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
         <script src="/static/scripts.js"></script>
         <script src="/static/marked.js"></script>
     </body>
