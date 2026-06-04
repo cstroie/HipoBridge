@@ -17,30 +17,9 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-This application provides a FHIR-compatible API bridge to access patient data
-from the Hipocrate medical system. It exposes endpoints for patient search,
-retrieval, observations, diagnostic reports, and encounters.
-
-Key Features:
-- FHIR-compatible REST API
-- Patient search by name, CNP, or patient code
-- Patient data retrieval with checkin/checkout IDs
-- Observation (analysis) listing and details
-- Diagnostic report retrieval with redirect handling
-- Encounter (checkout) information
-- CNP validation and parsing
-- Web interface for patient analysis
-- Configuration via file with environment variable overrides
-
-Configuration:
-- Server settings (host, port) in hipobridge.cfg
-- Hipocrate service URL in hipobridge.cfg
-- Credentials via HYP_USER and HYP_PASS environment variables
-- Local overrides in local.cfg (optional)
-
-Author: Costin Stroie <costinstroie@eridu.eu.org>
-License: GPL-3.0
-Version: 1.0.0
+FHIR R4 API bridge to Hipocrate: scrapes HTML on every request, no database.
+Routes: /api/* returns raw HipoData JSON; /fhir/* returns FHIR R4 resources.
+Config: hipobridge.cfg (defaults) overridden by local.cfg (not tracked by git).
 """
 import os
 from aiohttp import web
@@ -52,7 +31,6 @@ from datetime import datetime
 import configparser
 import base64
 
-# Import FHIR classes
 from fhir import OperationOutcome, Resource
 
 from hipoclient import ANALYSIS_TYPES
@@ -63,14 +41,12 @@ from hipodata import HipoData
 from extractors import parse_cnp
 from markdown import markdown_to_html
 
-# Configure logging
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s | %(levelname)8s | %(message)s'
 )
 logger = logging.getLogger('HipoBridge')
 
-# Default configuration
 DEFAULT_CONFIG = {
     'server': {
         'port': '44660',
@@ -82,19 +58,8 @@ DEFAULT_CONFIG = {
 }
 
 
-
-# Authentication helpers
-# ###########################################################################
-
 def get_basic_auth(request):
-    """Extract basic auth credentials from request.
-
-    Args:
-        request: The incoming HTTP request
-
-    Returns:
-        Tuple of (username, password) or None if not found
-    """
+    """Extract (username, password) from Basic Auth header, or None."""
     auth_header = request.headers.get('Authorization')
     if not auth_header or not auth_header.startswith('Basic '):
         return None
@@ -108,7 +73,7 @@ def get_basic_auth(request):
         return None
 
 def require_auth(handler):
-    """Decorator to require basic authentication for endpoints."""
+    """Decorator: enforce Basic Auth and attach credentials to request.auth_credentials."""
     @functools.wraps(handler)
     async def wrapper(request):
         auth = get_basic_auth(request)
@@ -120,503 +85,236 @@ def require_auth(handler):
     return wrapper
 
 
-
-# Endpoints
-# ###########################################################################
-
 @require_auth
 async def search_patient(request):
-    """Search for patients by name, CNP, or patient code.
-
-    Searches for patients in the Hipocrate service using various search criteria
-    and returns matching patient information.
-
-    Args:
-        request: The incoming HTTP request with 'q' query parameter for search term
-                 and basic auth credentials for authentication
-
-    Returns:
-        JSON response with patient search results or error information
-    """
-    # Get search parameter from query string
+    """Search patients by name, CNP, or patient code. Returns raw HipoData JSON."""
     search_term = request.query.get('q', '')
     if not search_term:
         return web_error_response("Search term is required")
     logger.info(f"Searching for patients with term: {search_term}")
 
-    # Create a new HipoClient instance with credentials
     client = HipoClientPatientSearch(SERVICE_URL, request)
-
-    # Retrieve and parse the page
     parsed_data = await client.search(search_term)
-
-    # Return the response
     return web_json_response(parsed_data)
 
 @require_auth
 async def search_fhir_patient(request):
-    """Search for patients and return FHIR-formatted results.
-
-    Searches for patients in the Hipocrate service and returns results
-    in FHIR Patient resource format.
-
-    Args:
-        request: The incoming HTTP request with 'q' query parameter for search term
-                 and basic auth credentials for authentication
-
-    Returns:
-        JSON response with FHIR Patient resources or error information
-    """
-    # Get search parameter from query string
+    """Search patients. Returns FHIR Patient resource or Bundle."""
     search_term = request.query.get('q', '')
     if not search_term:
         return web_fhir_response("Search term is required")
     logger.info(f"Searching for patients with term: {search_term}")
 
-    # Create a new HipoClient instance with credentials
     client = HipoClientPatientSearch(SERVICE_URL, request)
-
-    # Retrieve and parse the page
     parsed_data = await client.search(search_term)
 
-    # Check if there is one patient or there are more in response
     if 'patient' in parsed_data:
-        # Convert parsed data to FHIR resource
         response = client.fhir_response(parsed_data)
     elif 'patients' in parsed_data and len(parsed_data['patients']) > 0:
-        # Convert multiple patients to FHIR Bundle using the new method
         response = client.fhir_bundle_response(parsed_data, http_request=request)
     else:
-        # Create OperationOutcome for no patients found
         response = OperationOutcome.from_error(
             message="No patients found for the specified search criteria",
             code="not-found",
             severity="information"
         )
-    
-    # Return the response
+
     return web_fhir_response(response)
 
 
 @require_auth
 async def get_patient(request):
-    """Retrieve patient information by ID.
-
-    Gets detailed patient information from the Hipocrate service including
-    personal data, contact information, and related encounter IDs.
-
-    Args:
-        request: The incoming HTTP request with 'id' path parameter for patient ID
-                 and basic auth credentials for authentication
-
-    Returns:
-        JSON response with patient data or error information
-    """
-    # Extract patient ID from path
+    """Retrieve patient by ID. Returns raw HipoData JSON."""
     id = request.match_info.get('id')
     if not id:
         return web_error_response("Patient ID is required")
     logger.info(f"Retrieving patient with ID: {id}")
 
-    # Create a new HipoClient instance with credentials
     client = HipoClientPatient(SERVICE_URL, request)
 
-    # Check if debug response is requested
     debug_resp = await web_debug_response(client, request, id=id)
     if debug_resp:
         return debug_resp
 
-    # Retrieve and parse the page
     parsed_data = await client.fetch_and_parse(id=id)
-
-    # Return the response
     return web_json_response(parsed_data)
 
 @require_auth
 async def get_fhir_patient(request):
-    """Retrieve patient information by ID.
-
-    Gets patient information from the Hipocrate service and extracts
-    associated admission and discharge IDs.
-
-    Args:
-        request: The incoming HTTP request with 'id' query parameter for patient ID
-                 and basic auth credentials for authentication
-
-    Returns:
-        JSON response with patient data or error information
-    """
-    # Get patient ID from request path
+    """Retrieve patient by ID. Returns FHIR Patient resource."""
     id = request.match_info.get('id')
     if not id:
         return web_fhir_response("Patient ID is required")
     logger.info(f"Retrieving patient with ID: {id}")
 
-    # Create a new HipoClient instance with credentials
     client = HipoClientPatient(SERVICE_URL, request)
-
-    # Retrieve and parse the page, then convert to FHIR resource
     response = await client.fetch_respond_fhir(id=id)
-
-    # Return the response using web_fhir_response helper
     return web_fhir_response(response)
 
 
 @require_auth
 async def search_request(request):
-    """Search for service requests for a specific patient.
-
-    Gets service requests (medical examinations, lab tests, imaging studies) 
-    for a patient from the Hipocrate service.
-
-    Args:
-        request: The incoming HTTP request with 'patient' query parameter for patient ID
-                 and optional 'type', 'region', 'dt', and 'full' parameters
-                 and basic auth credentials for authentication
-
-    Returns:
-        JSON response with service request data or error information
-    """
-    # Get search parameter from query string
+    """Search service requests for a patient. Returns raw HipoData JSON."""
     patient_id = request.query.get('patient', '')
     if not patient_id:
         return web_error_response("Patient ID is required")
     logger.info(f"Retrieving service requests for patient with ID: {patient_id}")
 
-    # Get optional parameters
     exam_type = request.query.get('type')
     exam_region = request.query.get('region')
     exam_datetime = request.query.get('dt')
     full_data = request.query.get('full', 'no').lower() == 'yes'
 
-    # Create a new HipoClient instance with credentials
     client = HipoClientServiceRequestSearch(SERVICE_URL, request)
-
-    # Retrieve and parse the page
     parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime, full=full_data)
-
-    # Return the response
     return web_json_response(parsed_data)
 
 @require_auth
 async def search_fhir_service_request(request):
-    """Search for service requests and return FHIR-formatted results.
-
-    Searches for service requests in the Hipocrate service and returns results
-    in FHIR ServiceRequest resource format.
-
-    Args:
-        request: The incoming HTTP request with 'patient' query parameter for patient ID
-                 and optional 'type', 'region', 'dt', and 'full' parameters
-                 and basic auth credentials for authentication
-
-    Returns:
-        JSON response with FHIR ServiceRequest resources or error information
-    """
-    # Get search parameter from query string
+    """Search service requests for a patient. Returns FHIR ServiceRequest Bundle."""
     patient_id = request.query.get('patient', '')
     if not patient_id:
         return web_fhir_response("Patient ID is required")
     logger.info(f"Retrieving service requests for patient with ID: {patient_id}")
 
-    # Get optional parameters
     exam_type = request.query.get('type')
     exam_region = request.query.get('region')
     exam_datetime = request.query.get('dt')
     full_data = request.query.get('full', 'no').lower() == 'yes'
 
-    # Create a new HipoClient instance with credentials
     client = HipoClientServiceRequestSearch(SERVICE_URL, request)
-
-    # Retrieve and parse the page
     parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime, full=full_data)
-
-    # Convert parsed data to FHIR Bundle using the new method
     response = client.fhir_bundle_response(parsed_data, http_request=request, patient_id=patient_id)
-
-    # Return the response
     return web_fhir_response(response)
 
 
 @require_auth
 async def get_request(request):
-    """Retrieve detailed service request information by ID.
-
-    Gets detailed service request information from the Hipocrate service including
-    medical data, diagnosis, and related studies.
-
-    Args:
-        request: The incoming HTTP request with 'id' path parameter for service request ID
-                 and basic auth credentials for authentication
-
-    Returns:
-        JSON response with service request data or error information
-    """
-    # Extract service request ID from path
+    """Retrieve service request by ID. Returns raw HipoData JSON."""
     id = request.match_info.get('id')
     if not id:
         return web_error_response("Service request ID is required")
     logger.info(f"Retrieving service request with ID: {id}")
 
-    # Create a new HipoClient instance
     client = HipoClientServiceRequest(SERVICE_URL, request)
 
-    # Check if debug response is requested
     debug_resp = await web_debug_response(client, request, id=id)
     if debug_resp:
         return debug_resp
 
-    # Retrieve and parse the page
     parsed_data = await client.fetch_and_parse(id=id)
-
-    # Return the response
     return web_json_response(parsed_data)
 
 @require_auth
 async def get_fhir_service_request(request):
-    """Retrieve service request information by ID.
-
-    Gets service request information from the Hipocrate service and parses
-    the medical data into structured format.
-
-    Args:
-        request: The incoming HTTP request with 'id' path parameter for service request ID
-                 and basic auth credentials for authentication
-
-    Returns:
-        JSON response with service request data or error information
-
-    See:
-        https://build.fhir.org/servicerequest.html
-    """
-    # Extract service request ID from path
+    """Retrieve service request by ID. Returns FHIR ServiceRequest resource."""
     id = request.match_info.get('id')
     if not id:
         return web_fhir_response("Service request ID is required")
     logger.info(f"Retrieving service request with ID: {id}")
 
-    # Create a new HipoClient instance with credentials
     client = HipoClientServiceRequest(SERVICE_URL, request)
-
-    # Retrieve and parse the page, then convert to FHIR resource
     response = await client.fetch_respond_fhir(id=id)
-    
-    # Return the response
     return web_fhir_response(response)
 
 
 @require_auth
 async def get_study(request):
-    """Retrieve imaging study information by ID.
-
-    Gets imaging study information from the Hipocrate service and parses
-    the medical data into structured format.
-
-    Args:
-        request: The incoming HTTP request with 'id' path parameter for imaging study ID
-                 and basic auth credentials for authentication
-
-    Returns:
-        JSON response with imaging study data or error information
-    """
-    # Extract imaging study ID from path
+    """Retrieve imaging study by ID. Returns raw HipoData JSON."""
     id = request.match_info.get('id')
     if not id:
         return web_error_response("Imaging study ID is required")
     logger.info(f"Retrieving imaging study with ID: {id}")
 
-    # Create a new HipoClient instance
     client = HipoClientImagingStudy(SERVICE_URL, request)
 
-    # Check if debug response is requested
     debug_resp = await web_debug_response(client, request, id=id)
     if debug_resp:
         return debug_resp
 
-    # Retrieve and parse the page
     parsed_data = await client.fetch_and_parse(id=id)
-
-    # Return the response
     return web_json_response(parsed_data)
 
 @require_auth
 async def get_fhir_imaging_study(request):
-    """Retrieve an imaging study by ID, following redirect chains.
-
-    Gets an imaging study from the Hipocrate service, following any redirects to
-    retrieve the final report data, then parses it into structured format.
-
-    Args:
-        request: The incoming HTTP request with 'id' path parameter for study ID
-                 and basic auth credentials for authentication
-
-    Returns:
-        JSON response with imaging study data or error information
-    """
-    # Extract imaging study ID from path
+    """Retrieve imaging study by ID, following Hipocrate redirect chains. Returns FHIR ImagingStudy."""
     id = request.match_info.get('id')
     if not id:
         return web_fhir_response("Imaging study ID is required")
     logger.info(f"Retrieving imaging study with ID: {id}")
 
-    # Create a new HipoClient instance with credentials
     client = HipoClientImagingStudy(SERVICE_URL, request)
-
-    # Retrieve and parse the page, then convert to FHIR resource
     response = await client.fetch_respond_fhir(id=id)
-
-    # Return the response
     return web_fhir_response(response)
 
 
 @require_auth
 async def get_report(request):
-    """Retrieve diagnostic report by ID.
-
-    Gets diagnostic report information from the Hipocrate service and parses
-    the medical data into structured format.
-
-    Args:
-        request: The incoming HTTP request with 'id' path parameter for diagnostic report ID
-                 and basic auth credentials for authentication
-
-    Returns:
-        JSON response with diagnostic report data or error information
-    """
-    # Extract diagnostic report ID from path
+    """Retrieve diagnostic report by ID. Returns raw HipoData JSON."""
     id = request.match_info.get('id')
     if not id:
         return web_error_response("Diagnostic report ID is required")
     logger.info(f"Retrieving diagnostic report with ID: {id}")
 
-    # Create a new HipoClient instance
     client = HipoClientDiagnosticReport(SERVICE_URL, request)
 
-    # Check if debug response is requested
     debug_resp = await web_debug_response(client, request, id=id)
     if debug_resp:
         return debug_resp
 
-    # Retrieve and parse the page
     parsed_data = await client.fetch_and_parse(id=id)
-
-    # Return the response
     return web_json_response(parsed_data)
 
 @require_auth
 async def get_fhir_diagnostic_report(request):
-    """Retrieve a diagnostic report by ID in FHIR format.
-
-    Gets diagnostic report information from the Hipocrate service and returns
-    a FHIR DiagnosticReport resource.
-
-    Args:
-        request: The incoming HTTP request with 'id' path parameter for report ID
-                 and basic auth credentials for authentication
-
-    Returns:
-        JSON response with FHIR DiagnosticReport resource or OperationOutcome on error
-    """
-    # Extract diagnostic report ID from path
+    """Retrieve diagnostic report by ID. Returns FHIR DiagnosticReport resource."""
     id = request.match_info.get('id')
     if not id:
         return web_fhir_response("Diagnostic report ID is required")
     logger.info(f"Retrieving diagnostic report with ID: {id}")
 
-    # Create a new HipoClient instance with credentials
     client = HipoClientDiagnosticReport(SERVICE_URL, request)
-
-    # Retrieve and parse the page, then convert to FHIR resource
     response = await client.fetch_respond_fhir(id=id)
-
-    # Return the response
     return web_fhir_response(response)
 
 
 @require_auth
 async def get_checkout(request):
-    """Retrieve checkout (discharge) information by ID.
-
-    Gets checkout/discharge information from the Hipocrate service and parses
-    the medical data into structured format.
-
-    Args:
-        request: The incoming HTTP request with 'id' path parameter for checkout ID
-                 and basic auth credentials for authentication
-
-    Returns:
-        JSON response with checkout data or error information
-    """
-    # Extract checkout ID from path
+    """Retrieve discharge summary by ID. Returns raw HipoData JSON."""
     id = request.match_info.get('id')
     if not id:
         return web_error_response("Checkout ID is required")
     logger.info(f"Retrieving checkout with ID: {id}")
 
-    # Create a new HipoClient instance
     client = HipoClientCheckout(SERVICE_URL, request)
 
-    # Check if debug response is requested
     debug_resp = await web_debug_response(client, request, id=id)
     if debug_resp:
         return debug_resp
 
-    # Retrieve and parse the page
     parsed_data = await client.fetch_and_parse(id=id)
-
-    # Return the response
     return web_json_response(parsed_data)
 
 @require_auth
 async def get_fhir_encounter(request):
-    """Retrieve encounter information by ID.
-
-    Gets encounter information from the Hipocrate service and parses
-    the medical data into structured format.
-
-    Args:
-        request: The incoming HTTP request with 'identifier' query parameter for encounter ID
-                 and basic auth credentials for authentication
-
-    Returns:
-        JSON response with encounter data or error information
-
-    See:
-        https://build.fhir.org/encounter.html
-    """
-    # Extract encounter ID from path
+    """Retrieve encounter (discharge summary) by ID. Returns FHIR Encounter resource."""
     id = request.match_info.get('id')
     if not id:
         return web_fhir_response("Encounter ID is required")
     logger.info(f"Retrieving encounter with ID: {id}")
 
-    # Create a new HipoClient instance with credentials
     client = HipoClientCheckout(SERVICE_URL, request)
-
-    # Retrieve and parse the page, then convert to FHIR resource
     response = await client.fetch_respond_fhir(id=id)
-    
-    # Return the response
     return web_fhir_response(response)
 
 
 async def serve_spec(request):
-    """Serve the OpenAPI specification.
-
-    Returns the OpenAPI specification in JSON format for API documentation.
-
-    Args:
-        request: The incoming HTTP request
-
-    Returns:
-        JSON response with OpenAPI specification
-    """
+    """Serve spec.json as OpenAPI specification, updating the server URL dynamically."""
     logger.info("GET /fhir/spec endpoint accessed")
 
     try:
         with open('spec.json', 'r') as f:
             spec = json.load(f)
-        # Update the server URL with the current PORT
         spec["servers"][0]["url"] = f"{request.scheme}://{request.host}"
         return web.json_response(spec)
     except FileNotFoundError:
@@ -626,26 +324,12 @@ async def serve_spec(request):
 
 
 async def serve_fhir_analysis_types(request):
-    """Serve the analysis types terminology.
+    """Serve FHIR CodeSystem resource listing the Hipocrate analysis types."""
+    concepts = [
+        {"code": code, "display": details["display"], "definition": details["definition"]}
+        for code, details in ANALYSIS_TYPES.items()
+    ]
 
-    Returns a FHIR CodeSystem resource defining the analysis types used in the hospital system.
-
-    Args:
-        request: The incoming HTTP request
-
-    Returns:
-        JSON response with CodeSystem resource
-    """
-    # Build concepts list
-    concepts = []
-    for code, details in ANALYSIS_TYPES.items():
-        concepts.append({
-            "code": code,
-            "display": details["display"],
-            "definition": details["definition"]
-        })
-
-    # Create FHIR CodeSystem using the FHIR Resource class
     code_system = Resource(
         resourceType="CodeSystem",
         id="analysis-types",
@@ -663,24 +347,13 @@ async def serve_fhir_analysis_types(request):
         concept=concepts
     )
 
-    # Return the response
     return web_fhir_response(code_system)
 
 
 async def serve_fhir_metadata(request):
-    """Serve the FHIR capability statement.
-
-    Returns the FHIR capability statement as a metadata endpoint.
-
-    Args:
-        request: The incoming HTTP request
-
-    Returns:
-        JSON response with FHIR capability statement
-    """
+    """Serve FHIR CapabilityStatement for this server."""
     logger.info("GET /fhir/Metadata endpoint accessed")
 
-    # Create a basic FHIR CapabilityStatement using the Resource class
     capability_statement = Resource(
         resourceType="CapabilityStatement",
         id="hipobridge-fhir-capability-statement",
@@ -741,31 +414,15 @@ async def serve_fhir_metadata(request):
         ]
     )
 
-    # Return the response
     return web_fhir_response(capability_statement)
 
 
 async def serve_md2html(request):
-    """Convert markdown text to HTML.
-
-    Takes markdown text and converts it to basic HTML.
-
-    Args:
-        request: The incoming HTTP request with JSON body containing 'text' field
-
-    Returns:
-        JSON response with HTML content
-    """
-
+    """Convert markdown text to HTML. Accepts JSON body with 'text' field."""
     try:
-        # Get markdown text from request body
         data = await request.json()
         markdown_text = data.get('text', '')
-
-        # Convert to HTML
         html_content = markdown_to_html(markdown_text)
-
-        # Return the response
         return web_json_response({
             "status": "success",
             "html": html_content
@@ -778,23 +435,12 @@ async def serve_md2html(request):
 
 @require_auth
 async def serve_validate_cnp(request):
-    """Validate a Romanian CNP (Personal Numerical Code).
-
-    Validates a Romanian CNP using the internal validation algorithm and returns parsed data.
-
-    Args:
-        request: The incoming HTTP request with 'id' query parameter for CNP
-
-    Returns:
-        JSON response with validation result and parsed data
-    """
-    # Get CNP from query string
+    """Validate a Romanian CNP and return parsed demographic data."""
     cnp = request.query.get('id')
     if not cnp:
         return web_error_response("CNP is required")
     logger.info(f"Validating CNP: {cnp}")
 
-    # Parse CNP to get detailed information
     parsed_data = parse_cnp(cnp)
 
     response_data = {
@@ -803,7 +449,6 @@ async def serve_validate_cnp(request):
         "valid": parsed_data.get("valid", False)
     }
 
-    # Add parsed data if valid
     if parsed_data.get("valid"):
         response_data.update({
             "gender": parsed_data.get("gender"),
@@ -814,27 +459,14 @@ async def serve_validate_cnp(request):
             "control_digit": parsed_data.get("control_digit")
         })
 
-    # Return the response
     return web_json_response(response_data)
 
 
 @require_auth
 async def serve_web_page(request):
-    """Handle requests to the root endpoint.
-
-    Returns a web page with a CNP input form and analysis functionality.
-    Requires basic authentication.
-
-    Args:
-        request: The incoming HTTP request
-
-    Returns:
-        HTML response with the web interface or 401 if not authenticated
-    """
-    # Get credentials from request (added by decorator)
+    """Serve the SPA after verifying Hipocrate credentials are valid."""
     username, password = request.auth_credentials
 
-    # Try to login with provided credentials
     client = HipoClient(SERVICE_URL, request)
     session, login_success = await client.get_authenticated_session(username, password)
 
@@ -845,57 +477,25 @@ async def serve_web_page(request):
 
 
 def web_error_response(message: str, status_code: int = 400, details: Dict[str, Any] = None) -> web.Response:
-    """Create a standardized error response.
-
-    Args:
-        message: Error message
-        status_code: HTTP status code (default: 400)
-        details: Additional error details
-
-    Returns:
-        Standardized JSON error response
-    """
+    """Return a standardized JSON error response."""
     if status_code >= 500:
         logger.error(f"{message}")
     else:
         logger.warning(f"{message}")
-    # Build response data
-    response_data = {
-        "status": "error",
-        "message": message
-    }
-    # Include additional details if provided
+    response_data = {"status": "error", "message": message}
     if details:
         response_data["details"] = details
-    # Return JSON response with appropriate status code
     return web.json_response(response_data, status=status_code)
 
 
 def web_json_response(data: Dict[str, Any]) -> web.Response:
-    """Create a JSON response with appropriate status code based on data status.
-
-    Args:
-        data: Response data dictionary with 'status' field
-
-    Returns:
-        JSON response with 200 for success, 404 for error
-    """
+    """Return 200 for successful HipoData, 404 otherwise."""
     status = 200 if data.get("status") == "success" else 404
     return web.json_response(data, status=status)
 
 
 async def web_debug_response(client, request, **kwargs) -> web.Response:
-    """Handle debug page responses when debug parameter is present.
-
-    Args:
-        client: HipoClient instance
-        request: The incoming HTTP request
-        **kwargs: Arguments to pass to debug_page method
-
-    Returns:
-        HTML response with raw page content if debug=page parameter is present,
-        None otherwise
-    """
+    """Return raw Hipocrate HTML when ?debug=page is set, else None."""
     if request.query.get('debug') == 'page':
         result = await client.debug_page(**kwargs)
         return web.Response(body=result, content_type="text/html")
@@ -903,63 +503,47 @@ async def web_debug_response(client, request, **kwargs) -> web.Response:
 
 
 def web_fhir_response(data) -> web.Response:
-    """Create a FHIR-compatible JSON response from dict or FHIR Resource objects.
+    """Return a FHIR-typed JSON response.
 
-    Args:
-        data: Response data as dict, FHIR Resource object, or string
-
-    Returns:
-        JSON response with appropriate FHIR content type and status code
+    Strings are wrapped in OperationOutcome (500). Resource objects are serialized
+    via to_dict(). Status code is derived from OperationOutcome severity.
     """
-    # Handle string data as error message
     if isinstance(data, str):
         operation_outcome = OperationOutcome.from_error(message=data, code="processing", severity="error")
         response_data = operation_outcome.to_dict()
         return web.json_response(response_data, status=500)
-    
-    # Handle FHIR Resource objects by converting to dict
+
     if hasattr(data, 'to_dict'):
         response_data = data.to_dict()
     else:
         response_data = data
-    
-    # Determine status code based on resource content
+
     status_code = 200
     if isinstance(response_data, dict):
-        # Check for OperationOutcome with errors
         if response_data.get('resourceType') == 'OperationOutcome':
-            if any(issue.get('severity') in ['error', 'fatal'] 
+            if any(issue.get('severity') in ['error', 'fatal']
                    for issue in response_data.get('issue', [])):
                 status_code = 500
-            elif any(issue.get('severity') == 'warning' 
+            elif any(issue.get('severity') == 'warning'
                      for issue in response_data.get('issue', [])):
                 status_code = 400
-        # Check for other error indicators
         elif response_data.get('status') == 'error':
             status_code = 404
-    
+
     return web.json_response(response_data, status=status_code)
 
 
 def load_config():
-    """Load configuration from hipobridge.cfg and local.cfg (if exists).
-
-    Returns:
-        dict: Configuration dictionary with merged settings
-    """
+    """Load hipobridge.cfg then overlay local.cfg if present."""
     config = configparser.ConfigParser()
-
-    # Read default config
     config.read_dict(DEFAULT_CONFIG)
 
-    # Load main config file
     if os.path.exists('hipobridge.cfg'):
         logger.info("Loading hipobridge.cfg configuration")
         config.read('hipobridge.cfg')
     else:
         logger.info("hipobridge.cfg not found, using default configuration")
 
-    # Load local config if exists (will override hipobridge.cfg)
     if os.path.exists('local.cfg'):
         logger.info("Loading local.cfg configuration (overrides hipobridge.cfg)")
         config.read('local.cfg')
@@ -967,37 +551,19 @@ def load_config():
     return config
 
 async def on_startup(app):
-    """Handle application startup.
-
-    Args:
-        app: The web application
-    """
     logger.info("Application startup")
 
 async def on_cleanup(app):
-    """Handle application cleanup.
-
-    Closes all user HTTP sessions.
-
-    Args:
-        app: The web application
-    """
+    """Close all user HTTP sessions on shutdown."""
     logger.info("Application cleanup")
     await user_session_manager.close_all_sessions()
 
 async def init_app():
-    """Initialize the web application.
-
-    Sets up routes and application lifecycle handlers.
-
-    Returns:
-        Configured web application
-    """
+    """Wire up routes and lifecycle handlers, return the configured app."""
     logger.info("Initializing web application")
 
     app = web.Application()
     app.router.add_get('/', serve_web_page)
-    # API endpoints
     app.router.add_get('/api/patient', search_patient)
     app.router.add_get('/api/patient/{id}', get_patient)
     app.router.add_get('/api/request', search_request)
@@ -1005,7 +571,6 @@ async def init_app():
     app.router.add_get('/api/study/{id}', get_study)
     app.router.add_get('/api/report/{id}', get_report)
     app.router.add_get('/api/checkout/{id}', get_checkout)
-    # FHIR-compatible endpoints
     app.router.add_get('/fhir/Patient', search_fhir_patient)
     app.router.add_get('/fhir/Patient/{id}', get_fhir_patient)
     app.router.add_get('/fhir/ServiceRequest', search_fhir_service_request)
@@ -1013,7 +578,6 @@ async def init_app():
     app.router.add_get('/fhir/ImagingStudy/{id}', get_fhir_imaging_study)
     app.router.add_get('/fhir/DiagnosticReport/{id}', get_fhir_diagnostic_report)
     app.router.add_get('/fhir/Encounter/{id}', get_fhir_encounter)
-    
     app.router.add_get('/fhir/ValueSet/cnp', serve_validate_cnp)
     app.router.add_post('/fhir/md2html', serve_md2html)
     app.router.add_get('/fhir/CodeSystem/analysis-types', serve_fhir_analysis_types)
@@ -1021,22 +585,16 @@ async def init_app():
     app.router.add_get('/fhir/Metadata', serve_fhir_metadata)
     app.router.add_static('/static/', path='static', name='static')
 
-    # Setup startup and cleanup
     app.on_startup.append(on_startup)
     app.on_cleanup.append(on_cleanup)
 
-    # Return the configured app
     return app
 
-# Load configuration
 config = load_config()
-
-# Configuration values
 SERVICE_URL = config.get('hipocrate', 'service_url')
 PORT = config.getint('server', 'port')
 HOST = config.get('server', 'host')
 
-# Run the application
 if __name__ == "__main__":
     logger.info(f"Starting HipoBridge server on {HOST}:{PORT}")
     web.run_app(init_app(), host=HOST, port=PORT)

@@ -300,12 +300,7 @@ class HipoClient:
     """
 
     def __init__(self, service_url: str, request: Optional[web.Request] = None):
-        """Initialize the Hipocrate client.
-
-        Args:
-            service_url: Base URL of the Hipocrate service
-            request: Optional request object to extract credentials from
-        """
+        """Initialize the Hipocrate client."""
         self.service_url = service_url
         self.request_url = f"main.asp"
         self.request = request
@@ -707,63 +702,35 @@ class HipoClient:
             return ""
 
     async def post_form(self, url, data=None):
-        """Submit a form to the Hipocrate service, following redirects.
-
-        This method handles the common pattern of making authenticated POST requests
-        with proper form data submission and redirect following.
-
-        Args:
-            url: The URL to submit the form to
-            data: Form data to submit
-
-        Returns:
-            Tuple of (page_content, error_message) where error_message is None if no error
-        """
-        # Construct the full URL if a relative path is provided
+        """Submit a form to Hipocrate. Returns (page_content, error_message)."""
         current_url = self.get_full_url(url)
 
-        # Get the session for the current user
         if not self.session:
             self.session = self.get_user_session(self.username)
 
-        # Make the authenticated request
         start_time = datetime.now()
         response_text, error_response = await self.make_authenticated_request(
             current_url, "POST", data, self.username, self.password
         )
         duration = (datetime.now() - start_time).total_seconds()
 
-        # Check for errors in the response
         if error_response:
             error_msg = error_response.get("message", "Unknown error") if isinstance(error_response, dict) else str(error_response)
             return None, error_msg
         logger.info(f"Response received in {duration:.2f} seconds")
 
-        # Return the final response
         return response_text, None
 
     async def get_page(self, url, max_redirects=5):
-        """Retrieve a page from the Hipocrate service, following redirects.
+        """Retrieve a Hipocrate page with auth and caching. Returns (page_content, error_message).
 
-        This method handles the common pattern of making authenticated requests with
-        redirect following, which can be reused by derived classes. Implements
-        caching and automatic authentication handling.
-
-        Args:
-            url: The URL to request
-            max_redirects: Maximum number of redirects to follow (default: 5)
-
-        Returns:
-            Tuple of (page_content, error_message) where error_message is None if no error
+        aiohttp follows redirects automatically; max_redirects is unused but kept for API compat.
         """
-        # Construct the full URL if a relative path is provided
         current_url = self.get_full_url(url)
 
-        # Get the session for the current user
         if not self.session:
             self.session = self.get_user_session(self.username)
 
-        # aiohttp follows redirects automatically; a single authenticated request suffices
         start_time = datetime.now()
         response_text, error_response = await self.make_authenticated_request(
             current_url, "GET", None, self.username, self.password
@@ -778,31 +745,11 @@ class HipoClient:
         return response_text, None
 
     def parse_data(self, html_content: str, **kwargs) -> HipoData:
-        """Parse HTML content and extract structured data.
-
-        Abstract method to be implemented by subclasses for specific data parsing.
-
-        Args:
-            html_content: HTML content to parse
-            **kwargs: Additional arguments for parsing
-
-        Returns:
-            HipoData containing parsed data
-        """
+        """Override in subclasses to parse Hipocrate HTML into HipoData."""
         return HipoData(status="error", message="No data")
 
     def fhir_response(self, parsed_data: HipoData, **kwargs) -> FHIROperationOutcome:
-        """Convert parsed data to FHIR-compatible format.
-
-        Abstract method to be implemented by subclasses for FHIR conversion.
-
-        Args:
-            parsed_data: Parsed data from parse_data method
-            **kwargs: Additional arguments for FHIR conversion
-
-        Returns:
-            Dictionary containing FHIR-compatible data or FHIROperationOutcome for errors
-        """
+        """Override in subclasses to convert HipoData to a FHIR resource."""
         return FHIROperationOutcome.from_error(
             message="No data",
             code="not-supported",
@@ -810,101 +757,42 @@ class HipoClient:
         )
 
     async def fetch_and_parse(self, *args, max_redirects=5, **kwargs):
-        """Generic method to fetch data from an endpoint and parse it.
-
-        This method provides a reusable way to fetch data from any endpoint and parse it
-        using the instance parser method. Handles authentication, caching, and error handling.
-
-        Args:
-            max_redirects: Maximum number of redirects to follow (default: 5)
-            **kwargs: Arguments for URL formatting and parsing
-
-        Returns:
-            HipoData containing parsed data or error information
-        """
-        # Create the data object
+        """Fetch request_url (formatted with kwargs) and return parsed HipoData."""
         data = HipoData(status="success", message="")
-        # Create the specific request url
         url = self.request_url.format(**kwargs)
         try:
-            # Retrieve the page
             response_text, error_message = await self.get_page(url, max_redirects)
-
-            # Check for errors in the response
             if error_message:
                 data.set_error(error_message)
                 return data
-
-            # Parse the data using the parser function
-            parsed_data = self.parse_data(response_text, **kwargs)
-            return parsed_data
-
+            return self.parse_data(response_text, **kwargs)
         except Exception as e:
             data.set_error("Data retrieval failed")
             return data
 
     async def fetch_respond_fhir(self, *args, max_redirects=5, **kwargs):
-        """Generic method to fetch data from an endpoint and convert it to FHIR format.
-
-        This method provides a reusable way to fetch data from any endpoint, parse it,
-        and convert it to FHIR-compatible format using the instance parser and FHIR methods.
-
-        Args:
-            max_redirects: Maximum number of redirects to follow (default: 5)
-            **kwargs: Arguments for URL formatting and parsing
-
-        Returns:
-            FHIR resource object or FHIROperationOutcome in case of error
-        """
+        """Fetch, parse, and convert to FHIR. Returns resource or OperationOutcome."""
         try:
-            # Retrieve and parse the page
             parsed_data = await self.fetch_and_parse(**kwargs)
-
-            # Check for errors in the response
             if parsed_data.get("status") == "error":
-                # Return FHIROperationOutcome for errors
                 return FHIROperationOutcome.from_error(
                     message=parsed_data.get("message", "Unknown error"),
                     code="processing",
                     severity="error"
                 )
-
-            # Convert parsed data to FHIR resource
-            fhir_resource = self.fhir_response(parsed_data, **kwargs)
-            return fhir_resource
-
+            return self.fhir_response(parsed_data, **kwargs)
         except Exception as e:
-            # Return FHIROperationOutcome for exceptions
-            outcome = FHIROperationOutcome.from_exception(e, code="exception")
             logger.error(f"Data retrieval failed: {str(e)}")
-            return outcome
+            return FHIROperationOutcome.from_exception(e, code="exception")
 
     async def debug_page(self, *args, max_redirects=5, **kwargs):
-        """Generic method to fetch data from an endpoint and return raw HTML.
-
-        This method provides a reusable way to fetch raw HTML content from any endpoint
-        without parsing it. Useful for debugging purposes.
-
-        Args:
-            max_redirects: Maximum number of redirects to follow (default: 5)
-            **kwargs: Arguments for URL formatting
-
-        Returns:
-            String containing raw HTML content or error information
-        """
-        # Create the specific request url
+        """Return raw Hipocrate HTML for the request URL (used by ?debug=page)."""
         url = self.request_url.format(**kwargs)
         try:
-            # Retrieve the page
             response_text, error_message = await self.get_page(url, max_redirects)
-
-            # Check for errors in the response
             if error_message:
                 return f"Page error: {error_message}"
-
-            # Return the raw HTML content
             return response_text
-
         except Exception as e:
             return f"Page retrieval failed: {str(e)}"
 
@@ -918,43 +806,16 @@ class HipoClientPatient(HipoClient):
     """
 
     def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
-        """Initialize the patient client.
-
-        Args:
-            service_url: Base URL of the Hipocrate service
-            request: Optional request object to extract credentials from
-        """
-        # Initialize the parent
-        super().__init__(service_url = service_url, request = request)
-        # The request endpoint
+        super().__init__(service_url=service_url, request=request)
         self.request_url = "/Pacient/edit.asp?id={id}"
 
     def parse_data(self, html_content: str, **kwargs) -> HipoData:
-        """Parse HTML patient content and extract structured data.
-
-        Extracts patient information from patient HTML content,
-        including personal data, contact information, medical identifiers,
-        and related encounter IDs.
-
-        Args:
-            html_content: HTML content of the patient page
-            **kwargs: Additional arguments
-
-        Returns:
-            HipoData containing parsed patient data organized in sections:
-            - patient: Patient information (name, id, cnp, etc.)
-            - presentation: List of presentation IDs
-            - checkin: List of admission/checkin IDs
-            - checkout: List of discharge/checkout IDs
-        """
-        # Initialize result dictionary
+        """Parse a Hipocrate patient page into HipoData (patient, presentation, checkin, checkout)."""
         data = HipoData(status="success", message="", patient = {})
 
         try:
-            # Parse HTML content
             soup = BeautifulSoup(html_content, 'html.parser')
 
-            # Check if this is a single patient page by looking for 'Date pasaportale' in title
             if not self.is_expected_page(soup, 'Date pasaportale'):
                 # Log snippet of response for debugging
                 data.set_error(f"Unexpected page for Patient: {self.get_title(soup)}")
@@ -967,100 +828,56 @@ class HipoClientPatient(HipoClient):
                 data.set_error("Patient name from navbar is empty, invalid patient id")
                 return data
 
-            # Extract patient name
             data.store("patient.name", patient_name_from_navbar)
 
-            # Extract patient name from input elements
             data.store("patient.family_name", extract_value_from_input(soup, element_id="strNume"))
             data.store("patient.given_name", extract_value_from_input(soup, element_id="strPrenume"))
             if data.get("patient.family_name") and data.get("patient.given_name"):
                 data.store("patient.name", f"{data.get('patient.family_name')} {data.get('patient.given_name')}")
 
-
-            # Extract patient CNP from input element with id "strCNP"
             data.store("patient.cnp", extract_value_from_input(soup, element_id="strCNP"))
-
-            # Extract patient id from hidden input with id "hdnCodeID"
             data.store("patient.id", extract_value_from_input(soup, element_id="hdnCodeID"))
-
-            # Extract CID
             data.store("patient.cid", extract_value_from_input(soup, element_id="strCID"))
-
-            # Extract phone
             data.store("patient.phone", extract_value_from_input(soup, element_id="strTelefon"))
-
-            # Extract email
             data.store("patient.email", extract_value_from_input(soup, element_id="strEmail"))
-
-            # Extract weight
             data.store("patient.weight", extract_value_from_input(soup, element_id="strGreutate"))
-
-            # Extract height
             data.store("patient.height", extract_value_from_input(soup, element_id="strInaltime"))
-
-            # Extract MCP
             data.store("patient.mcp", extract_value_from_input(soup, element_id="strmcp"))
-
-            # Extract address from SELECT with id strDomLegal_LocId
             data.store("patient.address", extract_selected_from_dropdown(soup, element_id='strDomLegal_LocId'))
 
-            # Derive sex and birth date from CNP if available
             if data.get("patient.cnp"):
                 parsed_cnp = parse_cnp(data.get("patient.cnp"))
                 if parsed_cnp.get("valid"):
                     data.store("patient.sex", parsed_cnp.get("gender", "unknown"))
                     data.store("patient.birth_date", parsed_cnp.get("birth_date", ""))
 
-            # If we couldn't derive birth date from CNP, try to get it from strDataNastere input
+            # Fallback: Hipocrate stores birth date as DD/MM/YYYY in strDataNastere
             if not data.get("patient.birth_date"):
                 birth_date = extract_value_from_input(soup, element_id='strDataNastere')
                 if birth_date and re.match(r'\d{2}/\d{2}/\d{4}', birth_date):
-                    # Convert DD/MM/YYYY format to YYYY-MM-DD
                     try:
                         day, month, year = birth_date.split('/')
                         data.store("patient.birth_date", f"{year}-{month}-{day}")
                     except Exception:
-                        pass  # Keep birth_date empty if parsing fails
+                        pass
 
-            # Extract encounters / presentations
             data.store_list("presentation", extract_ids_from_links(soup, r'../files/presentation\.asp\?id=(\d+)'))
-
-            # Extract admissions / checkins
             data.store_list("checkin", extract_ids_from_links(soup, r'../files/checkin\.asp\?id=(\d+)'))
-
-            # Extract discharges / checkouts
             data.store_list("checkout", extract_ids_from_links(soup, r'../files/checkout\.asp\?id=(\d+)'))
-            
-            # Return the data
+
             return data
-        
+
         except Exception as e:
             logger.error(f"Error parsing patient data: {e}")
             data.set_error(str(e))
             return data
 
     def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRPatient, FHIROperationOutcome]:
-        """Convert parsed patient data to FHIR Patient resource.
-
-        Transforms parsed patient data into a FHIR-compatible Patient
-        resource with proper structure, references, coding systems, and extensions.
-
-        Args:
-            parsed_data: Parsed patient data from parse_data method
-            **kwargs: Additional arguments including 'http_request' for host information
-                     and 'id' for patient ID
-
-        Returns:
-            FHIR Patient resource or FHIROperationOutcome in case of error
-        """
-        # Extract http_request from kwargs if available, otherwise use self.request
+        """Convert parsed patient HipoData to a FHIR Patient resource."""
         http_request = kwargs.get('http_request', self.request)
-        
-        # Get patient ID from the request URL parameters
         patient_id = kwargs.get('id', '')
-        
+
         try:
-            # Check for errors in parsed data
             if parsed_data.get("status") == "error":
                 return FHIROperationOutcome.from_error(
                     message=parsed_data.get("message", "Error in parsed patient data"),
@@ -1068,21 +885,17 @@ class HipoClientPatient(HipoClient):
                     severity="error"
                 )
 
-            # Use already extracted family name and given name if available
             family_name = parsed_data.get("patient.family_name", "")
             given_names = [parsed_data.get("patient.given_name", "")] if parsed_data.get("patient.given_name") else []
 
-            # Fallback to parsing from full name if family/given names are not available
             if not family_name and not given_names:
                 name_parts = parsed_data.get("patient.name", "").split()
                 family_name = name_parts[0] if len(name_parts) > 0 else ""
                 given_names = name_parts[1:] if len(name_parts) > 1 else []
 
-            # Use already extracted gender and birth date if available
             gender = parsed_data.get("patient.sex", "")
             birth_date = parsed_data.get("patient.birth_date", "")
 
-            # Create FHIR Patient resource using the FHIR class
             fhir_patient = FHIRPatient(
                 id=parsed_data.get("patient.id", patient_id),
                 active=True,
@@ -1092,112 +905,76 @@ class HipoClientPatient(HipoClient):
             if birth_date:
                 fhir_patient["birthDate"] = birth_date
 
-            # Add name
-            name = {
+            fhir_patient["name"] = [{
                 "use": "official",
                 "family": family_name,
                 "given": given_names
-            }
-            fhir_patient["name"] = [name]
+            }]
 
-            # Add telecom information if available
             telecom = []
-            if parsed_data.get("patient.phone", None):
-                telecom.append({
-                    "system": "phone",
-                    "value": parsed_data.get("patient.phone")
-                })
-
-            if parsed_data.get("patient.email", None):
-                telecom.append({
-                    "system": "email",
-                    "value": parsed_data.get("patient.email")
-                })
-
+            if parsed_data.get("patient.phone"):
+                telecom.append({"system": "phone", "value": parsed_data.get("patient.phone")})
+            if parsed_data.get("patient.email"):
+                telecom.append({"system": "email", "value": parsed_data.get("patient.email")})
             if telecom:
                 fhir_patient["telecom"] = telecom
 
-            # Add address information if available
-            address = []
-            if parsed_data.get("patient.address", None):
-                address.append({
-                    "text": parsed_data.get("patient.address")
-                })
+            if parsed_data.get("patient.address"):
+                fhir_patient["address"] = [{"text": parsed_data.get("patient.address")}]
 
-            if address:
-                fhir_patient["address"] = address
-
-            # Add extensions for additional patient data
             extensions = []
-
-            # Add weight if available
-            if parsed_data.get("patient.weight", None):
+            if parsed_data.get("patient.weight"):
                 extensions.append({
                     "url": "http://hl7.org/fhir/us/vitals/StructureDefinition/body-weight",
                     "valueString": parsed_data.get("patient.weight")
                 })
-
-            # Add height if available
-            if parsed_data.get("patient.height", None):
+            if parsed_data.get("patient.height"):
                 extensions.append({
                     "url": "http://hl7.org/fhir/us/vitals/StructureDefinition/height",
                     "valueString": parsed_data.get("patient.height")
                 })
 
-            # Add extensions for encounter/admission/discharge IDs
             presentations = parsed_data.get("presentation", [])
             if presentations and http_request:
                 extensions.append({
                     "url": f"{http_request.scheme}://{http_request.host}/fhir/StructureDefinition/presentation-ids",
                     "valueString": ",".join(presentations) if isinstance(presentations, list) else str(presentations)
                 })
-                
             checkins = parsed_data.get("checkin", [])
             if checkins and http_request:
                 extensions.append({
                     "url": f"{http_request.scheme}://{http_request.host}/fhir/StructureDefinition/checkin-ids",
                     "valueString": ",".join(checkins) if isinstance(checkins, list) else str(checkins)
                 })
-                
             checkouts = parsed_data.get("checkout", [])
             if checkouts and http_request:
                 extensions.append({
                     "url": f"{http_request.scheme}://{http_request.host}/fhir/StructureDefinition/checkout-ids",
                     "valueString": ",".join(checkouts) if isinstance(checkouts, list) else str(checkouts)
                 })
-
             if extensions:
                 fhir_patient["extension"] = extensions
 
-            # Add identifiers
             identifiers = []
-
-            # Add CNP as identifier if available
-            if parsed_data.get("patient.cnp", None) and http_request:
+            if parsed_data.get("patient.cnp") and http_request:
                 identifiers.append({
                     "use": "official",
                     "system": f"{http_request.scheme}://{http_request.host}/fhir/NamingSystem/patient-cnp",
                     "value": parsed_data.get("patient.cnp")
                 })
-
-            # Add CID if available
-            if parsed_data.get("patient.cid", None) and http_request:
+            if parsed_data.get("patient.cid") and http_request:
                 identifiers.append({
                     "system": f"{http_request.scheme}://{http_request.host}/fhir/NamingSystem/patient-cid",
                     "value": parsed_data.get("patient.cid")
                 })
-
-            # Add MCP if available
-            if parsed_data.get("patient.mcp", None) and http_request:
+            if parsed_data.get("patient.mcp") and http_request:
                 identifiers.append({
                     "system": f"{http_request.scheme}://{http_request.host}/fhir/NamingSystem/patient-mcp",
                     "value": parsed_data.get("patient.mcp")
                 })
-
             if identifiers:
                 fhir_patient["identifier"] = identifiers
 
-            # Return the FHIR Patient resource
             return fhir_patient
 
         except Exception as e:
@@ -1213,15 +990,8 @@ class HipoClientPatientSearch(HipoClientPatient):
     """
 
     def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
-        """Initialize the patient search client.
-
-        Args:
-            service_url: Base URL of the Hipocrate service
-            request: Optional request object to extract credentials from
-        """
-        # Initialize the parent
-        super().__init__(service_url = service_url, request = request)
-        # The request endpoint
+        """Initialize the patient search client."""
+        super().__init__(service_url=service_url, request=request)
         self.request_url = "/files/search.asp?what=PA"
 
     async def search(self, search_term: str, **kwargs) -> HipoData:
@@ -1237,13 +1007,10 @@ class HipoClientPatientSearch(HipoClientPatient):
         Returns:
             HipoData containing search results or error information
         """
-        # Initialize result data
         data = HipoData(status="success", message="", patients=[])
 
-        # Determine search type based on input
         search_type = "name"  # default
 
-        # Check if search term is numeric
         if search_term.isdigit():
             # If it's 13 digits, validate as CNP
             if len(search_term) == 13:
@@ -1255,27 +1022,22 @@ class HipoClientPatientSearch(HipoClientPatient):
                     search_type = "code"
                     logger.info(f"Performing patient code search for: {search_term}")
             else:
-                # Numeric but not 13 digits, treat as patient code
                 search_type = "code"
                 logger.info(f"Performing patient code search for: {search_term}")
         else:
             # Check if search term ends with *, treat as partial CNP
             if search_term.endswith('*'):
-                # Validate that the part before * is all digits
                 prefix = search_term[:-1]
                 if prefix.isdigit() and len(prefix) < 13:
                     search_type = "partial_cnp"
                     logger.info(f"Performing partial CNP search for: {search_term}")
                 else:
-                    # Not a valid partial CNP, treat as name search
                     search_type = "name"
                     logger.info(f"Searching for patients by name: {search_term}")
             else:
-                # Not numeric, treat as name search
                 search_type = "name"
                 logger.info(f"Searching for patients by name: {search_term}")
 
-        # Prepare full search data as captured in the POST request
         search_data = {
             "hdnSearchType": "1",
             "pageNo": "1",
@@ -1306,20 +1068,16 @@ class HipoClientPatientSearch(HipoClientPatient):
         }
 
         try:
-            # Post the request
             response_text, error_message = await self.post_form(self.request_url, search_data)
 
-            # Check for errors in the response
             if error_message:
                 data.set_error(error_message)
                 return data
 
-            # Parse the data using the patient parser function, for a single patient
             parsed_data = self.parse_one_patient_data(response_text, **kwargs)
             if parsed_data and parsed_data.get("status") == "success":
                 return parsed_data
             
-            # Try to parse as multiple patients page
             parsed_data = self.parse_multiple_patients_data(response_text, **kwargs)
             if parsed_data and parsed_data.get("status") == "success":
                 return parsed_data
@@ -1332,43 +1090,23 @@ class HipoClientPatientSearch(HipoClientPatient):
             return data
 
     def parse_one_patient_data(self, html_content: str, **kwargs) -> HipoData:
-        """Parse HTML content for a single patient page.
-
-        Args:
-            html_content: HTML content of the patient page
-            **kwargs: Additional arguments
-
-        Returns:
-            HipoData containing parsed patient data
-        """
+        """Parse a single-patient Hipocrate page (delegates to parse_data)."""
         return self.parse_data(html_content, **kwargs)
 
     def parse_multiple_patients_data(self, html_content: str) -> HipoData:
-        """Parse HTML content for multiple patient search results and extract patient data.
-
-        Extracts patient names, CNP, and ids from search results page with multiple patients.
-
-        Args:
-            html_content: HTML content of the search results page
-
-        Returns:
-            HipoData containing patient search results
-        """
+        """Parse a multi-patient Hipocrate search results page into HipoData."""
         # Initialize empty dict for patients
         data = HipoData(status="success", message="", patients = {})
 
         try:
-            # Parse HTML content with BeautifulSoup
             soup = BeautifulSoup(html_content, 'html.parser')
 
-            # Check if this is a search results page by looking for 'Fisier' in title
             if not self.is_expected_page(soup, 'Fisier'):
                 # Return empty list if not expected page
                 data.set_error(f"Unexpected page for PatientSearch: {self.get_title(soup)}")
                 logger.warning(f"{data['message']}: {self.get_error(soup)}")
                 return data
 
-            # Find all links with the pattern javascript:Edit('patient_id')
             pattern = r"javascript:Edit\('([^']+)'\);"
             data["patients"] = extract_text_ids_from_links(soup, pattern)
 
@@ -1376,27 +1114,13 @@ class HipoClientPatientSearch(HipoClientPatient):
             logger.error(f"Error parsing multiple patients data: {e}")
             data.set_error(str(e))
 
-        # Return the patients dict
         return data
 
     def fhir_bundle_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRBundle, FHIROperationOutcome]:
-        """Convert parsed patient search data to FHIR FHIRBundle of Patient resources.
-
-        Transforms parsed patient search data into a FHIR-compatible FHIRBundle containing
-        Patient resources with proper structure, references, coding systems, and extensions.
-
-        Args:
-            parsed_data: Parsed patient search data from parse_multiple_patients_data method
-            **kwargs: Additional arguments including 'http_request' for host information
-
-        Returns:
-            FHIR FHIRBundle resource containing Patients or FHIROperationOutcome in case of error
-        """
-        # Extract http_request from kwargs if available, otherwise use self.request
+        """Convert parsed patient search data to a FHIR Bundle of Patient resources."""
         http_request = kwargs.get('http_request', self.request)
         
         try:
-            # Check for errors in parsed data
             if parsed_data.get("status") == "error":
                 return FHIROperationOutcome.from_error(
                     message=parsed_data.get("message", "Error in parsed patient search data"),
@@ -1406,7 +1130,6 @@ class HipoClientPatientSearch(HipoClientPatient):
 
             # Check if there are patients in response
             if 'patients' in parsed_data and len(parsed_data['patients']) > 0:
-                # Convert multiple patients to FHIR FHIRBundle using the FHIRBundle class
                 response = FHIRBundle(
                     type="searchset",
                     total=len(parsed_data['patients'])
@@ -1424,7 +1147,6 @@ class HipoClientPatientSearch(HipoClientPatient):
                 
                 return response
             else:
-                # Create FHIROperationOutcome for no patients found
                 return FHIROperationOutcome.from_error(
                     message="No patients found for the specified search criteria",
                     code="not-found",
@@ -1444,48 +1166,21 @@ class HipoClientServiceRequest(HipoClient):
     """
 
     def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
-        """Initialize the service request client.
-
-        Args:
-            service_url: Base URL of the Hipocrate service
-            request: Optional request object to extract credentials from
-        """
-        # Initialize the parent
-        super().__init__(service_url = service_url, request = request)
-        # The request endpoint
+        """Initialize the service request client."""
+        super().__init__(service_url=service_url, request=request)
         self.request_url = "/Analyse/LabRequest/buletinRecoltari.asp?id={id}"
 
     def parse_data(self, html_content: str, **kwargs) -> HipoData:
-        """Parse HTML service request content and extract structured data.
-
-        Extracts patient information and medical data from service request HTML content,
-        including medic information, diagnosis, imaging studies, and request details.
-
-        Args:
-            html_content: HTML content of the service request page
-            **kwargs: Additional arguments
-
-        Returns:
-            HipoData containing parsed service request data organized in sections:
-            - patient: Patient information (name, id)
-            - checkin: Admission information (medic, id, diagnosis)
-            - request: Request information (clinical_comments, lab_comments, date_time, is_urgent)
-            - studies: List of requested imaging studies
-        """
-        # Initialize result dictionary
+        """Parse a Hipocrate service request page into HipoData."""
         data = HipoData(status="success", message="")
 
         try:
-            # Parse HTML content
             soup = BeautifulSoup(html_content, 'html.parser')
 
-            # Extract patient name
             data.store("patient.name", extract_text_after_label(soup, r'Nume Pacient:'))
 
-            # Extract patient ID
             data.store("patient.id", extract_ids_from_links(soup, r'../Pacient/edit\.asp\?id='))
 
-            # Extract medic
             data.store("checkin.medic", extract_text_after_label(soup, r'Medicul:', stop_at=r'-'))
 
             # Extract admission ID from the "Back" link
@@ -1531,7 +1226,6 @@ class HipoClientServiceRequest(HipoClient):
             # Extract request urgency
             data.store("request.is_urgent", "~URGENTA~" in html_content)
 
-            # Return the data
             return data
         
         except Exception as e:
@@ -1540,7 +1234,7 @@ class HipoClientServiceRequest(HipoClient):
             return data
 
     def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRServiceRequest, FHIROperationOutcome]:
-        """Convert parsed service request data to FHIR ServiceRequest resource.
+        """Convert parsed service request HipoData to a FHIR ServiceRequest resource.
 
         Transforms parsed service request data into a FHIR-compatible ServiceRequest
         resource with proper structure, references, coding systems, and extensions.
@@ -1553,14 +1247,12 @@ class HipoClientServiceRequest(HipoClient):
         Returns:
             FHIR ServiceRequest resource or FHIROperationOutcome in case of error
         """
-        # Extract http_request from kwargs if available, otherwise use self.request
         http_request = kwargs.get('http_request', self.request)
         
         # Get service request ID from the request URL parameters
         service_request_id = kwargs.get('id', '')
         
         try:
-            # Check for errors in parsed data
             if parsed_data.get("status") == "error":
                 return FHIROperationOutcome.from_error(
                     message=parsed_data.get("message", "Error in parsed service request data"),
@@ -1681,7 +1373,6 @@ class HipoClientServiceRequest(HipoClient):
                     # Convert to ISO format
                     fhir_service_request["authoredOn"] = parsed_dt.isoformat()
                 else:
-                    # If parsing fails, keep the original string
                     fhir_service_request["authoredOn"] = request_date_time
 
             return fhir_service_request
@@ -1698,15 +1389,8 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
     """
 
     def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
-        """Initialize the patient search client.
-
-        Args:
-            service_url: Base URL of the Hipocrate service
-            request: Optional request object to extract credentials from
-        """
-        # Initialize the parent
-        super().__init__(service_url = service_url, request = request)
-        # The request endpoint
+        """Initialize the patient search client."""
+        super().__init__(service_url=service_url, request=request)
         self.request_url_all = "/pacient/analyses.asp?type=PA&pacid={pacid}"
         self.request_url_episode = "/Pacient/analysesEpisod.asp?pacid={pacid}"
 
@@ -1725,15 +1409,11 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
         Returns:
             HipoData containing service requests or error information
         """      
-        # Initialize result data
         data = HipoData(status="success", message="")
 
         try:
-            # Choose the request URL for episode
             self.request_url = self.request_url_episode
-            # Filter by type in request
             if kwargs.get('type'):
-                # Append the domain
                 self.request_url += f"&strDomeniu={ANALYSIS_TYPES[kwargs['type']]['domain']}"
             elif kwargs.get('dt'):
                 # Append the year extracted from dt parameter
@@ -1756,25 +1436,19 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
             else:
                 # Choose the request URL for all analyses
                 self.request_url = self.request_url_all
-                # Add full=yes parameter if requested
                 if kwargs.get('full'):
                     self.request_url += "&full=yes"
 
-            # Create the specific request url
             url = self.request_url.format(pacid=patient_id)
             
-            # Retrieve the page
             response_text, error_message = await self.get_page(url)
 
-            # Check for errors in the response
             if error_message:
                 data.set_error(error_message)
                 return data
 
-            # Parse the data using the parser function
             parsed_data = self.parse_data(response_text, **kwargs)
             
-            # Ensure we always return a HipoData object
             if not isinstance(parsed_data, HipoData):
                 result = HipoData(status="success", message="")
                 result.update(parsed_data)
@@ -1787,30 +1461,12 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
             return data
 
     def parse_data(self, html_content: str, **kwargs) -> HipoData:
-        """Parse HTML service request content and extract structured data.
-
-        Extracts patient information and medical data from service request HTML content,
-        including medic information, diagnosis, imaging studies, and request details.
-
-        Args:
-            html_content: HTML content of the service request page
-            **kwargs: Additional arguments
-
-        Returns:
-            HipoData containing parsed service request data organized in sections:
-            - patient: Patient information (name, id)
-            - checkin: Admission information (medic, id, diagnosis)
-            - request: Request information (clinical_comments, lab_comments, date_time, is_urgent)
-            - studies: List of requested imaging studies
-        """
-        # Initialize result dictionary
+        """Parse a Hipocrate service request page into HipoData."""
         data = HipoData(status="success", message="")
 
         try:
-            # Parse HTML content with BeautifulSoup
             soup = BeautifulSoup(html_content, 'html.parser')
 
-            # Check if this is a search results page by looking for 'Fisier' in title
             if not self.is_expected_page(soup, 'Cereri de Laborator'):
                 # Return empty list if not expected page
                 data.set_error(f"Unexpected page for ServiceRequestSearch: {self.get_title(soup)}")
@@ -1821,10 +1477,8 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
             patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id='))
             if patient_link:
                 data.store("patient.name", patient_link.get_text())
-                # Extract patient ID from href
                 data.store("patient.id", extract_id_from_link(patient_link))
 
-            # Extract patient CNP
             data.store("patient.cnp", extract_text_after_label(soup, r'CNP\s*:', 'tr'))
             if data.get("patient.cnp"):
                 parsed_cnp = parse_cnp(data.get("patient.cnp"))
@@ -1833,23 +1487,18 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                 data.store("patient.age", parsed_cnp.get("age"))
 
             requests = []
-            # Find all links with onclick attribute containing redirect function
             #   function redirect(tip,tipPrintabil,intCodeID, isLabSynevo,barcode)
             #   Example: <a href="#" id="myHref" onclick="redirect('Normal',3,1607394,0,'');return false;">Tipareste buletin recoltari>>></a>
             onclick_links = soup.find_all('a', attrs={'onclick': True})
             
-            # Find all links with href containing 'analyseFile.asp'
             # Example: <a href="analyseFile.asp?id=1606238" target="_blank">Tipareste buletin rezultate>>></a>
             href_links = soup.find_all('a', href=re.compile(r'analyseFile\.asp\?id=(\d+)'))
             
-            # Combine both lists and remove duplicates based on ID
             all_links = list(onclick_links)
             
-            # Add href links that don't already exist in onclick links
             for href_link in href_links:
                 href_id = extract_id_from_link(href_link, r'analyseFile\.asp\?id=(\d+)')
                 if href_id:
-                    # Check if this ID already exists in onclick links
                     duplicate_found = False
                     for onclick_link in onclick_links:
                         onclick_attr = onclick_link.get('onclick', '')
@@ -1920,12 +1569,10 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                     # Cell 4: Date
                     date_text = cells[4].get_text().strip()
                     if date_text:
-                        # Try to parse the date_time
                         dt = parse_date_time(date_text)
                         if dt:
                             request.store("date_time", dt.isoformat())
                         else:
-                            # If parsing fails, keep the original string
                             request.store("date_time", date_text.strip())
 
                     # Cell 5: Priority
@@ -2025,27 +1672,12 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
         return data
 
     def fhir_bundle_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRBundle, FHIROperationOutcome]:
-        """Convert parsed service request data to FHIR FHIRBundle of ServiceRequest resources.
-
-        Transforms parsed service request data into a FHIR-compatible FHIRBundle containing
-        ServiceRequest resources with proper structure, references, coding systems, and extensions.
-
-        Args:
-            parsed_data: Parsed service request data from parse_data method
-            **kwargs: Additional arguments including 'http_request' for host information
-                     and 'patient_id' for patient ID
-
-        Returns:
-            FHIR FHIRBundle resource containing ServiceRequests or FHIROperationOutcome in case of error
-        """
-        # Extract http_request from kwargs if available, otherwise use self.request
+        """Convert parsed service request HipoData to a FHIR Bundle of ServiceRequest resources."""
         http_request = kwargs.get('http_request', self.request)
         
-        # Get patient ID from kwargs
         patient_id = kwargs.get('patient_id', '')
         
         try:
-            # Check for errors in parsed data
             if parsed_data.get("status") == "error":
                 return FHIROperationOutcome.from_error(
                     message=parsed_data.get("message", "Error in parsed service request data"),
@@ -2130,42 +1762,17 @@ class HipoClientImagingStudy(HipoClient):
     """
 
     def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
-        """Initialize the service request client.
-
-        Args:
-            service_url: Base URL of the Hipocrate service
-            request: Optional request object to extract credentials from
-        """
-        # Initialize the parent
-        super().__init__(service_url = service_url, request = request)
-        # The request endpoint
+        """Initialize the service request client."""
+        super().__init__(service_url=service_url, request=request)
         self.request_url = "/Analyse/LabRequest/edit.asp?id={id}"
 
     def parse_data(self, html_content: str, **kwargs) -> HipoData:
-        """Parse HTML service request content and extract structured data.
-
-        Extracts patient information and medical data from service request HTML content,
-        including medic information, diagnosis, imaging studies, and request details.
-
-        Args:
-            html_content: HTML content of the service request page
-            **kwargs: Additional arguments
-
-        Returns:
-            HipoData containing parsed service request data organized in sections:
-            - patient: Patient information (name, id)
-            - checkin: Admission information (medic, id, diagnosis)
-            - request: Request information (clinical_comments, lab_comments, date_time, is_urgent)
-            - studies: List of requested imaging studies
-        """
-        # Initialize result dictionary
+        """Parse a Hipocrate service request page into HipoData."""
         data = HipoData(status="success", message="")
 
         try:
-            # Parse HTML content with BeautifulSoup
             soup = BeautifulSoup(html_content, 'html.parser')
 
-            # Check if this is a diagnostic request/report page
             if not self.is_expected_page(soup, 'Cerere de investigatii paraclinice'):
                 # Log snippet of response for debugging
                 data.set_error(f"Unexpected page for ImagingStudy: {self.get_title(soup)}")
@@ -2195,7 +1802,6 @@ class HipoClientImagingStudy(HipoClient):
             # Extract barcode
             data.store("request.barcode", extract_text_after_label(soup, r'Cerere de investigatii (?!paraclinice)'))
 
-            # Extract medic
             data.store("checkin.medic", extract_text_after_label(soup, r'Medic:', 'tr'))
 
             # Extract the clinical comments
@@ -2210,40 +1816,31 @@ class HipoClientImagingStudy(HipoClient):
             # Extract the justification
             data.store("request.justification", extract_text_from_element(soup, element_id="strJustificare"))
 
-            # Extract ICD10 coded diagnosis
             data.store("request.icd10", extract_text_after_label(soup, r'Diagnostic:', 'tr'))
 
-            # Extract requester and request date and time
             req = extract_text_after_label(soup, r'Ceruta:', 'tr')
             if req and '-' in req:
                 try:
                     request_medic, request_date_time = req.split('-', 1)
                     data.store("request.medic", request_medic)
-                    # Try to parse the date_time
                     dt = parse_date_time(request_date_time)
                     if dt:
                         data.store("request.date_time", dt.isoformat())
                     else:
-                        # If parsing fails, keep the original string
                         data.store("request.date_time", request_date_time.strip())
                 except ValueError:
-                    # Handle case where split doesn't work as expected
                     data.store("request.info", req)
 
-            # Extract performer (validator) from the domain section
             validator = extract_text_after_label(soup, r'Validat de:', 'td', stop_at=r'Data')
             if validator:
                 data.store("validation.validator", validator)
 
-            # Extract validation date_time
             validation_datetime = extract_value_from_input(soup, element_id="dataefectuarii")
             if validation_datetime:
-                # Try to parse the date_time
                 dt = parse_date_time(validation_datetime)
                 if dt:
                     data.store("validation.date_time", dt.isoformat())
                 else:
-                    # If parsing fails, keep the original string
                     data.store("validation.date_time", validation_datetime)
             
             # For each strAnalyseExec input, find the parent 'td' and extract examination name from first 'b' element
@@ -2301,7 +1898,6 @@ class HipoClientImagingStudy(HipoClient):
             # Store urgency flag
             data.store("request.is_urgent", "~URGENTA~" in html_content)
 
-            # Return the parsed report data
             return data
 
         except Exception as e:
@@ -2309,27 +1905,12 @@ class HipoClientImagingStudy(HipoClient):
             return HipoData(status="error", message=str(e))
 
     def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRImagingStudy, FHIROperationOutcome]:
-        """Convert parsed imaging study data to FHIR ImagingStudy resource.
-
-        Transforms parsed imaging study data into a FHIR-compatible ImagingStudy
-        resource with proper structure, references, coding systems, and extensions.
-
-        Args:
-            parsed_data: Parsed imaging study data from parse_data method
-            **kwargs: Additional arguments including 'http_request' for host information
-                     and 'id' for study ID
-
-        Returns:
-            FHIR ImagingStudy resource or FHIROperationOutcome in case of error
-        """
-        # Extract http_request from kwargs if available, otherwise use self.request
+        """Convert parsed imaging study HipoData to a FHIR ImagingStudy resource."""
         http_request = kwargs.get('http_request', self.request)
         
-        # Get study ID from the request URL parameters
         study_id = kwargs.get('id', '')
         
         try:
-            # Check for errors in parsed data
             if parsed_data.get("status") == "error":
                 return FHIROperationOutcome.from_error(
                     message=parsed_data.get("message", "Error in parsed imaging study data"),
@@ -2377,7 +1958,6 @@ class HipoClientImagingStudy(HipoClient):
                         "display": modality_code
                     }]
 
-            # Add identifiers
             identifiers = []
             if parsed_data.get("patient.name"):
                 identifiers.append({
@@ -2488,15 +2068,8 @@ class HipoClientDiagnosticReport(HipoClient):
     """
 
     def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
-        """Initialize the service request client.
-
-        Args:
-            service_url: Base URL of the Hipocrate service
-            request: Optional request object to extract credentials from
-        """
-        # Initialize the parent
-        super().__init__(service_url = service_url, request = request)
-        # The request endpoint
+        """Initialize the service request client."""
+        super().__init__(service_url=service_url, request=request)
         self.request_url = "/analyse/Reports/analyseFile.asp?id={id}"
 
     async def fetch_and_parse(self, *args, **kwargs):
@@ -2517,30 +2090,12 @@ class HipoClientDiagnosticReport(HipoClient):
         return parsed_data
 
     def parse_data(self, html_content: str, **kwargs) -> HipoData:
-        """Parse HTML service request content and extract structured data.
-
-        Extracts patient information and medical data from service request HTML content,
-        including medic information, diagnosis, imaging studies, and request details.
-
-        Args:
-            html_content: HTML content of the service request page
-            **kwargs: Additional arguments
-
-        Returns:
-            HipoData containing parsed service request data organized in sections:
-            - patient: Patient information (name, id)
-            - checkin: Admission information (medic, id, diagnosis)
-            - request: Request information (clinical_comments, lab_comments, date_time, is_urgent)
-            - studies: List of requested imaging studies
-        """
-        # Initialize result dictionary
+        """Parse a Hipocrate service request page into HipoData."""
         data = HipoData(status="success", message="")
 
         try:
-            # Parse HTML content with BeautifulSoup
             soup = BeautifulSoup(html_content, 'html.parser')
 
-            # Check if this is a diagnostic request/report page
             if not self.is_expected_page(soup, 'Buletin de investigatii paraclinice'):
                 # Log snippet of response for debugging
                 data.set_error(f"Unexpected page for DiagnosticReport: {self.get_title(soup)}")
@@ -2553,13 +2108,11 @@ class HipoClientDiagnosticReport(HipoClient):
             # Extract barcode
             data.store("request.barcode", extract_text_after_label(soup, r'Nr.: '))
 
-            # Extract medic
             data.store("checkin.medic", extract_text_after_label(soup, r'Solicitat de:', 'td'))
 
             # Extract the clinical comments
             data.store("checkin.diagnosis", extract_text_after_label(soup, r'DIAGNOSTIC DE TRIMITERE:', 'td'))
 
-            # Extract medic
             data.store("request.medic", extract_text_after_label(soup, r'TRIMIS DE:\s*MEDIC', 'tr', stop_at=r'SECTIA'))
 
             # Extract the clinical comments
@@ -2571,18 +2124,15 @@ class HipoClientDiagnosticReport(HipoClient):
             # Extract performer (Efectuata de catre:)
             data.store("study.performer", extract_text_after_label(soup, r'Efectuata de catre:'))
 
-            # Extract performer (validator) from the domain section
             data.store("study.medic", extract_text_after_label(soup, r'MEDIC,|Medic validator:', 'td', stop_at=r'Semnatura'))
 
             # Extract study date_time
             study_datetime = extract_text_after_label(soup, r'Data investigatiei:', stop_at=r'Efectuata')
             if study_datetime:
-                # Try to parse the date_time
                 dt = parse_date_time(study_datetime)
                 if dt:
                     data.store("study.date_time", dt.isoformat())
                 else:
-                    # If parsing fails, keep the original string
                     data.store("study.date_time", study_datetime)
 
             # Extract multiple reports: find all elements with text starting with "REZULTAT:"
@@ -2632,7 +2182,6 @@ class HipoClientDiagnosticReport(HipoClient):
             # Store urgency flag
             data.store("request.is_urgent", "~URGENTA~" in html_content)
 
-            # Return the parsed report data
             return data
 
         except Exception as e:
@@ -2640,27 +2189,12 @@ class HipoClientDiagnosticReport(HipoClient):
             return HipoData(status="error", message=str(e))
 
     def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRDiagnosticReport, FHIROperationOutcome]:
-        """Convert parsed diagnostic report data to FHIR DiagnosticReport resource.
-
-        Transforms parsed diagnostic report data into a FHIR-compatible DiagnosticReport
-        resource with proper structure, references, coding systems, and extensions.
-
-        Args:
-            parsed_data: Parsed diagnostic report data from parse_data method
-            **kwargs: Additional arguments including 'http_request' for host information
-                     and 'id' for report ID
-
-        Returns:
-            FHIR DiagnosticReport resource or FHIROperationOutcome in case of error
-        """
-        # Extract http_request from kwargs if available, otherwise use self.request
+        """Convert parsed diagnostic report HipoData to a FHIR DiagnosticReport resource."""
         http_request = kwargs.get('http_request', self.request)
         
-        # Get report ID from the request URL parameters
         report_id = kwargs.get('id', '')
         
         try:
-            # Check for errors in parsed data
             if parsed_data.get("status") == "error":
                 return FHIROperationOutcome.from_error(
                     message=parsed_data.get("message", "Error in parsed diagnostic report data"),
@@ -2810,7 +2344,6 @@ class HipoClientDiagnosticReport(HipoClient):
             if extensions:
                 fhir_report["extension"] = extensions
 
-            # Add identifiers
             identifiers = []
 
             # Add barcode as identifier if available
@@ -2839,15 +2372,8 @@ class HipoClientCheckout(HipoClient):
     """
 
     def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
-        """Initialize the checkout client.
-
-        Args:
-            service_url: Base URL of the Hipocrate service
-            request: Optional request object to extract credentials from
-        """
-        # Initialize the parent
-        super().__init__(service_url = service_url, request = request)
-        # The request endpoint
+        """Initialize the checkout client."""
+        super().__init__(service_url=service_url, request=request)
         self.request_url = "/files/checkout.asp?id={id}"
 
     async def fetch_and_parse(self, *args, **kwargs):
@@ -2865,32 +2391,12 @@ class HipoClientCheckout(HipoClient):
         return parsed_data
 
     def parse_data(self, html_content: str, **kwargs) -> HipoData:
-        """Parse HTML checkout content and extract structured data.
-
-        Extracts patient information and medical data from checkout HTML content.
-        This function parses discharge/checkout forms from the Hipocrate system
-        to extract structured data about patient encounters.
-
-        Args:
-            html_content: HTML content of the checkout page
-            **kwargs: Additional arguments including 'id' for checkout ID
-
-        Returns:
-            HipoData containing parsed checkout data organized in sections:
-            - patient: Patient information (name, id, cnp, gender, date, age)
-            - presentation: Presentation/visit information
-            - checkin: Admission information (id, medic, ward, diagnosis, date, time, date_time)
-            - checkout: Discharge information (date, time, date_time, epicrisis, diagnosis, 
-                    medic, ward, surgery, recommendations, icd10)
-        """
-        # Initialize result dictionary
+        """Parse a Hipocrate checkout/discharge page into HipoData."""
         data = HipoData(status="success", message="")
 
         try:
-            # Parse HTML content with BeautifulSoup
             soup = BeautifulSoup(html_content, 'html.parser')
 
-            # Check if this is the correct page by looking for title
             if not self.is_expected_page(soup, 'FISA EXTERNARE'):
                 data.set_error("Page is not a discharge page")
                 logger.warning("Page is not a discharge page")
@@ -2900,10 +2406,8 @@ class HipoClientCheckout(HipoClient):
             patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id='))
             if patient_link:
                 data.store("patient.name", patient_link.get_text())
-                # Extract patient ID from href
                 data.store("patient.id", extract_id_from_link(patient_link))
 
-            # Extract patient CNP
             data.store("patient.cnp", extract_text_after_label(soup, r'CNP\s*:', 'tr'))
             if data.get("patient.cnp"):
                 parsed_cnp = parse_cnp(data.get("patient.cnp"))
@@ -2923,7 +2427,6 @@ class HipoClientCheckout(HipoClient):
             if checkin_ids:
                 data.store("checkin.id", checkin_ids)
 
-            # Extract medic
             data.store("checkin.medic", extract_text_after_label(soup, r'Medic\s*:', 'tr'))
 
             # Extract ward
@@ -2959,7 +2462,6 @@ class HipoClientCheckout(HipoClient):
             # Extract diagnostic (textarea after 'Diagnostic externare')
             data.store("checkout.diagnosis", extract_textarea_after_label(soup, r'Diagnostic externare[^:]*:'))
 
-            # Extract medic
             data.store("checkout.medic", extract_selected_from_dropdown(soup, name='iCOMedicID'))
 
             # Extract ward
@@ -2978,7 +2480,6 @@ class HipoClientCheckout(HipoClient):
             if 'id' in kwargs:
                 data.store("checkout.id", kwargs["id"])
 
-            # Return the extracted data
             return data
 
         except Exception as e:
@@ -2987,20 +2488,9 @@ class HipoClientCheckout(HipoClient):
             return data
 
     def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIREncounter, FHIROperationOutcome]:
-        """Convert parsed checkout data to FHIR Encounter resource.
-
-        Transforms parsed checkout data into a FHIR-compatible Encounter resource
-        with proper structure, references, and coding systems.
-
-        Args:
-            parsed_data: Parsed checkout data from parse_data method
-            **kwargs: Additional arguments including 'id' for encounter ID
-
-        Returns:
-            FHIR Encounter resource or FHIROperationOutcome in case of error
+        """Convert parsed checkout HipoData to a FHIR Encounter resource.
         """
         try:
-            # Check for errors in parsed data
             if parsed_data.get("status") == "error":
                 return FHIROperationOutcome.from_error(
                     message=parsed_data.get("message", "Error in parsed checkout data"),
@@ -3009,7 +2499,6 @@ class HipoClientCheckout(HipoClient):
                 )
 
             encounter_id = parsed_data.get('checkout.id', '')
-            # Create enhanced FHIR Encounter resource using the FHIR class
             fhir_encounter = FHIREncounter(
                 id=encounter_id,
                 status="discharged",
