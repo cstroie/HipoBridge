@@ -604,17 +604,18 @@ document.addEventListener('DOMContentLoaded', function() {
     function filterAnalyses() {
         const searchTerm = elements.analysesSearch ? elements.analysesSearch.value.toLowerCase() : '';
         const filterType = elements.analysesFilter ? elements.analysesFilter.value : 'all';
-        
+
         const cards = elements.analysesGrid.querySelectorAll('.analysis-card');
+        let visible = 0;
         cards.forEach(card => {
             const type = card.className.match(/radio|ct|irm|eco|rads/)?.[0] || '';
             const text = card.textContent.toLowerCase();
-            
-            const matchesSearch = searchTerm ? text.includes(searchTerm) : true;
-            const matchesType = filterType === 'all' || type === filterType;
-            
-            card.style.display = matchesSearch && matchesType ? 'block' : 'none';
+            const show = (searchTerm ? text.includes(searchTerm) : true) &&
+                         (filterType === 'all' || type === filterType);
+            card.style.display = show ? 'block' : 'none';
+            if (show) visible++;
         });
+        if (elements.noAnalyses) elements.noAnalyses.style.display = visible === 0 ? 'block' : 'none';
     }
     
     function printPatientData() {

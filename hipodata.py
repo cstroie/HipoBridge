@@ -151,16 +151,14 @@ class HipoData(dict):
             
             data = self[section]
             
-            # Auto-unwrap single element lists
             if not isinstance(value, list):
-                value = list(value)
+                value = [value]
                 
             data[sub_key] = value
         else:
             # Store directly in root
-            # Auto-unwrap single element lists
             if not isinstance(value, list):
-                value = list(value)
+                value = [value]
             self[key] = value
 
     def get_section_key(self, section_key_str: str) -> tuple:

@@ -10,7 +10,7 @@ request deduplication to prevent cache stampedes under concurrent load.
 import asyncio
 from typing import Dict, Optional
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Configure logging
 logging.basicConfig(
@@ -60,7 +60,7 @@ class URLCache:
             del self.cache[url]
             return None
 
-        cache_age = (datetime.now() - ts).total_seconds()
+        cache_age = (datetime.now(timezone.utc) - ts).total_seconds()
         if cache_age >= self.timeout:
             del self.cache[url]
             del self.timestamps[url]
@@ -83,7 +83,7 @@ class URLCache:
             self.timestamps.pop(oldest_key, None)
             logger.debug(f"Evicted oldest cache entry: {oldest_key}")
         self.cache[url] = response_text
-        self.timestamps[url] = datetime.now()
+        self.timestamps[url] = datetime.now(timezone.utc)
         logger.debug(f"Cached response for: {url}")
 
     def remove(self, url: str) -> None:

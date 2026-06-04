@@ -47,6 +47,7 @@ from aiohttp import web
 from typing import Dict, Any, Optional, List
 import json
 import logging
+import functools
 from datetime import datetime, timedelta
 import configparser
 import base64
@@ -108,18 +109,14 @@ def get_basic_auth(request):
 
 def require_auth(handler):
     """Decorator to require basic authentication for endpoints."""
+    @functools.wraps(handler)
     async def wrapper(request):
-        # Get credentials from basic auth
         auth = get_basic_auth(request)
         if not auth:
             return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HipoBridge"'})
-        # Extract username and password
         username, password = auth
-        # Add credentials to request for use in handler
         request.auth_credentials = (username, password)
-        # Call the original handler
         return await handler(request)
-    # End of wrapper function
     return wrapper
 
 
@@ -508,17 +505,17 @@ async def get_report(request):
 
 @require_auth
 async def get_fhir_diagnostic_report(request):
-    """Retrieve service request information by ID.
+    """Retrieve a diagnostic report by ID in FHIR format.
 
-    Gets service request information from the Hipocrate service and parses
-    the medical data into structured format.
+    Gets diagnostic report information from the Hipocrate service and returns
+    a FHIR DiagnosticReport resource.
 
     Args:
-        request: The incoming HTTP request with 'id' path parameter for service request ID
+        request: The incoming HTTP request with 'id' path parameter for report ID
                  and basic auth credentials for authentication
 
     Returns:
-        JSON response with service request data or error information
+        JSON response with FHIR DiagnosticReport resource or OperationOutcome on error
     """
     # Extract diagnostic report ID from path
     id = request.match_info.get('id')
@@ -844,18 +841,7 @@ async def serve_web_page(request):
     if not login_success:
         return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HipoBridge"'})
 
-    # Set cookie with 30-minute expiration
-    response = web.StreamResponse()
-    response.set_cookie('auth_user', username, max_age=1800, httponly=True)
-
-    # Serve the external HTML file
-    with open('static/main.html', 'r') as f:
-        html_content = f.read()
-
-    response.content_type = 'text/html'
-    await response.prepare(request)
-    await response.write(html_content.encode('utf-8'))
-    return response
+    return web.FileResponse('static/main.html')
 
 
 def web_error_response(message: str, status_code: int = 400, details: Dict[str, Any] = None) -> web.Response:
