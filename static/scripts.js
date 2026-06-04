@@ -882,15 +882,33 @@ document.addEventListener('DOMContentLoaded', function() {
             showToast('No report content to copy', 'warning');
             return;
         }
-        try {
-            await navigator.clipboard.writeText(markdown);
+
+        const confirm = () => {
             const btn = elements.copyReportBtn;
             const originalHTML = btn.innerHTML;
             btn.innerHTML = '<i class="fas fa-check"></i> <span>Copied!</span>';
             setTimeout(() => { btn.innerHTML = originalHTML; }, 2000);
-        } catch (err) {
-            showToast('Failed to copy to clipboard', 'error');
+        };
+
+        // Prefer modern clipboard API, fall back to execCommand for plain HTTP
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            try {
+                await navigator.clipboard.writeText(markdown);
+                confirm();
+                return;
+            } catch (err) { /* fall through */ }
         }
+
+        // execCommand fallback
+        const ta = document.createElement('textarea');
+        ta.value = markdown;
+        ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        ok ? confirm() : showToast('Failed to copy to clipboard', 'error');
     }
     
     async function loadAndDisplayReport(patientData, analysesData) {
