@@ -736,29 +736,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 const serviceRequest = entry.resource;
                 const analysisType = serviceRequest.code?.coding?.[0]?.code || 'unknown';
                 const analysisText = serviceRequest.code?.coding?.[0]?.display || 'analysis';
-                const examDate = serviceRequest.authoredOn ? new Date(serviceRequest.authoredOn) : null;
-                
                 // Skip unknown types
                 if (!modalityMap[analysisType]) return;
-                
+
                 if (!analysesByModality[analysisType]) {
                     analysesByModality[analysisType] = [];
                 }
-                
+
                 analysesByModality[analysisType].push({
                     serviceRequest,
                     analysisText,
-                    examDate,
-                    examDateString: serviceRequest.authoredOn
+                    examDateString: serviceRequest.authoredOn || null
                 });
             });
         }
-        
-        // Sort each modality group by date (most recent first)
+
+        // Sort each modality group by date string (most recent first)
         Object.keys(analysesByModality).forEach(modality => {
             analysesByModality[modality].sort((a, b) => {
-                if (!a.examDate || !b.examDate) return 0;
-                return b.examDate - a.examDate;
+                if (!a.examDateString || !b.examDateString) return 0;
+                return b.examDateString > a.examDateString ? 1 : -1;
             });
         });
         
@@ -1019,29 +1016,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Helper function to extract checkout diagnosis from encounter data
-    function extractCheckoutDiagnosis(encounterData) {
-        if (!encounterData || !encounterData.diagnosis || encounterData.diagnosis.length === 0) {
-            return null;
-        }
-        
-        // Look for discharge diagnosis first (use code "DD")
-        const dischargeDiagnosis = encounterData.diagnosis.find(d => 
-            d.use && d.use.coding && d.use.coding.some(c => c.code === "DD")
-        );
-        
-        if (dischargeDiagnosis && dischargeDiagnosis.condition && dischargeDiagnosis.condition.display) {
-            return dischargeDiagnosis.condition.display;
-        }
-        
-        // Fallback to first diagnosis if no discharge diagnosis found
-        const firstDiagnosis = encounterData.diagnosis[0];
-        if (firstDiagnosis.condition && firstDiagnosis.condition.display) {
-            return firstDiagnosis.condition.display;
-        }
-        
-        return null;
-    }
     
     function loadRecentSearches() {
         const recentSearches = JSON.parse(localStorage.getItem('recentSearches') || '[]');
