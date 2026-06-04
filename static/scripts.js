@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', function() {
         patientId: document.getElementById('patientId'),
         patientName: document.getElementById('patientName'),
         patientCnp: document.getElementById('patientCnp'),
+        patientAge: document.getElementById('patientAge'),
         patientGender: document.getElementById('patientGender'),
         patientBirthDate: document.getElementById('patientBirthDate'),
         patientPhone: document.getElementById('patientPhone'),
@@ -250,8 +251,6 @@ document.addEventListener('DOMContentLoaded', function() {
         showLoading();
         hideError();
         
-        // Notify user of search start
-        showToast('Starting patient search...', 'info');
         
         try {
             // Enhanced search with better error handling
@@ -287,7 +286,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Load and display reports first, then epicrisis, then report
             log('Loading and displaying reports...');
-            await loadAndDisplayReports(analysesData, patientData);
+            await loadAndDisplayReports(analysesData);
             log('Loading and displaying epicrisis...');
             await loadAndDisplayEpicrisis(patientData);
             log('Loading and displaying report...');
@@ -363,18 +362,6 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             const validation = validatePatientIdentifier(identifier);
             
-            // Show appropriate message based on search type
-            if (validation.type === 'cnp') {
-                showToast('Validating CNP...', 'info');
-                // CNP validation can be added here if needed
-            } else if (validation.type === 'partial_cnp') {
-                showToast('Searching with partial CNP...', 'info');
-            } else if (validation.type === 'code') {
-                showToast('Searching by patient code...', 'info');
-            } else {
-                showToast('Searching by patient name...', 'info');
-            }
-            
             // Search for patient using FHIR API
             const searchResponse = await fetch(`/fhir/Patient?q=${encodeURIComponent(identifier)}`);
             
@@ -438,7 +425,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 };
             }
             
-            showToast('Patient information retrieved successfully', 'success');
             
             // Add to recent searches with patient data
             addToRecentSearches(identifier, patientData);
@@ -462,7 +448,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Enhanced analyses fetching function
     async function fetchAnalysesData(patientCode) {
         try {
-            showToast('Loading diagnostic reports...', 'info');
             
             const analysesResponse = await fetch(`/fhir/ServiceRequest?patient=${patientCode}&full=yes`);
             
@@ -487,7 +472,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             const analysesData = await analysesResponse.json();
-            showToast('Patient diagnostic reports loaded successfully', 'success');
             
             return {
                 success: true,
@@ -1194,7 +1178,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Markdown to HTML conversion now uses marked.js library
     // marked.parse(markdownText) converts markdown to HTML
 
-    function displayPatientData(patientData, analysesData, epicrisisData = null) {
+    function displayPatientData(patientData, analysesData) {
         log('Displaying patient data:', patientData);
         log('Analyses data:', analysesData);
         
@@ -1227,10 +1211,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Set age in the existing age badge
         const age = calculateAge(patientData.birthDate);
-        const ageBadge = document.querySelector('#patientAge');
-        if (ageBadge) {
-            ageBadge.textContent = `Age: ${age}`;
-        }
+        if (elements.patientAge) elements.patientAge.textContent = `Age: ${age}`;
         log('Age set to:', age);
         
         // CNP with validation
@@ -1552,7 +1533,7 @@ document.addEventListener('DOMContentLoaded', function() {
     window.closeImagingStudyModal = closeImagingStudyModal;
     
     // Function to load and display reports progressively
-    async function loadAndDisplayReports(analysesData, patientData) {
+    async function loadAndDisplayReports(analysesData) {
         log('Loading and displaying reports:', analysesData);
         
         // Define the types of reports to include

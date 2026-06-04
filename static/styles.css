@@ -1310,6 +1310,31 @@ select {
     border-top: 1px solid var(--border);
 }
 
+/* Inline error message (search tab) */
+.error {
+    display: none;
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: var(--radius-md);
+    color: var(--danger);
+    margin-top: var(--spacing-md);
+}
+
+/* No-data placeholder */
+.no-data {
+    display: none;
+    padding: 3rem 1rem;
+    color: var(--text-light);
+    text-align: center;
+}
+
+.no-data i {
+    display: block;
+    margin-bottom: var(--spacing-md);
+    opacity: 0.4;
+}
+
 /* Report loading placeholder */
 .markdown-content .loading-content {
     display: flex;
