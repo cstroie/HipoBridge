@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 export HYP_USER=<username> HYP_PASS=<password>
-python hipobridge.py
+python3 hipobridge.py
 ```
 
 Server listens on `http://0.0.0.0:44660` by default. Override with `local.cfg`:
@@ -23,16 +23,15 @@ service_url = http://192.168.3.230/hipocrate
 
 ## Running tests
 
-Tests require the server to be running on `http://localhost:44660` and credentials in `HYP_USER`/`HYP_PASS`.
-
 ```bash
-python runtests.py               # all tests
-python runtests.py extractors    # one group (no server needed)
-python runtests.py markdown      # one group (no server needed)
+python3 runtests.py               # all tests
+python3 runtests.py extractors    # one group (no server needed)
+python3 runtests.py markdown      # one group (no server needed)
+python3 runtests.py hipodata      # one group (no server needed)
 ```
 
 Groups that don't hit the network: `extractors`, `markdown`, `hipodata`.  
-Groups that need a live server: `root`, `auth`, `patients`, `analyses`, `reports`, `checkout`, `cnp`.
+Groups that need a live server + credentials: `root`, `auth`, `patients`, `analyses`, `reports`, `checkout`, `cnp`.
 
 ## Architecture
 
@@ -42,9 +41,9 @@ HippoBridge is a **scraping proxy**: it has no database. Every request authentic
 
 ```
 HTTP client
-  → hipobridge.py   (aiohttp routes + auth decorator)
-  → HipoClient*     (fetches Hipocrate HTML, parses it)
-  → fhir.py         (converts HipoData → FHIR resource)
+  → hipobridge.py       (aiohttp routes + @require_auth decorator)
+  → HipoClient*         (fetches Hipocrate HTML through cache + semaphore)
+  → fhir.py             (converts HipoData → FHIR resource)
   → web_fhir_response / web_json_response
 ```
 
@@ -52,14 +51,14 @@ HTTP client
 
 **`hipobridge.py`** — entry point. Defines all routes and two response helpers:
 - `web_json_response` — raw internal API (`/api/*`)
-- `web_fhir_response` — FHIR-typed responses (`/fhir/*`); handles `OperationOutcome` on errors.
-- `@require_auth` decorator extracts Basic Auth credentials and attaches them to `request.auth_credentials`.
+- `web_fhir_response` — FHIR-typed responses (`/fhir/*`); handles `OperationOutcome` on errors
+- `@require_auth` decorator extracts Basic Auth and attaches credentials to `request.auth_credentials`
 
-**`hipoclient.py`** — the heaviest file (~3200 lines). One base class + six specialised subclasses, one per Hipocrate resource type:
+**`hipoclient.py`** — the core scraping layer. One base class + seven specialised subclasses:
 
 | Class | Resource |
 |---|---|
-| `HipoClient` | Base: session management, fetch, cache, redirect following |
+| `HipoClient` | Base: session management, fetch, cache, semaphore, auth |
 | `HipoClientPatient` | Patient record page |
 | `HipoClientPatientSearch` | Patient search results |
 | `HipoClientServiceRequest` | Individual exam/service request |
@@ -73,26 +72,30 @@ Every subclass implements three methods:
 - `fhir_response(parsed_data)` → FHIR resource object
 - `fetch_repond_fhir(**kwargs)` → calls both, returns FHIR resource directly
 
-`UserSessionManager` (singleton `user_session_manager`) keeps one `aiohttp.ClientSession` per username to reuse cookies. Sessions are closed on app shutdown via `on_cleanup`.
+**Concurrency and caching** (critical — Hipocrate is a fragile legacy server):
+- `_hipocrate_semaphore = asyncio.Semaphore(6)` — global cap on concurrent outbound HTTP calls; all request paths including login go through this.
+- `URLCache` (`urlcache.py`) — LRU cache, 500 entries, 30-minute TTL. In-flight deduplication via `asyncio.Event`: if two coroutines miss the cache for the same URL simultaneously, the second waits for the first's result rather than issuing a duplicate request.
+- `UserSessionManager` — one `aiohttp.ClientSession` per username (cookie reuse). Includes a per-user `asyncio.Lock` so concurrent requests from the same user never trigger two simultaneous login sequences. Tracks `is_authenticated` state to skip redundant Hipocrate probes.
+- `login_if_needed(force=True)` — skip the is-logged-in main.asp probe when the caller already knows the session is expired.
 
-`URLCache` (inner class, also standalone in `urlcache.py`) is an LRU cache with per-entry TTL used to avoid re-fetching the same Hipocrate URLs within a request burst.
+**`fhir.py`** — FHIR R4 resource model. `Resource(MutableMapping)` is the base; all FHIR types subclass it. Resources serialize via `to_dict()`. `OperationOutcome.from_error()` is the standard way to signal errors through the FHIR path.
 
-**`fhir.py`** — FHIR R4 resource model. `Resource(MutableMapping)` is the base; all FHIR types subclass it. Resources serialize via `to_dict()`. `OperationOutcome.from_error()` is the standard way to return errors through the FHIR path.
+**`hipodata.py`** — `HipoData(dict)` typed dict wrapper passed between the scraper and the FHIR converter. `store(key, value)` normalises values (strips strings, unwraps single-item lists, converts datetimes to ISO). Dot-notation keys (`"patient.id"`) create nested dicts automatically.
 
-**`hipodata.py`** — `HipoData(dict)` is a typed dict wrapper passed between the scraper and the FHIR converter. Keeps parsed field names consistent.
+**`extractors.py`** — stateless HTML-parsing helpers: `extract_text_after_label`, `extract_tabular_data`, `extract_id_from_link`, `parse_cnp`, `parse_date_time`, etc.
 
-**`extractors.py`** — stateless HTML-parsing helpers used by `HipoClient` subclasses: `extract_text_after_label`, `extract_tabular_data`, `extract_id_from_link`, `parse_cnp`, `parse_date_time`, etc.
-
-**`markdown.py`** — bidirectional conversion: `html_to_markdown` (used when scraping Hipocrate HTML into report text) and `markdown_to_html` (exposed via `POST /fhir/md2html`).
+**`markdown.py`** — bidirectional conversion: `html_to_markdown` (scraping Hipocrate HTML into report text) and `markdown_to_html` (exposed via `POST /fhir/md2html`).
 
 ### Frontend (`static/`)
 
-Single-page app in `static/main.html` + `static/scripts.js` + `static/styles.css`.
+Single-page app: `main.html` + `scripts.js` + `styles.css`.
 
-- All API calls go to `/fhir/*` endpoints using Basic Auth passed in the `Authorization` header.
-- `marked.js` renders markdown in the Report tab.
-- The Report tab assembles a clinical markdown document (patient → discharge summaries → imaging studies) intended to be copied and passed to an LLM for radiology insight summarisation. The raw markdown is stored in `patientReportMarkdown.dataset.markdown` after render; the Copy Markdown button reads from there.
-- Concurrency for parallel fetches is throttled by `limitedMap(arr, MAX_CONCURRENT_REQUESTS, asyncFn)`.
+- All API calls use `/fhir/*` endpoints with Basic Auth in the `Authorization` header.
+- `marked.js` renders markdown in the Epicrisis and Report tabs.
+- Both the **Epicrisis** and **Report** tabs use the same `.markdown-content` CSS class and the same Copy Markdown button pattern. Raw markdown is stored in `element.dataset.markdown` after render; the clipboard button reads from there with an `execCommand` fallback for plain HTTP.
+- The **Report** tab assembles a clinical document (patient header → discharge summaries → imaging studies) structured for LLM consumption. The Epicrisis tab renders a single encounter as a markdown doc (diagnosis heading + metadata line + full text).
+- Parallel fetches are throttled by `limitedMap(arr, MAX_CONCURRENT_REQUESTS=5, asyncFn)`.
+- All dates are normalised to `YYYY-MM-DD` (or `YYYY-MM-DD HH:MM` with time) via `formatDate()` / `formatDateWithTime()` regardless of how Hipocrate sends them.
 - Recent searches are persisted in `localStorage`.
 
 ### Dual API surface
@@ -102,3 +105,7 @@ Every resource type has two route families:
 - `/fhir/<Resource>` — returns FHIR R4 JSON
 
 The `?debug=page` query parameter on any `/api/*` endpoint returns the raw Hipocrate HTML for debugging scrapers.
+
+### CSS design system
+
+All colours, spacing, radii, and shadows use CSS custom properties defined in `:root` and `[data-theme="dark"]`. Always use `var(--radius-sm/md/lg)` — `var(--radius)` is not defined. Header-specific button and badge styles are scoped to `.header .btn-icon` / `.header .badge` to avoid overriding the general component styles.
