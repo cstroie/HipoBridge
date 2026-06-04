@@ -1582,13 +1582,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         const reportData = await reportResponse.json();
                         log('Report data loaded for service request', serviceRequest.id, ':', reportData);
                         
-                        // Add performer and interpreter to footer if available
-                        const reportFooter = analysisCard.querySelector('.report-footer');
-                        if (reportFooter && reportData.resultsInterpreter && reportData.resultsInterpreter.length > 0) {
-                            // Add interpreter if available
-                            const p = document.createElement('p');
-                            p.innerHTML = `<strong><i class="fas fa-user-md"></i> Medic:</strong> ${reportData.resultsInterpreter[0].display || ''}`;
-                            reportFooter.appendChild(p);
+                        // Performing doctor → header right side
+                        if (reportData.resultsInterpreter && reportData.resultsInterpreter.length > 0) {
+                            const medicEl = analysisCard.querySelector('.card-medic');
+                            if (medicEl) medicEl.textContent = reportData.resultsInterpreter[0].display || '';
                         }
                         
                         // Add report content to the card - now using presentedForm or conclusion
@@ -1708,22 +1705,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const reportId = article.querySelector('.report-id');
         if (reportId) reportId.textContent = `#${serviceRequest.id}`;
 
-        // Exam date
+        // Exam date — shown in header badge
         const examDateElement = article.querySelector('.exam-date');
         if (examDateElement) {
             examDateElement.textContent = serviceRequest.authoredOn
                 ? formatExamDate(serviceRequest.authoredOn)
                 : 'Unknown';
-        }
-
-        // Status
-        const statusElement = article.querySelector('.status');
-        if (statusElement) statusElement.textContent = serviceRequest.status || 'Unknown';
-
-        // Requesting medic
-        const medicNameElement = article.querySelector('.medic-name');
-        if (medicNameElement && serviceRequest.requester) {
-            medicNameElement.textContent = serviceRequest.requester.display || '';
         }
 
         log('Analysis card created successfully');
