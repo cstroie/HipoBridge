@@ -1098,8 +1098,8 @@ document.addEventListener('DOMContentLoaded', function() {
         let markdown = '## Discharge Summaries\n\n';
 
         epicrisisData.forEach((ep, index) => {
-            const dischargeStr  = ep.dischargeDate  ? ep.dischargeDate.toLocaleDateString('ro-RO')  : 'unknown';
-            const admissionStr  = ep.admissionDate  ? ep.admissionDate.toLocaleDateString('ro-RO')  : 'unknown';
+            const dischargeStr  = ep.dischargeDate  ? formatDate(ep.dischargeDate.toISOString())  : 'unknown';
+            const admissionStr  = ep.admissionDate  ? formatDate(ep.admissionDate.toISOString())  : 'unknown';
             const diagnosis     = ep.diagnosis || 'Unspecified';
 
             markdown += `### ${index + 1}. ${diagnosis} — ${dischargeStr}\n\n`;
@@ -1611,17 +1611,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Enhanced birth date formatting
     function formatBirthDate(birthDate) {
         if (!birthDate) return 'N/A';
-        
-        try {
-            const date = new Date(birthDate);
-            return date.toLocaleDateString('en-GB', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric'
-            });
-        } catch (err) {
-            return birthDate;
-        }
+        return formatDate(birthDate);
     }
     
     // Enhanced CNP extraction
@@ -1941,19 +1931,8 @@ document.addEventListener('DOMContentLoaded', function() {
             };
         },
         
-        // Format date helper
-        formatDate: (dateString) => {
-            if (!dateString) return 'Unknown';
-            const date = new Date(dateString);
-            return date.toLocaleDateString('en-GB');
-        },
-        
-        // Format time helper
-        formatTime: (dateString) => {
-            if (!dateString) return '';
-            const date = new Date(dateString);
-            return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-        },
+        formatDate,
+        formatDateWithTime,
         
         // Check if element exists
         elementExists: (selector) => {
@@ -2161,28 +2140,31 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Enhanced date formatting function
+    // Parse an ISO-ish date string and return YYYY-MM-DD (or YYYY-MM if no day)
+    function formatDate(dateString) {
+        if (!dateString) return 'Unknown';
+        // If it looks like a bare date (YYYY-MM-DD or YYYY-MM), return as-is
+        if (/^\d{4}-\d{2}(-\d{2})?$/.test(dateString)) return dateString;
+        try {
+            const d = new Date(dateString);
+            if (isNaN(d)) return dateString;
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
+        } catch { return dateString; }
+    }
+
     function formatDateWithTime(dateString) {
         if (!dateString) return 'Unknown';
-        
         try {
-            const date = new Date(dateString);
-            const dateOptions = { 
-                day: '2-digit', 
-                month: '2-digit', 
-                year: 'numeric' 
-            };
-            const timeOptions = { 
-                hour: '2-digit', 
-                minute: '2-digit' 
-            };
-            
-            const formattedDate = date.toLocaleDateString('en-GB', dateOptions);
-            const formattedTime = date.toLocaleTimeString('en-GB', timeOptions);
-            
-            return `${formattedDate} at ${formattedTime}`;
-        } catch (err) {
-            return dateString;
-        }
+            const d = new Date(dateString);
+            if (isNaN(d)) return dateString;
+            const date = formatDate(dateString);
+            const hh = String(d.getHours()).padStart(2, '0');
+            const mm = String(d.getMinutes()).padStart(2, '0');
+            return `${date} ${hh}:${mm}`;
+        } catch { return dateString; }
     }
     
     // Enhanced report preview formatting
