@@ -44,6 +44,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Epicrisis actions
         // Loading overlay
         loadingOverlay: document.getElementById('loadingOverlay'),
+        loadingStep: document.getElementById('loadingStep'),
         // Recent searches
         recentSearchesList: document.getElementById('recentSearchesList')
     };
@@ -253,49 +254,52 @@ document.addEventListener('DOMContentLoaded', function() {
         
         
         try {
-            // Enhanced search with better error handling
+            setLoadingStep('Searching Hipocrate for patient record...');
             log('Starting patient search...');
             const searchResult = await performPatientSearch(cnp);
             log('Patient search result:', searchResult);
-            
+
             if (!searchResult.success) {
                 showToast(searchResult.message, 'error');
                 return;
             }
-            
+
             const { patientData, patientCode } = searchResult;
             log('Patient data retrieved:', patientData);
             log('Patient code:', patientCode);
-            
-            // Get analyses using FHIR API with better error handling
+
+            setLoadingStep('Fetching imaging studies and service requests...');
             log('Fetching analyses data for patient:', patientCode);
             const analysesResult = await fetchAnalysesData(patientCode);
             log('Analyses data result:', analysesResult);
-            
+
             if (!analysesResult.success) {
                 showToast(analysesResult.message, 'error');
                 return;
             }
-            
+
             const analysesData = analysesResult.data;
             log('Analyses data retrieved:', analysesData);
-            
-            // Display patient data first
+
+            setLoadingStep('Building patient profile...');
             log('Displaying patient data...');
             await displayPatientData(patientData, analysesData);
-            
-            // Load and display reports first, then epicrisis, then report
+
+            setLoadingStep('Loading diagnostic reports...');
             log('Loading and displaying reports...');
             await loadAndDisplayReports(analysesData);
+
+            setLoadingStep('Loading discharge summaries...');
             log('Loading and displaying epicrisis...');
             await loadAndDisplayEpicrisis(patientData);
+
+            setLoadingStep('Assembling full clinical report...');
             log('Loading and displaying report...');
             await loadAndDisplayReport(patientData, analysesData);
-            
-            // Switch to patient profile tab with enhanced navigation
+
             log('Switching to patient tab...');
             switchToPatientTab();
-            
+
             showToast('Patient data loaded', 'success');
             log('All data loading complete');
             
@@ -1157,17 +1161,15 @@ document.addEventListener('DOMContentLoaded', function() {
         hideLoading();
     }
     
-    // Enhanced loading states
-    function showLoading(message = 'Loading patient data...') {
+    function showLoading() {
         elements.loadingOverlay.style.display = 'flex';
         elements.analyzeBtn.disabled = true;
         elements.analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Searching...';
-        
-        // Update loading message if provided
-        const loadingMessage = document.querySelector('.loading-spinner p');
-        if (loadingMessage) {
-            loadingMessage.textContent = message;
-        }
+        if (elements.loadingStep) elements.loadingStep.textContent = '';
+    }
+
+    function setLoadingStep(text) {
+        if (elements.loadingStep) elements.loadingStep.textContent = text;
     }
     
     // Markdown to HTML conversion now uses marked.js library

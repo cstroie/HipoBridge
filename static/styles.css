@@ -1374,6 +1374,14 @@ select {
     font-weight: var(--font-weight-medium);
 }
 
+.loading-step {
+    margin-top: 0.4rem !important;
+    font-size: var(--font-size-sm) !important;
+    font-weight: var(--font-weight-normal) !important;
+    color: var(--text-light) !important;
+    min-height: 1.25em;
+}
+
 /* Responsive Design */
 @media (max-width: 1024px) {
     .search-section {
