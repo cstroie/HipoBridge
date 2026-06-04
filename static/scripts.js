@@ -1715,7 +1715,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const examDateElement = article.querySelector('.exam-date');
         if (examDateElement) {
             examDateElement.textContent = serviceRequest.authoredOn
-                ? formatDateWithTime(serviceRequest.authoredOn)
+                ? formatExamDate(serviceRequest.authoredOn)
                 : 'Unknown';
         }
 
@@ -1758,6 +1758,26 @@ document.addEventListener('DOMContentLoaded', function() {
             const hh = String(d.getHours()).padStart(2, '0');
             const mm = String(d.getMinutes()).padStart(2, '0');
             return `${date} ${hh}:${mm}`;
+        } catch { return dateString; }
+    }
+
+    // Human-friendly date for analysis cards: relative label + time for recent, absolute for older
+    function formatExamDate(dateString) {
+        if (!dateString) return 'Unknown';
+        try {
+            const d = new Date(dateString);
+            if (isNaN(d)) return dateString;
+            const hh = String(d.getHours()).padStart(2, '0');
+            const mm = String(d.getMinutes()).padStart(2, '0');
+            const time = `${hh}:${mm}`;
+            const now = new Date();
+            const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const startOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+            const diffDays = Math.round((startOfToday - startOfDay) / 86400000);
+            if (diffDays === 0) return `Today · ${time}`;
+            if (diffDays === 1) return `Yesterday · ${time}`;
+            if (diffDays > 1 && diffDays < 7) return `${diffDays} days ago · ${time}`;
+            return `${formatDate(dateString)} · ${time}`;
         } catch { return dateString; }
     }
     
