@@ -472,6 +472,20 @@
               "type": "string",
               "format": "date-time"
             }
+          },
+          {
+            "name": "full",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "yes",
+                "no"
+              ],
+              "default": "no"
+            },
+            "description": "Include full report content for each service request (yes/no)"
           }
         ],
         "responses": {

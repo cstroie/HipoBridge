@@ -125,38 +125,18 @@ class HipoData(dict):
                 self[key] = value
     
     def store_list(self, key: str, value: str = None) -> None:
-        """Store a value in the dictionary with automatic data processing.
-        
-        Args:
-            key: Key for the value. Can be in format "section.key" for nested storage.
-            value: Value to store. Lists are preserved as lists.
-                  
-        Storage logic:
-        - If key is in format "section.key": Store value in nested section[key] structure
-        - Otherwise: Store key-value pair directly in root dict
-        - Sections are created automatically if they don't exist
-        """
-        # Check if key has dot notation for nested storage
+        """Like store(), but always keeps the value as a list (wraps non-lists)."""
         if '.' in key:
             section, sub_key = key.split('.', 1)
-            
-            # Create section if it doesn't exist
             if section not in self:
                 self[section] = {}
-            
-            # Ensure section is a dict
             if not isinstance(self[section], dict):
-                # Convert existing value to dict
                 self[section] = {"": self[section]}
-            
             data = self[section]
-            
             if not isinstance(value, list):
                 value = [value]
-                
             data[sub_key] = value
         else:
-            # Store directly in root
             if not isinstance(value, list):
                 value = [value]
             self[key] = value
