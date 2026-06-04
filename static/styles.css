@@ -1221,80 +1221,79 @@ select {
     cursor: pointer;
 }
 
+/* Modality colours */
+:root {
+    --modality-radio: #3b82f6;
+    --modality-ct:    #f97316;
+    --modality-irm:   #8b5cf6;
+    --modality-eco:   #14b8a6;
+    --modality-rads:  #10b981;
+}
+
+/* Analyses grid */
+.analyses-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
 /* Analysis Cards */
 .analysis-card {
     background: var(--card-bg);
     border: 1px solid var(--border);
+    border-left: 4px solid var(--primary);
     border-radius: var(--radius-lg);
     padding: 1.5rem;
-    box-shadow: var(--shadow-md);
-    transition: all 0.3s ease;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
     position: relative;
-    overflow: hidden;
     display: block;
 }
 
-.analysis-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 4px;
-    background: linear-gradient(90deg, var(--primary), var(--secondary));
-    transform: scaleX(0);
-    transition: transform 0.3s ease;
-}
-
 .analysis-card:hover {
-    transform: translateY(-5px);
+    transform: translateY(-2px);
     box-shadow: var(--shadow-lg);
 }
 
-.analysis-card:hover::before {
-    transform: scaleX(1);
-}
+.analysis-card.radio { border-left-color: var(--modality-radio); }
+.analysis-card.ct    { border-left-color: var(--modality-ct); }
+.analysis-card.irm   { border-left-color: var(--modality-irm); }
+.analysis-card.eco   { border-left-color: var(--modality-eco); }
+.analysis-card.rads  { border-left-color: var(--modality-rads); }
 
 .analysis-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 1rem;
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
 }
 
 .analysis-type-badge {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.5rem 0.75rem;
+    padding: 0.4rem 0.75rem;
     background: var(--bg);
     border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    flex-shrink: 0;
+    border-radius: var(--radius-full);
 }
 
 .analysis-type-badge i {
     color: var(--primary);
 }
+.analysis-card.radio .analysis-type-badge i { color: var(--modality-radio); }
+.analysis-card.ct    .analysis-type-badge i { color: var(--modality-ct); }
+.analysis-card.irm   .analysis-type-badge i { color: var(--modality-irm); }
+.analysis-card.eco   .analysis-type-badge i { color: var(--modality-eco); }
+.analysis-card.rads  .analysis-type-badge i { color: var(--modality-rads); }
 
 .analysis-type-badge .type-text {
     font-weight: 600;
+    font-size: var(--font-size-sm);
     color: var(--text);
 }
 
-.analysis-header h4 {
-    margin: 0;
-    color: var(--text);
-    font-size: 1.1rem;
-    flex: 1;
-    word-break: break-word;
-}
-
-.analysis-actions {
-    display: flex;
-    gap: 0.5rem;
-    flex-shrink: 0;
+.analysis-type-badge .report-id {
+    font-size: var(--font-size-xs);
+    color: var(--text-light);
+    margin-left: 0.25rem;
 }
 
 .btn-small {
