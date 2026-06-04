@@ -247,7 +247,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Search results as FHIR Patient resource or Bundle",
+            "description": "Single Patient or Bundle of Patients",
             "content": {
               "application/fhir+json": {
                 "schema": {
@@ -255,19 +255,13 @@
                     {
                       "type": "object",
                       "properties": {
-                        "resourceType": {
-                          "type": "string",
-                          "example": "Patient"
-                        }
+                        "resourceType": { "type": "string", "example": "Patient" }
                       }
                     },
                     {
                       "type": "object",
                       "properties": {
-                        "resourceType": {
-                          "type": "string",
-                          "example": "Bundle"
-                        }
+                        "resourceType": { "type": "string", "example": "Bundle" }
                       }
                     }
                   ]
@@ -309,6 +303,22 @@
                     "message": {
                       "type": "string",
                       "example": "Authentication required"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No patients found",
+            "content": {
+              "application/fhir+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "resourceType": {
+                      "type": "string",
+                      "example": "OperationOutcome"
                     }
                   }
                 }
@@ -467,25 +477,11 @@
             "name": "dt",
             "in": "query",
             "required": false,
-            "description": "Date/time filter in ISO format (YYYY-MM-DDTHH:mm:ss) - includes reports older than this but no older than 6 hours later",
+            "description": "Target date/time in ISO format. Filters requests to those closest to this timestamp using a binary-narrowing window (starts at ±24 h, halves on each ambiguous attempt until a single match is found).",
             "schema": {
               "type": "string",
               "format": "date-time"
             }
-          },
-          {
-            "name": "full",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "yes",
-                "no"
-              ],
-              "default": "no"
-            },
-            "description": "Include full report content for each service request (yes/no)"
           }
         ],
         "responses": {
