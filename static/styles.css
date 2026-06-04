@@ -1070,6 +1070,16 @@ select {
     font-size: var(--font-size-sm);
 }
 
+.study-title {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--primary);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.25rem;
+    margin: 0.75rem 0 0.5rem;
+}
+.study-title:first-child { margin-top: 0; }
+
 .imaging-study-link {
     margin-top: 0.5rem;
 }

@@ -2741,6 +2741,7 @@ class HipoClientDiagnosticReport(HipoClient):
                         fhir_report["presentedForm"].append(
                             {
                                 "contentType": "text/markdown",
+                                "title": study.get("title", ""),
                                 "data": study["result"],
                                 "type": study.get("type", ""),
                                 "region": study.get("region", "")

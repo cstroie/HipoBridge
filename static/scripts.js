@@ -801,27 +801,22 @@ document.addEventListener('DOMContentLoaded', function() {
             
             const reportData = await reportResponse.json();
             let content = null;
-            // Extract report content from different possible sources
             if (reportData.conclusion) {
                 content = reportData.conclusion;
             } else if (reportData.presentedForm && reportData.presentedForm.length > 0) {
-                // Concatenate all presented form content
-                content = '';
-                reportData.presentedForm.forEach(form => {
-                    if (form.data) {
-                        content += form.data + '\n\n';
-                    }
-                });
-                content = content.trim();
+                const forms = reportData.presentedForm;
+                const multiStudy = forms.length > 1;
+                content = forms
+                    .filter(f => f.data)
+                    .map(f => multiStudy && f.title ? `##### ${f.title}\n\n${f.data}` : f.data)
+                    .join('\n\n---\n\n')
+                    .trim();
             } else if (reportData.result && reportData.result.length > 0) {
-                // Fallback to result array
-                content = '';
-                reportData.result.forEach(result => {
-                    if (result.display) {
-                        content += result.display + '\n\n';
-                    }
-                });
-                content = content.trim();
+                content = reportData.result
+                    .filter(r => r.display)
+                    .map(r => r.display)
+                    .join('\n\n')
+                    .trim();
             }
 
             // only cache non-empty results; null/empty means report not written yet
@@ -1588,29 +1583,39 @@ document.addEventListener('DOMContentLoaded', function() {
                             if (medicEl) medicEl.textContent = reportData.resultsInterpreter[0].display || '';
                         }
                         
-                        // Add report content to the card - now using presentedForm or conclusion
+                        // Update card header with study titles when multiple studies present
+                        const forms = reportData.presentedForm || [];
+                        if (forms.length > 1) {
+                            const typeTextEl = analysisCard.querySelector('.type-text');
+                            if (typeTextEl) {
+                                const titles = forms
+                                    .map(f => f.title)
+                                    .filter(Boolean);
+                                if (titles.length > 1) typeTextEl.textContent = titles.join(' / ');
+                            }
+                        }
+
+                        // Add report content to the card
                         const reportPreview = analysisCard.querySelector('.report-preview');
                         if (reportPreview) {
                             reportPreview.id = `report-${serviceRequest.id}`;
-                            
-                            if (reportData.presentedForm && reportData.presentedForm.length > 0) {
-                                // Process all presentedForm entries
-                                for (const form of reportData.presentedForm) {
-                                    // Add a header for each result
-                                    if (form.title) {
+
+                            if (forms.length > 0) {
+                                const multiStudy = forms.length > 1;
+                                for (const form of forms) {
+                                    if (multiStudy && form.title) {
                                         const h5 = document.createElement('h5');
-                                        h5.innerHTML = `<i class="fas fa-file-alt"></i> ${form.title}`;
+                                        h5.className = 'study-title';
+                                        h5.textContent = form.title;
                                         reportPreview.appendChild(h5);
                                     }
-                                    
                                     if (form.contentType === 'text/plain' && form.data) {
                                         const pre = document.createElement('pre');
                                         pre.textContent = form.data;
                                         reportPreview.appendChild(pre);
                                     } else if (form.contentType === 'text/markdown' && form.data) {
-                                        const htmlResult = marked.parse(form.data);
                                         const div = document.createElement('div');
-                                        div.innerHTML = htmlResult;
+                                        div.innerHTML = marked.parse(form.data);
                                         reportPreview.appendChild(div);
                                     } else if (form.contentType === 'text/html' && form.data) {
                                         const div = document.createElement('div');
@@ -1619,12 +1624,10 @@ document.addEventListener('DOMContentLoaded', function() {
                                     }
                                 }
                             } else if (reportData.conclusion) {
-                                const htmlResult = marked.parse(reportData.conclusion);
                                 const div = document.createElement('div');
-                                div.innerHTML = htmlResult;
+                                div.innerHTML = marked.parse(reportData.conclusion);
                                 reportPreview.appendChild(div);
                             } else {
-                                // If no content, show a message
                                 const p = document.createElement('p');
                                 p.textContent = 'No report text available';
                                 reportPreview.appendChild(p);
