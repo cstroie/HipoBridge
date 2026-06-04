@@ -380,6 +380,7 @@ small {
 .brand-info p {
     margin: 0;
     font-size: var(--font-size-sm);
+    color: white;
 }
 
 .header-actions {
