@@ -57,12 +57,13 @@ Key endpoints:
 GET  /fhir/Patient?q={search_term}
 GET  /fhir/Patient/{id}
 GET  /fhir/ServiceRequest?patient={id}
-GET  /fhir/DiagnosticReport?identifier={id}
-GET  /fhir/ImagingStudy?identifier={id}
-GET  /fhir/Encounter?identifier={id}
+GET  /fhir/ServiceRequest/{id}
+GET  /fhir/DiagnosticReport/{id}
+GET  /fhir/ImagingStudy/{id}
+GET  /fhir/Encounter/{id}
 GET  /fhir/ValueSet/cnp?id={cnp}
+GET  /fhir/CodeSystem/analysis-types
 POST /fhir/md2html
-POST /fhir/login
 ```
 
 All endpoints require HTTP Basic Auth.
