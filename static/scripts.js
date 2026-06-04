@@ -824,8 +824,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 content = content.trim();
             }
 
-            // cache result (even if null to avoid repeated attempts)
-            cache.reports[serviceRequestId] = content;
+            // only cache non-empty results; null/empty means report not written yet
+            if (content) cache.reports[serviceRequestId] = content;
             return content;
             
         } catch (error) {

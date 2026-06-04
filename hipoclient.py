@@ -2499,6 +2499,23 @@ class HipoClientDiagnosticReport(HipoClient):
         # The request endpoint
         self.request_url = "/analyse/Reports/analyseFile.asp?id={id}"
 
+    async def fetch_and_parse(self, *args, **kwargs):
+        """Fetch and parse a diagnostic report, evicting the cache if no study results found.
+
+        An empty studies list means the report has not been filled yet in Hipocrate.
+        Caching that response would prevent the next request from picking up the real data,
+        so we evict the URL from cache when studies is empty.
+        """
+        parsed_data = await super().fetch_and_parse(*args, **kwargs)
+        if parsed_data.get("status") != "error":
+            studies = parsed_data.get("studies") or []
+            all_empty = all(not s.get("result") for s in studies) if studies else True
+            if all_empty:
+                url = self.request_url.format(**kwargs)
+                self.cache_remove(self.get_full_url(url))
+                logger.debug(f"Evicted empty diagnostic report from cache: {url}")
+        return parsed_data
+
     def parse_data(self, html_content: str, **kwargs) -> HipoData:
         """Parse HTML service request content and extract structured data.
 
@@ -2831,6 +2848,20 @@ class HipoClientCheckout(HipoClient):
         super().__init__(service_url = service_url, request = request)
         # The request endpoint
         self.request_url = "/files/checkout.asp?id={id}"
+
+    async def fetch_and_parse(self, *args, **kwargs):
+        """Fetch and parse a checkout, evicting cache if epicrisis is empty.
+
+        An empty epicrisis means the discharge summary has not been written yet.
+        Evict so the next request can pick up the filled-in text.
+        """
+        parsed_data = await super().fetch_and_parse(*args, **kwargs)
+        if parsed_data.get("status") != "error":
+            if not parsed_data.get("checkout.epicrisis"):
+                url = self.request_url.format(**kwargs)
+                self.cache_remove(self.get_full_url(url))
+                logger.debug(f"Evicted empty checkout epicrisis from cache: {url}")
+        return parsed_data
 
     def parse_data(self, html_content: str, **kwargs) -> HipoData:
         """Parse HTML checkout content and extract structured data.
