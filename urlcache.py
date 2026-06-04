@@ -12,11 +12,6 @@ from typing import Dict, Optional
 import logging
 from datetime import datetime, timezone
 
-# Configure logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s | %(levelname)8s | %(message)s'
-)
 logger = logging.getLogger('URLCache')
 
 

@@ -33,11 +33,6 @@ from datetime import datetime
 
 from markdown import html_to_markdown
 
-# Configure logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s | %(levelname)8s | %(message)s'
-)
 logger = logging.getLogger('HipoExtractor')
 
 

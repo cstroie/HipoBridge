@@ -23,7 +23,7 @@ Config: hipobridge.cfg (defaults) overridden by local.cfg (not tracked by git).
 """
 import os
 from aiohttp import web
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any
 import json
 import logging
 import functools
