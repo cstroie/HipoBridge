@@ -990,16 +990,19 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Generate markdown content
         let markdown = '';
-        
-        // Process each modality group
+
+        if (Object.keys(analysesByModality).length === 0) {
+            return '';
+        }
+
+        markdown += '## Imaging Studies\n\n';
+
         for (const modality of Object.keys(analysesByModality)) {
             const modalityInfo = modalityMap[modality];
             const analyses = analysesByModality[modality];
-            
-            // Add modality header
-            markdown += `## ${modalityInfo.name} (${analyses.length} analyses)\n\n`;
-            
-            // fetch report contents for this group with limited concurrency
+
+            markdown += `### ${modalityInfo.name} (${analyses.length})\n\n`;
+
             const reportContents = await limitedMap(
                 analyses.map(a => a.serviceRequest.id),
                 MAX_CONCURRENT_REQUESTS,
@@ -1007,26 +1010,20 @@ document.addEventListener('DOMContentLoaded', function() {
             );
 
             analyses.forEach((analysis, idx) => {
-                const formattedDate = analysis.examDateString ? 
-                    formatDateWithTime(analysis.examDateString) : 'Unknown';
-                
-                markdown += `### ${analysis.analysisText} ${analysis.serviceRequest.id} (${formattedDate})\n`;
-                
+                const formattedDate = analysis.examDateString ?
+                    formatDateWithTime(analysis.examDateString) : 'Unknown date';
+
+                markdown += `#### ${analysis.analysisText} — ${formattedDate}\n\n`;
+
                 const reportContent = reportContents[idx];
                 if (reportContent) {
-                    markdown += `${reportContent}\n`;
+                    markdown += reportContent.trim() + '\n';
+                } else {
+                    markdown += '_No report text available._\n';
                 }
-                
-                markdown += `\n`;
+
+                markdown += '\n---\n\n';
             });
-            
-            markdown += `\n`;
-        }
-        
-        // If no analyses found, add a message
-        if (Object.keys(analysesByModality).length === 0) {
-            markdown += '## No Analyses Available\n\n';
-            markdown += 'No diagnostic analyses found for this patient.\n\n';
         }
         
         log('Analyses by modality markdown generated successfully');
@@ -1085,116 +1082,64 @@ document.addEventListener('DOMContentLoaded', function() {
     
     async function generateEpicrisisMarkdown(patientData) {
         log('Generating epicrisis markdown');
-        
-        // Extract all checkout IDs from patient data
+
         const checkoutIds = extractCheckoutIds(patientData);
-        
-        if (checkoutIds.length === 0) {
-            log('No checkout IDs found for epicrisis');
-            return '';
-        }
-        
-        let markdown = '';
-        
-        // Array to store epicrisis data
+        if (checkoutIds.length === 0) return '';
+
         const epicrisisData = [];
-        
-        // Fetch all encounter data with limited concurrency
+
         const encounters = await limitedMap(
             checkoutIds,
             MAX_CONCURRENT_REQUESTS,
             async id => {
-                try {
-                    return await fetchEncounterDataForCheckout(id);
-                } catch (err) {
-                    console.error(`Error fetching epicrisis for checkout ${id}:`, err);
-                    return null;
-                }
+                try { return await fetchEncounterDataForCheckout(id); }
+                catch (err) { return null; }
             }
         );
 
         encounters.forEach((encounterData, idx) => {
-            const checkoutId = checkoutIds[idx];
             if (!encounterData) return;
-
             const epicrisisText = extractEpicrisisText(encounterData);
-            if (epicrisisText) {
-                const diagnosis = extractDiagnosisText(encounterData);
-                const checkoutDate = encounterData.period?.end ? new Date(encounterData.period.end) : null;
-                epicrisisData.push({
-                    checkoutId,
-                    diagnosis,
-                    checkoutDate,
-                    epicrisisText,
-                    encounterData
-                });
-            }
-        });
-        
-        // Sort by date (most recent first)
-        epicrisisData.sort((a, b) => {
-            if (!a.checkoutDate || !b.checkoutDate) return 0;
-            return b.checkoutDate - a.checkoutDate;
-        });
-        
-        // Generate markdown for each epicrisis
-        if (epicrisisData.length > 0) {
-            markdown += '## Epicrisis History\n\n';
-            
-            epicrisisData.forEach((epicrisis, index) => {
-                const formattedDate = epicrisis.checkoutDate ? 
-                    epicrisis.checkoutDate.toLocaleDateString('en-GB') : 'Unknown';
-                
-                markdown += `### Epicrisis #${index + 1}: ${epicrisis.diagnosis || 'DIAGNOSTIC'} (${formattedDate})\n\n`;
-                markdown += `**Checkout ID:** ${epicrisis.checkoutId}\n\n`;
-                
-                // Add full epicrisis content
-                if (epicrisis.epicrisisText) {
-                    markdown += epicrisis.epicrisisText;
-                }
-                
-                // Add additional encounter details if available
-                if (epicrisis.encounterData) {
-                    const encounter = epicrisis.encounterData;
-                    
-                    // Add encounter period
-                    if (encounter.period && encounter.period.start) {
-                        const startDate = new Date(encounter.period.start);
-                        const formattedStartDate = startDate.toLocaleDateString('en-GB');
-                        markdown += `**Admission Date:** ${formattedStartDate}\n\n`;
-                    }
-                    
-                    // Add medic information
-                    if (encounter.participant && encounter.participant.length > 0) {
-                        const attender = encounter.participant.find(p => 
-                            p.type && p.type.some(t => 
-                                t.coding && t.coding.some(c => c.code === "ATND")
-                            )
-                        );
-                        
-                        if (attender && attender.individual && attender.individual.display) {
-                            markdown += `**Attending Medic:** ${attender.individual.display}\n\n`;
-                        }
-                    }
-                    
-                    // Add class if available
-                    if (encounter.class && encounter.class.display) {
-                        markdown += `**Encounter Class:** ${encounter.class.display}\n\n`;
-                    }
-                    
-                    // Add service type if available
-                    if (encounter.serviceType && encounter.serviceType.display) {
-                        markdown += `**Service Type:** ${encounter.serviceType.display}\n\n`;
-                    }
-                }
-                
-                markdown += '\n---\n\n';
+            if (!epicrisisText) return;
+            epicrisisData.push({
+                checkoutId: checkoutIds[idx],
+                diagnosis: extractDiagnosisText(encounterData),
+                admissionDate: encounterData.period?.start ? new Date(encounterData.period.start) : null,
+                dischargeDate: encounterData.period?.end   ? new Date(encounterData.period.end)   : null,
+                attender: (() => {
+                    const p = encounterData.participant?.find(p =>
+                        p.type?.some(t => t.coding?.some(c => c.code === 'ATND'))
+                    );
+                    return p?.individual?.display || null;
+                })(),
+                service: encounterData.serviceType?.display || null,
+                epicrisisText,
             });
-        } else {
-            markdown += '## No Epicrisis Available\n\n';
-            markdown += 'No epicrisis documents found for this patient.\n\n';
-        }
-        
+        });
+
+        epicrisisData.sort((a, b) => {
+            if (!a.dischargeDate || !b.dischargeDate) return 0;
+            return b.dischargeDate - a.dischargeDate;
+        });
+
+        if (epicrisisData.length === 0) return '';
+
+        let markdown = '## Discharge Summaries\n\n';
+
+        epicrisisData.forEach((ep, index) => {
+            const dischargeStr  = ep.dischargeDate  ? ep.dischargeDate.toLocaleDateString('ro-RO')  : 'unknown';
+            const admissionStr  = ep.admissionDate  ? ep.admissionDate.toLocaleDateString('ro-RO')  : 'unknown';
+            const diagnosis     = ep.diagnosis || 'Unspecified';
+
+            markdown += `### ${index + 1}. ${diagnosis} — ${dischargeStr}\n\n`;
+            markdown += `**Admission:** ${admissionStr} · **Discharge:** ${dischargeStr}`;
+            if (ep.attender) markdown += ` · **Attending:** ${ep.attender}`;
+            if (ep.service)  markdown += ` · **Service:** ${ep.service}`;
+            markdown += `  \n\n`;
+            markdown += ep.epicrisisText.trim();
+            markdown += '\n\n---\n\n';
+        });
+
         log('Epicrisis markdown generated successfully');
         return markdown;
     }
@@ -1288,8 +1233,8 @@ document.addEventListener('DOMContentLoaded', function() {
             log('Generated analyses markdown content:', analysesMarkdown);
             log('Generated epicrisis markdown content:', epicrisisMarkdown);
             
-            // Combine all markdown content
-            const combinedMarkdown = patientMarkdown + analysesMarkdown + epicrisisMarkdown;
+            // Combine: patient → discharge summaries → imaging studies
+            const combinedMarkdown = patientMarkdown + epicrisisMarkdown + analysesMarkdown;
             log('Combined markdown content:', combinedMarkdown);
             
             // Convert markdown to HTML using marked.js
@@ -1313,68 +1258,25 @@ document.addEventListener('DOMContentLoaded', function() {
     
     async function generatePatientMarkdown(patientData) {
         log('Generating patient report markdown');
-        
-        let markdown = `## ${formatPatientName(patientData.name)}\n\n`;
-        
-        // Patient ID
-        markdown += `**ID:** ${patientData.id || 'N/A'}\n\n`;
-        // Age and Gender
-        markdown += `**Age:** ${calculateAge(patientData.birthDate)}\n\n`;
-        markdown += `**Gender:** ${formatGender(patientData.gender)}\n\n`;
-        // Birth Date
-        markdown += `**Birth Date:** ${formatBirthDate(patientData.birthDate)}\n\n`;
-        // CNP
-        const cnp = extractCNP(patientData.identifier);
-        markdown += `**CNP:** ${cnp || 'N/A'}\n\n`;
-        // Contact Information
-        const contactInfo = extractContactInfo(patientData.telecom);
-        markdown += `**Phone:** ${contactInfo.phone || 'N/A'}\n\n`;
-        markdown += `**Email:** ${contactInfo.email || 'N/A'}\n\n`;
-        
-        // Medical Statistics
+
+        const name = formatPatientName(patientData.name);
+        const age = calculateAge(patientData.birthDate);
+        const gender = formatGender(patientData.gender);
+        const dob = formatBirthDate(patientData.birthDate);
+        const cnp = extractCNP(patientData.identifier) || 'N/A';
         const stats = extractMedicalStats(patientData);
-        markdown += `### Medical Statistics\n\n`;
-        markdown += `**Total Presentations:** ${stats.encounters}\n\n`;
-        markdown += `**Total Admissions:** ${stats.admissions}\n\n`;
-        markdown += `**Total Discharges:** ${stats.discharges}\n\n`;
-        
-        // Checkout IDs with detailed information
-        if (stats.checkoutIds.length > 0) {
-            markdown += `### Checkout Details\n\n`;
-            // fetch all encounters with limited concurrency
-            const encounters = await limitedMap(
-                stats.checkoutIds,
-                MAX_CONCURRENT_REQUESTS,
-                id => fetchEncounterDataForCheckout(id).catch(() => null)
-            );
 
-            encounters.forEach((encounterData, index) => {
-                const checkoutId = stats.checkoutIds[index];
-                markdown += `#### Checkout #${checkoutId}\n\n`;
+        let markdown = `# PATIENT CLINICAL REPORT\n\n`;
+        markdown += `## Patient\n\n`;
+        markdown += `**Name:** ${name}  \n`;
+        markdown += `**Age:** ${age} | **Sex:** ${gender} | **DOB:** ${dob}  \n`;
+        markdown += `**CNP:** ${cnp}  \n\n`;
 
-                if (encounterData) {
-                    // Checkout Date
-                    if (encounterData.period && encounterData.period.end) {
-                        const checkoutDate = new Date(encounterData.period.end);
-                        const formattedDate = checkoutDate.toLocaleDateString('en-GB');
-                        const formattedTime = checkoutDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-                        markdown += `**Checkout Date:** ${formattedDate} at ${formattedTime}\n\n`;
-                    }
+        markdown += `## Clinical History\n\n`;
+        markdown += `- **Total presentations:** ${stats.encounters}\n`;
+        markdown += `- **Admissions:** ${stats.admissions}\n`;
+        markdown += `- **Discharges:** ${stats.discharges}\n\n`;
 
-                    // Checkout Diagnosis
-                    const diagnosis = extractCheckoutDiagnosis(encounterData);
-                    if (diagnosis) {
-                        markdown += `**Checkout Diagnosis:** ${diagnosis}\n\n`;
-                    }
-                } else {
-                    markdown += `**Checkout Date:** Data not available\n\n`;
-                    markdown += `**Checkout Diagnosis:** Data not available\n\n`;
-                }
-
-                markdown += `\n`;
-            });
-        }
-        
         log('Patient report markdown generated successfully');
         return markdown;
     }
