@@ -88,15 +88,17 @@ Every subclass implements three methods:
 
 ### Frontend (`static/`)
 
-Single-page app: `main.html` + `scripts.js` + `styles.css`.
+Single-page app: `main.html` + `scripts.js` + `styles.css` + `marked.js`.
 
 - All API calls use `/fhir/*` endpoints with Basic Auth in the `Authorization` header.
 - `marked.js` renders markdown in the Epicrisis and Report tabs.
 - Both the **Epicrisis** and **Report** tabs use the same `.markdown-content` CSS class and the same Copy Markdown button pattern. Raw markdown is stored in `element.dataset.markdown` after render; the clipboard button reads from there with an `execCommand` fallback for plain HTTP.
 - The **Report** tab assembles a clinical document (patient header → discharge summaries → imaging studies) structured for LLM consumption. The Epicrisis tab renders a single encounter as a markdown doc (diagnosis heading + metadata line + full text).
 - Parallel fetches are throttled by `limitedMap(arr, MAX_CONCURRENT_REQUESTS=5, asyncFn)`.
-- All dates are normalised to `YYYY-MM-DD` (or `YYYY-MM-DD HH:MM` with time) via `formatDate()` / `formatDateWithTime()` regardless of how Hipocrate sends them.
+- All dates are normalised to `YYYY-MM-DD` (or `YYYY-MM-DD HH:MM` with time) via `formatDate()` / `formatDateWithTime()` regardless of how Hipocrate sends them. **Never call `new Date(hipocrate_string).toISOString()`** — Hipocrate sends non-ISO date strings that produce invalid `Date` objects and throw `RangeError`. Always pass raw strings through `formatDate()` / `formatDateWithTime()`, which have `isNaN` guards and try/catch.
 - Recent searches are persisted in `localStorage`.
+- All DOM elements are cached at startup in the `elements` object via `getElementById`. Never look up the same element inside a function that runs repeatedly.
+- Analysis cards use a `MODALITY_INFO` map (radio/ct/irm/eco/rads) for per-modality icon and label. Modality CSS is driven by per-type custom properties (`--modality-radio`, `--modality-ct`, etc.) with separate light/dark values to meet WCAG AA contrast.
 
 ### Dual API surface
 
@@ -108,4 +110,9 @@ The `?debug=page` query parameter on any `/api/*` endpoint returns the raw Hipoc
 
 ### CSS design system
 
-All colours, spacing, radii, and shadows use CSS custom properties defined in `:root` and `[data-theme="dark"]`. Always use `var(--radius-sm/md/lg)` — `var(--radius)` is not defined. Header-specific button and badge styles are scoped to `.header .btn-icon` / `.header .badge` to avoid overriding the general component styles.
+All colours, spacing, radii, and shadows use CSS custom properties defined in `:root` and `[data-theme="dark"]`. Key rules:
+- Always use `var(--radius-sm/md/lg/full)` — `var(--radius)` is not defined.
+- Always use `var(--font-size-xs/sm/base/lg/2xl/3xl/5xl)` and `var(--font-weight-normal/medium/semibold/bold)` — no hardcoded values.
+- Header-specific button and badge styles are scoped to `.header .btn-icon` / `.header .badge` to avoid overriding general component styles.
+- `--header-primary` / `--header-secondary` are separate from `--primary` / `--secondary` so the header gradient can use darker shades in dark mode without affecting the rest of the UI.
+- Modality colors (`--modality-*`) have distinct light and dark values — the light values are darkened to meet WCAG AA 4.5:1 against white; the dark values are lighter for dark backgrounds.

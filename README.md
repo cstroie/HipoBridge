@@ -1,122 +1,92 @@
 # HippoBridge
 
-HippoBridge is a medical data integration system that provides a modern web interface and FHIR-compatible API for accessing patient information from the Hipocrate medical system. It bridges the gap between legacy medical systems and modern healthcare data standards, enabling interoperability through standardized FHIR resources while providing both programmatic and user-friendly access to medical data.
-
-## Features
-
-- **Web Interface**: User-friendly web application for searching and viewing patient medical data
-- **FHIR API**: Standards-compliant FHIR (Fast Healthcare Interoperability Resources) API for programmatic access
-- **Patient Search**: Search patients by CNP (Personal Numerical Code), patient code, or name
-- **Medical Data Access**: Retrieve patient information, medical analyses, diagnostic reports, and epicrisis
-- **CNP Validation**: Built-in Romanian CNP validation with detailed information extraction
-- **Authentication**: Secure authentication with the Hipocrate system
-- **CLI Client**: Command-line interface for automated access to medical data
+HippoBridge is a scraping proxy that exposes a FHIR R4 API and a web interface on top of the legacy Hipocrate medical system. It has no database — every request authenticates against Hipocrate, scrapes HTML, and returns structured JSON or FHIR resources.
 
 ## Prerequisites
 
-- Python 3.7+
-- Access to Hipocrate medical system at `192.168.3.230`
-- Hipocrate system credentials
+- Python 3.8+
+- Access to a Hipocrate instance
+- Hipocrate credentials
 
 ## Installation
 
-1. Clone the repository:
-   ```bash
-   git clone <repository-url>
-   cd hippobridge
-   ```
+```bash
+pip install -r requirements.txt
+```
 
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+## Running the server
 
-## Configuration
+```bash
+export HYP_USER=<username> HYP_PASS=<password>
+python3 hipobridge.py
+```
 
-### Environment Variables
-Set the following environment variables:
-- `HYP_USER`: Hipocrate system username
-- `HYP_PASS`: Hipocrate system password
+Server listens on `http://0.0.0.0:44660` by default. Override with `local.cfg` (not tracked by git):
 
-### Configuration Files
-The application uses configuration files for server and service settings:
-- `hipp.cfg`: Main configuration file with default settings
-- `local.cfg`: Local overrides (optional, not tracked in version control)
-
-Configuration file format:
 ```ini
 [server]
-port = 44660
-host = 0.0.0.0
+port = 8080
 
 [hipocrate]
 service_url = http://192.168.3.230/hipocrate
 ```
 
-## Usage
+## Web interface
 
-### Running the Server
+Open `http://localhost:44660` to access the single-page app. Features:
 
-Start the HippoBridge server:
-```bash
-python hipp.py
+- Patient search by CNP, patient code, or name
+- Patient profile with analyses, diagnostic reports, and epicrisis
+- Report tab — assembles a full clinical document (patient header + discharge summaries + imaging studies) formatted for LLM consumption
+- Dark/light theme toggle
+
+## API
+
+Every resource has two routes:
+
+| Route | Returns |
+|---|---|
+| `GET /api/<resource>` | Raw `HipoData` JSON (internal/debug) |
+| `GET /fhir/<Resource>` | FHIR R4 JSON |
+
+Add `?debug=page` to any `/api/*` endpoint to get the raw Hipocrate HTML.
+
+Key endpoints:
+
+```
+GET  /fhir/Patient?q={search_term}
+GET  /fhir/Patient/{id}
+GET  /fhir/ServiceRequest?patient={id}
+GET  /fhir/DiagnosticReport?identifier={id}
+GET  /fhir/ImagingStudy?identifier={id}
+GET  /fhir/Encounter?identifier={id}
+GET  /fhir/ValueSet/cnp?id={cnp}
+POST /fhir/md2html
+POST /fhir/login
 ```
 
-The server will start on `http://localhost:44660`
+All endpoints require HTTP Basic Auth.
 
-### Web Interface
+## CLI client
 
-Access the web interface at `http://localhost:44660` to:
-- Search for patients using CNP, patient code, or name
-- View patient information and medical analyses
-- Access diagnostic reports and epicrisis
-
-### API Endpoints
-
-The FHIR-compatible API provides the following endpoints:
-
-- `GET /fhir/Patient?q={search_term}` - Search for patients
-- `GET /fhir/Patient/{id}` - Get patient information
-- `GET /fhir/Observation?patient={patient_id}` - Get patient analyses
-- `GET /fhir/DiagnosticReport?identifier={report_id}` - Get diagnostic report
-- `GET /fhir/Encounter?identifier={encounter_id}` - Get encounter/checkout information
-- `GET /fhir/ValueSet/cnp?id={cnp}` - Validate CNP
-- `POST /fhir/login` - Authenticate with Hipocrate system
-
-### Command-Line Client
-
-Use the CLI client for programmatic access:
 ```bash
-python client.py --username USER --password PASS --search "patient_name"
+python3 client.py --username USER --password PASS --search "patient_name"
+python3 client.py --username USER --password PASS --patient {id}
+python3 client.py --username USER --password PASS --checkout {id}
+python3 client.py --username USER --password PASS --cnp {cnp}
 ```
 
-Available options:
-- `--search` - Search for patients
-- `--patient` - Retrieve patient information
-- `--analyses` - Retrieve patient analyses
-- `--report` - Retrieve diagnostic report
-- `--checkout` - Retrieve checkout information
-- `--cnp` - Validate CNP
+## Running tests
 
-## Development
+```bash
+python3 runtests.py               # all groups
+python3 runtests.py extractors    # offline
+python3 runtests.py markdown      # offline
+python3 runtests.py hipodata      # offline
+```
 
-### Project Structure
-
-- `hipp.py` - Main server application with FHIR API endpoints
-- `client.py` - Command-line client for accessing the API
-- `static/` - Web interface files (HTML, CSS, JavaScript)
-- `requirements.txt` - Python dependencies
-
-### API Documentation
-
-Access the OpenAPI specification at `http://localhost:44660/fhir/spec` when the server is running.
+Groups requiring a live server: `root`, `auth`, `patients`, `analyses`, `reports`, `checkout`, `cnp`.
 
 ## License
 
-This project is licensed for internal hospital use only.
-
-## Acknowledgments
-
-- Built using the FHIR standard for healthcare interoperability
-- Uses aiohttp for asynchronous HTTP handling
-- Uses BeautifulSoup for HTML parsing
+Internal hospital use only.
