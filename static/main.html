@@ -337,25 +337,17 @@
                             <p>Discharge summary and medical conclusions</p>
                         </div>
                         <div class="header-actions">
-                            <button class="btn-secondary" id="downloadEpicrisisBtn">
-                                <i class="fas fa-download"></i>
-                                <span>Download PDF</span>
-                            </button>
-                            <button class="btn-ghost" id="printEpicrisisBtn">
-                                <i class="fas fa-print"></i>
-                                <span>Print</span>
+                            <button class="btn-secondary" id="copyEpicrisisBtn">
+                                <i class="fas fa-copy"></i>
+                                <span>Copy Markdown</span>
                             </button>
                         </div>
                     </div>
-                    
-                    <article id="epicrisisSection" aria-live="polite">
-                        <div class="epicrisis-card">
-                            <div class="epicrisis-title">
-                                <h3 id="epicrisisTitle">DIAGNOSTIC</h3>
-                                <p id="epicrisisDate" aria-label="Epicrisis date"></p>
-                            </div>
-                            <main id="epicrisisContent" class="epicrisis-content" aria-label="Epicrisis content"></main>
-                            <footer id="epicrisisFooter" class="epicrisis-footer" aria-label="Epicrisis footer"></footer>
+
+                    <article id="epicrisisContent" class="markdown-content" aria-live="polite">
+                        <div class="loading-content">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Loading epicrisis data...</p>
                         </div>
                     </article>
                 </section>

@@ -26,10 +26,7 @@ document.addEventListener('DOMContentLoaded', function() {
         noAnalyses: document.getElementById('noAnalyses'),
         // Epicrisis tab elements
         epicrisisContent: document.getElementById('epicrisisContent'),
-        epicrisisDate: document.getElementById('epicrisisDate'),
-        epicrisisTitle: document.getElementById('epicrisisTitle'),
-        epicrisisFooter: document.getElementById('epicrisisFooter'),
-        epicrisisSection: document.getElementById('epicrisisSection'),
+        copyEpicrisisBtn: document.getElementById('copyEpicrisisBtn'),
         // Report tab elements
         patientReportMarkdown: document.getElementById('patientReportMarkdown'),
         copyReportBtn: document.getElementById('copyReportBtn'),
@@ -60,8 +57,6 @@ document.addEventListener('DOMContentLoaded', function() {
         analysesFilter: document.getElementById('analysesFilter'),
         refreshAnalysesBtn: document.getElementById('refreshAnalysesBtn'),
         // Epicrisis actions
-        downloadEpicrisisBtn: document.getElementById('downloadEpicrisisBtn'),
-        printEpicrisisBtn: document.getElementById('printEpicrisisBtn'),
         // Loading overlay
         loadingOverlay: document.getElementById('loadingOverlay'),
         // Recent searches
@@ -243,14 +238,11 @@ document.addEventListener('DOMContentLoaded', function() {
             elements.printPatientBtn.addEventListener('click', printPatientData);
         }
         
-        if (elements.downloadEpicrisisBtn) {
-            elements.downloadEpicrisisBtn.addEventListener('click', downloadEpicrisis);
+        // Epicrisis tab buttons
+        if (elements.copyEpicrisisBtn) {
+            elements.copyEpicrisisBtn.addEventListener('click', copyEpicrisisMarkdown);
         }
-        
-        if (elements.printEpicrisisBtn) {
-            elements.printEpicrisisBtn.addEventListener('click', printEpicrisis);
-        }
-        
+
         // Report tab buttons
         if (elements.copyReportBtn) {
             elements.copyReportBtn.addEventListener('click', copyReportMarkdown);
@@ -643,12 +635,11 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.analysesGrid) elements.analysesGrid.innerHTML = '';
         if (elements.noAnalyses) elements.noAnalyses.style.display = 'none';
         
-        // Clear epicrisis with null checks
-        if (elements.epicrisisContent) elements.epicrisisContent.innerHTML = '';
-        if (elements.epicrisisDate) elements.epicrisisDate.style.display = 'none';
-        if (elements.epicrisisTitle) elements.epicrisisTitle.textContent = 'DIAGNOSTIC';
-        if (elements.epicrisisFooter) elements.epicrisisFooter.style.display = 'none';
-        if (elements.epicrisisSection) elements.epicrisisSection.style.display = 'none';
+        // Clear epicrisis
+        if (elements.epicrisisContent) {
+            elements.epicrisisContent.innerHTML = '';
+            delete elements.epicrisisContent.dataset.markdown;
+        }
         
         // Clear report tab
         if (elements.patientReportMarkdown) elements.patientReportMarkdown.innerHTML = '';
@@ -842,32 +833,37 @@ document.addEventListener('DOMContentLoaded', function() {
         window.print();
     }
     
-    function downloadEpicrisis() {
-        showToast('Downloading epicrisis PDF...', 'success');
-        // This would normally trigger a PDF download
-    }
-    
-    function printEpicrisis() {
-        const printContent = elements.epicrisisContent.innerHTML;
-        const printWindow = window.open('', '_blank');
-        printWindow.document.write(`
-            <html>
-                <head>
-                    <title>Epicrisis - ${elements.epicrisisTitle.textContent}</title>
-                    <style>
-                        body { font-family: Arial, sans-serif; }
-                        h1 { color: #333; }
-                        .content { margin: 20px; }
-                    </style>
-                </head>
-                <body>
-                    <h1>${elements.epicrisisTitle.textContent}</h1>
-                    <div class="content">${printContent}</div>
-                </body>
-            </html>
-        `);
-        printWindow.document.close();
-        printWindow.print();
+    async function copyEpicrisisMarkdown() {
+        const markdown = elements.epicrisisContent?.dataset.markdown;
+        if (!markdown) {
+            showToast('No epicrisis content to copy', 'warning');
+            return;
+        }
+
+        const confirm = () => {
+            const btn = elements.copyEpicrisisBtn;
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-check"></i> <span>Copied!</span>';
+            setTimeout(() => { btn.innerHTML = originalHTML; }, 2000);
+        };
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            try {
+                await navigator.clipboard.writeText(markdown);
+                confirm();
+                return;
+            } catch (err) { /* fall through */ }
+        }
+
+        const ta = document.createElement('textarea');
+        ta.value = markdown;
+        ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        ok ? confirm() : showToast('Failed to copy to clipboard', 'error');
     }
     
     async function copyReportMarkdown() {
@@ -1126,11 +1122,6 @@ document.addEventListener('DOMContentLoaded', function() {
         showToast('Full epicrisis view feature coming soon', 'info');
     };
     
-    window.printEpicrisis = function(checkoutId) {
-        // This would print the epicrisis
-        log('Printing epicrisis for checkout:', checkoutId);
-        showToast('Print epicrisis feature coming soon', 'info');
-    };
     
     async function fetchAndDisplayReportContent(serviceRequestId, analysisItem) {
         try {
@@ -1528,8 +1519,6 @@ document.addEventListener('DOMContentLoaded', function() {
         log('Checkout IDs:', checkoutIds);
         displayCheckoutIds(checkoutIds);
         
-        // Initialize sections but keep them hidden until data is loaded
-        elements.epicrisisSection.style.display = 'none';
         elements.analysesGrid.innerHTML = '';
         elements.noAnalyses.style.display = 'none';
         
@@ -2235,10 +2224,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Extract all checkout IDs from patient extensions
         const checkoutIds = extractCheckoutIds(patientData);
         
-        if (checkoutIds.length === 0) {
-            elements.epicrisisSection.style.display = 'none';
-            return;
-        }
+        if (checkoutIds.length === 0) return;
         
         // Try to fetch epicrisis data for each checkout ID until we find a valid one
         for (const checkoutId of checkoutIds) {
@@ -2295,91 +2281,45 @@ document.addEventListener('DOMContentLoaded', function() {
         return encounterData.note.map(note => note.text || '').join('\n\n');
     }
     
-    // Helper function to display epicrisis data
-    async function displayEpicrisisData(encounterData, epicrisisText) {
-        try {
-            const htmlContent = marked.parse(epicrisisText);
-            elements.epicrisisContent.innerHTML = htmlContent;
-            
-            // Set diagnosis title if available - prioritize discharge diagnosis
-            const diagnosisText = extractDiagnosisText(encounterData);
-            elements.epicrisisTitle.innerHTML = `<i class="fas fa-diagnoses"></i> Epicrisis: ${diagnosisText}`;
-            
-            // Display date if available
-            displayEpicrisisDate(encounterData);
-            
-            // Extract medic name from attender (ATND) participant and display in footer
-            displayMedicInfo(encounterData);
-            
-            elements.epicrisisSection.style.display = 'block';
-            
-            // Force UI update to display the epicrisis immediately
-            await new Promise(resolve => setTimeout(resolve, 0));
-            
-        } catch (err) {
-            console.error('Error converting epicrisis markdown:', err);
-            elements.epicrisisContent.textContent = epicrisisText;
-            elements.epicrisisDate.style.display = 'none';
-            elements.epicrisisFooter.style.display = 'none';
-        }
-    }
-    
     // Helper function to extract diagnosis text
     function extractDiagnosisText(encounterData) {
-        if (!encounterData.diagnosis || encounterData.diagnosis.length === 0) {
-            return 'DIAGNOSTIC';
-        }
-        
-        // Look for discharge diagnosis first (use code "DD")
-        const dischargeDiagnosis = encounterData.diagnosis.find(d => 
-            d.use && d.use.coding && d.use.coding.some(c => c.code === "DD")
+        if (!encounterData.diagnosis || encounterData.diagnosis.length === 0) return null;
+        const dd = encounterData.diagnosis.find(d =>
+            d.use?.coding?.some(c => c.code === 'DD')
         );
-        
-        if (dischargeDiagnosis && dischargeDiagnosis.condition && dischargeDiagnosis.condition.display) {
-            return dischargeDiagnosis.condition.display;
-        }
-        
-        // Fallback to first diagnosis if no discharge diagnosis found
-        const firstDiagnosis = encounterData.diagnosis[0];
-        if (firstDiagnosis.condition && firstDiagnosis.condition.display) {
-            return firstDiagnosis.condition.display;
-        }
-        
-        return 'DIAGNOSTIC';
+        return dd?.condition?.display
+            || encounterData.diagnosis[0]?.condition?.display
+            || null;
     }
-    
-    // Helper function to display epicrisis date
-    function displayEpicrisisDate(encounterData) {
-        if (encounterData.period && encounterData.period.end) {
-            const dateTime = new Date(encounterData.period.end);
-            const formattedDate = dateTime.toLocaleDateString('en-GB');
-            const formattedTime = dateTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-            elements.epicrisisDate.innerHTML = `<i class="fas fa-calendar"></i> Date: ${formattedDate} ${formattedTime}`;
-            elements.epicrisisDate.style.display = 'block';
-        } else {
-            elements.epicrisisDate.style.display = 'none';
+
+    // Render encounterData + epicrisisText into the epicrisis markdown-content container
+    function displayEpicrisisData(encounterData, epicrisisText) {
+        const diagnosis = extractDiagnosisText(encounterData) || 'Epicrisis';
+
+        // Build metadata line
+        const meta = [];
+        if (encounterData.period?.start) {
+            const d = new Date(encounterData.period.start);
+            meta.push(`**Admission:** ${d.toISOString().slice(0, 10)}`);
         }
-    }
-    
-    // Helper function to display medic information
-    function displayMedicInfo(encounterData) {
-        if (!encounterData.participant || encounterData.participant.length === 0) {
-            elements.epicrisisFooter.style.display = 'none';
-            return;
+        if (encounterData.period?.end) {
+            const d = new Date(encounterData.period.end);
+            meta.push(`**Discharge:** ${d.toISOString().slice(0, 10)}`);
         }
-        
-        // Look for participant with ATND type
-        const attenderParticipant = encounterData.participant.find(p => 
-            p.type && p.type.some(t => 
-                t.coding && t.coding.some(c => c.code === "ATND")
-            )
+        const attender = encounterData.participant?.find(p =>
+            p.type?.some(t => t.coding?.some(c => c.code === 'ATND'))
         );
-        
-        if (attenderParticipant && attenderParticipant.individual && attenderParticipant.individual.display) {
-            elements.epicrisisFooter.innerHTML = `<i class="fas fa-user-md"></i> Medic: ${attenderParticipant.individual.display}`;
-            elements.epicrisisFooter.style.display = 'block';
-        } else {
-            elements.epicrisisFooter.style.display = 'none';
+        if (attender?.individual?.display) {
+            meta.push(`**Attending:** ${attender.individual.display}`);
         }
+        if (encounterData.serviceType?.display) {
+            meta.push(`**Service:** ${encounterData.serviceType.display}`);
+        }
+
+        const markdown = `# ${diagnosis}\n\n${meta.join(' · ')}  \n\n${epicrisisText.trim()}`;
+
+        const htmlContent = marked.parse(markdown);
+        elements.epicrisisContent.innerHTML = htmlContent;
+        elements.epicrisisContent.dataset.markdown = markdown;
     }
 });

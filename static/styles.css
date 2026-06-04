@@ -1364,29 +1364,6 @@ select {
     border-top: 1px solid var(--border);
 }
 
-/* Epicrisis */
-.epicrisis-card {
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: 2rem;
-}
-
-.epicrisis-title {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1.5rem;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid var(--border);
-}
-
-.epicrisis-title h3 {
-    margin: 0;
-    font-size: 1.5rem;
-    color: var(--primary);
-}
-
 /* Dashboard */
 .dashboard-grid {
     display: grid;
