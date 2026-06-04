@@ -48,7 +48,7 @@ from typing import Dict, Any, Optional, List
 import json
 import logging
 import functools
-from datetime import datetime, timedelta
+from datetime import datetime
 import configparser
 import base64
 
@@ -256,7 +256,7 @@ async def get_fhir_patient(request):
     client = HipoClientPatient(SERVICE_URL, request)
 
     # Retrieve and parse the page, then convert to FHIR resource
-    response = await client.fetch_repond_fhir(id=id)
+    response = await client.fetch_respond_fhir(id=id)
 
     # Return the response using web_fhir_response helper
     return web_fhir_response(response)
@@ -399,7 +399,7 @@ async def get_fhir_service_request(request):
     client = HipoClientServiceRequest(SERVICE_URL, request)
 
     # Retrieve and parse the page, then convert to FHIR resource
-    response = await client.fetch_repond_fhir(id=id)
+    response = await client.fetch_respond_fhir(id=id)
     
     # Return the response
     return web_fhir_response(response)
@@ -463,7 +463,7 @@ async def get_fhir_imaging_study(request):
     client = HipoClientImagingStudy(SERVICE_URL, request)
 
     # Retrieve and parse the page, then convert to FHIR resource
-    response = await client.fetch_repond_fhir(id=id)
+    response = await client.fetch_respond_fhir(id=id)
 
     # Return the response
     return web_fhir_response(response)
@@ -527,7 +527,7 @@ async def get_fhir_diagnostic_report(request):
     client = HipoClientDiagnosticReport(SERVICE_URL, request)
 
     # Retrieve and parse the page, then convert to FHIR resource
-    response = await client.fetch_repond_fhir(id=id)
+    response = await client.fetch_respond_fhir(id=id)
 
     # Return the response
     return web_fhir_response(response)
@@ -594,7 +594,7 @@ async def get_fhir_encounter(request):
     client = HipoClientCheckout(SERVICE_URL, request)
 
     # Retrieve and parse the page, then convert to FHIR resource
-    response = await client.fetch_repond_fhir(id=id)
+    response = await client.fetch_respond_fhir(id=id)
     
     # Return the response
     return web_fhir_response(response)

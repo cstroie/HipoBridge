@@ -843,7 +843,7 @@ class HipoClient:
             data.set_error("Data retrieval failed")
             return data
 
-    async def fetch_repond_fhir(self, *args, max_redirects=5, **kwargs):
+    async def fetch_respond_fhir(self, *args, max_redirects=5, **kwargs):
         """Generic method to fetch data from an endpoint and convert it to FHIR format.
 
         This method provides a reusable way to fetch data from any endpoint, parse it,

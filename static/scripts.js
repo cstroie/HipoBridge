@@ -109,9 +109,8 @@ document.addEventListener('DOMContentLoaded', function() {
     function initTheme() {
         const savedTheme = localStorage.getItem('theme') || 'auto';
         document.documentElement.setAttribute('data-theme', savedTheme);
-        
-        const themeIcon = elements.themeToggle.querySelector('i');
-        themeIcon.className = savedTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+        const themeIcon = elements.themeToggle?.querySelector('i');
+        if (themeIcon) themeIcon.className = savedTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
     }
     
     function initializeTabs() {
