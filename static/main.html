@@ -10,11 +10,6 @@
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
         <link rel="stylesheet" href="/static/styles.css">
         
-        <!-- Preload critical fonts and resources -->
-        <link rel="preload" href="/static/styles.css" as="style">
-        <link rel="preload" href="/static/scripts.js" as="script">
-        <link rel="preload" href="/static/marked.js" as="script">
-        
         <!-- Google Fonts -->
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -55,32 +50,32 @@
         <nav class="main-nav" aria-label="Main navigation">
             <div class="container">
                 <ul class="nav-menu" role="tablist">
-                    <li class="nav-item active" data-tab="search" role="tab" aria-selected="true">
-                        <a href="#" aria-controls="search-tab" role="tab">
+                    <li class="nav-item active" data-tab="search" role="tab" aria-selected="true" aria-controls="search-tab">
+                        <a href="#">
                             <i class="fas fa-search"></i>
                             <span>Patient Search</span>
                         </a>
                     </li>
-                    <li class="nav-item" data-tab="patient" style="display: none;" role="tab" aria-selected="false">
-                        <a href="#" aria-controls="patient-tab" role="tab">
+                    <li class="nav-item" data-tab="patient" style="display: none;" role="tab" aria-selected="false" aria-controls="patient-tab">
+                        <a href="#">
                             <i class="fas fa-user-injured"></i>
                             <span>Patient Profile</span>
                         </a>
                     </li>
-                    <li class="nav-item" data-tab="analyses" style="display: none;" role="tab" aria-selected="false">
-                        <a href="#" aria-controls="analyses-tab" role="tab">
+                    <li class="nav-item" data-tab="analyses" style="display: none;" role="tab" aria-selected="false" aria-controls="analyses-tab">
+                        <a href="#">
                             <i class="fas fa-file-medical"></i>
                             <span>Analyses</span>
                         </a>
                     </li>
-                    <li class="nav-item" data-tab="epicrisis" style="display: none;" role="tab" aria-selected="false">
-                        <a href="#" aria-controls="epicrisis-tab" role="tab">
+                    <li class="nav-item" data-tab="epicrisis" style="display: none;" role="tab" aria-selected="false" aria-controls="epicrisis-tab">
+                        <a href="#">
                             <i class="fas fa-file-prescription"></i>
                             <span>Epicrisis</span>
                         </a>
                     </li>
-                    <li class="nav-item" data-tab="report" style="display: none;" role="tab" aria-selected="false">
-                        <a href="#" aria-controls="report-tab" role="tab">
+                    <li class="nav-item" data-tab="report" style="display: none;" role="tab" aria-selected="false" aria-controls="report-tab">
+                        <a href="#">
                             <i class="fas fa-notes-medical"></i>
                             <span>Report</span>
                         </a>
@@ -93,7 +88,7 @@
         <main class="main-content">
             <div class="container">
                 <!-- Search Tab -->
-                <section id="search-tab" class="tab-content active" role="tabpanel" aria-labelledby="search-tab">
+                <section id="search-tab" class="tab-content active" role="tabpanel" aria-labelledby="search-tab-heading">
                     <div class="hero-section">
                         <div class="hero-content">
                             <h2><i class="fas fa-stethoscope"></i> Patient Records</h2>
@@ -104,7 +99,7 @@
                     <div class="search-section">
                         <div class="search-card">
                             <div class="search-header">
-                                <h3><i class="fas fa-search"></i> Find Patient</h3>
+                                <h3 id="search-tab-heading"><i class="fas fa-search"></i> Find Patient</h3>
                             </div>
                             
                             <form id="cnpForm" novalidate>
@@ -143,14 +138,14 @@
                 </section>
 
                 <!-- Patient Profile Tab -->
-                <section id="patient-tab" class="tab-content" role="tabpanel" aria-labelledby="patient-tab" hidden>
+                <section id="patient-tab" class="tab-content" role="tabpanel" aria-labelledby="patient-tab-heading" hidden>
                     <div class="patient-overview">
                         <div class="patient-header">
                             <div class="patient-avatar">
                                 <i class="fas fa-user-injured"></i>
                             </div>
                             <div class="patient-main-info">
-                                <h2 id="patientName"><i class="fas fa-user"></i> Patient Name</h2>
+                                <h2 id="patientName"><i class="fas fa-user"></i> <span id="patient-tab-heading">Patient Name</span></h2>
                                 <div class="patient-meta">
                                     <span class="badge badge-primary" id="patientId">ID: N/A</span>
                                     <span class="badge badge-secondary" id="patientGender">Gender: N/A</span>
@@ -235,10 +230,10 @@
                 </section>
 
                 <!-- Medical Analyses Tab -->
-                <section id="analyses-tab" class="tab-content" role="tabpanel" aria-labelledby="analyses-tab" hidden>
+                <section id="analyses-tab" class="tab-content" role="tabpanel" aria-labelledby="analyses-tab-heading" hidden>
                     <div class="analyses-header">
                         <div class="header-left">
-                            <h2><i class="fas fa-file-medical"></i> Analyses</h2>
+                            <h2 id="analyses-tab-heading"><i class="fas fa-file-medical"></i> Analyses</h2>
                             <p>Comprehensive diagnostic reports and imaging studies</p>
                         </div>
                         <div class="header-actions">
@@ -267,10 +262,10 @@
                 </section>
 
                 <!-- Epicrisis Tab -->
-                <section id="epicrisis-tab" class="tab-content" role="tabpanel" aria-labelledby="epicrisis-tab" hidden>
+                <section id="epicrisis-tab" class="tab-content" role="tabpanel" aria-labelledby="epicrisis-tab-heading" hidden>
                     <div class="epicrisis-header">
                         <div class="header-left">
-                            <h2><i class="fas fa-file-prescription"></i> Epicrisis</h2>
+                            <h2 id="epicrisis-tab-heading"><i class="fas fa-file-prescription"></i> Epicrisis</h2>
                             <p>Discharge summary and medical conclusions</p>
                         </div>
                         <div class="header-actions">
@@ -290,10 +285,10 @@
                 </section>
 
                 <!-- Report Tab -->
-                <section id="report-tab" class="tab-content" role="tabpanel" aria-labelledby="report-tab" hidden>
+                <section id="report-tab" class="tab-content" role="tabpanel" aria-labelledby="report-tab-heading" hidden>
                     <div class="report-header">
                         <div class="header-left">
-                            <h2><i class="fas fa-notes-medical"></i> Patient Report</h2>
+                            <h2 id="report-tab-heading"><i class="fas fa-notes-medical"></i> Patient Report</h2>
                             <p>Clinical summary structured for LLM consumption — copy and paste into your AI assistant</p>
                         </div>
                         <div class="header-actions">
@@ -352,11 +347,11 @@
                 <article>
                     <header>
                         <h2></h2>
-                        <button class="close" aria-label="Close modal" rel="prev">
+                        <button class="close" aria-label="Close modal">
                             <i class="fas fa-times"></i>
                         </button>
                     </header>
-                    <main>
+                    <div>
                         <div class="study-section">
                             <h3><i class="fas fa-info-circle"></i> Study Information</h3>
                             <div class="study-info" aria-label="Study information"></div>
@@ -368,7 +363,7 @@
                         <section class="study-section">
                             <p><a href="#" class="back-to-report" aria-label="Back to report"><i class="fas fa-arrow-left"></i> Back to Report</a></p>
                         </section>
-                    </main>
+                    </div>
                     <footer>
                         <button class="btn-secondary" data-close-modal aria-label="Close modal">
                             <i class="fas fa-times"></i>
@@ -392,7 +387,7 @@
             </div>
         </div>
 
-        <script src="/static/scripts.js"></script>
         <script src="/static/marked.js"></script>
+        <script src="/static/scripts.js"></script>
     </body>
 </html>
