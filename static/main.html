@@ -3,8 +3,8 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>HippoBridge - Medical Patient Data Analyzer</title>
-        <meta name="description" content="Secure medical patient data analyzer for healthcare professionals">
+        <title>HippoBridge — Medical Data Intelligence</title>
+        <meta name="description" content="FHIR-compatible medical data interface for the Hipocrate system">
         <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌉</text></svg>">
         <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌉</text></svg>">
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -81,7 +81,7 @@
                     </li>
                     <li class="nav-item" data-tab="report" style="display: none;" role="tab" aria-selected="false">
                         <a href="#" aria-controls="report-tab" role="tab">
-                            <i class="fas fa-chart-bar"></i>
+                            <i class="fas fa-notes-medical"></i>
                             <span>Report</span>
                         </a>
                     </li>
@@ -96,16 +96,15 @@
                 <section id="search-tab" class="tab-content active" role="tabpanel" aria-labelledby="search-tab">
                     <div class="hero-section">
                         <div class="hero-content">
-                            <h1><i class="fas fa-stethoscope"></i> Welcome to HippoBridge</h1>
-                            <p class="hero-subtitle">Advanced medical data analysis for healthcare professionals. Search for patients and access comprehensive medical records, diagnostic reports, and treatment histories.</p>
+                            <h2><i class="fas fa-stethoscope"></i> Patient Records</h2>
+                            <p class="hero-subtitle">Search Hipocrate by CNP, patient code, or name — access analyses, diagnostic reports, and discharge summaries.</p>
                         </div>
-                        </div>
+                    </div>
 
                     <div class="search-section">
                         <div class="search-card">
                             <div class="search-header">
-                                <h2><i class="fas fa-search"></i> Find Patient Records</h2>
-                                <p>Search by CNP, patient name, or medical code to access comprehensive patient data</p>
+                                <h3><i class="fas fa-search"></i> Find Patient</h3>
                             </div>
                             
                             <form id="cnpForm" novalidate>
@@ -123,7 +122,6 @@
                             </form>
                             
                             <div class="search-examples">
-                                <h4><i class="fas fa-lightbulb"></i> Search Examples</h4>
                                 <div class="examples-grid">
                                     <button type="button" class="example-btn" data-example="1234567890123">1234567890123</button>
                                     <button type="button" class="example-btn" data-example="1234567*">1234567*</button>
@@ -295,8 +293,8 @@
                 <section id="report-tab" class="tab-content" role="tabpanel" aria-labelledby="report-tab" hidden>
                     <div class="report-header">
                         <div class="header-left">
-                            <h2><i class="fas fa-chart-bar"></i> Patient Report</h2>
-                            <p>Comprehensive patient data analysis and summary</p>
+                            <h2><i class="fas fa-notes-medical"></i> Patient Report</h2>
+                            <p>Clinical summary structured for LLM consumption — copy and paste into your AI assistant</p>
                         </div>
                         <div class="header-actions">
                             <button class="btn-secondary" id="copyReportBtn">
@@ -309,7 +307,7 @@
                     <article id="patientReportMarkdown" class="markdown-content">
                         <div class="loading-content">
                             <i class="fas fa-spinner fa-spin"></i>
-                            <p>Loading patient identification data...</p>
+                            <p>Assembling report...</p>
                         </div>
                     </article>
                 </section>

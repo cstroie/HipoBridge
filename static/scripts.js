@@ -296,7 +296,7 @@ document.addEventListener('DOMContentLoaded', function() {
             log('Switching to patient tab...');
             switchToPatientTab();
             
-            showToast('Analysis loading complete', 'success');
+            showToast('Patient data loaded', 'success');
             log('All data loading complete');
             
         } catch (err) {
@@ -598,7 +598,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const themeIcon = elements.themeToggle.querySelector('i');
         themeIcon.className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
         
-        showToast(`Theme switched to ${newTheme}`, 'info');
     }
     
     
@@ -907,7 +906,7 @@ document.addEventListener('DOMContentLoaded', function() {
         markdownContainer.innerHTML = `
             <div class="loading-content">
                 <i class="fas fa-spinner fa-spin"></i>
-                <p>Loading patient report data...</p>
+                <p>Assembling report...</p>
             </div>
         `;
         
@@ -1406,7 +1405,6 @@ document.addEventListener('DOMContentLoaded', function() {
             
             const studyData = await studyResponse.json();
             displayImagingStudyModal(studyData, studyId, reportId);
-            showToast(`Imaging study ${studyId} loaded successfully`, 'success');
             
         } catch (err) {
             console.error('Error fetching imaging study:', err);
@@ -1632,7 +1630,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             } else {
                                 // If no content, show a message
                                 const p = document.createElement('p');
-                                p.textContent = 'No report content available';
+                                p.textContent = 'No report text available';
                                 reportPreview.appendChild(p);
                             }
                         }
