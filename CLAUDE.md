@@ -103,6 +103,15 @@ Every subclass implements three methods:
 - `html_to_markdown`: decomposes icon-only `<i>` tags (no text content) so they don't produce stray `*` markers; replaces heading tags with a plain text node to preserve `#` prefix inside block containers.
 - `markdown_to_html`: processes bold before italic using STX/ETX sentinels to avoid `*` interference; uses distinct sentinel tags for `<ul>` vs `<ol>` items to prevent double-wrapping.
 
+### Entry point (`hipobridge.py`) conventions
+
+- **Log level** is controlled by the `LOG_LEVEL` environment variable (default `INFO`). Set `LOG_LEVEL=DEBUG` for development. Never hardcode `DEBUG` in the source.
+- **Config loading** happens inside `init_app()`, not at module-import time. Module-level globals (`SERVICE_URL`, `_PORT`, `_HOST`) hold safe defaults and are overwritten by `init_app()` before any route is served.
+- **All file paths** (`spec.json`, `static/`) are constructed with `os.path.join(os.path.dirname(__file__), ...)` so the server works regardless of the current working directory.
+- **Request credentials** are stored as `request['auth_credentials']` (aiohttp dict-style storage), not as a plain attribute. Read them the same way in `HipoClient.__init__`.
+- **`web_fhir_response`** sets `Content-Type: application/fhir+json` on every response (required by FHIR R4). Strings are wrapped in an `OperationOutcome` and returned as 400.
+- **`web_json_response`** maps `status="success"` → 200, `status="error"` with "not found" in the message → 404, other errors → 500.
+
 ### Error handling conventions
 
 - `web_fhir_response(str)` — wraps the string in an `OperationOutcome` and returns **400** (missing required parameter). Do not pass strings for server-side failures; build an `OperationOutcome` directly with the right severity.

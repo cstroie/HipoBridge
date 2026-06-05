@@ -21,7 +21,7 @@ export HYP_USER=<username> HYP_PASS=<password>
 python3 hipobridge.py
 ```
 
-Server listens on `http://0.0.0.0:44660` by default. Override with `local.cfg` (not tracked by git):
+Server listens on `http://0.0.0.0:44660` by default. Set `LOG_LEVEL=DEBUG` for verbose logging. Override host/port/service URL with `local.cfg` (not tracked by git):
 
 ```ini
 [server]
