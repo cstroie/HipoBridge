@@ -549,7 +549,10 @@ document.addEventListener('DOMContentLoaded', function() {
     function clearResults() {
         // Clear patient data with null checks
         if (elements.patientId) elements.patientId.textContent = '';
-        if (elements.patientName) elements.patientName.textContent = '';
+        if (elements.patientName) {
+            const nameSpan = elements.patientName.querySelector('#patient-tab-heading');
+            if (nameSpan) nameSpan.textContent = '';
+        }
         if (elements.patientCnp) elements.patientCnp.textContent = '';
         if (elements.patientGender) elements.patientGender.textContent = '';
         if (elements.patientBirthDate) elements.patientBirthDate.textContent = '';
