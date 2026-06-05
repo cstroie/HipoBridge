@@ -42,7 +42,7 @@ from extractors import parse_cnp
 from markdown import markdown_to_html
 
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=getattr(logging, os.getenv('LOG_LEVEL', 'INFO').upper(), logging.INFO),
     format='%(asctime)s | %(levelname)8s | %(message)s'
 )
 logger = logging.getLogger('HipoBridge')
@@ -80,7 +80,7 @@ def require_auth(handler):
         if not auth:
             return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HipoBridge"'})
         username, password = auth
-        request.auth_credentials = (username, password)
+        request['auth_credentials'] = (username, password)
         return await handler(request)
     return wrapper
 
@@ -108,9 +108,9 @@ async def search_fhir_patient(request):
     client = HipoClientPatientSearch(SERVICE_URL, request)
     parsed_data = await client.search(search_term)
 
-    if 'patient' in parsed_data:
+    if parsed_data.get('patient'):
         response = client.fhir_response(parsed_data)
-    elif 'patients' in parsed_data and len(parsed_data['patients']) > 0:
+    elif parsed_data.get('patients'):
         response = client.fhir_bundle_response(parsed_data, http_request=request)
     else:
         response = OperationOutcome.from_error(
@@ -310,14 +310,16 @@ async def serve_spec(request):
     """Serve spec.json as OpenAPI specification, updating the server URL dynamically."""
     logger.info("GET /fhir/spec endpoint accessed")
 
+    spec_path = os.path.join(os.path.dirname(__file__), 'spec.json')
     try:
-        with open('spec.json', 'r') as f:
+        with open(spec_path, 'r') as f:
             spec = json.load(f)
         spec["servers"][0]["url"] = f"{request.scheme}://{request.host}"
         return web.json_response(spec)
     except FileNotFoundError:
         return web_error_response("Specification file not found", 500)
     except json.JSONDecodeError as e:
+        logger.error(f"spec.json parse error: {e}")
         return web_error_response("Error parsing specification file", 500)
 
 
@@ -420,6 +422,8 @@ async def serve_md2html(request):
     try:
         data = await request.json()
         markdown_text = data.get('text', '')
+        if not isinstance(markdown_text, str):
+            return web_error_response("'text' field must be a string")
         html_content = markdown_to_html(markdown_text)
         return web_json_response({
             "status": "success",
@@ -463,7 +467,7 @@ async def serve_validate_cnp(request):
 @require_auth
 async def serve_web_page(request):
     """Serve the SPA after verifying Hipocrate credentials are valid."""
-    username, password = request.auth_credentials
+    username, password = request['auth_credentials']
 
     client = HipoClient(SERVICE_URL, request)
     session, login_success = await client.get_authenticated_session(username, password)
@@ -471,7 +475,7 @@ async def serve_web_page(request):
     if not login_success:
         return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HipoBridge"'})
 
-    return web.FileResponse('static/main.html')
+    return web.FileResponse(os.path.join(os.path.dirname(__file__), 'static', 'main.html'))
 
 
 def web_error_response(message: str, status_code: int = 400, details: Dict[str, Any] = None) -> web.Response:
@@ -487,8 +491,16 @@ def web_error_response(message: str, status_code: int = 400, details: Dict[str, 
 
 
 def web_json_response(data: Dict[str, Any]) -> web.Response:
-    """Return 200 for successful HipoData, 404 otherwise."""
-    status = 200 if data.get("status") == "success" else 404
+    """Return 200 for successful HipoData, 404 for not-found, 500 for errors."""
+    s = data.get("status")
+    if s == "success":
+        status = 200
+    elif s == "error":
+        msg = data.get("message", "")
+        # Distinguish parse/upstream failures (500) from not-found (404)
+        status = 404 if "not found" in msg.lower() else 500
+    else:
+        status = 200
     return web.json_response(data, status=status)
 
 
@@ -508,9 +520,12 @@ def web_fhir_response(data) -> web.Response:
     OperationOutcome issue code: 'not-found' → 404, 'information' severity → 200,
     other errors → 500, warnings → 400.
     """
+    FHIR_CONTENT_TYPE = 'application/fhir+json'
+
     if isinstance(data, str):
         operation_outcome = OperationOutcome.from_error(message=data, code="required", severity="error")
-        return web.json_response(operation_outcome.to_dict(), status=400)
+        return web.json_response(operation_outcome.to_dict(), status=400,
+                                 content_type=FHIR_CONTENT_TYPE)
 
     if hasattr(data, 'to_dict'):
         response_data = data.to_dict()
@@ -528,7 +543,8 @@ def web_fhir_response(data) -> web.Response:
             status_code = 400
         # 'information' severity (e.g. search returning zero results) stays 200
 
-    return web.json_response(response_data, status=status_code)
+    return web.json_response(response_data, status=status_code,
+                             content_type=FHIR_CONTENT_TYPE)
 
 
 def load_config():
@@ -548,17 +564,19 @@ def load_config():
 
     return config
 
-async def on_startup(app):
-    logger.info("Application startup")
-
 async def on_cleanup(app):
     """Close all user HTTP sessions on shutdown."""
     logger.info("Application cleanup")
     await user_session_manager.close_all_sessions()
 
 async def init_app():
-    """Wire up routes and lifecycle handlers, return the configured app."""
-    logger.info("Initializing web application")
+    """Load config, wire up routes and lifecycle handlers, return the configured app."""
+    global SERVICE_URL, _PORT, _HOST
+    config = load_config()
+    SERVICE_URL = config.get('hipocrate', 'service_url')
+    _PORT = config.getint('server', 'port')
+    _HOST = config.get('server', 'host')
+    logger.info(f"Service URL: {SERVICE_URL}")
 
     app = web.Application()
     app.router.add_get('/', serve_web_page)
@@ -581,18 +599,31 @@ async def init_app():
     app.router.add_get('/fhir/CodeSystem/analysis-types', serve_fhir_analysis_types)
     app.router.add_get('/fhir/spec', serve_spec)
     app.router.add_get('/fhir/Metadata', serve_fhir_metadata)
-    app.router.add_static('/static/', path='static', name='static')
+    app.router.add_static('/static/', path=os.path.join(os.path.dirname(__file__), 'static'), name='static')
 
-    app.on_startup.append(on_startup)
     app.on_cleanup.append(on_cleanup)
 
     return app
 
-config = load_config()
-SERVICE_URL = config.get('hipocrate', 'service_url')
-PORT = config.getint('server', 'port')
-HOST = config.get('server', 'host')
+# Module-level defaults — overridden by init_app() from the config files
+SERVICE_URL: str = DEFAULT_CONFIG['hipocrate']['service_url']
+_PORT: int = int(DEFAULT_CONFIG['server']['port'])
+_HOST: str = DEFAULT_CONFIG['server']['host']
 
 if __name__ == "__main__":
-    logger.info(f"Starting HipoBridge server on {HOST}:{PORT}")
-    web.run_app(init_app(), host=HOST, port=PORT)
+    import asyncio
+
+    async def _main():
+        global SERVICE_URL, _PORT, _HOST
+        app = await init_app()
+        logger.info(f"Starting HipoBridge server on {_HOST}:{_PORT}")
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, _HOST, _PORT)
+        await site.start()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            await runner.cleanup()
+
+    asyncio.run(_main())

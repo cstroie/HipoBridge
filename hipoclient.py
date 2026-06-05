@@ -316,8 +316,8 @@ class HipoClient:
         self.session = None
         
         # Extract credentials from request if provided
-        if self.request and hasattr(self.request, 'auth_credentials'):
-            self.username, self.password = self.request.auth_credentials
+        if self.request and 'auth_credentials' in self.request:
+            self.username, self.password = self.request['auth_credentials']
 
     def set_credentials(self, username: str, password: str):
         """Set the username and password for authentication.
