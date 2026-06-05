@@ -206,15 +206,15 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function switchTab(tabId) {
-        // Update active nav item and aria-selected
+        // Update active nav item and aria-current
         elements.navItems.forEach(nav => {
             nav.classList.remove('active');
-            nav.setAttribute('aria-selected', 'false');
+            nav.removeAttribute('aria-current');
         });
         const activeNavItem = document.querySelector(`.nav-item[data-tab="${tabId}"]`);
         if (activeNavItem) {
             activeNavItem.classList.add('active');
-            activeNavItem.setAttribute('aria-selected', 'true');
+            activeNavItem.setAttribute('aria-current', 'page');
         }
         
         // Show corresponding tab content

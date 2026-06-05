@@ -347,7 +347,7 @@ small {
     color: white;
 }
 
-.brand-info h1 {
+.brand-name {
     font-size: var(--font-size-2xl);
     margin: 0;
     font-weight: var(--font-weight-bold);
@@ -770,7 +770,7 @@ small {
     box-shadow: var(--shadow-lg);
 }
 
-.patient-main-info h2 {
+.patient-main-info h1 {
     font-size: var(--font-size-4xl);
     margin: 0 0 0.5rem 0;
 }
@@ -885,7 +885,8 @@ small {
     background: var(--bg);
 }
 
-.info-row label {
+.info-row label,
+.info-row dt {
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -893,9 +894,11 @@ small {
     font-weight: var(--font-weight-medium);
 }
 
-.info-row span {
+.info-row span,
+.info-row dd {
     color: var(--text);
     font-weight: var(--font-weight-semibold);
+    margin: 0;
 }
 
 .stats-grid {
@@ -1458,7 +1461,7 @@ select {
         height: 40px;
     }
     
-    .brand-info h1 {
+    .brand-name {
         font-size: var(--font-size-lg);
     }
     
@@ -1472,7 +1475,7 @@ select {
         font-size: var(--font-size-2xl);
     }
     
-    .patient-main-info h2 {
+    .patient-main-info h1 {
         font-size: var(--font-size-2xl);
     }
     

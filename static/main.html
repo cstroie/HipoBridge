@@ -7,13 +7,10 @@
         <meta name="description" content="FHIR-compatible medical data interface for the Hipocrate system">
         <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌉</text></svg>">
         <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌉</text></svg>">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
         <link rel="stylesheet" href="/static/styles.css">
         
-        <!-- Google Fonts -->
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <!-- Inter loaded via system font stack in styles.css; no external font request needed -->
     </head>
     <body>
         <!-- Header -->
@@ -25,7 +22,7 @@
                             <i class="fas fa-bridge"></i>
                         </div>
                         <div class="brand-info">
-                            <h1>HippoBridge</h1>
+                            <p class="brand-name">HippoBridge</p>
                             <p>Medical Data Intelligence</p>
                         </div>
                     </div>
@@ -49,32 +46,32 @@
         <!-- Navigation -->
         <nav class="main-nav" aria-label="Main navigation">
             <div class="container">
-                <ul class="nav-menu" role="tablist">
-                    <li class="nav-item active" data-tab="search" role="tab" aria-selected="true" aria-controls="search-tab">
+                <ul class="nav-menu">
+                    <li class="nav-item active" data-tab="search" aria-current="page" aria-controls="search-tab">
                         <a href="#">
                             <i class="fas fa-search"></i>
                             <span>Patient Search</span>
                         </a>
                     </li>
-                    <li class="nav-item" data-tab="patient" style="display: none;" role="tab" aria-selected="false" aria-controls="patient-tab">
+                    <li class="nav-item" data-tab="patient" style="display: none;" aria-controls="patient-tab">
                         <a href="#">
                             <i class="fas fa-user-injured"></i>
                             <span>Patient Profile</span>
                         </a>
                     </li>
-                    <li class="nav-item" data-tab="analyses" style="display: none;" role="tab" aria-selected="false" aria-controls="analyses-tab">
+                    <li class="nav-item" data-tab="analyses" style="display: none;" aria-controls="analyses-tab">
                         <a href="#">
                             <i class="fas fa-file-medical"></i>
                             <span>Analyses</span>
                         </a>
                     </li>
-                    <li class="nav-item" data-tab="epicrisis" style="display: none;" role="tab" aria-selected="false" aria-controls="epicrisis-tab">
+                    <li class="nav-item" data-tab="epicrisis" style="display: none;" aria-controls="epicrisis-tab">
                         <a href="#">
                             <i class="fas fa-file-prescription"></i>
                             <span>Epicrisis</span>
                         </a>
                     </li>
-                    <li class="nav-item" data-tab="report" style="display: none;" role="tab" aria-selected="false" aria-controls="report-tab">
+                    <li class="nav-item" data-tab="report" style="display: none;" aria-controls="report-tab">
                         <a href="#">
                             <i class="fas fa-notes-medical"></i>
                             <span>Report</span>
@@ -91,7 +88,7 @@
                 <section id="search-tab" class="tab-content active" role="tabpanel" aria-labelledby="search-tab-heading">
                     <div class="hero-section">
                         <div class="hero-content">
-                            <h2><i class="fas fa-stethoscope"></i> Patient Records</h2>
+                            <h1 id="search-tab-heading"><i class="fas fa-stethoscope"></i> Patient Records</h1>
                             <p class="hero-subtitle">Search Hipocrate by CNP, patient code, or name — access analyses, diagnostic reports, and discharge summaries.</p>
                         </div>
                     </div>
@@ -99,7 +96,7 @@
                     <div class="search-section">
                         <div class="search-card">
                             <div class="search-header">
-                                <h3 id="search-tab-heading"><i class="fas fa-search"></i> Find Patient</h3>
+                                <h2><i class="fas fa-search"></i> Find Patient</h2>
                             </div>
                             
                             <form id="cnpForm" novalidate>
@@ -145,7 +142,7 @@
                                 <i class="fas fa-user-injured"></i>
                             </div>
                             <div class="patient-main-info">
-                                <h2 id="patientName"><i class="fas fa-user"></i> <span id="patient-tab-heading">Patient Name</span></h2>
+                                <h1 id="patientName"><i class="fas fa-user" aria-hidden="true"></i> <span id="patient-tab-heading">Patient Name</span></h1>
                                 <div class="patient-meta">
                                     <span class="badge badge-primary" id="patientId">ID: N/A</span>
                                     <span class="badge badge-secondary" id="patientGender">Gender: N/A</span>
@@ -169,24 +166,24 @@
                                 <div class="card-header">
                                     <h3><i class="fas fa-id-card"></i> Personal Information</h3>
                                 </div>
-                                <div class="card-content">
+                                <dl class="card-content">
                                     <div class="info-row">
-                                        <label><i class="fas fa-id-card"></i> CNP</label>
-                                        <span id="patientCnp" aria-label="Patient CNP"></span>
+                                        <dt><i class="fas fa-id-card" aria-hidden="true"></i> CNP</dt>
+                                        <dd id="patientCnp"></dd>
                                     </div>
                                     <div class="info-row">
-                                        <label><i class="fas fa-birthday-cake"></i> Birth Date</label>
-                                        <span id="patientBirthDate" aria-label="Patient birth date"></span>
+                                        <dt><i class="fas fa-birthday-cake" aria-hidden="true"></i> Birth Date</dt>
+                                        <dd id="patientBirthDate"></dd>
                                     </div>
                                     <div class="info-row">
-                                        <label><i class="fas fa-phone"></i> Phone</label>
-                                        <span id="patientPhone" aria-label="Patient phone number"></span>
+                                        <dt><i class="fas fa-phone" aria-hidden="true"></i> Phone</dt>
+                                        <dd id="patientPhone"></dd>
                                     </div>
                                     <div class="info-row">
-                                        <label><i class="fas fa-envelope"></i> Email</label>
-                                        <span id="patientEmail" aria-label="Patient email address"></span>
+                                        <dt><i class="fas fa-envelope" aria-hidden="true"></i> Email</dt>
+                                        <dd id="patientEmail"></dd>
                                     </div>
-                                </div>
+                                </dl>
                             </div>
                             
                             <div class="patient-stats-card">
@@ -233,7 +230,7 @@
                 <section id="analyses-tab" class="tab-content" role="tabpanel" aria-labelledby="analyses-tab-heading" hidden>
                     <div class="analyses-header">
                         <div class="header-left">
-                            <h2 id="analyses-tab-heading"><i class="fas fa-file-medical"></i> Analyses</h2>
+                            <h1 id="analyses-tab-heading"><i class="fas fa-file-medical" aria-hidden="true"></i> Analyses</h1>
                             <p>Comprehensive diagnostic reports and imaging studies</p>
                         </div>
                         <div class="header-actions">
@@ -265,7 +262,7 @@
                 <section id="epicrisis-tab" class="tab-content" role="tabpanel" aria-labelledby="epicrisis-tab-heading" hidden>
                     <div class="epicrisis-header">
                         <div class="header-left">
-                            <h2 id="epicrisis-tab-heading"><i class="fas fa-file-prescription"></i> Epicrisis</h2>
+                            <h1 id="epicrisis-tab-heading"><i class="fas fa-file-prescription" aria-hidden="true"></i> Epicrisis</h1>
                             <p>Discharge summary and medical conclusions</p>
                         </div>
                         <div class="header-actions">
@@ -276,19 +273,14 @@
                         </div>
                     </div>
 
-                    <article id="epicrisisContent" class="markdown-content" aria-live="polite">
-                        <div class="loading-content">
-                            <i class="fas fa-spinner fa-spin"></i>
-                            <p>Loading epicrisis data...</p>
-                        </div>
-                    </article>
+                    <div id="epicrisisContent" class="markdown-content" aria-live="polite"></div>
                 </section>
 
                 <!-- Report Tab -->
                 <section id="report-tab" class="tab-content" role="tabpanel" aria-labelledby="report-tab-heading" hidden>
                     <div class="report-header">
                         <div class="header-left">
-                            <h2 id="report-tab-heading"><i class="fas fa-notes-medical"></i> Patient Report</h2>
+                            <h1 id="report-tab-heading"><i class="fas fa-notes-medical" aria-hidden="true"></i> Patient Report</h1>
                             <p>Clinical summary structured for LLM consumption — copy and paste into your AI assistant</p>
                         </div>
                         <div class="header-actions">
@@ -299,12 +291,7 @@
                         </div>
                     </div>
 
-                    <article id="patientReportMarkdown" class="markdown-content">
-                        <div class="loading-content">
-                            <i class="fas fa-spinner fa-spin"></i>
-                            <p>Assembling report...</p>
-                        </div>
-                    </article>
+                    <div id="patientReportMarkdown" class="markdown-content"></div>
                 </section>
 
             </div>
@@ -321,7 +308,7 @@
 
         <!-- Templates for dynamic content -->
         <template id="analysis-card-template">
-            <article class="analysis-card" role="article">
+            <article class="analysis-card">
                 <div class="analysis-header">
                     <div class="analysis-type-badge">
                         <i class="modality-icon"></i>
@@ -366,10 +353,10 @@
         </template>
 
         <template id="imaging-study-modal-template">
-            <dialog class="modal" aria-modal="true" role="dialog">
+            <dialog class="modal" aria-modal="true" role="dialog" aria-labelledby="imaging-study-modal-title">
                 <article>
                     <header>
-                        <h2><i class="fas fa-x-ray"></i> <span class="modal-title"></span></h2>
+                        <h2 id="imaging-study-modal-title"><i class="fas fa-x-ray" aria-hidden="true"></i> <span class="modal-title"></span></h2>
                         <button class="close" aria-label="Close modal">
                             <i class="fas fa-times"></i>
                         </button>
@@ -392,7 +379,7 @@
                             <i class="fas fa-times"></i>
                             <span>Close</span>
                         </button>
-                        <button class="btn-primary" id="viewImagesBtn" aria-label="View images">
+                        <button class="btn-primary" aria-label="View images">
                             <i class="fas fa-images"></i>
                             <span>View Images</span>
                         </button>
