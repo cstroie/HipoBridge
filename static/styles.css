@@ -73,6 +73,9 @@
     --z-overlay: 9999;
     --z-toast: 10000;
 
+    /* Header height — used by sticky nav offset */
+    --header-height: 72px;
+
     color-scheme: light dark;
 }
 
@@ -109,7 +112,7 @@
 *::after {
     border-width: 0;
     border-style: solid;
-    border-color: currentColor;
+    border-color: transparent;
 }
 
 html {
@@ -307,7 +310,7 @@ small {
 .header {
     background: linear-gradient(135deg, var(--header-primary, var(--primary)), var(--header-secondary, var(--secondary)));
     color: white;
-    padding: 1rem 0;
+    padding: var(--spacing-md) 0;
     box-shadow: var(--shadow-lg);
     position: sticky;
     top: 0;
@@ -318,13 +321,13 @@ small {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 2rem;
+    gap: var(--spacing-xl);
 }
 
 .brand {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: var(--spacing-md);
 }
 
 .brand-logo {
@@ -360,15 +363,15 @@ small {
 .header-actions {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: var(--spacing-md);
 }
 
 .search-quick {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--spacing-sm);
     background: rgba(255, 255, 255, 0.1);
-    padding: 0.5rem;
+    padding: var(--spacing-sm);
     border-radius: var(--radius-full);
     border: 1px solid rgba(255, 255, 255, 0.2);
     backdrop-filter: blur(10px);
@@ -412,7 +415,7 @@ small {
 .user-actions {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--spacing-sm);
 }
 
 
@@ -429,14 +432,13 @@ small {
     background: var(--card-bg);
     border-bottom: 1px solid var(--border);
     position: sticky;
-    top: 72px;
+    top: var(--header-height);
     z-index: var(--z-nav);
 }
 
 .nav-menu {
     display: flex;
     list-style: none;
-    padding: 0;
     margin: 0;
     gap: 0.25rem;
     background: var(--bg);
@@ -490,10 +492,14 @@ small {
 }
 
 /* Dark mode nav active: primary text on subtle bg (white on #60a5fa gradient = 2.5:1 — fails) */
-[data-theme="dark"] .nav-item.active,
 [data-theme="dark"] .nav-item.active a {
     background: rgba(96, 165, 250, 0.15);
     color: var(--primary);
+    box-shadow: none;
+}
+
+[data-theme="dark"] .nav-item.active {
+    background: transparent;
     box-shadow: none;
 }
 
@@ -513,7 +519,7 @@ small {
 }
 
 .hero-content h2 {
-    font-size: var(--font-size-5xl);
+    font-size: var(--font-size-4xl);
     margin: 0 0 0.5rem 0;
     font-weight: var(--font-weight-bold);
 }
@@ -716,11 +722,22 @@ small {
     white-space: nowrap;
 }
 
-.recent-item:hover,
-.recent-item:hover * {
+.recent-item:hover {
     background: var(--primary);
     color: white;
+    border-color: var(--primary);
+}
+
+/* Children inherit the white color; button gets a translucent tint */
+.recent-item:hover i,
+.recent-item:hover span {
+    color: inherit;
+}
+
+.recent-item:hover .btn-icon {
+    background: rgba(255, 255, 255, 0.2);
     border-color: transparent;
+    color: white;
 }
 
 /* Patient Overview */
@@ -1269,17 +1286,17 @@ select {
 /* Toast notifications */
 .toast-container {
     position: fixed;
-    top: 20px;
-    right: 20px;
+    top: var(--spacing-lg);
+    right: var(--spacing-lg);
     z-index: var(--z-toast);
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: var(--spacing-sm);
     max-width: 350px;
 }
 
 .toast {
-    padding: 12px 20px;
+    padding: var(--spacing-sm) var(--spacing-md);
     border-radius: var(--radius-md);
     color: white;
     box-shadow: var(--shadow-lg);
@@ -1292,7 +1309,7 @@ select {
 }
 
 .toast i {
-    margin-right: 10px;
+    margin-right: var(--spacing-sm);
     font-size: var(--font-size-base);
 }
 
@@ -1317,14 +1334,8 @@ select {
 }
 
 @keyframes slideIn {
-    from { 
-        transform: translateX(100%) translateY(-20px);
-        opacity: 0; 
-    }
-    to { 
-        transform: translateX(0) translateY(0);
-        opacity: 1; 
-    }
+    from { transform: translate(100%, -20px); opacity: 0; }
+    to   { transform: translate(0, 0);        opacity: 1; }
 }
 
 /* Loading Overlay */
@@ -1432,8 +1443,8 @@ select {
     }
     
     .toast-container {
-        right: 10px;
-        left: 10px;
+        right: var(--spacing-sm);
+        left: var(--spacing-sm);
     }
     
     .toast {
@@ -1478,5 +1489,32 @@ select {
     .btn-ghost {
         width: 100%;
         justify-content: center;
+    }
+}
+
+/* Honour the OS reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+
+    .card:hover,
+    .analysis-card:hover,
+    .btn-primary:hover,
+    .btn-secondary:hover,
+    .btn-ghost:hover,
+    .header .btn-icon:hover {
+        transform: none;
+    }
+
+    .spinner {
+        animation: none;
+        border-top-color: var(--primary);
+        opacity: 0.6;
     }
 }
