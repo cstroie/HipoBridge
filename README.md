@@ -70,12 +70,19 @@ All endpoints require HTTP Basic Auth.
 
 ## CLI client
 
+Credentials can be passed as flags or via `HYP_USER` / `HYP_PASS` environment variables.
+
 ```bash
-python3 client.py --username USER --password PASS --search "patient_name"
-python3 client.py --username USER --password PASS --patient {id}
-python3 client.py --username USER --password PASS --checkout {id}
-python3 client.py --username USER --password PASS --cnp {cnp}
+python3 client.py -u USER -w PASS --search "patient_name"
+python3 client.py -u USER -w PASS --patient {id|CNP|partial_CNP*}
+python3 client.py -u USER -w PASS --analyses {patient_id} [--analysis-type radio] [--datetime-filter 2025-03-15]
+python3 client.py -u USER -w PASS --report {id}
+python3 client.py -u USER -w PASS --imaging-study {id}
+python3 client.py -u USER -w PASS --checkout {id}
+python3 client.py -u USER -w PASS --cnp {cnp}
 ```
+
+`--patient` accepts a patient code, a 13-digit CNP (validated then resolved to a code), or a partial CNP ending with `*`.
 
 ## Running tests
 

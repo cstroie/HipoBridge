@@ -74,17 +74,34 @@ Every subclass implements three methods:
 
 **Concurrency and caching** (critical — Hipocrate is a fragile legacy server):
 - `_hipocrate_semaphore = asyncio.Semaphore(6)` — global cap on concurrent outbound HTTP calls; all request paths including login go through this.
-- `URLCache` (`urlcache.py`) — LRU cache, 500 entries, 30-minute TTL. In-flight deduplication via `asyncio.Event`: if two coroutines miss the cache for the same URL simultaneously, the second waits for the first's result rather than issuing a duplicate request.
+- `URLCache` (`urlcache.py`) — true LRU cache (`OrderedDict`), 500 entries, 30-minute TTL. In-flight deduplication via `asyncio.Event`: if two coroutines miss the cache for the same URL simultaneously, the second waits for the first's result rather than issuing a duplicate request. `resolve_inflight()` must be called on **every** exit path (including re-auth failures) or waiters hang permanently.
 - `UserSessionManager` — one `aiohttp.ClientSession` per username (cookie reuse). Includes a per-user `asyncio.Lock` so concurrent requests from the same user never trigger two simultaneous login sequences. Tracks `is_authenticated` state to skip redundant Hipocrate probes.
 - `login_if_needed(force=True)` — skip the is-logged-in main.asp probe when the caller already knows the session is expired.
+- `DICOM_MODALITY` — module-level dict mapping internal type codes (`radio`, `eco`, `ct`, `mri`) to `(DICOM_code, human_display)` tuples. Use this for both top-level and per-series modality fields in `ImagingStudy`; never repeat the code string as the display value.
 
-**`fhir.py`** — FHIR R4 resource model. `Resource(MutableMapping)` is the base; all FHIR types subclass it. Resources serialize via `to_dict()`. `OperationOutcome.from_error()` is the standard way to signal errors through the FHIR path.
+**`fhir.py`** — FHIR R4 resource model. `Resource(MutableMapping)` is the base; all FHIR types subclass it. Key behaviours:
+- `Resource.__setitem__(key, None)` removes the key (never stores `None`).
+- `to_dict()` recurses into nested plain dicts so `Resource` objects inside dict values are serialised correctly.
+- `OperationOutcome.from_error()` default `code` is `"processing"` (a valid FHIR issue code). Always pass an explicit `code` for `"not-found"`, `"required"`, etc.
+- `Bundle.append_entry()` keeps `total` in sync with the actual entry count.
+- `Encounter` uses FHIR R4 field names: `period`, `reasonCode`, `reasonReference`, `hospitalization` — not the R5 names (`actualPeriod`, `businessStatus`, etc.).
 
-**`hipodata.py`** — `HipoData(dict)` typed dict wrapper passed between the scraper and the FHIR converter. `store(key, value)` normalises values (strips strings, unwraps single-item lists, converts datetimes to ISO). Dot-notation keys (`"patient.id"`) create nested dicts automatically.
+**`hipodata.py`** — `HipoData(dict)` typed dict wrapper passed between the scraper and the FHIR converter.
+- `store(key, value)` normalises values via `_normalise()`: strips strings, unwraps single-item lists, converts `datetime` → ISO string, skips `None`. Dot-notation keys (`"patient.id"`) create nested dicts automatically. Empty section or sub-key after the dot is silently ignored.
+- `store_list(key, value)` — like `store()` but always keeps the value as a list; also skips `None`.
+- `get(key, default=None)` — default is `None` (matching `dict.get`). Callers that need `""` must pass it explicitly.
+- `set(key, value)` — same normalisation as `store()` (strings stripped, datetimes converted).
+- `__init__(**kwargs)` routes all kwargs through `store()` so construction-time values are normalised.
+- `set_success()` removes the `message` key rather than setting it to `""`.
 
-**`extractors.py`** — stateless HTML-parsing helpers: `extract_text_after_label`, `extract_tabular_data`, `extract_id_from_link`, `parse_cnp`, `parse_date_time`, etc. `parse_date_time` handles `DD Mon YYYY HH:MM:SS` (Hipocrate format) and `DD/MM/YYYY`, `DD/MM/YYYY HH:MM`, `DD/MM/YYYY HH:MM:SS` — always returns a naive `datetime` with no tzinfo.
+**`extractors.py`** — stateless HTML-parsing helpers: `extract_text_after_label`, `extract_id_from_link`, `extract_ids_from_links`, `parse_cnp`, `parse_date_time`, etc.
+- `parse_date_time` handles `DD Mon YYYY [HH:MM[:SS]]` (English and Romanian month abbreviations including `Noi` for November) and `DD/MM/YYYY[[ HH:MM[:SS]]` — always returns a naive `datetime` with no tzinfo.
+- `extract_text_after_label` tries all matching nodes, skipping those with no container or empty content, rather than stopping at the first node found.
+- `extract_ids_from_links` falls back to `group(0)` when the pattern has no capture group.
 
 **`markdown.py`** — bidirectional conversion: `html_to_markdown` (scraping Hipocrate HTML into report text) and `markdown_to_html` (exposed via `POST /fhir/md2html`).
+- `html_to_markdown`: decomposes icon-only `<i>` tags (no text content) so they don't produce stray `*` markers; replaces heading tags with a plain text node to preserve `#` prefix inside block containers.
+- `markdown_to_html`: processes bold before italic using STX/ETX sentinels to avoid `*` interference; uses distinct sentinel tags for `<ul>` vs `<ol>` items to prevent double-wrapping.
 
 ### Error handling conventions
 
@@ -92,6 +109,8 @@ Every subclass implements three methods:
 - `OperationOutcome` HTTP status mapping: `not-found` code → 404; `error`/`fatal` severity → 500; `warning` → 400; `information` → 200.
 - `HipoClientDiagnosticReport` and `HipoClientCheckout` override `fetch_and_parse` to evict the cache when the result is empty (report not yet written / epicrisis not yet filled).
 - Datetime comparisons in `parse_data` always use naive datetimes. If the caller supplies a TZ-aware string, strip `tzinfo` before comparing (`datetime.replace(tzinfo=None)`).
+- `fetch_and_parse` (base class) logs the exception and includes the message in the returned `HipoData` error — never swallow exceptions silently.
+- Region filter uses `request.get('regions', [])` — requests parsed from the no-parent-row path may not have a `regions` key.
 
 ### Frontend (`static/`)
 
