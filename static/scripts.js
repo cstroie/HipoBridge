@@ -37,7 +37,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Search examples
         exampleBtns: document.querySelectorAll('.example-btn'),
         // Patient actions
-        printPatientBtn: document.getElementById('printPatientBtn'),
         // Analyses actions
         analysesSearch: document.getElementById('analysesSearch'),
         analysesFilter: document.getElementById('analysesFilter'),
@@ -189,10 +188,6 @@ document.addEventListener('DOMContentLoaded', function() {
             elements.analysesFilter.addEventListener('change', filterAnalyses);
         }
         
-        // Patient actions
-        if (elements.printPatientBtn) {
-            elements.printPatientBtn.addEventListener('click', printPatientData);
-        }
         
         // Epicrisis tab buttons
         if (elements.copyEpicrisisBtn) {
@@ -619,10 +614,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (show) visible++;
         });
         if (elements.noAnalyses) elements.noAnalyses.style.display = visible === 0 ? 'block' : 'none';
-    }
-    
-    function printPatientData() {
-        window.print();
     }
     
     async function copyMarkdown(markdownEl, btn) {
@@ -1124,39 +1115,27 @@ document.addEventListener('DOMContentLoaded', function() {
     function displayPatientBasicInfo(patientData) {
         log('Displaying patient basic info:', patientData);
         
-        // Patient ID
-        elements.patientId.textContent = patientData.id || 'N/A';
-        log('Patient ID set to:', elements.patientId.textContent);
-        
-        // Patient Name with enhanced formatting
+        // Patient Name
         const name = formatPatientName(patientData.name);
-        elements.patientName.innerHTML = `<i class="fas fa-user"></i> ${name}`;
+        elements.patientName.querySelector('#patient-tab-heading').textContent = name;
         log('Patient name set to:', name);
         
-        // Set age in the existing age badge
+        // Meta badges (id, gender, age)
         const age = calculateAge(patientData.birthDate);
-        if (elements.patientAge) elements.patientAge.textContent = `Age: ${age}`;
+        if (elements.patientId)     elements.patientId.textContent     = patientData.id ? `ID: ${patientData.id}` : '';
+        if (elements.patientGender) elements.patientGender.textContent = formatGender(patientData.gender);
+        if (elements.patientAge)    elements.patientAge.textContent    = age !== 'N/A' ? `${age} years` : '';
         log('Age set to:', age);
         
-        // CNP with validation
+        // Personal info fields
         const cnp = extractCNP(patientData.identifier);
-        elements.patientCnp.textContent = cnp || 'N/A';
-        log('CNP set to:', cnp);
-        
-        // Gender with icons
-        const gender = formatGender(patientData.gender);
-        elements.patientGender.textContent = gender;
-        log('Gender set to:', gender);
-        
-        // Birth date with formatting
-        elements.patientBirthDate.textContent = formatBirthDate(patientData.birthDate);
-        log('Birth date set to:', elements.patientBirthDate.textContent);
-        
-        // Contact information
+        if (elements.patientCnp)       elements.patientCnp.textContent       = cnp || '—';
+        if (elements.patientBirthDate) elements.patientBirthDate.textContent = formatBirthDate(patientData.birthDate) || '—';
+
         const contactInfo = extractContactInfo(patientData.telecom);
-        elements.patientPhone.textContent = contactInfo.phone || 'N/A';
-        elements.patientEmail.textContent = contactInfo.email || 'N/A';
-        log('Contact info set - Phone:', contactInfo.phone, 'Email:', contactInfo.email);
+        if (elements.patientPhone) elements.patientPhone.textContent = contactInfo.phone || '—';
+        if (elements.patientEmail) elements.patientEmail.textContent = contactInfo.email || '—';
+        log('CNP:', cnp, 'Phone:', contactInfo.phone, 'Email:', contactInfo.email);
     }
     
     // Enhanced name formatting

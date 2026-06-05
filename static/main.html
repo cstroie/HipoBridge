@@ -136,94 +136,79 @@
 
                 <!-- Patient Profile Tab -->
                 <section id="patient-tab" class="tab-content" role="tabpanel" aria-labelledby="patient-tab-heading" hidden>
-                    <div class="patient-overview">
-                        <div class="patient-header">
+
+                    <!-- Banner -->
+                    <div class="patient-banner">
+                        <div class="patient-banner-left">
                             <div class="patient-avatar">
-                                <i class="fas fa-user-injured"></i>
+                                <i class="fas fa-user-injured" aria-hidden="true"></i>
                             </div>
                             <div class="patient-main-info">
-                                <h1 id="patientName"><i class="fas fa-user" aria-hidden="true"></i> <span id="patient-tab-heading">Patient Name</span></h1>
+                                <h1 id="patientName"><span id="patient-tab-heading">Patient Name</span></h1>
                                 <div class="patient-meta">
-                                    <span class="badge badge-primary" id="patientId">ID: N/A</span>
-                                    <span class="badge badge-secondary" id="patientGender">Gender: N/A</span>
-                                    <span class="badge badge-info" id="patientAge">Age: N/A</span>
-                                </div>
-                            </div>
-                            <div class="patient-actions">
-                                <button class="btn-secondary" id="backToSearch" aria-label="Start new search">
-                                    <i class="fas fa-arrow-left"></i>
-                                    <span>New Search</span>
-                                </button>
-                                <button class="btn-ghost" id="printPatientBtn" aria-label="Print patient data">
-                                    <i class="fas fa-print"></i>
-                                    <span>Print</span>
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <div class="patient-details-grid">
-                            <div class="patient-info-card">
-                                <div class="card-header">
-                                    <h3><i class="fas fa-id-card"></i> Personal Information</h3>
-                                </div>
-                                <dl class="card-content">
-                                    <div class="info-row">
-                                        <dt><i class="fas fa-id-card" aria-hidden="true"></i> CNP</dt>
-                                        <dd id="patientCnp"></dd>
-                                    </div>
-                                    <div class="info-row">
-                                        <dt><i class="fas fa-birthday-cake" aria-hidden="true"></i> Birth Date</dt>
-                                        <dd id="patientBirthDate"></dd>
-                                    </div>
-                                    <div class="info-row">
-                                        <dt><i class="fas fa-phone" aria-hidden="true"></i> Phone</dt>
-                                        <dd id="patientPhone"></dd>
-                                    </div>
-                                    <div class="info-row">
-                                        <dt><i class="fas fa-envelope" aria-hidden="true"></i> Email</dt>
-                                        <dd id="patientEmail"></dd>
-                                    </div>
-                                </dl>
-                            </div>
-                            
-                            <div class="patient-stats-card">
-                                <div class="card-header">
-                                    <h3><i class="fas fa-chart-line"></i> Medical Statistics</h3>
-                                </div>
-                                <div class="stats-grid">
-                                    <div class="stat-item">
-                                        <div class="stat-icon"><i class="fas fa-procedures"></i></div>
-                                        <div class="stat-content">
-                                            <div class="stat-label">Presentations</div>
-                                            <div class="stat-value" id="presentationsCount">0</div>
-                                        </div>
-                                    </div>
-                                    <div class="stat-item">
-                                        <div class="stat-icon"><i class="fas fa-sign-in-alt"></i></div>
-                                        <div class="stat-content">
-                                            <div class="stat-label">Admissions</div>
-                                            <div class="stat-value" id="checkinsCount">0</div>
-                                        </div>
-                                    </div>
-                                    <div class="stat-item">
-                                        <div class="stat-icon"><i class="fas fa-sign-out-alt"></i></div>
-                                        <div class="stat-content">
-                                            <div class="stat-label">Discharges</div>
-                                            <div class="stat-value" id="checkoutsCount">0</div>
-                                        </div>
-                                    </div>
-                                    <div class="stat-item">
-                                        <div class="stat-icon"><i class="fas fa-file-medical"></i></div>
-                                        <div class="stat-content">
-                                            <div class="stat-label">Reports</div>
-                                            <div class="stat-value" id="reportsCount">0</div>
-                                        </div>
-                                    </div>
+                                    <span class="patient-badge" id="patientId"></span>
+                                    <span class="patient-badge" id="patientGender"></span>
+                                    <span class="patient-badge" id="patientAge"></span>
                                 </div>
                             </div>
                         </div>
-                        
+                        <div class="patient-banner-actions">
+                            <button class="btn-outline-white" id="backToSearch" aria-label="Start new search">
+                                <i class="fas fa-arrow-left" aria-hidden="true"></i>
+                                <span>New Search</span>
+                            </button>
+                        </div>
                     </div>
+
+                    <!-- Stats strip -->
+                    <div class="patient-stats-strip">
+                        <div class="stat-pill">
+                            <i class="fas fa-procedures" aria-hidden="true"></i>
+                            <span class="stat-pill-value" id="presentationsCount">0</span>
+                            <span class="stat-pill-label">Presentations</span>
+                        </div>
+                        <div class="stat-pill">
+                            <i class="fas fa-sign-in-alt" aria-hidden="true"></i>
+                            <span class="stat-pill-value" id="checkinsCount">0</span>
+                            <span class="stat-pill-label">Admissions</span>
+                        </div>
+                        <div class="stat-pill">
+                            <i class="fas fa-sign-out-alt" aria-hidden="true"></i>
+                            <span class="stat-pill-value" id="checkoutsCount">0</span>
+                            <span class="stat-pill-label">Discharges</span>
+                        </div>
+                        <div class="stat-pill">
+                            <i class="fas fa-file-medical" aria-hidden="true"></i>
+                            <span class="stat-pill-value" id="reportsCount">0</span>
+                            <span class="stat-pill-label">Reports</span>
+                        </div>
+                    </div>
+
+                    <!-- Personal information -->
+                    <div class="patient-info-panel">
+                        <h2 class="panel-heading">
+                            <i class="fas fa-id-card" aria-hidden="true"></i> Personal Information
+                        </h2>
+                        <dl class="info-grid">
+                            <div class="info-cell">
+                                <dt><i class="fas fa-fingerprint" aria-hidden="true"></i> CNP</dt>
+                                <dd id="patientCnp">—</dd>
+                            </div>
+                            <div class="info-cell">
+                                <dt><i class="fas fa-birthday-cake" aria-hidden="true"></i> Birth Date</dt>
+                                <dd id="patientBirthDate">—</dd>
+                            </div>
+                            <div class="info-cell">
+                                <dt><i class="fas fa-phone" aria-hidden="true"></i> Phone</dt>
+                                <dd id="patientPhone">—</dd>
+                            </div>
+                            <div class="info-cell">
+                                <dt><i class="fas fa-envelope" aria-hidden="true"></i> Email</dt>
+                                <dd id="patientEmail">—</dd>
+                            </div>
+                        </dl>
+                    </div>
+
                 </section>
 
                 <!-- Medical Analyses Tab -->
