@@ -228,7 +228,7 @@
 
                 <!-- Medical Analyses Tab -->
                 <section id="analyses-tab" class="tab-content" role="tabpanel" aria-labelledby="analyses-tab-heading" hidden>
-                    <div class="analyses-header">
+                    <div class="tab-header analyses-header">
                         <div class="header-left">
                             <h1 id="analyses-tab-heading"><i class="fas fa-file-medical" aria-hidden="true"></i> Analyses</h1>
                             <p>Comprehensive diagnostic reports and imaging studies</p>
@@ -260,13 +260,13 @@
 
                 <!-- Epicrisis Tab -->
                 <section id="epicrisis-tab" class="tab-content" role="tabpanel" aria-labelledby="epicrisis-tab-heading" hidden>
-                    <div class="epicrisis-header">
+                    <div class="tab-header">
                         <div class="header-left">
                             <h1 id="epicrisis-tab-heading"><i class="fas fa-file-prescription" aria-hidden="true"></i> Epicrisis</h1>
                             <p>Discharge summary and medical conclusions</p>
                         </div>
                         <div class="header-actions">
-                            <button class="btn-secondary" id="copyEpicrisisBtn">
+                            <button class="btn-secondary" id="copyEpicrisisBtn" aria-label="Copy epicrisis as Markdown">
                                 <i class="fas fa-copy"></i>
                                 <span>Copy Markdown</span>
                             </button>
@@ -278,13 +278,13 @@
 
                 <!-- Report Tab -->
                 <section id="report-tab" class="tab-content" role="tabpanel" aria-labelledby="report-tab-heading" hidden>
-                    <div class="report-header">
+                    <div class="tab-header">
                         <div class="header-left">
                             <h1 id="report-tab-heading"><i class="fas fa-notes-medical" aria-hidden="true"></i> Patient Report</h1>
                             <p>Clinical summary structured for LLM consumption — copy and paste into your AI assistant</p>
                         </div>
                         <div class="header-actions">
-                            <button class="btn-secondary" id="copyReportBtn">
+                            <button class="btn-secondary" id="copyReportBtn" aria-label="Copy report as Markdown">
                                 <i class="fas fa-copy"></i>
                                 <span>Copy Markdown</span>
                             </button>

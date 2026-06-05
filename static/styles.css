@@ -937,7 +937,22 @@ small {
     gap: 1rem;
 }
 
-/* Analyses */
+/* Tab section headers — title on the left, action buttons on the right */
+.tab-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+    flex-wrap: wrap;
+}
+
+.tab-header .header-left {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Analyses (alias kept for backwards compat) */
 .analyses-header {
     display: flex;
     justify-content: space-between;
