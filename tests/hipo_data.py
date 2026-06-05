@@ -6,226 +6,209 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import unittest
-from hipo import HipoData
+from datetime import datetime
+from hipodata import HipoData
 
 
 class TestHipoData(unittest.TestCase):
-    """Test cases for the HipoData class."""
 
     def setUp(self):
-        """Set up test fixtures."""
         self.data = HipoData()
 
+    # ------------------------------------------------------------------
+    # Basic construction
+    # ------------------------------------------------------------------
+
     def test_init_empty(self):
-        """Test that HipoData initializes as an empty dictionary."""
         self.assertIsInstance(self.data, dict)
         self.assertEqual(len(self.data), 0)
 
-    def test_store_in_root(self):
-        """Test storing data directly in root."""
+    def test_init_with_kwargs_normalised(self):
+        """__init__ routes kwargs through store() so values are normalised."""
+        d = HipoData(name="  Alice  ", score=None)
+        self.assertEqual(d["name"], "Alice")       # stripped
+        self.assertNotIn("score", d)               # None skipped
+
+    def test_init_status_success_no_message(self):
+        """status='success' with no message stores only status."""
+        d = HipoData(status="success")
+        self.assertEqual(d["status"], "success")
+        self.assertNotIn("message", d)
+
+    # ------------------------------------------------------------------
+    # store() — root keys
+    # ------------------------------------------------------------------
+
+    def test_store_root_string(self):
         self.data.store("name", "John Doe")
         self.assertEqual(self.data["name"], "John Doe")
-        self.assertEqual(len(self.data), 1)
 
-    def test_store_in_root_direct(self):
-        """Test storing data directly in root."""
-        self.data.store("diagnosis", "Healthy")
-        self.assertEqual(self.data["diagnosis"], "Healthy")
-        self.assertEqual(len(self.data), 1)
+    def test_store_root_strips_string(self):
+        self.data.store("name", "  John Doe  ")
+        self.assertEqual(self.data["name"], "John Doe")
 
-    def test_store_in_section(self):
-        """Test storing data in a named section."""
-        self.data.store("patient.id", "12345")
-        self.assertIn("patient", self.data)
-        self.assertIsInstance(self.data["patient"], dict)
-        self.assertEqual(self.data["patient"]["id"], "12345")
+    def test_store_root_skips_none(self):
+        self.data.store("name", None)
+        self.assertNotIn("name", self.data)
 
-    def test_store_multiple_values_in_same_section(self):
-        """Test storing multiple values in the same section."""
-        self.data.store("patient.id", "12345")
-        self.data.store("patient.name", "John Doe")
-        self.assertIn("patient", self.data)
-        self.assertEqual(self.data["patient"]["id"], "12345")
-        self.assertEqual(self.data["patient"]["name"], "John Doe")
+    def test_store_root_empty_string_is_stored(self):
+        """Empty string is not None — it is stored as-is."""
+        self.data.store("name", "")
+        self.assertEqual(self.data["name"], "")
 
-    def test_store_creates_section_automatically(self):
-        """Test that sections are created automatically when first referenced."""
-        self.data.store("patient.id", "12345")
-        self.assertIn("patient", self.data)
-        self.assertIsInstance(self.data["patient"], dict)
+    def test_store_root_overwrites(self):
+        self.data.store("name", "John")
+        self.data.store("name", "Jane")
+        self.assertEqual(self.data["name"], "Jane")
 
     def test_store_unwraps_single_element_list(self):
-        """Test that single element lists are automatically unwrapped."""
-        self.data.store("patient.id", ["12345"])
+        self.data.store("id", ["12345"])
+        self.assertEqual(self.data["id"], "12345")
+        self.assertNotIsInstance(self.data["id"], list)
+
+    def test_store_keeps_multi_element_list(self):
+        self.data.store("ids", ["a", "b"])
+        self.assertEqual(self.data["ids"], ["a", "b"])
+
+    def test_store_converts_datetime_to_iso(self):
+        dt = datetime(2025, 3, 15, 10, 30, 0)
+        self.data.store("dt", dt)
+        self.assertEqual(self.data["dt"], "2025-03-15T10:30:00")
+
+    # ------------------------------------------------------------------
+    # store() — dot-notation
+    # ------------------------------------------------------------------
+
+    def test_store_section_key(self):
+        self.data.store("patient.id", "12345")
+        self.assertIsInstance(self.data["patient"], dict)
         self.assertEqual(self.data["patient"]["id"], "12345")
-        self.assertNotIsInstance(self.data["patient"]["id"], list)
 
-    def test_store_does_not_unwrap_multi_element_list(self):
-        """Test that multi-element lists are not unwrapped."""
-        multi_element_list = ["12345", "67890"]
-        self.data.store_list("patient.ids", multi_element_list)
-        self.assertEqual(self.data["patient"]["ids"], multi_element_list)
-
-    def test_store_strips_string_values(self):
-        """Test that string values are automatically stripped."""
-        self.data.store("patient.name", "  John Doe  ")
+    def test_store_multiple_keys_same_section(self):
+        self.data.store("patient.id", "12345")
+        self.data.store("patient.name", "John Doe")
+        self.assertEqual(self.data["patient"]["id"], "12345")
         self.assertEqual(self.data["patient"]["name"], "John Doe")
 
-    def test_store_handles_empty_values(self):
-        """Test handling of empty values."""
-        self.data.store("patient.name", "")
-        self.assertEqual(self.data["patient"]["name"], "")
-
-    def test_store_handles_none_values(self):
-        """Test handling of None values."""
+    def test_store_dot_skips_none(self):
         self.data.store("patient.name", None)
-        self.assertIsNone(self.data["patient"]["name"])
+        self.assertNotIn("patient", self.data)
 
-    def test_store_with_none_value(self):
-        """Test behavior when value is None."""
-        self.data.store("test", None)
-        self.assertIsNone(self.data["test"])
+    def test_store_dot_empty_subkey_ignored(self):
+        self.data.store("patient.", "value")
+        self.assertNotIn("patient", self.data)
 
-    def test_store_overwrites_existing_values(self):
-        """Test that storing with the same key overwrites existing values."""
+    def test_store_promotes_scalar_to_dict(self):
+        """If section already holds a scalar, promote it to {"": scalar}."""
+        self.data.store("patient", "original")
+        self.data.store("patient.id", "123")
+        self.assertEqual(self.data["patient"]["id"], "123")
+        self.assertEqual(self.data["patient"][""], "original")
+
+    # ------------------------------------------------------------------
+    # store_list()
+    # ------------------------------------------------------------------
+
+    def test_store_list_wraps_scalar(self):
+        self.data.store_list("ids", "abc")
+        self.assertEqual(self.data["ids"], ["abc"])
+
+    def test_store_list_keeps_list(self):
+        self.data.store_list("ids", ["a", "b"])
+        self.assertEqual(self.data["ids"], ["a", "b"])
+
+    def test_store_list_skips_none(self):
+        self.data.store_list("ids", None)
+        self.assertNotIn("ids", self.data)
+
+    def test_store_list_dot_notation(self):
+        self.data.store_list("patient.ids", ["p1", "p2"])
+        self.assertEqual(self.data["patient"]["ids"], ["p1", "p2"])
+
+    # ------------------------------------------------------------------
+    # get()
+    # ------------------------------------------------------------------
+
+    def test_get_existing_section_key(self):
         self.data.store("patient.name", "John Doe")
-        self.data.store("patient.name", "Jane Smith")
-        self.assertEqual(self.data["patient"]["name"], "Jane Smith")
+        self.assertEqual(self.data.get("patient.name"), "John Doe")
 
-    def test_complex_storage_scenario(self):
-        """Test a complex scenario with multiple sections and data types."""
-        # Store in root
+    def test_get_missing_returns_none_by_default(self):
+        """Default is None, matching dict.get() behaviour."""
+        self.assertIsNone(self.data.get("patient.name"))
+        self.assertIsNone(self.data.get("missing"))
+
+    def test_get_explicit_default(self):
+        self.assertEqual(self.data.get("patient.name", "Unknown"), "Unknown")
+        self.assertEqual(self.data.get("missing", ""), "")
+
+    def test_get_root_key(self):
+        self.data.store("status", "ok")
+        self.assertEqual(self.data.get("status"), "ok")
+
+    def test_get_root_key_missing(self):
+        self.assertIsNone(self.data.get("status"))
+
+    # ------------------------------------------------------------------
+    # set()
+    # ------------------------------------------------------------------
+
+    def test_set_section_key(self):
+        self.data.set("patient.name", "John Doe")
+        self.assertEqual(self.data["patient"]["name"], "John Doe")
+
+    def test_set_normalises_string(self):
+        self.data.set("patient.name", "  Alice  ")
+        self.assertEqual(self.data["patient"]["name"], "Alice")
+
+    def test_set_normalises_datetime(self):
+        dt = datetime(2025, 1, 1, 0, 0, 0)
+        self.data.set("study.date", dt)
+        self.assertEqual(self.data["study"]["date"], "2025-01-01T00:00:00")
+
+    def test_set_root_key(self):
+        self.data.set("status", "ok")
+        self.assertEqual(self.data["status"], "ok")
+
+    def test_set_overwrites(self):
+        self.data.set("patient.name", "John")
+        self.data.set("patient.name", "Jane")
+        self.assertEqual(self.data["patient"]["name"], "Jane")
+
+    # ------------------------------------------------------------------
+    # set_error / set_success
+    # ------------------------------------------------------------------
+
+    def test_set_error(self):
+        self.data.set_error("something broke")
+        self.assertEqual(self.data["status"], "error")
+        self.assertEqual(self.data["message"], "something broke")
+
+    def test_set_success_removes_message(self):
+        self.data.set_error("oops")
+        self.data.set_success()
+        self.assertEqual(self.data["status"], "success")
+        self.assertNotIn("message", self.data)
+
+    # ------------------------------------------------------------------
+    # Complex scenario
+    # ------------------------------------------------------------------
+
+    def test_complex_scenario(self):
         self.data.store("report_id", "R001")
-        
-        # Store in patient section
-        self.data.store("patient.id", ["P001"])
-        self.data.store("patient.name", "  John Doe  ")
-        
-        # Store in diagnosis section
+        self.data.store("patient.id", ["P001"])   # unwrapped
+        self.data.store("patient.name", "  John Doe  ")  # stripped
         self.data.store("diagnosis", "Healthy")
-        
-        # Store multiple values in test section
         self.data.store("test.glucose", "90 mg/dL")
-        self.data.store("test.cholesterol", "180 mg/dL")
-        
-        # Store list data
-        self.data.store_list("test.results", ["result1", "result2"])
-        
-        # Verify structure
+        self.data.store_list("test.results", ["r1", "r2"])
+
         self.assertEqual(self.data["report_id"], "R001")
         self.assertEqual(self.data["patient"]["id"], "P001")
         self.assertEqual(self.data["patient"]["name"], "John Doe")
         self.assertEqual(self.data["diagnosis"], "Healthy")
         self.assertEqual(self.data["test"]["glucose"], "90 mg/dL")
-        self.assertEqual(self.data["test"]["cholesterol"], "180 mg/dL")
-        self.assertEqual(self.data["test"]["results"], ["result1", "result2"])
+        self.assertEqual(self.data["test"]["results"], ["r1", "r2"])
 
-    def test_get_section_key_with_valid_format(self):
-        """Test get_section_key with valid section.key format."""
-        section, key = self.data.get_section_key("patient.name")
-        self.assertEqual(section, "patient")
-        self.assertEqual(key, "name")
-    
-    def test_get_section_key_with_no_dot(self):
-        """Test get_section_key with no dot in string."""
-        section, key = self.data.get_section_key("patient")
-        self.assertEqual(section, "patient")
-        self.assertIsNone(key)
-    
-    def test_get_section_key_with_extra_spaces(self):
-        """Test get_section_key with extra spaces."""
-        section, key = self.data.get_section_key(" patient.name ")
-        self.assertEqual(section, "patient")
-        self.assertEqual(key, "name")
-    
-    def test_get_method_with_existing_value(self):
-        """Test get method with existing section and key."""
-        # Set up test data using store method
-        self.data.store("patient.name", "John Doe")
-        
-        # Test getting existing value
-        result = self.data.get("patient.name")
-        self.assertEqual(result, "John Doe")
-    
-    def test_get_method_with_non_existing_section(self):
-        """Test get method with non-existing section."""
-        result = self.data.get("patient.name")
-        self.assertEqual(result, "")
-    
-    def test_get_method_with_non_existing_key(self):
-        """Test get method with existing section but non-existing key."""
-        # Set up test data
-        self.data.store("patient", {})
-        
-        result = self.data.get("patient.name")
-        self.assertEqual(result, "")
-    
-    def test_get_method_with_key_none(self):
-        """Test get method when key is None (section only)."""
-        # Set up test data
-        self.data.store("patient", "John Doe")
-        
-        result = self.data.get("patient")
-        self.assertEqual(result, "John Doe")
-    
-    def test_get_method_with_key_none_not_existing(self):
-        """Test get method when key is None and section doesn't exist."""
-        result = self.data.get("patient")
-        self.assertEqual(result, "")
-    
-    def test_get_method_with_default_value(self):
-        """Test get method with custom default value."""
-        result = self.data.get("patient.name", "Unknown")
-        self.assertEqual(result, "Unknown")
-    
-    def test_get_method_with_default_value_existing_key(self):
-        """Test get method with custom default value for existing key."""
-        # Set up test data
-        self.data.store("patient.name", "John Doe")
-        
-        result = self.data.get("patient.name", "Unknown")
-        self.assertEqual(result, "John Doe")
-    
-    def test_get_method_with_non_string_value(self):
-        """Test get method with non-string value."""
-        # Set up test data
-        self.data.store("patient.age", 30)
-        
-        result = self.data.get("patient.age")
-        self.assertEqual(result, 30)
-    
-    def test_set_method_with_valid_section_and_key(self):
-        """Test set method with valid section and key."""
-        self.data.set("patient.name", "John Doe")
-        
-        self.assertIn("patient", self.data)
-        self.assertIsInstance(self.data["patient"], dict)
-        self.assertIn("name", self.data["patient"])
-        self.assertEqual(self.data["patient"]["name"], "John Doe")
-    
-    def test_set_method_with_key_none(self):
-        """Test set method when key is None (section only)."""
-        self.data.set("patient", "John Doe")
-        
-        self.assertIn("patient", self.data)
-        self.assertEqual(self.data["patient"], "John Doe")
-    
-    def test_set_method_creates_section_automatically(self):
-        """Test that set method creates section automatically."""
-        self.data.set("patient.name", "John Doe")
-        
-        self.assertIn("patient", self.data)
-        self.assertIsInstance(self.data["patient"], dict)
-    
-    def test_set_method_overwrites_existing_value(self):
-        """Test that set method overwrites existing values."""
-        # Set initial value
-        self.data.set("patient.name", "John Doe")
-        
-        # Overwrite with new value
-        self.data.set("patient.name", "Jane Smith")
-        
-        self.assertEqual(self.data["patient"]["name"], "Jane Smith")
 
 if __name__ == '__main__':
     unittest.main()

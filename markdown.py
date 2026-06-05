@@ -59,21 +59,8 @@ def html_to_markdown(html_content: str) -> str:
         if len(element_children) == 1 and element_children[0].name == 'b':
             element_children[0].unwrap()
 
-        # Headings → replace the whole tag with a markdown text node so that
-        # surrounding block elements (p, td) don't swallow the # prefix.
-        for tag in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
-            level = int(tag.name[1])
-            text = tag.get_text()
-            tag.replace_with(f'\n\n{"#" * level} {text}\n\n')
-
-        # Paragraphs
-        for p in soup.find_all('p'):
-            p.insert_after('\n\n')
-            p.unwrap()
-
-        # Line breaks
-        for br in soup.find_all('br'):
-            br.replace_with('\n')
+        # Process inline elements BEFORE block elements so that unwrapping
+        # <p> doesn't move <b> to body level and trigger the wrapper check.
 
         # Bold — skip pure-wrapper <b> (only child of body / soup root)
         for b in soup.find_all(['b', 'strong']):
@@ -101,6 +88,22 @@ def html_to_markdown(html_content: str) -> str:
             u.insert_before('*')
             u.insert_after('*')
             u.unwrap()
+
+        # Headings → replace the whole tag with a markdown text node so that
+        # surrounding block elements (p, td) don't swallow the # prefix.
+        for tag in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
+            level = int(tag.name[1])
+            text = tag.get_text()
+            tag.replace_with(f'\n\n{"#" * level} {text}\n\n')
+
+        # Paragraphs
+        for p in soup.find_all('p'):
+            p.insert_after('\n\n')
+            p.unwrap()
+
+        # Line breaks
+        for br in soup.find_all('br'):
+            br.replace_with('\n')
 
         # Extract text directly from the modified soup (no second parse needed)
         text = soup.get_text()

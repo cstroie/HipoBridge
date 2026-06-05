@@ -6,7 +6,7 @@ import asyncio
 import aiohttp
 import os
 from bs4 import BeautifulSoup
-from hipp import extract_text_after_label, extract_id_from_link, extract_ids_from_links
+from extractors import extract_text_after_label, extract_id_from_link, extract_ids_from_links
 
 async def test_extract_text_after_label_basic(session: aiohttp.ClientSession) -> bool:
     """Test basic functionality of extract_text_after_label function"""
