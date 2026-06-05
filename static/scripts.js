@@ -49,11 +49,14 @@ document.addEventListener('DOMContentLoaded', function() {
         recentSearchesList: document.getElementById('recentSearchesList')
     };
     
-    // Simple in-memory cache for encounters and reports to avoid duplicate network calls
-    const cache = {
-        encounters: {},
-        reports: {}
-    };
+    // Bounded in-memory cache (100 entries per store; evicts oldest on overflow)
+    const CACHE_MAX = 100;
+    const cache = { encounters: {}, reports: {} };
+    function cachePut(store, key, value) {
+        const keys = Object.keys(store);
+        if (keys.length >= CACHE_MAX) delete store[keys[0]];
+        store[key] = value;
+    }
 
     // debug logging helper (set DEBUG=true during development to see logs)
     const DEBUG = false;
@@ -276,6 +279,10 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             const { patientData, patientCode } = searchResult;
+            if (!patientCode) {
+                showToast('Could not determine patient ID. Please try again.', 'error');
+                return;
+            }
             log('Patient data retrieved:', patientData);
             log('Patient code:', patientCode);
 
@@ -433,10 +440,15 @@ document.addEventListener('DOMContentLoaded', function() {
             const box = document.createElement('div');
             box.className = 'card';
             box.style.cssText = 'min-width:320px;max-width:480px;max-height:70vh;overflow-y:auto;padding:var(--space-4)';
+            box.setAttribute('role', 'dialog');
+            box.setAttribute('aria-modal', 'true');
+            box.setAttribute('aria-label', 'Select patient');
 
             const heading = document.createElement('h3');
             heading.textContent = `${candidates.length} patients found — select one:`;
             box.appendChild(heading);
+
+            const dismiss = (result) => { document.body.removeChild(overlay); resolve(result); };
 
             candidates.forEach(patient => {
                 const nameObj = Array.isArray(patient.name) ? patient.name[0] : patient.name;
@@ -445,7 +457,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 btn.className = 'btn-secondary';
                 btn.style.cssText = 'display:block;width:100%;margin-top:var(--space-2);text-align:left';
                 btn.textContent = name;
-                btn.addEventListener('click', () => { document.body.removeChild(overlay); resolve(patient); });
+                btn.addEventListener('click', () => dismiss(patient));
                 box.appendChild(btn);
             });
 
@@ -453,11 +465,27 @@ document.addEventListener('DOMContentLoaded', function() {
             cancel.className = 'btn-secondary';
             cancel.style.cssText = 'display:block;width:100%;margin-top:var(--space-3)';
             cancel.textContent = 'Cancel';
-            cancel.addEventListener('click', () => { document.body.removeChild(overlay); resolve(null); });
+            cancel.addEventListener('click', () => dismiss(null));
             box.appendChild(cancel);
 
             overlay.appendChild(box);
             document.body.appendChild(overlay);
+
+            // Trap focus inside the dialog; close on Escape
+            const focusable = () => [...box.querySelectorAll('button')];
+            const trapFocus = e => {
+                if (e.key === 'Escape') { dismiss(null); return; }
+                if (e.key !== 'Tab') return;
+                const els = focusable();
+                const first = els[0], last = els[els.length - 1];
+                if (e.shiftKey ? document.activeElement === first : document.activeElement === last) {
+                    e.preventDefault();
+                    (e.shiftKey ? last : first).focus();
+                }
+            };
+            overlay.addEventListener('keydown', trapFocus);
+            // Focus first button after paint
+            requestAnimationFrame(() => focusable()[0]?.focus());
         });
     }
 
@@ -503,58 +531,18 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Enhanced tab switching function
     function switchToPatientTab() {
-        log('Switching to patient tab');
-        
-        // Update navigation
-        elements.navItems.forEach(nav => nav.classList.remove('active'));
-        const patientNavItem = document.querySelector('.nav-item[data-tab="patient"]');
-        if (patientNavItem) {
-            patientNavItem.classList.add('active');
-            log('Patient nav item activated');
-        }
-        
-        // Show relevant tabs
-        const tabsToShow = ['patient', 'analyses', 'epicrisis', 'report'];
-        tabsToShow.forEach(tabName => {
-            const tabElement = document.querySelector(`.nav-item[data-tab="${tabName}"]`);
-            if (tabElement) {
-                tabElement.style.display = 'block';
-                log(`Tab ${tabName} made visible`);
-            }
+        // Unhide nav items hidden by clearResults
+        ['patient', 'analyses', 'epicrisis', 'report'].forEach(tabName => {
+            const navEl = document.querySelector(`.nav-item[data-tab="${tabName}"]`);
+            if (navEl) navEl.style.display = 'block';
         });
-        
-        // Update tab content display
-        elements.tabContents.forEach(tab => {
-            tab.classList.remove('active');
-            tab.style.display = 'none';
-            tab.hidden = true;
+        // Unhide sibling tab content panels (clearResults set hidden=true)
+        ['analyses-tab', 'epicrisis-tab', 'report-tab'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.hidden = false;
         });
-        
-        const patientTab = document.getElementById('patient-tab');
-        if (patientTab) {
-            patientTab.classList.add('active');
-            patientTab.style.display = 'block';
-            patientTab.hidden = false;
-            log('Patient tab content activated and displayed');
-        }
-        
-        // Also show the other tabs that should be visible after patient data is loaded
-        const analysesTab = document.getElementById('analyses-tab');
-        if (analysesTab) {
-            analysesTab.hidden = false;
-        }
-        
-        const epicrisisTab = document.getElementById('epicrisis-tab');
-        if (epicrisisTab) {
-            epicrisisTab.hidden = false;
-        }
-        
-        const reportTab = document.getElementById('report-tab');
-        if (reportTab) {
-            reportTab.hidden = false;
-        }
+        switchTab('patient');
     }
     
     function hideLoading() {
@@ -796,7 +784,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             // only cache non-empty results; null/empty means report not written yet
-            if (content) cache.reports[serviceRequestId] = content;
+            if (content) cachePut(cache.reports, serviceRequestId, content);
             return content;
             
         } catch (error) {
@@ -872,14 +860,17 @@ document.addEventListener('DOMContentLoaded', function() {
     async function displayPatientReport(patientData, analysesData) {
         log('Displaying patient report data');
         
-        // Show loading state
         const markdownContainer = elements.patientReportMarkdown;
-        markdownContainer.innerHTML = `
-            <div class="loading-content">
-                <i class="fas fa-spinner fa-spin"></i>
-                <p>Assembling report...</p>
-            </div>
-        `;
+        markdownContainer.replaceChildren((() => {
+            const wrap = document.createElement('div');
+            wrap.className = 'loading-content';
+            const icon = document.createElement('i');
+            icon.className = 'fas fa-spinner fa-spin';
+            const msg = document.createElement('p');
+            msg.textContent = 'Assembling report…';
+            wrap.append(icon, msg);
+            return wrap;
+        })());
         
         try {
             // Generate patient identification markdown
@@ -909,12 +900,16 @@ document.addEventListener('DOMContentLoaded', function() {
             
         } catch (error) {
             console.error('Error displaying patient report:', error);
-            markdownContainer.innerHTML = `
-                <div class="error-content">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <p>Error loading patient report data</p>
-                </div>
-            `;
+            markdownContainer.replaceChildren((() => {
+                const wrap = document.createElement('div');
+                wrap.className = 'error-content';
+                const icon = document.createElement('i');
+                icon.className = 'fas fa-exclamation-triangle';
+                const msg = document.createElement('p');
+                msg.textContent = 'Error loading patient report data';
+                wrap.append(icon, msg);
+                return wrap;
+            })());
         }
     }
     
@@ -959,8 +954,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             const encounterData = await response.json();
-            // store in cache
-            cache.encounters[checkoutId] = encounterData;
+            cachePut(cache.encounters, checkoutId, encounterData);
             log(`Encounter data fetched successfully for checkout ${checkoutId}:`, encounterData);
             return encounterData;
             
@@ -990,6 +984,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const trigger = () => { elements.cnpInput.value = searchTerm; elements.form.dispatchEvent(new Event('submit')); };
             div.addEventListener('click', trigger);
+            // Stop button clicks from bubbling to the div and triggering twice
+            div.querySelector('button').addEventListener('click', e => { e.stopPropagation(); trigger(); });
 
             elements.recentSearchesList.appendChild(div);
         });
@@ -1165,11 +1161,10 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Enhanced name formatting
     function formatPatientName(nameArray) {
-        if (!nameArray || nameArray.length === 0) {
-            return 'N/A';
-        }
-        
-        const name = nameArray[0];
+        if (!nameArray) return 'N/A';
+        const arr = Array.isArray(nameArray) ? nameArray : [nameArray];
+        if (arr.length === 0) return 'N/A';
+        const name = arr[0];
         const family = name.family || '';
         const given = name.given ? name.given.join(' ') : '';
         
@@ -1308,13 +1303,14 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function calculateAge(birthDate) {
         if (!birthDate) return 'N/A';
+        // Parse YYYY-MM-DD directly to avoid UTC-offset day shift from new Date()
+        const parts = String(birthDate).split('-').map(Number);
+        if (parts.length < 2 || isNaN(parts[0])) return 'N/A';
+        const [year, month, day = 1] = parts;
         const today = new Date();
-        const birth = new Date(birthDate);
-        let age = today.getFullYear() - birth.getFullYear();
-        const monthDiff = today.getMonth() - birth.getMonth();
-        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-            age--;
-        }
+        let age = today.getFullYear() - year;
+        const m = today.getMonth() + 1 - month;
+        if (m < 0 || (m === 0 && today.getDate() < day)) age--;
         return age >= 0 ? age : 'N/A';
     }
     
@@ -1327,6 +1323,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!studyResponse.ok) {
                 if (studyResponse.status === 401) {
                     showToast('Authentication required. Please refresh the page and enter your credentials.', 'error');
+                    return;
                 }
                 showToast(`Error loading imaging study ${studyId}`, 'error');
                 return;
@@ -1392,8 +1389,8 @@ document.addEventListener('DOMContentLoaded', function() {
     function populateStudyInfo(studyInfo, studyData) {
         if (studyData.started)
             addStudyInfoRow(studyInfo, 'fa-calendar', 'Started', formatDateWithTime(studyData.started));
-        if (studyData.modality)
-            addStudyInfoRow(studyInfo, 'fa-stethoscope', 'Modality', studyData.modality.display || studyData.modality.code || 'N/A');
+        if (studyData.modality?.length > 0)
+            addStudyInfoRow(studyInfo, 'fa-stethoscope', 'Modality', studyData.modality[0].display || studyData.modality[0].code || 'N/A');
         if (studyData.description)
             addStudyInfoRow(studyInfo, 'fa-file-medical', 'Description', studyData.description);
         if (studyData.performer?.length > 0)
@@ -1567,9 +1564,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Add the card to the grid
                 log('Adding analysis card to grid');
                 elements.analysesGrid.appendChild(analysisCard);
-                
-                // Force UI update to display the report immediately
-                await new Promise(resolve => setTimeout(resolve, 0));
             }
             
             log('Finished adding all analysis cards. Total cards:', elements.analysesGrid.children.length);
