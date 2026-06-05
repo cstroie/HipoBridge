@@ -169,6 +169,15 @@ RADIO_REGION_RULES, ECO_REGION_RULES, CT_REGION_RULES, MRI_REGION_RULES = load_r
 
 
 
+# Maps internal study-type codes → DICOM modality (code, display)
+DICOM_MODALITY = {
+    "radio": ("CR",  "Computed Radiography"),
+    "eco":   ("US",  "Ultrasound"),
+    "ct":    ("CT",  "Computed Tomography"),
+    "mri":   ("MR",  "Magnetic Resonance"),
+    "other": ("OT",  "Other"),
+}
+
 # Headers for compatibility with Hipocrate service
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -511,21 +520,8 @@ class HipoClient:
             Tuple of (page_content, error_message) where error_message is None if no error
         """
 
-        async def _make_request(use_retry_headers=False):
-            """Helper function to make an HTTP request with proper headers and error handling.
-
-            This internal helper function handles the actual HTTP request execution,
-            including proper header management for GET and POST requests. For POST
-            requests, it carefully manages Content-Type headers to avoid conflicts
-            with aiohttp's automatic header setting.
-
-            Args:
-                use_retry_headers (bool): If True, removes Content-Type from headers
-                    to avoid conflicts during retry attempts. Default is False.
-
-            Returns:
-                str: The response text content, HTML unescaped
-            """
+        async def _make_request():
+            """Make a single HTTP request and return unescaped response text."""
             if method == "GET":
                 logger.debug(f"Making GET request to: {url}")
                 async with self.session.get(url, headers=self.headers) as response:
@@ -533,12 +529,8 @@ class HipoClient:
                     logger.debug(f"GET response status: {response.status}")
             else:  # POST
                 logger.debug(f"Making POST request to: {url}")
-                # For POST requests, we need to be careful about Content-Type headers
-                # Create a copy of headers without Content-Type to avoid conflicts
-                post_headers = self.headers.copy()
-                if use_retry_headers or method == "POST":
-                    post_headers.pop("Content-Type", None)
-                # When sending form data, let aiohttp set the Content-Type automatically
+                # Strip Content-Type so aiohttp sets it automatically for form data
+                post_headers = {k: v for k, v in self.headers.items() if k != "Content-Type"}
                 if data:
                     async with self.session.post(url, data=data, headers=post_headers) as response:
                         response_text = await self.handle_response_encoding(response)
@@ -584,10 +576,14 @@ class HipoClient:
                 login_success = await self.login_if_needed(self.session, username, password, force=True)
                 if login_success:
                     async with _hipocrate_semaphore:
-                        response_text = await _make_request(use_retry_headers=True)
+                        response_text = await _make_request()
                     if self.is_login_page(response_text):
+                        if method == "GET":
+                            self.url_cache.resolve_inflight(url)
                         return None, "Authentication failed after retry"
                 else:
+                    if method == "GET":
+                        self.url_cache.resolve_inflight(url)
                     return None, "Re-authentication failed"
 
             # Cache the response for GET requests and wake up any waiters
@@ -711,9 +707,9 @@ class HipoClient:
 
         if error_response:
             error_msg = error_response.get("message", "Unknown error") if isinstance(error_response, dict) else str(error_response)
+            logger.warning(f"POST failed in {duration:.2f}s: {error_msg}")
             return None, error_msg
-        logger.info(f"Response received in {duration:.2f} seconds")
-
+        logger.info(f"Response received in {duration:.2f}s")
         return response_text, None
 
     async def get_page(self, url, max_redirects=5):
@@ -734,6 +730,7 @@ class HipoClient:
 
         if error_response:
             error_msg = error_response.get("message", "Unknown error") if isinstance(error_response, dict) else str(error_response)
+            logger.warning(f"GET failed in {duration:.2f}s: {current_url}: {error_msg}")
             return None, error_msg
 
         logger.info(f"Page retrieved in {duration:.2f}s: {current_url}")
@@ -762,7 +759,8 @@ class HipoClient:
                 return data
             return self.parse_data(response_text, **kwargs)
         except Exception as e:
-            data.set_error("Data retrieval failed")
+            logger.error(f"fetch_and_parse failed: {e}")
+            data.set_error(f"Data retrieval failed: {e}")
             return data
 
     async def fetch_respond_fhir(self, *args, max_redirects=5, **kwargs):
@@ -806,7 +804,7 @@ class HipoClientPatient(HipoClient):
 
     def parse_data(self, html_content: str, **kwargs) -> HipoData:
         """Parse a Hipocrate patient page into HipoData (patient, presentation, checkin, checkout)."""
-        data = HipoData(status="success", message="", patient = {})
+        data = HipoData(status="success")
 
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
@@ -1163,7 +1161,9 @@ class HipoClientServiceRequest(HipoClient):
 
             data.store("patient.name", extract_text_after_label(soup, r'Nume Pacient:'))
 
-            data.store("patient.id", extract_ids_from_links(soup, r'../Pacient/edit\.asp\?id='))
+            patient_ids = extract_ids_from_links(soup, r'../Pacient/edit\.asp\?id=(\d+)')
+            if patient_ids:
+                data.store("patient.id", patient_ids[0] if isinstance(patient_ids, list) else patient_ids)
 
             data.store("checkin.medic", extract_text_after_label(soup, r'Medicul:', stop_at=r'-'))
 
@@ -1420,14 +1420,7 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                 data.set_error(error_message)
                 return data
 
-            parsed_data = self.parse_data(response_text, **kwargs)
-            
-            if not isinstance(parsed_data, HipoData):
-                result = HipoData(status="success", message="")
-                result.update(parsed_data)
-                return result
-                
-            return parsed_data
+            return self.parse_data(response_text, **kwargs)
 
         except Exception as e:
             data.set_error(f"Data retrieval failed: {str(e)}")
@@ -1467,22 +1460,18 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
             # Example: <a href="analyseFile.asp?id=1606238" target="_blank">Tipareste buletin rezultate>>></a>
             href_links = soup.find_all('a', href=re.compile(r'analyseFile\.asp\?id=(\d+)'))
             
+            # Build a set of IDs already covered by onclick links (O(n) dedup)
+            onclick_ids = set()
+            for onclick_link in onclick_links:
+                m = re.search(r'redirect\([^,]+,[^,]+,(\d+)', onclick_link.get('onclick', ''))
+                if m:
+                    onclick_ids.add(m.group(1))
+
             all_links = list(onclick_links)
-            
             for href_link in href_links:
                 href_id = extract_id_from_link(href_link, r'analyseFile\.asp\?id=(\d+)')
-                if href_id:
-                    duplicate_found = False
-                    for onclick_link in onclick_links:
-                        onclick_attr = onclick_link.get('onclick', '')
-                        redirect_match = re.search(r'redirect\([^,]+,[^,]+,(\d+)', onclick_attr)
-                        if redirect_match and redirect_match.group(1) == href_id:
-                            duplicate_found = True
-                            break
-                    
-                    # If not a duplicate, add to all_links
-                    if not duplicate_found:
-                        all_links.append(href_link)
+                if href_id and href_id not in onclick_ids:
+                    all_links.append(href_link)
             
             for link in all_links:
                 # Extract request ID - either from onclick or href
@@ -1594,7 +1583,7 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                     continue
                     
                 # Filter by region
-                if kwargs.get('region') and not kwargs['region'] in request['regions']:
+                if kwargs.get('region') and kwargs['region'] not in request.get('regions', []):
                     continue
 
                 # Append the request data to the requests list
@@ -1910,23 +1899,15 @@ class HipoClientImagingStudy(HipoClient):
 
             # Add modality if available in studies
             studies = parsed_data.get("studies", [])
-            if studies and len(studies) > 0 and isinstance(studies[0], dict):
-                first_study = studies[0]
-                study_type = first_study.get("type", "").upper()
-                if study_type:
-                    # Map study types to DICOM modality codes
-                    modality_mapping = {
-                        "radio": "CR",  # Computed Radiography
-                        "eco": "US",    # Ultrasound
-                        "ct": "CT",     # Computed Tomography
-                        "mri": "MR",    # Magnetic Resonance
-                    }
-                    modality_code = modality_mapping.get(study_type.lower(), "OT")  # Other
-                    fhir_imaging_study["modality"] = [{
-                        "system": "http://dicom.nema.org/resources/ontology/DCM",
-                        "code": modality_code,
-                        "display": modality_code
-                    }]
+            if studies and isinstance(studies[0], dict):
+                mod_code, mod_display = DICOM_MODALITY.get(
+                    studies[0].get("type", "").lower(), DICOM_MODALITY["other"]
+                )
+                fhir_imaging_study["modality"] = [{
+                    "system": "http://dicom.nema.org/resources/ontology/DCM",
+                    "code": mod_code,
+                    "display": mod_display
+                }]
 
             identifiers = []
             if parsed_data.get("patient.name"):
@@ -1987,20 +1968,14 @@ class HipoClientImagingStudy(HipoClient):
                         series["started"] = request_date_time
                     
                     # Use the study modality for the series if available
-                    study_type = study.get("type", "").upper()
-                    if study_type:
-                        modality_mapping = {
-                            "radio": "CR",  # Computed Radiography
-                            "eco": "US",    # Ultrasound
-                            "ct": "CT",     # Computed Tomography
-                            "mri": "MR",    # Magnetic Resonance
-                        }
-                        series_modality = modality_mapping.get(study_type.lower(), "OT")
-                        series["modality"] = {
-                            "system": "http://dicom.nema.org/resources/ontology/DCM",
-                            "code": series_modality,
-                            "display": series_modality
-                        }
+                    s_code, s_display = DICOM_MODALITY.get(
+                        study.get("type", "").lower(), DICOM_MODALITY["other"]
+                    )
+                    series["modality"] = {
+                        "system": "http://dicom.nema.org/resources/ontology/DCM",
+                        "code": s_code,
+                        "display": s_display
+                    }
                         
                     series_list.append(series)
 
@@ -2488,13 +2463,10 @@ class HipoClientCheckout(HipoClient):
                 }
             )
             
-            # Initialize participant array
-            fhir_encounter["participant"] = []
-
             # Add performer if available (from checkout medic)
             checkout_medic = parsed_data.get("checkout.medic")
             if checkout_medic:
-                fhir_encounter["participant"].append({
+                fhir_encounter["participant"] = [{
                     "type": [
                         {
                             "coding": [
@@ -2509,7 +2481,7 @@ class HipoClientCheckout(HipoClient):
                     "individual": {
                         "display": checkout_medic
                     }
-                })
+                }]
 
             # Add reason (admission diagnostic) if available
             admission_diagnosis = parsed_data.get("checkin.diagnosis")
