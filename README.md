@@ -35,10 +35,11 @@ service_url = http://192.168.3.230/hipocrate
 
 Open `http://localhost:44660` to access the single-page app. Features:
 
-- Patient search by CNP, patient code, or name; multiple results show a selection list
+- Patient search by CNP, patient code, or name; multiple results show a keyboard-accessible selection dialog
 - Patient profile with analyses, diagnostic reports, and epicrisis (all encounters, most-recent first)
 - Report tab — assembles a full clinical document (patient header + discharge summaries + imaging studies) formatted for LLM consumption
 - Three-state theme toggle: auto (OS preference) → light → dark
+- Respects `prefers-reduced-motion`; no external font requests (system font stack)
 
 ## API
 

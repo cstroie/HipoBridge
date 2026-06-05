@@ -120,15 +120,39 @@ Single-page app: `main.html` + `scripts.js` + `styles.css` + `marked.js`.
 - `marked.js` renders markdown in the Epicrisis and Report tabs.
 - Both the **Epicrisis** and **Report** tabs use the same `.markdown-content` CSS class and the same Copy Markdown button pattern. Raw markdown is stored in `element.dataset.markdown` after render; the clipboard button reads from there with an `execCommand` fallback for plain HTTP.
 - The **Report** tab assembles a clinical document (patient header → discharge summaries → imaging studies) structured for LLM consumption. The **Epicrisis** tab renders all encounters with an epicrisis, sorted by most-recent discharge, as a single markdown document.
-- When a patient search returns multiple results, a selection overlay is shown — never pick `entry[0]` silently.
+- When a patient search returns multiple results, a selection overlay is shown — never pick `entry[0]` silently. The overlay has `role="dialog"`, `aria-modal="true"`, an Escape-key handler, and a focus trap.
 - Analyses fetch failure is non-fatal: a warning toast is shown and the patient tab still loads.
 - Parallel fetches are throttled by `limitedMap(arr, MAX_CONCURRENT_REQUESTS=5, asyncFn)`.
-- All dates are normalised to `YYYY-MM-DD` (or `YYYY-MM-DD HH:MM` with time) via `formatDate()` / `formatDateWithTime()` regardless of how Hipocrate sends them. **Never call `new Date(hipocrate_string).toISOString()`** — Hipocrate sends non-ISO date strings that produce invalid `Date` objects and throw `RangeError`. Always pass raw strings through `formatDate()` / `formatDateWithTime()`, which have `isNaN` guards and try/catch.
+- The in-memory `cache` (encounters + reports) is bounded to `CACHE_MAX=100` entries per store with oldest-first eviction via `cachePut()`.
+- All dates are normalised to `YYYY-MM-DD` (or `YYYY-MM-DD HH:MM` with time) via `formatDate()` / `formatDateWithTime()` regardless of how Hipocrate sends them. **Never call `new Date(hipocrate_string).toISOString()`** — Hipocrate sends non-ISO date strings that produce invalid `Date` objects and throw `RangeError`. Always pass raw strings through `formatDate()` / `formatDateWithTime()`, which have `isNaN` guards and try/catch. **`calculateAge` uses string splitting on `YYYY-MM-DD` to avoid UTC midnight offset** — never `new Date(birthDate)` for age calculation.
 - Recent searches are persisted in `localStorage`.
 - All DOM elements are cached at startup in the `elements` object via `getElementById`. Never look up the same element inside a function that runs repeatedly.
 - Analysis cards use a `MODALITY_INFO` map (radio/ct/irm/eco/rads) for per-modality icon and label. Card type is stored in `article.dataset.type` and read by `filterAnalyses` — do not detect type from `className`. Modality CSS is driven by per-type custom properties (`--modality-radio`, `--modality-ct`, etc.) with separate light/dark values to meet WCAG AA contrast.
-- Dynamic HTML uses `<template>` elements in `main.html` and `cloneNode(true)` + `textContent`/`className` in JS. Do not use `innerHTML` with interpolated strings for new elements.
+- Dynamic HTML uses `<template>` elements in `main.html` and `cloneNode(true)` + `textContent`/`className` in JS. Do not use `innerHTML` with interpolated strings for new elements. Do not put `id` attributes inside `<template>` — they are duplicated on every clone.
 - Theme cycles `auto → light → dark → auto` via `toggleTheme()`; `localStorage` key is `theme`.
+
+### HTML / accessibility conventions (`main.html`)
+
+- There is exactly one `<h1>` per visible tab — the content heading (hero title, patient name, tab section title). The brand name uses `<p class="brand-name">`, not `<h1>`.
+- Navigation uses `<nav aria-label="Main navigation">` with `aria-current="page"` on the active `<li>` — **not** `role="tablist"` / `role="tab"` / `aria-selected`, because the pattern is link-based and arrow-key tab widget semantics are not implemented.
+- Tab panel containers are `<section role="tabpanel" aria-labelledby="...">`. Tab panel section headings carry the `id` referenced by `aria-labelledby`.
+- Key-value patient info uses `<dl>`/`<dt>`/`<dd>` — not `<label>` (which is for form controls only).
+- `<article>` is reserved for independently distributable content (analysis cards). Tab panel wrappers and markdown containers use `<div>` or `<section>`.
+- The `<dialog>` in the imaging study modal template has `aria-labelledby` pointing to its `<h2>`.
+- No Google Fonts external request — the body font stack already includes Inter as a system font fallback. Font Awesome is loaded from cdnjs with `crossorigin="anonymous" referrerpolicy="no-referrer"`.
+
+### CSS design system
+
+All colours, spacing, radii, and shadows use CSS custom properties defined in `:root` and `[data-theme="dark"]`. Key rules:
+- Always use `var(--radius-sm/md/lg/full)` — `var(--radius)` is not defined.
+- Always use `var(--font-size-xs/sm/base/lg/2xl/3xl/5xl)` and `var(--font-weight-normal/medium/semibold/bold)` — no hardcoded values.
+- Always use `var(--spacing-xs/sm/md/lg/xl/2xl)` for padding/gap/margin — no hardcoded `px` or `rem` values.
+- `--header-height: 72px` is defined in `:root`; use it for the sticky nav `top` offset.
+- Header brand uses `.brand-name` (not `h1`) — styled by `.brand-name` selector, not `brand-info h1`.
+- Header-specific button and badge styles are scoped to `.header .btn-icon` / `.header .badge` to avoid overriding general component styles.
+- `--header-primary` / `--header-secondary` are separate from `--primary` / `--secondary` so the header gradient can use darker shades in dark mode without affecting the rest of the UI.
+- Modality colors (`--modality-*`) have distinct light and dark values — the light values are darkened to meet WCAG AA 4.5:1 against white; the dark values are lighter for dark backgrounds.
+- `@media (prefers-reduced-motion: reduce)` disables all animations and hover transforms; the CSS spinner becomes a static indicator.
 
 ### Dual API surface
 
@@ -138,11 +162,3 @@ Every resource type has two route families:
 
 The `?debug=page` query parameter on any `/api/*` endpoint returns the raw Hipocrate HTML for debugging scrapers.
 
-### CSS design system
-
-All colours, spacing, radii, and shadows use CSS custom properties defined in `:root` and `[data-theme="dark"]`. Key rules:
-- Always use `var(--radius-sm/md/lg/full)` — `var(--radius)` is not defined.
-- Always use `var(--font-size-xs/sm/base/lg/2xl/3xl/5xl)` and `var(--font-weight-normal/medium/semibold/bold)` — no hardcoded values.
-- Header-specific button and badge styles are scoped to `.header .btn-icon` / `.header .badge` to avoid overriding general component styles.
-- `--header-primary` / `--header-secondary` are separate from `--primary` / `--secondary` so the header gradient can use darker shades in dark mode without affecting the rest of the UI.
-- Modality colors (`--modality-*`) have distinct light and dark values — the light values are darkened to meet WCAG AA 4.5:1 against white; the dark values are lighter for dark backgrounds.
