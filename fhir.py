@@ -30,30 +30,32 @@ class Resource(MutableMapping):
         return self.data[key]
     
     def __setitem__(self, key, value):
-        self.data[key] = value
-    
+        if value is None:
+            self.data.pop(key, None)
+        else:
+            self.data[key] = value
+
     def __delitem__(self, key):
         del self.data[key]
-    
+
     def __iter__(self):
-        # Filter out None values when iterating
-        return (k for k in self.data if self.data[k] is not None)
-    
+        return iter(self.data)
+
     def __len__(self):
-        return sum(1 for k in self.data if self.data[k] is not None)
-    
+        return len(self.data)
+
     def to_dict(self):
-        """Convert to dict, recursively converting Resource objects to dicts"""
-        result = {}
-        for k, v in self.data.items():
-            if v is not None:
-                if isinstance(v, Resource):
-                    result[k] = v.to_dict()
-                elif isinstance(v, list):
-                    result[k] = [item.to_dict() if isinstance(item, Resource) else item for item in v]
-                else:
-                    result[k] = v
-        return result
+        """Convert to dict, recursively converting Resource objects and nested dicts."""
+        def _convert(v):
+            if isinstance(v, Resource):
+                return v.to_dict()
+            if isinstance(v, dict):
+                return {dk: _convert(dv) for dk, dv in v.items()}
+            if isinstance(v, list):
+                return [_convert(item) for item in v]
+            return v
+
+        return {k: _convert(v) for k, v in self.data.items()}
 
 class Coding(Resource):
     def __init__(self, system: Optional[str] = None, version: Optional[str] = None, code: Optional[str] = None, 
@@ -235,6 +237,7 @@ class Patient(Resource):
 
 class Practitioner(Resource):
     def __init__(self,
+                 id: Optional[str] = None,
                  identifier: Optional[List[Dict[str, Any]]] = None,
                  active: Optional[bool] = None,
                  name: Optional[List[Dict[str, Any]]] = None,
@@ -249,6 +252,8 @@ class Practitioner(Resource):
                  communication: Optional[List[Dict[str, Any]]] = None,
                  **kwargs):
         super().__init__(
+            resourceType="Practitioner",
+            id=id,
             identifier=identifier,                           # An identifier for the person as this agent
             active=active,                                   # Whether this practitioner's record is in active use
             name=name,                                       # The name(s) associated with the practitioner
@@ -571,6 +576,7 @@ class SupportingInfo(Resource):
 
 class ImagingStudy(Resource):
     def __init__(self,
+                 id: Optional[str] = None,
                  identifier: Optional[List[Dict[str, Any]]] = None,
                  status: Optional[str] = None,
                  modality: Optional[List[Dict[str, Any]]] = None,
@@ -591,6 +597,7 @@ class ImagingStudy(Resource):
                  **kwargs):
         super().__init__(
             resourceType="ImagingStudy",       # Resource type
+            id=id,                             # Logical id of this artifact
             identifier=identifier,             # Business identifier for imaging study
             status=status,                     # registered | available | cancelled | entered-in-error | unknown | inactive
             modality=modality,                 # The distinct values for series' modalities
@@ -637,7 +644,7 @@ class DiagnosticReport(Resource):
                  composition: Optional[Dict[str, Any]] = None,
                  conclusion: Optional[str] = None,
                  conclusionCode: Optional[List[Dict[str, Any]]] = None,
-                 recomendation: Optional[List[Dict[str, Any]]] = None,
+                 recommendation: Optional[List[Dict[str, Any]]] = None,
                  presentedForm: Optional[List[Dict[str, Any]]] = None,
                  communication: Optional[List[Dict[str, Any]]] = None,
                  comparison: Optional[Dict[str, Any]] = None,
@@ -667,7 +674,7 @@ class DiagnosticReport(Resource):
             composition=composition,           # Reference to a Composition resource for the DiagnosticReport structure
             conclusion=conclusion,             # Clinical conclusion (interpretation) of test results
             conclusionCode=conclusionCode,     # Codes and/or references for the clinical conclusion of test results
-            recomendation=recomendation,       # Recommendations based on findings and interpretations
+            recommendation=recommendation,       # Recommendations based on findings and interpretations
             presentedForm=presentedForm,       # Entire report as issued
             communication=communication,       # Communication initiated during the reporting process
             comparison=comparison,             # Prior data and findings for comparison
@@ -700,66 +707,52 @@ class Encounter(Resource):
                  id: Optional[str] = None,
                  identifier: Optional[List[Dict[str, Any]]] = None,
                  status: Optional[str] = None,
-                 businessStatus: Optional[List[Dict[str, Any]]] = None,
-                 class_: Optional[List[Dict[str, Any]]] = None,
-                 priority: Optional[Dict[str, Any]] = None,
+                 class_: Optional[Dict[str, Any]] = None,
                  type: Optional[List[Dict[str, Any]]] = None,
-                 serviceType: Optional[List[Dict[str, Any]]] = None,
+                 serviceType: Optional[Dict[str, Any]] = None,
+                 priority: Optional[Dict[str, Any]] = None,
                  subject: Optional[Dict[str, Any]] = None,
-                 subjectStatus: Optional[Dict[str, Any]] = None,
                  episodeOfCare: Optional[List[Dict[str, Any]]] = None,
                  basedOn: Optional[List[Dict[str, Any]]] = None,
-                 careTeam: Optional[List[Dict[str, Any]]] = None,
-                 partOf: Optional[Dict[str, Any]] = None,
-                 serviceProvider: Optional[Dict[str, Any]] = None,
                  participant: Optional[List[Dict[str, Any]]] = None,
                  appointment: Optional[List[Dict[str, Any]]] = None,
-                 virtualService: Optional[List[Dict[str, Any]]] = None,
-                 actualPeriod: Optional[Dict[str, Any]] = None,
-                 plannedStartDate: Optional[str] = None,
-                 plannedEndDate: Optional[str] = None,
+                 period: Optional[Dict[str, Any]] = None,
                  length: Optional[Dict[str, Any]] = None,
-                 reason: Optional[List[Dict[str, Any]]] = None,
+                 reasonCode: Optional[List[Dict[str, Any]]] = None,
+                 reasonReference: Optional[List[Dict[str, Any]]] = None,
                  diagnosis: Optional[List[Dict[str, Any]]] = None,
                  account: Optional[List[Dict[str, Any]]] = None,
-                 dietPreference: Optional[List[Dict[str, Any]]] = None,
-                 specialArrangement: Optional[List[Dict[str, Any]]] = None,
-                 specialCourtesy: Optional[List[Dict[str, Any]]] = None,
-                 admission: Optional[Dict[str, Any]] = None,
+                 hospitalization: Optional[Dict[str, Any]] = None,
                  location: Optional[List[Dict[str, Any]]] = None,
+                 serviceProvider: Optional[Dict[str, Any]] = None,
+                 partOf: Optional[Dict[str, Any]] = None,
+                 note: Optional[List[Dict[str, Any]]] = None,
                  **kwargs):
         super().__init__(
             resourceType="Encounter",              # Resource type
             id=id,                                 # Logical id of this artifact
             identifier=identifier,                 # Identifier(s) by which this encounter is known
-            status=status,                         # planned | in-progress | on-hold | discharged | completed | cancelled | discontinued | entered-in-error | unknown
-            businessStatus=businessStatus,         # A granular, workflows specific set of statuses that apply to the encounter
-            class_=class_,                         # Classification of patient encounter context - e.g. Inpatient, outpatient
+            status=status,                         # planned | arrived | triaged | in-progress | on-leave | finished | cancelled | entered-in-error | unknown
+            **{"class": class_} if class_ is not None else {},
+            type=type,                             # Specific type of encounter
+            serviceType=serviceType,               # Broad categorization of the service to be provided
             priority=priority,                     # Indicates the urgency of the encounter
-            type=type,                             # Specific type of encounter (e.g. e-mail consultation, surgical day-care, ...)
-            serviceType=serviceType,               # Specific type of service
             subject=subject,                       # The patient or group related to this encounter
-            subjectStatus=subjectStatus,           # The current status of the subject in relation to the Encounter
             episodeOfCare=episodeOfCare,           # Episode(s) of care that this encounter should be recorded against
             basedOn=basedOn,                       # The request that initiated this encounter
-            careTeam=careTeam,                     # The group(s) that are allocated to participate in this encounter
-            partOf=partOf,                         # Another Encounter this encounter is part of
-            serviceProvider=serviceProvider,       # The organization (facility) responsible for this encounter
             participant=participant,               # List of participants involved in the encounter
             appointment=appointment,               # The appointment that scheduled this encounter
-            virtualService=virtualService,         # Connection details of a virtual service (e.g. conference call)
-            actualPeriod=actualPeriod,             # The actual start and end time of the encounter
-            plannedStartDate=plannedStartDate,     # The planned start date/time (or admission date) of the encounter
-            plannedEndDate=plannedEndDate,         # The planned end date/time (or discharge date) of the encounter
-            length=length,                         # Actual quantity of time the encounter lasted (less time absent)
-            reason=reason,                         # The list of medical reasons that are expected to be addressed during the episode of care
+            period=period,                         # The start and end time of the encounter
+            length=length,                         # Quantity of time the encounter lasted
+            reasonCode=reasonCode,                 # Coded reason the encounter takes place
+            reasonReference=reasonReference,       # Reason the encounter takes place (reference)
             diagnosis=diagnosis,                   # The list of diagnosis relevant to this encounter
-            account=account,                       # The set of accounts that may be used for billing for this Encounter
-            dietPreference=dietPreference,         # Diet preferences reported by the patient
-            specialArrangement=specialArrangement, # Wheelchair, translator, stretcher, etc
-            specialCourtesy=specialCourtesy,       # Special courtesies (VIP, board member)
-            admission=admission,                   # Details about the admission to a healthcare service
+            account=account,                       # The set of accounts that may be used for billing
+            hospitalization=hospitalization,       # Details about the admission to a healthcare service
             location=location,                     # List of locations where the patient has been
+            serviceProvider=serviceProvider,       # The organization responsible for this encounter
+            partOf=partOf,                         # Another Encounter this encounter is part of
+            note=note,                             # Additional notes about the encounter
             **kwargs
         )
 
@@ -821,6 +814,7 @@ class Bundle(Resource):
         if self.data.get("entry") is None:
             self.data["entry"] = []
         self.data["entry"].append(entry)
+        self.data["total"] = len(self.data["entry"])
     
     def set_total(self, total: int):
         """Set the total number of matches across all pages."""
@@ -844,7 +838,7 @@ class OperationOutcome(Resource):
         )
     
     @classmethod
-    def from_error(cls, message: str, code: str = "exception", severity: str = "error", 
+    def from_error(cls, message: str, code: str = "processing", severity: str = "error",
                    diagnostics: Optional[str] = None, location: Optional[List[str]] = None,
                    expression: Optional[List[str]] = None):
         """Create an OperationOutcome from an error message."""
@@ -859,7 +853,7 @@ class OperationOutcome(Resource):
         return cls(issue=[issue.to_dict()])
     
     @classmethod
-    def from_exception(cls, exception: Exception, code: str = "exception", 
+    def from_exception(cls, exception: Exception, code: str = "processing",
                        diagnostics: Optional[str] = None):
         """Create an OperationOutcome from an exception."""
         return cls.from_error(
