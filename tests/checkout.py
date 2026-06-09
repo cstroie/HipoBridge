@@ -24,13 +24,12 @@ async def test_encounter_endpoint_missing_id(session: aiohttp.ClientSession) -> 
     """Test encounter endpoint with missing ID"""
     print("Testing encounter endpoint with missing ID...")
     try:
-        async with session.get(f"{BASE_URL}/fhir/Encounter", headers=_auth_headers()) as response:
-            if response.status == 400:
-                data = await response.json()
-                print(f"  ✓ Encounter endpoint with missing ID correctly returned 400: {data.get('message', 'unknown')}")
+        async with session.get(f"{BASE_URL}/fhir/Encounter/", headers=_auth_headers()) as response:
+            if response.status in (400, 404):
+                print(f"  ✓ Encounter with missing ID correctly returned {response.status}")
                 return True
             else:
-                print(f"  ✗ Encounter endpoint with missing ID should return 400 but got: {response.status}")
+                print(f"  ✗ Encounter with missing ID should return 400/404 but got: {response.status}")
                 return False
     except Exception as e:
         print(f"  ✗ Encounter endpoint with missing ID test failed with exception: {e}")

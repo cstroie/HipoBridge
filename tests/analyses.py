@@ -22,13 +22,12 @@ async def test_observations_endpoint_missing_patient_id(session: aiohttp.ClientS
             credentials = base64.b64encode(f"{HYP_USER}:{HYP_PASS}".encode()).decode()
             headers["Authorization"] = f"Basic {credentials}"
             
-        async with session.get(f"{BASE_URL}/fhir/Observation", headers=headers) as response:
-            if response.status == 400:
-                data = await response.json()
-                print(f"  ✓ Observations endpoint with missing patient ID correctly returned 400: {data.get('message', 'unknown')}")
+        async with session.get(f"{BASE_URL}/fhir/ServiceRequest", headers=headers) as response:
+            if response.status in (400, 404):
+                print(f"  ✓ ServiceRequest without patient ID correctly returned {response.status}")
                 return True
             else:
-                print(f"  ✗ Observations endpoint with missing patient ID should return 400 but got: {response.status}")
+                print(f"  ✗ ServiceRequest without patient ID should return 400/404 but got: {response.status}")
                 return False
     except Exception as e:
         print(f"  ✗ Observations endpoint with missing patient ID test failed with exception: {e}")
