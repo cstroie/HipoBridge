@@ -1911,13 +1911,15 @@ class HipoClientImagingStudy(HipoClient):
                     }
                 ]
 
-            # Add note if clinical comments are available
+            # Add notes: clinical comments + per-study results
+            notes = []
             if parsed_data.get("request.clinical_comments"):
-                fhir_imaging_study["note"] = [
-                    {
-                        "text": parsed_data.get("request.clinical_comments")
-                    }
-                ]
+                notes.append({"text": parsed_data.get("request.clinical_comments")})
+            for study in (studies or []):
+                if isinstance(study, dict) and study.get("result"):
+                    notes.append({"text": study["result"]})
+            if notes:
+                fhir_imaging_study["note"] = notes
 
             return fhir_imaging_study
 
