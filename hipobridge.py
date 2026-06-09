@@ -294,6 +294,18 @@ async def get_checkout(request):
     return web_json_response(parsed_data)
 
 @require_auth
+async def debug_passthrough(request):
+    """Fetch any Hipocrate path for debugging. ?path=/files/checkup.asp?cuid=..."""
+    path = request.query.get('path', '')
+    if not path:
+        return web.Response(text='Missing ?path=', status=400)
+    client = HipoClient(SERVICE_URL, request)
+    html, err = await client.get_page(path)
+    if err:
+        return web.Response(text=f'Error: {err}', status=500)
+    return web.Response(text=html, content_type='text/html')
+
+@require_auth
 async def get_fhir_encounter(request):
     """Retrieve encounter (discharge summary) by ID. Returns FHIR Encounter resource."""
     id = request.match_info.get('id')
@@ -587,6 +599,7 @@ async def init_app():
     app.router.add_get('/api/study/{id}', get_study)
     app.router.add_get('/api/report/{id}', get_report)
     app.router.add_get('/api/checkout/{id}', get_checkout)
+    app.router.add_get('/api/debug', debug_passthrough)
     app.router.add_get('/fhir/Patient', search_fhir_patient)
     app.router.add_get('/fhir/Patient/{id}', get_fhir_patient)
     app.router.add_get('/fhir/ServiceRequest', search_fhir_service_request)
