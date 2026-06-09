@@ -107,6 +107,26 @@ GET /api/checkout/260100000619759?debug=page
 
 ---
 
+## Admission Record (Checkin)
+
+| HippoBridge endpoint | Hipocrate URL |
+|---|---|
+| `GET /api/checkin/{id}` | `/files/checkin.asp?id={id}` |
+
+Returns: patient name/CNP, presentation date/urgency/section, diagnosis, DRG/72H diagnoses, secondary diagnoses, ward transfers, exam (general/local).
+
+---
+
+## Emergency Consultation (Checkup)
+
+| HippoBridge endpoint | Hipocrate URL |
+|---|---|
+| `GET /api/checkup/{id}` | `/files/checkup.asp?cuid={id}` |
+
+Returns: patient name/CNP, presentation date/urgency/section, admission info, ICD-10, initial/final/referral diagnoses, discharge status, exam (general/local).
+
+---
+
 ## Known Hipocrate URLs (not yet proxied)
 
 | Purpose | URL |

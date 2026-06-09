@@ -34,7 +34,7 @@ import base64
 from fhir import OperationOutcome, Resource
 
 from hipoclient import ANALYSIS_TYPES
-from hipoclient import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientImagingStudy, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientServiceRequestSearch, HipoClientCheckout
+from hipoclient import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientImagingStudy, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientServiceRequestSearch, HipoClientCheckout, HipoClientCheckin, HipoClientCheckup
 from hipoclient import user_session_manager
 from hipodata import HipoData
 
@@ -290,6 +290,34 @@ async def get_checkout(request):
     if debug_resp is not None:
         return debug_resp
 
+    parsed_data = await client.fetch_and_parse(id=id)
+    return web_json_response(parsed_data)
+
+@require_auth
+async def get_checkin(request):
+    """Retrieve admission record by ID. Returns raw HipoData JSON."""
+    id = request.match_info.get('id')
+    if not id:
+        return web_error_response("Checkin ID is required")
+    logger.info(f"Retrieving checkin with ID: {id}")
+    client = HipoClientCheckin(SERVICE_URL, request)
+    debug_resp = await web_debug_response(client, request, id=id)
+    if debug_resp is not None:
+        return debug_resp
+    parsed_data = await client.fetch_and_parse(id=id)
+    return web_json_response(parsed_data)
+
+@require_auth
+async def get_checkup(request):
+    """Retrieve outpatient/emergency consultation by ID. Returns raw HipoData JSON."""
+    id = request.match_info.get('id')
+    if not id:
+        return web_error_response("Checkup ID is required")
+    logger.info(f"Retrieving checkup with ID: {id}")
+    client = HipoClientCheckup(SERVICE_URL, request)
+    debug_resp = await web_debug_response(client, request, id=id)
+    if debug_resp is not None:
+        return debug_resp
     parsed_data = await client.fetch_and_parse(id=id)
     return web_json_response(parsed_data)
 
@@ -599,6 +627,8 @@ async def init_app():
     app.router.add_get('/api/study/{id}', get_study)
     app.router.add_get('/api/report/{id}', get_report)
     app.router.add_get('/api/checkout/{id}', get_checkout)
+    app.router.add_get('/api/checkin/{id}', get_checkin)
+    app.router.add_get('/api/checkup/{id}', get_checkup)
     app.router.add_get('/api/debug', debug_passthrough)
     app.router.add_get('/fhir/Patient', search_fhir_patient)
     app.router.add_get('/fhir/Patient/{id}', get_fhir_patient)

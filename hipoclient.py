@@ -2611,3 +2611,200 @@ class HipoClientCheckout(HipoClient):
         except Exception as e:
             logger.error(f"Error converting checkout data to FHIR: {e}")
             return FHIROperationOutcome.from_exception(e, code="exception")
+
+
+class HipoClientCheckin(HipoClient):
+    """Parses the admission record (/files/checkin.asp?id={id})."""
+
+    def __init__(self, service_url=None, request=None):
+        super().__init__(service_url=service_url, request=request)
+        self.request_url = "/files/checkin.asp?id={id}"
+
+    def parse_data(self, html_content: str, **kwargs) -> HipoData:
+        data = HipoData(status="success", message="")
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            if not self.is_expected_page(soup, 'FISA INTERNARE'):
+                data.set_error(f"Unexpected page for Checkin: {self.get_title(soup)}")
+                logger.warning(data['message'])
+                return data
+
+            rows = soup.find_all('tr')
+
+            def rt(r):
+                return [c.get_text(' ', strip=True) for c in r.find_all('td')]
+
+            for i, row in enumerate(rows):
+                cells = rt(row)
+                nc = len(cells)
+
+                # Row 5: "Pacient [ NAME ] CNP ..." + "Prezentare [ id ] Data: ... Urgenta: ... Sectie: ..."
+                if nc >= 1 and cells[0].startswith('Pacient ['):
+                    m = re.search(r'Pacient\s*\[\s*(.*?)\s*\]\s*CNP\s+(\S+)', cells[0])
+                    if m:
+                        data.store("patient.name", m.group(1).strip())
+                        data.store("patient.cnp", m.group(2))
+                        parsed = parse_cnp(m.group(2))
+                        data.store("patient.gender", parsed.get("gender"))
+                        data.store("patient.date", parsed.get("birth_date"))
+                        data.store("patient.age", parsed.get("age"))
+                    if nc >= 2:
+                        m2 = re.search(r'Prezentare\s*\[\s*(\S+)\s*\]\s*Data:\s*(\S+\s+\S+)\s*Urgenta:\s*(\S+)\s*Sect\w*:\s*(\S+)', cells[1])
+                        if m2:
+                            data.store("presentation.id", m2.group(1))
+                            data.store("presentation.date_time", m2.group(2))
+                            data.store("presentation.is_urgent", m2.group(3).upper() == 'DA')
+                            data.store("presentation.section", m2.group(4))
+
+                # Row 19: "Tip diagnostic: Cronic Acut Subacut Ore de ventilatie:"
+                elif nc == 1 and cells[0].startswith('Tip diagnostic:'):
+                    tip_raw = cells[0][len('Tip diagnostic:'):].strip()
+                    # Strip the radio-button labels — only keep before "Ore de ventilatie"
+                    tip = re.sub(r'\s*Ore de ventilatie:.*$', '', tip_raw).strip()
+                    data.store("checkin.diagnosis_type", tip)
+
+                # Row 20: "Diagnostic DRG la internare: CODE desc"
+                elif nc == 1 and cells[0].startswith('Diagnostic DRG la internare:'):
+                    data.store("checkin.diagnosis", cells[0][len('Diagnostic DRG la internare:'):].strip())
+
+                # Row 21: "Diagnostic la 72H: ..."
+                elif nc == 1 and cells[0].startswith('Diagnostic la 72H:'):
+                    val = cells[0][len('Diagnostic la 72H:'):].strip()
+                    if val:
+                        data.store("checkin.diagnosis_72h", val)
+
+                # Row 22: "Diagnostice secundare" header → next rows with section/regim/de la/pana la
+                elif nc == 1 and cells[0].strip() == 'Diagnostice secundare':
+                    secondary = []
+                    for j in range(i + 1, min(i + 10, len(rows))):
+                        nxt = rt(rows[j])
+                        if len(nxt) >= 1 and nxt[0] in ('Sectia', 'Cod', 'Examen general:', ''):
+                            break
+                        if len(nxt) >= 1 and nxt[0].strip() and not nxt[0].startswith('['):
+                            parts = re.split(r'(?<=[a-zA-Z])(?=[A-Z]\d{2}\.)', nxt[0])
+                            for p in parts:
+                                p = p.strip()
+                                if p and p not in ('Sectia', 'Regim', 'De la', 'Pana la'):
+                                    secondary.append(p)
+                    if secondary:
+                        data.store_list("checkin.secondary_diagnoses", secondary)
+
+                # Ward transfers: "Cod | Sectie | Medic | Data/Ora | Tip Examinare | Decizie | _"
+                # Skip header rows and lab history rows
+                elif (nc == 7 and cells[0] not in ('Cod', 'Nr.Crt.', 'Laborator', '')
+                      and cells[1] not in ('Sectie', 'Cod cerere', '')
+                      and cells[2] not in ('Medic', 'Data recoltarii', '')):
+                    transfers = data.get("checkin.transfers") or []
+                    transfers.append({
+                        "section": cells[1].strip(),
+                        "medic": cells[2].strip(),
+                        "date_time": cells[3].strip(),
+                        "type": cells[4].strip(),
+                        "decision": cells[5].strip(),
+                    })
+                    data.store_list("checkin.transfers", transfers)
+
+                # Physical exam
+                elif nc == 2 and cells[0] == 'Examen general:':
+                    data.store("checkin.exam_general", cells[1].strip())
+                elif nc == 2 and cells[0] == 'Examen local:':
+                    data.store("checkin.exam_local", cells[1].strip())
+
+            if 'id' in kwargs:
+                data.store("checkin.id", kwargs["id"])
+
+            return data
+        except Exception as e:
+            logger.error(f"Error parsing checkin data: {e}")
+            data.set_error(str(e))
+            return data
+
+
+class HipoClientCheckup(HipoClient):
+    """Parses the emergency/outpatient consultation (/files/checkup.asp?cuid={id})."""
+
+    def __init__(self, service_url=None, request=None):
+        super().__init__(service_url=service_url, request=request)
+        self.request_url = "/files/checkup.asp?cuid={id}"
+
+    def parse_data(self, html_content: str, **kwargs) -> HipoData:
+        data = HipoData(status="success", message="")
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            if not self.is_expected_page(soup, 'Consult'):
+                data.set_error(f"Unexpected page for Checkup: {self.get_title(soup)}")
+                logger.warning(data['message'])
+                return data
+
+            rows = soup.find_all('tr')
+
+            def rt(r):
+                return [c.get_text(' ', strip=True) for c in r.find_all('td')]
+
+            for i, row in enumerate(rows):
+                cells = rt(row)
+                nc = len(cells)
+
+                # Row 5 (3-cell): patient + presentation + admission
+                if nc >= 2 and cells[0].startswith('Pacient ['):
+                    m = re.search(r'Pacient\s*\[\s*(.*?)\s*\]\s*CNP\s+(\S+)', cells[0])
+                    if m:
+                        data.store("patient.name", m.group(1).strip())
+                        data.store("patient.cnp", m.group(2))
+                        parsed = parse_cnp(m.group(2))
+                        data.store("patient.gender", parsed.get("gender"))
+                        data.store("patient.date", parsed.get("birth_date"))
+                        data.store("patient.age", parsed.get("age"))
+                    m2 = re.search(r'Prezentare\s*\[\s*(\S+)\s*\]\s*Data:\s*(\S+\s+\S+)\s*Urgenta:\s*(\S+)\s*Sect\w*:\s*(\S+)', cells[1] if nc > 1 else '')
+                    if m2:
+                        data.store("presentation.date_time", m2.group(2))
+                        data.store("presentation.is_urgent", m2.group(3).upper() == 'DA')
+                        data.store("presentation.section", m2.group(4))
+                    if nc >= 3:
+                        m3 = re.search(r'Internare\s*\[\s*(\S+)\s*\]\s*Data:\s*(\S+\s+\S+)\s*Sectie:\s*(\S+)\s*Medic:\s*(.*)', cells[2])
+                        if m3:
+                            data.store("checkin.id", m3.group(1))
+                            data.store("checkin.date_time", m3.group(2))
+                            data.store("checkin.section", m3.group(3))
+                            data.store("checkin.medic", m3.group(4).strip())
+
+                # Diagnostic ICD10 + text
+                elif nc == 4 and cells[0] == 'Diagnostic ICD10:':
+                    data.store("diagnosis.icd10", cells[1].strip())
+                    data.store("diagnosis.text", cells[3].strip())
+
+                # Initial / final diagnosis
+                elif nc == 4 and cells[0] == 'Diagnostic initial:':
+                    data.store("diagnosis.initial", cells[1].strip())
+                    data.store("diagnosis.final", cells[3].strip())
+
+                # Referral diagnosis
+                elif nc >= 2 and cells[0] == 'Diagnostic trimitere:':
+                    data.store("diagnosis.referral", cells[1].strip())
+
+                # Discharge state
+                elif nc >= 1 and 'Stare pacient' in cells[0]:
+                    # Value follows in next non-empty cell
+                    for c in cells[1:]:
+                        if c.strip() and c.strip() not in ('50-Ameliorat', '51-Stationar', '52-Agravat', '53-Decedat'):
+                            break
+                    # Parse from the row text: look for selected value
+                    row_text = row.get_text(' ', strip=True)
+                    for state in ('Ameliorat', 'Stationar', 'Agravat', 'Decedat'):
+                        if state.lower() in row_text.lower():
+                            data.store("discharge.status", state.lower())
+                            break
+
+                # Exam general / local
+                elif nc == 4 and cells[0] == 'Examen clinic general:':
+                    data.store("exam.general", cells[1].strip())
+                    data.store("exam.local", cells[3].strip())
+
+            if 'id' in kwargs:
+                data.store("checkup.id", kwargs["id"])
+
+            return data
+        except Exception as e:
+            logger.error(f"Error parsing checkup data: {e}")
+            data.set_error(str(e))
+            return data
