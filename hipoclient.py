@@ -2184,7 +2184,7 @@ class HipoClientCheckout(HipoClient):
     def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
         """Initialize the checkout client."""
         super().__init__(service_url=service_url, request=request)
-        self.request_url = "/files/checkout.asp?id={id}"
+        self.request_url = "/gen_printabile/BiletExternare.asp?RelId={id}&RelName=CO"
 
     async def fetch_and_parse(self, *args, **kwargs):
         """Fetch and parse a checkout, evicting cache if epicrisis is empty.
@@ -2201,92 +2201,104 @@ class HipoClientCheckout(HipoClient):
         return parsed_data
 
     def parse_data(self, html_content: str, **kwargs) -> HipoData:
-        """Parse a Hipocrate checkout/discharge page into HipoData."""
+        """Parse a Hipocrate BiletExternare (printable discharge form) into HipoData."""
         data = HipoData(status="success", message="")
 
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
 
-            if not self.is_expected_page(soup, 'FISA EXTERNARE'):
-                data.set_error("Page is not a discharge page")
-                logger.warning("Page is not a discharge page")
+            if not self.is_expected_page(soup, 'Imprimare Fisa'):
+                data.set_error("Page is not a discharge summary")
+                logger.warning("Page is not a discharge summary")
                 return data
 
-            # Extract patient name and ID from the link
-            patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id='))
-            if patient_link:
-                data.store("patient.name", patient_link.get_text())
-                data.store("patient.id", extract_id_from_link(patient_link))
+            rows = soup.find_all('tr')
 
-            data.store("patient.cnp", extract_text_after_label(soup, r'CNP\s*:', 'tr'))
-            if data.get("patient.cnp"):
-                parsed_cnp = parse_cnp(data.get("patient.cnp"))
-                data.store("patient.gender", parsed_cnp.get("gender"))
-                data.store("patient.date", parsed_cnp.get("birth_date"))
-                data.store("patient.age", parsed_cnp.get("age"))
+            def row_text(r):
+                return [c.get_text(strip=True) for c in r.find_all('td')]
 
+            # Row 2: 6-cell — "Data eliberarii:", date, "Sectie / Compartiment:", ward, ...
+            # Row 3: 4-cell — "Perioada internarii:", "DD/MM/YYYY HH:MM - DD/MM/YYYY HH:MM", "Medic:", name
+            # Row 4: 2-cell — "NUME:SURNAME", "PRENUME:FIRSTNAME"
+            # Row 5: 2-cell — "DIAGNOSTIC PRINCIPAL (DRG Cod 1):code desc", "DIAGNOSTIC PRINCIPAL (DRG Cod 2):-"
+            # Row 6: 2-cell — "VARSTA:...", "CNP:..."
+            # Row 10: 2-cell — "STAREA LA EXTERNARE:..."
+            # Row 11-12: secondary diagnoses
+            # Row 13: 1-cell "EPICRIZA" header; Row 14: 1-cell epicrisis text
+            # Row 15: 1-cell "TRATAMENT RECOMANDAT"; Row 16: 1-cell "RECOMANDARI..."; Row 17: recommendations
 
-            # Extract presentation ID
-            presentation_ids = extract_ids_from_links(soup, r'presentation\.asp\?id=(\d+)')
-            if presentation_ids:
-                data.store("presentation.id", presentation_ids)
+            for i, row in enumerate(rows):
+                cells = row_text(row)
+                nc = len(cells)
 
+                if nc == 6 and cells[0] == 'Data eliberarii:':
+                    data.store("checkout.date", cells[1])
+                    data.store("checkout.ward", cells[3])
 
-            # Extract admission ID
-            checkin_ids = extract_ids_from_links(soup, r'checkin\.asp\?id=(\d+)')
-            if checkin_ids:
-                data.store("checkin.id", checkin_ids)
+                elif nc == 4 and cells[0] == 'Perioada internarii:':
+                    period = cells[1]
+                    data.store("checkin.medic", re.sub(r'^Dr\.', '', cells[3]).strip())
+                    # "DD/MM/YYYY HH:MM - DD/MM/YYYY HH:MM"
+                    m = re.match(r'(\S+\s+\S+)\s*-\s*(\S+\s+\S+)', period)
+                    if m:
+                        data.store("checkin.date_time", m.group(1))
+                        data.store("checkout.date_time", m.group(2))
 
-            data.store("checkin.medic", extract_text_after_label(soup, r'Medic\s*:', 'tr'))
+                elif nc == 2 and cells[0].startswith('NUME:'):
+                    surname = cells[0][len('NUME:'):]
+                    firstname = cells[1][len('PRENUME:'):] if cells[1].startswith('PRENUME:') else cells[1]
+                    data.store("patient.name", f"{surname} {firstname}".strip())
 
-            # Extract ward
-            data.store("checkin.ward", extract_text_after_label(soup, r'Sectie\s*:', 'tr'))
+                elif nc == 2 and cells[0].startswith('DIAGNOSTIC PRINCIPAL (DRG Cod 1):'):
+                    data.store("checkin.diagnosis", cells[0][len('DIAGNOSTIC PRINCIPAL (DRG Cod 1):'):].strip())
 
-            # Extract checkin diagnostic
-            data.store("checkin.diagnosis", extract_text_after_label(soup, r'Diagnostic\s*:', 'tr'))
+                elif nc == 2 and cells[1].startswith('CNP:'):
+                    cnp = cells[1][len('CNP:'):]
+                    data.store("patient.cnp", cnp)
+                    parsed = parse_cnp(cnp)
+                    data.store("patient.gender", parsed.get("gender"))
+                    data.store("patient.date", parsed.get("birth_date"))
+                    data.store("patient.age", parsed.get("age"))
 
-            # Extract checkin date and time from input fields
-            data.store("checkin.date", extract_value_from_input(soup, element_id='sCIDate'))
-            data.store("checkin.time", extract_value_from_input(soup, element_id='sCITime'))
-            
-            # Create combined checkin date_time
-            checkin_date = data.get("checkin.date")
-            checkin_time = data.get("checkin.time")
-            if checkin_date and checkin_time:
-                data.store("checkin.date_time", f'{checkin_date} {checkin_time}')
+                elif nc == 2 and cells[0].startswith('STAREA LA EXTERNARE:'):
+                    data.store("checkout.discharge_status", cells[0][len('STAREA LA EXTERNARE:'):].strip())
 
+                elif nc == 1 and cells[0] == 'EPICRIZA':
+                    # Next non-empty 1-cell row is the epicrisis text
+                    for j in range(i + 1, min(i + 5, len(rows))):
+                        nxt = row_text(rows[j])
+                        if len(nxt) == 1 and nxt[0] and nxt[0] not in ('TRATAMENT RECOMANDAT', 'RECOMANDARI / REGIM / MEDICATIE'):
+                            data.store("checkout.epicrisis", nxt[0])
+                            break
 
-            # Extract checkout date and time from input fields
-            data.store("checkout.date", extract_value_from_input(soup, element_id='sCODate'))
-            data.store("checkout.time", extract_value_from_input(soup, element_id='sCOTime'))
-            
-            # Create combined checkout date_time
-            checkout_date = data.get("checkout.date")
-            checkout_time = data.get("checkout.time")
-            if checkout_date and checkout_time:
-                data.store("checkout.date_time", f'{checkout_date} {checkout_time}')
+                elif nc == 1 and cells[0] == 'RECOMANDARI / REGIM / MEDICATIE':
+                    for j in range(i + 1, min(i + 5, len(rows))):
+                        nxt = row_text(rows[j])
+                        if len(nxt) == 1 and nxt[0] and not nxt[0].startswith('EXAMENE'):
+                            data.store("checkout.recommendations", nxt[0])
+                            break
 
-            # Extract epicrisis (textarea with id "sEpicrisysHtmlArea")
-            data.store("checkout.epicrisis", extract_text_from_element(soup, 'sEpicrisys'))
+            # Extract 2-cell lab/imaging investigation rows under section headers
+            investigations = []
+            current_section = ""
+            for row in rows:
+                cells = row_text(row)
+                if len(cells) == 1:
+                    txt = cells[0]
+                    if txt.startswith('EXAMENE') or txt.startswith('PROCEDURI'):
+                        current_section = txt
+                elif len(cells) == 2 and cells[0] not in ('COD CERERE / DATA',) and current_section:
+                    code_date = cells[0]
+                    detail = cells[1]
+                    if code_date and detail:
+                        investigations.append({
+                            "section": current_section,
+                            "code_date": code_date,
+                            "detail": detail
+                        })
+            if investigations:
+                data.store_list("investigations", investigations)
 
-            # Extract diagnostic (textarea after 'Diagnostic externare')
-            data.store("checkout.diagnosis", extract_textarea_after_label(soup, r'Diagnostic externare[^:]*:'))
-
-            data.store("checkout.medic", extract_selected_from_dropdown(soup, name='iCOMedicID'))
-
-            # Extract ward
-            data.store("checkout.ward", extract_selected_from_dropdown(soup, name='sSectionCode'))
-
-            # Extract surgery (textarea with id "sBOProtocolHtmlArea")
-            data.store("checkout.surgery", extract_text_from_element(soup, 'sBOProtocol'))
-
-            # Extract recommendations (textarea with id 'sRecommendationsHtmlArea')
-            data.store("checkout.recommendations", extract_text_from_element(soup, 'sRecommendations'))
-
-            # Extract ICD10 diagnostic from textarea with name "sCODiagnosis"
-            data.store("checkout.icd10", extract_text_from_element(soup, name='sCODiagnosis'))
-
-            # Add the id, if provided
             if 'id' in kwargs:
                 data.store("checkout.id", kwargs["id"])
 
