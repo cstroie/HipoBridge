@@ -88,22 +88,35 @@ Encounter IDs are 15-digit numbers (e.g. `260100000619759`).
 | `GET /fhir/Metadata` | FHIR CapabilityStatement |
 | `GET /fhir/spec` | OpenAPI spec (spec.json) |
 | `GET /fhir/CodeSystem/analysis-types` | Analysis type codes and domain mappings |
-| `GET /fhir/ValueSet/cnp?cnp={cnp}` | Validate and parse a Romanian CNP |
+| `GET /fhir/ValueSet/cnp?id={cnp}` | Validate and parse a Romanian CNP |
 | `POST /fhir/md2html` | Convert markdown to HTML (body: markdown text) |
 
 ---
 
 ## Debug
 
-Append `?debug=page` to any `/api/*` single-resource endpoint to return the raw Hipocrate HTML instead of parsed JSON. Useful for inspecting page structure when parsers break.
+Two complementary debug mechanisms:
 
-Examples:
+**1. Raw HTML for a proxied endpoint** — append `?debug=page` to any `/api/*` single-resource endpoint:
+
 ```
 GET /api/patient/421200000683090?debug=page
 GET /api/study/1667755?debug=page
 GET /api/report/1667755?debug=page
 GET /api/checkout/260100000619759?debug=page
+GET /api/checkin/652001?debug=page
+GET /api/checkup/421200002270746?debug=page
 ```
+
+**2. Arbitrary Hipocrate path passthrough** — fetch any Hipocrate URL not yet proxied:
+
+```
+GET /api/debug?path=/Pacient/history.asp?pacid=421200000667904
+GET /api/debug?path=/files/checkin.asp?id=652001
+GET /api/debug?path=/files/checkup.asp?cuid=421200002270746
+```
+
+Returns the raw Hipocrate HTML. Useful for inspecting pages before writing a parser.
 
 ---
 
