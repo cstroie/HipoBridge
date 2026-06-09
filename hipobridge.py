@@ -133,7 +133,7 @@ async def get_patient(request):
     client = HipoClientPatient(SERVICE_URL, request)
 
     debug_resp = await web_debug_response(client, request, id=id)
-    if debug_resp:
+    if debug_resp is not None:
         return debug_resp
 
     parsed_data = await client.fetch_and_parse(id=id)
@@ -197,7 +197,7 @@ async def get_request(request):
     client = HipoClientServiceRequest(SERVICE_URL, request)
 
     debug_resp = await web_debug_response(client, request, id=id)
-    if debug_resp:
+    if debug_resp is not None:
         return debug_resp
 
     parsed_data = await client.fetch_and_parse(id=id)
@@ -227,7 +227,7 @@ async def get_study(request):
     client = HipoClientImagingStudy(SERVICE_URL, request)
 
     debug_resp = await web_debug_response(client, request, id=id)
-    if debug_resp:
+    if debug_resp is not None:
         return debug_resp
 
     parsed_data = await client.fetch_and_parse(id=id)
@@ -257,7 +257,7 @@ async def get_report(request):
     client = HipoClientDiagnosticReport(SERVICE_URL, request)
 
     debug_resp = await web_debug_response(client, request, id=id)
-    if debug_resp:
+    if debug_resp is not None:
         return debug_resp
 
     parsed_data = await client.fetch_and_parse(id=id)
@@ -287,7 +287,7 @@ async def get_checkout(request):
     client = HipoClientCheckout(SERVICE_URL, request)
 
     debug_resp = await web_debug_response(client, request, id=id)
-    if debug_resp:
+    if debug_resp is not None:
         return debug_resp
 
     parsed_data = await client.fetch_and_parse(id=id)
@@ -508,7 +508,7 @@ async def web_debug_response(client, request, **kwargs) -> web.Response:
     """Return raw Hipocrate HTML when ?debug=page is set, else None."""
     if request.query.get('debug') == 'page':
         result = await client.debug_page(**kwargs)
-        return web.Response(body=result, content_type="text/html")
+        return web.Response(text=result, content_type="text/html")
     return None
 
 
