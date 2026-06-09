@@ -65,6 +65,15 @@ GET  /fhir/Encounter/{id}
 GET  /fhir/ValueSet/cnp?id={cnp}
 GET  /fhir/CodeSystem/analysis-types
 POST /fhir/md2html
+GET  /fhir/Metadata
+```
+
+Raw-JSON-only endpoints (no FHIR equivalent yet):
+
+```
+GET  /api/checkin/{id}     — admission record (checkin.asp)
+GET  /api/checkup/{id}     — emergency consultation (checkup.asp)
+GET  /api/debug?path=...   — raw Hipocrate HTML passthrough for any path
 ```
 
 All endpoints require HTTP Basic Auth.
@@ -80,6 +89,8 @@ python3 client.py -u USER -w PASS --analyses {patient_id} [--analysis-type radio
 python3 client.py -u USER -w PASS --report {id}
 python3 client.py -u USER -w PASS --imaging-study {id}
 python3 client.py -u USER -w PASS --checkout {id}
+python3 client.py -u USER -w PASS --checkin {id}
+python3 client.py -u USER -w PASS --checkup {id}
 python3 client.py -u USER -w PASS --cnp {cnp}
 ```
 
