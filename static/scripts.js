@@ -686,6 +686,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 analysesByModality[analysisType].push({
                     serviceRequest,
+                    analysisType,
                     analysisText,
                     examDateString: serviceRequest.authoredOn || null
                 });
@@ -716,9 +717,9 @@ document.addEventListener('DOMContentLoaded', function() {
             markdown += `### ${modalityInfo.name} (${analyses.length})\n\n`;
 
             const reportContents = await limitedMap(
-                analyses.map(a => a.serviceRequest.id),
+                analyses,
                 MAX_CONCURRENT_REQUESTS,
-                id => getReportContent(id)
+                a => getReportContent(a.serviceRequest.id, a.analysisType)
             );
 
             analyses.forEach((analysis, idx) => {
@@ -743,23 +744,30 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Helper function to get report content for a service request
-    async function getReportContent(serviceRequestId) {
+    const IMAGING_TYPES = ['radio', 'ct', 'irm', 'eco', 'rads'];
+    async function getReportContent(serviceRequestId, analysisType) {
         // check cache first
         if (cache.reports[serviceRequestId]) {
             return cache.reports[serviceRequestId];
         }
 
         try {
-            const reportResponse = await fetch(`/fhir/DiagnosticReport/${serviceRequestId}`);
-            
+            const isImaging = IMAGING_TYPES.includes(analysisType);
+            const endpoint = isImaging
+                ? `/fhir/ImagingStudy/${serviceRequestId}`
+                : `/fhir/DiagnosticReport/${serviceRequestId}`;
+            const reportResponse = await fetch(endpoint);
+
             if (!reportResponse.ok) {
                 log(`Report not found for service request ${serviceRequestId}`);
                 return null;
             }
-            
+
             const reportData = await reportResponse.json();
             let content = null;
-            if (reportData.conclusion) {
+            if (reportData.note && reportData.note.length > 0) {
+                content = reportData.note.map(n => n.text).filter(Boolean).join('\n\n').trim();
+            } else if (reportData.conclusion) {
                 content = reportData.conclusion;
             } else if (reportData.presentedForm && reportData.presentedForm.length > 0) {
                 const forms = reportData.presentedForm;
