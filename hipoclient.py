@@ -1380,10 +1380,32 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                     year = datetime.now().year
                 request_url = self.request_url_episode + f"&strAN={year}&NrPePag=100"
             else:
-                request_url = self.request_url_all
+                # Fetch all imaging domains in parallel and merge
+                imaging_types = [t for t, v in ANALYSIS_TYPES.items() if v['domain'] != 0]
+                tasks = []
+                for t in imaging_types:
+                    url = (self.request_url_episode + f"&strDomeniu={ANALYSIS_TYPES[t]['domain']}&NrPePag=100").format(pacid=patient_id)
+                    tasks.append(self.get_page(url))
+                results = await asyncio.gather(*tasks)
+                merged = HipoData(status="success", message="")
+                seen_ids = set()
+                all_requests = []
+                for html, err in results:
+                    if err or not html:
+                        continue
+                    parsed = self.parse_data(html)
+                    if parsed.get('patient') and not merged.get('patient'):
+                        merged['patient'] = parsed['patient']
+                    for req in parsed.get('requests', []):
+                        if req['id'] not in seen_ids:
+                            seen_ids.add(req['id'])
+                            all_requests.append(req)
+                all_requests.sort(key=lambda r: r.get('date_time', ''), reverse=True)
+                merged['requests'] = all_requests
+                return merged
 
             url = request_url.format(pacid=patient_id)
-            
+
             response_text, error_message = await self.get_page(url)
 
             if error_message:
