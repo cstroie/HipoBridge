@@ -1367,7 +1367,7 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
 
         try:
             if kwargs.get('type'):
-                request_url = self.request_url_episode + f"&strDomeniu={ANALYSIS_TYPES[kwargs['type']]['domain']}"
+                request_url = self.request_url_episode + f"&strDomeniu={ANALYSIS_TYPES[kwargs['type']]['domain']}&NrPePag=100"
             elif kwargs.get('dt'):
                 dt_param = kwargs.get('dt')
                 try:
@@ -1378,7 +1378,7 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                     year = dt_obj.year
                 except (ValueError, TypeError):
                     year = datetime.now().year
-                request_url = self.request_url_episode + f"&strAN={year}"
+                request_url = self.request_url_episode + f"&strAN={year}&NrPePag=100"
             else:
                 request_url = self.request_url_all
 
