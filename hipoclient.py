@@ -1973,47 +1973,83 @@ class HipoClientDiagnosticReport(HipoClient):
             _parse_buletin_header(soup, data)
 
             # 3-cell data rows: cell0=analysis name, cell1=result, cell2=reference range
-            # Skip rows that are page headers, patient info blocks, column headers, or footers
-            SKIP_PREFIXES = ('DENUMIRE ANALIZA', 'NUME:', 'Afisat de:', 'Spitalul ', 'SPITALUL ')
+            # Section structure (1-cell rows):
+            #   "HEMATOLOGIE (device) Starea probei: ..."  → section name (before DENUMIRE header)
+            #   "HEMOLEUCOGRAMA (Tip proba: ...)"          → subcategory (after DENUMIRE header)
+            #   "Validat de: ..."                          → validator (end of section)
+            SKIP_3CELL = ('DENUMIRE ANALIZA', 'NUME:', 'Afisat de:', 'Spitalul ', 'SPITALUL ')
             studies = []
             seen = set()
             section_name = ""
+            subcategory = ""
+            pending_section = ""   # 1-cell row seen before a DENUMIRE header
+            after_header = False   # True immediately after DENUMIRE header row
             for row in soup.find_all('tr'):
                 cells = row.find_all('td')
-                if len(cells) in (1, 7):
+                nc = len(cells)
+
+                if nc == 1:
+                    txt = cells[0].get_text(strip=True)
+                    if not txt or txt.startswith('Afisat de:') or txt.startswith('Data tiparirii') or txt.startswith('Data eliberarii'):
+                        continue
+                    if txt.startswith('Validat de:'):
+                        # Extract validator for the current section
+                        vm = re.search(r'Validat de:\s*(.*?)(?:Parafa:|$)', txt)
+                        if vm and studies:
+                            # attach validator to last study in this section
+                            validator = vm.group(1).strip()
+                            for s in reversed(studies):
+                                if s.get('section') == section_name:
+                                    s['validator'] = validator
+                                    break
+                        after_header = False
+                        pending_section = ""
+                        subcategory = ""
+                        continue
+                    if after_header:
+                        # First 1-cell after DENUMIRE header is the subcategory
+                        subcategory = re.sub(r'\s*\(Tip proba:.*?\)|\s*\(Metoda de Lucru:.*?\)', '', txt).strip()
+                        after_header = False
+                    else:
+                        # Section name comes before the DENUMIRE header
+                        pending_section = re.sub(r'\s*\(.*?\)\s*Starea probei:.*$', '', txt).strip()
                     continue
-                if len(cells) == 12:
-                    # Section header row — use second unique cell as section name
+
+                if nc == 12:
                     section_name = cells[1].get_text(strip=True)
+                    after_header = True
+                    subcategory = ""
                     continue
-                if len(cells) != 3:
-                    continue
-                cell0_text = cells[0].get_text(strip=True)
-                if not cell0_text:
-                    continue
-                if any(cell0_text.startswith(p) for p in SKIP_PREFIXES):
-                    continue
-                # Skip column header row and validation/footer rows
-                cell1_text = cells[1].get_text(strip=True)
-                if 'REZULTAT' == cell0_text or 'Data validare' in cell0_text or 'Data tiparirii' in cell1_text:
-                    continue
-                # Strip trailing "(Tip proba: ...)*" markers from analysis name
-                analysis_name = re.sub(r'\s*\*.*$', '', cell0_text).strip()
-                result_text = cell1_text
-                reference = cells[2].get_text(strip=True)
-                if not analysis_name or analysis_name in seen:
-                    continue
-                seen.add(analysis_name)
-                study_type, region = identify_study_type_and_region(analysis_name)
-                study = {
-                    "title": analysis_name,
-                    "result": result_text,
-                    "reference": reference,
-                    "section": section_name,
-                    "type": study_type,
-                    "region": region
-                }
-                studies.append(study)
+
+                if nc == 3:
+                    cell0_text = cells[0].get_text(strip=True)
+                    cell1_text = cells[1].get_text(strip=True)
+                    if not cell0_text or any(cell0_text.startswith(p) for p in SKIP_3CELL):
+                        if cell0_text == 'DENUMIRE ANALIZA':
+                            # Column header — next 1-cell is subcategory
+                            if pending_section:
+                                section_name = pending_section
+                                pending_section = ""
+                            after_header = True
+                            subcategory = ""
+                        continue
+                    if 'REZULTAT' == cell0_text or 'Data validare' in cell0_text or 'Data tiparirii' in cell1_text:
+                        continue
+                    analysis_name = re.sub(r'\s*\(Tip proba:.*?\)|\s*\(Metoda de Lucru:.*?\)|\s*\*.*$', '', cell0_text).strip()
+                    reference = cells[2].get_text(strip=True)
+                    if not analysis_name or analysis_name in seen:
+                        continue
+                    seen.add(analysis_name)
+                    study_type, region = identify_study_type_and_region(analysis_name)
+                    studies.append({
+                        "title": analysis_name,
+                        "result": cell1_text,
+                        "reference": reference,
+                        "section": section_name,
+                        "subcategory": subcategory,
+                        "type": study_type,
+                        "region": region
+                    })
             data.store_list("studies", studies)
 
             return data
