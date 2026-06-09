@@ -1380,7 +1380,7 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                     year = datetime.now().year
                 request_url = self.request_url_episode + f"&strAN={year}"
             else:
-                request_url = self.request_url_episode + f"&strAN={datetime.now().year}"
+                request_url = self.request_url_all
 
             url = request_url.format(pacid=patient_id)
             
