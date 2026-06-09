@@ -1766,15 +1766,19 @@ class HipoClientImagingStudy(HipoClient):
                 result_text = result_raw[len('rezultat:'):].strip()
                 study_type, region = identify_study_type_and_region(study_name)
                 validation_raw = cells[4].get_text(strip=True)
-                # Extract date from "Data validare:DD/MM/YYYY HH:MM" format
-                date_m = re.search(r'(\d{2}/\d{2}/\d{4}(?:\s+\d{2}:\d{2})?)', validation_raw)
+                # Extract date from "Data validare: DD/MM/YYYY HH:MM" or "27 May 2023 07:36"
+                date_m = re.search(r'(\d{2}/\d{2}/\d{4}(?:\s+\d{2}:\d{2})?|\d{2}\s+\w+\s+\d{4}(?:\s+\d{2}:\d{2})?)', validation_raw)
                 dt = parse_date_time(date_m.group(1)) if date_m else None
+                # Extract validator name: "Validat de: Dr. X Parafa: ..."
+                validator_m = re.search(r'Validat de:\s*(.*?)(?:Parafa:|$)', validation_raw)
+                validator = validator_m.group(1).strip() if validator_m else None
                 studies.append({
                     "title": study_name,
                     "result": result_text,
                     "type": study_type,
                     "region": region,
-                    "validation_date": dt.isoformat() if dt else validation_raw
+                    "validation_date": dt.isoformat() if dt else None,
+                    "validator": validator,
                 })
             data.store_list("studies", studies)
 
@@ -1850,15 +1854,11 @@ class HipoClientImagingStudy(HipoClient):
             if studies and len(studies) > 0 and isinstance(studies[0], dict):
                 fhir_imaging_study["description"] = studies[0].get("title", "Imaging Study")
 
-            # Add performer if available
-            if parsed_data.get("checkin.medic"):
-                fhir_imaging_study["performer"] = [
-                    {
-                        "actor": {
-                            "display": parsed_data.get("checkin.medic")
-                        }
-                    }
-                ]
+            # Add performer: use validator from first study, fall back to requesting medic
+            validator = studies[0].get("validator") if studies and isinstance(studies[0], dict) else None
+            performer_name = validator or parsed_data.get("checkin.medic")
+            if performer_name:
+                fhir_imaging_study["performer"] = [{"actor": {"display": performer_name}}]
 
             # Add referrer if requesting medic is available
             if parsed_data.get("request.medic"):
