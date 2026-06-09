@@ -1089,7 +1089,7 @@ class HipoClientPatientSearch(HipoClientPatient):
                 logger.warning(f"{data['message']}: {self.get_error(soup)}")
                 return data
 
-            pattern = r"javascript:Edit\('([^']+)'\);"
+            pattern = r"\.\./Pacient/edit\.asp\?id=(\d+)"
             data["patients"] = extract_text_ids_from_links(soup, pattern)
 
         except Exception as e:
@@ -1150,7 +1150,7 @@ class HipoClientServiceRequest(HipoClient):
     def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
         """Initialize the service request client."""
         super().__init__(service_url=service_url, request=request)
-        self.request_url = "/Analyse/LabRequest/buletinRecoltari.asp?id={id}"
+        self.request_url = "/PARA/Printabile/buletinRecoltari.asp?id={id}"
 
     def parse_data(self, html_content: str, **kwargs) -> HipoData:
         """Parse a Hipocrate service request page into HipoData."""
@@ -1159,56 +1159,26 @@ class HipoClientServiceRequest(HipoClient):
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
 
-            data.store("patient.name", extract_text_after_label(soup, r'Nume Pacient:'))
+            data.store("patient.name", extract_text_after_label(soup, r'NUME PACIENT:'))
+            data.store("checkin.medic", extract_text_after_label(soup, r'MEDICUL:'))
+            data.store("request.date_time", extract_text_after_label(soup, r'DATA SI ORA CERERII:', stop_at=r'RECEPTIONAT'))
+            data.store("request.barcode", soup.find('div', class_='div_barCode').get_text(strip=True) if soup.find('div', class_='div_barCode') else None)
+            data.store("request.is_urgent", bool(soup.find('p', class_='pUrgenta')))
 
-            patient_ids = extract_ids_from_links(soup, r'../Pacient/edit\.asp\?id=(\d+)')
-            if patient_ids:
-                data.store("patient.id", patient_ids[0] if isinstance(patient_ids, list) else patient_ids)
-
-            data.store("checkin.medic", extract_text_after_label(soup, r'Medicul:', stop_at=r'-'))
-
-            # Extract admission ID from the "Back" link
-            data.store("checkin.id", extract_ids_from_links(soup, r'/checkin\.asp\?id=([^&"]+)'))
-
-            # Extract diagnosis
-            data.store("checkin.diagnosis", extract_text_after_label(soup, r'Diagnostic:', 'td'))
-
-            # Extract comments (clinical and lab)
-            comment_headers = soup.find_all('td', class_='tdnplus', string=re.compile(r'Comentariile', re.IGNORECASE))
-            if len(comment_headers) >= 2:
-                # Get the next row which contains the actual comments
-                comment_row = comment_headers[0].parent.find_next_sibling('tr')
-                if comment_row:
-                    comment_tds = comment_row.find_all('td', class_='tdn')
-                    if len(comment_tds) >= 2:
-                        data.store("request.clinical_comments", comment_tds[0].get_text().strip())
-                        data.store("request.lab_comments", comment_tds[1].get_text().strip())
-
-            # Extract imaging studies from the table
-            studies_rows = soup.find_all('tr')
+            # Studies: numbered rows in table (index in first cell)
             studies = []
-            for row in studies_rows:
+            seen_titles = set()
+            for row in soup.find_all('tr'):
                 cells = row.find_all('td')
                 if len(cells) >= 3:
-                    # Check if this is a studies row (has numbering in first cell)
-                    first_cell_text = cells[0].get_text().strip()
-                    if first_cell_text and first_cell_text.isdigit():
+                    first = cells[0].get_text().strip()
+                    if first and first.isdigit():
                         study_text = cells[1].get_text().strip()
-                        if study_text:
-                            # Get study type and region
+                        if study_text and study_text not in seen_titles:
+                            seen_titles.add(study_text)
                             study_type, region = identify_study_type_and_region(study_text)
-                            studies.append({"id": f"{first_cell_text}",
-                                            "title": study_text,
-                                            "type": study_type,
-                                            "region": region
-                            })
+                            studies.append({"id": first, "title": study_text, "type": study_type, "region": region})
             data.store_list("studies", studies)
-
-            # Extract request date_time (Data si ora cererii)
-            data.store("request.date_time", extract_text_after_label(soup, r'Data si ora cererii:', stop_at=r'Receptionat'))
-
-            # Extract request urgency
-            data.store("request.is_urgent", "~URGENTA~" in html_content)
 
             return data
         
@@ -1375,7 +1345,7 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
     def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
         """Initialize the patient search client."""
         super().__init__(service_url=service_url, request=request)
-        self.request_url_all = "/pacient/analyses.asp?type=PA&pacid={pacid}"
+        self.request_url_all = "/Pacient/analysesALL.asp?type=PA&pacid={pacid}"
         self.request_url_episode = "/Pacient/analysesEpisod.asp?pacid={pacid}"
 
     async def search(self, patient_id: str, **kwargs) -> HipoData:
@@ -1397,7 +1367,7 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
 
         try:
             if kwargs.get('type'):
-                request_url = self.request_url_episode + f"&strDomeniu={ANALYSIS_TYPES[kwargs['type']]['domain']}"
+                request_url = self.request_url_episode + f"&strDomeniu={ANALYSIS_TYPES[kwargs['type']]['domain']}&NrPePag=100"
             elif kwargs.get('dt'):
                 dt_param = kwargs.get('dt')
                 try:
@@ -1408,12 +1378,34 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                     year = dt_obj.year
                 except (ValueError, TypeError):
                     year = datetime.now().year
-                request_url = self.request_url_episode + f"&strAN={year}"
+                request_url = self.request_url_episode + f"&strAN={year}&NrPePag=100"
             else:
-                request_url = self.request_url_all
+                # Fetch all imaging domains in parallel and merge
+                imaging_types = [t for t, v in ANALYSIS_TYPES.items() if v['domain'] != 0]
+                tasks = []
+                for t in imaging_types:
+                    url = (self.request_url_episode + f"&strDomeniu={ANALYSIS_TYPES[t]['domain']}&NrPePag=100").format(pacid=patient_id)
+                    tasks.append(self.get_page(url))
+                results = await asyncio.gather(*tasks)
+                merged = HipoData(status="success", message="")
+                seen_ids = set()
+                all_requests = []
+                for html, err in results:
+                    if err or not html:
+                        continue
+                    parsed = self.parse_data(html)
+                    if parsed.get('patient') and not merged.get('patient'):
+                        merged['patient'] = parsed['patient']
+                    for req in parsed.get('requests', []):
+                        if req['id'] not in seen_ids:
+                            seen_ids.add(req['id'])
+                            all_requests.append(req)
+                all_requests.sort(key=lambda r: r.get('date_time', ''), reverse=True)
+                merged['requests'] = all_requests
+                return merged
 
             url = request_url.format(pacid=patient_id)
-            
+
             response_text, error_message = await self.get_page(url)
 
             if error_message:
@@ -1453,140 +1445,90 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                 data.store("patient.age", parsed_cnp.get("age"))
 
             requests = []
-            #   function redirect(tip,tipPrintabil,intCodeID, isLabSynevo,barcode)
-            #   Example: <a href="#" id="myHref" onclick="redirect('Normal',3,1607394,0,'');return false;">Tipareste buletin recoltari>>></a>
-            onclick_links = soup.find_all('a', attrs={'onclick': True})
-            
-            # Example: <a href="analyseFile.asp?id=1606238" target="_blank">Tipareste buletin rezultate>>></a>
-            href_links = soup.find_all('a', href=re.compile(r'analyseFile\.asp\?id=(\d+)'))
-            
-            # Build a set of IDs already covered by onclick links (O(n) dedup)
-            onclick_ids = set()
-            for onclick_link in onclick_links:
-                m = re.search(r'redirect\([^,]+,[^,]+,(\d+)', onclick_link.get('onclick', ''))
-                if m:
-                    onclick_ids.add(m.group(1))
+            seen_ids = set()
+            all_rows = soup.find_all('tr')
+            for row_idx, row in enumerate(all_rows):
+                cells = row.find_all('td')
+                if len(cells) != 8:
+                    continue
 
-            all_links = list(onclick_links)
-            for href_link in href_links:
-                href_id = extract_id_from_link(href_link, r'analyseFile\.asp\?id=(\d+)')
-                if href_id and href_id not in onclick_ids:
-                    all_links.append(href_link)
-            
-            for link in all_links:
-                # Extract request ID - either from onclick or href
-                request_id = None
-                onclick_attr = link.get('onclick', '')
-                
-                # Check if onclick contains redirect function call
-                redirect_match = re.search(r'redirect\([^,]+,[^,]+,(\d+)', onclick_attr)
-                if redirect_match:
-                    # Extract request ID from intCodeID parameter (3rd parameter in redirect function)
-                    request_id = redirect_match.group(1)
-                else:
-                    # Try to extract from href
-                    request_id = extract_id_from_link(link, r'analyseFile\.asp\?id=(\d+)')
-                
+                # Cell 0 contains buletinRecoltari link (request ID)
+                recoltari_link = cells[0].find('a', href=re.compile(r'buletinRecoltari\.asp\?id=(\d+)'))
+                if not recoltari_link:
+                    continue
+                request_id = re.search(r'buletinRecoltari\.asp\?id=(\d+)', recoltari_link['href'])
                 if not request_id:
                     continue
+                request_id = request_id.group(1)
+                if request_id in seen_ids:
+                    continue
+                seen_ids.add(request_id)
 
-                # Keep each request data in HopoData
                 request = HipoData(id=request_id, type="unknown", regions=[])
 
-                # Find the parent table row
-                parent_row = link.find_parent('tr')
-                if not parent_row:
-                    # If no parent row, just add the ID without type
-                    requests.append(request)
-                    continue
+                # Cell 1: "BARCODE - NNNN-type"
+                cell1_text = cells[1].get_text(strip=True)
+                type_match = re.search(r'\d{4}-(\w+)', cell1_text)
+                if type_match:
+                    extracted_type = type_match.group(1).lower()
+                    if extracted_type in ANALYSIS_TYPES:
+                        request.store("type", extracted_type)
+                request.store("barcode", cell1_text.split(' - ')[0] if ' - ' in cell1_text else cell1_text)
 
-                # Get all the cells in row
-                cells = parent_row.find_all('td')
-                if len(cells) >= 8:
-                    # Cell 0: Checkbox (ignore)
-                    # Cell 1: Report link (already processed)
-                    # Cell 2: Barcode and type
-                    cell_2_text = cells[2].get_text(strip=True)
-                    try:
-                        barcode, exam_type = cell_2_text.split(' - ', 1)
-                        type_match = re.search(r'\d{4}-(\w+)', exam_type.strip())
-                        if type_match:
-                            extracted_type = type_match.group(1).lower()
-                            # Check if the extracted type is in our known analysis types
-                            if extracted_type in ANALYSIS_TYPES:
-                                request.store("type", extracted_type)
-                    except ValueError:
-                        # Handle case where there's no ' - ' separator
-                        # Try to extract type directly from the text
-                        type_match = re.search(r'\d{4}-(\w+)', cell_2_text)
-                        if type_match:
-                            extracted_type = type_match.group(1).lower()
-                            if extracted_type in ANALYSIS_TYPES:
-                                request.store("type", extracted_type)
+                # Cell 2: checkup link
+                request.store('checkup', extract_ids_from_links(cells[2], r'checkup\.asp\?cuid=(\d+)'))
 
-                    # Cell 3: Checkin/Checkup code
-                    request.store('checkin', extract_ids_from_links(cells[3], r'checkin\.asp\?id=(\d+)'))
-                    request.store('checkup', extract_ids_from_links(cells[3], r'checkup\.asp\?cuid=(\d+)'))
+                # Cell 3: date
+                date_text = cells[3].get_text(strip=True)
+                if date_text:
+                    dt = parse_date_time(date_text)
+                    if dt:
+                        request.store("date_time", dt.isoformat())
+                    else:
+                        request.store("date_time", date_text)
 
-                    # Cell 4: Date
-                    date_text = cells[4].get_text().strip()
-                    if date_text:
-                        dt = parse_date_time(date_text)
-                        if dt:
-                            request.store("date_time", dt.isoformat())
-                        else:
-                            request.store("date_time", date_text.strip())
+                # Cell 4: priority
+                request.store("is_urgent", "urgent" in cells[4].get_text().lower())
 
-                    # Cell 5: Priority
-                    request.store("is_urgent", "urgent" in cells[5].get_text().lower())
+                # Cell 5: section code
+                request.store("section", cells[5].get_text(strip=True))
 
-                    # Cell 6: Analysis type
-                    type_text = cells[6].get_text().strip()
-                    # Look for pattern like 'XXXX-Radio', 'XXXX-lab', etc.
-                    type_match = re.search(r'\d{4}-(\w+)', type_text)
-                    if type_match:
-                        extracted_type = type_match.group(1).lower()
-                        # Check if the extracted type is in our known analysis types
-                        if extracted_type in ANALYSIS_TYPES:
-                            request.store("type", extracted_type)
+                # Cell 6: doctor
+                request.store("medic", cells[6].get_text(strip=True))
 
-                    # Cell 7: Requesting doctor
-                    request.store('medic', cells[7].get_text())
+                # Check for BuletinAnalize link (results available)
+                analize_link = cells[0].find('a', href=re.compile(r'BuletinAnalize\.asp\?id=\d+&type=1'))
+                if analize_link:
+                    result_id = re.search(r'BuletinAnalize\.asp\?id=(\d+)', analize_link['href'])
+                    if result_id:
+                        request.store("result_id", result_id.group(1))
 
-                    # Cell 8: barcode
-                    request.store('barcode', cells[8].get_text())
-
-                #  Find the next sibling 'tr' to identify the exam types and regions
+                # Next 2-cell sibling row contains exam description
                 try:
-                    exams_row = parent_row.find_next_sibling('tr')
-                    if exams_row:
-                        # Find all cells in this row
-                        cells = exams_row.find_all('td')
-                        if len(cells) >= 2:
-                            exams_text = cells[1].get_text()
+                    next_row = all_rows[row_idx + 1] if row_idx + 1 < len(all_rows) else None
+                    if next_row:
+                        next_cells = next_row.find_all('td')
+                        if len(next_cells) == 2:
+                            exams_text = next_cells[1].get_text(strip=True)
                             if exams_text:
-                                exams = exams_text.split(';')
                                 regions = []
-                                for exam in exams:
-                                    study_type, region = identify_study_type_and_region(exam)
+                                for exam in exams_text.split(';'):
+                                    _, region = identify_study_type_and_region(exam)
                                     if region != 'unknown':
                                         regions.append(region)
-                                # Store the regions
                                 if regions:
                                     request.store_list('regions', regions)
                 except Exception as e:
                     logger.warning(f"Error processing exam regions for request {request_id}: {e}")
-                    # Continue with empty regions
 
                 # Filter by type
-                if kwargs.get('type') and kwargs['type'] != request['type']:
+                if kwargs.get('type') and kwargs['type'] != request.get('type'):
                     continue
-                    
+
                 # Filter by region
                 if kwargs.get('region') and kwargs['region'] not in request.get('regions', []):
                     continue
 
-                # Append the request data to the requests list
                 requests.append(request)
 
             # Filter requests by date_time
@@ -1713,6 +1655,70 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
             return FHIROperationOutcome.from_exception(e, code="exception")
 
 
+def _parse_buletin_header(soup, data: HipoData) -> None:
+    """Parse the shared header of BuletinAnalize pages (type=1 and type=2).
+
+    Row 1 cell 1: "BULETIN ... Data si ora recoltarii: <date>"
+    Row 1 cell 2: "Nr.Reg.<id>Cod cerere:<barcode>..."
+    Row 2 cell 0: "NUME:<name>CNP:<cnp>..."
+    Row 2 cell 1: "...COD PACIENT:<id>Urgenta:<urgency>SEX:<sex>"
+    Row 2 cell 2: "SECTIE:<section>MEDIC:<medic>"
+    """
+    rows = soup.find_all('tr')
+    if len(rows) < 3:
+        return
+
+    def extract_field(text, label, stop_labels=None):
+        pattern = re.escape(label)
+        m = re.search(pattern + r'(.*?)(?=' + '|'.join(re.escape(s) for s in (stop_labels or [])) + r'|$)', text, re.DOTALL)
+        return m.group(1).strip() if m else None
+
+    try:
+        row1_cells = rows[1].find_all('td') if len(rows) > 1 else []
+        row2_cells = rows[2].find_all('td') if len(rows) > 2 else []
+
+        # Extract date and barcode from page header
+        page_text = soup.get_text(' ')
+        header_html = str(soup)
+        date_m = re.search(r'Data si ora recoltarii setului de analize:\s*(.*?)(?:Data si ora|$)', page_text)
+        if date_m:
+            dt = parse_date_time(date_m.group(1).strip())
+            data.store("request.date_time", dt.isoformat() if dt else date_m.group(1).strip())
+        # Barcode: "Cod cerere: <b>CODE</b>" in raw HTML
+        barcode_m = re.search(r'Cod cerere:?\s*<[^>]*>([^<]+)<', header_html)
+        if not barcode_m:
+            barcode_m = re.search(r'Cod cerere:([A-Z0-9]+)', page_text)
+        if barcode_m:
+            data.store("request.barcode", barcode_m.group(1).strip())
+
+        if len(row2_cells) >= 3:
+            cell0 = row2_cells[0].get_text(strip=True)
+            name_m = re.search(r'NUME:(.*?)(?:CNP:|$)', cell0)
+            if name_m:
+                data.store("patient.name", name_m.group(1).strip())
+            cnp_m = re.search(r'CNP:(\d+)', cell0)
+            if cnp_m:
+                cnp = cnp_m.group(1)
+                data.store("patient.cnp", cnp)
+                parsed = parse_cnp(cnp)
+                data.store("patient.gender", parsed.get("gender"))
+                data.store("patient.birth_date", parsed.get("birth_date"))
+                data.store("patient.age", parsed.get("age"))
+
+            cell1 = row2_cells[1].get_text(strip=True)
+            pid_m = re.search(r'COD PACIENT:(\d+)', cell1)
+            if pid_m:
+                data.store("patient.id", pid_m.group(1))
+            data.store("request.is_urgent", bool(re.search(r'Urgenta:DA', cell1)))
+
+            cell2 = row2_cells[2].get_text(strip=True)
+            medic_m = re.search(r'MEDIC:(.*?)$', cell2)
+            if medic_m:
+                data.store("checkin.medic", medic_m.group(1).strip())
+    except Exception as e:
+        logger.warning(f"Error parsing buletin header: {e}")
+
+
 class HipoClientImagingStudy(HipoClient):
     """Specialized client for imaging study related operations in the Hipocrate medical system.
 
@@ -1723,144 +1729,63 @@ class HipoClientImagingStudy(HipoClient):
     def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
         """Initialize the service request client."""
         super().__init__(service_url=service_url, request=request)
-        self.request_url = "/Analyse/LabRequest/edit.asp?id={id}"
+        self.request_url = "/PARA/Printabile/BuletinAnalize.asp?id={id}&type=2&IdP=1"
 
     def parse_data(self, html_content: str, **kwargs) -> HipoData:
-        """Parse a Hipocrate service request page into HipoData."""
+        """Parse a BuletinAnalize type=2 (imaging/radiology) page into HipoData."""
         data = HipoData(status="success", message="")
 
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
 
-            if not self.is_expected_page(soup, 'Cerere de investigatii paraclinice'):
-                # Log snippet of response for debugging
+            if not self.is_expected_page(soup, 'BULETIN ANALIZE MEDICALE'):
                 data.set_error(f"Unexpected page for ImagingStudy: {self.get_title(soup)}")
                 logger.warning(f"{data['message']}: {self.get_error(soup)}")
                 return data
 
-            # Extract patient name from the table with patient data
-            data.store("patient.name", extract_text_after_label(soup, r'Nume:', 'tr', stop_at=r'\['))
+            # Parse shared header (same layout as DiagnosticReport)
+            _parse_buletin_header(soup, data)
 
-            # Extract patient CNP from the table with patient data
-            patient_cnp = extract_value_from_input(soup, element_id="strCNP")
-            data.store("patient.cnp", patient_cnp)
-            if patient_cnp:
-                parsed_cnp = parse_cnp(patient_cnp)
-                data.store("patient.gender", parsed_cnp.get("gender", ""))
-                data.store("patient.birth_date", parsed_cnp.get("birth_date", ""))
-                data.store("patient.age", parsed_cnp.get("age", ""))
-
-            # Extract patient code from the table with patient data
-            patient_ids = extract_ids_from_links(soup, r'/pacient/edit\.asp\?id=(\d+)')
-            if patient_ids:
-                data.store("patient.id", patient_ids[0] if isinstance(patient_ids, list) else patient_ids)
-            
-            # Extract checkin ID
-            data.store("checkin.id", extract_ids_from_links(soup, r'/files/checkin\.asp\?id=(\d+)'))
-
-            # Extract barcode
-            data.store("request.barcode", extract_text_after_label(soup, r'Cerere de investigatii (?!paraclinice)'))
-
-            data.store("checkin.medic", extract_text_after_label(soup, r'Medic:', 'tr'))
-
-            # Extract the clinical comments
-            data.store("checkin.diagnosis", extract_text_after_label(soup, r'prezumtiv:', 'tr'))
-
-            # Extract the clinical comments
-            data.store("request.clinical_comments", extract_text_after_label(soup, r'Informatii suplimentare:', 'tr', stop_at=r'Motiv'))
-
-            # Extract the lab comments
-            data.store("request.lab_comments", extract_text_from_element(soup, element_id="strComments"))
-
-            # Extract the justification
-            data.store("request.justification", extract_text_from_element(soup, element_id="strJustificare"))
-
-            data.store("request.icd10", extract_text_after_label(soup, r'Diagnostic:', 'tr'))
-
-            req = extract_text_after_label(soup, r'Ceruta:', 'tr')
-            if req and '-' in req:
-                try:
-                    request_medic, request_date_time = req.split('-', 1)
-                    data.store("request.medic", request_medic)
-                    dt = parse_date_time(request_date_time)
-                    if dt:
-                        data.store("request.date_time", dt.isoformat())
-                    else:
-                        data.store("request.date_time", request_date_time.strip())
-                except ValueError:
-                    data.store("request.info", req)
-
-            validator = extract_text_after_label(soup, r'Validat de:', 'td', stop_at=r'Data')
-            if validator:
-                data.store("validation.validator", validator)
-
-            validation_datetime = extract_value_from_input(soup, element_id="dataefectuarii")
-            if validation_datetime:
-                dt = parse_date_time(validation_datetime)
-                if dt:
-                    data.store("validation.date_time", dt.isoformat())
-                else:
-                    data.store("validation.date_time", validation_datetime)
-            
-            # For each strAnalyseExec input, find the parent 'td' and extract examination name from first 'b' element
+            # 9-cell rows: cell1=category, cell2=study name, cell3="Rezultat:...", cell4=validation date
+            # Identify data rows by checking that cell3 starts with "Rezultat:"
             studies = []
-            for input_elem in soup.find_all('input', {'name': 'strAnalyseExec'}):
-                try:
-                    study_title = ""
-                    study_result = None
-                    
-                    parent_td = input_elem.find_parent('td')
-                    if parent_td:
-                        first_b = parent_td.find('b')
-                        if first_b:
-                            study_title = first_b.get_text(strip=True)
-                        else:
-                            study_title = parent_td.get_text(strip=True)
-                            
-                    # Find the 'table' parent and then the 'center' sibling
-                    if parent_td:
-                        parent_table = parent_td.find_parent('table')
-                        if parent_table:
-                            container = parent_table.find_next_sibling('center')
-                            if container:
-                                # In 'center' there is another table.
-                                # The rows containing 'rezultat' in first 'td' have the result in second 'td'
-                                for row in container.find_all('tr'):
-                                    cells = row.find_all('td')
-                                    if len(cells) >= 2:
-                                        if cells[0].get_text(strip=True).lower() == "rezultat":
-                                            # Filter out text nodes that contain only whitespace
-                                            subelements = [child for child in cells[1] if hasattr(child, 'name') and child.name]
-                                            if len(subelements) == 1 and subelements[0].name == 'b':
-                                                # If the only child is a <b> tag, use its content directly
-                                                study_result = html_to_markdown(str(subelements[0]))
-                                            else:
-                                                # Otherwise, process the entire div
-                                                study_result = html_to_markdown(str(cells[1]))
-                    
-                    # Append the study if the data is valid
-                    if study_title and study_result:
-                        # Get study type and region
-                        study_type, region = identify_study_type_and_region(study_title)
-                        study = {
-                            "title": study_title,
-                            "result": study_result,
-                            "type": study_type,
-                            "region": region
-                        }
-                        studies.append(study)
-                except Exception as e:
-                    logger.warning(f"Error processing study for input element: {e}")
-                    # Continue processing other studies
+            seen = set()
+            for row in soup.find_all('tr'):
+                cells = row.find_all('td')
+                if len(cells) < 9:
+                    continue
+                result_raw = cells[3].get_text(strip=True)
+                if not result_raw.lower().startswith('rezultat:'):
+                    continue
+                study_name = cells[2].get_text(strip=True)
+                # Strip "(Tip proba: ...)" suffix for deduplication key
+                dedup_key = re.sub(r'\s*\(Tip proba:.*?\)', '', study_name).strip()
+                if not dedup_key or dedup_key in seen:
+                    continue
+                seen.add(dedup_key)
+                result_text = result_raw[len('rezultat:'):].strip()
+                study_type, region = identify_study_type_and_region(study_name)
+                validation_raw = cells[4].get_text(strip=True)
+                # Extract date from "Data validare: DD/MM/YYYY HH:MM" or "27 May 2023 07:36"
+                date_m = re.search(r'(\d{2}/\d{2}/\d{4}(?:\s+\d{2}:\d{2})?|\d{2}\s+\w+\s+\d{4}(?:\s+\d{2}:\d{2})?)', validation_raw)
+                dt = parse_date_time(date_m.group(1)) if date_m else None
+                # Extract validator name: "Validat de: Dr. X Parafa: ..."
+                validator_m = re.search(r'Validat de:\s*(.*?)(?:Parafa:|$)', validation_raw)
+                validator = validator_m.group(1).strip() if validator_m else None
+                studies.append({
+                    "title": study_name,
+                    "result": result_text,
+                    "type": study_type,
+                    "region": region,
+                    "validation_date": dt.isoformat() if dt else None,
+                    "validator": validator,
+                })
             data.store_list("studies", studies)
-
-            # Store urgency flag
-            data.store("request.is_urgent", "~URGENTA~" in html_content)
 
             return data
 
         except Exception as e:
-            logger.error(f"Error parsing report data: {e}")
+            logger.error(f"Error parsing imaging study data: {e}")
             return HipoData(status="error", message=str(e))
 
     def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRImagingStudy, FHIROperationOutcome]:
@@ -1929,15 +1854,11 @@ class HipoClientImagingStudy(HipoClient):
             if studies and len(studies) > 0 and isinstance(studies[0], dict):
                 fhir_imaging_study["description"] = studies[0].get("title", "Imaging Study")
 
-            # Add performer if available
-            if parsed_data.get("checkin.medic"):
-                fhir_imaging_study["performer"] = [
-                    {
-                        "actor": {
-                            "display": parsed_data.get("checkin.medic")
-                        }
-                    }
-                ]
+            # Add performer: use validator from first study, fall back to requesting medic
+            validator = studies[0].get("validator") if studies and isinstance(studies[0], dict) else None
+            performer_name = validator or parsed_data.get("checkin.medic")
+            if performer_name:
+                fhir_imaging_study["performer"] = [{"actor": {"display": performer_name}}]
 
             # Add referrer if requesting medic is available
             if parsed_data.get("request.medic"):
@@ -1990,13 +1911,15 @@ class HipoClientImagingStudy(HipoClient):
                     }
                 ]
 
-            # Add note if clinical comments are available
+            # Add notes: clinical comments + per-study results
+            notes = []
             if parsed_data.get("request.clinical_comments"):
-                fhir_imaging_study["note"] = [
-                    {
-                        "text": parsed_data.get("request.clinical_comments")
-                    }
-                ]
+                notes.append({"text": parsed_data.get("request.clinical_comments")})
+            for study in (studies or []):
+                if isinstance(study, dict) and study.get("result"):
+                    notes.append({"text": study["result"]})
+            if notes:
+                fhir_imaging_study["note"] = notes
 
             return fhir_imaging_study
 
@@ -2015,7 +1938,7 @@ class HipoClientDiagnosticReport(HipoClient):
     def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
         """Initialize the service request client."""
         super().__init__(service_url=service_url, request=request)
-        self.request_url = "/analyse/Reports/analyseFile.asp?id={id}"
+        self.request_url = "/PARA/Printabile/BuletinAnalize.asp?id={id}&type=1&IdP=1"
 
     async def fetch_and_parse(self, *args, **kwargs):
         """Fetch and parse a diagnostic report, evicting the cache if no study results found.
@@ -2035,102 +1958,104 @@ class HipoClientDiagnosticReport(HipoClient):
         return parsed_data
 
     def parse_data(self, html_content: str, **kwargs) -> HipoData:
-        """Parse a Hipocrate service request page into HipoData."""
+        """Parse a BuletinAnalize type=1 (lab diagnostics) page into HipoData."""
         data = HipoData(status="success", message="")
 
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
 
-            if not self.is_expected_page(soup, 'Buletin de investigatii paraclinice'):
-                # Log snippet of response for debugging
+            if not self.is_expected_page(soup, 'BULETIN ANALIZE MEDICALE'):
                 data.set_error(f"Unexpected page for DiagnosticReport: {self.get_title(soup)}")
                 logger.warning(f"{data['message']}: {self.get_error(soup)}")
                 return data
 
-            # Extract patient name from the table with patient data
-            data.store("patient.name", extract_text_after_label(soup, r'PACIENT:', 'td', stop_at=r'Varsta'))
+            # Parse shared header
+            _parse_buletin_header(soup, data)
 
-            # Extract barcode
-            data.store("request.barcode", extract_text_after_label(soup, r'Nr.: '))
-
-            data.store("checkin.medic", extract_text_after_label(soup, r'Solicitat de:', 'td'))
-
-            # Extract the clinical comments
-            data.store("checkin.diagnosis", extract_text_after_label(soup, r'DIAGNOSTIC DE TRIMITERE:', 'td'))
-
-            data.store("request.medic", extract_text_after_label(soup, r'TRIMIS DE:\s*MEDIC', 'tr', stop_at=r'SECTIA'))
-
-            # Extract the clinical comments
-            data.store("request.clinical_comments", extract_text_after_label(soup, r'DG\.PREZUMTIV:', 'td'))
-
-            # Extract the lab comments
-            data.store("request.lab_comments", extract_text_after_label(soup, r'INDICATII SPECIALE:', 'td'))
-
-            # Extract performer (Efectuata de catre:)
-            data.store("study.performer", extract_text_after_label(soup, r'Efectuata de catre:'))
-
-            data.store("study.medic", extract_text_after_label(soup, r'MEDIC,|Medic validator:', 'td', stop_at=r'Semnatura'))
-
-            # Extract study date_time
-            study_datetime = extract_text_after_label(soup, r'Data investigatiei:', stop_at=r'Efectuata')
-            if study_datetime:
-                dt = parse_date_time(study_datetime)
-                if dt:
-                    data.store("study.date_time", dt.isoformat())
-                else:
-                    data.store("study.date_time", study_datetime)
-
-            # Extract multiple reports: find all elements with text starting with "REZULTAT:"
+            # 3-cell data rows: cell0=analysis name, cell1=result, cell2=reference range
+            # Section structure (1-cell rows):
+            #   "HEMATOLOGIE (device) Starea probei: ..."  → section name (before DENUMIRE header)
+            #   "HEMOLEUCOGRAMA (Tip proba: ...)"          → subcategory (after DENUMIRE header)
+            #   "Validat de: ..."                          → validator (end of section)
+            SKIP_3CELL = ('DENUMIRE ANALIZA', 'NUME:', 'Afisat de:', 'Spitalul ', 'SPITALUL ')
             studies = []
-            for result_element in soup.find_all(string=re.compile(r'^REZULTAT:', re.IGNORECASE)):
-                try:
-                    # The investigation name is the text after "REZULTAT:" in the element
-                    element_text = result_element.get_text() if hasattr(result_element, 'get_text') else str(result_element)
-                    investigation_match = re.search(r'REZULTAT:\s*(.*?)(?:\s*$)', element_text, re.IGNORECASE)
-                    study_title = ""
-                    if investigation_match:
-                        study_title = investigation_match.group(1).strip()
+            seen = set()
+            section_name = ""
+            subcategory = ""
+            pending_section = ""   # 1-cell row seen before a DENUMIRE header
+            after_header = False   # True immediately after DENUMIRE header row
+            for row in soup.find_all('tr'):
+                cells = row.find_all('td')
+                nc = len(cells)
 
-                    # Find the next div sibling which contains the actual result
-                    study_result = ""
-                    if hasattr(result_element, 'find_next'):
-                        result_div = result_element.find_next('div')
-                        if result_div:
-                            # Check if the div contains only a single <b> tag as its child
-                            div_children = list(result_div.children)
-                            # Filter out text nodes that contain only whitespace
-                            element_children = [child for child in div_children if hasattr(child, 'name') and child.name]
-                            if len(element_children) == 1 and element_children[0].name == 'b':
-                                # If the only child is a <b> tag, use its content directly
-                                study_result = html_to_markdown(str(element_children[0]))
-                            else:
-                                # Otherwise, process the entire div
-                                study_result = html_to_markdown(str(result_div))
-
-                    # Add to reports list if we have valid data
-                    if study_title or study_result:
-                        # Process investigation name to identify study type and region
-                        study_type, region = identify_study_type_and_region(study_title)
-                        study = {
-                                "title": study_title,
-                                "result": study_result,
-                                "type": study_type,
-                                "region": region
-                            }
-                        studies.append(study)
-                except Exception as e:
-                    logger.error(f"Error parsing individual report: {e}")
+                if nc == 1:
+                    txt = cells[0].get_text(strip=True)
+                    if not txt or txt.startswith('Afisat de:') or txt.startswith('Data tiparirii') or txt.startswith('Data eliberarii'):
+                        continue
+                    if txt.startswith('Validat de:'):
+                        # Extract validator for the current section
+                        vm = re.search(r'Validat de:\s*(.*?)(?:Parafa:|$)', txt)
+                        if vm and studies:
+                            # attach validator to last study in this section
+                            validator = vm.group(1).strip()
+                            for s in reversed(studies):
+                                if s.get('section') == section_name:
+                                    s['validator'] = validator
+                                    break
+                        after_header = False
+                        pending_section = ""
+                        subcategory = ""
+                        continue
+                    if after_header:
+                        # First 1-cell after DENUMIRE header is the subcategory
+                        subcategory = re.sub(r'\s*\(Tip proba:.*?\)|\s*\(Metoda de Lucru:.*?\)', '', txt).strip()
+                        after_header = False
+                    else:
+                        # Section name comes before the DENUMIRE header
+                        pending_section = re.sub(r'\s*\(.*?\)\s*Starea probei:.*$', '', txt).strip()
                     continue
+
+                if nc == 12:
+                    section_name = cells[1].get_text(strip=True)
+                    after_header = True
+                    subcategory = ""
+                    continue
+
+                if nc == 3:
+                    cell0_text = cells[0].get_text(strip=True)
+                    cell1_text = cells[1].get_text(strip=True)
+                    if not cell0_text or any(cell0_text.startswith(p) for p in SKIP_3CELL):
+                        if cell0_text == 'DENUMIRE ANALIZA':
+                            # Column header — next 1-cell is subcategory
+                            if pending_section:
+                                section_name = pending_section
+                                pending_section = ""
+                            after_header = True
+                            subcategory = ""
+                        continue
+                    if 'REZULTAT' == cell0_text or 'Data validare' in cell0_text or 'Data tiparirii' in cell1_text:
+                        continue
+                    analysis_name = re.sub(r'\s*\(Tip proba:.*?\)|\s*\(Metoda de Lucru:.*?\)|\s*\*.*$', '', cell0_text).strip()
+                    reference = cells[2].get_text(strip=True)
+                    if not analysis_name or analysis_name in seen:
+                        continue
+                    seen.add(analysis_name)
+                    study_type, region = identify_study_type_and_region(analysis_name)
+                    studies.append({
+                        "title": analysis_name,
+                        "result": cell1_text,
+                        "reference": reference,
+                        "section": section_name,
+                        "subcategory": subcategory,
+                        "type": study_type,
+                        "region": region
+                    })
             data.store_list("studies", studies)
-
-
-            # Store urgency flag
-            data.store("request.is_urgent", "~URGENTA~" in html_content)
 
             return data
 
         except Exception as e:
-            logger.error(f"Error parsing report data: {e}")
+            logger.error(f"Error parsing diagnostic report data: {e}")
             return HipoData(status="error", message=str(e))
 
     def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRDiagnosticReport, FHIROperationOutcome]:
@@ -2319,7 +2244,7 @@ class HipoClientCheckout(HipoClient):
     def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
         """Initialize the checkout client."""
         super().__init__(service_url=service_url, request=request)
-        self.request_url = "/files/checkout.asp?id={id}"
+        self.request_url = "/gen_printabile/BiletExternare.asp?RelId={id}&RelName=CO"
 
     async def fetch_and_parse(self, *args, **kwargs):
         """Fetch and parse a checkout, evicting cache if epicrisis is empty.
@@ -2336,92 +2261,141 @@ class HipoClientCheckout(HipoClient):
         return parsed_data
 
     def parse_data(self, html_content: str, **kwargs) -> HipoData:
-        """Parse a Hipocrate checkout/discharge page into HipoData."""
+        """Parse a Hipocrate BiletExternare (printable discharge form) into HipoData."""
         data = HipoData(status="success", message="")
 
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
 
-            if not self.is_expected_page(soup, 'FISA EXTERNARE'):
-                data.set_error("Page is not a discharge page")
-                logger.warning("Page is not a discharge page")
+            if not self.is_expected_page(soup, 'Imprimare Fisa'):
+                data.set_error("Page is not a discharge summary")
+                logger.warning("Page is not a discharge summary")
                 return data
 
-            # Extract patient name and ID from the link
-            patient_link = soup.find('a', href=re.compile(r'../Pacient/edit\.asp\?id='))
-            if patient_link:
-                data.store("patient.name", patient_link.get_text())
-                data.store("patient.id", extract_id_from_link(patient_link))
+            rows = soup.find_all('tr')
 
-            data.store("patient.cnp", extract_text_after_label(soup, r'CNP\s*:', 'tr'))
-            if data.get("patient.cnp"):
-                parsed_cnp = parse_cnp(data.get("patient.cnp"))
-                data.store("patient.gender", parsed_cnp.get("gender"))
-                data.store("patient.date", parsed_cnp.get("birth_date"))
-                data.store("patient.age", parsed_cnp.get("age"))
+            def row_text(r):
+                return [c.get_text(strip=True) for c in r.find_all('td')]
 
+            # Row 2: 6-cell — "Data eliberarii:", date, "Sectie / Compartiment:", ward, ...
+            # Row 3: 4-cell — "Perioada internarii:", "DD/MM/YYYY HH:MM - DD/MM/YYYY HH:MM", "Medic:", name
+            # Row 4: 2-cell — "NUME:SURNAME", "PRENUME:FIRSTNAME"
+            # Row 5: 2-cell — "DIAGNOSTIC PRINCIPAL (DRG Cod 1):code desc", "DIAGNOSTIC PRINCIPAL (DRG Cod 2):-"
+            # Row 6: 2-cell — "VARSTA:...", "CNP:..."
+            # Row 10: 2-cell — "STAREA LA EXTERNARE:..."
+            # Row 11-12: secondary diagnoses
+            # Row 13: 1-cell "EPICRIZA" header; Row 14: 1-cell epicrisis text
+            # Row 15: 1-cell "TRATAMENT RECOMANDAT"; Row 16: 1-cell "RECOMANDARI..."; Row 17: recommendations
 
-            # Extract presentation ID
-            presentation_ids = extract_ids_from_links(soup, r'presentation\.asp\?id=(\d+)')
-            if presentation_ids:
-                data.store("presentation.id", presentation_ids)
+            for i, row in enumerate(rows):
+                cells = row_text(row)
+                nc = len(cells)
 
+                if nc == 6 and cells[0] == 'Data eliberarii:':
+                    data.store("checkout.date", cells[1])
+                    data.store("checkout.ward", cells[3])
+                    fo_m = re.search(r'FO\s*(\d+)', cells[4])
+                    if fo_m:
+                        data.store("checkout.fo_number", fo_m.group(1))
+                    data.store("checkout.is_urgent", 'UrgentaDA' in cells[5] or 'Urgenta DA' in cells[5])
 
-            # Extract admission ID
-            checkin_ids = extract_ids_from_links(soup, r'checkin\.asp\?id=(\d+)')
-            if checkin_ids:
-                data.store("checkin.id", checkin_ids)
+                elif nc == 4 and cells[0] == 'Perioada internarii:':
+                    period = cells[1]
+                    data.store("checkin.medic", re.sub(r'^Dr\.', '', cells[3]).strip())
+                    # "DD/MM/YYYY HH:MM - DD/MM/YYYY HH:MM"
+                    m = re.match(r'(\S+\s+\S+)\s*-\s*(\S+\s+\S+)', period)
+                    if m:
+                        data.store("checkin.date_time", m.group(1))
+                        data.store("checkout.date_time", m.group(2))
 
-            data.store("checkin.medic", extract_text_after_label(soup, r'Medic\s*:', 'tr'))
+                elif nc == 2 and cells[0].startswith('NUME:'):
+                    surname = cells[0][len('NUME:'):]
+                    firstname = cells[1][len('PRENUME:'):] if cells[1].startswith('PRENUME:') else cells[1]
+                    data.store("patient.name", f"{surname} {firstname}".strip())
 
-            # Extract ward
-            data.store("checkin.ward", extract_text_after_label(soup, r'Sectie\s*:', 'tr'))
+                elif nc == 2 and cells[0].startswith('DIAGNOSTIC PRINCIPAL (DRG Cod 1):'):
+                    data.store("checkin.diagnosis", cells[0][len('DIAGNOSTIC PRINCIPAL (DRG Cod 1):'):].strip())
 
-            # Extract checkin diagnostic
-            data.store("checkin.diagnosis", extract_text_after_label(soup, r'Diagnostic\s*:', 'tr'))
+                elif nc == 2 and cells[1].startswith('CNP:'):
+                    cnp = cells[1][len('CNP:'):]
+                    data.store("patient.cnp", cnp)
+                    parsed = parse_cnp(cnp)
+                    data.store("patient.gender", parsed.get("gender"))
+                    data.store("patient.date", parsed.get("birth_date"))
+                    data.store("patient.age", parsed.get("age"))
 
-            # Extract checkin date and time from input fields
-            data.store("checkin.date", extract_value_from_input(soup, element_id='sCIDate'))
-            data.store("checkin.time", extract_value_from_input(soup, element_id='sCITime'))
-            
-            # Create combined checkin date_time
-            checkin_date = data.get("checkin.date")
-            checkin_time = data.get("checkin.time")
-            if checkin_date and checkin_time:
-                data.store("checkin.date_time", f'{checkin_date} {checkin_time}')
+                elif nc == 2 and 'CASA ASIGURARE:' in cells[0]:
+                    data.store("patient.insurance_house", cells[0].split('CASA ASIGURARE:',1)[1].strip())
+                    if 'CATEGORIA DE ASIGURAT:' in cells[1]:
+                        data.store("patient.insurance_category", cells[1].split('CATEGORIA DE ASIGURAT:',1)[1].strip())
 
+                elif nc == 2 and 'NUMAR DE ASIGURAT:' in cells[0]:
+                    data.store("patient.insurance_number", cells[0].split('NUMAR DE ASIGURAT:',1)[1].strip())
+                    if 'ADRESA:' in cells[1]:
+                        data.store("patient.address", cells[1].split('ADRESA:',1)[1].strip())
 
-            # Extract checkout date and time from input fields
-            data.store("checkout.date", extract_value_from_input(soup, element_id='sCODate'))
-            data.store("checkout.time", extract_value_from_input(soup, element_id='sCOTime'))
-            
-            # Create combined checkout date_time
-            checkout_date = data.get("checkout.date")
-            checkout_time = data.get("checkout.time")
-            if checkout_date and checkout_time:
-                data.store("checkout.date_time", f'{checkout_date} {checkout_time}')
+                elif nc == 2 and 'TELEFON:' in cells[0]:
+                    data.store("patient.phone", cells[0].split('TELEFON:',1)[1].strip())
 
-            # Extract epicrisis (textarea with id "sEpicrisysHtmlArea")
-            data.store("checkout.epicrisis", extract_text_from_element(soup, 'sEpicrisys'))
+                elif nc == 2 and cells[0].startswith('STAREA LA EXTERNARE:'):
+                    data.store("checkout.discharge_status", cells[0][len('STAREA LA EXTERNARE:'):].strip())
 
-            # Extract diagnostic (textarea after 'Diagnostic externare')
-            data.store("checkout.diagnosis", extract_textarea_after_label(soup, r'Diagnostic externare[^:]*:'))
+                elif nc == 1 and cells[0] == 'EPICRIZA':
+                    # Next non-empty 1-cell row is the epicrisis text
+                    for j in range(i + 1, min(i + 5, len(rows))):
+                        nxt = row_text(rows[j])
+                        if len(nxt) == 1 and nxt[0] and nxt[0] not in ('TRATAMENT RECOMANDAT', 'RECOMANDARI / REGIM / MEDICATIE'):
+                            data.store("checkout.epicrisis", nxt[0])
+                            break
 
-            data.store("checkout.medic", extract_selected_from_dropdown(soup, name='iCOMedicID'))
+                elif nc == 1 and cells[0] == 'TRATAMENT RECOMANDAT':
+                    for j in range(i + 1, min(i + 5, len(rows))):
+                        nxt = row_text(rows[j])
+                        if len(nxt) == 1 and nxt[0] and nxt[0] not in ('RECOMANDARI / REGIM / MEDICATIE',):
+                            data.store("checkout.treatment", nxt[0])
+                            break
 
-            # Extract ward
-            data.store("checkout.ward", extract_selected_from_dropdown(soup, name='sSectionCode'))
+                elif nc == 1 and cells[0] == 'RECOMANDARI / REGIM / MEDICATIE':
+                    for j in range(i + 1, min(i + 5, len(rows))):
+                        nxt = row_text(rows[j])
+                        if len(nxt) == 1 and nxt[0] and not nxt[0].startswith('EXAMENE'):
+                            data.store("checkout.recommendations", nxt[0])
+                            break
 
-            # Extract surgery (textarea with id "sBOProtocolHtmlArea")
-            data.store("checkout.surgery", extract_text_from_element(soup, 'sBOProtocol'))
+                elif nc == 2 and cells[0].startswith('DIAGNOSTICE SECUNDARE'):
+                    # Next row contains codes concatenated: "P92.0 Voma la nou-nascutR63.3 ..."
+                    for j in range(i + 1, min(i + 3, len(rows))):
+                        nxt = row_text(rows[j])
+                        if len(nxt) >= 1 and nxt[0] and nxt[0] != '-':
+                            # Split on ICD-10 code boundary: letter+digit+dot preceded by non-space
+                            raw = nxt[0]
+                            parts = re.split(r'(?<=[a-zA-Z])(?=[A-Z]\d{2}\.)', raw)
+                            secondary = [p.strip() for p in parts if p.strip() and p.strip() != '-']
+                            if secondary:
+                                data.store_list("checkin.secondary_diagnoses", secondary)
+                            break
 
-            # Extract recommendations (textarea with id 'sRecommendationsHtmlArea')
-            data.store("checkout.recommendations", extract_text_from_element(soup, 'sRecommendations'))
+            # Extract 2-cell lab/imaging investigation rows under section headers
+            investigations = []
+            current_section = ""
+            for row in rows:
+                cells = row_text(row)
+                if len(cells) == 1:
+                    txt = cells[0]
+                    if txt.startswith('EXAMENE') or txt.startswith('PROCEDURI'):
+                        current_section = txt
+                elif len(cells) == 2 and cells[0] not in ('COD CERERE / DATA',) and current_section:
+                    code_date = cells[0]
+                    detail = cells[1]
+                    if code_date and detail:
+                        investigations.append({
+                            "section": current_section,
+                            "code_date": code_date,
+                            "detail": detail
+                        })
+            if investigations:
+                data.store_list("investigations", investigations)
 
-            # Extract ICD10 diagnostic from textarea with name "sCODiagnosis"
-            data.store("checkout.icd10", extract_text_from_element(soup, name='sCODiagnosis'))
-
-            # Add the id, if provided
             if 'id' in kwargs:
                 data.store("checkout.id", kwargs["id"])
 
@@ -2492,15 +2466,48 @@ class HipoClientCheckout(HipoClient):
                     }
                 ]
 
-            # Add text summary if epicrisis exists
+            # Emergency flag
+            if parsed_data.get("checkout.is_urgent"):
+                fhir_encounter["priority"] = {
+                    "coding": [{"system": "http://terminology.hl7.org/CodeSystem/v3-ActPriority", "code": "EM", "display": "emergency"}]
+                }
+
+            # FO number as identifier
+            fo_number = parsed_data.get("checkout.fo_number")
+            if fo_number:
+                fhir_encounter["identifier"] = [{"system": "FO", "value": fo_number}]
+
+            # Insurance
+            if parsed_data.get("patient.insurance_house"):
+                fhir_encounter["extension"] = fhir_encounter.get("extension", [])
+                fhir_encounter["extension"].append({
+                    "url": "insurance",
+                    "valueString": parsed_data.get("patient.insurance_house")
+                })
+                if parsed_data.get("patient.insurance_category"):
+                    fhir_encounter["extension"].append({
+                        "url": "insuranceCategory",
+                        "valueString": parsed_data.get("patient.insurance_category")
+                    })
+
+            # Patient contact info
+            if parsed_data.get("patient.address") or parsed_data.get("patient.phone"):
+                fhir_encounter["extension"] = fhir_encounter.get("extension", [])
+                if parsed_data.get("patient.address"):
+                    fhir_encounter["extension"].append({"url": "patientAddress", "valueString": parsed_data.get("patient.address")})
+                if parsed_data.get("patient.phone"):
+                    fhir_encounter["extension"].append({"url": "patientPhone", "valueString": parsed_data.get("patient.phone")})
+
+            # Notes: epicrisis + recommended treatment
+            notes = []
             epicrisis = parsed_data.get("checkout.epicrisis")
             if epicrisis:
-                # Also add as a note
-                fhir_encounter["note"] = [
-                    {
-                        "text": epicrisis
-                    }
-                ]
+                notes.append({"text": epicrisis})
+            treatment = parsed_data.get("checkout.treatment")
+            if treatment:
+                notes.append({"text": f"[Treatment] {treatment}"})
+            if notes:
+                fhir_encounter["note"] = notes
 
             # Add diagnosis if available
             if admission_diagnosis:
@@ -2545,6 +2552,26 @@ class HipoClientCheckout(HipoClient):
                     }
                 )
 
+            # Secondary diagnoses
+            secondary = parsed_data.get("checkin.secondary_diagnoses") or []
+            if secondary:
+                if "diagnosis" not in fhir_encounter:
+                    fhir_encounter["diagnosis"] = []
+                for idx, diag in enumerate(secondary):
+                    fhir_encounter["diagnosis"].append({
+                        "condition": {
+                            "reference": f"Condition/secondary-{encounter_id}-{idx}",
+                            "display": diag
+                        },
+                        "use": {
+                            "coding": [{
+                                "system": "http://terminology.hl7.org/CodeSystem/diagnosis-role",
+                                "code": "CM",
+                                "display": "Comorbidity diagnosis"
+                            }]
+                        }
+                    })
+
             # Add period for admission and discharge times
             checkin_datetime = parsed_data.get("checkin.date_time")
             checkout_datetime = parsed_data.get("checkout.date_time")
@@ -2584,3 +2611,200 @@ class HipoClientCheckout(HipoClient):
         except Exception as e:
             logger.error(f"Error converting checkout data to FHIR: {e}")
             return FHIROperationOutcome.from_exception(e, code="exception")
+
+
+class HipoClientCheckin(HipoClient):
+    """Parses the admission record (/files/checkin.asp?id={id})."""
+
+    def __init__(self, service_url=None, request=None):
+        super().__init__(service_url=service_url, request=request)
+        self.request_url = "/files/checkin.asp?id={id}"
+
+    def parse_data(self, html_content: str, **kwargs) -> HipoData:
+        data = HipoData(status="success", message="")
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            if not self.is_expected_page(soup, 'FISA INTERNARE'):
+                data.set_error(f"Unexpected page for Checkin: {self.get_title(soup)}")
+                logger.warning(data['message'])
+                return data
+
+            rows = soup.find_all('tr')
+
+            def rt(r):
+                return [c.get_text(' ', strip=True) for c in r.find_all('td')]
+
+            for i, row in enumerate(rows):
+                cells = rt(row)
+                nc = len(cells)
+
+                # Row 5: "Pacient [ NAME ] CNP ..." + "Prezentare [ id ] Data: ... Urgenta: ... Sectie: ..."
+                if nc >= 1 and cells[0].startswith('Pacient ['):
+                    m = re.search(r'Pacient\s*\[\s*(.*?)\s*\]\s*CNP\s+(\S+)', cells[0])
+                    if m:
+                        data.store("patient.name", m.group(1).strip())
+                        data.store("patient.cnp", m.group(2))
+                        parsed = parse_cnp(m.group(2))
+                        data.store("patient.gender", parsed.get("gender"))
+                        data.store("patient.date", parsed.get("birth_date"))
+                        data.store("patient.age", parsed.get("age"))
+                    if nc >= 2:
+                        m2 = re.search(r'Prezentare\s*\[\s*(\S+)\s*\]\s*Data:\s*(\S+\s+\S+)\s*Urgenta:\s*(\S+)\s*Sect\w*:\s*(\S+)', cells[1])
+                        if m2:
+                            data.store("presentation.id", m2.group(1))
+                            data.store("presentation.date_time", m2.group(2))
+                            data.store("presentation.is_urgent", m2.group(3).upper() == 'DA')
+                            data.store("presentation.section", m2.group(4))
+
+                # Row 19: "Tip diagnostic: Cronic Acut Subacut Ore de ventilatie:"
+                elif nc == 1 and cells[0].startswith('Tip diagnostic:'):
+                    tip_raw = cells[0][len('Tip diagnostic:'):].strip()
+                    # Strip the radio-button labels — only keep before "Ore de ventilatie"
+                    tip = re.sub(r'\s*Ore de ventilatie:.*$', '', tip_raw).strip()
+                    data.store("checkin.diagnosis_type", tip)
+
+                # Row 20: "Diagnostic DRG la internare: CODE desc"
+                elif nc == 1 and cells[0].startswith('Diagnostic DRG la internare:'):
+                    data.store("checkin.diagnosis", cells[0][len('Diagnostic DRG la internare:'):].strip())
+
+                # Row 21: "Diagnostic la 72H: ..."
+                elif nc == 1 and cells[0].startswith('Diagnostic la 72H:'):
+                    val = cells[0][len('Diagnostic la 72H:'):].strip()
+                    if val:
+                        data.store("checkin.diagnosis_72h", val)
+
+                # Row 22: "Diagnostice secundare" header → next rows with section/regim/de la/pana la
+                elif nc == 1 and cells[0].strip() == 'Diagnostice secundare':
+                    secondary = []
+                    for j in range(i + 1, min(i + 10, len(rows))):
+                        nxt = rt(rows[j])
+                        if len(nxt) >= 1 and nxt[0] in ('Sectia', 'Cod', 'Examen general:', ''):
+                            break
+                        if len(nxt) >= 1 and nxt[0].strip() and not nxt[0].startswith('['):
+                            parts = re.split(r'(?<=[a-zA-Z])(?=[A-Z]\d{2}\.)', nxt[0])
+                            for p in parts:
+                                p = p.strip()
+                                if p and p not in ('Sectia', 'Regim', 'De la', 'Pana la'):
+                                    secondary.append(p)
+                    if secondary:
+                        data.store_list("checkin.secondary_diagnoses", secondary)
+
+                # Ward transfers: "Cod | Sectie | Medic | Data/Ora | Tip Examinare | Decizie | _"
+                # Skip header rows and lab history rows
+                elif (nc == 7 and cells[0] not in ('Cod', 'Nr.Crt.', 'Laborator', '')
+                      and cells[1] not in ('Sectie', 'Cod cerere', '')
+                      and cells[2] not in ('Medic', 'Data recoltarii', '')):
+                    transfers = data.get("checkin.transfers") or []
+                    transfers.append({
+                        "section": cells[1].strip(),
+                        "medic": cells[2].strip(),
+                        "date_time": cells[3].strip(),
+                        "type": cells[4].strip(),
+                        "decision": cells[5].strip(),
+                    })
+                    data.store_list("checkin.transfers", transfers)
+
+                # Physical exam
+                elif nc == 2 and cells[0] == 'Examen general:':
+                    data.store("checkin.exam_general", cells[1].strip())
+                elif nc == 2 and cells[0] == 'Examen local:':
+                    data.store("checkin.exam_local", cells[1].strip())
+
+            if 'id' in kwargs:
+                data.store("checkin.id", kwargs["id"])
+
+            return data
+        except Exception as e:
+            logger.error(f"Error parsing checkin data: {e}")
+            data.set_error(str(e))
+            return data
+
+
+class HipoClientCheckup(HipoClient):
+    """Parses the emergency/outpatient consultation (/files/checkup.asp?cuid={id})."""
+
+    def __init__(self, service_url=None, request=None):
+        super().__init__(service_url=service_url, request=request)
+        self.request_url = "/files/checkup.asp?cuid={id}"
+
+    def parse_data(self, html_content: str, **kwargs) -> HipoData:
+        data = HipoData(status="success", message="")
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            if not self.is_expected_page(soup, 'Consult'):
+                data.set_error(f"Unexpected page for Checkup: {self.get_title(soup)}")
+                logger.warning(data['message'])
+                return data
+
+            rows = soup.find_all('tr')
+
+            def rt(r):
+                return [c.get_text(' ', strip=True) for c in r.find_all('td')]
+
+            for i, row in enumerate(rows):
+                cells = rt(row)
+                nc = len(cells)
+
+                # Row 5 (3-cell): patient + presentation + admission
+                if nc >= 2 and cells[0].startswith('Pacient ['):
+                    m = re.search(r'Pacient\s*\[\s*(.*?)\s*\]\s*CNP\s+(\S+)', cells[0])
+                    if m:
+                        data.store("patient.name", m.group(1).strip())
+                        data.store("patient.cnp", m.group(2))
+                        parsed = parse_cnp(m.group(2))
+                        data.store("patient.gender", parsed.get("gender"))
+                        data.store("patient.date", parsed.get("birth_date"))
+                        data.store("patient.age", parsed.get("age"))
+                    m2 = re.search(r'Prezentare\s*\[\s*(\S+)\s*\]\s*Data:\s*(\S+\s+\S+)\s*Urgenta:\s*(\S+)\s*Sect\w*:\s*(\S+)', cells[1] if nc > 1 else '')
+                    if m2:
+                        data.store("presentation.date_time", m2.group(2))
+                        data.store("presentation.is_urgent", m2.group(3).upper() == 'DA')
+                        data.store("presentation.section", m2.group(4))
+                    if nc >= 3:
+                        m3 = re.search(r'Internare\s*\[\s*(\S+)\s*\]\s*Data:\s*(\S+\s+\S+)\s*Sectie:\s*(\S+)\s*Medic:\s*(.*)', cells[2])
+                        if m3:
+                            data.store("checkin.id", m3.group(1))
+                            data.store("checkin.date_time", m3.group(2))
+                            data.store("checkin.section", m3.group(3))
+                            data.store("checkin.medic", m3.group(4).strip())
+
+                # Diagnostic ICD10 + text
+                elif nc == 4 and cells[0] == 'Diagnostic ICD10:':
+                    data.store("diagnosis.icd10", cells[1].strip())
+                    data.store("diagnosis.text", cells[3].strip())
+
+                # Initial / final diagnosis
+                elif nc == 4 and cells[0] == 'Diagnostic initial:':
+                    data.store("diagnosis.initial", cells[1].strip())
+                    data.store("diagnosis.final", cells[3].strip())
+
+                # Referral diagnosis
+                elif nc >= 2 and cells[0] == 'Diagnostic trimitere:':
+                    data.store("diagnosis.referral", cells[1].strip())
+
+                # Discharge state
+                elif nc >= 1 and 'Stare pacient' in cells[0]:
+                    # Value follows in next non-empty cell
+                    for c in cells[1:]:
+                        if c.strip() and c.strip() not in ('50-Ameliorat', '51-Stationar', '52-Agravat', '53-Decedat'):
+                            break
+                    # Parse from the row text: look for selected value
+                    row_text = row.get_text(' ', strip=True)
+                    for state in ('Ameliorat', 'Stationar', 'Agravat', 'Decedat'):
+                        if state.lower() in row_text.lower():
+                            data.store("discharge.status", state.lower())
+                            break
+
+                # Exam general / local
+                elif nc == 4 and cells[0] == 'Examen clinic general:':
+                    data.store("exam.general", cells[1].strip())
+                    data.store("exam.local", cells[3].strip())
+
+            if 'id' in kwargs:
+                data.store("checkup.id", kwargs["id"])
+
+            return data
+        except Exception as e:
+            logger.error(f"Error parsing checkup data: {e}")
+            data.set_error(str(e))
+            return data

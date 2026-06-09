@@ -54,23 +54,27 @@ HTTP client
 - `web_fhir_response` — FHIR-typed responses (`/fhir/*`); handles `OperationOutcome` on errors
 - `@require_auth` decorator extracts Basic Auth and attaches credentials to `request.auth_credentials`
 
-**`hipoclient.py`** — the core scraping layer. One base class + seven specialised subclasses:
+**`hipoclient.py`** — the core scraping layer. One base class + nine specialised subclasses:
 
-| Class | Resource |
-|---|---|
-| `HipoClient` | Base: session management, fetch, cache, semaphore, auth |
-| `HipoClientPatient` | Patient record page |
-| `HipoClientPatientSearch` | Patient search results |
-| `HipoClientServiceRequest` | Individual exam/service request |
-| `HipoClientServiceRequestSearch` | Service request list for a patient |
-| `HipoClientImagingStudy` | Imaging study report |
-| `HipoClientDiagnosticReport` | Diagnostic report |
-| `HipoClientCheckout` | Discharge/encounter summary |
+| Class | Route | Hipocrate URL |
+|---|---|---|
+| `HipoClient` | — | Base: session management, fetch, cache, semaphore, auth |
+| `HipoClientPatient` | `/api/patient/{id}` | `/Pacient/edit.asp?id={id}` |
+| `HipoClientPatientSearch` | `/api/patient?q=` | `/files/search.asp?what=PA` |
+| `HipoClientServiceRequest` | `/api/request/{id}` | `/PARA/Printabile/buletinRecoltari.asp?id={id}` |
+| `HipoClientServiceRequestSearch` | `/api/request?patient=` | `/Pacient/analysesEpisod.asp` (parallel per domain) |
+| `HipoClientImagingStudy` | `/api/study/{id}` | `/PARA/Printabile/BuletinAnalize.asp?id={id}&type=2` |
+| `HipoClientDiagnosticReport` | `/api/report/{id}` | `/PARA/Printabile/BuletinAnalize.asp?id={id}&type=1` |
+| `HipoClientCheckout` | `/api/checkout/{id}` | `/gen_printabile/BiletExternare.asp?RelId={id}&RelName=CO` |
+| `HipoClientCheckin` | `/api/checkin/{id}` | `/files/checkin.asp?id={id}` |
+| `HipoClientCheckup` | `/api/checkup/{id}` | `/files/checkup.asp?cuid={id}` |
 
-Every subclass implements three methods:
+Every subclass (except `HipoClientCheckin` / `HipoClientCheckup` which are raw-JSON only) implements three methods:
 - `fetch_and_parse(**kwargs)` → `HipoData` (raw dict)
 - `fhir_response(parsed_data)` → FHIR resource object
 - `fetch_respond_fhir(**kwargs)` → calls both, returns FHIR resource directly
+
+`HipoClientCheckin` and `HipoClientCheckup` implement only `fetch_and_parse()`; they return `HipoData` via `/api/*` routes with no FHIR equivalent yet.
 
 **Concurrency and caching** (critical — Hipocrate is a fragile legacy server):
 - `_hipocrate_semaphore = asyncio.Semaphore(6)` — global cap on concurrent outbound HTTP calls; all request paths including login go through this.
@@ -120,6 +124,36 @@ Every subclass implements three methods:
 - Datetime comparisons in `parse_data` always use naive datetimes. If the caller supplies a TZ-aware string, strip `tzinfo` before comparing (`datetime.replace(tzinfo=None)`).
 - `fetch_and_parse` (base class) logs the exception and includes the message in the returned `HipoData` error — never swallow exceptions silently.
 - Region filter uses `request.get('regions', [])` — requests parsed from the no-parent-row path may not have a `regions` key.
+
+### Checkout (`HipoClientCheckout`) field notes
+
+Extracts from `BiletExternare.asp`: patient identity, insurance (`patient.insurance_house`, `patient.insurance_category`, `patient.insurance_number`), address, phone, FO number (`checkout.fo_number`), urgency flag (`checkout.is_urgent`), primary and secondary diagnoses (ICD-10 split via `(?<=[a-zA-Z])(?=[A-Z]\d{2}\.)`), recommended treatment (`checkout.treatment`). FHIR output: insurance as `extension[]`, emergency as `priority`, secondary diagnoses as additional `Condition`-coded entries, treatment in `note[]`.
+
+### Checkin (`HipoClientCheckin`) field notes
+
+Page: `/files/checkin.asp?id={id}`. Expected title text: `FISA INTERNARE`. Extracts:
+- `patient.name`, `patient.cnp` — from "Pacient [ NAME ] CNP X" pattern
+- `checkin.presentation_id/date/urgency/section` — from presentation row
+- `checkin.diagnosis_type` — radio label stripped of trailing instrument info
+- `checkin.diagnosis`, `checkin.drg_diagnosis`, `checkin.diagnosis_72h`
+- `checkin.secondary_diagnoses` — list, same ICD-10 split as checkout
+- `checkin.transfers` — list of ward movements (7-cell rows; header rows with `Nr.Crt.` / `Cod cerere` / `Sectie` as first/second cell are excluded)
+- `checkin.exam_general`, `checkin.exam_local`
+
+No FHIR response implemented yet.
+
+### Checkup (`HipoClientCheckup`) field notes
+
+Page: `/files/checkup.asp?cuid={id}`. Expected title text: `Consult`. Extracts:
+- `patient.name`, `patient.cnp`
+- `checkup.presentation_date/urgency/section`
+- `checkup.admission_id/date/section/medic` — linked inpatient admission if present
+- `checkup.icd10`, `checkup.icd10_text`
+- `checkup.initial_diagnosis`, `checkup.final_diagnosis`, `checkup.referral_diagnosis`
+- `checkup.discharge_status`
+- `checkup.exam_general`, `checkup.exam_local`
+
+No FHIR response implemented yet.
 
 ### Frontend (`static/`)
 

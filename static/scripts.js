@@ -686,6 +686,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 analysesByModality[analysisType].push({
                     serviceRequest,
+                    analysisType,
                     analysisText,
                     examDateString: serviceRequest.authoredOn || null
                 });
@@ -716,9 +717,9 @@ document.addEventListener('DOMContentLoaded', function() {
             markdown += `### ${modalityInfo.name} (${analyses.length})\n\n`;
 
             const reportContents = await limitedMap(
-                analyses.map(a => a.serviceRequest.id),
+                analyses,
                 MAX_CONCURRENT_REQUESTS,
-                id => getReportContent(id)
+                a => getReportContent(a.serviceRequest.id, a.analysisType)
             );
 
             analyses.forEach((analysis, idx) => {
@@ -743,23 +744,30 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Helper function to get report content for a service request
-    async function getReportContent(serviceRequestId) {
+    const IMAGING_TYPES = ['radio', 'ct', 'irm', 'eco', 'rads'];
+    async function getReportContent(serviceRequestId, analysisType) {
         // check cache first
         if (cache.reports[serviceRequestId]) {
             return cache.reports[serviceRequestId];
         }
 
         try {
-            const reportResponse = await fetch(`/fhir/DiagnosticReport/${serviceRequestId}`);
-            
+            const isImaging = IMAGING_TYPES.includes(analysisType);
+            const endpoint = isImaging
+                ? `/fhir/ImagingStudy/${serviceRequestId}`
+                : `/fhir/DiagnosticReport/${serviceRequestId}`;
+            const reportResponse = await fetch(endpoint);
+
             if (!reportResponse.ok) {
                 log(`Report not found for service request ${serviceRequestId}`);
                 return null;
             }
-            
+
             const reportData = await reportResponse.json();
             let content = null;
-            if (reportData.conclusion) {
+            if (reportData.note && reportData.note.length > 0) {
+                content = reportData.note.map(n => n.text).filter(Boolean).join('\n\n').trim();
+            } else if (reportData.conclusion) {
                 content = reportData.conclusion;
             } else if (reportData.presentedForm && reportData.presentedForm.length > 0) {
                 const forms = reportData.presentedForm;
@@ -1458,30 +1466,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Fetch and display report content
                 try {
-                    // Fetch report data using FHIR API - now using the service request ID directly
-                    log('Fetching diagnostic report for service request:', serviceRequest.id);
-                    const reportResponse = await fetch(`/fhir/DiagnosticReport/${serviceRequest.id}`);
+                    // Fetch report data using FHIR API - imaging types use ImagingStudy, lab uses DiagnosticReport
+                    const imagingTypes = ['radio', 'ct', 'irm', 'eco', 'rads'];
+                    const reportEndpoint = imagingTypes.includes(analysisType)
+                        ? `/fhir/ImagingStudy/${serviceRequest.id}`
+                        : `/fhir/DiagnosticReport/${serviceRequest.id}`;
+                    log('Fetching report for service request:', serviceRequest.id, 'endpoint:', reportEndpoint);
+                    const reportResponse = await fetch(reportEndpoint);
                     
                     if (reportResponse.ok) {
                         const reportData = await reportResponse.json();
                         log('Report data loaded for service request', serviceRequest.id, ':', reportData);
                         
                         // Performing doctor → header right side
-                        if (reportData.resultsInterpreter && reportData.resultsInterpreter.length > 0) {
+                        const medicDisplay = reportData.resultsInterpreter?.[0]?.display
+                            || reportData.performer?.[0]?.actor?.display || '';
+                        if (medicDisplay) {
                             const medicEl = analysisCard.querySelector('.card-medic');
-                            if (medicEl) medicEl.textContent = reportData.resultsInterpreter[0].display || '';
-                        }
-                        
-                        // Update card header with study titles when multiple studies present
-                        const forms = reportData.presentedForm || [];
-                        if (forms.length > 1) {
-                            const typeTextEl = analysisCard.querySelector('.type-text');
-                            if (typeTextEl) {
-                                const titles = forms
-                                    .map(f => f.title)
-                                    .filter(Boolean);
-                                if (titles.length > 1) typeTextEl.textContent = titles.join(' / ');
-                            }
+                            if (medicEl) medicEl.textContent = medicDisplay;
                         }
 
                         // Add report content to the card
@@ -1489,7 +1491,18 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (reportPreview) {
                             reportPreview.id = `report-${serviceRequest.id}`;
 
+                            const forms = reportData.presentedForm || [];
+                            const notes = reportData.note || [];
+
                             if (forms.length > 0) {
+                                // DiagnosticReport: presentedForm entries
+                                if (forms.length > 1) {
+                                    const typeTextEl = analysisCard.querySelector('.type-text');
+                                    if (typeTextEl) {
+                                        const titles = forms.map(f => f.title).filter(Boolean);
+                                        if (titles.length > 1) typeTextEl.textContent = titles.join(' / ');
+                                    }
+                                }
                                 const multiStudy = forms.length > 1;
                                 for (const form of forms) {
                                     if (multiStudy && form.title) {
@@ -1509,6 +1522,16 @@ document.addEventListener('DOMContentLoaded', function() {
                                     } else if (form.contentType === 'text/html' && form.data) {
                                         const div = document.createElement('div');
                                         div.innerHTML = form.data;
+                                        reportPreview.appendChild(div);
+                                    }
+                                }
+                            } else if (notes.length > 0) {
+                                // ImagingStudy: note entries contain result text
+                                for (const note of notes) {
+                                    if (note.text) {
+                                        const div = document.createElement('div');
+                                        div.className = 'report-note';
+                                        div.textContent = note.text;
                                         reportPreview.appendChild(div);
                                     }
                                 }
