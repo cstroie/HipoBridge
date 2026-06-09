@@ -2258,6 +2258,10 @@ class HipoClientCheckout(HipoClient):
                 if nc == 6 and cells[0] == 'Data eliberarii:':
                     data.store("checkout.date", cells[1])
                     data.store("checkout.ward", cells[3])
+                    fo_m = re.search(r'FO\s*(\d+)', cells[4])
+                    if fo_m:
+                        data.store("checkout.fo_number", fo_m.group(1))
+                    data.store("checkout.is_urgent", 'UrgentaDA' in cells[5] or 'Urgenta DA' in cells[5])
 
                 elif nc == 4 and cells[0] == 'Perioada internarii:':
                     period = cells[1]
@@ -2284,6 +2288,19 @@ class HipoClientCheckout(HipoClient):
                     data.store("patient.date", parsed.get("birth_date"))
                     data.store("patient.age", parsed.get("age"))
 
+                elif nc == 2 and 'CASA ASIGURARE:' in cells[0]:
+                    data.store("patient.insurance_house", cells[0].split('CASA ASIGURARE:',1)[1].strip())
+                    if 'CATEGORIA DE ASIGURAT:' in cells[1]:
+                        data.store("patient.insurance_category", cells[1].split('CATEGORIA DE ASIGURAT:',1)[1].strip())
+
+                elif nc == 2 and 'NUMAR DE ASIGURAT:' in cells[0]:
+                    data.store("patient.insurance_number", cells[0].split('NUMAR DE ASIGURAT:',1)[1].strip())
+                    if 'ADRESA:' in cells[1]:
+                        data.store("patient.address", cells[1].split('ADRESA:',1)[1].strip())
+
+                elif nc == 2 and 'TELEFON:' in cells[0]:
+                    data.store("patient.phone", cells[0].split('TELEFON:',1)[1].strip())
+
                 elif nc == 2 and cells[0].startswith('STAREA LA EXTERNARE:'):
                     data.store("checkout.discharge_status", cells[0][len('STAREA LA EXTERNARE:'):].strip())
 
@@ -2295,11 +2312,31 @@ class HipoClientCheckout(HipoClient):
                             data.store("checkout.epicrisis", nxt[0])
                             break
 
+                elif nc == 1 and cells[0] == 'TRATAMENT RECOMANDAT':
+                    for j in range(i + 1, min(i + 5, len(rows))):
+                        nxt = row_text(rows[j])
+                        if len(nxt) == 1 and nxt[0] and nxt[0] not in ('RECOMANDARI / REGIM / MEDICATIE',):
+                            data.store("checkout.treatment", nxt[0])
+                            break
+
                 elif nc == 1 and cells[0] == 'RECOMANDARI / REGIM / MEDICATIE':
                     for j in range(i + 1, min(i + 5, len(rows))):
                         nxt = row_text(rows[j])
                         if len(nxt) == 1 and nxt[0] and not nxt[0].startswith('EXAMENE'):
                             data.store("checkout.recommendations", nxt[0])
+                            break
+
+                elif nc == 2 and cells[0].startswith('DIAGNOSTICE SECUNDARE'):
+                    # Next row contains codes concatenated: "P92.0 Voma la nou-nascutR63.3 ..."
+                    for j in range(i + 1, min(i + 3, len(rows))):
+                        nxt = row_text(rows[j])
+                        if len(nxt) >= 1 and nxt[0] and nxt[0] != '-':
+                            # Split on ICD-10 code boundary: letter+digit+dot preceded by non-space
+                            raw = nxt[0]
+                            parts = re.split(r'(?<=[a-zA-Z])(?=[A-Z]\d{2}\.)', raw)
+                            secondary = [p.strip() for p in parts if p.strip() and p.strip() != '-']
+                            if secondary:
+                                data.store_list("checkin.secondary_diagnoses", secondary)
                             break
 
             # Extract 2-cell lab/imaging investigation rows under section headers
@@ -2393,15 +2430,48 @@ class HipoClientCheckout(HipoClient):
                     }
                 ]
 
-            # Add text summary if epicrisis exists
+            # Emergency flag
+            if parsed_data.get("checkout.is_urgent"):
+                fhir_encounter["priority"] = {
+                    "coding": [{"system": "http://terminology.hl7.org/CodeSystem/v3-ActPriority", "code": "EM", "display": "emergency"}]
+                }
+
+            # FO number as identifier
+            fo_number = parsed_data.get("checkout.fo_number")
+            if fo_number:
+                fhir_encounter["identifier"] = [{"system": "FO", "value": fo_number}]
+
+            # Insurance
+            if parsed_data.get("patient.insurance_house"):
+                fhir_encounter["extension"] = fhir_encounter.get("extension", [])
+                fhir_encounter["extension"].append({
+                    "url": "insurance",
+                    "valueString": parsed_data.get("patient.insurance_house")
+                })
+                if parsed_data.get("patient.insurance_category"):
+                    fhir_encounter["extension"].append({
+                        "url": "insuranceCategory",
+                        "valueString": parsed_data.get("patient.insurance_category")
+                    })
+
+            # Patient contact info
+            if parsed_data.get("patient.address") or parsed_data.get("patient.phone"):
+                fhir_encounter["extension"] = fhir_encounter.get("extension", [])
+                if parsed_data.get("patient.address"):
+                    fhir_encounter["extension"].append({"url": "patientAddress", "valueString": parsed_data.get("patient.address")})
+                if parsed_data.get("patient.phone"):
+                    fhir_encounter["extension"].append({"url": "patientPhone", "valueString": parsed_data.get("patient.phone")})
+
+            # Notes: epicrisis + recommended treatment
+            notes = []
             epicrisis = parsed_data.get("checkout.epicrisis")
             if epicrisis:
-                # Also add as a note
-                fhir_encounter["note"] = [
-                    {
-                        "text": epicrisis
-                    }
-                ]
+                notes.append({"text": epicrisis})
+            treatment = parsed_data.get("checkout.treatment")
+            if treatment:
+                notes.append({"text": f"[Treatment] {treatment}"})
+            if notes:
+                fhir_encounter["note"] = notes
 
             # Add diagnosis if available
             if admission_diagnosis:
@@ -2445,6 +2515,26 @@ class HipoClientCheckout(HipoClient):
                         }
                     }
                 )
+
+            # Secondary diagnoses
+            secondary = parsed_data.get("checkin.secondary_diagnoses") or []
+            if secondary:
+                if "diagnosis" not in fhir_encounter:
+                    fhir_encounter["diagnosis"] = []
+                for idx, diag in enumerate(secondary):
+                    fhir_encounter["diagnosis"].append({
+                        "condition": {
+                            "reference": f"Condition/secondary-{encounter_id}-{idx}",
+                            "display": diag
+                        },
+                        "use": {
+                            "coding": [{
+                                "system": "http://terminology.hl7.org/CodeSystem/diagnosis-role",
+                                "code": "CM",
+                                "display": "Comorbidity diagnosis"
+                            }]
+                        }
+                    })
 
             # Add period for admission and discharge times
             checkin_datetime = parsed_data.get("checkin.date_time")
