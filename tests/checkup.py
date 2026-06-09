@@ -47,7 +47,7 @@ async def test_checkup_endpoint_known_id(session: aiohttp.ClientSession) -> bool
             if data.get("status") != "success":
                 print(f"  ✗ status={data.get('status')}: {data.get('message')}")
                 return False
-            for key in ("patient", "checkup"):
+            for key in ("patient", "presentation"):
                 if key not in data:
                     print(f"  ✗ Missing key '{key}' in response")
                     return False
@@ -55,11 +55,11 @@ async def test_checkup_endpoint_known_id(session: aiohttp.ClientSession) -> bool
             if not patient.get("name"):
                 print("  ✗ patient.name is empty")
                 return False
-            checkup = data["checkup"]
-            if not checkup.get("section"):
-                print("  ✗ checkup.section is empty")
+            presentation = data["presentation"]
+            if not presentation.get("section"):
+                print("  ✗ presentation.section is empty")
                 return False
-            print(f"  ✓ checkup/{checkup_id}: patient={patient.get('name')}, section={checkup.get('section')}")
+            print(f"  ✓ checkup/{checkup_id}: patient={patient.get('name')}, section={presentation.get('section')}")
             return True
     except Exception as e:
         print(f"  ✗ Exception: {e}")
