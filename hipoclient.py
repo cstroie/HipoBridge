@@ -1345,7 +1345,7 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
     def __init__(self, service_url: Optional[str] = None, request: Optional[web.Request] = None):
         """Initialize the patient search client."""
         super().__init__(service_url=service_url, request=request)
-        self.request_url_all = "/pacient/analyses.asp?type=PA&pacid={pacid}"
+        self.request_url_all = "/Pacient/analysesALL.asp?type=PA&pacid={pacid}"
         self.request_url_episode = "/Pacient/analysesEpisod.asp?pacid={pacid}"
 
     async def search(self, patient_id: str, **kwargs) -> HipoData:
