@@ -1242,6 +1242,7 @@ select {
     color: var(--text-light);
     font-size: var(--font-size-lg);
 }
+.report-loading[hidden] { display: none; }
 
 .report-footer {
     display: flex;
@@ -1287,6 +1288,8 @@ select {
     font-size: var(--font-size-sm);
     line-height: 1.6;
 }
+.report-note p { margin: 0; }
+.report-note p + p { margin-top: var(--spacing-xs); }
 
 .report-note + .report-note {
     margin-top: var(--spacing-sm);
@@ -1907,13 +1910,15 @@ select {
 .schedule-status.status-sent     { background: #dbeafe; color: #1d4ed8; }              /* draft: sent/received at lab */
 .schedule-status.status-active   { background: #e0e7ff; color: #3730a3; }              /* active: in progress */
 .schedule-status.status-done     { background: #d1fae5; color: #065f46; }              /* completed */
-.schedule-status.status-revoked  { background: #f3f4f6; color: #6b7280; }              /* revoked: ended/terminated */
+.schedule-status.status-ended    { background: #ccfbf1; color: #0f766e; }              /* ended: terminated/completed */
+.schedule-status.status-revoked  { background: #f3f4f6; color: #6b7280; }              /* revoked: cancelled */
 .schedule-status.status-error    { background: #fee2e2; color: #991b1b; }              /* entered-in-error: fara analize */
 
 [data-theme="dark"] .schedule-status.status-pending  { background: #1f2937; color: var(--text-light); }
 [data-theme="dark"] .schedule-status.status-sent     { background: #1e3a5f; color: #93c5fd; }
 [data-theme="dark"] .schedule-status.status-active   { background: #1e1b4b; color: #a5b4fc; }
 [data-theme="dark"] .schedule-status.status-done     { background: #064e3b; color: #6ee7b7; }
+[data-theme="dark"] .schedule-status.status-ended    { background: #042f2e; color: #5eead4; }
 [data-theme="dark"] .schedule-status.status-revoked  { background: #1f2937; color: #9ca3af; }
 [data-theme="dark"] .schedule-status.status-error    { background: #450a0a; color: #fca5a5; }
 

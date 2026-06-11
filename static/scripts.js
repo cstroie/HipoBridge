@@ -1621,11 +1621,34 @@ document.addEventListener('DOMContentLoaded', function() {
             const dateEl = article.querySelector('.report-date');
             if (dateEl && date) dateEl.textContent = formatDate(date);
 
+            // Ordering physician from referrer (if not already set from ServiceRequest)
+            const referrerEl = article.querySelector('.card-referrer');
+            if (referrerEl && !referrerEl.textContent && data.referrer?.display) {
+                referrerEl.textContent = data.referrer.display;
+            }
+
+            // Clinical indication note(s) → populate request-meta dl
+            const allNotes = data.note || [];
+            const indicationNotes = allNotes.filter(n => n.category?.[0]?.text === 'clinical-indication');
+            const resultNotes = allNotes.filter(n => n.category?.[0]?.text !== 'clinical-indication');
+            if (indicationNotes.length > 0) {
+                const metaDl = article.querySelector('.request-meta');
+                if (metaDl && metaDl.children.length === 0) {
+                    indicationNotes.forEach(n => {
+                        const dt = document.createElement('dt');
+                        dt.textContent = 'Indication';
+                        const dd = document.createElement('dd');
+                        dd.textContent = n.text;
+                        metaDl.append(dt, dd);
+                    });
+                }
+            }
+
             // Report text
             const reportPreview = article.querySelector('.report-preview');
             if (reportPreview) {
                 const forms = data.presentedForm || [];
-                const notes = data.note || [];
+                const notes = resultNotes;
                 if (forms.length > 0) {
                     if (forms.length > 1) {
                         const typeTextEl = article.querySelector('.type-text');
@@ -1660,7 +1683,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (note.text) {
                             const div = document.createElement('div');
                             div.className = 'report-note';
-                            div.innerHTML = marked.parse(note.text);
+                            div.innerHTML = marked.parse(note.text).trim();
                             reportPreview.appendChild(div);
                         }
                     }
@@ -1813,7 +1836,7 @@ document.addEventListener('DOMContentLoaded', function() {
         'draft':          'status-sent',
         'active':         'status-active',
         'completed':      'status-done',
-        'ended':          'status-revoked',
+        'ended':          'status-ended',
         'revoked':        'status-revoked',
         'entered-in-error': 'status-error',
         'unknown':        'status-pending',
@@ -1877,7 +1900,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 for (const note of notes) {
                     if (!note.text) continue;
                     const div = document.createElement('div');
-                    div.innerHTML = marked.parse(note.text);
+                    div.innerHTML = marked.parse(note.text).trim();
                     bodyDiv.appendChild(div);
                 }
             } else if (reportData.conclusion) {

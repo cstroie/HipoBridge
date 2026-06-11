@@ -1640,7 +1640,11 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                     # Add effective date_time if available
                     if req.get("date_time"):
                         fhir_service_request["authoredOn"] = req["date_time"]
-                    
+
+                    # Add ordering physician
+                    if req.get("medic"):
+                        fhir_service_request["requester"] = FHIRReference(display=req["medic"])
+
                     # Add region information if available
                     if req.get("regions"):
                         fhir_service_request["bodySite"] = []
@@ -1922,10 +1926,13 @@ class HipoClientImagingStudy(HipoClient):
                     }
                 ]
 
-            # Add notes: clinical comments + per-study results
+            # Add notes: clinical comments (category=clinical-indication) + per-study results
             notes = []
             if parsed_data.get("request.clinical_comments"):
-                notes.append({"text": parsed_data.get("request.clinical_comments")})
+                notes.append({
+                    "text": parsed_data.get("request.clinical_comments"),
+                    "category": [{"text": "clinical-indication"}]
+                })
             for study in (studies or []):
                 if isinstance(study, dict) and study.get("result"):
                     notes.append({"text": study["result"]})
