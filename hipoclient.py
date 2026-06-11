@@ -2821,6 +2821,7 @@ class HipoClientSchedule(HipoClient):
         if 'radioscopii' in l:                          return 'fluoro'
         if 'radiografie' in l:                          return 'radio'
         if 'tomografie' in l or 'computerizata' in l:   return 'ct'
+        if 'computer tomograf' in l:                    return 'ct'
         if l == 'ct' or l.startswith('ct '):            return 'ct'
         if 'imagistica' in l or 'rezonanta' in l:       return 'irm'
         if 'laborator' in l:                            return 'lab'
