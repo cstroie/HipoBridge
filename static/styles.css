@@ -1747,6 +1747,11 @@ select {
     border-radius: var(--radius-sm);
     background: var(--bg);
     color: var(--text);
+    color-scheme: light;
+}
+
+[data-theme="dark"] .schedule-date-input {
+    color-scheme: dark;
 }
 
 .schedule-date-sep {
