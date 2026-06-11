@@ -23,7 +23,7 @@ Designed for the specific HTML structures produced by Hipocrate
 
 import re
 import html as html_module
-from bs4 import BeautifulSoup, Comment
+from bs4 import BeautifulSoup, Comment, NavigableString
 
 
 # Block-level tags that must not be wrapped in <p>
@@ -90,6 +90,30 @@ def html_to_markdown(html_content: str) -> str:
         # Process inline elements BEFORE block elements so that unwrapping
         # <p> doesn't move <b> to body level and trigger the wrapper check.
 
+        def _trim_tag_edges(tag):
+            """Trim leading/trailing whitespace from a tag's edge text nodes.
+
+            Returns (leading, trailing) whitespace strings that were removed.
+            CommonMark forbids opening ** immediately followed by whitespace
+            and closing ** immediately preceded by whitespace. The caller
+            re-inserts trimmed whitespace outside the markers so word spacing
+            is preserved.
+            """
+            leading = trailing = ''
+            if tag.contents and isinstance(tag.contents[0], NavigableString):
+                s = str(tag.contents[0])
+                stripped = s.lstrip()
+                if stripped != s:
+                    leading = s[:len(s) - len(stripped)]
+                    tag.contents[0].replace_with(NavigableString(stripped))
+            if tag.contents and isinstance(tag.contents[-1], NavigableString):
+                s = str(tag.contents[-1])
+                stripped = s.rstrip()
+                if stripped != s:
+                    trailing = s[len(stripped):]
+                    tag.contents[-1].replace_with(NavigableString(stripped))
+            return leading, trailing
+
         # Bold — skip empty tags and pure-wrapper <b> (only child of body)
         for b in soup.find_all(['b', 'strong']):
             if not b.get_text(strip=True):
@@ -101,8 +125,9 @@ def html_to_markdown(html_content: str) -> str:
             is_wrapper = (parent.name in ('body',) or parent == soup) \
                          and len(siblings) == 1
             if not is_wrapper:
-                b.insert_before('**')
-                b.insert_after('**')
+                lead, trail = _trim_tag_edges(b)
+                b.insert_before(lead + '**')
+                b.insert_after('**' + trail)
             b.unwrap()
 
         # Italic — skip <i> tags with no visible text (icon elements)
@@ -110,8 +135,9 @@ def html_to_markdown(html_content: str) -> str:
             if not i_tag.get_text(strip=True):
                 i_tag.decompose()
                 continue
-            i_tag.insert_before('*')
-            i_tag.insert_after('*')
+            lead, trail = _trim_tag_edges(i_tag)
+            i_tag.insert_before(lead + '*')
+            i_tag.insert_after('*' + trail)
             i_tag.unwrap()
 
         # Underline → italic (Markdown has no underline); skip empty
@@ -119,8 +145,9 @@ def html_to_markdown(html_content: str) -> str:
             if not u.get_text(strip=True):
                 u.decompose()
                 continue
-            u.insert_before('*')
-            u.insert_after('*')
+            lead, trail = _trim_tag_edges(u)
+            u.insert_before(lead + '*')
+            u.insert_after('*' + trail)
             u.unwrap()
 
         # Headings → replace the whole tag with a markdown text node so that

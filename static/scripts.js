@@ -1,3 +1,5 @@
+marked.use({ breaks: true });
+
 document.addEventListener('DOMContentLoaded', function() {
     // DOM Elements - Cache selectors for better performance
     const elements = {
