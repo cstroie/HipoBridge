@@ -1639,6 +1639,29 @@ select {
         width: 100%;
         justify-content: center;
     }
+
+    /* Larger touch targets on mobile */
+    .btn-icon {
+        width: 44px;
+        height: 44px;
+    }
+
+    .btn-secondary {
+        padding: 1rem 1.25rem;
+    }
+
+    /* Schedule filters: full-width on mobile */
+    .schedule-filter-input,
+    .schedule-filter-select,
+    .schedule-date-input {
+        min-width: 0;
+        flex: 1 1 100%;
+        width: 100%;
+    }
+
+    .schedule-filters {
+        gap: var(--spacing-xs);
+    }
 }
 
 /* Honour the OS reduced-motion preference */
@@ -1743,11 +1766,17 @@ select {
     flex: 1 1 200px;
 }
 
+.schedule-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-top: var(--spacing-md);
+}
+
 .schedule-table {
     width: 100%;
     border-collapse: collapse;
     font-size: var(--font-size-sm);
-    margin-top: var(--spacing-md);
+    min-width: 640px;
 }
 
 .schedule-table th {
@@ -1756,8 +1785,7 @@ select {
     background: var(--primary);
     color: #fff;
     font-weight: var(--font-weight-semibold);
-    position: sticky;
-    top: 0;
+    white-space: nowrap;
 }
 
 .schedule-table td {

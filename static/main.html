@@ -28,7 +28,7 @@
                     </div>
                     <div class="header-actions">
                         <div class="search-quick">
-                            <input type="text" id="quickSearch" placeholder="Quick search by CNP, name, or code..." aria-label="Quick search">
+                            <input type="search" id="quickSearch" autocomplete="off" placeholder="Quick search by CNP, name, or code..." aria-label="Quick search">
                             <button type="button" id="quickSearchBtn" class="btn-icon" aria-label="Quick search">
                                 <i class="fas fa-search"></i>
                             </button>
@@ -109,7 +109,7 @@
                                 <div class="search-input-group">
                                     <div class="input-with-icon">
                                         <i class="fas fa-id-card"></i>
-                                        <input type="text" id="cnpInput" name="cnp" placeholder="Enter 13-digit CNP, partial CNP, patient code, or patient name" required aria-describedby="cnpHelp">
+                                        <input type="search" id="cnpInput" name="cnp" inputmode="search" autocomplete="off" placeholder="Enter 13-digit CNP, partial CNP, patient code, or patient name" required aria-describedby="cnpHelp">
                                     </div>
                                     <button type="submit" id="analyzeBtn" class="btn-primary">
                                         <i class="fas fa-search"></i>
@@ -227,7 +227,7 @@
                         <div class="header-actions">
                             <div class="search-box">
                                 <i class="fas fa-search"></i>
-                                <input type="text" id="analysesSearch" placeholder="Search reports..." aria-label="Search reports">
+                                <input type="search" id="analysesSearch" placeholder="Search reports..." aria-label="Search reports">
                             </div>
                             <select id="analysesFilter" aria-label="Filter reports">
                                 <option value="all">All Types</option>
@@ -325,6 +325,7 @@
                         <div class="no-data" id="noSchedule" role="status">
                             <p>No requests found</p>
                         </div>
+                        <div class="schedule-table-wrap">
                         <table id="scheduleTable" class="schedule-table" hidden>
                             <thead>
                                 <tr>
@@ -339,6 +340,7 @@
                             </thead>
                             <tbody id="scheduleBody"></tbody>
                         </table>
+                        </div>
                     </div>
                 </section>
 

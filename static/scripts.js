@@ -1944,6 +1944,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 const patientId = json['patient.id'] || json.patient?.id;
                 if (patientId) {
                     elements.cnpInput.value = patientId;
+                    triggerEl.textContent = originalText;
+                    triggerEl.disabled = false;
                     elements.form.dispatchEvent(new Event('submit'));
                     return;
                 }
