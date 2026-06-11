@@ -39,18 +39,46 @@ def html_to_markdown(html_content: str) -> str:
     """Convert Hipocrate HTML to clean Markdown text.
 
     Handles Microsoft Office artifacts, icon-only <i> tags, nested headings,
-    and common medical record formatting patterns.
+    Word-style list paragraphs (MsoListParagraph), and common medical record
+    formatting patterns found in epicrisis HTML.
     """
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
 
-        # Remove XML processing instructions
+        # Remove non-content elements entirely (textarea duplicates the raw HTML
+        # as editable text; script/style have no narrative content)
+        for tag in soup.find_all(['script', 'style', 'textarea']):
+            tag.decompose()
+
+        # Remove XML processing instructions and HTML comments
         for node in soup.find_all(re.compile(r'^\?xml')):
             node.decompose()
+        for node in soup.find_all(string=lambda t: isinstance(t, Comment)):
+            node.extract()
 
-        # Remove MS-Office namespace tags but keep their text content
-        for tag in soup.find_all(['o:p', 'xml:namespace']):
-            tag.unwrap()
+        # MS-Office namespace tags: empty → gone, non-empty → unwrap
+        for tag in soup.find_all('o:p'):
+            if tag.get_text(strip=True):
+                tag.unwrap()
+            else:
+                tag.decompose()
+        for tag in soup.find_all(['xml:namespace']):
+            tag.decompose()
+
+        # mso-spacerun spans are padding-only → single space
+        for span in soup.find_all(True, style=re.compile(r'mso-spacerun', re.I)):
+            span.replace_with(' ')
+
+        # Mark Word list paragraphs before any structural processing so we can
+        # detect them later even after class attributes are gone
+        _list_cls = re.compile(r'MsoListParagraph', re.I)
+        for p in soup.find_all('p', class_=_list_cls):
+            p['data-md-list'] = '1'
+
+        # Word list-bullet spans (mso-list: Ignore) contain the "-" glyph and
+        # spacer — decompose them; we emit the "- " prefix ourselves below
+        for span in soup.find_all(True, attrs={'style': re.compile(r'mso-list\s*:\s*Ignore', re.I)}):
+            span.decompose()
 
         # Unwrap a single wrapping <b> that encloses the entire body content
         container = soup.find('body') or soup
@@ -62,8 +90,11 @@ def html_to_markdown(html_content: str) -> str:
         # Process inline elements BEFORE block elements so that unwrapping
         # <p> doesn't move <b> to body level and trigger the wrapper check.
 
-        # Bold — skip pure-wrapper <b> (only child of body / soup root)
+        # Bold — skip empty tags and pure-wrapper <b> (only child of body)
         for b in soup.find_all(['b', 'strong']):
+            if not b.get_text(strip=True):
+                b.unwrap()
+                continue
             parent = b.parent
             siblings = [c for c in parent.children
                         if hasattr(c, 'name') and c.name]
@@ -83,8 +114,11 @@ def html_to_markdown(html_content: str) -> str:
             i_tag.insert_after('*')
             i_tag.unwrap()
 
-        # Underline → italic (Markdown has no underline)
+        # Underline → italic (Markdown has no underline); skip empty
         for u in soup.find_all('u'):
+            if not u.get_text(strip=True):
+                u.decompose()
+                continue
             u.insert_before('*')
             u.insert_after('*')
             u.unwrap()
@@ -96,23 +130,38 @@ def html_to_markdown(html_content: str) -> str:
             text = tag.get_text()
             tag.replace_with(f'\n\n{"#" * level} {text}\n\n')
 
-        # Paragraphs
+        # Paragraphs: list items get a tight "- " prefix; others get \n\n after
         for p in soup.find_all('p'):
-            p.insert_after('\n\n')
+            if p.get('data-md-list'):
+                p.insert_before('\n- ')
+            else:
+                p.insert_after('\n\n')
             p.unwrap()
 
         # Line breaks
         for br in soup.find_all('br'):
             br.replace_with('\n')
 
-        # Extract text directly from the modified soup (no second parse needed)
+        # Block-level divs: unwrap with a paragraph break so outer wrappers
+        # don't run content together
+        for div in soup.find_all('div'):
+            div.insert_after('\n\n')
+            div.unwrap()
+
+        # Extract text directly from the modified soup
         text = soup.get_text()
 
         # Decode entities and normalise whitespace
         text = html_module.unescape(text)
         text = text.replace('\xa0', ' ').replace('&nbsp;', ' ').replace('&amp;nbsp;', ' ')
         text = re.sub(r'[ \t]+', ' ', text)
+        # Collapse over-nested emphasis markers (bold+italic+underline stacking
+        # produces ****, ***** etc. — cap at *** which is bold+italic)
+        text = re.sub(r'\*{4,}', '***', text)
+        # Tidy list items: collapse whitespace/newlines between "- " and content
+        text = re.sub(r'^- *\n+', '- ', text, flags=re.MULTILINE)
         text = re.sub(r'\n\s*\n', '\n\n', text)
+        text = re.sub(r'\n{3,}', '\n\n', text)
         return text.strip()
 
     except Exception:
