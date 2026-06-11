@@ -1778,52 +1778,16 @@ select {
     font-weight: var(--font-weight-medium);
 }
 
-.schedule-status.status-sent {
-    background: #dbeafe;
-    color: #1d4ed8;
-}
+.schedule-status.status-pending  { background: #f3f4f6; color: var(--text-light); }   /* on-hold: not yet sent */
+.schedule-status.status-sent     { background: #dbeafe; color: #1d4ed8; }              /* draft: sent/received at lab */
+.schedule-status.status-active   { background: #e0e7ff; color: #3730a3; }              /* active: in progress */
+.schedule-status.status-done     { background: #d1fae5; color: #065f46; }              /* completed */
+.schedule-status.status-revoked  { background: #f3f4f6; color: #6b7280; }              /* revoked: ended/terminated */
+.schedule-status.status-error    { background: #fee2e2; color: #991b1b; }              /* entered-in-error: fara analize */
 
-.schedule-status.status-received {
-    background: #d1fae5;
-    color: #065f46;
-}
-
-.schedule-status.status-pending {
-    background: #f3f4f6;
-    color: var(--text-light);
-}
-
-.schedule-status.status-empty {
-    background: #fef3c7;
-    color: #92400e;
-}
-
-.schedule-status.status-done {
-    background: #d1fae5;
-    color: #065f46;
-}
-
-[data-theme="dark"] .schedule-status.status-sent {
-    background: #1e3a5f;
-    color: #93c5fd;
-}
-
-[data-theme="dark"] .schedule-status.status-received {
-    background: #064e3b;
-    color: #6ee7b7;
-}
-
-[data-theme="dark"] .schedule-status.status-pending {
-    background: #1f2937;
-    color: var(--text-light);
-}
-
-[data-theme="dark"] .schedule-status.status-empty {
-    background: #451a03;
-    color: #fcd34d;
-}
-
-[data-theme="dark"] .schedule-status.status-done {
-    background: #064e3b;
-    color: #6ee7b7;
-}
+[data-theme="dark"] .schedule-status.status-pending  { background: #1f2937; color: var(--text-light); }
+[data-theme="dark"] .schedule-status.status-sent     { background: #1e3a5f; color: #93c5fd; }
+[data-theme="dark"] .schedule-status.status-active   { background: #1e1b4b; color: #a5b4fc; }
+[data-theme="dark"] .schedule-status.status-done     { background: #064e3b; color: #6ee7b7; }
+[data-theme="dark"] .schedule-status.status-revoked  { background: #1f2937; color: #9ca3af; }
+[data-theme="dark"] .schedule-status.status-error    { background: #450a0a; color: #fca5a5; }

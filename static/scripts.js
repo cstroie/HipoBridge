@@ -1796,11 +1796,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     const SCHEDULE_STATUS_CLASS = {
-        'draft':     'status-pending',
-        'active':    'status-sent',
-        'on-hold':   'status-empty',
-        'completed': 'status-done',
-        'unknown':   'status-pending',
+        'on-hold':        'status-pending',
+        'draft':          'status-sent',
+        'active':         'status-active',
+        'completed':      'status-done',
+        'ended':          'status-revoked',
+        'revoked':        'status-revoked',
+        'entered-in-error': 'status-error',
+        'unknown':        'status-pending',
     };
 
     let scheduleEntries = [];

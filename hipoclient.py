@@ -2959,14 +2959,14 @@ class HipoClientSchedule(HipoClient):
 
     # Maps Hipocrate status text → FHIR ServiceRequest.status
     _FHIR_STATUS = {
-        'cerere netrimisa':                   'draft',
-        'trimisa in laborator':               'active',
-        'primita in laborator':               'active',
+        'cerere netrimisa':                   'on-hold',
+        'trimisa in laborator':               'draft',
+        'primita in laborator':               'draft',
         'in lucru(nv)':                       'active',
-        'fara analize':                       'on-hold',
+        'fara analize':                       'entered-in-error',
         'cerere completata':                  'completed',
         'cerere completata/partial validata': 'completed',
-        'terminata':                          'completed',
+        'terminata':                          'ended',
     }
 
     def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRBundle, FHIROperationOutcome]:
