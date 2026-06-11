@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', function() {
         tabContents: document.querySelectorAll('.tab-content'),
         // Patient tab elements
         patientId: document.getElementById('patientId'),
+        patientAvatar: document.querySelector('.patient-avatar i'),
         patientName: document.getElementById('patientName'),
         patientCnp: document.getElementById('patientCnp'),
         patientAge: document.getElementById('patientAge'),
@@ -607,6 +608,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.patientCnp) elements.patientCnp.textContent = '';
         if (elements.patientGender) elements.patientGender.textContent = '';
         if (elements.patientBirthDate) elements.patientBirthDate.textContent = '';
+        if (elements.patientAvatar) elements.patientAvatar.className = 'fas fa-user-injured';
         if (elements.patientPhone) elements.patientPhone.textContent = '';
         if (elements.patientEmail) elements.patientEmail.textContent = '';
         if (elements.presentationsCount) elements.presentationsCount.textContent = '0';
@@ -1188,6 +1190,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.patientId)     elements.patientId.textContent     = patientData.id ? `ID: ${patientData.id}` : '';
         if (elements.patientGender) elements.patientGender.textContent = formatGender(patientData.gender);
         if (elements.patientAge)    elements.patientAge.textContent    = age !== 'N/A' ? `${age} years` : '';
+
+        if (elements.patientAvatar) {
+            const ageNum = age !== 'N/A' ? parseInt(age, 10) : null;
+            const female = patientData.gender === 'female';
+            let icon;
+            if (ageNum === null)      icon = 'fa-user-injured';
+            else if (ageNum <= 2)     icon = 'fa-baby';
+            else if (ageNum <= 12)    icon = female ? 'fa-child-dress' : 'fa-child';
+            else if (ageNum <= 64)    icon = female ? 'fa-person-dress' : 'fa-person';
+            else                      icon = 'fa-person-cane';
+            elements.patientAvatar.className = `fas ${icon}`;
+        }
         log('Age set to:', age);
         
         // Personal info fields
