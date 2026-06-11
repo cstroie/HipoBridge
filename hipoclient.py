@@ -2874,7 +2874,9 @@ class HipoClientSchedule(HipoClient):
                 id_match = re.search(r'id=(\d+)', code_link.get('href', ''))
                 request_id = id_match.group(1) if id_match else None
 
-                detail_cells = cells[2].select('div.div_detalii table tr td')
+                # Inner table has a header row then a data row; take the last tr
+                detail_rows = cells[2].select('div.div_detalii table tr')
+                detail_cells = detail_rows[-1].find_all('td') if detail_rows else []
                 if len(detail_cells) >= 7:
                     requests.append({
                         'patient_name': patient_name,
