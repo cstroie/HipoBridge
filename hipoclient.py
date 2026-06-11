@@ -2964,6 +2964,18 @@ class HipoClientSchedule(HipoClient):
                 )
 
             requests = parsed_data.get("requests") or []
+
+            # Apply optional server-side filters
+            patient_q = (kwargs.get('patient') or '').lower().strip()
+            modality_q = (kwargs.get('modality') or '').lower().strip()
+            section_q  = (kwargs.get('section') or '').strip()
+            if patient_q:
+                requests = [r for r in requests if patient_q in (r.get('patient_name') or '').lower()]
+            if modality_q:
+                requests = [r for r in requests if self._lab_to_modality(r.get('laboratory') or '') == modality_q]
+            if section_q:
+                requests = [r for r in requests if (r.get('section') or '') == section_q]
+
             bundle = FHIRBundle(type="searchset", total=len(requests))
 
             system_base = (

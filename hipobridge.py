@@ -346,12 +346,18 @@ async def get_schedule(request):
 
 @require_auth
 async def get_fhir_schedule(request):
-    """FHIR Bundle of ServiceRequest resources for the worklist. ?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD&refresh=1"""
+    """FHIR Bundle of ServiceRequest resources for the worklist. ?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD&refresh=1&patient=&modality=&section="""
     start_date = request.rel_url.query.get('start_date') or request.rel_url.query.get('date')
     end_date = request.rel_url.query.get('end_date')
     force = request.rel_url.query.get('refresh') == '1'
+    patient  = request.rel_url.query.get('patient')
+    modality = request.rel_url.query.get('modality')
+    section  = request.rel_url.query.get('section')
     client = HipoClientSchedule(SERVICE_URL, request)
-    response = await client.fetch_respond_fhir(start_date=start_date, end_date=end_date, force=force, http_request=request)
+    response = await client.fetch_respond_fhir(
+        start_date=start_date, end_date=end_date, force=force,
+        patient=patient, modality=modality, section=section,
+        http_request=request)
     return web_fhir_response(response)
 
 @require_auth

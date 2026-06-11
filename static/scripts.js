@@ -1823,17 +1823,23 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function fetchScheduleFromInputs(force = false) {
-        const start = elements.scheduleStartDate?.value || null;
-        const end = elements.scheduleEndDate?.value || null;
-        fetchSchedule(start, end, force);
+        const start    = elements.scheduleStartDate?.value || null;
+        const end      = elements.scheduleEndDate?.value || null;
+        const patient  = force ? (elements.schedulePatientFilter?.value.trim() || null) : null;
+        const modality = force ? (elements.scheduleModalityFilter?.value || null) : null;
+        const section  = force ? (elements.scheduleSectionFilter?.value || null) : null;
+        fetchSchedule(start, end, force, patient, modality, section);
     }
 
-    async function fetchSchedule(startDate, endDate, force = false) {
+    async function fetchSchedule(startDate, endDate, force = false, patient = null, modality = null, section = null) {
         if (!elements.scheduleBody) return;
         const params = new URLSearchParams();
         if (startDate) params.set('start_date', startDate);
-        if (endDate) params.set('end_date', endDate);
-        if (force) params.set('refresh', '1');
+        if (endDate)   params.set('end_date', endDate);
+        if (force)     params.set('refresh', '1');
+        if (patient)   params.set('patient', patient);
+        if (modality)  params.set('modality', modality);
+        if (section)   params.set('section', section);
         const url = `/fhir/Schedule${params.toString() ? '?' + params.toString() : ''}`;
         try {
             const resp = await fetch(url);
