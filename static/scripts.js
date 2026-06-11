@@ -126,11 +126,17 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function initializeTabs() {
+        // Set schedule date defaults before switchTab triggers the first fetch
+        const today = new Date().toISOString().slice(0, 10);
+        const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+        if (elements.scheduleStartDate) elements.scheduleStartDate.value = yesterday;
+        if (elements.scheduleEndDate)   elements.scheduleEndDate.value   = today;
+
         elements.tabContents.forEach(tab => {
-            if (!tab.classList.contains('active')) {
-                tab.style.display = 'none';
-            }
+            tab.classList.remove('active');
+            tab.style.display = 'none';
         });
+        switchTab('schedule');
     }
     
     function initEventListeners() {
@@ -211,14 +217,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Schedule tab
         {
-            const today = new Date().toISOString().slice(0, 10);
-            const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
             if (elements.scheduleStartDate) {
-                elements.scheduleStartDate.value = yesterday;
                 elements.scheduleStartDate.addEventListener('change', fetchScheduleFromInputs);
             }
             if (elements.scheduleEndDate) {
-                elements.scheduleEndDate.value = today;
                 elements.scheduleEndDate.addEventListener('change', fetchScheduleFromInputs);
             }
         }

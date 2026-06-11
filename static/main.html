@@ -47,7 +47,13 @@
         <nav class="main-nav" aria-label="Main navigation">
             <div class="container">
                 <ul class="nav-menu">
-                    <li class="nav-item active" data-tab="search" aria-current="page" aria-controls="search-tab">
+                    <li class="nav-item" data-tab="schedule" aria-controls="schedule-tab">
+                        <a href="#">
+                            <i class="fas fa-calendar-alt" aria-hidden="true"></i>
+                            <span>Schedule</span>
+                        </a>
+                    </li>
+                    <li class="nav-item" data-tab="search" aria-controls="search-tab">
                         <a href="#">
                             <i class="fas fa-search"></i>
                             <span>Patient Search</span>
@@ -77,12 +83,6 @@
                             <span>Report</span>
                         </a>
                     </li>
-                    <li class="nav-item" data-tab="schedule" aria-controls="schedule-tab">
-                        <a href="#">
-                            <i class="fas fa-calendar-alt" aria-hidden="true"></i>
-                            <span>Schedule</span>
-                        </a>
-                    </li>
                 </ul>
             </div>
         </nav>
@@ -91,7 +91,7 @@
         <main class="main-content">
             <div class="container">
                 <!-- Search Tab -->
-                <section id="search-tab" class="tab-content active" role="tabpanel" aria-labelledby="search-tab-heading">
+                <section id="search-tab" class="tab-content" role="tabpanel" aria-labelledby="search-tab-heading">
                     <div class="hero-section">
                         <div class="hero-content">
                             <h1 id="search-tab-heading"><i class="fas fa-stethoscope"></i> Patient Records</h1>
@@ -285,7 +285,7 @@
                     <div id="patientReportMarkdown" class="markdown-content"></div>
                 </section>
 
-                <section id="schedule-tab" class="tab-content" role="tabpanel" aria-labelledby="schedule-tab-heading" hidden>
+                <section id="schedule-tab" class="tab-content active" role="tabpanel" aria-labelledby="schedule-tab-heading">
                     <div class="tab-header">
                         <div class="header-left">
                             <h1 id="schedule-tab-heading"><i class="fas fa-calendar-alt" aria-hidden="true"></i> Schedule</h1>
