@@ -2813,16 +2813,18 @@ class HipoClientCheckup(HipoClient):
 class HipoClientSchedule(HipoClient):
     """Parses the daily imaging/lab request worklist (/PARA/NOM/Listare/?id=44)."""
 
-    # Maps substrings of the Hipocrate laboratory name → modality slug
-    _LAB_TO_MODALITY = [
-        ('ecografie',  'eco'),
-        ('radiografie', 'radio'),
-        ('radioscopii', 'radio'),
-        ('tomografie',  'ct'),
-        ('imagistica',  'irm'),
-        ('rezonanta',   'irm'),
-        ('laborator',   'lab'),
-    ]
+    @staticmethod
+    def _lab_to_modality(lab: str) -> Optional[str]:
+        """Map Hipocrate laboratory label to a modality slug."""
+        l = lab.lower().strip()
+        if 'ecografie' in l:                            return 'eco'
+        if 'radioscopii' in l:                          return 'fluoro'
+        if 'radiografie' in l:                          return 'radio'
+        if 'tomografie' in l or 'computerizata' in l:   return 'ct'
+        if l == 'ct' or l.startswith('ct '):            return 'ct'
+        if 'imagistica' in l or 'rezonanta' in l:       return 'irm'
+        if 'laborator' in l:                            return 'lab'
+        return None
 
     def __init__(self, service_url=None, request=None):
         super().__init__(service_url=service_url, request=request)
@@ -2953,7 +2955,7 @@ class HipoClientSchedule(HipoClient):
                     }] if req.get('request_code') else None,
                     subject=FHIRReference(display=req.get('patient_name')),
                     code=FHIRCodeableConcept(text=req.get('laboratory')),
-                    category=[FHIRCodeableConcept(coding=[{"code": modality}])] if (modality := next((v for k, v in self._LAB_TO_MODALITY if k in (req.get('laboratory') or '').lower()), None)) else None,
+                    category=[FHIRCodeableConcept(coding=[{"code": modality}])] if (modality := self._lab_to_modality(req.get('laboratory') or '')) else None,
                     authoredOn=req.get('date_time'),
                     requester=FHIRReference(display=req.get('requested_by')) if req.get('requested_by') else None,
                     note=[{"text": req.get('section')}] if req.get('section') else None,
