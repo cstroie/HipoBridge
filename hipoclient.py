@@ -2902,3 +2902,67 @@ class HipoClientSchedule(HipoClient):
             logger.error(f"Error parsing schedule data: {e}")
             data.set_error(str(e))
             return data
+
+    # Maps Hipocrate status text → FHIR ServiceRequest.status
+    _FHIR_STATUS = {
+        'cerere netrimisa':    'draft',
+        'trimisa in laborator': 'active',
+        'primita in laborator': 'active',
+        'fara analize':        'on-hold',
+    }
+
+    def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRBundle, FHIROperationOutcome]:
+        """Convert parsed schedule HipoData to a FHIR Bundle of ServiceRequest resources."""
+        http_request = kwargs.get('http_request', self.request)
+        try:
+            if parsed_data.get("status") == "error":
+                return FHIROperationOutcome.from_error(
+                    message=parsed_data.get("message", "Error retrieving schedule"),
+                    code="processing",
+                    severity="error"
+                )
+
+            requests = parsed_data.get("requests") or []
+            bundle = FHIRBundle(type="searchset", total=len(requests))
+
+            system_base = (
+                f"{http_request.scheme}://{http_request.host}"
+                if http_request else "http://localhost"
+            )
+
+            for req in requests:
+                status_key = (req.get('status') or '').lower()
+                fhir_status = self._FHIR_STATUS.get(status_key, 'unknown')
+                priority = 'urgent' if (req.get('priority') or '').lower() not in ('normala', 'normal', '') else 'routine'
+
+                sr = FHIRServiceRequest(
+                    id=req.get('request_id'),
+                    status=fhir_status,
+                    intent="order",
+                    priority=priority,
+                    identifier=[{
+                        "system": f"{system_base}/fhir/NamingSystem/request-code",
+                        "value": req.get('request_code'),
+                    }] if req.get('request_code') else None,
+                    subject=FHIRReference(display=req.get('patient_name')),
+                    code=FHIRCodeableConcept(text=req.get('laboratory')),
+                    authoredOn=req.get('date_time'),
+                    requester=FHIRReference(display=req.get('requested_by')) if req.get('requested_by') else None,
+                    note=[{"text": req.get('section')}] if req.get('section') else None,
+                )
+                bundle.append_entry(resource=sr)
+
+            return bundle
+        except Exception as e:
+            logger.error(f"Error building FHIR schedule bundle: {e}")
+            return FHIROperationOutcome.from_exception(e, code="exception")
+
+    async def fetch_respond_fhir(self, **kwargs) -> Union[FHIRBundle, FHIROperationOutcome]:
+        parsed = await self.fetch_and_parse(**kwargs)
+        if parsed.get("status") == "error":
+            return FHIROperationOutcome.from_error(
+                message=parsed.get("message", "Unknown error"),
+                code="processing",
+                severity="error"
+            )
+        return self.fhir_response(parsed, **kwargs)

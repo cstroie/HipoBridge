@@ -333,6 +333,14 @@ async def get_schedule(request):
     return web_json_response(parsed_data)
 
 @require_auth
+async def get_fhir_schedule(request):
+    """FHIR Bundle of ServiceRequest resources for the worklist. ?date=YYYY-MM-DD"""
+    date = request.rel_url.query.get('date')
+    client = HipoClientSchedule(SERVICE_URL, request)
+    response = await client.fetch_respond_fhir(date=date, http_request=request)
+    return web_fhir_response(response)
+
+@require_auth
 async def debug_passthrough(request):
     """Fetch any Hipocrate path for debugging. ?path=/files/checkup.asp?cuid=..."""
     path = request.query.get('path', '')
@@ -641,6 +649,7 @@ async def init_app():
     app.router.add_get('/api/checkin/{id}', get_checkin)
     app.router.add_get('/api/checkup/{id}', get_checkup)
     app.router.add_get('/api/schedule', get_schedule)
+    app.router.add_get('/fhir/Schedule', get_fhir_schedule)
     app.router.add_get('/api/debug', debug_passthrough)
     app.router.add_get('/fhir/Patient', search_fhir_patient)
     app.router.add_get('/fhir/Patient/{id}', get_fhir_patient)
