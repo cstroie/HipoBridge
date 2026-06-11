@@ -544,8 +544,8 @@ small {
     background: linear-gradient(135deg, rgba(37, 99, 235, 0.1), rgba(5, 150, 105, 0.1));
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    padding: 2rem;
-    margin-bottom: 2rem;
+    padding: var(--spacing-lg);
+    margin-bottom: var(--spacing-lg);
 }
 
 .hero-content h2 {
@@ -609,15 +609,16 @@ small {
 .search-section {
     display: grid;
     grid-template-columns: 2fr 1fr;
-    gap: 2rem;
-    margin-bottom: 2rem;
+    gap: var(--spacing-lg);
+    margin-bottom: var(--spacing-lg);
 }
 
 .search-card {
     background: var(--card-bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    padding: 2rem;
+    padding: var(--spacing-lg);
+    align-self: start;
 }
 
 .search-header h3 {
@@ -628,8 +629,8 @@ small {
 
 .search-input-group {
     display: flex;
-    gap: 1rem;
-    margin: 1.5rem 0;
+    gap: var(--spacing-md);
+    margin: var(--spacing-md) 0;
 }
 
 .input-with-icon {
@@ -687,87 +688,126 @@ small {
     font-size: var(--font-size-sm);
 }
 
-.search-examples h4 {
-    margin: 1.5rem 0 1rem 0;
-    color: var(--text);
-}
-
-.examples-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-    gap: 0.5rem;
-}
-
-.example-btn {
-    background: var(--card-bg);
-    border: 1px solid var(--muted);
-    border-radius: var(--radius-md);
-    padding: 0.5rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    font-size: var(--font-size-sm);
-    color: var(--text);
-}
-
-.example-btn:hover {
-    background: var(--primary);
-    color: white;
-    border-color: var(--primary);
-}
-
 .recent-searches {
     background: var(--card-bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    padding: 1.5rem;
+    padding: var(--spacing-md);
 }
 
-.recent-searches h3 {
-    margin: 0 0 1rem 0;
+.recent-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-sm);
+}
+
+.recent-header h3 {
+    margin: 0;
     color: var(--text);
 }
+
+.btn-link {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--primary);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+.btn-link:hover { color: var(--primary-dark); }
 
 .recent-list {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: var(--spacing-xs);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.recent-empty {
+    margin: 0;
+    color: var(--text-light);
+    font-size: var(--font-size-sm);
+    font-style: italic;
 }
 
 .recent-item {
     display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    padding: 0.75rem;
-    border: 1px solid var(--muted);
+    align-items: stretch;
+    border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     background: var(--card-bg);
-    transition: background 0.2s ease;
+    overflow: hidden;
+    transition: border-color 0.2s ease, background 0.2s ease;
+}
+.recent-item:hover {
+    border-color: var(--primary);
+    background: var(--bg);
 }
 
-.recent-item span {
+.recent-load {
     flex: 1;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm);
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    color: var(--text);
+    min-width: 0;
+}
+
+.recent-load i {
+    color: var(--primary);
+    flex-shrink: 0;
+}
+
+.recent-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.recent-primary {
     font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.recent-item:hover {
-    background: var(--primary);
-    color: white;
-    border-color: var(--primary);
+.recent-secondary {
+    font-size: var(--font-size-xs);
+    color: var(--text-light);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-/* Children inherit the white color; button gets a translucent tint */
-.recent-item:hover i,
-.recent-item:hover span {
-    color: inherit;
+.recent-remove {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    border-left: 1px solid var(--border);
+    padding: 0 var(--spacing-sm);
+    color: var(--text-light);
+    cursor: pointer;
+    transition: color 0.2s ease, background 0.2s ease;
 }
-
-.recent-item:hover .btn-icon {
-    background: rgba(255, 255, 255, 0.2);
-    border-color: transparent;
-    color: white;
+.recent-remove:hover {
+    color: #991b1b;
+    background: #fee2e2;
+}
+[data-theme="dark"] .recent-remove:hover {
+    color: #fca5a5;
+    background: #450a0a;
 }
 
 /* ── Patient Profile ────────────────────────────── */

@@ -38,7 +38,8 @@ document.addEventListener('DOMContentLoaded', function() {
         quickSearchBtn: document.getElementById('quickSearchBtn'),
         themeToggle: document.getElementById('themeToggle'),
         // Search examples
-        exampleBtns: document.querySelectorAll('.example-btn'),
+        clearRecentBtn: document.getElementById('clearRecentBtn'),
+        recentEmpty: document.getElementById('recentEmpty'),
         // Patient actions
         // Analyses actions
         analysesSearch: document.getElementById('analysesSearch'),
@@ -196,15 +197,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         
-        // Example buttons
-        elements.exampleBtns.forEach(btn => {
-            btn.addEventListener('click', function() {
-                const example = this.getAttribute('data-example');
-                elements.cnpInput.value = example;
-                showToast(`Using example: ${example}`, 'info');
-            });
-        });
-        
+        // Clear recent searches
+        if (elements.clearRecentBtn) {
+            elements.clearRecentBtn.addEventListener('click', clearRecentSearches);
+        }
+
         // Analyses search and filter
         if (elements.analysesSearch) {
             elements.analysesSearch.addEventListener('input', filterAnalyses);
@@ -1023,30 +1020,78 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     
+    // ISO timestamp → short relative time ("just now", "2 h ago", "yesterday")
+    function relativeTime(iso) {
+        if (!iso) return '';
+        const then = new Date(iso);
+        if (isNaN(then)) return '';
+        const s = Math.floor((Date.now() - then.getTime()) / 1000);
+        if (s < 60) return 'just now';
+        const m = Math.floor(s / 60);
+        if (m < 60) return `${m} min ago`;
+        const h = Math.floor(m / 60);
+        if (h < 24) return `${h} h ago`;
+        const d = Math.floor(h / 24);
+        if (d === 1) return 'yesterday';
+        if (d < 30) return `${d} days ago`;
+        return iso.split('T')[0];
+    }
+
     function loadRecentSearches() {
-        const recentSearches = JSON.parse(localStorage.getItem('recentSearches') || '[]');
         if (!elements.recentSearchesList) return;
+        const recentSearches = JSON.parse(localStorage.getItem('recentSearches') || '[]');
         elements.recentSearchesList.innerHTML = '';
+
+        const hasItems = recentSearches.length > 0;
+        if (elements.recentEmpty)   elements.recentEmpty.hidden = hasItems;
+        if (elements.clearRecentBtn) elements.clearRecentBtn.hidden = !hasItems;
+
+        const typeIcons = { cnp: 'fa-id-card', partial_cnp: 'fa-search', code: 'fa-barcode', name: 'fa-user', unknown: 'fa-question' };
+        const tmpl = document.getElementById('recent-item-template');
+
         recentSearches.forEach(search => {
             const searchTerm = typeof search === 'string' ? search : search.term;
             const patientName = typeof search === 'object' ? search.patientName : null;
+            const patientId = typeof search === 'object' ? search.patientId : null;
+            const timestamp = typeof search === 'object' ? search.timestamp : null;
             const type = typeof search === 'object' ? search.type : 'unknown';
 
-            const typeIcons = { cnp: 'fa-id-card', partial_cnp: 'fa-search', code: 'fa-barcode', name: 'fa-user', unknown: 'fa-question' };
-            const tmpl = document.getElementById('recent-item-template');
-            const div = tmpl.content.cloneNode(true).querySelector('.recent-item');
-            div.title = `Search: ${searchTerm}`;
-            div.querySelector('i').className = `fas ${typeIcons[type] || 'fa-question'}`;
-            div.querySelector('span').textContent = patientName ? `${searchTerm} — ${patientName}` : searchTerm;
-            div.querySelector('button').setAttribute('aria-label', `Search ${searchTerm}`);
+            const li = tmpl.content.cloneNode(true).querySelector('.recent-item');
+            li.querySelector('i').className = `fas ${typeIcons[type] || 'fa-question'}`;
 
-            const trigger = () => { elements.cnpInput.value = searchTerm; elements.form.dispatchEvent(new Event('submit')); };
-            div.addEventListener('click', trigger);
-            // Stop button clicks from bubbling to the div and triggering twice
-            div.querySelector('button').addEventListener('click', e => { e.stopPropagation(); trigger(); });
+            const when = relativeTime(timestamp);
+            li.querySelector('.recent-primary').textContent = patientName || searchTerm;
+            li.querySelector('.recent-secondary').textContent = patientName
+                ? [searchTerm, when].filter(Boolean).join(' · ')
+                : when;
 
-            elements.recentSearchesList.appendChild(div);
+            const loadBtn = li.querySelector('.recent-load');
+            loadBtn.title = `Search: ${searchTerm}`;
+            loadBtn.setAttribute('aria-label', `Search ${patientName || searchTerm}`);
+            loadBtn.addEventListener('click', () => {
+                // Prefer the resolved patient ID — direct fetch, no picker overlay
+                elements.cnpInput.value = patientId || searchTerm;
+                elements.form.dispatchEvent(new Event('submit'));
+            });
+
+            li.querySelector('.recent-remove').addEventListener('click', () => {
+                removeRecentSearch(searchTerm);
+            });
+
+            elements.recentSearchesList.appendChild(li);
         });
+    }
+
+    function removeRecentSearch(searchTerm) {
+        const recentSearches = JSON.parse(localStorage.getItem('recentSearches') || '[]');
+        const filtered = recentSearches.filter(s => (typeof s === 'string' ? s : s.term) !== searchTerm);
+        localStorage.setItem('recentSearches', JSON.stringify(filtered));
+        loadRecentSearches();
+    }
+
+    function clearRecentSearches() {
+        localStorage.removeItem('recentSearches');
+        loadRecentSearches();
     }
     
     function addToRecentSearches(searchTerm, patientData = null) {

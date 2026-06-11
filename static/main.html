@@ -116,24 +116,17 @@
                                         <span>Search Patient</span>
                                     </button>
                                 </div>
-                                <div id="cnpHelp" class="form-help">Examples: 1234567890123, 1234567*, P00123, John Doe</div>
+                                <div id="cnpHelp" class="form-help">Full CNP (13 digits), partial CNP with wildcard (1234567*), numeric patient code, or patient name</div>
                             </form>
-                            
-                            <div class="search-examples">
-                                <div class="examples-grid">
-                                    <button type="button" class="example-btn" data-example="1234567890123">1234567890123</button>
-                                    <button type="button" class="example-btn" data-example="1234567*">1234567*</button>
-                                    <button type="button" class="example-btn" data-example="P00123">P00123</button>
-                                    <button type="button" class="example-btn" data-example="John Doe">John Doe</button>
-                                </div>
-                            </div>
                         </div>
 
                         <div class="recent-searches">
-                            <h3><i class="fas fa-history"></i> Recent Searches</h3>
-                            <div class="recent-list" id="recentSearchesList">
-                                <!-- Recent searches will be populated here -->
+                            <div class="recent-header">
+                                <h3><i class="fas fa-history" aria-hidden="true"></i> Recent Searches</h3>
+                                <button type="button" id="clearRecentBtn" class="btn-link" hidden>Clear</button>
                             </div>
+                            <ul class="recent-list" id="recentSearchesList"></ul>
+                            <p class="recent-empty" id="recentEmpty" hidden>No recent searches yet</p>
                         </div>
                     </div>
                     
@@ -407,11 +400,18 @@
         </template>
 
         <template id="recent-item-template">
-            <div class="recent-item" style="cursor:pointer">
-                <i class="fas"></i>
-                <span></span>
-                <button class="btn-icon btn-small"><i class="fas fa-search"></i></button>
-            </div>
+            <li class="recent-item">
+                <button type="button" class="recent-load">
+                    <i class="fas" aria-hidden="true"></i>
+                    <span class="recent-text">
+                        <span class="recent-primary"></span>
+                        <span class="recent-secondary"></span>
+                    </span>
+                </button>
+                <button type="button" class="recent-remove" aria-label="Remove from recent searches">
+                    <i class="fas fa-xmark" aria-hidden="true"></i>
+                </button>
+            </li>
         </template>
 
         <template id="study-info-row-template">
