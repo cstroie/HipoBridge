@@ -45,41 +45,43 @@
 
         <!-- Navigation -->
         <nav class="main-nav" aria-label="Main navigation">
-            <div class="container">
-                <ul class="nav-menu">
-                    <li class="nav-item" data-tab="schedule" aria-controls="schedule-tab">
-                        <a href="#">
+            <div class="container nav-menus">
+                <ul class="nav-menu nav-group-global">
+                    <li class="nav-item" data-tab="schedule">
+                        <a href="#schedule" aria-controls="schedule-tab" aria-label="Schedule">
                             <i class="fas fa-calendar-alt" aria-hidden="true"></i>
                             <span>Schedule</span>
                         </a>
                     </li>
-                    <li class="nav-item" data-tab="search" aria-controls="search-tab">
-                        <a href="#">
-                            <i class="fas fa-search"></i>
+                    <li class="nav-item" data-tab="search">
+                        <a href="#search" aria-controls="search-tab" aria-label="Patient Search">
+                            <i class="fas fa-search" aria-hidden="true"></i>
                             <span>Patient Search</span>
                         </a>
                     </li>
-                    <li class="nav-item" data-tab="patient" style="display: none;" aria-controls="patient-tab">
-                        <a href="#">
-                            <i class="fas fa-user-injured"></i>
-                            <span>Patient Profile</span>
+                </ul>
+                <ul class="nav-menu nav-group-patient" id="navPatientGroup" aria-label="Loaded patient" hidden>
+                    <li class="nav-item" data-tab="patient">
+                        <a href="#patient" aria-controls="patient-tab" aria-label="Patient Profile">
+                            <i class="fas fa-user-injured" aria-hidden="true"></i>
+                            <span id="navPatientLabel">Patient Profile</span>
                         </a>
                     </li>
-                    <li class="nav-item" data-tab="analyses" style="display: none;" aria-controls="analyses-tab">
-                        <a href="#">
-                            <i class="fas fa-file-medical"></i>
+                    <li class="nav-item" data-tab="analyses">
+                        <a href="#analyses" aria-controls="analyses-tab" aria-label="Analyses">
+                            <i class="fas fa-file-medical" aria-hidden="true"></i>
                             <span>Analyses</span>
                         </a>
                     </li>
-                    <li class="nav-item" data-tab="epicrisis" style="display: none;" aria-controls="epicrisis-tab">
-                        <a href="#">
-                            <i class="fas fa-file-prescription"></i>
+                    <li class="nav-item" data-tab="epicrisis">
+                        <a href="#epicrisis" aria-controls="epicrisis-tab" aria-label="Epicrisis">
+                            <i class="fas fa-file-prescription" aria-hidden="true"></i>
                             <span>Epicrisis</span>
                         </a>
                     </li>
-                    <li class="nav-item" data-tab="report" style="display: none;" aria-controls="report-tab">
-                        <a href="#">
-                            <i class="fas fa-notes-medical"></i>
+                    <li class="nav-item" data-tab="report">
+                        <a href="#report" aria-controls="report-tab" aria-label="Report">
+                            <i class="fas fa-notes-medical" aria-hidden="true"></i>
                             <span>Report</span>
                         </a>
                     </li>
@@ -171,41 +173,59 @@
                             <span class="stat-pill-value" id="checkinsCount">0</span>
                             <span class="stat-pill-label">Admissions</span>
                         </div>
-                        <div class="stat-pill">
+                        <button type="button" class="stat-pill stat-pill-link" data-goto="epicrisis" aria-label="View discharge summaries">
                             <i class="fas fa-sign-out-alt" aria-hidden="true"></i>
                             <span class="stat-pill-value" id="checkoutsCount">0</span>
                             <span class="stat-pill-label">Discharges</span>
-                        </div>
-                        <div class="stat-pill">
+                        </button>
+                        <button type="button" class="stat-pill stat-pill-link" data-goto="analyses" aria-label="View analysis reports">
                             <i class="fas fa-file-medical" aria-hidden="true"></i>
                             <span class="stat-pill-value" id="reportsCount">0</span>
                             <span class="stat-pill-label">Reports</span>
-                        </div>
+                        </button>
                     </div>
 
-                    <!-- Personal information -->
-                    <div class="patient-info-panel">
-                        <h2 class="panel-heading">
-                            <i class="fas fa-id-card" aria-hidden="true"></i> Personal Information
-                        </h2>
-                        <dl class="info-grid">
-                            <div class="info-cell">
-                                <dt><i class="fas fa-fingerprint" aria-hidden="true"></i> CNP</dt>
-                                <dd id="patientCnp">—</dd>
+                    <div class="patient-panels">
+                        <!-- Personal information -->
+                        <div class="patient-info-panel">
+                            <h2 class="panel-heading">
+                                <i class="fas fa-id-card" aria-hidden="true"></i> Personal Information
+                            </h2>
+                            <dl class="info-grid">
+                                <div class="info-cell">
+                                    <dt><i class="fas fa-fingerprint" aria-hidden="true"></i> CNP</dt>
+                                    <dd id="patientCnp">—</dd>
+                                </div>
+                                <div class="info-cell">
+                                    <dt><i class="fas fa-birthday-cake" aria-hidden="true"></i> Birth Date</dt>
+                                    <dd id="patientBirthDate">—</dd>
+                                </div>
+                                <div class="info-cell">
+                                    <dt><i class="fas fa-phone" aria-hidden="true"></i> Phone</dt>
+                                    <dd id="patientPhone">—</dd>
+                                </div>
+                                <div class="info-cell">
+                                    <dt><i class="fas fa-envelope" aria-hidden="true"></i> Email</dt>
+                                    <dd id="patientEmail">—</dd>
+                                </div>
+                                <div class="info-cell info-cell-wide">
+                                    <dt><i class="fas fa-location-dot" aria-hidden="true"></i> Address</dt>
+                                    <dd id="patientAddress">—</dd>
+                                </div>
+                            </dl>
+                        </div>
+
+                        <!-- Hospitalisation history -->
+                        <div class="patient-info-panel">
+                            <h2 class="panel-heading">
+                                <i class="fas fa-hospital" aria-hidden="true"></i> Hospitalisation History
+                            </h2>
+                            <div class="history-loading" id="historyLoading" role="status" aria-label="Loading hospitalisation history" hidden>
+                                <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
                             </div>
-                            <div class="info-cell">
-                                <dt><i class="fas fa-birthday-cake" aria-hidden="true"></i> Birth Date</dt>
-                                <dd id="patientBirthDate">—</dd>
-                            </div>
-                            <div class="info-cell">
-                                <dt><i class="fas fa-phone" aria-hidden="true"></i> Phone</dt>
-                                <dd id="patientPhone">—</dd>
-                            </div>
-                            <div class="info-cell">
-                                <dt><i class="fas fa-envelope" aria-hidden="true"></i> Email</dt>
-                                <dd id="patientEmail">—</dd>
-                            </div>
-                        </dl>
+                            <ul class="history-list" id="historyList"></ul>
+                            <p class="history-empty" id="historyEmpty" hidden>No hospitalisations found</p>
+                        </div>
                     </div>
 
                 </section>
@@ -397,6 +417,16 @@
                 <i class="fas"></i>
                 <span class="toast-message"></span>
             </div>
+        </template>
+
+        <template id="history-item-template">
+            <li class="history-item">
+                <button type="button" class="history-load">
+                    <span class="history-period"></span>
+                    <span class="history-diagnosis"></span>
+                    <span class="history-detail"></span>
+                </button>
+            </li>
         </template>
 
         <template id="recent-item-template">

@@ -466,6 +466,12 @@ small {
     z-index: var(--z-nav);
 }
 
+.nav-menus {
+    display: flex;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+}
+
 .nav-menu {
     display: flex;
     list-style: none;
@@ -476,16 +482,14 @@ small {
     border-radius: var(--radius-lg);
     padding: 0.25rem;
 }
+.nav-menu[hidden] { display: none; }
+
+/* Patient-scoped group fills the remaining width */
+.nav-group-patient { flex: 1; }
 
 .nav-item {
     margin: 0;
     flex: 1;
-}
-
-.nav-item.active {
-    background: linear-gradient(135deg, var(--primary), var(--secondary));
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-md);
 }
 
 .nav-item a {
@@ -528,9 +532,14 @@ small {
     box-shadow: none;
 }
 
-[data-theme="dark"] .nav-item.active {
-    background: transparent;
-    box-shadow: none;
+/* Icon-only nav on narrow screens; links keep their aria-label names */
+@media (max-width: 560px) {
+    .nav-item a {
+        justify-content: center;
+        padding: 0.75rem 0.5rem;
+    }
+    .nav-item a span { display: none; }
+    .nav-item a i { font-size: var(--font-size-lg); }
 }
 
 /* Main Content */
@@ -548,13 +557,13 @@ small {
     margin-bottom: var(--spacing-lg);
 }
 
-.hero-content h2 {
-    font-size: var(--font-size-4xl);
+.hero-content h1 {
+    font-size: var(--font-size-3xl);
     margin: 0 0 0.5rem 0;
     font-weight: var(--font-weight-bold);
 }
 
-.hero-content h2 i {
+.hero-content h1 i {
     margin-right: 0.5rem;
     color: var(--primary);
 }
@@ -1005,6 +1014,89 @@ small {
     word-break: break-word;
 }
 
+.info-cell-wide { grid-column: 1 / -1; }
+
+/* Two-panel layout: personal info + hospitalisation history */
+.patient-panels {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-lg);
+    align-items: start;
+}
+
+@media (max-width: 1024px) {
+    .patient-panels { grid-template-columns: 1fr; }
+}
+
+/* Hospitalisation history */
+.history-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-lg);
+    color: var(--text-light);
+    font-size: var(--font-size-lg);
+}
+.history-loading[hidden] { display: none; }
+
+.history-empty {
+    margin: 0;
+    color: var(--text-light);
+    font-size: var(--font-size-sm);
+    font-style: italic;
+}
+
+.history-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.history-load {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    width: 100%;
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    text-align: left;
+    color: var(--text);
+    transition: border-color 0.2s ease;
+}
+.history-load:hover { border-color: var(--primary); }
+
+.history-period {
+    font-size: var(--font-size-xs);
+    color: var(--text-light);
+}
+
+.history-diagnosis {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+}
+
+.history-detail {
+    font-size: var(--font-size-xs);
+    color: var(--text-light);
+}
+.history-detail:empty { display: none; }
+
+/* Stat pills that act as tab shortcuts */
+button.stat-pill {
+    font: inherit;
+    cursor: pointer;
+}
+.stat-pill-link:hover {
+    border-color: var(--primary);
+}
+.stat-pill-link:hover > i { opacity: 1; }
+
 /* Badge (kept for other uses) */
 .badge {
     padding: 0.3rem 0.65rem;
@@ -1084,6 +1176,17 @@ small {
 .tab-header .header-left {
     flex: 1;
     min-width: 0;
+}
+
+.tab-header h1 {
+    font-size: var(--font-size-2xl);
+    margin: 0;
+}
+
+.tab-header .header-left p {
+    margin: var(--spacing-xs) 0 0;
+    font-size: var(--font-size-sm);
+    color: var(--text-light);
 }
 
 /* Analyses (alias kept for backwards compat) */
@@ -1708,8 +1811,8 @@ select {
         padding-bottom: 0.5rem;
     }
     
-    .hero-content h2 {
-        font-size: var(--font-size-4xl);
+    .hero-content h1 {
+        font-size: var(--font-size-2xl);
     }
     
     .search-card,
@@ -1755,8 +1858,8 @@ select {
         font-size: var(--font-size-lg);
     }
     
-    .hero-content h2 {
-        font-size: var(--font-size-2xl);
+    .hero-content h1 {
+        font-size: var(--font-size-xl);
     }
     
     .patient-avatar {

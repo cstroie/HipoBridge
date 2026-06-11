@@ -20,6 +20,12 @@ document.addEventListener('DOMContentLoaded', function() {
         patientBirthDate: document.getElementById('patientBirthDate'),
         patientPhone: document.getElementById('patientPhone'),
         patientEmail: document.getElementById('patientEmail'),
+        patientAddress: document.getElementById('patientAddress'),
+        navPatientLabel: document.getElementById('navPatientLabel'),
+        navPatientGroup: document.getElementById('navPatientGroup'),
+        historyList: document.getElementById('historyList'),
+        historyLoading: document.getElementById('historyLoading'),
+        historyEmpty: document.getElementById('historyEmpty'),
         presentationsCount: document.getElementById('presentationsCount'),
         checkinsCount: document.getElementById('checkinsCount'),
         checkoutsCount: document.getElementById('checkoutsCount'),
@@ -147,7 +153,11 @@ document.addEventListener('DOMContentLoaded', function() {
             tab.classList.remove('active');
             tab.style.display = 'none';
         });
-        switchTab('schedule');
+
+        // Honour the URL fragment, but only for tabs available without a
+        // loaded patient; patient-scoped tabs fall back to the default
+        const hash = location.hash.replace('#', '');
+        switchTab(['schedule', 'search'].includes(hash) ? hash : 'schedule');
     }
     
     function initEventListeners() {
@@ -201,6 +211,11 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.clearRecentBtn) {
             elements.clearRecentBtn.addEventListener('click', clearRecentSearches);
         }
+
+        // Stat pills that navigate to their tab
+        document.querySelectorAll('.stat-pill-link').forEach(pill => {
+            pill.addEventListener('click', () => switchTab(pill.dataset.goto));
+        });
 
         // Analyses search and filter
         if (elements.analysesSearch) {
@@ -270,6 +285,9 @@ document.addEventListener('DOMContentLoaded', function() {
             targetTab.classList.add('active');
             targetTab.style.display = 'block';
         }
+
+        // Reflect the tab in the URL fragment (no scroll, no history entry)
+        history.replaceState(null, '', `#${tabId}`);
 
         if (tabId === 'schedule' && !elements.scheduleTable?.dataset.loaded) {
             fetchScheduleFromInputs();
@@ -578,11 +596,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function switchToPatientTab() {
-        // Unhide nav items hidden by clearResults
-        ['patient', 'analyses', 'epicrisis', 'report'].forEach(tabName => {
-            const navEl = document.querySelector(`.nav-item[data-tab="${tabName}"]`);
-            if (navEl) navEl.style.display = 'block';
-        });
+        // Unhide the patient nav group hidden by clearResults
+        if (elements.navPatientGroup) elements.navPatientGroup.hidden = false;
         // Unhide sibling tab content panels (clearResults set hidden=true)
         ['analyses-tab', 'epicrisis-tab', 'report-tab'].forEach(id => {
             const el = document.getElementById(id);
@@ -610,6 +625,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.patientAvatar) elements.patientAvatar.className = 'fas fa-user-injured';
         if (elements.patientPhone) elements.patientPhone.textContent = '';
         if (elements.patientEmail) elements.patientEmail.textContent = '';
+        if (elements.patientAddress) elements.patientAddress.textContent = '';
+        if (elements.navPatientLabel) elements.navPatientLabel.textContent = 'Patient Profile';
+        if (elements.historyList) elements.historyList.innerHTML = '';
+        if (elements.historyEmpty) elements.historyEmpty.hidden = true;
         if (elements.presentationsCount) elements.presentationsCount.textContent = '0';
         if (elements.checkinsCount) elements.checkinsCount.textContent = '0';
         if (elements.checkoutsCount) elements.checkoutsCount.textContent = '0';
@@ -627,14 +646,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Clear report tab
         if (elements.patientReportMarkdown) elements.patientReportMarkdown.innerHTML = '';
         
-        // Hide navigation tabs for patient data (keep always-visible tabs)
-        elements.navItems.forEach(item => {
-            const tab = item.getAttribute('data-tab');
-            if (tab !== 'search' && tab !== 'schedule') {
-                item.style.display = 'none';
-            }
-        });
-        
+        // Hide the patient nav group (keep always-visible tabs)
+        if (elements.navPatientGroup) elements.navPatientGroup.hidden = true;
+
         // Clear any existing toasts
         const toastContainer = document.getElementById('toast-container');
         if (toastContainer) {
@@ -1220,7 +1234,75 @@ document.addEventListener('DOMContentLoaded', function() {
         elements.analysesGrid.innerHTML = '';
         elements.noAnalyses.style.display = 'none';
 
+        // Hospitalisation history loads lazily; don't block the profile render
+        loadHospitalisationHistory(patientData);
+
         log('Patient data display completed');
+    }
+
+    async function loadHospitalisationHistory(patientData) {
+        if (!elements.historyList) return;
+        elements.historyList.innerHTML = '';
+        if (elements.historyEmpty) elements.historyEmpty.hidden = true;
+
+        const checkoutIds = extractCheckoutIds(patientData);
+        if (checkoutIds.length === 0) {
+            if (elements.historyEmpty) elements.historyEmpty.hidden = false;
+            return;
+        }
+
+        if (elements.historyLoading) elements.historyLoading.hidden = false;
+        try {
+            const encounters = await limitedMap(
+                checkoutIds,
+                MAX_CONCURRENT_REQUESTS,
+                async id => {
+                    try { return await fetchEncounterDataForCheckout(id); }
+                    catch (_) { return null; }
+                }
+            );
+
+            const items = encounters
+                .filter(Boolean)
+                .map(enc => ({
+                    enc,
+                    start: enc.period?.start || '',
+                    end: enc.period?.end || ''
+                }))
+                .sort((a, b) => (b.end || b.start).localeCompare(a.end || a.start));
+
+            if (items.length === 0) {
+                if (elements.historyEmpty) elements.historyEmpty.hidden = false;
+                return;
+            }
+
+            const tmpl = document.getElementById('history-item-template');
+            items.forEach(({ enc, start, end }) => {
+                const li = tmpl.content.cloneNode(true).querySelector('.history-item');
+
+                const period = [start && formatDate(start), end && formatDate(end)]
+                    .filter(Boolean).join(' → ');
+                li.querySelector('.history-period').textContent = period || 'Unknown period';
+
+                li.querySelector('.history-diagnosis').textContent =
+                    extractDiagnosisText(enc) || 'No diagnosis recorded';
+
+                const ward = enc.serviceType?.display || '';
+                const attender = enc.participant?.find(p =>
+                    p.type?.some(t => t.coding?.some(c => c.code === 'ATND'))
+                )?.individual?.display || '';
+                li.querySelector('.history-detail').textContent =
+                    [ward, attender].filter(Boolean).join(' · ');
+
+                li.querySelector('.history-load').addEventListener('click', () => switchTab('epicrisis'));
+                elements.historyList.appendChild(li);
+            });
+        } catch (err) {
+            log('Failed to load hospitalisation history:', err);
+            if (elements.historyEmpty) elements.historyEmpty.hidden = false;
+        } finally {
+            if (elements.historyLoading) elements.historyLoading.hidden = true;
+        }
     }
     
     // Enhanced patient basic info display
@@ -1232,6 +1314,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const headingEl = elements.patientName?.querySelector('#patient-tab-heading');
         if (headingEl) headingEl.textContent = name;
         log('Patient name set to:', name);
+
+        // Show who is loaded in the nav: "FAMILY G." instead of "Patient Profile"
+        if (elements.navPatientLabel) {
+            const n = Array.isArray(patientData.name) ? patientData.name[0] : patientData.name;
+            const family = n?.family || '';
+            const givenInitial = n?.given?.[0] ? ` ${n.given[0][0]}.` : '';
+            elements.navPatientLabel.textContent = family ? `${family}${givenInitial}` : 'Patient Profile';
+        }
         
         // Meta badges (id, gender, age)
         const age = calculateAge(patientData.birthDate);
@@ -1260,6 +1350,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const contactInfo = extractContactInfo(patientData.telecom);
         if (elements.patientPhone) elements.patientPhone.textContent = contactInfo.phone || '—';
         if (elements.patientEmail) elements.patientEmail.textContent = contactInfo.email || '—';
+        if (elements.patientAddress) elements.patientAddress.textContent = patientData.address?.[0]?.text || '—';
         log('CNP:', cnp, 'Phone:', contactInfo.phone, 'Email:', contactInfo.email);
     }
     
