@@ -268,7 +268,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         if (tabId === 'schedule' && !elements.scheduleTable?.dataset.loaded) {
-            fetchAndPopulateFilterOptions().then(() => fetchScheduleFromInputs());
+            fetchScheduleFromInputs();
         }
     }
     
@@ -1835,11 +1835,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const end         = elements.scheduleEndDate?.value || null;
         const patientText = elements.schedulePatientFilter?.value.trim() || null;
         const labId       = elements.scheduleLabFilter?.value || null;
-        const sectionId   = elements.scheduleSectionFilter?.value || null;
-        fetchSchedule(start, end, force, patientText, labId, sectionId);
+        const sectionName = elements.scheduleSectionFilter?.value || null;
+        fetchSchedule(start, end, force, patientText, labId, sectionName);
     }
 
-    async function fetchSchedule(startDate, endDate, force = false, patientText = null, labId = null, sectionId = null) {
+    async function fetchSchedule(startDate, endDate, force = false, patientText = null, labId = null, sectionName = null) {
         if (!elements.scheduleBody) return;
         const params = new URLSearchParams();
         if (startDate)   params.set('start_date', startDate);
@@ -1847,13 +1847,15 @@ document.addEventListener('DOMContentLoaded', function() {
         if (force)       params.set('refresh', '1');
         if (patientText) params.set('patient_text', patientText);
         if (labId)       params.set('lab_id', labId);
-        if (sectionId)   params.set('section_id', sectionId);
+        if (sectionName) params.set('section_name', sectionName);
         const url = `/fhir/Schedule${params.toString() ? '?' + params.toString() : ''}`;
         try {
             const resp = await fetch(url);
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const bundle = await resp.json();
             scheduleEntries = (bundle.entry || []).map(e => e.resource);
+            // Repopulate section dropdown only when not currently filtered by section
+            if (!sectionName) populateSectionFilter(scheduleEntries);
             renderSchedule();
             if (elements.scheduleTable) elements.scheduleTable.dataset.loaded = '1';
         } catch (err) {
@@ -1861,30 +1863,18 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    async function fetchAndPopulateFilterOptions() {
-        try {
-            const resp = await fetch('/api/schedule/options');
-            if (!resp.ok) return;
-            const data = await resp.json();
-
-            function _populate(selectEl, items, allLabel) {
-                if (!selectEl) return;
-                const current = selectEl.value;
-                selectEl.innerHTML = `<option value="">${allLabel}</option>`;
-                (items || []).forEach(item => {
-                    const opt = document.createElement('option');
-                    opt.value = item.id;
-                    opt.textContent = item.name;
-                    if (item.id === current) opt.selected = true;
-                    selectEl.appendChild(opt);
-                });
-            }
-
-            _populate(elements.scheduleLabFilter,     data.labs,     'All laboratories');
-            _populate(elements.scheduleSectionFilter, data.sections, 'All sections');
-        } catch (err) {
-            log('Failed to load schedule filter options:', err.message);
-        }
+    function populateSectionFilter(entries) {
+        if (!elements.scheduleSectionFilter) return;
+        const sections = [...new Set(entries.map(r => r.note?.[0]?.text || '').filter(Boolean))].sort();
+        const current = elements.scheduleSectionFilter.value;
+        elements.scheduleSectionFilter.innerHTML = '<option value="">All sections</option>';
+        sections.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s;
+            opt.textContent = s;
+            if (s === current) opt.selected = true;
+            elements.scheduleSectionFilter.appendChild(opt);
+        });
     }
 
     function renderSchedule() {

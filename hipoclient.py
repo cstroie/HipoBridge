@@ -2854,8 +2854,7 @@ class HipoClientSchedule(HipoClient):
         super().__init__(service_url=service_url, request=request)
         self.request_url = "/PARA/NOM/Listare/"
 
-    def _build_url(self, start_date=None, end_date=None, lab_id=None, section_id=None,
-                   patient_text=None):
+    def _build_url(self, start_date=None, end_date=None, lab_id=None, patient_text=None):
         def _fmt(date_str):
             if date_str:
                 return datetime.strptime(date_str, '%Y-%m-%d').strftime('%d/%m/%Y')
@@ -2867,7 +2866,6 @@ class HipoClientSchedule(HipoClient):
                f"&LR_requesteddateSD={sd}"
                f"&LR_requesteddateED={ed}"
                f"&PARA_ID_Laborator={lab_id or ''}"
-               f"&PARA_ID_Sectie={section_id or ''}"
                f"&PARA_TextCautare={patient_text or ''}"
                f"&PARA_ID_TipCautare={'2' if patient_text else ''}"
                f"&PARA_Ordonare=2")
@@ -2879,7 +2877,6 @@ class HipoClientSchedule(HipoClient):
             kwargs.get('start_date') or kwargs.get('date'),
             kwargs.get('end_date'),
             lab_id=kwargs.get('lab_id'),
-            section_id=kwargs.get('section_id'),
             patient_text=kwargs.get('patient_text'),
         )
         if kwargs.get('force'):
@@ -2895,42 +2892,11 @@ class HipoClientSchedule(HipoClient):
             data.set_error(f"Data retrieval failed: {e}")
             return data
 
-    async def fetch_filter_options(self) -> HipoData:
-        """Fetch the schedule filter form and return available labs and sections."""
-        data = HipoData(status="success", message="")
-        # Fetch today's page — we only need the form HTML, not the table rows
-        url = self._build_url()
-        try:
-            response_text, error_message = await self.get_page(url)
-            if error_message:
-                data.set_error(error_message)
-                return data
-            soup = BeautifulSoup(response_text, 'html.parser')
-
-            def _parse_select(name):
-                sel = soup.find('select', {'name': name})
-                if not sel:
-                    return []
-                return [
-                    {'id': opt.get('value', ''), 'name': opt.get_text(strip=True)}
-                    for opt in sel.find_all('option')
-                    if opt.get('value', '').strip()
-                ]
-
-            data.store_list('labs',     _parse_select('PARA_ID_Laborator'))
-            data.store_list('sections', _parse_select('PARA_ID_Sectie'))
-            return data
-        except Exception as e:
-            logger.error(f"fetch_filter_options failed: {e}")
-            data.set_error(str(e))
-            return data
-
     async def debug_page(self, **kwargs):
         url = self._build_url(
             kwargs.get('start_date') or kwargs.get('date'),
             kwargs.get('end_date'),
             lab_id=kwargs.get('lab_id'),
-            section_id=kwargs.get('section_id'),
             patient_text=kwargs.get('patient_text'),
         )
         try:
@@ -3011,6 +2977,12 @@ class HipoClientSchedule(HipoClient):
                 )
 
             requests = parsed_data.get("requests") or []
+
+            # Python-side filtering for section (by name; lab is filtered natively by Hipocrate via PARA_ID_Laborator)
+            section_name = (kwargs.get('section_name') or '').strip()
+            if section_name:
+                requests = [r for r in requests if (r.get('section') or '') == section_name]
+
             bundle = FHIRBundle(type="searchset", total=len(requests))
 
             system_base = (
