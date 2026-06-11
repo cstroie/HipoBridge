@@ -651,8 +651,8 @@ document.addEventListener('DOMContentLoaded', function() {
         document.documentElement.setAttribute('data-theme', newTheme);
         localStorage.setItem('theme', newTheme);
 
-        const themeIcon = elements.themeToggle.querySelector('i');
-        themeIcon.className = newTheme === 'dark' ? 'fas fa-sun' : newTheme === 'light' ? 'fas fa-moon' : 'fas fa-circle-half-stroke';
+        const themeIcon = elements.themeToggle?.querySelector('i');
+        if (themeIcon) themeIcon.className = newTheme === 'dark' ? 'fas fa-sun' : newTheme === 'light' ? 'fas fa-moon' : 'fas fa-circle-half-stroke';
     }
     
     
@@ -1182,7 +1182,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Patient Name
         const name = formatPatientName(patientData.name);
-        elements.patientName.querySelector('#patient-tab-heading').textContent = name;
+        const headingEl = elements.patientName?.querySelector('#patient-tab-heading');
+        if (headingEl) headingEl.textContent = name;
         log('Patient name set to:', name);
         
         // Meta badges (id, gender, age)
@@ -1944,6 +1945,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function loadPatientFromRequest(requestId, patientName, triggerEl) {
         if (!requestId) {
+            if (!patientName) return;
             elements.cnpInput.value = patientName;
             elements.form.dispatchEvent(new Event('submit'));
             return;
@@ -1966,6 +1968,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         } catch (_) { /* fall through */ }
         // Fallback: search by name
+        if (!patientName) { triggerEl.textContent = originalText; triggerEl.disabled = false; return; }
         elements.cnpInput.value = patientName;
         elements.form.dispatchEvent(new Event('submit'));
         triggerEl.textContent = originalText;
