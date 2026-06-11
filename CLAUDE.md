@@ -80,7 +80,7 @@ Every subclass (except `HipoClientCheckin` / `HipoClientCheckup` which are raw-J
 
 `HipoClientCerere` implements only `fetch_and_parse()`; it extracts `patient.id` from a `Pacient/edit.asp?id=` link in the request edit page. Used by the Schedule frontend to resolve a precise patient ID before triggering a search.
 
-`HipoClientSchedule` overrides `fetch_and_parse` (URL is built from a `?date=` query param, not an `{id}` path segment) and implements all three methods; the FHIR response is a `searchset` Bundle of `ServiceRequest` resources.
+`HipoClientSchedule` overrides `fetch_and_parse` (URL is built from `?start_date=` / `?end_date=` query params, not an `{id}` path segment) and implements all three methods; the FHIR response is a `searchset` Bundle of `ServiceRequest` resources.
 
 **Concurrency and caching** (critical — Hipocrate is a fragile legacy server):
 - `_hipocrate_semaphore = asyncio.Semaphore(6)` — global cap on concurrent outbound HTTP calls; all request paths including login go through this.
@@ -176,11 +176,13 @@ Page: `/PARA/NOM/Listare/?id=44&NrPePag=100` with date filter params `LR_request
 - `request_id` — numeric ID from the same link's `href`
 - `date_time`, `status`, `payment_type`, `priority`, `section`, `requested_by`, `laboratory` — from the last `<tr>` of the nested `div.div_detalii` table (7 cells)
 
-FHIR output (`/fhir/Schedule?date=YYYY-MM-DD`): `searchset` Bundle of `ServiceRequest` resources. Status mapping: `Cerere netrimisa` → `draft`; `Trimisa in laborator` / `Primita in laborator` → `active`; `Fara analize` → `on-hold`. Priority: `Normala` → `routine`, anything else → `urgent`. `request_code` → `identifier[0].value`; `section` → `note[0].text`; modality slug → `category[0].coding[0].code`.
+`date_time` is parsed via `parse_date_time` and normalised to `YYYY-MM-DD HH:MM` at scrape time (Hipocrate emits `DD/MM/YYYY HH:MM`).
+
+FHIR output (`/fhir/Schedule?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD`): `searchset` Bundle of `ServiceRequest` resources. Both params default to today if omitted; `?date=` is accepted as a backwards-compatible alias for `start_date`. Pass `?refresh=1` to evict the URL from the LRU cache before fetching (used by the Refresh button). Status mapping: `Cerere netrimisa` → `draft`; `Trimisa in laborator` / `Primita in laborator` → `active`; `Fara analize` → `on-hold`. Priority: `Normala` → `routine`, anything else → `urgent`. `request_code` → `identifier[0].value`; `section` → `note[0].text`; modality slug → `category[0].coding[0].code`.
 
 Modality mapping (`_lab_to_modality`): `ecografie` → `eco`; `radioscopii` → `fluoro`; `radiografie` → `radio`; `tomografie` / `computerizata` / `computer tomograf` / standalone `ct` → `ct`; `imagistica` / `rezonanta` → `irm`; `laborator` → `lab`. Order matters — `radioscopii` is checked before `radiografie` so combined labels resolve to `fluoro`.
 
-`fetch_and_parse` and `debug_page` are overridden (URL assembled from `?date=` query param, not `{id}` path segment).
+`fetch_and_parse` and `debug_page` are overridden (URL assembled from `?start_date=` / `?end_date=` query params, not an `{id}` path segment). `force=True` kwarg evicts the cache entry before the fetch.
 
 ### Frontend (`static/`)
 
@@ -200,7 +202,7 @@ Single-page app: `main.html` + `scripts.js` + `styles.css` + `marked.js`.
 - Analysis cards use a `MODALITY_INFO` map (radio/ct/irm/eco/rads) for per-modality icon and label. Card type is stored in `article.dataset.type` and read by `filterAnalyses` — do not detect type from `className`. Modality CSS is driven by per-type custom properties (`--modality-radio`, `--modality-ct`, etc.) with separate light/dark values to meet WCAG AA contrast.
 - Dynamic HTML uses `<template>` elements in `main.html` and `cloneNode(true)` + `textContent`/`className` in JS. Do not use `innerHTML` with interpolated strings for new elements. Do not put `id` attributes inside `<template>` — they are duplicated on every clone.
 - Theme cycles `auto → light → dark → auto` via `toggleTheme()`; `localStorage` key is `theme`.
-- The **Schedule** tab is always visible (not gated on patient search). It fetches `/fhir/Schedule?date=YYYY-MM-DD` on first visit and on date/refresh changes. Entries are stored in `scheduleEntries[]` and filtered client-side by `renderSchedule()` — no re-fetch on filter change. The modality dropdown has static options; the section dropdown is populated dynamically from the loaded data. Patient name and request code cells are buttons that call `loadPatientFromRequest(requestId, patientName, el)`: fetches `/api/request/{id}/patient` to resolve the numeric patient ID, then submits the search form with that ID; falls back to name search if the fetch fails.
+- The **Schedule** tab is always visible (not gated on patient search). It fetches `/fhir/Schedule?start_date=…&end_date=…` on first visit and whenever the date inputs or Refresh button are activated. The date range defaults to yesterday–today. The Refresh button adds `?refresh=1` to bypass the server-side LRU cache. Entries are stored in `scheduleEntries[]` and filtered client-side by `renderSchedule()` — no re-fetch on filter change. Filters: modality (static dropdown), section (populated dynamically from loaded data), patient name (text input, partial match). The Date/Time column shows time only for same-day ranges and full `YYYY-MM-DD HH:MM` for multi-day ranges. Patient name and request code cells are buttons that call `loadPatientFromRequest(requestId, patientName, el)`: fetches `/api/request/{id}/patient` to resolve the numeric patient ID, then submits the search form with that ID; falls back to name search if the fetch fails.
 
 ### HTML / accessibility conventions (`main.html`)
 
