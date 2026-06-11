@@ -2959,10 +2959,14 @@ class HipoClientSchedule(HipoClient):
 
     # Maps Hipocrate status text → FHIR ServiceRequest.status
     _FHIR_STATUS = {
-        'cerere netrimisa':    'draft',
-        'trimisa in laborator': 'active',
-        'primita in laborator': 'active',
-        'fara analize':        'on-hold',
+        'cerere netrimisa':                   'draft',
+        'trimisa in laborator':               'active',
+        'primita in laborator':               'active',
+        'in lucru(nv)':                       'active',
+        'fara analize':                       'on-hold',
+        'cerere completata':                  'completed',
+        'cerere completata/partial validata': 'completed',
+        'terminata':                          'completed',
     }
 
     def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRBundle, FHIROperationOutcome]:
@@ -3009,7 +3013,10 @@ class HipoClientSchedule(HipoClient):
                     category=[FHIRCodeableConcept(coding=[{"code": modality}])] if (modality := self._lab_to_modality(req.get('laboratory') or '')) else None,
                     authoredOn=req.get('date_time'),
                     requester=FHIRReference(display=req.get('requested_by')) if req.get('requested_by') else None,
-                    note=[{"text": req.get('section')}] if req.get('section') else None,
+                    note=[n for n in [
+                        {"text": req.get('section')} if req.get('section') else None,
+                        {"text": req.get('payment_type')} if req.get('payment_type') else None,
+                    ] if n] or None,
                 )
                 bundle.append_entry(resource=sr)
 

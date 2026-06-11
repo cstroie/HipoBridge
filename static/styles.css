@@ -1798,6 +1798,11 @@ select {
     color: #92400e;
 }
 
+.schedule-status.status-done {
+    background: #d1fae5;
+    color: #065f46;
+}
+
 [data-theme="dark"] .schedule-status.status-sent {
     background: #1e3a5f;
     color: #93c5fd;
@@ -1816,4 +1821,9 @@ select {
 [data-theme="dark"] .schedule-status.status-empty {
     background: #451a03;
     color: #fcd34d;
+}
+
+[data-theme="dark"] .schedule-status.status-done {
+    background: #064e3b;
+    color: #6ee7b7;
 }
