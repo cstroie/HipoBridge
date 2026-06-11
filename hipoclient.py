@@ -2861,14 +2861,8 @@ class HipoClientSchedule(HipoClient):
                 data.set_error("Unexpected page: tbl_listare table not found")
                 return data
 
-            tbody = table.find('tbody')
-            if not tbody:
-                data.store_list("requests", [])
-                data.store("total", 0)
-                return data
-
             requests = []
-            for row in tbody.find_all('tr'):
+            for row in table.find_all('tr'):
                 cells = row.find_all('td', class_='tdn')
                 if len(cells) < 3:
                     continue
@@ -2880,7 +2874,7 @@ class HipoClientSchedule(HipoClient):
                 id_match = re.search(r'id=(\d+)', code_link.get('href', ''))
                 request_id = id_match.group(1) if id_match else None
 
-                detail_cells = cells[2].select('div.div_detalii table tbody tr td')
+                detail_cells = cells[2].select('div.div_detalii table tr td')
                 if len(detail_cells) >= 7:
                     requests.append({
                         'patient_name': patient_name,
