@@ -71,6 +71,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const DEBUG = false;
     function log(...args) { if (DEBUG) console.log(...args); }
 
+    function debounce(fn, ms) {
+        let timer;
+        return function(...args) { clearTimeout(timer); timer = setTimeout(() => fn.apply(this, args), ms); };
+    }
+
     // limit for simultaneous network requests (helpful when handling many IDs)
     const MAX_CONCURRENT_REQUESTS = 5;
 
@@ -228,13 +233,13 @@ document.addEventListener('DOMContentLoaded', function() {
             elements.refreshScheduleBtn.addEventListener('click', () => fetchScheduleFromInputs(true));
         }
         if (elements.schedulePatientFilter) {
-            elements.schedulePatientFilter.addEventListener('input', renderSchedule);
+            elements.schedulePatientFilter.addEventListener('input', debounce(fetchScheduleFromInputs, 400));
         }
         if (elements.scheduleModalityFilter) {
-            elements.scheduleModalityFilter.addEventListener('change', renderSchedule);
+            elements.scheduleModalityFilter.addEventListener('change', fetchScheduleFromInputs);
         }
         if (elements.scheduleSectionFilter) {
-            elements.scheduleSectionFilter.addEventListener('change', renderSchedule);
+            elements.scheduleSectionFilter.addEventListener('change', fetchScheduleFromInputs);
         }
     }
     
@@ -1827,9 +1832,9 @@ document.addEventListener('DOMContentLoaded', function() {
     function fetchScheduleFromInputs(force = false) {
         const start    = elements.scheduleStartDate?.value || null;
         const end      = elements.scheduleEndDate?.value || null;
-        const patient  = force ? (elements.schedulePatientFilter?.value.trim() || null) : null;
-        const modality = force ? (elements.scheduleModalityFilter?.value || null) : null;
-        const section  = force ? (elements.scheduleSectionFilter?.value || null) : null;
+        const patient  = elements.schedulePatientFilter?.value.trim() || null;
+        const modality = elements.scheduleModalityFilter?.value || null;
+        const section  = elements.scheduleSectionFilter?.value || null;
         fetchSchedule(start, end, force, patient, modality, section);
     }
 
@@ -1872,35 +1877,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function renderSchedule() {
         if (!elements.scheduleBody) return;
-        const modalityFilter = elements.scheduleModalityFilter?.value || '';
-        const sectionFilter = elements.scheduleSectionFilter?.value || '';
-        const patientFilter = (elements.schedulePatientFilter?.value || '').toLowerCase().trim();
-
-        const filtered = scheduleEntries.filter(r => {
-            if (modalityFilter) {
-                const modality = r.category?.[0]?.coding?.[0]?.code || '';
-                if (modality !== modalityFilter) return false;
-            }
-            if (sectionFilter) {
-                const section = r.note?.[0]?.text || '';
-                if (section !== sectionFilter) return false;
-            }
-            if (patientFilter) {
-                const name = (r.subject?.display || '').toLowerCase();
-                if (!name.includes(patientFilter)) return false;
-            }
-            return true;
-        });
 
         elements.scheduleBody.innerHTML = '';
-        if (filtered.length === 0) {
+        if (scheduleEntries.length === 0) {
             if (elements.scheduleTable) elements.scheduleTable.hidden = true;
             if (elements.noSchedule) elements.noSchedule.style.display = '';
             return;
         }
 
         if (elements.noSchedule) elements.noSchedule.style.display = 'none';
-        filtered.forEach(r => {
+        scheduleEntries.forEach(r => {
             const authoredOn = r.authoredOn || '';
             const isMultiDay = (elements.scheduleStartDate?.value || '') !== (elements.scheduleEndDate?.value || '');
             const time = isMultiDay ? authoredOn : (authoredOn.includes(' ') ? authoredOn.split(' ')[1] : authoredOn);
