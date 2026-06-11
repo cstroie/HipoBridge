@@ -1800,6 +1800,7 @@ document.addEventListener('DOMContentLoaded', function() {
         'active':    'status-sent',
         'on-hold':   'status-empty',
         'completed': 'status-done',
+        'revoked':   'status-revoked',
         'unknown':   'status-pending',
     };
 
