@@ -2810,6 +2810,29 @@ class HipoClientCheckup(HipoClient):
             return data
 
 
+class HipoClientCerere(HipoClient):
+    """Fetches a request edit page (cerere.asp) and extracts the patient ID."""
+
+    def __init__(self, service_url=None, request=None):
+        super().__init__(service_url=service_url, request=request)
+        self.request_url = "/PARA/NOM/Listare/cerere.asp?id={id}"
+
+    def parse_data(self, html_content: str, **kwargs) -> HipoData:
+        data = HipoData(status="success", message="")
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            ids = extract_ids_from_links(soup, r'[Pp]acient/edit\.asp\?id=(\d+)')
+            if ids:
+                data.store("patient.id", ids[0])
+            else:
+                data.set_error("Patient ID not found in request page")
+            return data
+        except Exception as e:
+            logger.error(f"Error parsing cerere data: {e}")
+            data.set_error(str(e))
+            return data
+
+
 class HipoClientSchedule(HipoClient):
     """Parses the daily imaging/lab request worklist (/PARA/NOM/Listare/?id=44)."""
 

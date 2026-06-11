@@ -34,7 +34,7 @@ import base64
 from fhir import OperationOutcome, Resource
 
 from hipoclient import ANALYSIS_TYPES
-from hipoclient import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientImagingStudy, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientServiceRequestSearch, HipoClientCheckout, HipoClientCheckin, HipoClientCheckup, HipoClientSchedule
+from hipoclient import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientImagingStudy, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientServiceRequestSearch, HipoClientCheckout, HipoClientCheckin, HipoClientCheckup, HipoClientSchedule, HipoClientCerere
 from hipoclient import user_session_manager
 from hipodata import HipoData
 
@@ -318,6 +318,16 @@ async def get_checkup(request):
     debug_resp = await web_debug_response(client, request, id=id)
     if debug_resp is not None:
         return debug_resp
+    parsed_data = await client.fetch_and_parse(id=id)
+    return web_json_response(parsed_data)
+
+@require_auth
+async def get_request_patient(request):
+    """Return patient ID for a given request ID. Fetches cerere.asp to extract it."""
+    id = request.match_info.get('id')
+    if not id:
+        return web_error_response("Request ID is required")
+    client = HipoClientCerere(SERVICE_URL, request)
     parsed_data = await client.fetch_and_parse(id=id)
     return web_json_response(parsed_data)
 
@@ -648,6 +658,7 @@ async def init_app():
     app.router.add_get('/api/checkout/{id}', get_checkout)
     app.router.add_get('/api/checkin/{id}', get_checkin)
     app.router.add_get('/api/checkup/{id}', get_checkup)
+    app.router.add_get('/api/request/{id}/patient', get_request_patient)
     app.router.add_get('/api/schedule', get_schedule)
     app.router.add_get('/fhir/Schedule', get_fhir_schedule)
     app.router.add_get('/api/debug', debug_passthrough)

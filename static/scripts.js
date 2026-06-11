@@ -1782,6 +1782,34 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let scheduleEntries = [];
 
+    async function loadPatientFromRequest(requestId, patientName, triggerEl) {
+        if (!requestId) {
+            elements.cnpInput.value = patientName;
+            elements.form.dispatchEvent(new Event('submit'));
+            return;
+        }
+        const originalText = triggerEl.textContent;
+        triggerEl.textContent = '…';
+        triggerEl.disabled = true;
+        try {
+            const resp = await fetch(`/api/request/${requestId}/patient`);
+            if (resp.ok) {
+                const json = await resp.json();
+                const patientId = json['patient.id'] || json.patient?.id;
+                if (patientId) {
+                    elements.cnpInput.value = patientId;
+                    elements.form.dispatchEvent(new Event('submit'));
+                    return;
+                }
+            }
+        } catch (_) { /* fall through */ }
+        // Fallback: search by name
+        elements.cnpInput.value = patientName;
+        elements.form.dispatchEvent(new Event('submit'));
+        triggerEl.textContent = originalText;
+        triggerEl.disabled = false;
+    }
+
     async function fetchSchedule(date) {
         if (!elements.scheduleBody) return;
         const url = date ? `/fhir/Schedule?date=${date}` : '/fhir/Schedule';
@@ -1855,22 +1883,28 @@ document.addEventListener('DOMContentLoaded', function() {
             timeTd.textContent = time;
             tr.appendChild(timeTd);
 
-            // Patient name — clickable to search
+            // Patient name — clickable, resolves patient ID via request page
             const nameTd = document.createElement('td');
             const nameBtn = document.createElement('button');
             nameBtn.className = 'schedule-patient-link';
             nameBtn.textContent = patientName;
-            nameBtn.title = `Search for ${patientName}`;
-            nameBtn.addEventListener('click', () => {
-                elements.cnpInput.value = patientName;
-                elements.form.dispatchEvent(new Event('submit'));
-                switchTab('search');
-            });
+            nameBtn.title = `Load patient record for ${patientName}`;
+            nameBtn.addEventListener('click', () => loadPatientFromRequest(r.id, patientName, nameBtn));
             nameTd.appendChild(nameBtn);
             tr.appendChild(nameTd);
 
+            // Request code — same: resolves and loads patient
+            const codeTd = document.createElement('td');
+            const codeBtn = document.createElement('button');
+            codeBtn.className = 'schedule-patient-link';
+            codeBtn.textContent = requestCode;
+            codeBtn.title = `Load patient record (${requestCode})`;
+            codeBtn.addEventListener('click', () => loadPatientFromRequest(r.id, patientName, codeBtn));
+            codeTd.appendChild(codeBtn);
+            tr.appendChild(codeTd);
+
             // Remaining plain cells
-            [requestCode, section, requestedBy, laboratory].forEach(val => {
+            [section, requestedBy, laboratory].forEach(val => {
                 const td = document.createElement('td');
                 td.textContent = val;
                 tr.appendChild(td);
