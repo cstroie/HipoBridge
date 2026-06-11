@@ -1792,19 +1792,133 @@ select {
 [data-theme="dark"] .schedule-status.status-revoked  { background: #1f2937; color: #9ca3af; }
 [data-theme="dark"] .schedule-status.status-error    { background: #450a0a; color: #fca5a5; }
 
-.request-modal-body { padding: var(--spacing-md); }
-.request-modal-fields {
-    display: grid;
-    grid-template-columns: max-content 1fr;
+/* ── Report modal (schedule request detail) ───────────────────────────── */
+
+dialog.report-modal {
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-lg);
+    background: var(--card-bg);
+    box-shadow: var(--shadow-lg);
+    width: min(720px, 96vw);
+    max-height: 88vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    /* native <dialog> centres itself; these reinforce it */
+    margin: auto;
+}
+
+dialog.report-modal::backdrop {
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(3px);
+}
+
+.report-modal-article {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    max-height: 88vh;
+    overflow: hidden;
+}
+
+.report-modal-header {
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-bottom: 1px solid var(--border-color);
+    background: var(--card-bg);
+    flex-shrink: 0;
+}
+
+.report-modal-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-sm);
+}
+
+.report-modal-title {
+    margin: 0;
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.report-modal-title i { color: var(--primary); }
+
+.report-modal-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-light);
+    font-size: var(--font-size-lg);
+    padding: var(--spacing-xs);
+    border-radius: var(--radius-sm);
+    line-height: 1;
+    transition: color 0.15s, background 0.15s;
+    flex-shrink: 0;
+}
+
+.report-modal-close:hover { color: var(--text); background: var(--hover-bg); }
+
+.report-modal-meta {
+    display: flex;
+    flex-wrap: wrap;
     gap: var(--spacing-xs) var(--spacing-md);
     margin: 0;
+    font-size: var(--font-size-sm);
 }
-.request-modal-fields dt {
+
+.report-modal-meta dt {
     font-weight: var(--font-weight-semibold);
     color: var(--text-light);
-    font-size: var(--font-size-sm);
+    display: inline;
 }
-.request-modal-fields dd {
+
+.report-modal-meta dt::after { content: ":"; margin-right: 0.25em; }
+
+.report-modal-meta dd {
     margin: 0;
+    display: inline;
+    color: var(--text);
+}
+
+.report-modal-meta .meta-item {
+    display: flex;
+    align-items: baseline;
+    gap: 0.25em;
+    white-space: nowrap;
+}
+
+.report-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--spacing-lg);
     font-size: var(--font-size-sm);
+    line-height: 1.65;
+    color: var(--text);
+}
+
+.report-modal-body.report-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-light);
+    font-style: italic;
+}
+
+.report-modal-footer {
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-top: 1px solid var(--border-color);
+    background: var(--card-bg);
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--spacing-sm);
+    flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    dialog.report-modal { animation: none; }
 }

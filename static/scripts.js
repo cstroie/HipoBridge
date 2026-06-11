@@ -1808,63 +1808,122 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let scheduleEntries = [];
 
-    async function showRequestModal(requestId, requestCode, patientName, triggerEl) {
+    async function showRequestModal(requestId, requestCode, patientName, modality, triggerEl) {
         const tmpl = document.getElementById('schedule-request-modal-template');
         if (!tmpl) return;
         const modal = tmpl.content.cloneNode(true).querySelector('dialog');
 
         modal.querySelector('.modal-request-code').textContent = requestCode;
 
-        const dl = modal.querySelector('.request-modal-fields');
+        const metaDl  = modal.querySelector('.report-modal-meta');
+        const bodyDiv = modal.querySelector('.report-modal-body');
+
         const originalText = triggerEl.textContent;
         triggerEl.textContent = '…';
         triggerEl.disabled = true;
 
-        function addField(label, value) {
+        function addMeta(label, value) {
             if (!value) return;
+            const item = document.createElement('span');
+            item.className = 'meta-item';
             const dt = document.createElement('dt');
             dt.textContent = label;
             const dd = document.createElement('dd');
             dd.textContent = value;
-            dl.appendChild(dt);
-            dl.appendChild(dd);
+            item.appendChild(dt);
+            item.appendChild(dd);
+            metaDl.appendChild(item);
         }
 
-        try {
-            const resp = await fetch(`/fhir/ServiceRequest/${requestId}`);
-            if (resp.ok) {
-                const sr = await resp.json();
-                addField('Patient',      sr.subject?.display);
-                addField('Date/Time',    sr.authoredOn);
-                addField('Laboratory',   sr.code?.text);
-                addField('Section',      sr.note?.[0]?.text);
-                addField('Payment',      sr.note?.[1]?.text);
-                addField('Requested by', sr.requester?.display);
-                addField('Priority',     sr.priority);
-                addField('Status',       sr.status);
+        function renderReportContent(reportData, isImaging) {
+            bodyDiv.innerHTML = '';
+            bodyDiv.classList.remove('report-empty');
+            const forms = reportData.presentedForm || [];
+            const notes = reportData.note || [];
+
+            if (forms.length > 0) {
+                for (const form of forms) {
+                    if (form.title && forms.length > 1) {
+                        const h = document.createElement('h3');
+                        h.textContent = form.title;
+                        bodyDiv.appendChild(h);
+                    }
+                    const div = document.createElement('div');
+                    if (form.contentType === 'text/markdown' && form.data) {
+                        div.innerHTML = marked.parse(form.data);
+                    } else if (form.contentType === 'text/html' && form.data) {
+                        div.innerHTML = form.data;
+                    } else if (form.data) {
+                        const pre = document.createElement('pre');
+                        pre.textContent = form.data;
+                        div.appendChild(pre);
+                    }
+                    bodyDiv.appendChild(div);
+                }
+            } else if (isImaging && notes.length > 0) {
+                for (const note of notes) {
+                    if (!note.text) continue;
+                    const div = document.createElement('div');
+                    div.innerHTML = marked.parse(note.text);
+                    bodyDiv.appendChild(div);
+                }
+            } else if (reportData.conclusion) {
+                bodyDiv.innerHTML = marked.parse(reportData.conclusion);
             } else {
-                addField('Error', `Could not load request (HTTP ${resp.status})`);
+                bodyDiv.classList.add('report-empty');
+                bodyDiv.textContent = 'No report text available yet.';
+            }
+        }
+
+        // Wire up close / load buttons before showing
+        modal.querySelector('.report-modal-close').addEventListener('click', () => modal.close());
+        modal.querySelector('[data-close-modal]').addEventListener('click', () => modal.close());
+        modal.addEventListener('click', e => { if (e.target === modal) modal.close(); });
+        modal.addEventListener('close', () => document.body.removeChild(modal));
+        modal.querySelector('.modal-load-patient-btn').addEventListener('click', () => {
+            modal.close();
+            loadPatientFromRequest(requestId, patientName, triggerEl);
+        });
+
+        // Show modal immediately with meta we already have from the schedule row
+        addMeta('Patient', patientName);
+        bodyDiv.classList.add('report-empty');
+        bodyDiv.textContent = 'Loading…';
+        document.body.appendChild(modal);
+        modal.showModal();
+
+        try {
+            const imagingTypes = ['radio', 'ct', 'irm', 'eco', 'rads', 'fluoro'];
+            const isImaging = imagingTypes.includes(modality);
+            const endpoint = isImaging
+                ? `/fhir/ImagingStudy/${requestId}`
+                : `/fhir/DiagnosticReport/${requestId}`;
+
+            const repResp = await fetch(endpoint);
+            if (repResp.ok) {
+                const reportData = await repResp.json();
+                // Enrich meta from report data
+                const date = reportData.started || reportData.effectiveDateTime || reportData.authoredOn;
+                if (date) addMeta('Date', formatDateWithTime(date));
+                const performer = reportData.performer?.[0]?.actor?.display
+                    || reportData.resultsInterpreter?.[0]?.display;
+                if (performer) addMeta('Medic', performer);
+                renderReportContent(reportData, isImaging);
+            } else if (repResp.status === 404) {
+                bodyDiv.classList.add('report-empty');
+                bodyDiv.textContent = 'Report not yet available.';
+            } else {
+                bodyDiv.classList.add('report-empty');
+                bodyDiv.textContent = `Could not load report (HTTP ${repResp.status}).`;
             }
         } catch (err) {
-            addField('Error', err.message);
+            bodyDiv.classList.add('report-empty');
+            bodyDiv.textContent = err.message;
         } finally {
             triggerEl.textContent = originalText;
             triggerEl.disabled = false;
         }
 
-        modal.querySelector('.close').addEventListener('click', () => modal.close());
-        modal.querySelector('[data-close-modal]').addEventListener('click', () => modal.close());
-        modal.addEventListener('click', e => { if (e.target === modal) modal.close(); });
-        modal.addEventListener('close', () => document.body.removeChild(modal));
-
-        const loadBtn = modal.querySelector('.modal-load-patient-btn');
-        loadBtn.addEventListener('click', () => {
-            modal.close();
-            loadPatientFromRequest(requestId, patientName, loadBtn);
-        });
-
-        document.body.appendChild(modal);
-        modal.showModal();
     }
 
     async function loadPatientFromRequest(requestId, patientName, triggerEl) {
@@ -1988,7 +2047,7 @@ document.addEventListener('DOMContentLoaded', function() {
             codeBtn.className = 'schedule-patient-link';
             codeBtn.textContent = requestCode;
             codeBtn.title = `View request details (${requestCode})`;
-            codeBtn.addEventListener('click', () => showRequestModal(r.id, requestCode, patientName, codeBtn));
+            codeBtn.addEventListener('click', () => showRequestModal(r.id, requestCode, patientName, r.category?.[0]?.coding?.[0]?.code || '', codeBtn));
             codeTd.appendChild(codeBtn);
             tr.appendChild(codeTd);
 

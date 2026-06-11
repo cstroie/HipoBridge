@@ -437,16 +437,20 @@
         </template>
 
         <template id="schedule-request-modal-template">
-            <dialog class="modal" aria-modal="true" role="dialog" aria-labelledby="schedule-request-modal-title">
-                <article>
-                    <header>
-                        <h2 id="schedule-request-modal-title"><i class="fas fa-flask" aria-hidden="true"></i> <span class="modal-request-code"></span></h2>
-                        <button class="close" aria-label="Close modal"><i class="fas fa-times"></i></button>
+            <dialog class="report-modal" aria-modal="true" role="dialog" aria-labelledby="schedule-request-modal-title">
+                <article class="report-modal-article">
+                    <header class="report-modal-header">
+                        <div class="report-modal-title-row">
+                            <h2 id="schedule-request-modal-title" class="report-modal-title">
+                                <i class="fas fa-file-medical" aria-hidden="true"></i>
+                                <span class="modal-request-code"></span>
+                            </h2>
+                            <button class="report-modal-close" aria-label="Close modal"><i class="fas fa-times"></i></button>
+                        </div>
+                        <dl class="report-modal-meta"></dl>
                     </header>
-                    <div class="request-modal-body">
-                        <dl class="request-modal-fields"></dl>
-                    </div>
-                    <footer>
+                    <div class="report-modal-body markdown-content"></div>
+                    <footer class="report-modal-footer">
                         <button class="btn-secondary" data-close-modal aria-label="Close"><i class="fas fa-times"></i> <span>Close</span></button>
                         <button class="btn-primary modal-load-patient-btn" aria-label="Load patient"><i class="fas fa-user-injured"></i> <span>Load Patient</span></button>
                     </footer>
