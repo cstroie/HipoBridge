@@ -1140,6 +1140,15 @@ select {
     margin-bottom: 0.75rem;
 }
 
+.card-referrer {
+    font-size: var(--font-size-sm);
+    color: var(--text-light);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 40%;
+}
+
 .card-medic {
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-medium);
@@ -1147,7 +1156,6 @@ select {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 40%;
 }
 
 .analysis-type-badge {
@@ -1199,6 +1207,62 @@ select {
 
 .analysis-content {
     margin-top: 1rem;
+}
+
+/* Request metadata: clinical indication + note */
+.request-meta {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: var(--spacing-xs) var(--spacing-sm);
+    margin-bottom: var(--spacing-sm);
+    font-size: var(--font-size-sm);
+}
+
+.request-meta:empty { display: none; }
+
+.request-meta dt {
+    font-weight: var(--font-weight-medium);
+    color: var(--text-light);
+    white-space: nowrap;
+}
+
+.request-meta dd {
+    margin: 0;
+    color: var(--text);
+}
+
+/* Report section: loading state → body */
+.report-section { margin-top: var(--spacing-sm); }
+
+.report-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-md);
+    color: var(--text-light);
+    font-size: var(--font-size-lg);
+}
+
+.report-footer {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+    margin-top: var(--spacing-xs);
+    padding-top: var(--spacing-xs);
+    border-top: 1px solid var(--border);
+    font-size: var(--font-size-xs);
+    color: var(--text-light);
+}
+
+.report-footer .card-medic::before { content: '\f0f0\00a0'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
+.report-footer .report-date::before { content: '\f073\00a0'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
+
+.no-report-text {
+    color: var(--text-light);
+    font-style: italic;
+    font-size: var(--font-size-sm);
+    margin: 0;
 }
 
 .report-preview {

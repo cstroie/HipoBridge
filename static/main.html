@@ -366,11 +366,23 @@
                         <span class="report-id"></span>
                         <span class="exam-date" aria-label="Exam date"></span>
                     </div>
-                    <span class="card-medic"></span>
+                    <span class="card-referrer" aria-label="Ordering physician"></span>
                 </div>
                 <div class="analysis-content">
-                    <div class="report-preview" aria-label="Report preview"></div>
-                    <div class="imaging-study-link" aria-label="Imaging study link"></div>
+                    <dl class="request-meta"></dl>
+                    <div class="report-section">
+                        <div class="report-loading" aria-label="Loading report">
+                            <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                        </div>
+                        <div class="report-body" hidden>
+                            <div class="report-preview" aria-label="Report text"></div>
+                            <div class="report-footer">
+                                <span class="card-medic" aria-label="Reporting physician"></span>
+                                <span class="report-date" aria-label="Report date"></span>
+                            </div>
+                            <div class="imaging-study-link" aria-label="Imaging study link"></div>
+                        </div>
+                    </div>
                 </div>
             </article>
         </template>

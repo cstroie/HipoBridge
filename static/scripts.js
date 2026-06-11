@@ -1489,161 +1489,49 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Function to load and display reports progressively
     async function loadAndDisplayReports(analysesData) {
-        log('Loading and displaying reports:', analysesData);
-        
-        // Define the types of reports to include
         const includedTypes = ['radio', 'ct', 'irm', 'eco', 'rads'];
-        
-        // Check if we have a FHIR Bundle of ServiceRequests
-        if (analysesData.resourceType === "Bundle" && analysesData.entry && analysesData.entry.length > 0) {
-            // Filter entries to only include specified types
-            const filteredEntries = analysesData.entry.filter(entry => {
-                const serviceRequest = entry.resource;
-                const analysisType = serviceRequest.code?.coding?.[0]?.code || 'unknown';
-                return includedTypes.includes(analysisType);
-            });
-            
-            if (filteredEntries.length === 0) {
-                elements.noAnalyses.style.display = 'block';
-                elements.analysesGrid.innerHTML = ''; // Clear any existing content
-                log('No matching analyses found after filtering');
-                return;
-            }
-            
-            elements.noAnalyses.style.display = 'none';
-            if (elements.reportsCount) elements.reportsCount.textContent = filteredEntries.length;
-            log('Found', filteredEntries.length, 'matching service requests');
-            
-            // Clear existing content
-            elements.analysesGrid.innerHTML = '';
-            
-            // Process each filtered service request
-            for (const entry of filteredEntries) {
-                const serviceRequest = entry.resource;
-                log('Processing service request:', serviceRequest);
-                
-                // Extract type and display text from service request code
-                const analysisType = serviceRequest.code?.coding?.[0]?.code || 'unknown';
-                const analysisText = serviceRequest.code?.coding?.[0]?.display || 'analysis';
-                log('Analysis type:', analysisType, 'Text:', analysisText);
-                
-                // Create analysis card using template
-                const analysisCard = createAnalysisCard(serviceRequest, analysisType, analysisText);
-                log('Created analysis card:', analysisCard);
-                
-                // Fetch and display report content
-                try {
-                    // Fetch report data using FHIR API - imaging types use ImagingStudy, lab uses DiagnosticReport
-                    const imagingTypes = ['radio', 'ct', 'irm', 'eco', 'rads'];
-                    const reportEndpoint = imagingTypes.includes(analysisType)
-                        ? `/fhir/ImagingStudy/${serviceRequest.id}`
-                        : `/fhir/DiagnosticReport/${serviceRequest.id}`;
-                    log('Fetching report for service request:', serviceRequest.id, 'endpoint:', reportEndpoint);
-                    const reportResponse = await fetch(reportEndpoint);
-                    
-                    if (reportResponse.ok) {
-                        const reportData = await reportResponse.json();
-                        log('Report data loaded for service request', serviceRequest.id, ':', reportData);
-                        
-                        // Performing doctor → header right side
-                        const medicDisplay = reportData.resultsInterpreter?.[0]?.display
-                            || reportData.performer?.[0]?.actor?.display || '';
-                        if (medicDisplay) {
-                            const medicEl = analysisCard.querySelector('.card-medic');
-                            if (medicEl) medicEl.textContent = medicDisplay;
-                        }
 
-                        // Add report content to the card
-                        const reportPreview = analysisCard.querySelector('.report-preview');
-                        if (reportPreview) {
-                            reportPreview.id = `report-${serviceRequest.id}`;
-
-                            const forms = reportData.presentedForm || [];
-                            const notes = reportData.note || [];
-
-                            if (forms.length > 0) {
-                                // DiagnosticReport: presentedForm entries
-                                if (forms.length > 1) {
-                                    const typeTextEl = analysisCard.querySelector('.type-text');
-                                    if (typeTextEl) {
-                                        const titles = forms.map(f => f.title).filter(Boolean);
-                                        if (titles.length > 1) typeTextEl.textContent = titles.join(' / ');
-                                    }
-                                }
-                                const multiStudy = forms.length > 1;
-                                for (const form of forms) {
-                                    if (multiStudy && form.title) {
-                                        const h5 = document.createElement('h5');
-                                        h5.className = 'study-title';
-                                        h5.textContent = form.title;
-                                        reportPreview.appendChild(h5);
-                                    }
-                                    if (form.contentType === 'text/plain' && form.data) {
-                                        const pre = document.createElement('pre');
-                                        pre.textContent = form.data;
-                                        reportPreview.appendChild(pre);
-                                    } else if (form.contentType === 'text/markdown' && form.data) {
-                                        const div = document.createElement('div');
-                                        div.innerHTML = marked.parse(form.data);
-                                        reportPreview.appendChild(div);
-                                    } else if (form.contentType === 'text/html' && form.data) {
-                                        const div = document.createElement('div');
-                                        div.innerHTML = form.data;
-                                        reportPreview.appendChild(div);
-                                    }
-                                }
-                            } else if (notes.length > 0) {
-                                // ImagingStudy: note entries contain result text
-                                for (const note of notes) {
-                                    if (note.text) {
-                                        const div = document.createElement('div');
-                                        div.className = 'report-note';
-                                        div.textContent = note.text;
-                                        reportPreview.appendChild(div);
-                                    }
-                                }
-                            } else if (reportData.conclusion) {
-                                const div = document.createElement('div');
-                                div.innerHTML = marked.parse(reportData.conclusion);
-                                reportPreview.appendChild(div);
-                            } else {
-                                const p = document.createElement('p');
-                                p.textContent = 'No report text available';
-                                reportPreview.appendChild(p);
-                            }
-                        }
-                        
-                        // Add link to ImagingStudy if available
-                        const imagingStudyLink = analysisCard.querySelector('.imaging-study-link');
-                        if (imagingStudyLink && reportData.imagingStudy) {
-                            const studyId = reportData.imagingStudy.reference.split('/')[1];
-                            const linkTmpl = document.getElementById('imaging-study-link-template');
-                            const a = linkTmpl.content.cloneNode(true).querySelector('a');
-                            a.querySelector('.study-ref-id').textContent = `#${studyId}`;
-                            a.addEventListener('click', function(e) {
-                                e.preventDefault();
-                                viewImagingStudy(studyId, serviceRequest.id);
-                            });
-                            imagingStudyLink.appendChild(a);
-                        }
-                    } else {
-                        log('Error loading report data for service request', serviceRequest.id, ':', reportResponse.status);
-                    }
-                } catch (err) {
-                    console.error('Error fetching report data:', err);
-                }
-                
-                // Add the card to the grid
-                log('Adding analysis card to grid');
-                elements.analysesGrid.appendChild(analysisCard);
-            }
-            
-            log('Finished adding all analysis cards. Total cards:', elements.analysesGrid.children.length);
-        } else {
-            log('No analyses found, showing noAnalyses message');
+        if (!(analysesData.resourceType === 'Bundle' && analysesData.entry?.length > 0)) {
             elements.noAnalyses.style.display = 'block';
-            elements.analysesGrid.innerHTML = ''; // Clear any existing content
+            elements.analysesGrid.innerHTML = '';
+            return;
         }
+
+        const filteredEntries = analysesData.entry.filter(e =>
+            includedTypes.includes(e.resource?.code?.coding?.[0]?.code)
+        );
+
+        if (filteredEntries.length === 0) {
+            elements.noAnalyses.style.display = 'block';
+            elements.analysesGrid.innerHTML = '';
+            return;
+        }
+
+        elements.noAnalyses.style.display = 'none';
+        if (elements.reportsCount) elements.reportsCount.textContent = filteredEntries.length;
+        elements.analysesGrid.innerHTML = '';
+
+        // Create all cards immediately (request metadata is already available)
+        const cards = filteredEntries.map(entry => {
+            const sr = entry.resource;
+            const type = sr.code?.coding?.[0]?.code || 'unknown';
+            const text = sr.code?.coding?.[0]?.display || 'analysis';
+            const card = createAnalysisCard(sr, type, text);
+            elements.analysesGrid.appendChild(card);
+            return card;
+        });
+
+        // Lazily fetch report for each card as it scrolls into view
+        const observer = new IntersectionObserver((entries, obs) => {
+            for (const entry of entries) {
+                if (entry.isIntersecting) {
+                    obs.unobserve(entry.target);
+                    fetchAndFillReport(entry.target);
+                }
+            }
+        }, { rootMargin: '120px' });
+
+        for (const card of cards) observer.observe(card);
     }
     
     const MODALITY_INFO = {
@@ -1656,25 +1544,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Helper function to create analysis card
     function createAnalysisCard(serviceRequest, analysisType, analysisText) {
-        log('Creating analysis card for:', serviceRequest, analysisType, analysisText);
-
         const cardTemplate = document.getElementById('analysis-card-template');
-        if (!cardTemplate) {
-            console.error('Analysis card template not found');
-            return document.createElement('div');
-        }
-
-        const analysisCard = cardTemplate.content.cloneNode(true);
-        const article = analysisCard.querySelector('article');
-        if (!article) {
-            console.error('Failed to clone analysis card template');
-            return document.createElement('div');
-        }
+        if (!cardTemplate) { console.error('Analysis card template not found'); return document.createElement('div'); }
+        const frag = cardTemplate.content.cloneNode(true);
+        const article = frag.querySelector('article');
+        if (!article) { console.error('Failed to clone analysis card template'); return document.createElement('div'); }
 
         article.className = `analysis-card ${analysisType}`;
         article.dataset.type = analysisType;
+        article.dataset.serviceRequestId = serviceRequest.id;
+        article.dataset.analysisType = analysisType;
 
-        // Modality icon
         const modality = MODALITY_INFO[analysisType] || { icon: 'fa-file-medical', label: analysisText };
         const iconEl = article.querySelector('.modality-icon');
         if (iconEl) iconEl.className = `fas ${modality.icon}`;
@@ -1685,16 +1565,132 @@ document.addEventListener('DOMContentLoaded', function() {
         const reportId = article.querySelector('.report-id');
         if (reportId) reportId.textContent = `#${serviceRequest.id}`;
 
-        // Exam date — shown in header badge
-        const examDateElement = article.querySelector('.exam-date');
-        if (examDateElement) {
-            examDateElement.textContent = serviceRequest.authoredOn
-                ? formatExamDate(serviceRequest.authoredOn)
-                : 'Unknown';
+        const examDateEl = article.querySelector('.exam-date');
+        if (examDateEl) examDateEl.textContent = serviceRequest.authoredOn ? formatExamDate(serviceRequest.authoredOn) : '';
+
+        // Ordering physician (from ServiceRequest.requester)
+        const referrer = serviceRequest.requester?.display;
+        const referrerEl = article.querySelector('.card-referrer');
+        if (referrerEl && referrer) referrerEl.textContent = referrer;
+
+        // Request metadata: clinical indication + note
+        const metaDl = article.querySelector('.request-meta');
+        if (metaDl) {
+            const indication = serviceRequest.reason?.[0]?.display
+                || serviceRequest.reasonCode?.[0]?.text
+                || serviceRequest.reasonCode?.[0]?.coding?.[0]?.display;
+            const note = serviceRequest.note?.[0]?.text;
+            const info = serviceRequest.supportingInfo?.[0]?.display;
+            const addMeta = (label, value) => {
+                if (!value) return;
+                const dt = document.createElement('dt');
+                dt.textContent = label;
+                const dd = document.createElement('dd');
+                dd.textContent = value;
+                metaDl.append(dt, dd);
+            };
+            addMeta('Indication', indication);
+            addMeta('Clinical note', note || info);
         }
 
-        log('Analysis card created successfully');
         return article;
+    }
+
+    async function fetchAndFillReport(article) {
+        const id = article.dataset.serviceRequestId;
+        const type = article.dataset.analysisType;
+        const imagingTypes = ['radio', 'ct', 'irm', 'eco', 'rads'];
+        const endpoint = imagingTypes.includes(type)
+            ? `/fhir/ImagingStudy/${id}`
+            : `/fhir/DiagnosticReport/${id}`;
+
+        const loadingEl = article.querySelector('.report-loading');
+        const bodyEl    = article.querySelector('.report-body');
+
+        try {
+            const resp = await fetch(endpoint);
+            if (!resp.ok) throw new Error(resp.status);
+            const data = await resp.json();
+
+            // Reporting physician + report date
+            const physician = data.resultsInterpreter?.[0]?.display
+                || data.performer?.[0]?.actor?.display || '';
+            const date = data.started || data.effectiveDateTime || data.authoredOn || '';
+            const medicEl = article.querySelector('.card-medic');
+            if (medicEl && physician) medicEl.textContent = physician;
+            const dateEl = article.querySelector('.report-date');
+            if (dateEl && date) dateEl.textContent = formatDate(date);
+
+            // Report text
+            const reportPreview = article.querySelector('.report-preview');
+            if (reportPreview) {
+                const forms = data.presentedForm || [];
+                const notes = data.note || [];
+                if (forms.length > 0) {
+                    if (forms.length > 1) {
+                        const typeTextEl = article.querySelector('.type-text');
+                        if (typeTextEl) {
+                            const titles = forms.map(f => f.title).filter(Boolean);
+                            if (titles.length > 1) typeTextEl.textContent = titles.join(' / ');
+                        }
+                    }
+                    for (const form of forms) {
+                        if (forms.length > 1 && form.title) {
+                            const h5 = document.createElement('h5');
+                            h5.className = 'study-title';
+                            h5.textContent = form.title;
+                            reportPreview.appendChild(h5);
+                        }
+                        if (form.contentType === 'text/markdown' && form.data) {
+                            const div = document.createElement('div');
+                            div.innerHTML = marked.parse(form.data);
+                            reportPreview.appendChild(div);
+                        } else if (form.contentType === 'text/html' && form.data) {
+                            const div = document.createElement('div');
+                            div.innerHTML = form.data;
+                            reportPreview.appendChild(div);
+                        } else if (form.contentType === 'text/plain' && form.data) {
+                            const pre = document.createElement('pre');
+                            pre.textContent = form.data;
+                            reportPreview.appendChild(pre);
+                        }
+                    }
+                } else if (notes.length > 0) {
+                    for (const note of notes) {
+                        if (note.text) {
+                            const div = document.createElement('div');
+                            div.className = 'report-note';
+                            div.innerHTML = marked.parse(note.text);
+                            reportPreview.appendChild(div);
+                        }
+                    }
+                } else if (data.conclusion) {
+                    const div = document.createElement('div');
+                    div.innerHTML = marked.parse(data.conclusion);
+                    reportPreview.appendChild(div);
+                } else {
+                    reportPreview.innerHTML = '<p class="no-report-text">No report text available yet</p>';
+                }
+            }
+
+            // ImagingStudy link
+            const imagingStudyLink = article.querySelector('.imaging-study-link');
+            if (imagingStudyLink && data.imagingStudy) {
+                const studyId = data.imagingStudy.reference.split('/')[1];
+                const linkTmpl = document.getElementById('imaging-study-link-template');
+                if (linkTmpl) {
+                    const a = linkTmpl.content.cloneNode(true).querySelector('a');
+                    a.querySelector('.study-ref-id').textContent = `#${studyId}`;
+                    a.addEventListener('click', e => { e.preventDefault(); viewImagingStudy(studyId, id); });
+                    imagingStudyLink.appendChild(a);
+                }
+            }
+        } catch (_) {
+            if (reportPreview) reportPreview.innerHTML = '';
+        } finally {
+            if (loadingEl) loadingEl.hidden = true;
+            if (bodyEl) bodyEl.hidden = false;
+        }
     }
     
     // Enhanced date formatting function
