@@ -1009,7 +1009,18 @@ class HipoClientPatientSearch(HipoClientPatient):
                 else:
                     logger.info(f"Performing patient code search for: {search_term}")
             else:
-                logger.info(f"Performing patient code search for: {search_term}")
+                # Not a CNP length — treat as a direct patient ID and fetch the patient
+                # page immediately instead of going through the search form (the form
+                # does not accept raw numeric IDs of this length and returns an
+                # unrecognised page).  Temporarily swap request_url so the inherited
+                # fetch_and_parse uses the patient-detail URL, then restore it.
+                logger.info(f"Performing direct patient ID lookup for: {search_term}")
+                saved_url = self.request_url
+                self.request_url = "/Pacient/edit.asp?id={id}"
+                try:
+                    return await self.fetch_and_parse(id=search_term)
+                finally:
+                    self.request_url = saved_url
         else:
             if search_term.endswith('*'):
                 prefix = search_term[:-1]
