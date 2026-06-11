@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', function() {
         scheduleEndDate: document.getElementById('scheduleEndDate'),
         refreshScheduleBtn: document.getElementById('refreshScheduleBtn'),
         schedulePatientFilter: document.getElementById('schedulePatientFilter'),
-        scheduleModalityFilter: document.getElementById('scheduleModalityFilter'),
+        scheduleLabFilter:     document.getElementById('scheduleLabFilter'),
         scheduleSectionFilter: document.getElementById('scheduleSectionFilter'),
         scheduleTable: document.getElementById('scheduleTable'),
         scheduleBody: document.getElementById('scheduleBody'),
@@ -235,8 +235,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.schedulePatientFilter) {
             elements.schedulePatientFilter.addEventListener('input', debounce(fetchScheduleFromInputs, 400));
         }
-        if (elements.scheduleModalityFilter) {
-            elements.scheduleModalityFilter.addEventListener('change', fetchScheduleFromInputs);
+        if (elements.scheduleLabFilter) {
+            elements.scheduleLabFilter.addEventListener('change', fetchScheduleFromInputs);
         }
         if (elements.scheduleSectionFilter) {
             elements.scheduleSectionFilter.addEventListener('change', fetchScheduleFromInputs);
@@ -268,7 +268,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         if (tabId === 'schedule' && !elements.scheduleTable?.dataset.loaded) {
-            fetchScheduleFromInputs();
+            fetchAndPopulateFilterOptions().then(() => fetchScheduleFromInputs());
         }
     }
     
@@ -1830,30 +1830,29 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function fetchScheduleFromInputs(force = false) {
-        const start    = elements.scheduleStartDate?.value || null;
-        const end      = elements.scheduleEndDate?.value || null;
-        const patient  = elements.schedulePatientFilter?.value.trim() || null;
-        const modality = elements.scheduleModalityFilter?.value || null;
-        const section  = elements.scheduleSectionFilter?.value || null;
-        fetchSchedule(start, end, force, patient, modality, section);
+        const start       = elements.scheduleStartDate?.value || null;
+        const end         = elements.scheduleEndDate?.value || null;
+        const patientText = elements.schedulePatientFilter?.value.trim() || null;
+        const labId       = elements.scheduleLabFilter?.value || null;
+        const sectionId   = elements.scheduleSectionFilter?.value || null;
+        fetchSchedule(start, end, force, patientText, labId, sectionId);
     }
 
-    async function fetchSchedule(startDate, endDate, force = false, patient = null, modality = null, section = null) {
+    async function fetchSchedule(startDate, endDate, force = false, patientText = null, labId = null, sectionId = null) {
         if (!elements.scheduleBody) return;
         const params = new URLSearchParams();
-        if (startDate) params.set('start_date', startDate);
-        if (endDate)   params.set('end_date', endDate);
-        if (force)     params.set('refresh', '1');
-        if (patient)   params.set('patient', patient);
-        if (modality)  params.set('modality', modality);
-        if (section)   params.set('section', section);
+        if (startDate)   params.set('start_date', startDate);
+        if (endDate)     params.set('end_date', endDate);
+        if (force)       params.set('refresh', '1');
+        if (patientText) params.set('patient_text', patientText);
+        if (labId)       params.set('lab_id', labId);
+        if (sectionId)   params.set('section_id', sectionId);
         const url = `/fhir/Schedule${params.toString() ? '?' + params.toString() : ''}`;
         try {
             const resp = await fetch(url);
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const bundle = await resp.json();
             scheduleEntries = (bundle.entry || []).map(e => e.resource);
-            populateSectionFilter(scheduleEntries);
             renderSchedule();
             if (elements.scheduleTable) elements.scheduleTable.dataset.loaded = '1';
         } catch (err) {
@@ -1861,18 +1860,30 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function populateSectionFilter(entries) {
-        if (!elements.scheduleSectionFilter) return;
-        const sections = [...new Set(entries.map(r => r.note?.[0]?.text || '').filter(Boolean))].sort();
-        const current = elements.scheduleSectionFilter.value;
-        elements.scheduleSectionFilter.innerHTML = '<option value="">All sections</option>';
-        sections.forEach(s => {
-            const opt = document.createElement('option');
-            opt.value = s;
-            opt.textContent = s;
-            if (s === current) opt.selected = true;
-            elements.scheduleSectionFilter.appendChild(opt);
-        });
+    async function fetchAndPopulateFilterOptions() {
+        try {
+            const resp = await fetch('/api/schedule/options');
+            if (!resp.ok) return;
+            const data = await resp.json();
+
+            function _populate(selectEl, items, allLabel) {
+                if (!selectEl) return;
+                const current = selectEl.value;
+                selectEl.innerHTML = `<option value="">${allLabel}</option>`;
+                (items || []).forEach(item => {
+                    const opt = document.createElement('option');
+                    opt.value = item.id;
+                    opt.textContent = item.name;
+                    if (item.id === current) opt.selected = true;
+                    selectEl.appendChild(opt);
+                });
+            }
+
+            _populate(elements.scheduleLabFilter,     data.labs,     'All laboratories');
+            _populate(elements.scheduleSectionFilter, data.sections, 'All sections');
+        } catch (err) {
+            log('Failed to load schedule filter options:', err.message);
+        }
     }
 
     function renderSchedule() {
