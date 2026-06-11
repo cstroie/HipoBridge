@@ -622,9 +622,10 @@ document.addEventListener('DOMContentLoaded', function() {
         // Clear report tab
         if (elements.patientReportMarkdown) elements.patientReportMarkdown.innerHTML = '';
         
-        // Hide navigation tabs for patient data
+        // Hide navigation tabs for patient data (keep always-visible tabs)
         elements.navItems.forEach(item => {
-            if (item.getAttribute('data-tab') !== 'search') {
+            const tab = item.getAttribute('data-tab');
+            if (tab !== 'search' && tab !== 'schedule') {
                 item.style.display = 'none';
             }
         });
