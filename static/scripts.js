@@ -233,7 +233,9 @@ document.addEventListener('DOMContentLoaded', function() {
             elements.refreshScheduleBtn.addEventListener('click', () => fetchScheduleFromInputs(true));
         }
         if (elements.schedulePatientFilter) {
-            elements.schedulePatientFilter.addEventListener('input', debounce(fetchScheduleFromInputs, 400));
+            elements.schedulePatientFilter.addEventListener('keydown', e => {
+                if (e.key === 'Enter') fetchScheduleFromInputs();
+            });
         }
         if (elements.scheduleLabFilter) {
             elements.scheduleLabFilter.addEventListener('change', fetchScheduleFromInputs);
