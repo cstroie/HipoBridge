@@ -292,8 +292,11 @@
                             <p>Imaging and lab requests for the selected date</p>
                         </div>
                         <div class="header-actions">
-                            <label for="scheduleDate" class="sr-only">Date</label>
-                            <input type="date" id="scheduleDate" class="schedule-date-input" aria-label="Select date">
+                            <label for="scheduleStartDate" class="sr-only">From date</label>
+                            <input type="date" id="scheduleStartDate" class="schedule-date-input" aria-label="From date">
+                            <span class="schedule-date-sep" aria-hidden="true">–</span>
+                            <label for="scheduleEndDate" class="sr-only">To date</label>
+                            <input type="date" id="scheduleEndDate" class="schedule-date-input" aria-label="To date">
                             <button class="btn-secondary" id="refreshScheduleBtn" aria-label="Refresh schedule">
                                 <i class="fas fa-sync-alt" aria-hidden="true"></i>
                                 <span>Refresh</span>
@@ -301,6 +304,8 @@
                         </div>
                     </div>
                     <div class="schedule-filters">
+                        <label for="schedulePatientFilter" class="sr-only">Patient name</label>
+                        <input type="search" id="schedulePatientFilter" class="schedule-filter-input" placeholder="Filter by patient name…" aria-label="Filter by patient name">
                         <label for="scheduleModalityFilter" class="sr-only">Modality</label>
                         <select id="scheduleModalityFilter" class="schedule-filter-select" aria-label="Filter by modality">
                             <option value="">All modalities</option>
@@ -323,7 +328,7 @@
                         <table id="scheduleTable" class="schedule-table" hidden>
                             <thead>
                                 <tr>
-                                    <th scope="col">Time</th>
+                                    <th scope="col">Date/Time</th>
                                     <th scope="col">Patient</th>
                                     <th scope="col">Code</th>
                                     <th scope="col">Section</th>

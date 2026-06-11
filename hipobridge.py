@@ -333,21 +333,23 @@ async def get_request_patient(request):
 
 @require_auth
 async def get_schedule(request):
-    """List imaging/lab requests for a given date (defaults to today). ?date=YYYY-MM-DD"""
-    date = request.rel_url.query.get('date')
+    """List imaging/lab requests for a date range. ?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD"""
+    start_date = request.rel_url.query.get('start_date') or request.rel_url.query.get('date')
+    end_date = request.rel_url.query.get('end_date')
     client = HipoClientSchedule(SERVICE_URL, request)
-    debug_resp = await web_debug_response(client, request, date=date)
+    debug_resp = await web_debug_response(client, request, start_date=start_date, end_date=end_date)
     if debug_resp is not None:
         return debug_resp
-    parsed_data = await client.fetch_and_parse(date=date)
+    parsed_data = await client.fetch_and_parse(start_date=start_date, end_date=end_date)
     return web_json_response(parsed_data)
 
 @require_auth
 async def get_fhir_schedule(request):
-    """FHIR Bundle of ServiceRequest resources for the worklist. ?date=YYYY-MM-DD"""
-    date = request.rel_url.query.get('date')
+    """FHIR Bundle of ServiceRequest resources for the worklist. ?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD"""
+    start_date = request.rel_url.query.get('start_date') or request.rel_url.query.get('date')
+    end_date = request.rel_url.query.get('end_date')
     client = HipoClientSchedule(SERVICE_URL, request)
-    response = await client.fetch_respond_fhir(date=date, http_request=request)
+    response = await client.fetch_respond_fhir(start_date=start_date, end_date=end_date, http_request=request)
     return web_fhir_response(response)
 
 @require_auth

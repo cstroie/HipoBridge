@@ -47,8 +47,10 @@ document.addEventListener('DOMContentLoaded', function() {
         // Recent searches
         recentSearchesList: document.getElementById('recentSearchesList'),
         // Schedule tab elements
-        scheduleDate: document.getElementById('scheduleDate'),
+        scheduleStartDate: document.getElementById('scheduleStartDate'),
+        scheduleEndDate: document.getElementById('scheduleEndDate'),
         refreshScheduleBtn: document.getElementById('refreshScheduleBtn'),
+        schedulePatientFilter: document.getElementById('schedulePatientFilter'),
         scheduleModalityFilter: document.getElementById('scheduleModalityFilter'),
         scheduleSectionFilter: document.getElementById('scheduleSectionFilter'),
         scheduleTable: document.getElementById('scheduleTable'),
@@ -208,13 +210,23 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         // Schedule tab
-        if (elements.scheduleDate) {
+        {
             const today = new Date().toISOString().slice(0, 10);
-            elements.scheduleDate.value = today;
-            elements.scheduleDate.addEventListener('change', () => fetchSchedule(elements.scheduleDate.value));
+            const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+            if (elements.scheduleStartDate) {
+                elements.scheduleStartDate.value = yesterday;
+                elements.scheduleStartDate.addEventListener('change', fetchScheduleFromInputs);
+            }
+            if (elements.scheduleEndDate) {
+                elements.scheduleEndDate.value = today;
+                elements.scheduleEndDate.addEventListener('change', fetchScheduleFromInputs);
+            }
         }
         if (elements.refreshScheduleBtn) {
-            elements.refreshScheduleBtn.addEventListener('click', () => fetchSchedule(elements.scheduleDate?.value || null));
+            elements.refreshScheduleBtn.addEventListener('click', fetchScheduleFromInputs);
+        }
+        if (elements.schedulePatientFilter) {
+            elements.schedulePatientFilter.addEventListener('input', renderSchedule);
         }
         if (elements.scheduleModalityFilter) {
             elements.scheduleModalityFilter.addEventListener('change', renderSchedule);
@@ -249,7 +261,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         if (tabId === 'schedule' && !elements.scheduleTable?.dataset.loaded) {
-            fetchSchedule(elements.scheduleDate?.value || null);
+            fetchScheduleFromInputs();
         }
     }
     
@@ -1810,9 +1822,18 @@ document.addEventListener('DOMContentLoaded', function() {
         triggerEl.disabled = false;
     }
 
-    async function fetchSchedule(date) {
+    function fetchScheduleFromInputs() {
+        const start = elements.scheduleStartDate?.value || null;
+        const end = elements.scheduleEndDate?.value || null;
+        fetchSchedule(start, end);
+    }
+
+    async function fetchSchedule(startDate, endDate) {
         if (!elements.scheduleBody) return;
-        const url = date ? `/fhir/Schedule?date=${date}` : '/fhir/Schedule';
+        const params = new URLSearchParams();
+        if (startDate) params.set('start_date', startDate);
+        if (endDate) params.set('end_date', endDate);
+        const url = `/fhir/Schedule${params.toString() ? '?' + params.toString() : ''}`;
         try {
             const resp = await fetch(url);
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -1844,6 +1865,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!elements.scheduleBody) return;
         const modalityFilter = elements.scheduleModalityFilter?.value || '';
         const sectionFilter = elements.scheduleSectionFilter?.value || '';
+        const patientFilter = (elements.schedulePatientFilter?.value || '').toLowerCase().trim();
 
         const filtered = scheduleEntries.filter(r => {
             if (modalityFilter) {
@@ -1853,6 +1875,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (sectionFilter) {
                 const section = r.note?.[0]?.text || '';
                 if (section !== sectionFilter) return false;
+            }
+            if (patientFilter) {
+                const name = (r.subject?.display || '').toLowerCase();
+                if (!name.includes(patientFilter)) return false;
             }
             return true;
         });
@@ -1867,7 +1893,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.noSchedule) elements.noSchedule.style.display = 'none';
         filtered.forEach(r => {
             const authoredOn = r.authoredOn || '';
-            const time = authoredOn.includes(' ') ? authoredOn.split(' ')[1] : authoredOn;
+            const isMultiDay = (elements.scheduleStartDate?.value || '') !== (elements.scheduleEndDate?.value || '');
+            const time = isMultiDay ? authoredOn : (authoredOn.includes(' ') ? authoredOn.split(' ')[1] : authoredOn);
             const patientName = r.subject?.display || '';
             const requestCode = r.identifier?.[0]?.value || r.id || '';
             const section = r.note?.[0]?.text || '';

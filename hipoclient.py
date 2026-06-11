@@ -2854,20 +2854,22 @@ class HipoClientSchedule(HipoClient):
         super().__init__(service_url=service_url, request=request)
         self.request_url = "/PARA/NOM/Listare/"
 
-    def _build_url(self, date_str=None):
-        if date_str:
-            dt = datetime.strptime(date_str, '%Y-%m-%d')
-            hipocrate_date = dt.strftime('%d/%m/%Y')
-        else:
-            hipocrate_date = datetime.now().strftime('%d/%m/%Y')
+    def _build_url(self, start_date=None, end_date=None):
+        def _fmt(date_str):
+            if date_str:
+                return datetime.strptime(date_str, '%Y-%m-%d').strftime('%d/%m/%Y')
+            return datetime.now().strftime('%d/%m/%Y')
+        sd = _fmt(start_date)
+        ed = _fmt(end_date or start_date)
         return (self.request_url +
                 f"?id=44&NrPePag=100"
-                f"&LR_requesteddateSD={hipocrate_date}"
-                f"&LR_requesteddateED={hipocrate_date}")
+                f"&LR_requesteddateSD={sd}"
+                f"&LR_requesteddateED={ed}")
 
     async def fetch_and_parse(self, **kwargs) -> HipoData:
         data = HipoData(status="success", message="")
-        url = self._build_url(kwargs.get('date'))
+        url = self._build_url(kwargs.get('start_date') or kwargs.get('date'),
+                              kwargs.get('end_date'))
         try:
             response_text, error_message = await self.get_page(url)
             if error_message:
@@ -2880,7 +2882,8 @@ class HipoClientSchedule(HipoClient):
             return data
 
     async def debug_page(self, **kwargs):
-        url = self._build_url(kwargs.get('date'))
+        url = self._build_url(kwargs.get('start_date') or kwargs.get('date'),
+                              kwargs.get('end_date'))
         try:
             response_text, error_message = await self.get_page(url)
             if error_message:

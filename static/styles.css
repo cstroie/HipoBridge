@@ -1726,6 +1726,23 @@ select {
     color: var(--text);
 }
 
+.schedule-date-sep {
+    align-self: center;
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+}
+
+.schedule-filter-input {
+    font-size: var(--font-size-sm);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--text);
+    min-width: 200px;
+    flex: 1 1 200px;
+}
+
 .schedule-table {
     width: 100%;
     border-collapse: collapse;
