@@ -33,11 +33,14 @@ service_url = http://192.168.3.230/hipocrate
 
 ## Web interface
 
-Open `http://localhost:44660` to access the single-page app. Features:
+Open `http://localhost:44660` to access the single-page app. Navigation:
 
-- Patient search by CNP, patient code, or name; multiple results show a keyboard-accessible selection dialog
-- Patient profile with analyses, diagnostic reports, and epicrisis (all encounters, most-recent first)
-- Report tab — assembles a full clinical document (patient header + discharge summaries + imaging studies) formatted for LLM consumption
+- **Schedule** — daily imaging/lab worklist; always visible; filters by date range, laboratory (dropdown), section (dropdown), patient name (Enter to search); clicking a request code opens a detail popup; clicking a patient name loads the patient
+- **Patient Search** — search by CNP, patient code, or name; multiple results show a keyboard-accessible selection dialog
+- **Patient Profile** — demographics and encounter counts
+- **Analyses** — imaging and lab cards grouped by modality; clicking a request code opens a detail popup
+- **Epicrisis** — all encounters with an epicrisis, most-recent first, rendered as markdown
+- **Report** — full clinical document (patient header + discharge summaries + imaging studies) formatted for LLM consumption
 - Three-state theme toggle: auto (OS preference) → light → dark
 - Respects `prefers-reduced-motion`; no external font requests (system font stack)
 
@@ -62,19 +65,25 @@ GET  /fhir/ServiceRequest/{id}
 GET  /fhir/DiagnosticReport/{id}
 GET  /fhir/ImagingStudy/{id}
 GET  /fhir/Encounter/{id}
+GET  /fhir/Schedule[?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD&lab_id=N&section_name=S&patient_text=T&refresh=1]
 GET  /fhir/ValueSet/cnp?id={cnp}
 GET  /fhir/CodeSystem/analysis-types
 POST /fhir/md2html
 GET  /fhir/Metadata
+GET  /fhir/spec
 ```
 
 Raw-JSON-only endpoints (no FHIR equivalent yet):
 
 ```
-GET  /api/checkin/{id}     — admission record (checkin.asp)
-GET  /api/checkup/{id}     — emergency consultation (checkup.asp)
-GET  /api/debug?path=...   — raw Hipocrate HTML passthrough for any path
+GET  /api/schedule[?start_date=&end_date=&lab_id=&section_name=&patient_text=&refresh=1]
+GET  /api/request/{id}/patient  — resolve numeric patient ID from a request page
+GET  /api/checkin/{id}          — admission record (checkin.asp)
+GET  /api/checkup/{id}          — emergency consultation (checkup.asp)
+GET  /api/debug?path=...        — raw Hipocrate HTML passthrough for any path
 ```
+
+`/fhir/Schedule` returns a `searchset` Bundle of `ServiceRequest` resources. Lab filter uses Hipocrate's native `PARA_ID_Laborator` param; patient text uses `PARA_TextCautare`; section is filtered server-side by name. Pass `?refresh=1` to bypass the 30-minute LRU cache.
 
 All endpoints require HTTP Basic Auth.
 

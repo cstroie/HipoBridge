@@ -1045,6 +1045,107 @@
         }
       }
     },
+    "/fhir/Schedule": {
+      "get": {
+        "summary": "Get imaging/lab worklist",
+        "description": "Returns a searchset Bundle of ServiceRequest resources from the Hipocrate schedule page. Lab and patient filters are passed as native Hipocrate URL params; section is filtered server-side by name.",
+        "parameters": [
+          {"name": "start_date", "in": "query", "required": false, "description": "Range start (YYYY-MM-DD, default today)", "schema": {"type": "string", "format": "date"}},
+          {"name": "end_date", "in": "query", "required": false, "description": "Range end (YYYY-MM-DD, default same as start_date)", "schema": {"type": "string", "format": "date"}},
+          {"name": "lab_id", "in": "query", "required": false, "description": "Hipocrate lab ID (26=CT, 28=Eco, 32=IRM, 49=Radiografie, 35=Rad.Interventionala, 50=Radioscopii)", "schema": {"type": "integer"}},
+          {"name": "patient_text", "in": "query", "required": false, "description": "Patient name free-text search (PARA_TextCautare)", "schema": {"type": "string"}},
+          {"name": "section_name", "in": "query", "required": false, "description": "Exact section name — server-side filter", "schema": {"type": "string"}},
+          {"name": "refresh", "in": "query", "required": false, "description": "Set to 1 to bypass the 30-minute LRU cache", "schema": {"type": "integer"}}
+        ],
+        "responses": {
+          "200": {
+            "description": "searchset Bundle of ServiceRequest resources",
+            "content": {
+              "application/fhir+json": {
+                "schema": {"type": "object", "properties": {"resourceType": {"type": "string", "example": "Bundle"}, "type": {"type": "string", "example": "searchset"}, "total": {"type": "integer"}, "entry": {"type": "array"}}}
+              }
+            }
+          },
+          "401": {"description": "Authentication required"}
+        }
+      }
+    },
+    "/api/schedule": {
+      "get": {
+        "summary": "Get schedule (raw JSON)",
+        "description": "Same as /fhir/Schedule but returns raw HipoData JSON. Accepts the same query parameters.",
+        "parameters": [
+          {"name": "start_date", "in": "query", "required": false, "schema": {"type": "string"}},
+          {"name": "end_date", "in": "query", "required": false, "schema": {"type": "string"}},
+          {"name": "lab_id", "in": "query", "required": false, "schema": {"type": "integer"}},
+          {"name": "patient_text", "in": "query", "required": false, "schema": {"type": "string"}},
+          {"name": "section_name", "in": "query", "required": false, "schema": {"type": "string"}},
+          {"name": "refresh", "in": "query", "required": false, "schema": {"type": "integer"}}
+        ],
+        "responses": {
+          "200": {"description": "Raw schedule data"},
+          "401": {"description": "Authentication required"}
+        }
+      }
+    },
+    "/api/request/{id}/patient": {
+      "get": {
+        "summary": "Resolve patient ID from request",
+        "description": "Extracts the numeric patient ID from the request edit page (cerere.asp). Used by the Schedule tab to load a patient from a request code.",
+        "parameters": [
+          {"name": "id", "in": "path", "required": true, "description": "Request ID", "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "200": {"description": "HipoData JSON with patient.id"},
+          "404": {"description": "Patient link not found on the request page"},
+          "401": {"description": "Authentication required"}
+        }
+      }
+    },
+    "/api/checkin/{id}": {
+      "get": {
+        "summary": "Get admission record (checkin)",
+        "description": "Scrapes checkin.asp and returns patient identity, presentation details, diagnoses, ward transfers, and clinical exam as raw JSON.",
+        "parameters": [
+          {"name": "id", "in": "path", "required": true, "description": "Admission ID", "schema": {"type": "string"}},
+          {"name": "debug", "in": "query", "required": false, "description": "Pass 'page' to get raw Hipocrate HTML", "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "200": {"description": "Admission record as HipoData JSON"},
+          "404": {"description": "Admission not found"},
+          "401": {"description": "Authentication required"}
+        }
+      }
+    },
+    "/api/checkup/{id}": {
+      "get": {
+        "summary": "Get emergency consultation (checkup)",
+        "description": "Scrapes checkup.asp and returns patient identity, consultation details, ICD-10 codes, diagnoses, discharge status, and clinical exam as raw JSON.",
+        "parameters": [
+          {"name": "id", "in": "path", "required": true, "description": "Consultation UID", "schema": {"type": "string"}},
+          {"name": "debug", "in": "query", "required": false, "description": "Pass 'page' to get raw Hipocrate HTML", "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "200": {"description": "Consultation record as HipoData JSON"},
+          "404": {"description": "Consultation not found"},
+          "401": {"description": "Authentication required"}
+        }
+      }
+    },
+    "/api/debug": {
+      "get": {
+        "summary": "Raw Hipocrate HTML passthrough",
+        "description": "Fetch any Hipocrate path and return the raw HTML. Useful for inspecting pages before writing a parser.",
+        "parameters": [
+          {"name": "path", "in": "query", "required": true, "description": "Hipocrate path to fetch (e.g. /Pacient/history.asp?pacid=123)", "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "200": {"description": "Raw HTML from Hipocrate"},
+          "400": {"description": "Missing path parameter"},
+          "401": {"description": "Authentication required"}
+        }
+      }
+    },
     "/fhir/CodeSystem/analysis-types": {
       "get": {
         "summary": "Get analysis types",

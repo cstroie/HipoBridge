@@ -140,6 +140,60 @@ Returns: patient name/CNP, presentation date/urgency/section, admission info, IC
 
 ---
 
+## Schedule (worklist)
+
+| HippoBridge endpoint | Hipocrate URL |
+|---|---|
+| `GET /api/schedule` | `/PARA/NOM/Listare/?id=44&NrPePag=200&LR_requesteddateSD=…&LR_requesteddateED=…&PARA_ID_Laborator=…&PARA_TextCautare=…` |
+| `GET /fhir/Schedule` | same |
+
+Query params (both endpoints):
+
+| Param | Type | Description |
+|---|---|---|
+| `start_date` | `YYYY-MM-DD` | Range start (default: today) |
+| `end_date` | `YYYY-MM-DD` | Range end (default: same as start) |
+| `lab_id` | integer | Hipocrate lab ID — native filter via `PARA_ID_Laborator` |
+| `patient_text` | string | Patient name free-text search via `PARA_TextCautare` |
+| `section_name` | string | Exact section name — server-side Python filter |
+| `refresh` | `1` | Evict URL from LRU cache before fetching |
+
+Lab IDs (from `/gen_lib/filtre_ajax_dropdown.asp?N=PARA_ID_Laborator&P1=44`):
+
+| ID | Name |
+|---|---|
+| 26 | Computer Tomograf |
+| 28 | Ecografie |
+| 32 | Imagistica Rezonanta Magnetica |
+| 49 | Radiografie |
+| 35 | Radiologie Interventionala |
+| 50 | Radioscopii si Radiografii/Ecografii cu contrast |
+
+FHIR ServiceRequest status mapping:
+
+| Hipocrate | FHIR status |
+|---|---|
+| Cerere netrimisa | `on-hold` |
+| Trimisa in laborator | `draft` |
+| Primita in laborator | `draft` |
+| In lucru(NV) | `active` |
+| Cerere completata | `completed` |
+| Cerere completata/partial validata | `completed` |
+| Terminata | `ended` (R6) |
+| Fara analize | `entered-in-error` |
+
+---
+
+## Request → Patient Resolution
+
+| HippoBridge endpoint | Hipocrate URL |
+|---|---|
+| `GET /api/request/{id}/patient` | `/PARA/NOM/Listare/cerere.asp?id={id}` |
+
+Extracts the numeric patient ID from the first `Pacient/edit.asp?id=` link on the request edit page. Used by the Schedule tab to resolve a patient before loading their record. Falls back to name search on failure.
+
+---
+
 ## Known Hipocrate URLs (not yet proxied)
 
 | Purpose | URL |
