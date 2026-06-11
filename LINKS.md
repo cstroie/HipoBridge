@@ -155,7 +155,7 @@ Query params (both endpoints):
 | `end_date` | `YYYY-MM-DD` | Range end (default: same as start) |
 | `lab_id` | integer | Hipocrate lab ID — native filter via `PARA_ID_Laborator` |
 | `patient_text` | string | Patient name free-text search via `PARA_TextCautare` |
-| `section_name` | string | Exact section name — server-side Python filter |
+| `section_name` | string | Exact ward name — server-side Python filter |
 | `refresh` | `1` | Evict URL from LRU cache before fetching |
 
 Lab IDs (from `/gen_lib/filtre_ajax_dropdown.asp?N=PARA_ID_Laborator&P1=44`):
@@ -163,9 +163,9 @@ Lab IDs (from `/gen_lib/filtre_ajax_dropdown.asp?N=PARA_ID_Laborator&P1=44`):
 | ID | Name |
 |---|---|
 | 26 | Computer Tomograf |
-| 28 | Ecografie |
+| 28 | Ultrasound (Ecografie) |
 | 32 | Imagistica Rezonanta Magnetica |
-| 49 | Radiografie |
+| 49 | X-Ray (Radiografie) |
 | 35 | Radiologie Interventionala |
 | 50 | Radioscopii si Radiografii/Ecografii cu contrast |
 

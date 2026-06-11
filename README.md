@@ -35,7 +35,7 @@ service_url = http://192.168.3.230/hipocrate
 
 Open `http://localhost:44660` to access the single-page app. Navigation:
 
-- **Schedule** — daily imaging/lab worklist; always visible; filters by date range, laboratory (dropdown), section (dropdown), patient name (Enter to search); clicking a request code opens a detail popup; clicking a patient name loads the patient
+- **Schedule** — daily imaging/lab worklist; always visible; filters by date range, modality (dropdown), ward (dropdown), patient name (Enter to search); clicking a request code opens the exam report in a modal; clicking a patient name loads the patient
 - **Patient Search** — search by CNP, patient code, or name; multiple results show a keyboard-accessible selection dialog
 - **Patient Profile** — demographics and encounter counts
 - **Analyses** — imaging and lab cards grouped by modality; clicking a request code opens a detail popup
@@ -83,7 +83,7 @@ GET  /api/checkup/{id}          — emergency consultation (checkup.asp)
 GET  /api/debug?path=...        — raw Hipocrate HTML passthrough for any path
 ```
 
-`/fhir/Schedule` returns a `searchset` Bundle of `ServiceRequest` resources. Lab filter uses Hipocrate's native `PARA_ID_Laborator` param; patient text uses `PARA_TextCautare`; section is filtered server-side by name. Pass `?refresh=1` to bypass the 30-minute LRU cache.
+`/fhir/Schedule` returns a `searchset` Bundle of `ServiceRequest` resources. Modality filter uses Hipocrate's native `PARA_ID_Laborator` param; patient text uses `PARA_TextCautare`; ward is filtered server-side by name. Pass `?refresh=1` to bypass the 30-minute LRU cache.
 
 All endpoints require HTTP Basic Auth.
 
