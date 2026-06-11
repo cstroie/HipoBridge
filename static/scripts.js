@@ -223,7 +223,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         if (elements.refreshScheduleBtn) {
-            elements.refreshScheduleBtn.addEventListener('click', fetchScheduleFromInputs);
+            elements.refreshScheduleBtn.addEventListener('click', () => fetchScheduleFromInputs(true));
         }
         if (elements.schedulePatientFilter) {
             elements.schedulePatientFilter.addEventListener('input', renderSchedule);
@@ -1822,17 +1822,18 @@ document.addEventListener('DOMContentLoaded', function() {
         triggerEl.disabled = false;
     }
 
-    function fetchScheduleFromInputs() {
+    function fetchScheduleFromInputs(force = false) {
         const start = elements.scheduleStartDate?.value || null;
         const end = elements.scheduleEndDate?.value || null;
-        fetchSchedule(start, end);
+        fetchSchedule(start, end, force);
     }
 
-    async function fetchSchedule(startDate, endDate) {
+    async function fetchSchedule(startDate, endDate, force = false) {
         if (!elements.scheduleBody) return;
         const params = new URLSearchParams();
         if (startDate) params.set('start_date', startDate);
         if (endDate) params.set('end_date', endDate);
+        if (force) params.set('refresh', '1');
         const url = `/fhir/Schedule${params.toString() ? '?' + params.toString() : ''}`;
         try {
             const resp = await fetch(url);

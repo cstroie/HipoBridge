@@ -2870,6 +2870,8 @@ class HipoClientSchedule(HipoClient):
         data = HipoData(status="success", message="")
         url = self._build_url(kwargs.get('start_date') or kwargs.get('date'),
                               kwargs.get('end_date'))
+        if kwargs.get('force'):
+            self.cache_remove(self.get_full_url(url))
         try:
             response_text, error_message = await self.get_page(url)
             if error_message:
