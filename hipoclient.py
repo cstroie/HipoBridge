@@ -2352,25 +2352,33 @@ class HipoClientCheckout(HipoClient):
                     data.store("checkout.discharge_status", cells[0][len('STAREA LA EXTERNARE:'):].strip())
 
                 elif nc == 1 and cells[0] == 'EPICRIZA':
-                    # Next non-empty 1-cell row is the epicrisis text
+                    # Next non-empty 1-cell row is the epicrisis text.
+                    # Use inner HTML + html_to_markdown so paragraph structure is preserved;
+                    # get_text(strip=True) would collapse all formatting to a single line.
                     for j in range(i + 1, min(i + 5, len(rows))):
                         nxt = row_text(rows[j])
                         if len(nxt) == 1 and nxt[0] and nxt[0] not in ('TRATAMENT RECOMANDAT', 'RECOMANDARI / REGIM / MEDICATIE'):
-                            data.store("checkout.epicrisis", nxt[0])
+                            cell = rows[j].find('td')
+                            cell_html = cell.decode_contents() if cell else nxt[0]
+                            data.store("checkout.epicrisis", html_to_markdown(cell_html))
                             break
 
                 elif nc == 1 and cells[0] == 'TRATAMENT RECOMANDAT':
                     for j in range(i + 1, min(i + 5, len(rows))):
                         nxt = row_text(rows[j])
                         if len(nxt) == 1 and nxt[0] and nxt[0] not in ('RECOMANDARI / REGIM / MEDICATIE',):
-                            data.store("checkout.treatment", nxt[0])
+                            cell = rows[j].find('td')
+                            cell_html = cell.decode_contents() if cell else nxt[0]
+                            data.store("checkout.treatment", html_to_markdown(cell_html))
                             break
 
                 elif nc == 1 and cells[0] == 'RECOMANDARI / REGIM / MEDICATIE':
                     for j in range(i + 1, min(i + 5, len(rows))):
                         nxt = row_text(rows[j])
                         if len(nxt) == 1 and nxt[0] and not nxt[0].startswith('EXAMENE'):
-                            data.store("checkout.recommendations", nxt[0])
+                            cell = rows[j].find('td')
+                            cell_html = cell.decode_contents() if cell else nxt[0]
+                            data.store("checkout.recommendations", html_to_markdown(cell_html))
                             break
 
                 elif nc == 2 and cells[0].startswith('DIAGNOSTICE SECUNDARE'):
