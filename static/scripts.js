@@ -712,11 +712,11 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Define modality mapping
         const modalityMap = {
-            'radio': { name: 'Radiography', icon: 'fa-x-ray', color: '#36a2eb' },
-            'ct': { name: 'CT Scan', icon: 'fa-computer', color: '#ff6384' },
-            'irm': { name: 'MRI', icon: 'fa-magnet', color: '#ffce56' },
-            'eco': { name: 'Ultrasound', icon: 'fa-heartbeat', color: '#4bc0c0' },
-            'rads': { name: 'Radiology', icon: 'fa-radiation', color: '#9966ff' }
+            'radio': { name: 'X-Ray',        icon: 'fa-x-ray',    color: '#36a2eb' },
+            'ct':    { name: 'CT Scan',      icon: 'fa-computer', color: '#ff6384' },
+            'irm':   { name: 'MRI',          icon: 'fa-magnet',   color: '#ffce56' },
+            'eco':   { name: 'Ultrasound',   icon: 'fa-heartbeat',color: '#4bc0c0' },
+            'rads':  { name: 'Fluoroscopy',  icon: 'fa-radiation',color: '#9966ff' }
         };
         
         // Group analyses by modality
@@ -1634,7 +1634,7 @@ document.addEventListener('DOMContentLoaded', function() {
         ct:    { icon: 'fa-computer',   label: 'CT Scan' },
         irm:   { icon: 'fa-magnet',     label: 'MRI' },
         eco:   { icon: 'fa-heartbeat',  label: 'Ultrasound' },
-        rads:  { icon: 'fa-radiation',  label: 'Radiology' },
+        rads:  { icon: 'fa-radiation',  label: 'Fluoroscopy' },
     };
 
     // Helper function to create analysis card
@@ -1907,7 +1907,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (date) addMeta('Date', formatDateWithTime(date));
                 const performer = reportData.performer?.[0]?.actor?.display
                     || reportData.resultsInterpreter?.[0]?.display;
-                if (performer) addMeta('Medic', performer);
+                if (performer) addMeta('Physician', performer);
                 renderReportContent(reportData, isImaging);
             } else if (repResp.status === 404) {
                 bodyDiv.classList.add('report-empty');
@@ -1991,7 +1991,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!elements.scheduleSectionFilter) return;
         const sections = [...new Set(entries.map(r => r.note?.[0]?.text || '').filter(Boolean))].sort();
         const current = elements.scheduleSectionFilter.value;
-        elements.scheduleSectionFilter.innerHTML = '<option value="">All sections</option>';
+        elements.scheduleSectionFilter.innerHTML = '<option value="">All wards</option>';
         sections.forEach(s => {
             const opt = document.createElement('option');
             opt.value = s;
