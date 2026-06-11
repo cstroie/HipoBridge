@@ -54,7 +54,7 @@ HTTP client
 - `web_fhir_response` — FHIR-typed responses (`/fhir/*`); handles `OperationOutcome` on errors
 - `@require_auth` decorator extracts Basic Auth and attaches credentials to `request.auth_credentials`
 
-**`hipoclient.py`** — the core scraping layer. One base class + ten specialised subclasses:
+**`hipoclient.py`** — the core scraping layer. One base class + eleven specialised subclasses:
 
 | Class | Route | Hipocrate URL |
 |---|---|---|
@@ -68,6 +68,7 @@ HTTP client
 | `HipoClientCheckout` | `/api/checkout/{id}` | `/gen_printabile/BiletExternare.asp?RelId={id}&RelName=CO` |
 | `HipoClientCheckin` | `/api/checkin/{id}` | `/files/checkin.asp?id={id}` |
 | `HipoClientCheckup` | `/api/checkup/{id}` | `/files/checkup.asp?cuid={id}` |
+| `HipoClientCerere` | `/api/request/{id}/patient` | `/PARA/NOM/Listare/cerere.asp?id={id}` |
 | `HipoClientSchedule` | `/api/schedule`, `/fhir/Schedule` | `/PARA/NOM/Listare/?id=44&NrPePag=100` |
 
 Every subclass (except `HipoClientCheckin` / `HipoClientCheckup` which are raw-JSON only) implements three methods:
@@ -76,6 +77,8 @@ Every subclass (except `HipoClientCheckin` / `HipoClientCheckup` which are raw-J
 - `fetch_respond_fhir(**kwargs)` → calls both, returns FHIR resource directly
 
 `HipoClientCheckin` and `HipoClientCheckup` implement only `fetch_and_parse()`; they return `HipoData` via `/api/*` routes with no FHIR equivalent yet.
+
+`HipoClientCerere` implements only `fetch_and_parse()`; it extracts `patient.id` from a `Pacient/edit.asp?id=` link in the request edit page. Used by the Schedule frontend to resolve a precise patient ID before triggering a search.
 
 `HipoClientSchedule` overrides `fetch_and_parse` (URL is built from a `?date=` query param, not an `{id}` path segment) and implements all three methods; the FHIR response is a `searchset` Bundle of `ServiceRequest` resources.
 
@@ -158,17 +161,26 @@ Page: `/files/checkup.asp?cuid={id}`. Expected title text: `Consult`. Extracts:
 
 No FHIR response implemented yet.
 
+### Cerere (`HipoClientCerere`) field notes
+
+Page: `/PARA/NOM/Listare/cerere.asp?id={id}` — the request edit form. Extracts:
+- `patient.id` — from the first `Pacient/edit.asp?id=(\d+)` link (case-insensitive)
+
+Returns an error if no such link is found. Used exclusively by the Schedule tab to resolve a numeric patient ID before triggering a patient search; the frontend falls back to name search if this fails.
+
 ### Schedule (`HipoClientSchedule`) field notes
 
-Page: `/PARA/NOM/Listare/?id=44&NrPePag=100` with date filter params `LR_requesteddateSD` / `LR_requesteddateED` (format `DD/MM/YYYY`; defaults to today). Page title: `Listare Cereri laborator`. Parses the `tbl_listare` table — one entry per `<tr class="class_0|class_1">` row:
+Page: `/PARA/NOM/Listare/?id=44&NrPePag=100` with date filter params `LR_requesteddateSD` / `LR_requesteddateED` (format `DD/MM/YYYY`; defaults to today). Page title: `Listare Cereri laborator`. Parses the `tbl_listare` table — one entry per `<tr class="class_0|class_1">` row. Does **not** rely on `<tbody>` (html.parser does not inject it); iterates `table.find_all('tr')` directly and takes `detail_rows[-1]` to skip the inner header row:
 - `patient_name` — plain text in first `td.tdn`
 - `request_code` — link text (e.g. `ES9686`) from second `td.tdn`
 - `request_id` — numeric ID from the same link's `href`
-- `date_time`, `status`, `payment_type`, `priority`, `section`, `requested_by`, `laboratory` — from the nested `div.div_detalii` table (7 cells)
+- `date_time`, `status`, `payment_type`, `priority`, `section`, `requested_by`, `laboratory` — from the last `<tr>` of the nested `div.div_detalii` table (7 cells)
 
-FHIR output (`/fhir/Schedule?date=YYYY-MM-DD`): `searchset` Bundle of `ServiceRequest` resources. Status mapping: `Cerere netrimisa` → `draft`; `Trimisa in laborator` / `Primita in laborator` → `active`; `Fara analize` → `on-hold`. Priority: `Normala` → `routine`, anything else → `urgent`. `request_code` goes into `identifier[0].value`; `section` goes into `note[0].text`.
+FHIR output (`/fhir/Schedule?date=YYYY-MM-DD`): `searchset` Bundle of `ServiceRequest` resources. Status mapping: `Cerere netrimisa` → `draft`; `Trimisa in laborator` / `Primita in laborator` → `active`; `Fara analize` → `on-hold`. Priority: `Normala` → `routine`, anything else → `urgent`. `request_code` → `identifier[0].value`; `section` → `note[0].text`; modality slug → `category[0].coding[0].code`.
 
-`fetch_and_parse` is overridden (not delegated to base) because the URL is assembled from a query param rather than an `{id}` path segment; `debug_page` is also overridden for the same reason.
+Modality mapping (`_lab_to_modality`): `ecografie` → `eco`; `radioscopii` → `fluoro`; `radiografie` → `radio`; `tomografie` / `computerizata` / `computer tomograf` / standalone `ct` → `ct`; `imagistica` / `rezonanta` → `irm`; `laborator` → `lab`. Order matters — `radioscopii` is checked before `radiografie` so combined labels resolve to `fluoro`.
+
+`fetch_and_parse` and `debug_page` are overridden (URL assembled from `?date=` query param, not `{id}` path segment).
 
 ### Frontend (`static/`)
 
@@ -188,6 +200,7 @@ Single-page app: `main.html` + `scripts.js` + `styles.css` + `marked.js`.
 - Analysis cards use a `MODALITY_INFO` map (radio/ct/irm/eco/rads) for per-modality icon and label. Card type is stored in `article.dataset.type` and read by `filterAnalyses` — do not detect type from `className`. Modality CSS is driven by per-type custom properties (`--modality-radio`, `--modality-ct`, etc.) with separate light/dark values to meet WCAG AA contrast.
 - Dynamic HTML uses `<template>` elements in `main.html` and `cloneNode(true)` + `textContent`/`className` in JS. Do not use `innerHTML` with interpolated strings for new elements. Do not put `id` attributes inside `<template>` — they are duplicated on every clone.
 - Theme cycles `auto → light → dark → auto` via `toggleTheme()`; `localStorage` key is `theme`.
+- The **Schedule** tab is always visible (not gated on patient search). It fetches `/fhir/Schedule?date=YYYY-MM-DD` on first visit and on date/refresh changes. Entries are stored in `scheduleEntries[]` and filtered client-side by `renderSchedule()` — no re-fetch on filter change. The modality dropdown has static options; the section dropdown is populated dynamically from the loaded data. Patient name and request code cells are buttons that call `loadPatientFromRequest(requestId, patientName, el)`: fetches `/api/request/{id}/patient` to resolve the numeric patient ID, then submits the search form with that ID; falls back to name search if the fetch fails.
 
 ### HTML / accessibility conventions (`main.html`)
 
