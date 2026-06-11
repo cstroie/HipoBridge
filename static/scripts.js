@@ -1808,6 +1808,65 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let scheduleEntries = [];
 
+    async function showRequestModal(requestId, requestCode, patientName, triggerEl) {
+        const tmpl = document.getElementById('schedule-request-modal-template');
+        if (!tmpl) return;
+        const modal = tmpl.content.cloneNode(true).querySelector('dialog');
+
+        modal.querySelector('.modal-request-code').textContent = requestCode;
+
+        const dl = modal.querySelector('.request-modal-fields');
+        const originalText = triggerEl.textContent;
+        triggerEl.textContent = '…';
+        triggerEl.disabled = true;
+
+        function addField(label, value) {
+            if (!value) return;
+            const dt = document.createElement('dt');
+            dt.textContent = label;
+            const dd = document.createElement('dd');
+            dd.textContent = value;
+            dl.appendChild(dt);
+            dl.appendChild(dd);
+        }
+
+        try {
+            const resp = await fetch(`/fhir/ServiceRequest/${requestId}`);
+            if (resp.ok) {
+                const sr = await resp.json();
+                addField('Patient',      sr.subject?.display);
+                addField('Date/Time',    sr.authoredOn);
+                addField('Laboratory',   sr.code?.text);
+                addField('Section',      sr.note?.[0]?.text);
+                addField('Payment',      sr.note?.[1]?.text);
+                addField('Requested by', sr.requester?.display);
+                addField('Priority',     sr.priority);
+                addField('Status',       sr.status);
+            } else {
+                addField('Error', `Could not load request (HTTP ${resp.status})`);
+            }
+        } catch (err) {
+            addField('Error', err.message);
+        } finally {
+            triggerEl.textContent = originalText;
+            triggerEl.disabled = false;
+        }
+
+        modal.querySelector('.close').addEventListener('click', () => modal.close());
+        modal.querySelector('[data-close-modal]').addEventListener('click', () => modal.close());
+        modal.addEventListener('click', e => { if (e.target === modal) modal.close(); });
+        modal.addEventListener('close', () => document.body.removeChild(modal));
+
+        const loadBtn = modal.querySelector('.modal-load-patient-btn');
+        loadBtn.addEventListener('click', () => {
+            modal.close();
+            loadPatientFromRequest(requestId, patientName, loadBtn);
+        });
+
+        document.body.appendChild(modal);
+        modal.showModal();
+    }
+
     async function loadPatientFromRequest(requestId, patientName, triggerEl) {
         if (!requestId) {
             elements.cnpInput.value = patientName;
@@ -1923,13 +1982,13 @@ document.addEventListener('DOMContentLoaded', function() {
             nameTd.appendChild(nameBtn);
             tr.appendChild(nameTd);
 
-            // Request code — same: resolves and loads patient
+            // Request code — opens request detail modal
             const codeTd = document.createElement('td');
             const codeBtn = document.createElement('button');
             codeBtn.className = 'schedule-patient-link';
             codeBtn.textContent = requestCode;
-            codeBtn.title = `Load patient record (${requestCode})`;
-            codeBtn.addEventListener('click', () => loadPatientFromRequest(r.id, patientName, codeBtn));
+            codeBtn.title = `View request details (${requestCode})`;
+            codeBtn.addEventListener('click', () => showRequestModal(r.id, requestCode, patientName, codeBtn));
             codeTd.appendChild(codeBtn);
             tr.appendChild(codeTd);
 

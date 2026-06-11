@@ -1791,3 +1791,20 @@ select {
 [data-theme="dark"] .schedule-status.status-done     { background: #064e3b; color: #6ee7b7; }
 [data-theme="dark"] .schedule-status.status-revoked  { background: #1f2937; color: #9ca3af; }
 [data-theme="dark"] .schedule-status.status-error    { background: #450a0a; color: #fca5a5; }
+
+.request-modal-body { padding: var(--spacing-md); }
+.request-modal-fields {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: var(--spacing-xs) var(--spacing-md);
+    margin: 0;
+}
+.request-modal-fields dt {
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-light);
+    font-size: var(--font-size-sm);
+}
+.request-modal-fields dd {
+    margin: 0;
+    font-size: var(--font-size-sm);
+}
