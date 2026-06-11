@@ -300,6 +300,21 @@
                             </button>
                         </div>
                     </div>
+                    <div class="schedule-filters">
+                        <label for="scheduleModalityFilter" class="sr-only">Modality</label>
+                        <select id="scheduleModalityFilter" class="schedule-filter-select" aria-label="Filter by modality">
+                            <option value="">All modalities</option>
+                            <option value="eco">Ultrasound</option>
+                            <option value="radio">X-Ray</option>
+                            <option value="ct">CT Scan</option>
+                            <option value="irm">MRI</option>
+                            <option value="lab">Laboratory</option>
+                        </select>
+                        <label for="scheduleSectionFilter" class="sr-only">Section</label>
+                        <select id="scheduleSectionFilter" class="schedule-filter-select" aria-label="Filter by section">
+                            <option value="">All sections</option>
+                        </select>
+                    </div>
                     <div id="scheduleContent" aria-live="polite">
                         <div class="no-data" id="noSchedule" role="status">
                             <p>No requests found</p>

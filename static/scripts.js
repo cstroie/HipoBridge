@@ -49,6 +49,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Schedule tab elements
         scheduleDate: document.getElementById('scheduleDate'),
         refreshScheduleBtn: document.getElementById('refreshScheduleBtn'),
+        scheduleModalityFilter: document.getElementById('scheduleModalityFilter'),
+        scheduleSectionFilter: document.getElementById('scheduleSectionFilter'),
         scheduleTable: document.getElementById('scheduleTable'),
         scheduleBody: document.getElementById('scheduleBody'),
         noSchedule: document.getElementById('noSchedule')
@@ -213,6 +215,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         if (elements.refreshScheduleBtn) {
             elements.refreshScheduleBtn.addEventListener('click', () => fetchSchedule(elements.scheduleDate?.value || null));
+        }
+        if (elements.scheduleModalityFilter) {
+            elements.scheduleModalityFilter.addEventListener('change', renderSchedule);
+        }
+        if (elements.scheduleSectionFilter) {
+            elements.scheduleSectionFilter.addEventListener('change', renderSchedule);
         }
     }
     
@@ -1772,6 +1780,8 @@ document.addEventListener('DOMContentLoaded', function() {
         'unknown':  'status-pending',
     };
 
+    let scheduleEntries = [];
+
     async function fetchSchedule(date) {
         if (!elements.scheduleBody) return;
         const url = date ? `/fhir/Schedule?date=${date}` : '/fhir/Schedule';
@@ -1779,47 +1789,104 @@ document.addEventListener('DOMContentLoaded', function() {
             const resp = await fetch(url);
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const bundle = await resp.json();
-            const entries = bundle.entry || [];
-
-            elements.scheduleBody.innerHTML = '';
-            if (entries.length === 0) {
-                if (elements.scheduleTable) elements.scheduleTable.hidden = true;
-                if (elements.noSchedule) elements.noSchedule.style.display = '';
-            } else {
-                if (elements.noSchedule) elements.noSchedule.style.display = 'none';
-                entries.forEach(({ resource: r }) => {
-                    const authoredOn = r.authoredOn || '';
-                    const time = authoredOn.includes(' ') ? authoredOn.split(' ')[1] : authoredOn;
-                    const patientName = r.subject?.display || '';
-                    const requestCode = r.identifier?.[0]?.value || r.id || '';
-                    const section = r.note?.[0]?.text || '';
-                    const requestedBy = r.requester?.display || '';
-                    const laboratory = r.code?.text || '';
-                    const status = r.status || '';
-                    const statusClass = SCHEDULE_STATUS_CLASS[status] || '';
-
-                    const tr = document.createElement('tr');
-                    [time, patientName, requestCode, section, requestedBy, laboratory].forEach(val => {
-                        const td = document.createElement('td');
-                        td.textContent = val;
-                        tr.appendChild(td);
-                    });
-                    const statusTd = document.createElement('td');
-                    const badge = document.createElement('span');
-                    badge.className = `schedule-status ${statusClass}`;
-                    badge.textContent = status;
-                    statusTd.appendChild(badge);
-                    tr.appendChild(statusTd);
-                    elements.scheduleBody.appendChild(tr);
-                });
-                if (elements.scheduleTable) {
-                    elements.scheduleTable.hidden = false;
-                    elements.scheduleTable.dataset.loaded = '1';
-                }
-            }
+            scheduleEntries = (bundle.entry || []).map(e => e.resource);
+            populateSectionFilter(scheduleEntries);
+            renderSchedule();
+            if (elements.scheduleTable) elements.scheduleTable.dataset.loaded = '1';
         } catch (err) {
             showToast(`Failed to load schedule: ${err.message}`, 'error');
         }
+    }
+
+    function populateSectionFilter(entries) {
+        if (!elements.scheduleSectionFilter) return;
+        const sections = [...new Set(entries.map(r => r.note?.[0]?.text || '').filter(Boolean))].sort();
+        const current = elements.scheduleSectionFilter.value;
+        elements.scheduleSectionFilter.innerHTML = '<option value="">All sections</option>';
+        sections.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s;
+            opt.textContent = s;
+            if (s === current) opt.selected = true;
+            elements.scheduleSectionFilter.appendChild(opt);
+        });
+    }
+
+    function renderSchedule() {
+        if (!elements.scheduleBody) return;
+        const modalityFilter = elements.scheduleModalityFilter?.value || '';
+        const sectionFilter = elements.scheduleSectionFilter?.value || '';
+
+        const filtered = scheduleEntries.filter(r => {
+            if (modalityFilter) {
+                const modality = r.category?.[0]?.coding?.[0]?.code || '';
+                if (modality !== modalityFilter) return false;
+            }
+            if (sectionFilter) {
+                const section = r.note?.[0]?.text || '';
+                if (section !== sectionFilter) return false;
+            }
+            return true;
+        });
+
+        elements.scheduleBody.innerHTML = '';
+        if (filtered.length === 0) {
+            if (elements.scheduleTable) elements.scheduleTable.hidden = true;
+            if (elements.noSchedule) elements.noSchedule.style.display = '';
+            return;
+        }
+
+        if (elements.noSchedule) elements.noSchedule.style.display = 'none';
+        filtered.forEach(r => {
+            const authoredOn = r.authoredOn || '';
+            const time = authoredOn.includes(' ') ? authoredOn.split(' ')[1] : authoredOn;
+            const patientName = r.subject?.display || '';
+            const requestCode = r.identifier?.[0]?.value || r.id || '';
+            const section = r.note?.[0]?.text || '';
+            const requestedBy = r.requester?.display || '';
+            const laboratory = r.code?.text || '';
+            const status = r.status || '';
+            const statusClass = SCHEDULE_STATUS_CLASS[status] || '';
+
+            const tr = document.createElement('tr');
+
+            // Time
+            const timeTd = document.createElement('td');
+            timeTd.textContent = time;
+            tr.appendChild(timeTd);
+
+            // Patient name — clickable to search
+            const nameTd = document.createElement('td');
+            const nameBtn = document.createElement('button');
+            nameBtn.className = 'schedule-patient-link';
+            nameBtn.textContent = patientName;
+            nameBtn.title = `Search for ${patientName}`;
+            nameBtn.addEventListener('click', () => {
+                elements.cnpInput.value = patientName;
+                elements.form.dispatchEvent(new Event('submit'));
+                switchTab('search');
+            });
+            nameTd.appendChild(nameBtn);
+            tr.appendChild(nameTd);
+
+            // Remaining plain cells
+            [requestCode, section, requestedBy, laboratory].forEach(val => {
+                const td = document.createElement('td');
+                td.textContent = val;
+                tr.appendChild(td);
+            });
+
+            // Status badge
+            const statusTd = document.createElement('td');
+            const badge = document.createElement('span');
+            badge.className = `schedule-status ${statusClass}`;
+            badge.textContent = status;
+            statusTd.appendChild(badge);
+            tr.appendChild(statusTd);
+
+            elements.scheduleBody.appendChild(tr);
+        });
+        if (elements.scheduleTable) elements.scheduleTable.hidden = false;
     }
 
     // Helper function to extract diagnosis text

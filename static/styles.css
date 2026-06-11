@@ -1684,6 +1684,39 @@ select {
 
 /* ── Schedule tab ───────────────────────────────────────────────────────── */
 
+.schedule-filters {
+    display: flex;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+    padding: var(--spacing-sm) 0;
+}
+
+.schedule-filter-select {
+    font-size: var(--font-size-sm);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--text);
+    min-width: 160px;
+}
+
+.schedule-patient-link {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--primary);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    text-align: left;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.schedule-patient-link:hover {
+    color: var(--primary-dark);
+}
+
 .schedule-date-input {
     font-size: var(--font-size-sm);
     padding: var(--spacing-xs) var(--spacing-sm);
