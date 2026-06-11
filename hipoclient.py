@@ -2918,11 +2918,14 @@ class HipoClientSchedule(HipoClient):
                 detail_rows = cells[2].select('div.div_detalii table tr')
                 detail_cells = detail_rows[-1].find_all('td') if detail_rows else []
                 if len(detail_cells) >= 7:
+                    raw_dt = detail_cells[0].get_text(strip=True)
+                    parsed_dt = parse_date_time(raw_dt)
+                    iso_dt = parsed_dt.strftime('%Y-%m-%d %H:%M') if parsed_dt else raw_dt
                     requests.append({
                         'patient_name': patient_name,
                         'request_code': request_code,
                         'request_id': request_id,
-                        'date_time': detail_cells[0].get_text(strip=True),
+                        'date_time': iso_dt,
                         'status': detail_cells[1].get_text(strip=True),
                         'payment_type': detail_cells[2].get_text(strip=True),
                         'priority': detail_cells[3].get_text(strip=True),
