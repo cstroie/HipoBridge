@@ -1566,12 +1566,33 @@ document.addEventListener('DOMContentLoaded', function() {
         if (reportId) reportId.textContent = `#${serviceRequest.id}`;
 
         const examDateEl = article.querySelector('.exam-date');
-        if (examDateEl) examDateEl.textContent = serviceRequest.authoredOn ? formatExamDate(serviceRequest.authoredOn) : '';
+        if (examDateEl && serviceRequest.authoredOn) {
+            examDateEl.textContent = formatExamDate(serviceRequest.authoredOn);
+            examDateEl.dateTime = serviceRequest.authoredOn;
+        }
+
+        // Body regions → part of the card title
+        const regions = (serviceRequest.bodySite || [])
+            .map(b => b.text).filter(Boolean);
+        const regionsEl = article.querySelector('.card-regions');
+        if (regionsEl && regions.length > 0) {
+            regionsEl.textContent = ` · ${regions.join(', ')}`;
+        }
+
+        // Urgent badge
+        if (serviceRequest.priority === 'urgent') {
+            const urgentEl = article.querySelector('.urgent-badge');
+            if (urgentEl) urgentEl.hidden = false;
+        }
 
         // Ordering physician (from ServiceRequest.requester)
         const referrer = serviceRequest.requester?.display;
         const referrerEl = article.querySelector('.card-referrer');
-        if (referrerEl && referrer) referrerEl.textContent = referrer;
+        if (referrerEl && referrer) {
+            referrerEl.textContent = referrer;
+            const line = article.querySelector('.card-referrer-line');
+            if (line) line.hidden = false;
+        }
 
         // Request metadata: clinical indication + note
         const metaDl = article.querySelector('.request-meta');
@@ -1619,12 +1640,21 @@ document.addEventListener('DOMContentLoaded', function() {
             const medicEl = article.querySelector('.card-medic');
             if (medicEl && physician) medicEl.textContent = physician;
             const dateEl = article.querySelector('.report-date');
-            if (dateEl && date) dateEl.textContent = formatDate(date);
+            if (dateEl && date) {
+                dateEl.textContent = formatDate(date);
+                dateEl.dateTime = date;
+            }
+            if (physician || date) {
+                const signedEl = article.querySelector('.report-signed');
+                if (signedEl) signedEl.hidden = false;
+            }
 
             // Ordering physician from referrer (if not already set from ServiceRequest)
             const referrerEl = article.querySelector('.card-referrer');
             if (referrerEl && !referrerEl.textContent && data.referrer?.display) {
                 referrerEl.textContent = data.referrer.display;
+                const line = article.querySelector('.card-referrer-line');
+                if (line) line.hidden = false;
             }
 
             // Clinical indication note(s) → populate request-meta dl
@@ -1650,19 +1680,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 const forms = data.presentedForm || [];
                 const notes = resultNotes;
                 if (forms.length > 0) {
-                    if (forms.length > 1) {
-                        const typeTextEl = article.querySelector('.type-text');
-                        if (typeTextEl) {
-                            const titles = forms.map(f => f.title).filter(Boolean);
-                            if (titles.length > 1) typeTextEl.textContent = titles.join(' / ');
-                        }
-                    }
                     for (const form of forms) {
                         if (forms.length > 1 && form.title) {
-                            const h5 = document.createElement('h5');
-                            h5.className = 'study-title';
-                            h5.textContent = form.title;
-                            reportPreview.appendChild(h5);
+                            const h3 = document.createElement('h3');
+                            h3.className = 'study-title';
+                            h3.textContent = form.title;
+                            reportPreview.appendChild(h3);
                         }
                         if (form.contentType === 'text/markdown' && form.data) {
                             const div = document.createElement('div');
@@ -1709,7 +1732,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
         } catch (_) {
-            if (reportPreview) reportPreview.innerHTML = '';
+            const previewEl = article.querySelector('.report-preview');
+            if (previewEl) previewEl.innerHTML = '<p class="no-report-text">Report could not be loaded</p>';
         } finally {
             if (loadingEl) loadingEl.hidden = true;
             if (bodyEl) bodyEl.hidden = false;

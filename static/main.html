@@ -359,29 +359,38 @@
         <!-- Templates for dynamic content -->
         <template id="analysis-card-template">
             <article class="analysis-card">
-                <div class="analysis-header">
-                    <div class="analysis-type-badge">
-                        <i class="modality-icon"></i>
-                        <span class="type-text"></span>
-                        <span class="report-id"></span>
-                        <span class="exam-date" aria-label="Exam date"></span>
+                <header class="card-identity">
+                    <i class="modality-icon" aria-hidden="true"></i>
+                    <div class="card-title-block">
+                        <h2 class="card-title">
+                            <span class="type-text"></span><span class="card-regions"></span>
+                        </h2>
+                        <p class="card-subtitle">
+                            <time class="exam-date" aria-label="Exam date"></time>
+                            <span class="report-id"></span>
+                        </p>
                     </div>
-                    <span class="card-referrer" aria-label="Ordering physician"></span>
-                </div>
-                <div class="analysis-content">
+                    <strong class="urgent-badge" hidden>Urgent</strong>
+                </header>
+                <div class="card-request">
+                    <p class="card-referrer-line" hidden>
+                        <i class="fas fa-user-doctor" aria-hidden="true"></i>
+                        <span class="card-referrer" aria-label="Ordering physician"></span>
+                    </p>
                     <dl class="request-meta"></dl>
-                    <div class="report-section">
-                        <div class="report-loading" aria-label="Loading report">
-                            <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
-                        </div>
-                        <div class="report-body" hidden>
-                            <div class="report-preview" aria-label="Report text"></div>
-                            <div class="report-footer">
-                                <span class="card-medic" aria-label="Reporting physician"></span>
-                                <span class="report-date" aria-label="Report date"></span>
-                            </div>
-                            <div class="imaging-study-link" aria-label="Imaging study link"></div>
-                        </div>
+                </div>
+                <div class="report-section">
+                    <div class="report-loading" role="status" aria-label="Loading report">
+                        <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                    </div>
+                    <div class="report-body" hidden>
+                        <div class="report-preview" aria-label="Report text"></div>
+                        <footer class="report-signed" hidden>
+                            <i class="fas fa-circle-check" aria-hidden="true"></i>
+                            <span class="card-medic" aria-label="Reporting physician"></span>
+                            <time class="report-date" aria-label="Report date"></time>
+                        </footer>
+                        <div class="imaging-study-link" aria-label="Imaging study link"></div>
                     </div>
                 </div>
             </article>
