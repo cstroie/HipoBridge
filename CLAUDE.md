@@ -54,7 +54,7 @@ HTTP client
 - `web_fhir_response` — FHIR-typed responses (`/fhir/*`); handles `OperationOutcome` on errors
 - `@require_auth` decorator extracts Basic Auth and attaches credentials to `request.auth_credentials`
 
-**`hipoclient.py`** — the core scraping layer. One base class + nine specialised subclasses:
+**`hipoclient.py`** — the core scraping layer. One base class + ten specialised subclasses:
 
 | Class | Route | Hipocrate URL |
 |---|---|---|
@@ -68,6 +68,7 @@ HTTP client
 | `HipoClientCheckout` | `/api/checkout/{id}` | `/gen_printabile/BiletExternare.asp?RelId={id}&RelName=CO` |
 | `HipoClientCheckin` | `/api/checkin/{id}` | `/files/checkin.asp?id={id}` |
 | `HipoClientCheckup` | `/api/checkup/{id}` | `/files/checkup.asp?cuid={id}` |
+| `HipoClientSchedule` | `/api/schedule`, `/fhir/Schedule` | `/PARA/NOM/Listare/?id=44&NrPePag=100` |
 
 Every subclass (except `HipoClientCheckin` / `HipoClientCheckup` which are raw-JSON only) implements three methods:
 - `fetch_and_parse(**kwargs)` → `HipoData` (raw dict)
@@ -75,6 +76,8 @@ Every subclass (except `HipoClientCheckin` / `HipoClientCheckup` which are raw-J
 - `fetch_respond_fhir(**kwargs)` → calls both, returns FHIR resource directly
 
 `HipoClientCheckin` and `HipoClientCheckup` implement only `fetch_and_parse()`; they return `HipoData` via `/api/*` routes with no FHIR equivalent yet.
+
+`HipoClientSchedule` overrides `fetch_and_parse` (URL is built from a `?date=` query param, not an `{id}` path segment) and implements all three methods; the FHIR response is a `searchset` Bundle of `ServiceRequest` resources.
 
 **Concurrency and caching** (critical — Hipocrate is a fragile legacy server):
 - `_hipocrate_semaphore = asyncio.Semaphore(6)` — global cap on concurrent outbound HTTP calls; all request paths including login go through this.
@@ -154,6 +157,18 @@ Page: `/files/checkup.asp?cuid={id}`. Expected title text: `Consult`. Extracts:
 - `checkup.exam_general`, `checkup.exam_local`
 
 No FHIR response implemented yet.
+
+### Schedule (`HipoClientSchedule`) field notes
+
+Page: `/PARA/NOM/Listare/?id=44&NrPePag=100` with date filter params `LR_requesteddateSD` / `LR_requesteddateED` (format `DD/MM/YYYY`; defaults to today). Page title: `Listare Cereri laborator`. Parses the `tbl_listare` table — one entry per `<tr class="class_0|class_1">` row:
+- `patient_name` — plain text in first `td.tdn`
+- `request_code` — link text (e.g. `ES9686`) from second `td.tdn`
+- `request_id` — numeric ID from the same link's `href`
+- `date_time`, `status`, `payment_type`, `priority`, `section`, `requested_by`, `laboratory` — from the nested `div.div_detalii` table (7 cells)
+
+FHIR output (`/fhir/Schedule?date=YYYY-MM-DD`): `searchset` Bundle of `ServiceRequest` resources. Status mapping: `Cerere netrimisa` → `draft`; `Trimisa in laborator` / `Primita in laborator` → `active`; `Fara analize` → `on-hold`. Priority: `Normala` → `routine`, anything else → `urgent`. `request_code` goes into `identifier[0].value`; `section` goes into `note[0].text`.
+
+`fetch_and_parse` is overridden (not delegated to base) because the URL is assembled from a query param rather than an `{id}` path segment; `debug_page` is also overridden for the same reason.
 
 ### Frontend (`static/`)
 
