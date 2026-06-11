@@ -2966,7 +2966,7 @@ class HipoClientSchedule(HipoClient):
         'fara analize':                       'on-hold',
         'cerere completata':                  'completed',
         'cerere completata/partial validata': 'completed',
-        'terminata':                          'revoked',
+        'terminata':                          'completed',
     }
 
     def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRBundle, FHIROperationOutcome]:
