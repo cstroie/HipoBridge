@@ -288,7 +288,7 @@
                 <section id="schedule-tab" class="tab-content active" role="tabpanel" aria-labelledby="schedule-tab-heading">
                     <div class="tab-header">
                         <div class="header-left">
-                            <h1 id="schedule-tab-heading"><i class="fas fa-calendar-alt" aria-hidden="true"></i> Schedule</h1>
+                            <h1 id="schedule-tab-heading"><i class="fas fa-calendar-alt" aria-hidden="true"></i> Schedule <span id="scheduleCount" class="schedule-count" hidden></span></h1>
                             <p>Imaging and lab requests for the selected date</p>
                         </div>
                         <div class="header-actions">
@@ -322,6 +322,9 @@
                         </select>
                     </div>
                     <div id="scheduleContent" aria-live="polite">
+                        <div class="schedule-loading" id="scheduleLoading" role="status" aria-label="Loading schedule" hidden>
+                            <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                        </div>
                         <div class="no-data" id="noSchedule" role="status">
                             <p>No requests found</p>
                         </div>

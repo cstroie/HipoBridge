@@ -1935,6 +1935,121 @@ select {
 [data-theme="dark"] .schedule-status.status-revoked  { background: #1f2937; color: #9ca3af; }
 [data-theme="dark"] .schedule-status.status-error    { background: #450a0a; color: #fca5a5; }
 
+/* Result count badge in the Schedule heading */
+.schedule-count {
+    display: inline-block;
+    min-width: 1.5em;
+    padding: 0.1em 0.45em;
+    background: var(--primary);
+    color: #fff;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    border-radius: var(--radius-full);
+    text-align: center;
+    vertical-align: middle;
+}
+
+/* Loading indicator while the schedule fetch is in flight */
+.schedule-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-xl);
+    color: var(--text-light);
+    font-size: var(--font-size-2xl);
+}
+.schedule-loading[hidden] { display: none; }
+
+/* Day group header rows (multi-day ranges) */
+.schedule-day-row th {
+    background: var(--bg);
+    color: var(--text-light);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-xs);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+}
+
+/* Request code: monospace chip-button, distinct from the patient link */
+.schedule-code-link {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: var(--font-size-xs);
+    padding: 0.1rem 0.4rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    cursor: pointer;
+}
+.schedule-code-link:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+/* Modality chips — outline style driven by the shared modality palette */
+.modality-chip {
+    display: inline-block;
+    padding: 0.1rem 0.45rem;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    border: 1px solid currentColor;
+    border-radius: var(--radius-full);
+    white-space: nowrap;
+}
+.modality-chip-radio { color: var(--modality-radio); }
+.modality-chip-ct    { color: var(--modality-ct); }
+.modality-chip-irm   { color: var(--modality-irm); }
+.modality-chip-eco   { color: var(--modality-eco); }
+.modality-chip-rads  { color: var(--modality-rads); }
+.modality-chip-lab   { color: var(--primary); }
+
+.schedule-table .urgent-badge {
+    margin-left: var(--spacing-xs);
+}
+
+/* Stacked card layout on narrow screens */
+@media (max-width: 700px) {
+    .schedule-table { min-width: 0; }
+    .schedule-table thead { display: none; }
+    .schedule-table tbody, .schedule-table tr, .schedule-table td,
+    .schedule-table .schedule-day-row th { display: block; }
+
+    .schedule-table tr {
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        margin-bottom: var(--spacing-sm);
+        padding: var(--spacing-xs) var(--spacing-sm);
+        background: var(--card-bg);
+    }
+    .schedule-table tr:hover td { background: transparent; }
+
+    .schedule-table td {
+        display: flex;
+        gap: var(--spacing-sm);
+        align-items: baseline;
+        border-bottom: none;
+        padding: 0.15rem 0;
+    }
+    .schedule-table td:empty { display: none; }
+    .schedule-table td::before {
+        content: attr(data-label);
+        flex: 0 0 5.5em;
+        font-size: var(--font-size-xs);
+        font-weight: var(--font-weight-medium);
+        color: var(--text-light);
+    }
+
+    .schedule-table .schedule-day-row {
+        border: none;
+        background: transparent;
+        padding: 0;
+        margin-bottom: var(--spacing-xs);
+    }
+}
+
 /* ── Report modal (schedule request detail) ───────────────────────────── */
 
 dialog.report-modal {

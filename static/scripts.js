@@ -58,6 +58,8 @@ document.addEventListener('DOMContentLoaded', function() {
         scheduleSectionFilter: document.getElementById('scheduleSectionFilter'),
         scheduleTable: document.getElementById('scheduleTable'),
         scheduleBody: document.getElementById('scheduleBody'),
+        scheduleCount: document.getElementById('scheduleCount'),
+        scheduleLoading: document.getElementById('scheduleLoading'),
         noSchedule: document.getElementById('noSchedule')
     };
     
@@ -1866,6 +1868,29 @@ document.addEventListener('DOMContentLoaded', function() {
         'unknown':        'status-pending',
     };
 
+    // Human-readable labels for FHIR request statuses (raw status kept in title)
+    const SCHEDULE_STATUS_LABEL = {
+        'on-hold':        'Not sent',
+        'draft':          'In lab',
+        'active':         'In progress',
+        'completed':      'Completed',
+        'ended':          'Finished',
+        'revoked':        'Cancelled',
+        'entered-in-error': 'No exams',
+        'unknown':        'Unknown',
+    };
+
+    // Modality slug (category[0].coding[0].code) → compact chip; fluoro shares
+    // the rads colour class used by the analysis cards
+    const SCHEDULE_MODALITY_CHIP = {
+        radio:  { label: 'X-Ray',  cls: 'radio' },
+        ct:     { label: 'CT',     cls: 'ct' },
+        irm:    { label: 'MRI',    cls: 'irm' },
+        eco:    { label: 'US',     cls: 'eco' },
+        fluoro: { label: 'Fluoro', cls: 'rads' },
+        lab:    { label: 'Lab',    cls: 'lab' },
+    };
+
     let scheduleEntries = [];
 
     async function showRequestModal(requestId, requestCode, patientName, modality, triggerEl) {
@@ -2037,6 +2062,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (labId)       params.set('lab_id', labId);
         if (sectionName) params.set('section_name', sectionName);
         const url = `/fhir/Schedule${params.toString() ? '?' + params.toString() : ''}`;
+        if (elements.scheduleLoading) elements.scheduleLoading.hidden = false;
+        if (elements.noSchedule) elements.noSchedule.style.display = 'none';
         try {
             const resp = await fetch(url);
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -2048,6 +2075,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (elements.scheduleTable) elements.scheduleTable.dataset.loaded = '1';
         } catch (err) {
             showToast(`Failed to load schedule: ${err.message}`, 'error');
+        } finally {
+            if (elements.scheduleLoading) elements.scheduleLoading.hidden = true;
         }
     }
 
@@ -2069,6 +2098,12 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!elements.scheduleBody) return;
 
         elements.scheduleBody.innerHTML = '';
+
+        if (elements.scheduleCount) {
+            elements.scheduleCount.textContent = String(scheduleEntries.length);
+            elements.scheduleCount.hidden = false;
+        }
+
         if (scheduleEntries.length === 0) {
             if (elements.scheduleTable) elements.scheduleTable.hidden = true;
             if (elements.noSchedule) elements.noSchedule.style.display = '';
@@ -2076,27 +2111,58 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         if (elements.noSchedule) elements.noSchedule.style.display = 'none';
+        const isMultiDay = (elements.scheduleStartDate?.value || '') !== (elements.scheduleEndDate?.value || '');
+        let currentDay = null;
+
         scheduleEntries.forEach(r => {
             const authoredOn = r.authoredOn || '';
-            const isMultiDay = (elements.scheduleStartDate?.value || '') !== (elements.scheduleEndDate?.value || '');
-            const time = isMultiDay ? authoredOn : (authoredOn.includes(' ') ? authoredOn.split(' ')[1] : authoredOn);
+            const hasTime = authoredOn.includes(' ');
+            const day = hasTime ? authoredOn.split(' ')[0] : authoredOn;
+            const time = hasTime ? authoredOn.split(' ')[1] : authoredOn;
+
+            // Day group header for multi-day ranges
+            if (isMultiDay && day && day !== currentDay) {
+                currentDay = day;
+                const dayTr = document.createElement('tr');
+                dayTr.className = 'schedule-day-row';
+                const dayTh = document.createElement('th');
+                dayTh.colSpan = 7;
+                dayTh.scope = 'colgroup';
+                dayTh.textContent = formatDayHeading(day);
+                dayTr.appendChild(dayTh);
+                elements.scheduleBody.appendChild(dayTr);
+            }
+
             const patientName = r.subject?.display || '';
             const requestCode = r.identifier?.[0]?.value || r.id || '';
             const section = r.note?.[0]?.text || '';
             const requestedBy = r.requester?.display || '';
             const laboratory = r.code?.text || '';
+            const modalitySlug = r.category?.[0]?.coding?.[0]?.code || '';
             const status = r.status || '';
             const statusClass = SCHEDULE_STATUS_CLASS[status] || '';
+            const isUrgent = r.priority === 'urgent';
 
             const tr = document.createElement('tr');
 
-            // Time
+            // Time (+ urgent flag)
             const timeTd = document.createElement('td');
-            timeTd.textContent = time;
+            timeTd.dataset.label = 'Time';
+            const timeEl = document.createElement('time');
+            timeEl.dateTime = authoredOn.replace(' ', 'T');
+            timeEl.textContent = time;
+            timeTd.appendChild(timeEl);
+            if (isUrgent) {
+                const urgent = document.createElement('strong');
+                urgent.className = 'urgent-badge';
+                urgent.textContent = 'Urgent';
+                timeTd.appendChild(urgent);
+            }
             tr.appendChild(timeTd);
 
             // Patient name — clickable, resolves patient ID via request page
             const nameTd = document.createElement('td');
+            nameTd.dataset.label = 'Patient';
             const nameBtn = document.createElement('button');
             nameBtn.className = 'schedule-patient-link';
             nameBtn.textContent = patientName;
@@ -2107,32 +2173,60 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Request code — opens request detail modal
             const codeTd = document.createElement('td');
+            codeTd.dataset.label = 'Request';
             const codeBtn = document.createElement('button');
-            codeBtn.className = 'schedule-patient-link';
+            codeBtn.className = 'schedule-code-link';
             codeBtn.textContent = requestCode;
             codeBtn.title = `View request details (${requestCode})`;
-            codeBtn.addEventListener('click', () => showRequestModal(r.id, requestCode, patientName, r.category?.[0]?.coding?.[0]?.code || '', codeBtn));
+            codeBtn.addEventListener('click', () => showRequestModal(r.id, requestCode, patientName, modalitySlug, codeBtn));
             codeTd.appendChild(codeBtn);
             tr.appendChild(codeTd);
 
-            // Remaining plain cells
-            [section, requestedBy, laboratory].forEach(val => {
+            // Ward and referrer
+            [['Ward', section], ['Referrer', requestedBy]].forEach(([label, val]) => {
                 const td = document.createElement('td');
+                td.dataset.label = label;
                 td.textContent = val;
                 tr.appendChild(td);
             });
 
-            // Status badge
+            // Modality chip (coloured by slug); fall back to the lab name
+            const modalityTd = document.createElement('td');
+            modalityTd.dataset.label = 'Modality';
+            const chipInfo = SCHEDULE_MODALITY_CHIP[modalitySlug];
+            if (chipInfo) {
+                const chip = document.createElement('span');
+                chip.className = `modality-chip modality-chip-${chipInfo.cls}`;
+                chip.textContent = chipInfo.label;
+                chip.title = laboratory;
+                modalityTd.appendChild(chip);
+            } else {
+                modalityTd.textContent = laboratory;
+            }
+            tr.appendChild(modalityTd);
+
+            // Status badge — human label, raw FHIR status in title
             const statusTd = document.createElement('td');
+            statusTd.dataset.label = 'Status';
             const badge = document.createElement('span');
             badge.className = `schedule-status ${statusClass}`;
-            badge.textContent = status;
+            badge.textContent = SCHEDULE_STATUS_LABEL[status] || status;
+            badge.title = status;
             statusTd.appendChild(badge);
             tr.appendChild(statusTd);
 
             elements.scheduleBody.appendChild(tr);
         });
         if (elements.scheduleTable) elements.scheduleTable.hidden = false;
+    }
+
+    // "2026-06-11" → "Wednesday, 2026-06-11" (string split avoids UTC offset)
+    function formatDayHeading(day) {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+        if (!m) return day;
+        const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+        if (isNaN(d)) return day;
+        return `${d.toLocaleDateString('en-US', { weekday: 'long' })}, ${day}`;
     }
 
     // Helper function to extract diagnosis text
