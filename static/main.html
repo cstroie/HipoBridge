@@ -77,6 +77,12 @@
                             <span>Report</span>
                         </a>
                     </li>
+                    <li class="nav-item" data-tab="schedule" aria-controls="schedule-tab">
+                        <a href="#">
+                            <i class="fas fa-calendar-alt" aria-hidden="true"></i>
+                            <span>Schedule</span>
+                        </a>
+                    </li>
                 </ul>
             </div>
         </nav>
@@ -277,6 +283,42 @@
                     </div>
 
                     <div id="patientReportMarkdown" class="markdown-content"></div>
+                </section>
+
+                <section id="schedule-tab" class="tab-content" role="tabpanel" aria-labelledby="schedule-tab-heading" hidden>
+                    <div class="tab-header">
+                        <div class="header-left">
+                            <h1 id="schedule-tab-heading"><i class="fas fa-calendar-alt" aria-hidden="true"></i> Schedule</h1>
+                            <p>Imaging and lab requests for the selected date</p>
+                        </div>
+                        <div class="header-actions">
+                            <label for="scheduleDate" class="sr-only">Date</label>
+                            <input type="date" id="scheduleDate" class="schedule-date-input" aria-label="Select date">
+                            <button class="btn-secondary" id="refreshScheduleBtn" aria-label="Refresh schedule">
+                                <i class="fas fa-sync-alt" aria-hidden="true"></i>
+                                <span>Refresh</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="scheduleContent" aria-live="polite">
+                        <div class="no-data" id="noSchedule" role="status">
+                            <p>No requests found</p>
+                        </div>
+                        <table id="scheduleTable" class="schedule-table" hidden>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Time</th>
+                                    <th scope="col">Patient</th>
+                                    <th scope="col">Code</th>
+                                    <th scope="col">Section</th>
+                                    <th scope="col">Requested By</th>
+                                    <th scope="col">Laboratory</th>
+                                    <th scope="col">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="scheduleBody"></tbody>
+                        </table>
+                    </div>
                 </section>
 
             </div>

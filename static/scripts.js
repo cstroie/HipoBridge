@@ -45,7 +45,13 @@ document.addEventListener('DOMContentLoaded', function() {
         loadingOverlay: document.getElementById('loadingOverlay'),
         loadingStep: document.getElementById('loadingStep'),
         // Recent searches
-        recentSearchesList: document.getElementById('recentSearchesList')
+        recentSearchesList: document.getElementById('recentSearchesList'),
+        // Schedule tab elements
+        scheduleDate: document.getElementById('scheduleDate'),
+        refreshScheduleBtn: document.getElementById('refreshScheduleBtn'),
+        scheduleTable: document.getElementById('scheduleTable'),
+        scheduleBody: document.getElementById('scheduleBody'),
+        noSchedule: document.getElementById('noSchedule')
     };
     
     // Bounded in-memory cache (100 entries per store; evicts oldest on overflow)
@@ -198,6 +204,16 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.copyReportBtn) {
             elements.copyReportBtn.addEventListener('click', copyReportMarkdown);
         }
+
+        // Schedule tab
+        if (elements.scheduleDate) {
+            const today = new Date().toISOString().slice(0, 10);
+            elements.scheduleDate.value = today;
+            elements.scheduleDate.addEventListener('change', () => fetchSchedule(elements.scheduleDate.value));
+        }
+        if (elements.refreshScheduleBtn) {
+            elements.refreshScheduleBtn.addEventListener('click', () => fetchSchedule(elements.scheduleDate?.value || null));
+        }
     }
     
     function switchTab(tabId) {
@@ -222,6 +238,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (targetTab) {
             targetTab.classList.add('active');
             targetTab.style.display = 'block';
+        }
+
+        if (tabId === 'schedule' && !elements.scheduleTable?.dataset.loaded) {
+            fetchSchedule(elements.scheduleDate?.value || null);
         }
     }
     
@@ -1745,6 +1765,57 @@ document.addEventListener('DOMContentLoaded', function() {
         elements.epicrisisContent.dataset.markdown = markdown;
     }
     
+    const SCHEDULE_STATUS_CLASS = {
+        'trimisa in laborator': 'status-sent',
+        'primita in laborator': 'status-received',
+        'cerere netrimisa': 'status-pending',
+        'fara analize': 'status-empty',
+    };
+
+    async function fetchSchedule(date) {
+        if (!elements.scheduleBody) return;
+        const url = date ? `/api/schedule?date=${date}` : '/api/schedule';
+        try {
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const json = await resp.json();
+            const requests = json.requests || [];
+
+            elements.scheduleBody.innerHTML = '';
+            if (requests.length === 0) {
+                if (elements.scheduleTable) elements.scheduleTable.hidden = true;
+                if (elements.noSchedule) elements.noSchedule.style.display = '';
+            } else {
+                if (elements.noSchedule) elements.noSchedule.style.display = 'none';
+                requests.forEach(r => {
+                    const tr = document.createElement('tr');
+                    const time = r.date_time ? r.date_time.split(' ')[1] || r.date_time : '';
+                    const statusKey = (r.status || '').toLowerCase();
+                    const statusClass = SCHEDULE_STATUS_CLASS[statusKey] || '';
+                    tr.innerHTML = '';
+                    [time, r.patient_name, r.request_code, r.section, r.requested_by, r.laboratory].forEach(val => {
+                        const td = document.createElement('td');
+                        td.textContent = val || '';
+                        tr.appendChild(td);
+                    });
+                    const statusTd = document.createElement('td');
+                    const badge = document.createElement('span');
+                    badge.className = `schedule-status ${statusClass}`;
+                    badge.textContent = r.status || '';
+                    statusTd.appendChild(badge);
+                    tr.appendChild(statusTd);
+                    elements.scheduleBody.appendChild(tr);
+                });
+                if (elements.scheduleTable) {
+                    elements.scheduleTable.hidden = false;
+                    elements.scheduleTable.dataset.loaded = '1';
+                }
+            }
+        } catch (err) {
+            showToast(`Failed to load schedule: ${err.message}`, 'error');
+        }
+    }
+
     // Helper function to extract diagnosis text
     function extractDiagnosisText(encounterData) {
         if (!encounterData.diagnosis || encounterData.diagnosis.length === 0) return null;

@@ -2808,3 +2808,97 @@ class HipoClientCheckup(HipoClient):
             logger.error(f"Error parsing checkup data: {e}")
             data.set_error(str(e))
             return data
+
+
+class HipoClientSchedule(HipoClient):
+    """Parses the daily imaging/lab request worklist (/PARA/NOM/Listare/?id=44)."""
+
+    def __init__(self, service_url=None, request=None):
+        super().__init__(service_url=service_url, request=request)
+        self.request_url = "/PARA/NOM/Listare/"
+
+    def _build_url(self, date_str=None):
+        if date_str:
+            dt = datetime.strptime(date_str, '%Y-%m-%d')
+            hipocrate_date = dt.strftime('%d/%m/%Y')
+        else:
+            hipocrate_date = datetime.now().strftime('%d/%m/%Y')
+        return (self.request_url +
+                f"?id=44&NrPePag=100"
+                f"&LR_requesteddateSD={hipocrate_date}"
+                f"&LR_requesteddateED={hipocrate_date}")
+
+    async def fetch_and_parse(self, **kwargs) -> HipoData:
+        data = HipoData(status="success", message="")
+        url = self._build_url(kwargs.get('date'))
+        try:
+            response_text, error_message = await self.get_page(url)
+            if error_message:
+                data.set_error(error_message)
+                return data
+            return self.parse_data(response_text, **kwargs)
+        except Exception as e:
+            logger.error(f"fetch_and_parse (schedule) failed: {e}")
+            data.set_error(f"Data retrieval failed: {e}")
+            return data
+
+    async def debug_page(self, **kwargs):
+        url = self._build_url(kwargs.get('date'))
+        try:
+            response_text, error_message = await self.get_page(url)
+            if error_message:
+                return f"Page error: {error_message}"
+            return response_text
+        except Exception as e:
+            return f"Page retrieval failed: {str(e)}"
+
+    def parse_data(self, html_content: str, **kwargs) -> HipoData:
+        data = HipoData(status="success", message="")
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            table = soup.find('table', class_='tbl_listare')
+            if not table:
+                data.set_error("Unexpected page: tbl_listare table not found")
+                return data
+
+            tbody = table.find('tbody')
+            if not tbody:
+                data.store_list("requests", [])
+                data.store("total", 0)
+                return data
+
+            requests = []
+            for row in tbody.find_all('tr'):
+                cells = row.find_all('td', class_='tdn')
+                if len(cells) < 3:
+                    continue
+                patient_name = cells[0].get_text(strip=True)
+                code_link = cells[1].find('a')
+                if not code_link:
+                    continue
+                request_code = code_link.get_text(strip=True)
+                id_match = re.search(r'id=(\d+)', code_link.get('href', ''))
+                request_id = id_match.group(1) if id_match else None
+
+                detail_cells = cells[2].select('div.div_detalii table tbody tr td')
+                if len(detail_cells) >= 7:
+                    requests.append({
+                        'patient_name': patient_name,
+                        'request_code': request_code,
+                        'request_id': request_id,
+                        'date_time': detail_cells[0].get_text(strip=True),
+                        'status': detail_cells[1].get_text(strip=True),
+                        'payment_type': detail_cells[2].get_text(strip=True),
+                        'priority': detail_cells[3].get_text(strip=True),
+                        'section': detail_cells[4].get_text(strip=True),
+                        'requested_by': detail_cells[5].get_text(strip=True),
+                        'laboratory': detail_cells[6].get_text(strip=True),
+                    })
+
+            data.store_list("requests", requests)
+            data.store("total", len(requests))
+            return data
+        except Exception as e:
+            logger.error(f"Error parsing schedule data: {e}")
+            data.set_error(str(e))
+            return data
