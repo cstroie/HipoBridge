@@ -35,6 +35,7 @@ document.addEventListener('DOMContentLoaded', function() {
         noAnalyses: document.getElementById('noAnalyses'),
         // Epicrisis tab elements
         epicrisisContent: document.getElementById('epicrisisContent'),
+        epicrisisNav: document.getElementById('epicrisisNav'),
         copyEpicrisisBtn: document.getElementById('copyEpicrisisBtn'),
         // Report tab elements
         patientReportMarkdown: document.getElementById('patientReportMarkdown'),
@@ -641,6 +642,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.epicrisisContent) {
             elements.epicrisisContent.innerHTML = '';
             delete elements.epicrisisContent.dataset.markdown;
+        }
+        if (elements.epicrisisNav) {
+            elements.epicrisisNav.innerHTML = '';
+            elements.epicrisisNav.hidden = true;
         }
         
         // Clear report tab
@@ -1771,22 +1776,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!resp.ok) throw new Error(resp.status);
             const data = await resp.json();
 
-            // Reporting physician + report date
-            const physician = data.resultsInterpreter?.[0]?.display
-                || data.performer?.[0]?.actor?.display || '';
-            const date = data.started || data.effectiveDateTime || data.authoredOn || '';
-            const medicEl = article.querySelector('.card-medic');
-            if (medicEl && physician) medicEl.textContent = physician;
-            const dateEl = article.querySelector('.report-date');
-            if (dateEl && date) {
-                dateEl.textContent = formatDate(date);
-                dateEl.dateTime = date;
-            }
-            if (physician || date) {
-                const signedEl = article.querySelector('.report-signed');
-                if (signedEl) signedEl.hidden = false;
-            }
-
             // Ordering physician from referrer (if not already set from ServiceRequest)
             const referrerEl = article.querySelector('.card-referrer');
             if (referrerEl && !referrerEl.textContent && data.referrer?.display) {
@@ -1813,9 +1802,33 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             // Report text
+            const forms = data.presentedForm || [];
+            const hasReport = forms.length > 0
+                || resultNotes.some(n => n.text)
+                || Boolean(data.conclusion);
+
+            // Signature footer only when a report actually exists — without one,
+            // performer falls back to the requesting physician server-side and
+            // showing it here would misattribute the (nonexistent) report
+            if (hasReport) {
+                const physician = data.resultsInterpreter?.[0]?.display
+                    || data.performer?.[0]?.actor?.display || '';
+                const date = data.started || data.effectiveDateTime || data.authoredOn || '';
+                const medicEl = article.querySelector('.card-medic');
+                if (medicEl && physician) medicEl.textContent = physician;
+                const dateEl = article.querySelector('.report-date');
+                if (dateEl && date) {
+                    dateEl.textContent = formatDate(date);
+                    dateEl.dateTime = date;
+                }
+                if (physician || date) {
+                    const signedEl = article.querySelector('.report-signed');
+                    if (signedEl) signedEl.hidden = false;
+                }
+            }
+
             const reportPreview = article.querySelector('.report-preview');
             if (reportPreview) {
-                const forms = data.presentedForm || [];
                 const notes = resultNotes;
                 if (forms.length > 0) {
                     for (const form of forms) {
@@ -1963,33 +1976,93 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (valid.length === 0) return;
 
-        // Build a single markdown document for all encounters
+        elements.epicrisisContent.innerHTML = '';
+        if (elements.epicrisisNav) {
+            elements.epicrisisNav.innerHTML = '';
+            elements.epicrisisNav.hidden = valid.length < 2;
+        }
+
+        // One distinct card per encounter + a chip navigator; the combined
+        // markdown document is kept for the Copy Markdown button
         let markdown = '';
         valid.forEach((item, index) => {
             const enc = item.enc;
             const epicrisisText = extractEpicrisisText(enc);
             const diagnosis = extractDiagnosisText(enc) || 'Epicrisis';
-            const meta = [];
-            if (enc.period?.start) meta.push(`**Admission:** ${formatDate(enc.period.start)}`);
-            if (enc.period?.end)   meta.push(`**Discharge:** ${formatDate(enc.period.end)}`);
+            const admission = enc.period?.start ? formatDate(enc.period.start) : '';
+            const discharge = enc.period?.end ? formatDate(enc.period.end) : '';
             const attender = enc.participant?.find(p =>
                 p.type?.some(t => t.coding?.some(c => c.code === 'ATND'))
-            );
-            if (attender?.individual?.display) meta.push(`**Attending:** ${attender.individual.display}`);
-            if (enc.serviceType?.display) meta.push(`**Service:** ${enc.serviceType.display}`);
+            )?.individual?.display || '';
+            const service = enc.serviceType?.display || '';
 
-            if (valid.length === 1) {
-                markdown += `# ${diagnosis}\n\n`;
-            } else {
-                markdown += `## ${index + 1}. ${diagnosis}\n\n`;
-            }
+            // Markdown for the copy button
+            const meta = [];
+            if (admission) meta.push(`**Admission:** ${admission}`);
+            if (discharge) meta.push(`**Discharge:** ${discharge}`);
+            if (attender)  meta.push(`**Attending:** ${attender}`);
+            if (service)   meta.push(`**Service:** ${service}`);
+            markdown += valid.length === 1 ? `# ${diagnosis}\n\n` : `## ${index + 1}. ${diagnosis}\n\n`;
             if (meta.length) markdown += `${meta.join(' · ')}  \n\n`;
             markdown += epicrisisText.trim() + '\n\n';
             if (index < valid.length - 1) markdown += '---\n\n';
+
+            // Card
+            const card = document.createElement('article');
+            card.className = 'epicrisis-card';
+            card.id = `epicrisis-${item.checkoutId}`;
+
+            const header = document.createElement('header');
+            header.className = 'epicrisis-card-header';
+            const h2 = document.createElement('h2');
+            h2.className = 'epicrisis-title';
+            h2.textContent = diagnosis;
+            header.appendChild(h2);
+
+            const metaP = document.createElement('p');
+            metaP.className = 'epicrisis-meta';
+            [['Admission', admission], ['Discharge', discharge],
+             ['Attending', attender], ['Service', service]].forEach(([label, value]) => {
+                if (!value) return;
+                const span = document.createElement('span');
+                const strong = document.createElement('strong');
+                strong.textContent = `${label}: `;
+                span.append(strong, value);
+                metaP.appendChild(span);
+            });
+            if (metaP.childElementCount) header.appendChild(metaP);
+            card.appendChild(header);
+
+            const body = document.createElement('div');
+            body.className = 'markdown-content epicrisis-body';
+            body.innerHTML = marked.parse(epicrisisText.trim());
+            card.appendChild(body);
+
+            elements.epicrisisContent.appendChild(card);
+
+            // Navigator chip: discharge date + diagnosis
+            if (elements.epicrisisNav && valid.length > 1) {
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.className = 'epicrisis-chip';
+                if (index === 0) chip.classList.add('active');
+                const dateSpan = document.createElement('span');
+                dateSpan.className = 'epicrisis-chip-date';
+                dateSpan.textContent = discharge || admission || '—';
+                const diagSpan = document.createElement('span');
+                diagSpan.className = 'epicrisis-chip-diag';
+                diagSpan.textContent = diagnosis;
+                chip.append(dateSpan, diagSpan);
+                chip.addEventListener('click', () => {
+                    elements.epicrisisNav.querySelectorAll('.epicrisis-chip')
+                        .forEach(c => c.classList.remove('active'));
+                    chip.classList.add('active');
+                    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                });
+                elements.epicrisisNav.appendChild(chip);
+            }
         });
 
-        const htmlContent = marked.parse(markdown);
-        elements.epicrisisContent.innerHTML = htmlContent;
         elements.epicrisisContent.dataset.markdown = markdown;
     }
     

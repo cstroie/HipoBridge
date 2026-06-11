@@ -495,7 +495,9 @@ small {
 .nav-item a {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 0.5rem;
+    white-space: nowrap;
     padding: 0.75rem 1rem;
     color: var(--text);
     text-decoration: none;
@@ -2191,6 +2193,98 @@ select {
         padding: 0;
         margin-bottom: var(--spacing-xs);
     }
+}
+
+/* ── Epicrisis cards + navigator ──────────────────────────────────────── */
+
+.epicrisis-nav {
+    display: flex;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+    margin-bottom: var(--spacing-md);
+    position: sticky;
+    top: calc(var(--header-height) + 60px);  /* below the main nav bar */
+    z-index: calc(var(--z-nav) - 1);
+    background: var(--bg);
+    padding: var(--spacing-sm) 0;
+}
+.epicrisis-nav[hidden] { display: none; }
+
+.epicrisis-chip {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.1rem;
+    padding: var(--spacing-xs) var(--spacing-md);
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    text-align: left;
+    max-width: 220px;
+    transition: border-color 0.2s ease;
+}
+.epicrisis-chip:hover { border-color: var(--primary); }
+.epicrisis-chip.active {
+    border-color: var(--primary);
+    background: rgba(37, 99, 235, 0.08);
+}
+
+.epicrisis-chip-date {
+    font-size: var(--font-size-xs);
+    color: var(--text-light);
+}
+
+.epicrisis-chip-diag {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+.epicrisis-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--primary);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--spacing-lg);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    scroll-margin-top: calc(var(--header-height) + 135px);  /* main nav + sticky chip bar */
+}
+
+.epicrisis-card-header {
+    padding: var(--spacing-md) var(--spacing-lg);
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+}
+
+.epicrisis-title {
+    margin: 0;
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+}
+
+.epicrisis-meta {
+    display: flex;
+    gap: var(--spacing-md);
+    flex-wrap: wrap;
+    margin: var(--spacing-xs) 0 0;
+    font-size: var(--font-size-sm);
+    color: var(--text-light);
+}
+.epicrisis-meta strong { color: var(--text); font-weight: var(--font-weight-medium); }
+
+/* The card supplies the chrome; strip the markdown-content box styling */
+.epicrisis-body {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: var(--spacing-md) var(--spacing-lg);
 }
 
 /* ── Report modal (schedule request detail) ───────────────────────────── */
