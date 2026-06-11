@@ -1,0 +1,21 @@
+checkout: http://192.168.3.230/Hipocrate/gen_printabile/BiletExternare.asp?RelId=260100000619759&RelName=CO
+user_info: http://192.168.3.230/Hipocrate/gen_administrare/listare/cont.asp?id=421200000000744&ses=1
+appointments: http://192.168.3.230/Hipocrate/gen_apps/
+
+lab_req:
+  - one_lab_req: http://192.168.3.230/Hipocrate/PARA/NOM/Listare/cerere.asp?id=1714488
+  - all_lab_req: http://192.168.3.230/Hipocrate/PARA/NOM/Listare/?id=44
+  - http://192.168.3.230/Hipocrate/PARA/NOM/Listare/bulkValidatePrepare.asp
+  - http://192.168.3.230/Hipocrate/PARA/NOM/Listare/bulkValidate.asp?dela=07/06/2026&panala=09/06/2026&sh=00:00&eh=23:59&pt=&m=&st=&d=&an=&rap=1&p=0&r=&o=1&lab=&dp=&s=&E=0
+  - http://192.168.3.230/Hipocrate/PARA/NOM/Listare/bulkValidate.asp?dela=07/06/2026&panala=09/06/2026&sh=00:00&eh=23:59&pt=&m=&st=&d=&an=&rap=1&p=0&r=1&o=1&lab=&dp=&s=&E=0
+
+lab_req: http://192.168.3.230/Hipocrate/PARA/Printabile/buletinRecoltari.asp?id=1665109
+lab_rep: http://192.168.3.230/Hipocrate/PARA/Printabile/BuletinAnalize.asp?id=1674330&type=2&IdP=13
+
+
+history: http://192.168.3.230/Hipocrate/pacient/analysesALL.asp?type=PA&pacid=421200000683090
+episode: http://192.168.3.230/Hipocrate/pacient/analysesEpisod.asp?strFileID=652001&pacid=421200000683090&strType=CI
+
+req-rep: http://192.168.3.230/Hipocrate/PARA/NOM/Listare/Cerere.asp?id=1674330
+
+analize: http://192.168.3.230/Hipocrate/Pacient/analysesEpisod.asp?pacid=421200000683090&strFileID=652001&strType=CI&strAN=&strDomeniu=&pagina=01&NrPePag=100
