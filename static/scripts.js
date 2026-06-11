@@ -1766,42 +1766,48 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     const SCHEDULE_STATUS_CLASS = {
-        'trimisa in laborator': 'status-sent',
-        'primita in laborator': 'status-received',
-        'cerere netrimisa': 'status-pending',
-        'fara analize': 'status-empty',
+        'active':   'status-sent',
+        'draft':    'status-pending',
+        'on-hold':  'status-empty',
+        'unknown':  'status-pending',
     };
 
     async function fetchSchedule(date) {
         if (!elements.scheduleBody) return;
-        const url = date ? `/api/schedule?date=${date}` : '/api/schedule';
+        const url = date ? `/fhir/Schedule?date=${date}` : '/fhir/Schedule';
         try {
             const resp = await fetch(url);
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const json = await resp.json();
-            const requests = json.requests || [];
+            const bundle = await resp.json();
+            const entries = bundle.entry || [];
 
             elements.scheduleBody.innerHTML = '';
-            if (requests.length === 0) {
+            if (entries.length === 0) {
                 if (elements.scheduleTable) elements.scheduleTable.hidden = true;
                 if (elements.noSchedule) elements.noSchedule.style.display = '';
             } else {
                 if (elements.noSchedule) elements.noSchedule.style.display = 'none';
-                requests.forEach(r => {
+                entries.forEach(({ resource: r }) => {
+                    const authoredOn = r.authoredOn || '';
+                    const time = authoredOn.includes(' ') ? authoredOn.split(' ')[1] : authoredOn;
+                    const patientName = r.subject?.display || '';
+                    const requestCode = r.identifier?.[0]?.value || r.id || '';
+                    const section = r.note?.[0]?.text || '';
+                    const requestedBy = r.requester?.display || '';
+                    const laboratory = r.code?.text || '';
+                    const status = r.status || '';
+                    const statusClass = SCHEDULE_STATUS_CLASS[status] || '';
+
                     const tr = document.createElement('tr');
-                    const time = r.date_time ? r.date_time.split(' ')[1] || r.date_time : '';
-                    const statusKey = (r.status || '').toLowerCase();
-                    const statusClass = SCHEDULE_STATUS_CLASS[statusKey] || '';
-                    tr.innerHTML = '';
-                    [time, r.patient_name, r.request_code, r.section, r.requested_by, r.laboratory].forEach(val => {
+                    [time, patientName, requestCode, section, requestedBy, laboratory].forEach(val => {
                         const td = document.createElement('td');
-                        td.textContent = val || '';
+                        td.textContent = val;
                         tr.appendChild(td);
                     });
                     const statusTd = document.createElement('td');
                     const badge = document.createElement('span');
                     badge.className = `schedule-status ${statusClass}`;
-                    badge.textContent = r.status || '';
+                    badge.textContent = status;
                     statusTd.appendChild(badge);
                     tr.appendChild(statusTd);
                     elements.scheduleBody.appendChild(tr);
