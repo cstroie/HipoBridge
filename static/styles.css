@@ -1261,13 +1261,24 @@ select {
     cursor: pointer;
 }
 
-/* Analyses toolbar: the filter select stretches to the search box height */
-.analyses-header .header-actions {
-    align-items: stretch;
+/* Uniform control height in every header-actions row */
+.header-actions .btn-primary,
+.header-actions .btn-secondary,
+.header-actions .btn-ghost,
+.header-actions select,
+.header-actions .search-box,
+.header-actions .search-quick,
+.header-actions .schedule-date-input {
+    height: 40px;
+    padding-top: 0;
+    padding-bottom: 0;
 }
 
-.analyses-header select {
-    padding: var(--spacing-sm) var(--spacing-md);
+.header-actions .search-box input,
+.header-actions .search-quick input {
+    height: 100%;
+    padding-top: 0;
+    padding-bottom: 0;
 }
 
 /* Analyses grid */
