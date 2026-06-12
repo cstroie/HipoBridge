@@ -107,6 +107,10 @@
     /* Header height — used by sticky nav offset */
     --header-height: 72px;
 
+    /* Focus rings — follow the theme's --primary instead of a fixed rgba */
+    --focus-ring: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent);
+    --focus-ring-subtle: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent);
+
     color-scheme: light dark;
 }
 
@@ -237,7 +241,7 @@ small {
 .btn:focus {
     outline: 2px solid transparent;
     outline-offset: 2px;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+    box-shadow: var(--focus-ring);
 }
 
 .btn-icon {
@@ -282,7 +286,7 @@ small {
 .form-input:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    box-shadow: var(--focus-ring-subtle);
 }
 
 .form-input::placeholder {
@@ -525,7 +529,7 @@ small {
 
 .nav-item a:focus {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+    box-shadow: var(--focus-ring);
     border-color: var(--primary);
 }
 
@@ -554,7 +558,9 @@ small {
 
 /* Hero Section */
 .hero-section {
-    background: linear-gradient(135deg, rgba(37, 99, 235, 0.1), rgba(5, 150, 105, 0.1));
+    background: linear-gradient(135deg,
+        color-mix(in srgb, var(--primary) 10%, transparent),
+        color-mix(in srgb, var(--secondary) 10%, transparent));
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     padding: var(--spacing-lg);
@@ -674,7 +680,7 @@ small {
 .input-with-icon input:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    box-shadow: var(--focus-ring-subtle);
 }
 
 .btn-primary {
@@ -1110,21 +1116,21 @@ button.stat-pill {
 }
 
 .badge-primary {
-    background: rgba(37, 99, 235, 0.1);
+    background: color-mix(in srgb, var(--primary) 10%, transparent);
     color: var(--primary);
-    border: 1px solid rgba(37, 99, 235, 0.3);
+    border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
 }
 
 .badge-secondary {
-    background: rgba(107, 114, 128, 0.1);
+    background: color-mix(in srgb, var(--muted) 10%, transparent);
     color: var(--muted);
-    border: 1px solid rgba(107, 114, 128, 0.3);
+    border: 1px solid color-mix(in srgb, var(--muted) 30%, transparent);
 }
 
 .badge-info {
-    background: rgba(59, 130, 246, 0.1);
+    background: color-mix(in srgb, var(--info) 10%, transparent);
     color: var(--info);
-    border: 1px solid rgba(59, 130, 246, 0.3);
+    border: 1px solid color-mix(in srgb, var(--info) 30%, transparent);
 }
 
 .btn-secondary {
