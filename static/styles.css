@@ -310,7 +310,6 @@ small {
 
 .card:hover {
     box-shadow: var(--shadow-xl);
-    transform: translateY(-2px);
 }
 
 .card-header {
@@ -418,7 +417,7 @@ small {
     border: none;
     outline: none;
     color: white;
-    padding: 0.5rem 0.75rem;
+    padding: var(--spacing-sm) 0.75rem;
     font-size: var(--font-size-sm);
     min-width: 200px;
     width: 100%;
@@ -432,7 +431,7 @@ small {
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.2);
     color: white;
-    padding: 0.5rem;
+    padding: var(--spacing-sm);
     border-radius: var(--radius-full);
     cursor: pointer;
     transition: all 0.2s ease;
@@ -445,7 +444,6 @@ small {
 
 .header .btn-icon:hover {
     background: rgba(255, 255, 255, 0.2);
-    transform: translateY(-1px);
 }
 
 .user-actions {
@@ -457,10 +455,10 @@ small {
 
 .header .badge {
     background: rgba(255, 255, 255, 0.2);
-    padding: 0.25rem 0.5rem;
+    padding: var(--spacing-xs) var(--spacing-sm);
     border-radius: var(--radius-full);
     font-size: var(--font-size-xs);
-    margin-left: 0.5rem;
+    margin-left: var(--spacing-sm);
 }
 
 /* Navigation */
@@ -482,11 +480,11 @@ small {
     display: flex;
     list-style: none;
     margin: 0;
-    gap: 0.25rem;
+    gap: var(--spacing-xs);
     background: var(--bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    padding: 0.25rem;
+    padding: var(--spacing-xs);
 }
 .nav-menu[hidden] { display: none; }
 
@@ -502,9 +500,9 @@ small {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0.5rem;
+    gap: var(--spacing-sm);
     white-space: nowrap;
-    padding: 0.75rem 1rem;
+    padding: 0.75rem var(--spacing-md);
     color: var(--text);
     text-decoration: none;
     border-radius: var(--radius-sm);
@@ -544,7 +542,7 @@ small {
 @media (max-width: 560px) {
     .nav-item a {
         justify-content: center;
-        padding: 0.75rem 0.5rem;
+        padding: 0.75rem var(--spacing-sm);
     }
     .nav-item a span { display: none; }
     .nav-item a i { font-size: var(--font-size-lg); }
@@ -553,7 +551,7 @@ small {
 /* Main Content */
 .main-content {
     flex: 1;
-    padding: 2rem 0 4rem;
+    padding: var(--spacing-xl) 0 4rem;
 }
 
 /* Hero Section */
@@ -569,12 +567,12 @@ small {
 
 .hero-content h1 {
     font-size: var(--font-size-3xl);
-    margin: 0 0 0.5rem 0;
+    margin: 0 0 var(--spacing-sm) 0;
     font-weight: var(--font-weight-bold);
 }
 
 .hero-content h1 i {
-    margin-right: 0.5rem;
+    margin-right: var(--spacing-sm);
     color: var(--primary);
 }
 
@@ -588,10 +586,10 @@ small {
     background: var(--card-bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    padding: 1.5rem;
+    padding: var(--spacing-lg);
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: var(--spacing-md);
 }
 
 .stat-icon {
@@ -642,7 +640,7 @@ small {
 
 .search-header h2 {
     font-size: var(--font-size-2xl);
-    margin: 0 0 0.5rem 0;
+    margin: 0 0 var(--spacing-sm) 0;
     color: var(--text);
 }
 
@@ -668,7 +666,7 @@ small {
 
 .input-with-icon input {
     width: 100%;
-    padding: 1rem 1rem 1rem 2.5rem;
+    padding: var(--spacing-md) var(--spacing-md) var(--spacing-md) 2.5rem;
     border: 2px solid var(--border);
     border-radius: var(--radius-md);
     background: var(--card-bg);
@@ -687,18 +685,17 @@ small {
     background: linear-gradient(135deg, var(--primary), var(--primary-dark));
     color: white;
     border: none;
-    padding: 1rem 1.5rem;
+    padding: var(--spacing-md) var(--spacing-lg);
     border-radius: var(--radius-md);
     font-weight: var(--font-weight-semibold);
     cursor: pointer;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--spacing-sm);
 }
 
 .btn-primary:hover {
-    transform: translateY(-2px);
     box-shadow: var(--shadow-lg);
 }
 
@@ -942,7 +939,6 @@ small {
 
 .stat-pill:hover {
     box-shadow: var(--shadow-md);
-    transform: translateY(-2px);
 }
 
 .stat-pill > i {
@@ -998,7 +994,7 @@ small {
 .info-cell {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: var(--spacing-xs);
     padding: var(--spacing-md);
     background: var(--bg);
     border: 1px solid var(--border);
@@ -1137,14 +1133,14 @@ button.stat-pill {
     background: var(--bg);
     color: var(--text);
     border: 1px solid var(--border);
-    padding: 0.75rem 1rem;
+    padding: 0.75rem var(--spacing-md);
     border-radius: var(--radius-md);
     font-weight: var(--font-weight-medium);
     cursor: pointer;
     transition: all 0.2s ease;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--spacing-sm);
 }
 
 .btn-secondary:hover {
@@ -1157,14 +1153,14 @@ button.stat-pill {
     background: transparent;
     color: var(--text);
     border: 1px solid var(--border);
-    padding: 0.75rem 1rem;
+    padding: 0.75rem var(--spacing-md);
     border-radius: var(--radius-md);
     font-weight: var(--font-weight-medium);
     cursor: pointer;
     transition: all 0.2s ease;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--spacing-sm);
 }
 
 .btn-ghost:hover {
@@ -1204,7 +1200,7 @@ button.stat-pill {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1.5rem;
+    margin-bottom: var(--spacing-lg);
 }
 
 .header-left p {
@@ -1215,11 +1211,11 @@ button.stat-pill {
 .search-box {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--spacing-sm);
     background: var(--card-bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    padding: 0.5rem 1rem;
+    padding: var(--spacing-sm) var(--spacing-md);
 }
 
 .search-box i {
@@ -1231,7 +1227,7 @@ button.stat-pill {
     border: none;
     outline: none;
     color: var(--text);
-    padding: 0.5rem;
+    padding: var(--spacing-sm);
     min-width: 250px;
 }
 
@@ -1243,9 +1239,18 @@ select {
     background: var(--card-bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    padding: 0.5rem;
+    padding: var(--spacing-sm);
     color: var(--text);
     cursor: pointer;
+}
+
+/* Analyses toolbar: the filter select stretches to the search box height */
+.analyses-header .header-actions {
+    align-items: stretch;
+}
+
+.analyses-header select {
+    padding: var(--spacing-sm) var(--spacing-md);
 }
 
 /* Analyses grid */
@@ -1281,7 +1286,6 @@ select {
 }
 
 .analysis-card:hover {
-    transform: translateY(-2px);
     box-shadow: var(--shadow-lg);
 }
 
@@ -1343,7 +1347,7 @@ select {
 
 .urgent-badge {
     flex-shrink: 0;
-    padding: 0.15rem 0.5rem;
+    padding: 0.15rem var(--spacing-sm);
     background: #fee2e2;
     color: #991b1b;
     font-size: var(--font-size-xs);
@@ -1389,7 +1393,7 @@ select {
 }
 
 .btn-small {
-    padding: 0.5rem;
+    padding: var(--spacing-sm);
     border-radius: var(--radius-sm);
 }
 
@@ -1440,7 +1444,7 @@ select {
     color: var(--text-light);
 }
 
-.report-signed .fa-circle-check { color: var(--success, #16a34a); }
+.report-signed .fa-signature { color: var(--success, #16a34a); }
 .report-signed .report-date::before { content: '·\00a0'; }
 
 .no-report-text {
@@ -1500,19 +1504,19 @@ select {
     font-weight: var(--font-weight-semibold);
     color: var(--primary);
     border-bottom: 1px solid var(--border);
-    padding-bottom: 0.25rem;
-    margin: 0.75rem 0 0.5rem;
+    padding-bottom: var(--spacing-xs);
+    margin: 0.75rem 0 var(--spacing-sm);
 }
 .study-title:first-child { margin-top: 0; }
 
 .imaging-study-link {
-    margin-top: 0.5rem;
+    margin-top: var(--spacing-sm);
 }
 
 .imaging-study-link a {
     display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--spacing-sm);
     color: var(--primary);
     text-decoration: none;
     font-weight: var(--font-weight-medium);
@@ -1536,7 +1540,7 @@ select {
 /* No-data placeholder */
 .no-data {
     display: none;
-    padding: 3rem 1rem;
+    padding: var(--spacing-2xl) var(--spacing-md);
     color: var(--text-light);
     text-align: center;
 }
@@ -1553,8 +1557,8 @@ select {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 1rem;
-    padding: 3rem 1rem;
+    gap: var(--spacing-md);
+    padding: var(--spacing-2xl) var(--spacing-md);
     color: var(--text-light);
 }
 
@@ -1567,7 +1571,7 @@ select {
 .markdown-content {
     background: var(--card-bg);
     border-radius: var(--radius-lg);
-    padding: 2rem;
+    padding: var(--spacing-xl);
     line-height: 1.75;
     color: var(--text);
 }
@@ -1577,8 +1581,8 @@ select {
     font-weight: var(--font-weight-bold);
     color: var(--primary);
     border-bottom: 2px solid var(--border);
-    padding-bottom: 0.5rem;
-    margin-bottom: 1.5rem;
+    padding-bottom: var(--spacing-sm);
+    margin-bottom: var(--spacing-lg);
     margin-top: 0;
 }
 
@@ -1588,16 +1592,16 @@ select {
     color: var(--text);
     border-left: 3px solid var(--primary);
     padding-left: 0.75rem;
-    margin-top: 2rem;
-    margin-bottom: 1rem;
+    margin-top: var(--spacing-xl);
+    margin-bottom: var(--spacing-md);
 }
 
 .markdown-content h3 {
     font-size: var(--font-size-lg);
     font-weight: var(--font-weight-semibold);
     color: var(--text-light);
-    margin-top: 1.5rem;
-    margin-bottom: 0.5rem;
+    margin-top: var(--spacing-lg);
+    margin-bottom: var(--spacing-sm);
 }
 
 .markdown-content p {
@@ -1615,23 +1619,23 @@ select {
 
 .markdown-content ul,
 .markdown-content ol {
-    margin: 0.5rem 0 1rem 1.5rem;
+    margin: var(--spacing-sm) 0 var(--spacing-md) var(--spacing-lg);
 }
 
 .markdown-content li {
-    margin-bottom: 0.25rem;
+    margin-bottom: var(--spacing-xs);
 }
 
 .markdown-content hr {
     border: none;
     border-top: 1px solid var(--border);
-    margin: 1.5rem 0;
+    margin: var(--spacing-lg) 0;
 }
 
 .markdown-content blockquote {
     border-left: 4px solid var(--primary-light);
-    padding: 0.5rem 1rem;
-    margin: 1rem 0;
+    padding: var(--spacing-sm) var(--spacing-md);
+    margin: var(--spacing-md) 0;
     background: var(--bg);
     border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
     color: var(--text-light);
@@ -1649,9 +1653,9 @@ select {
     background: var(--bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    padding: 1rem;
+    padding: var(--spacing-md);
     overflow-x: auto;
-    margin: 1rem 0;
+    margin: var(--spacing-md) 0;
 }
 
 .markdown-content pre code {
@@ -1663,7 +1667,7 @@ select {
 .markdown-content table {
     width: 100%;
     border-collapse: collapse;
-    margin: 1rem 0;
+    margin: var(--spacing-md) 0;
     font-size: var(--font-size-sm);
 }
 
@@ -1671,12 +1675,12 @@ select {
     background: var(--bg);
     font-weight: var(--font-weight-semibold);
     text-align: left;
-    padding: 0.5rem 0.75rem;
+    padding: var(--spacing-sm) 0.75rem;
     border: 1px solid var(--border);
 }
 
 .markdown-content td {
-    padding: 0.5rem 0.75rem;
+    padding: var(--spacing-sm) 0.75rem;
     border: 1px solid var(--border);
 }
 
@@ -1688,7 +1692,7 @@ select {
 .footer {
     background: var(--card-bg);
     border-top: 1px solid var(--border);
-    padding: 1rem 0;
+    padding: var(--spacing-md) 0;
     margin-top: auto;
 }
 
@@ -1778,7 +1782,7 @@ select {
     background: var(--card-bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    padding: 2rem;
+    padding: var(--spacing-xl);
     text-align: center;
     box-shadow: var(--shadow-lg);
 }
@@ -1790,7 +1794,7 @@ select {
     border-top-color: var(--primary);
     border-radius: var(--radius-full);
     animation: spin 1s linear infinite;
-    margin: 0 auto 1rem;
+    margin: 0 auto var(--spacing-md);
 }
 
 @keyframes spin {
@@ -1826,7 +1830,7 @@ select {
 @media (max-width: 768px) {
     .header-content {
         flex-direction: column;
-        gap: 1rem;
+        gap: var(--spacing-md);
     }
 
     /* Stacked header is taller than --header-height, so the 72px sticky
@@ -1851,7 +1855,7 @@ select {
     .nav-menu {
         overflow-x: auto;
         white-space: nowrap;
-        padding-bottom: 0.5rem;
+        padding-bottom: var(--spacing-sm);
     }
     
     .hero-content h1 {
@@ -1860,7 +1864,7 @@ select {
     
     .search-card,
     .recent-searches {
-        padding: 1.5rem;
+        padding: var(--spacing-lg);
     }
     
     .patient-banner {
@@ -1941,7 +1945,7 @@ select {
     }
 
     .btn-secondary {
-        padding: 1rem 1.25rem;
+        padding: var(--spacing-md) 1.25rem;
     }
 
     /* Schedule filters: full-width on mobile */
@@ -1967,15 +1971,6 @@ select {
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
-    }
-
-    .card:hover,
-    .analysis-card:hover,
-    .btn-primary:hover,
-    .btn-secondary:hover,
-    .btn-ghost:hover,
-    .header .btn-icon:hover {
-        transform: none;
     }
 
     .spinner {
