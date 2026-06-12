@@ -1932,7 +1932,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     dateEl.textContent = formatExamDate(date);
                     dateEl.dateTime = date;
                 }
-                if (physician || date) {
+                // No performing physician means the report isn't signed — keep the footer hidden
+                if (physician) {
                     const signedEl = article.querySelector('.report-signed');
                     if (signedEl) signedEl.hidden = false;
                 }
