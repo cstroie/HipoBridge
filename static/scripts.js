@@ -1764,7 +1764,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const modality = MODALITY_INFO[analysisType] || { icon: 'fa-file-medical', label: analysisText };
         const iconEl = article.querySelector('.modality-icon');
-        if (iconEl) iconEl.className = `fas ${modality.icon}`;
+        if (iconEl) iconEl.className = `modality-icon fas ${modality.icon}`;
 
         const typeText = article.querySelector('.type-text');
         if (typeText) typeText.textContent = analysisText || modality.label;
