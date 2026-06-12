@@ -37,6 +37,9 @@
                             <button class="btn-icon" id="themeToggle" aria-label="Toggle theme">
                                 <i class="fas fa-moon"></i>
                             </button>
+                            <button class="btn-icon" id="userButton" aria-label="User account">
+                                <i class="fas fa-user-circle"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -510,6 +513,45 @@
                     <footer class="report-modal-footer">
                         <button class="btn-secondary" data-close-modal aria-label="Close"><i class="fas fa-times"></i> <span>Close</span></button>
                         <button class="btn-primary modal-load-patient-btn" aria-label="Load patient"><i class="fas fa-user-injured"></i> <span>Load Patient</span></button>
+                    </footer>
+                </article>
+            </dialog>
+        </template>
+
+        <template id="user-modal-template">
+            <dialog class="modal user-modal" aria-modal="true" role="dialog" aria-labelledby="user-modal-title">
+                <article>
+                    <header>
+                        <h2 id="user-modal-title"><i class="fas fa-user-circle" aria-hidden="true"></i> <span class="modal-title">User Account</span></h2>
+                        <button class="close" aria-label="Close modal">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </header>
+                    <div>
+                        <div class="user-modal-identity">
+                            <div class="user-modal-avatar" aria-hidden="true">
+                                <i class="fas fa-user-md"></i>
+                            </div>
+                            <p class="user-modal-name"></p>
+                        </div>
+                        <dl class="user-modal-details">
+                            <dt>Username</dt>
+                            <dd class="user-detail-username"></dd>
+                            <dt>User ID</dt>
+                            <dd class="user-detail-id"></dd>
+                            <dt>Account</dt>
+                            <dd class="user-detail-account"></dd>
+                        </dl>
+                    </div>
+                    <footer>
+                        <button class="btn-secondary" data-close-modal aria-label="Close modal">
+                            <i class="fas fa-times"></i>
+                            <span>Close</span>
+                        </button>
+                        <button class="btn-primary user-logout-btn" aria-label="Log out">
+                            <i class="fas fa-sign-out-alt"></i>
+                            <span>Log Out</span>
+                        </button>
                     </footer>
                 </article>
             </dialog>

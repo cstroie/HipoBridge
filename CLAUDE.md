@@ -54,7 +54,7 @@ HTTP client
 - `web_fhir_response` — FHIR-typed responses (`/fhir/*`); handles `OperationOutcome` on errors
 - `@require_auth` decorator extracts Basic Auth and attaches credentials to `request.auth_credentials`
 
-**`hipoclient.py`** — the core scraping layer. One base class + eleven specialised subclasses:
+**`hipoclient.py`** — the core scraping layer. One base class + twelve specialised subclasses:
 
 | Class | Route | Hipocrate URL |
 |---|---|---|
@@ -70,6 +70,7 @@ HTTP client
 | `HipoClientCheckup` | `/api/checkup/{id}` | `/files/checkup.asp?cuid={id}` |
 | `HipoClientCerere` | `/api/request/{id}/patient` | `/PARA/NOM/Listare/cerere.asp?id={id}` |
 | `HipoClientSchedule` | `/api/schedule`, `/fhir/Schedule` | `/PARA/NOM/Listare/?id=44&NrPePag=100` |
+| `HipoClientWhoami` | `/api/whoami` | `main.asp` (clockSession block) |
 
 Every subclass (except `HipoClientCheckin` / `HipoClientCheckup` which are raw-JSON only) implements three methods:
 - `fetch_and_parse(**kwargs)` → `HipoData` (raw dict)
@@ -160,6 +161,10 @@ Page: `/files/checkup.asp?cuid={id}`. Expected title text: `Consult`. Extracts:
 - `checkup.exam_general`, `checkup.exam_local`
 
 No FHIR response implemented yet.
+
+### Whoami (`HipoClientWhoami`) field notes
+
+Page: `main.asp` — extracts the logged-in user from the `div.clockSession` header block (`<b>Utilizator:</b>4212-stroie.costin`). Stores `user.account` (full string), `user.id` and `user.username` (split on the first `-` when the prefix is numeric). **Cache safety:** `main.asp` is the same URL for every user but its content is user-specific, so `fetch_and_parse` evicts the URL from the shared cache both before and after the fetch. Raw-JSON only (`/api/whoami`); no FHIR equivalent. `POST /api/logout` closes the caller's Hipocrate session via `user_session_manager.close_user_session(username)` — it cannot clear the browser's Basic Auth credentials.
 
 ### Cerere (`HipoClientCerere`) field notes
 

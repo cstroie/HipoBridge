@@ -2289,11 +2289,13 @@ select {
 
 /* ── Report modal (schedule request detail) ───────────────────────────── */
 
+dialog.modal,
 dialog.report-modal {
     padding: 0;
     border: none;
     border-radius: var(--radius-lg);
     background: var(--card-bg);
+    color: var(--text);
     box-shadow: var(--shadow-lg);
     width: min(720px, 96vw);
     max-height: 88vh;
@@ -2304,10 +2306,124 @@ dialog.report-modal {
     margin: auto;
 }
 
+dialog.modal::backdrop,
 dialog.report-modal::backdrop {
     background: rgba(0, 0, 0, 0.55);
     backdrop-filter: blur(3px);
 }
+
+/* display:flex above would override the native [open] toggle */
+dialog.modal:not([open]),
+dialog.report-modal:not([open]) {
+    display: none;
+}
+
+/* ── Generic .modal structure (imaging study, user account) ───────────── */
+
+dialog.modal { width: min(560px, 96vw); }
+
+dialog.modal article {
+    display: flex;
+    flex-direction: column;
+    max-height: 88vh;
+    overflow: hidden;
+}
+
+dialog.modal article > header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+dialog.modal article > header h2 {
+    margin: 0;
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+dialog.modal article > header h2 i { color: var(--primary); }
+
+dialog.modal .close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-light);
+    font-size: var(--font-size-lg);
+    padding: var(--spacing-xs);
+    border-radius: var(--radius-sm);
+    line-height: 1;
+    transition: color 0.15s, background 0.15s;
+    flex-shrink: 0;
+}
+
+dialog.modal .close:hover { color: var(--text); background: var(--hover-bg); }
+
+dialog.modal article > div {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--spacing-lg);
+    font-size: var(--font-size-sm);
+    line-height: 1.65;
+}
+
+dialog.modal article > footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-top: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+/* ── User account modal ───────────────────────────────────────────────── */
+
+.user-modal-identity {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+}
+
+.user-modal-avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: var(--radius-full);
+    background: var(--primary);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-2xl);
+    flex-shrink: 0;
+}
+
+.user-modal-name {
+    margin: 0;
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    text-transform: capitalize;
+}
+
+.user-modal-details {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: var(--spacing-xs) var(--spacing-md);
+    margin: 0;
+}
+
+.user-modal-details dt {
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-light);
+}
+
+.user-modal-details dd { margin: 0; }
 
 .report-modal-article {
     display: flex;
@@ -2415,5 +2531,5 @@ dialog.report-modal::backdrop {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    dialog.report-modal { animation: none; }
+    dialog.modal, dialog.report-modal { animation: none; }
 }

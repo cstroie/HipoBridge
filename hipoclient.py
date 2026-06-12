@@ -280,6 +280,14 @@ class UserSessionManager:
     def set_authenticated(self, username: str, value: bool) -> None:
         self._authenticated[username] = value
 
+    async def close_user_session(self, username: str) -> None:
+        """Close one user's session and forget its authentication state."""
+        session = self.user_sessions.pop(username, None)
+        if session and not session.closed:
+            logger.info(f"Closing session for user {username}")
+            await session.close()
+        self._authenticated.pop(username, None)
+
     async def close_all_sessions(self):
         """Close all user sessions and free associated resources."""
         logger.info("Closing all user sessions")
@@ -2855,6 +2863,50 @@ class HipoClientCerere(HipoClient):
             return data
         except Exception as e:
             logger.error(f"Error parsing cerere data: {e}")
+            data.set_error(str(e))
+            return data
+
+
+class HipoClientWhoami(HipoClient):
+    """Extracts the logged-in user identity from the clockSession block on main.asp."""
+
+    def __init__(self, service_url=None, request=None):
+        super().__init__(service_url=service_url, request=request)
+        self.request_url = "main.asp"
+
+    async def fetch_and_parse(self, *args, **kwargs):
+        # main.asp is the same URL for every user but its clockSession block is
+        # user-specific — it must never be served from or left in the shared URL cache.
+        full_url = self.get_full_url(self.request_url)
+        self.cache_remove(full_url)
+        parsed_data = await super().fetch_and_parse(*args, **kwargs)
+        self.cache_remove(full_url)
+        return parsed_data
+
+    def parse_data(self, html_content: str, **kwargs) -> HipoData:
+        data = HipoData(status="success", message="")
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            container = soup.find('div', class_='clockSession')
+            if not container:
+                data.set_error("Session block not found on Hipocrate page")
+                return data
+            text = container.get_text(' ', strip=True)
+            m = re.search(r'Utilizator:\s*(\S+)', text)
+            if not m:
+                data.set_error("User name not found in session block")
+                return data
+            account = m.group(1)
+            data.store("user.account", account)
+            uid, sep, name = account.partition('-')
+            if sep and uid.isdigit() and name:
+                data.store("user.id", uid)
+                data.store("user.username", name)
+            else:
+                data.store("user.username", account)
+            return data
+        except Exception as e:
+            logger.error(f"Error parsing whoami data: {e}")
             data.set_error(str(e))
             return data
 

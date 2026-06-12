@@ -34,7 +34,7 @@ import base64
 from fhir import OperationOutcome, Resource
 
 from hipoclient import ANALYSIS_TYPES
-from hipoclient import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientImagingStudy, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientServiceRequestSearch, HipoClientCheckout, HipoClientCheckin, HipoClientCheckup, HipoClientSchedule, HipoClientCerere
+from hipoclient import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientImagingStudy, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientServiceRequestSearch, HipoClientCheckout, HipoClientCheckin, HipoClientCheckup, HipoClientSchedule, HipoClientCerere, HipoClientWhoami
 from hipoclient import user_session_manager
 from hipodata import HipoData
 
@@ -367,6 +367,23 @@ async def get_fhir_schedule(request):
     return web_fhir_response(response)
 
 @require_auth
+async def get_whoami(request):
+    """Return the logged-in Hipocrate user identity. Returns raw HipoData JSON."""
+    client = HipoClientWhoami(SERVICE_URL, request)
+    debug_resp = await web_debug_response(client, request)
+    if debug_resp is not None:
+        return debug_resp
+    parsed_data = await client.fetch_and_parse()
+    return web_json_response(parsed_data)
+
+@require_auth
+async def post_logout(request):
+    """Close the user's Hipocrate session held by the bridge."""
+    username, _ = request['auth_credentials']
+    await user_session_manager.close_user_session(username)
+    return web_json_response(HipoData(status="success", message=""))
+
+@require_auth
 async def debug_passthrough(request):
     """Fetch any Hipocrate path for debugging. ?path=/files/checkup.asp?cuid=..."""
     path = request.query.get('path', '')
@@ -677,6 +694,8 @@ async def init_app():
     app.router.add_get('/api/request/{id}/patient', get_request_patient)
     app.router.add_get('/api/schedule', get_schedule)
     app.router.add_get('/fhir/Schedule', get_fhir_schedule)
+    app.router.add_get('/api/whoami', get_whoami)
+    app.router.add_post('/api/logout', post_logout)
     app.router.add_get('/api/debug', debug_passthrough)
     app.router.add_get('/fhir/Patient', search_fhir_patient)
     app.router.add_get('/fhir/Patient/{id}', get_fhir_patient)

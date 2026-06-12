@@ -44,6 +44,7 @@ document.addEventListener('DOMContentLoaded', function() {
         quickSearch: document.getElementById('quickSearch'),
         quickSearchBtn: document.getElementById('quickSearchBtn'),
         themeToggle: document.getElementById('themeToggle'),
+        userButton: document.getElementById('userButton'),
         // Search examples
         clearRecentBtn: document.getElementById('clearRecentBtn'),
         recentEmpty: document.getElementById('recentEmpty'),
@@ -206,7 +207,12 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.themeToggle) {
             elements.themeToggle.addEventListener('click', toggleTheme);
         }
-        
+
+        // User account button
+        if (elements.userButton) {
+            elements.userButton.addEventListener('click', showUserModal);
+        }
+
         
         // Clear recent searches
         if (elements.clearRecentBtn) {
@@ -504,7 +510,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const box = document.createElement('div');
             box.className = 'card';
-            box.style.cssText = 'min-width:320px;max-width:480px;max-height:70vh;overflow-y:auto;padding:var(--space-4)';
+            box.style.cssText = 'min-width:320px;max-width:480px;max-height:70vh;overflow-y:auto;padding:var(--spacing-lg)';
             box.setAttribute('role', 'dialog');
             box.setAttribute('aria-modal', 'true');
             box.setAttribute('aria-label', 'Select patient');
@@ -520,7 +526,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const name = nameObj?.text || [nameObj?.family, ...(nameObj?.given || [])].filter(Boolean).join(' ') || patient.id;
                 const btn = document.createElement('button');
                 btn.className = 'btn-secondary';
-                btn.style.cssText = 'display:block;width:100%;margin-top:var(--space-2);text-align:left';
+                btn.style.cssText = 'display:block;width:100%;margin-top:var(--spacing-sm);text-align:left';
                 btn.textContent = name;
                 btn.addEventListener('click', () => dismiss(patient));
                 box.appendChild(btn);
@@ -528,7 +534,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const cancel = document.createElement('button');
             cancel.className = 'btn-secondary';
-            cancel.style.cssText = 'display:block;width:100%;margin-top:var(--space-3)';
+            cancel.style.cssText = 'display:block;width:100%;margin-top:var(--spacing-md)';
             cancel.textContent = 'Cancel';
             cancel.addEventListener('click', () => dismiss(null));
             box.appendChild(cancel);
@@ -672,7 +678,63 @@ document.addEventListener('DOMContentLoaded', function() {
         const themeIcon = elements.themeToggle?.querySelector('i');
         if (themeIcon) themeIcon.className = newTheme === 'dark' ? 'fas fa-sun' : newTheme === 'light' ? 'fas fa-moon' : 'fas fa-circle-half-stroke';
     }
-    
+
+    let whoamiData = null;
+
+    async function fetchWhoami() {
+        if (whoamiData) return whoamiData;
+        const resp = await fetch('/api/whoami');
+        if (!resp.ok) throw new Error(`Whoami request failed (${resp.status})`);
+        const data = await resp.json();
+        if (data.status !== 'success' || !data.user) {
+            throw new Error(data.message || 'User data not available');
+        }
+        whoamiData = data.user;
+        return whoamiData;
+    }
+
+    async function showUserModal() {
+        const tmpl = document.getElementById('user-modal-template');
+        const modal = tmpl.content.cloneNode(true).querySelector('dialog');
+
+        const nameEl = modal.querySelector('.user-modal-name');
+        nameEl.textContent = 'Loading…';
+
+        const closeModal = () => { modal.close(); modal.remove(); };
+        modal.querySelectorAll('[data-close-modal], .close').forEach(btn => {
+            btn.addEventListener('click', closeModal);
+        });
+        modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+        modal.addEventListener('cancel', () => modal.remove());
+
+        modal.querySelector('.user-logout-btn').addEventListener('click', async () => {
+            try {
+                const resp = await fetch('/api/logout', { method: 'POST' });
+                if (!resp.ok) throw new Error(`Logout failed (${resp.status})`);
+                whoamiData = null;
+                closeModal();
+                showToast('Hipocrate session closed. Close the browser to clear saved credentials.', 'success');
+            } catch (err) {
+                showToast(`Logout failed: ${err.message}`, 'error');
+            }
+        });
+
+        document.body.appendChild(modal);
+        modal.showModal();
+
+        try {
+            const user = await fetchWhoami();
+            const displayName = (user.username || user.account || '').replace(/\./g, ' ');
+            nameEl.textContent = displayName || 'Unknown user';
+            modal.querySelector('.user-detail-username').textContent = user.username || '—';
+            modal.querySelector('.user-detail-id').textContent = user.id || '—';
+            modal.querySelector('.user-detail-account').textContent = user.account || '—';
+        } catch (err) {
+            nameEl.textContent = 'Unavailable';
+            showToast(`Could not load user info: ${err.message}`, 'error');
+        }
+    }
+
     
     function filterAnalyses() {
         const searchTerm = elements.analysesSearch ? elements.analysesSearch.value.toLowerCase() : '';
