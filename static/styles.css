@@ -1318,7 +1318,6 @@ select {
     align-items: flex-start;
     gap: var(--spacing-sm);
     padding-bottom: var(--spacing-xs);
-    border-bottom: 1px solid var(--border);
 }
 
 .card-identity .modality-icon {
@@ -1378,13 +1377,12 @@ select {
 /* Request zone: ordering physician + indication */
 .card-request {
     margin-top: 0;
-    /* sits beside card-identity; share its divider line */
+    /* sits beside card-identity */
     padding-bottom: var(--spacing-xs);
-    border-bottom: 1px solid var(--border);
 }
 
 @media (max-width: 640px) {
-    .card-request { border-bottom: none; padding-bottom: 0; margin-top: var(--spacing-xs); }
+    .card-request { padding-bottom: 0; margin-top: var(--spacing-xs); }
 }
 
 .card-referrer-line {
