@@ -2868,20 +2868,52 @@ class HipoClientCerere(HipoClient):
 
 
 class HipoClientWhoami(HipoClient):
-    """Extracts the logged-in user identity from the clockSession block on main.asp."""
+    """Extracts the logged-in user identity from main.asp and the sidebar menu iframe."""
+
+    MENU_URL = "Template/menu.asp"
 
     def __init__(self, service_url=None, request=None):
         super().__init__(service_url=service_url, request=request)
         self.request_url = "main.asp"
 
     async def fetch_and_parse(self, *args, **kwargs):
-        # main.asp is the same URL for every user but its clockSession block is
-        # user-specific — it must never be served from or left in the shared URL cache.
-        full_url = self.get_full_url(self.request_url)
-        self.cache_remove(full_url)
+        # Both pages are the same URL for every user but their content is
+        # user-specific — they must never be served from or left in the shared URL cache.
+        main_url = self.get_full_url(self.request_url)
+        menu_url = self.get_full_url(self.MENU_URL)
+        self.cache_remove(main_url)
+        self.cache_remove(menu_url)
         parsed_data = await super().fetch_and_parse(*args, **kwargs)
-        self.cache_remove(full_url)
+        if parsed_data.get("status") != "error":
+            try:
+                menu_html, err = await self.get_page(self.MENU_URL)
+                if menu_html and not err:
+                    self.parse_menu(menu_html, parsed_data)
+            except Exception as e:
+                # Menu enrichment is best-effort; the core identity comes from main.asp
+                logger.warning(f"Could not enrich whoami from menu page: {e}")
+        self.cache_remove(main_url)
+        self.cache_remove(menu_url)
         return parsed_data
+
+    def parse_menu(self, html_content: str, data: HipoData) -> None:
+        """Enrich whoami data from the sidebar menu iframe (Template/menu.asp).
+
+        The CONTUL MEU section carries the display name in a <small> tag
+        ("[ DR. STROIE COSTIN ]") and a cont.asp?id= link with the account ID.
+        """
+        soup = BeautifulSoup(html_content, 'html.parser')
+        for small in soup.find_all('small'):
+            td = small.find_parent('td', class_='menu_caps')
+            if td and 'CONTUL MEU' in td.get_text():
+                name = small.get_text(' ', strip=True).replace('\xa0', ' ')
+                name = re.sub(r'\s+', ' ', name).strip('[] ').strip()
+                if name:
+                    data.store("user.display_name", name)
+                break
+        ids = extract_ids_from_links(soup, r'cont\.asp\?id=(\d+)')
+        if ids:
+            data.store("user.account_id", ids[0])
 
     def parse_data(self, html_content: str, **kwargs) -> HipoData:
         data = HipoData(status="success", message="")

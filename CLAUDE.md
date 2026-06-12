@@ -164,7 +164,9 @@ No FHIR response implemented yet.
 
 ### Whoami (`HipoClientWhoami`) field notes
 
-Page: `main.asp` — extracts the logged-in user from the `div.clockSession` header block (`<b>Utilizator:</b>4212-stroie.costin`). Stores `user.account` (full string), `user.id` and `user.username` (split on the first `-` when the prefix is numeric). **Cache safety:** `main.asp` is the same URL for every user but its content is user-specific, so `fetch_and_parse` evicts the URL from the shared cache both before and after the fetch. Raw-JSON only (`/api/whoami`); no FHIR equivalent. `POST /api/logout` closes the caller's Hipocrate session via `user_session_manager.close_user_session(username)` — it cannot clear the browser's Basic Auth credentials.
+Pages: `main.asp` + `Template/menu.asp` (sidebar menu iframe). From the `div.clockSession` header block (`<b>Utilizator:</b>4212-stroie.costin`) it stores `user.account` (full string), `user.id` and `user.username` (split on the first `-` when the prefix is numeric). The menu iframe enriches (best-effort, never fatal): `user.display_name` from the `<small>` under the `CONTUL MEU` `td.menu_caps` (`[ DR. STROIE COSTIN ]`, brackets and `&nbsp;` stripped) and `user.account_id` from the `cont.asp?id=(\d+)` link. **Cache safety:** both pages are the same URL for every user but user-specific in content, so `fetch_and_parse` evicts both URLs from the shared cache before and after the fetch. Raw-JSON only (`/api/whoami`); no FHIR equivalent. `POST /api/logout` closes the caller's Hipocrate session via `user_session_manager.close_user_session(username)` — it cannot clear the browser's Basic Auth credentials.
+
+Future tip: `/gen_administrare/listare/cont.asp?id={account_id}&ses=1` ("Informatii personale") exposes employee details — `strIDAngajat`, name parts, CNP, parafa (`strParafa`), phone/email/address fields. **Do not scrape or expose it wholesale: the page echoes the user's current password in plaintext (`strParola`).**
 
 ### Cerere (`HipoClientCerere`) field notes
 

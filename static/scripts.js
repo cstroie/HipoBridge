@@ -724,7 +724,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         try {
             const user = await fetchWhoami();
-            const displayName = (user.username || user.account || '').replace(/\./g, ' ');
+            const displayName = user.display_name
+                ? user.display_name.toLowerCase()
+                : (user.username || user.account || '').replace(/\./g, ' ');
             nameEl.textContent = displayName || 'Unknown user';
             modal.querySelector('.user-detail-username').textContent = user.username || '—';
             modal.querySelector('.user-detail-id').textContent = user.id || '—';
