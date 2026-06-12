@@ -1192,7 +1192,7 @@ button.stat-pill {
     align-self: stretch;
     display: flex;
     align-items: center;
-    font-size: var(--font-size-4xl);
+    font-size: var(--font-size-5xl);
     color: var(--primary);
     flex-shrink: 0;
 }
