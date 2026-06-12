@@ -1289,7 +1289,7 @@ select {
 }
 
 .card-identity .modality-icon {
-    font-size: var(--font-size-lg);
+    font-size: 2rem;
     color: var(--primary);
     flex-shrink: 0;
     /* stretch to the full height of the adjacent card-title-block */
