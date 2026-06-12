@@ -2320,9 +2320,23 @@ select {
 }
 
 .epicrisis-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--spacing-md);
     padding: var(--spacing-md) var(--spacing-lg);
     background: var(--bg);
     border-bottom: 1px solid var(--border);
+}
+
+.epicrisis-card-heading {
+    min-width: 0;
+}
+
+.epicrisis-copy-btn {
+    flex-shrink: 0;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: var(--font-size-sm);
 }
 
 .epicrisis-title {

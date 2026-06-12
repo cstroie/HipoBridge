@@ -299,6 +299,29 @@ document.addEventListener('DOMContentLoaded', function() {
         if (tabId === 'schedule' && !elements.scheduleTable?.dataset.loaded) {
             fetchScheduleFromInputs();
         }
+
+        if (tabId === 'epicrisis') {
+            loadEpicrisisLazily();
+        }
+    }
+
+    let pendingEpicrisisData = null;
+
+    async function loadEpicrisisLazily() {
+        if (!pendingEpicrisisData || elements.epicrisisContent?.dataset.loaded) return;
+        elements.epicrisisContent.dataset.loaded = '1';
+        elements.epicrisisContent.innerHTML =
+            '<div class="loading-content"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i><p>Loading discharge summaries…</p></div>';
+        try {
+            await loadAndDisplayEpicrisis(pendingEpicrisisData);
+        } catch (err) {
+            console.error('Error loading epicrisis:', err);
+            showToast('Failed to load discharge summaries', 'error');
+            delete elements.epicrisisContent.dataset.loaded;
+        } finally {
+            const spinner = elements.epicrisisContent.querySelector('.loading-content');
+            if (spinner) spinner.remove();
+        }
     }
     
     async function handleFormSubmit(e) {
@@ -377,9 +400,9 @@ document.addEventListener('DOMContentLoaded', function() {
             log('Loading and displaying reports...');
             await loadAndDisplayReports(analysesData);
 
-            setLoadingStep('Loading discharge summaries...');
-            log('Loading and displaying epicrisis...');
-            await loadAndDisplayEpicrisis(patientData);
+            // Epicrisis is lazy-loaded on first visit to its tab
+            pendingEpicrisisData = patientData;
+            if (elements.epicrisisContent) delete elements.epicrisisContent.dataset.loaded;
 
             setLoadingStep('Assembling full clinical report...');
             log('Loading and displaying report...');
@@ -645,9 +668,11 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.noAnalyses) elements.noAnalyses.style.display = 'none';
         
         // Clear epicrisis
+        pendingEpicrisisData = null;
         if (elements.epicrisisContent) {
             elements.epicrisisContent.innerHTML = '';
             delete elements.epicrisisContent.dataset.markdown;
+            delete elements.epicrisisContent.dataset.loaded;
         }
         if (elements.epicrisisNav) {
             elements.epicrisisNav.innerHTML = '';
@@ -2077,10 +2102,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const header = document.createElement('header');
             header.className = 'epicrisis-card-header';
+            const headText = document.createElement('div');
+            headText.className = 'epicrisis-card-heading';
             const h2 = document.createElement('h2');
             h2.className = 'epicrisis-title';
             h2.textContent = diagnosis;
-            header.appendChild(h2);
+            headText.appendChild(h2);
 
             const metaP = document.createElement('p');
             metaP.className = 'epicrisis-meta';
@@ -2093,7 +2120,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 span.append(strong, value);
                 metaP.appendChild(span);
             });
-            if (metaP.childElementCount) header.appendChild(metaP);
+            if (metaP.childElementCount) headText.appendChild(metaP);
+            header.appendChild(headText);
+
+            // Per-card copy button — only useful when there is more than one
+            card.dataset.markdown = `# ${diagnosis}\n\n`
+                + (meta.length ? `${meta.join(' · ')}  \n\n` : '')
+                + epicrisisText.trim() + '\n';
+            if (valid.length > 1) {
+                const copyBtn = document.createElement('button');
+                copyBtn.type = 'button';
+                copyBtn.className = 'btn-secondary epicrisis-copy-btn';
+                copyBtn.setAttribute('aria-label', 'Copy this epicrisis as Markdown');
+                copyBtn.innerHTML = '<i class="fas fa-copy"></i> <span>Copy</span>';
+                copyBtn.addEventListener('click', () => copyMarkdown(card, copyBtn));
+                header.appendChild(copyBtn);
+            }
             card.appendChild(header);
 
             const body = document.createElement('div');
