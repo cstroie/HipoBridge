@@ -303,9 +303,27 @@ document.addEventListener('DOMContentLoaded', function() {
         if (tabId === 'epicrisis') {
             loadEpicrisisLazily();
         }
+
+        if (tabId === 'report') {
+            loadReportLazily();
+        }
     }
 
     let pendingEpicrisisData = null;
+    let pendingReportData = null;
+
+    async function loadReportLazily() {
+        if (!pendingReportData || elements.patientReportMarkdown?.dataset.loaded) return;
+        elements.patientReportMarkdown.dataset.loaded = '1';
+        try {
+            // displayPatientReport shows its own spinner while assembling
+            await loadAndDisplayReport(pendingReportData.patientData, pendingReportData.analysesData);
+        } catch (err) {
+            console.error('Error loading report:', err);
+            showToast('Failed to assemble patient report', 'error');
+            delete elements.patientReportMarkdown.dataset.loaded;
+        }
+    }
 
     async function loadEpicrisisLazily() {
         if (!pendingEpicrisisData || elements.epicrisisContent?.dataset.loaded) return;
@@ -404,9 +422,9 @@ document.addEventListener('DOMContentLoaded', function() {
             pendingEpicrisisData = patientData;
             if (elements.epicrisisContent) delete elements.epicrisisContent.dataset.loaded;
 
-            setLoadingStep('Assembling full clinical report...');
-            log('Loading and displaying report...');
-            await loadAndDisplayReport(patientData, analysesData);
+            // Report is lazy-loaded on first visit to its tab
+            pendingReportData = { patientData, analysesData };
+            if (elements.patientReportMarkdown) delete elements.patientReportMarkdown.dataset.loaded;
 
             log('Switching to patient tab...');
             switchToPatientTab();
@@ -680,7 +698,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Clear report tab
-        if (elements.patientReportMarkdown) elements.patientReportMarkdown.innerHTML = '';
+        pendingReportData = null;
+        if (elements.patientReportMarkdown) {
+            elements.patientReportMarkdown.innerHTML = '';
+            delete elements.patientReportMarkdown.dataset.markdown;
+            delete elements.patientReportMarkdown.dataset.loaded;
+        }
         
         // Hide the patient nav group (keep always-visible tabs)
         if (elements.navPatientGroup) elements.navPatientGroup.hidden = true;
