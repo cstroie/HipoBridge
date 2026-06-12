@@ -2900,7 +2900,7 @@ class HipoClientWhoami(HipoClient):
         """Enrich whoami data from the sidebar menu iframe (Template/menu.asp).
 
         The CONTUL MEU section carries the display name in a <small> tag
-        ("[ DR. STROIE COSTIN ]") and a cont.asp?id= link with the account ID.
+        ("[ DR. STROIE COSTIN ]") and a cont.asp?id= link with the user ID.
         """
         soup = BeautifulSoup(html_content, 'html.parser')
         for small in soup.find_all('small'):
@@ -2913,7 +2913,7 @@ class HipoClientWhoami(HipoClient):
                 break
         ids = extract_ids_from_links(soup, r'cont\.asp\?id=(\d+)')
         if ids:
-            data.store("user.account_id", ids[0])
+            data.store("user.id", ids[0])
 
     def parse_data(self, html_content: str, **kwargs) -> HipoData:
         data = HipoData(status="success", message="")
@@ -2930,9 +2930,10 @@ class HipoClientWhoami(HipoClient):
                 return data
             account = m.group(1)
             data.store("user.account", account)
-            uid, sep, name = account.partition('-')
-            if sep and uid.isdigit() and name:
-                data.store("user.id", uid)
+            # The numeric prefix before the dash is the installation ID
+            # (shared by patient codes, investigation codes, etc.) — not a user ID.
+            prefix, sep, name = account.partition('-')
+            if sep and prefix.isdigit() and name:
                 data.store("user.username", name)
             else:
                 data.store("user.username", account)
