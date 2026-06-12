@@ -1881,7 +1881,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (medicEl && physician) medicEl.textContent = physician;
                 const dateEl = article.querySelector('.report-date');
                 if (dateEl && date) {
-                    dateEl.textContent = formatDate(date);
+                    dateEl.textContent = formatExamDate(date);
                     dateEl.dateTime = date;
                 }
                 if (physician || date) {
