@@ -1413,6 +1413,7 @@ select {
 .report-signed {
     display: flex;
     align-items: baseline;
+    justify-content: flex-end;
     gap: var(--spacing-sm);
     flex-wrap: wrap;
     margin: 0;
