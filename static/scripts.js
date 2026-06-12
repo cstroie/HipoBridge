@@ -1624,16 +1624,16 @@ document.addEventListener('DOMContentLoaded', function() {
         backLink.querySelector('.back-report-id').textContent = `#${reportId}`;
         backLink.addEventListener('click', function(e) {
             e.preventDefault();
-            closeImagingStudyModal();
+            modal.close();
         });
         
         // Add event listeners for closing the modal
         const closeButtons = modal.querySelectorAll('[data-close-modal], .close');
         closeButtons.forEach(button => {
-            button.addEventListener('click', () => {
-                document.body.removeChild(modal);
-            });
+            button.addEventListener('click', () => modal.close());
         });
+        // Escape fires 'close' too — single removal path keeps the DOM clean
+        modal.addEventListener('close', () => modal.remove());
         
         // Add modal to document and show
         document.body.appendChild(modal);
@@ -1685,7 +1685,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function closeImagingStudyModal() {
         const modal = document.getElementById('imagingStudyModal');
         if (modal) {
-            modal.remove();
+            modal.close();
         }
     }
     
