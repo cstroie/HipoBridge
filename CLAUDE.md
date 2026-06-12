@@ -70,7 +70,7 @@ HTTP client
 | `HipoClientCheckup` | `/api/checkup/{id}` | `/files/checkup.asp?cuid={id}` |
 | `HipoClientCerere` | `/api/request/{id}/patient` | `/PARA/NOM/Listare/cerere.asp?id={id}` |
 | `HipoClientSchedule` | `/api/schedule`, `/fhir/Schedule` | `/PARA/NOM/Listare/?id=44&NrPePag=100` |
-| `HipoClientWhoami` | `/api/whoami` | `main.asp` (clockSession block) |
+| `HipoClientWhoami` | `/api/whoami` | `Template/menu.asp` (CONTUL MEU block) |
 
 Every subclass (except `HipoClientCheckin` / `HipoClientCheckup` which are raw-JSON only) implements three methods:
 - `fetch_and_parse(**kwargs)` → `HipoData` (raw dict)
@@ -168,7 +168,7 @@ No FHIR response implemented yet.
 
 ### Whoami (`HipoClientWhoami`) field notes
 
-Pages: `main.asp` + `Template/menu.asp` (sidebar menu iframe). From the `div.clockSession` header block (`<b>Utilizator:</b>4212-stroie.costin`) it stores `user.account` (full string) and `user.username` (text after the first `-`; the numeric prefix is the **installation ID** — shared by patient codes, investigation codes, etc. — and is ignored, not a user ID). The menu iframe enriches (best-effort, never fatal): `user.display_name` from the `<small>` under the `CONTUL MEU` `td.menu_caps` (`[ DR. STROIE COSTIN ]`, brackets and `&nbsp;` stripped) and `user.id` — the real user ID, the full number from the `cont.asp?id=(\d+)` link (e.g. `421200000000744`). **Cache safety:** both pages are the same URL for every user but user-specific in content, so `fetch_and_parse` evicts both URLs from the shared cache before and after the fetch. Raw-JSON only (`/api/whoami`); no FHIR equivalent. `POST /api/logout` closes the caller's Hipocrate session via `user_session_manager.close_user_session(username)` — it cannot clear the browser's Basic Auth credentials.
+Page: `Template/menu.asp` (sidebar menu iframe), CONTUL MEU / Informatii personale section. (`main.asp` is no longer scraped — its `div.clockSession` block was not reliably present.) Stores: `user.display_name` from the `<small>` under the `CONTUL MEU` `td.menu_caps` (`[ DR. STROIE COSTIN ]`, brackets and `&nbsp;` stripped), `user.id` — the real user ID, the full number from the `cont.asp?id=(\d+)` link (e.g. `421200000000744`), and `user.username` — the Basic Auth login name (the menu page does not repeat the account string anywhere parseable). Errors only if neither the CONTUL MEU block nor a `cont.asp?id=` link is found. **Cache safety:** the page is the same URL for every user but user-specific in content, so `fetch_and_parse` evicts the URL from the shared cache before and after the fetch. Raw-JSON only (`/api/whoami`); no FHIR equivalent. `POST /api/logout` closes the caller's Hipocrate session via `user_session_manager.close_user_session(username)` — it cannot clear the browser's Basic Auth credentials.
 
 Future tip: `/gen_administrare/listare/cont.asp?id={user.id}&ses=1` ("Informatii personale") exposes employee details — `strIDAngajat`, name parts, CNP, parafa (`strParafa`), phone/email/address fields. **Do not scrape or expose it wholesale: the page echoes the user's current password in plaintext (`strParola`).**
 

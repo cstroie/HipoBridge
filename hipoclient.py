@@ -2883,75 +2883,53 @@ class HipoClientCerere(HipoClient):
 
 
 class HipoClientWhoami(HipoClient):
-    """Extracts the logged-in user identity from main.asp and the sidebar menu iframe."""
-
-    MENU_URL = "Template/menu.asp"
+    """Extracts the logged-in user identity from the sidebar menu iframe
+    (Template/menu.asp), CONTUL MEU / Informatii personale section."""
 
     def __init__(self, service_url=None, request=None):
         super().__init__(service_url=service_url, request=request)
-        self.request_url = "main.asp"
+        self.request_url = "Template/menu.asp"
 
     async def fetch_and_parse(self, *args, **kwargs):
-        # Both pages are the same URL for every user but their content is
-        # user-specific — they must never be served from or left in the shared URL cache.
-        main_url = self.get_full_url(self.request_url)
-        menu_url = self.get_full_url(self.MENU_URL)
-        self.cache_remove(main_url)
+        # The menu page is the same URL for every user but its content is
+        # user-specific — it must never be served from or left in the shared URL cache.
+        menu_url = self.get_full_url(self.request_url)
         self.cache_remove(menu_url)
         parsed_data = await super().fetch_and_parse(*args, **kwargs)
-        if parsed_data.get("status") != "error":
-            try:
-                menu_html, err = await self.get_page(self.MENU_URL)
-                if menu_html and not err:
-                    self.parse_menu(menu_html, parsed_data)
-            except Exception as e:
-                # Menu enrichment is best-effort; the core identity comes from main.asp
-                logger.warning(f"Could not enrich whoami from menu page: {e}")
-        self.cache_remove(main_url)
         self.cache_remove(menu_url)
         return parsed_data
 
-    def parse_menu(self, html_content: str, data: HipoData) -> None:
-        """Enrich whoami data from the sidebar menu iframe (Template/menu.asp).
-
-        The CONTUL MEU section carries the display name in a <small> tag
-        ("[ DR. STROIE COSTIN ]") and a cont.asp?id= link with the user ID.
-        """
-        soup = BeautifulSoup(html_content, 'html.parser')
-        for small in soup.find_all('small'):
-            td = small.find_parent('td', class_='menu_caps')
-            if td and 'CONTUL MEU' in td.get_text():
-                name = small.get_text(' ', strip=True).replace('\xa0', ' ')
-                name = re.sub(r'\s+', ' ', name).strip('[] ').strip()
-                if name:
-                    data.store("user.display_name", name)
-                break
-        ids = extract_ids_from_links(soup, r'cont\.asp\?id=(\d+)')
-        if ids:
-            data.store("user.id", ids[0])
-
     def parse_data(self, html_content: str, **kwargs) -> HipoData:
+        """Parse the CONTUL MEU section of the menu iframe.
+
+        It carries the display name in a <small> tag ("[ DR. STROIE COSTIN ]")
+        and a cont.asp?id= link ("Informatii personale") with the user ID.
+        """
         data = HipoData(status="success", message="")
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
-            container = soup.find('div', class_='clockSession')
-            if not container:
-                data.set_error("Session block not found on Hipocrate page")
+            found = False
+            for small in soup.find_all('small'):
+                td = small.find_parent('td', class_='menu_caps')
+                if td and 'CONTUL MEU' in td.get_text():
+                    name = small.get_text(' ', strip=True).replace('\xa0', ' ')
+                    name = re.sub(r'\s+', ' ', name).strip('[] ').strip()
+                    # Blank name means the anonymous (logged-out) menu variant
+                    if name:
+                        found = True
+                        data.store("user.display_name", name)
+                    break
+            ids = extract_ids_from_links(soup, r'cont\.asp\?id=(\d+)')
+            if ids:
+                found = True
+                data.store("user.id", ids[0])
+            if not found:
+                data.set_error("User identity not found on Hipocrate menu page")
                 return data
-            text = container.get_text(' ', strip=True)
-            m = re.search(r'Utilizator:\s*(\S+)', text)
-            if not m:
-                data.set_error("User name not found in session block")
-                return data
-            account = m.group(1)
-            data.store("user.account", account)
-            # The numeric prefix before the dash is the installation ID
-            # (shared by patient codes, investigation codes, etc.) — not a user ID.
-            prefix, sep, name = account.partition('-')
-            if sep and prefix.isdigit() and name:
-                data.store("user.username", name)
-            else:
-                data.store("user.username", account)
+            # The login username is the authoritative account name; the menu
+            # page does not repeat it anywhere parseable.
+            if self.username:
+                data.store("user.username", self.username)
             return data
         except Exception as e:
             logger.error(f"Error parsing whoami data: {e}")

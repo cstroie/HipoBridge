@@ -726,11 +726,10 @@ document.addEventListener('DOMContentLoaded', function() {
             const user = await fetchWhoami();
             const displayName = user.display_name
                 ? user.display_name.toLowerCase()
-                : (user.username || user.account || '').replace(/\./g, ' ');
+                : (user.username || '').replace(/\./g, ' ');
             nameEl.textContent = displayName || 'Unknown user';
             modal.querySelector('.user-detail-username').textContent = user.username || '—';
             modal.querySelector('.user-detail-id').textContent = user.id || '—';
-            modal.querySelector('.user-detail-account').textContent = user.account || '—';
         } catch (err) {
             nameEl.textContent = 'Unavailable';
             showToast(`Could not load user info: ${err.message}`, 'error');
