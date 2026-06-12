@@ -1182,6 +1182,23 @@ button.stat-pill {
 .tab-header .header-left {
     flex: 1;
     min-width: 0;
+    display: flex;
+    align-items: stretch;
+    gap: var(--spacing-sm);
+}
+
+/* Tab glyph: spans the full height of the h1 + subtitle column */
+.tab-header .header-glyph {
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    font-size: var(--font-size-4xl);
+    color: var(--primary);
+    flex-shrink: 0;
+}
+
+.tab-header .header-text {
+    min-width: 0;
 }
 
 .tab-header h1 {
