@@ -1265,7 +1265,19 @@ select {
     box-shadow: var(--shadow-sm);
     transition: box-shadow 0.2s ease, transform 0.2s ease;
     position: relative;
-    display: block;
+    /* row 1: identity | request side by side; row 2: report spans both */
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: var(--spacing-md);
+}
+
+.analysis-card > .report-section {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 640px) {
+    .analysis-card { grid-template-columns: minmax(0, 1fr); }
+    .analysis-card > .report-section { grid-column: 1; }
 }
 
 .analysis-card:hover {
@@ -1344,7 +1356,14 @@ select {
 
 /* Request zone: ordering physician + indication */
 .card-request {
-    margin-top: var(--spacing-xs);
+    margin-top: 0;
+    /* sits beside card-identity; share its divider line */
+    padding-bottom: var(--spacing-xs);
+    border-bottom: 1px solid var(--border);
+}
+
+@media (max-width: 640px) {
+    .card-request { border-bottom: none; padding-bottom: 0; margin-top: var(--spacing-xs); }
 }
 
 .card-referrer-line {
