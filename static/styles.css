@@ -60,7 +60,8 @@
     --bg: #f8fafc;
     --card-bg: #ffffff;
     --border: #e5e7eb;
-    
+    --hover-bg: rgba(17, 24, 39, 0.06);
+
     /* Spacing */
     --spacing-xs: 0.25rem;
     --spacing-sm: 0.5rem;
@@ -125,6 +126,7 @@
     --bg: #0b1220;
     --card-bg: #111827;
     --border: #1f2937;
+    --hover-bg: rgba(255, 255, 255, 0.08);
     /* Header gradient — darker shades so white text passes 4.5:1 (was 2.54/1.92) */
     --header-primary:    #1d4ed8;  /* white text 6.7:1 */
     --header-secondary:  #065f46;  /* white text 7.7:1 */
@@ -2335,7 +2337,10 @@ dialog.modal article > header {
     justify-content: space-between;
     gap: var(--spacing-md);
     padding: var(--spacing-md) var(--spacing-lg);
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg,
+        color-mix(in srgb, var(--primary) 6%, var(--card-bg)),
+        var(--card-bg));
     flex-shrink: 0;
 }
 
@@ -2378,7 +2383,8 @@ dialog.modal article > footer {
     justify-content: flex-end;
     gap: var(--spacing-sm);
     padding: var(--spacing-md) var(--spacing-lg);
-    border-top: 1px solid var(--border-color);
+    border-top: 1px solid var(--border);
+    background: var(--bg);
     flex-shrink: 0;
 }
 
@@ -2434,9 +2440,11 @@ dialog.modal article > footer {
 }
 
 .report-modal-header {
-    padding: var(--spacing-md) var(--spacing-lg);
-    border-bottom: 1px solid var(--border-color);
-    background: var(--card-bg);
+    padding: var(--spacing-lg) var(--spacing-lg) var(--spacing-md);
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg,
+        color-mix(in srgb, var(--primary) 6%, var(--card-bg)),
+        var(--card-bg));
     flex-shrink: 0;
 }
 
@@ -2445,19 +2453,36 @@ dialog.modal article > footer {
     align-items: center;
     justify-content: space-between;
     gap: var(--spacing-md);
-    margin-bottom: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
 }
 
 .report-modal-title {
     margin: 0;
-    font-size: var(--font-size-lg);
+    font-size: var(--font-size-xl);
     font-weight: var(--font-weight-semibold);
+    letter-spacing: 0.01em;
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
 }
 
-.report-modal-title i { color: var(--primary); }
+.report-modal-title i {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    font-size: var(--font-size-base);
+    color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 12%, transparent);
+    border-radius: var(--radius-md);
+    flex-shrink: 0;
+}
+
+.report-modal-title .modal-request-code {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.03em;
+}
 
 .report-modal-close {
     background: none;
@@ -2477,38 +2502,39 @@ dialog.modal article > footer {
 .report-modal-meta {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--spacing-xs) var(--spacing-md);
+    gap: var(--spacing-sm) var(--spacing-xl);
     margin: 0;
     font-size: var(--font-size-sm);
 }
 
 .report-modal-meta dt {
-    font-weight: var(--font-weight-semibold);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
     color: var(--text-light);
-    display: inline;
+    margin: 0;
 }
-
-.report-modal-meta dt::after { content: ":"; margin-right: 0.25em; }
 
 .report-modal-meta dd {
     margin: 0;
-    display: inline;
     color: var(--text);
+    font-weight: var(--font-weight-medium);
 }
 
 .report-modal-meta .meta-item {
     display: flex;
-    align-items: baseline;
-    gap: 0.25em;
+    flex-direction: column;
+    gap: 2px;
     white-space: nowrap;
 }
 
 .report-modal-body {
     flex: 1;
     overflow-y: auto;
-    padding: var(--spacing-lg);
+    padding: var(--spacing-lg) var(--spacing-xl);
     font-size: var(--font-size-sm);
-    line-height: 1.65;
+    line-height: 1.7;
     color: var(--text);
 }
 
@@ -2522,14 +2548,35 @@ dialog.modal article > footer {
 
 .report-modal-footer {
     padding: var(--spacing-md) var(--spacing-lg);
-    border-top: 1px solid var(--border-color);
-    background: var(--card-bg);
+    border-top: 1px solid var(--border);
+    background: var(--bg);
     display: flex;
     justify-content: flex-end;
     gap: var(--spacing-sm);
     flex-shrink: 0;
 }
 
+@keyframes modal-pop {
+    from { opacity: 0; transform: translateY(12px) scale(0.985); }
+    to   { opacity: 1; transform: none; }
+}
+
+@keyframes backdrop-fade {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+dialog.modal[open],
+dialog.report-modal[open] {
+    animation: modal-pop 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+dialog.modal[open]::backdrop,
+dialog.report-modal[open]::backdrop {
+    animation: backdrop-fade 0.22s ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
-    dialog.modal, dialog.report-modal { animation: none; }
+    dialog.modal[open], dialog.report-modal[open],
+    dialog.modal[open]::backdrop, dialog.report-modal[open]::backdrop { animation: none; }
 }
