@@ -132,6 +132,10 @@ Every subclass (except `HipoClientCheckin` / `HipoClientCheckup` which are raw-J
 - `fetch_and_parse` (base class) logs the exception and includes the message in the returned `HipoData` error — never swallow exceptions silently.
 - Region filter uses `request.get('regions', [])` — requests parsed from the no-parent-row path may not have a `regions` key.
 
+### Buletin pages (`HipoClientImagingStudy` / `HipoClientDiagnosticReport`) shared header
+
+`_parse_buletin_header` parses the common BuletinAnalize header (patient, request date, barcode, urgency, medic) **and the clinical indication**: the `<p class="NoteSubsol"><b>INFO SUPLIMENTAR:</b> …</p>` footer note → `request.clinical_comments`. Both FHIR converters emit it as `note[]` entry with `category[0].text = "clinical-indication"`; the frontend filters notes on that category to populate the analysis card's `request-meta` (Indication) and treats the rest as result notes.
+
 ### Checkout (`HipoClientCheckout`) field notes
 
 Extracts from `BiletExternare.asp`: patient identity, insurance (`patient.insurance_house`, `patient.insurance_category`, `patient.insurance_number`), address, phone, FO number (`checkout.fo_number`), urgency flag (`checkout.is_urgent`), primary and secondary diagnoses (ICD-10 split via `(?<=[a-zA-Z])(?=[A-Z]\d{2}\.)`), recommended treatment (`checkout.treatment`). FHIR output: insurance as `extension[]`, emergency as `priority`, secondary diagnoses as additional `Condition`-coded entries, treatment in `note[]`.

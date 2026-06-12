@@ -1738,6 +1738,14 @@ def _parse_buletin_header(soup, data: HipoData) -> None:
             medic_m = re.search(r'MEDIC:(.*?)$', cell2)
             if medic_m:
                 data.store("checkin.medic", medic_m.group(1).strip())
+
+        # Clinical indication: "INFO SUPLIMENTAR: ..." footer note (p.NoteSubsol)
+        for note_p in soup.find_all('p', class_='NoteSubsol'):
+            note_text = note_p.get_text(' ', strip=True)
+            info_m = re.match(r'INFO SUPLIMENTAR:\s*(.+)', note_text, re.IGNORECASE | re.DOTALL)
+            if info_m:
+                data.store("request.clinical_comments", info_m.group(1))
+                break
     except Exception as e:
         logger.warning(f"Error parsing buletin header: {e}")
 
@@ -2239,6 +2247,13 @@ class HipoClientDiagnosticReport(HipoClient):
 
             if extensions:
                 fhir_report["extension"] = extensions
+
+            # Clinical indication note (same shape as ImagingStudy, read by the frontend)
+            if parsed_data.get("request.clinical_comments"):
+                fhir_report["note"] = [{
+                    "text": parsed_data.get("request.clinical_comments"),
+                    "category": [{"text": "clinical-indication"}]
+                }]
 
             identifiers = []
 
