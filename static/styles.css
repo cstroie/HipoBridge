@@ -1292,7 +1292,10 @@ select {
     font-size: var(--font-size-lg);
     color: var(--primary);
     flex-shrink: 0;
-    margin-top: 0.2rem;
+    /* stretch to the full height of the adjacent card-title-block */
+    align-self: stretch;
+    display: flex;
+    align-items: center;
 }
 .analysis-card.radio .modality-icon { color: var(--modality-radio); }
 .analysis-card.ct    .modality-icon { color: var(--modality-ct); }
