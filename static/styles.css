@@ -1543,7 +1543,6 @@ select {
 /* Markdown report content */
 .markdown-content {
     background: var(--card-bg);
-    border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     padding: 2rem;
     line-height: 1.75;
