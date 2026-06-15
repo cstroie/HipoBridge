@@ -6,39 +6,41 @@
         <title>HippoBridge — Medical Data Intelligence</title>
         <meta name="description" content="FHIR-compatible medical data interface for the Hipocrate system">
         <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌉</text></svg>">
-        <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌉</text></svg>">
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
         <link rel="stylesheet" href="/static/styles.css">
-        
-        <!-- Inter self-hosted in static/fonts/ via @font-face in styles.css -->
     </head>
     <body>
+
         <!-- Header -->
-        <header class="header">
+        <header class="header" role="banner">
             <div class="container">
                 <div class="header-content">
                     <div class="brand">
-                        <div class="brand-logo">
+                        <div class="brand-logo" aria-hidden="true">
                             <i class="fas fa-bridge"></i>
                         </div>
                         <div class="brand-info">
                             <p class="brand-name">HippoBridge</p>
-                            <p>Medical Data Intelligence</p>
+                            <p class="brand-tagline">Medical Data Intelligence</p>
                         </div>
                     </div>
                     <div class="header-actions">
                         <div class="search-quick">
-                            <input type="search" id="quickSearch" autocomplete="off" placeholder="Quick search by CNP, name, or code..." aria-label="Quick search">
-                            <button type="button" id="quickSearchBtn" class="btn-icon" aria-label="Quick search">
-                                <i class="fas fa-search"></i>
+                            <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                            <input type="search" id="quickSearch" autocomplete="off" placeholder="Quick search by CNP, name, or code…" aria-label="Quick search">
+                            <button type="button" id="quickSearchBtn" class="btn-icon" aria-label="Search">
+                                <i class="fas fa-arrow-right" aria-hidden="true"></i>
                             </button>
                         </div>
                         <div class="user-actions">
                             <button class="btn-icon" id="themeToggle" aria-label="Toggle theme">
-                                <i class="fas fa-moon"></i>
+                                <i class="fas fa-moon" aria-hidden="true"></i>
                             </button>
                             <button class="btn-icon" id="userButton" aria-label="User account">
-                                <i class="fas fa-user-circle"></i>
+                                <i class="fas fa-circle-user" aria-hidden="true"></i>
                             </button>
                         </div>
                     </div>
@@ -49,40 +51,43 @@
         <!-- Navigation -->
         <nav class="main-nav" aria-label="Main navigation">
             <div class="container nav-menus">
-                <ul class="nav-menu nav-group-global">
-                    <li class="nav-item" data-tab="schedule">
+                <ul class="nav-menu nav-group-global" role="list">
+                    <li class="nav-item" data-tab="schedule" role="listitem">
                         <a href="#schedule" aria-controls="schedule-tab" aria-label="Schedule">
-                            <i class="fas fa-calendar-alt" aria-hidden="true"></i>
+                            <i class="fas fa-calendar-day" aria-hidden="true"></i>
                             <span>Schedule</span>
                         </a>
                     </li>
-                    <li class="nav-item" data-tab="search">
+                    <li class="nav-item" data-tab="search" role="listitem">
                         <a href="#search" aria-controls="search-tab" aria-label="Patient Search">
-                            <i class="fas fa-search" aria-hidden="true"></i>
+                            <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
                             <span>Patient Search</span>
                         </a>
                     </li>
                 </ul>
-                <ul class="nav-menu nav-group-patient" id="navPatientGroup" aria-label="Loaded patient" hidden>
-                    <li class="nav-item" data-tab="patient">
+                <ul class="nav-menu nav-group-patient" id="navPatientGroup" aria-label="Patient tabs" hidden role="list">
+                    <li class="nav-item nav-item--patient-label" role="listitem" aria-hidden="true">
+                        <span class="nav-patient-chip" id="navPatientLabel">Patient</span>
+                    </li>
+                    <li class="nav-item" data-tab="patient" role="listitem">
                         <a href="#patient" aria-controls="patient-tab" aria-label="Patient Profile">
                             <i class="fas fa-user-injured" aria-hidden="true"></i>
-                            <span id="navPatientLabel">Patient Profile</span>
+                            <span>Profile</span>
                         </a>
                     </li>
-                    <li class="nav-item" data-tab="analyses">
+                    <li class="nav-item" data-tab="analyses" role="listitem">
                         <a href="#analyses" aria-controls="analyses-tab" aria-label="Analyses">
                             <i class="fas fa-file-medical" aria-hidden="true"></i>
                             <span>Analyses</span>
                         </a>
                     </li>
-                    <li class="nav-item" data-tab="epicrisis">
+                    <li class="nav-item" data-tab="epicrisis" role="listitem">
                         <a href="#epicrisis" aria-controls="epicrisis-tab" aria-label="Epicrisis">
                             <i class="fas fa-file-prescription" aria-hidden="true"></i>
                             <span>Epicrisis</span>
                         </a>
                     </li>
-                    <li class="nav-item" data-tab="report">
+                    <li class="nav-item" data-tab="report" role="listitem">
                         <a href="#report" aria-controls="report-tab" aria-label="Report">
                             <i class="fas fa-notes-medical" aria-hidden="true"></i>
                             <span>Report</span>
@@ -93,13 +98,15 @@
         </nav>
 
         <!-- Main Content -->
-        <main class="main-content">
+        <main class="main-content" id="main-content">
             <div class="container">
+
                 <!-- Search Tab -->
                 <section id="search-tab" class="tab-content" role="tabpanel" aria-labelledby="search-tab-heading">
                     <div class="hero-section">
                         <div class="hero-content">
-                            <h1 id="search-tab-heading"><i class="fas fa-stethoscope"></i> Patient Records</h1>
+                            <div class="section-label">Patient Search</div>
+                            <h1 id="search-tab-heading"><i class="fas fa-stethoscope" aria-hidden="true"></i> Patient Records</h1>
                             <p class="hero-subtitle">Search Hipocrate by CNP, patient code, or name — access analyses, diagnostic reports, and discharge summaries.</p>
                         </div>
                     </div>
@@ -107,18 +114,17 @@
                     <div class="search-section">
                         <div class="search-card">
                             <div class="search-header">
-                                <h2><i class="fas fa-search"></i> Find Patient</h2>
+                                <h2><i class="fas fa-magnifying-glass" aria-hidden="true"></i> Find Patient</h2>
                             </div>
-                            
                             <form id="cnpForm" novalidate>
                                 <div class="search-input-group">
                                     <div class="input-with-icon">
-                                        <i class="fas fa-id-card"></i>
+                                        <i class="fas fa-id-card" aria-hidden="true"></i>
                                         <input type="search" id="cnpInput" name="cnp" inputmode="search" autocomplete="off" placeholder="Enter 13-digit CNP, partial CNP, patient code, or patient name" required aria-describedby="cnpHelp">
                                     </div>
                                     <button type="submit" id="analyzeBtn" class="btn-primary">
-                                        <i class="fas fa-search"></i>
-                                        <span>Search Patient</span>
+                                        <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                                        <span>Search</span>
                                     </button>
                                 </div>
                                 <div id="cnpHelp" class="form-help">Full CNP (13 digits), partial CNP with wildcard (1234567*), numeric patient code, or patient name</div>
@@ -127,27 +133,27 @@
 
                         <div class="recent-searches">
                             <div class="recent-header">
-                                <h3><i class="fas fa-history" aria-hidden="true"></i> Recent Searches</h3>
+                                <h3><i class="fas fa-clock-rotate-left" aria-hidden="true"></i> Recent Searches</h3>
                                 <button type="button" id="clearRecentBtn" class="btn-link" hidden>Clear</button>
                             </div>
-                            <ul class="recent-list" id="recentSearchesList"></ul>
+                            <ul class="recent-list" id="recentSearchesList" role="list"></ul>
                             <p class="recent-empty" id="recentEmpty" hidden>No recent searches yet</p>
                         </div>
                     </div>
-                    
+
                     <div class="error" id="error" role="alert" aria-live="polite"></div>
                 </section>
 
                 <!-- Patient Profile Tab -->
                 <section id="patient-tab" class="tab-content" role="tabpanel" aria-labelledby="patient-tab-heading" hidden>
 
-                    <!-- Banner -->
                     <div class="patient-banner">
                         <div class="patient-banner-left">
-                            <div class="patient-avatar">
-                                <i class="fas fa-user-injured" aria-hidden="true"></i>
+                            <div class="patient-avatar" aria-hidden="true">
+                                <i class="fas fa-user-injured"></i>
                             </div>
                             <div class="patient-main-info">
+                                <div class="section-label">Patient Profile</div>
                                 <h1 id="patientName"><span id="patient-tab-heading">Patient Name</span></h1>
                                 <div class="patient-meta">
                                     <span class="patient-badge" id="patientId"></span>
@@ -164,32 +170,34 @@
                         </div>
                     </div>
 
-                    <!-- Stats strip -->
-                    <div class="patient-stats-strip">
-                        <div class="stat-pill">
-                            <i class="fas fa-procedures" aria-hidden="true"></i>
-                            <span class="stat-pill-value" id="presentationsCount">0</span>
-                            <span class="stat-pill-label">Presentations</span>
+                    <div class="patient-stats-strip" role="list">
+                        <div class="stat-pill" role="listitem">
+                            <div class="stat-pill-inner">
+                                <span class="stat-pill-value" id="presentationsCount">0</span>
+                                <span class="stat-pill-label">Presentations</span>
+                            </div>
                         </div>
-                        <div class="stat-pill">
-                            <i class="fas fa-sign-in-alt" aria-hidden="true"></i>
-                            <span class="stat-pill-value" id="checkinsCount">0</span>
-                            <span class="stat-pill-label">Admissions</span>
+                        <div class="stat-pill" role="listitem">
+                            <div class="stat-pill-inner">
+                                <span class="stat-pill-value" id="checkinsCount">0</span>
+                                <span class="stat-pill-label">Admissions</span>
+                            </div>
                         </div>
-                        <button type="button" class="stat-pill stat-pill-link" data-goto="epicrisis" aria-label="View discharge summaries">
-                            <i class="fas fa-sign-out-alt" aria-hidden="true"></i>
-                            <span class="stat-pill-value" id="checkoutsCount">0</span>
-                            <span class="stat-pill-label">Discharges</span>
+                        <button type="button" class="stat-pill stat-pill-link" data-goto="epicrisis" aria-label="View discharge summaries" role="listitem">
+                            <div class="stat-pill-inner">
+                                <span class="stat-pill-value" id="checkoutsCount">0</span>
+                                <span class="stat-pill-label">Discharges ↗</span>
+                            </div>
                         </button>
-                        <button type="button" class="stat-pill stat-pill-link" data-goto="analyses" aria-label="View analysis reports">
-                            <i class="fas fa-file-medical" aria-hidden="true"></i>
-                            <span class="stat-pill-value" id="reportsCount">0</span>
-                            <span class="stat-pill-label">Reports</span>
+                        <button type="button" class="stat-pill stat-pill-link" data-goto="analyses" aria-label="View analysis reports" role="listitem">
+                            <div class="stat-pill-inner">
+                                <span class="stat-pill-value" id="reportsCount">0</span>
+                                <span class="stat-pill-label">Reports ↗</span>
+                            </div>
                         </button>
                     </div>
 
                     <div class="patient-panels">
-                        <!-- Personal information -->
                         <div class="patient-info-panel">
                             <h2 class="panel-heading">
                                 <i class="fas fa-id-card" aria-hidden="true"></i> Personal Information
@@ -218,7 +226,6 @@
                             </dl>
                         </div>
 
-                        <!-- Hospitalisation history -->
                         <div class="patient-info-panel">
                             <h2 class="panel-heading">
                                 <i class="fas fa-hospital" aria-hidden="true"></i> Hospitalisation History
@@ -226,29 +233,30 @@
                             <div class="history-loading" id="historyLoading" role="status" aria-label="Loading hospitalisation history" hidden>
                                 <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
                             </div>
-                            <ul class="history-list" id="historyList"></ul>
+                            <ul class="history-list" id="historyList" role="list"></ul>
                             <p class="history-empty" id="historyEmpty" hidden>No hospitalisations found</p>
                         </div>
                     </div>
 
                 </section>
 
-                <!-- Medical Analyses Tab -->
+                <!-- Analyses Tab -->
                 <section id="analyses-tab" class="tab-content" role="tabpanel" aria-labelledby="analyses-tab-heading" hidden>
                     <div class="tab-header analyses-header">
                         <div class="header-left">
                             <i class="fas fa-file-medical header-glyph" aria-hidden="true"></i>
                             <div class="header-text">
-                                <h1 id="analyses-tab-heading">Analyses</h1>
-                                <p>Comprehensive diagnostic reports and imaging studies</p>
+                                <div class="section-label">Analyses</div>
+                                <h1 id="analyses-tab-heading">Diagnostic Reports</h1>
+                                <p>Imaging studies and lab analyses</p>
                             </div>
                         </div>
                         <div class="header-actions">
                             <div class="search-box">
-                                <i class="fas fa-search"></i>
-                                <input type="search" id="analysesSearch" placeholder="Search reports..." aria-label="Search reports">
+                                <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                                <input type="search" id="analysesSearch" placeholder="Search reports…" aria-label="Search reports">
                             </div>
-                            <select id="analysesFilter" aria-label="Filter reports">
+                            <select id="analysesFilter" aria-label="Filter by modality">
                                 <option value="all">All Types</option>
                                 <option value="radio">X-Ray</option>
                                 <option value="ct">CT Scan</option>
@@ -258,13 +266,13 @@
                             </select>
                         </div>
                     </div>
-                    
+
                     <div class="analyses-container" aria-live="polite">
                         <div class="no-data" id="noAnalyses" role="status" aria-label="No analyses available">
                             <i class="fas fa-file-medical fa-3x" aria-hidden="true"></i>
                             <p>No analyses found for this patient</p>
                         </div>
-                        <div id="analysesGrid" class="analyses-grid" aria-label="Medical analyses grid"></div>
+                        <div id="analysesGrid" class="analyses-grid" aria-label="Medical analyses"></div>
                     </div>
                 </section>
 
@@ -274,18 +282,18 @@
                         <div class="header-left">
                             <i class="fas fa-file-prescription header-glyph" aria-hidden="true"></i>
                             <div class="header-text">
-                                <h1 id="epicrisis-tab-heading">Epicrisis</h1>
+                                <div class="section-label">Epicrisis</div>
+                                <h1 id="epicrisis-tab-heading">Discharge Summaries</h1>
                                 <p>Discharge summary and medical conclusions</p>
                             </div>
                         </div>
                         <div class="header-actions">
                             <button class="btn-secondary" id="copyEpicrisisBtn" aria-label="Copy epicrisis as Markdown">
-                                <i class="fas fa-copy"></i>
+                                <i class="fas fa-copy" aria-hidden="true"></i>
                                 <span>Copy Markdown</span>
                             </button>
                         </div>
                     </div>
-
                     <nav id="epicrisisNav" class="epicrisis-nav" aria-label="Epicrisis navigation" hidden></nav>
                     <div id="epicrisisContent" aria-live="polite"></div>
                 </section>
@@ -296,26 +304,28 @@
                         <div class="header-left">
                             <i class="fas fa-notes-medical header-glyph" aria-hidden="true"></i>
                             <div class="header-text">
+                                <div class="section-label">Clinical Report</div>
                                 <h1 id="report-tab-heading">Patient Report</h1>
                                 <p>Clinical summary structured for LLM consumption — copy and paste into your AI assistant</p>
                             </div>
                         </div>
                         <div class="header-actions">
                             <button class="btn-secondary" id="copyReportBtn" aria-label="Copy report as Markdown">
-                                <i class="fas fa-copy"></i>
+                                <i class="fas fa-copy" aria-hidden="true"></i>
                                 <span>Copy Markdown</span>
                             </button>
                         </div>
                     </div>
-
                     <div id="patientReportMarkdown" class="markdown-content"></div>
                 </section>
 
+                <!-- Schedule Tab -->
                 <section id="schedule-tab" class="tab-content active" role="tabpanel" aria-labelledby="schedule-tab-heading">
                     <div class="tab-header">
                         <div class="header-left">
-                            <i class="fas fa-calendar-alt header-glyph" aria-hidden="true"></i>
+                            <i class="fas fa-calendar-day header-glyph" aria-hidden="true"></i>
                             <div class="header-text">
+                                <div class="section-label">Daily Worklist</div>
                                 <h1 id="schedule-tab-heading">Schedule <span id="scheduleCount" class="schedule-count" hidden></span></h1>
                                 <p>Imaging and lab requests for the selected date</p>
                             </div>
@@ -335,7 +345,7 @@
                             <option value="200" selected>200 items</option>
                         </select>
                         <button class="btn-secondary schedule-refresh-btn" id="refreshScheduleBtn" aria-label="Refresh schedule">
-                            <i class="fas fa-sync-alt" aria-hidden="true"></i>
+                            <i class="fas fa-arrows-rotate" aria-hidden="true"></i>
                             <span>Refresh</span>
                         </button>
                     </div>
@@ -365,20 +375,20 @@
                             <p>No requests found</p>
                         </div>
                         <div class="schedule-table-wrap">
-                        <table id="scheduleTable" class="schedule-table" hidden>
-                            <thead>
-                                <tr>
-                                    <th scope="col">Date/Time</th>
-                                    <th scope="col">Patient</th>
-                                    <th scope="col">Request</th>
-                                    <th scope="col">Ward</th>
-                                    <th scope="col">Referrer</th>
-                                    <th scope="col">Modality</th>
-                                    <th scope="col">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody id="scheduleBody"></tbody>
-                        </table>
+                            <table id="scheduleTable" class="schedule-table" hidden>
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Date/Time</th>
+                                        <th scope="col">Patient</th>
+                                        <th scope="col">Request</th>
+                                        <th scope="col">Ward</th>
+                                        <th scope="col">Referrer</th>
+                                        <th scope="col">Modality</th>
+                                        <th scope="col">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="scheduleBody"></tbody>
+                            </table>
                         </div>
                     </div>
                 </section>
@@ -387,15 +397,15 @@
         </main>
 
         <!-- Footer -->
-        <footer class="footer">
+        <footer class="footer" role="contentinfo">
             <div class="container">
                 <div class="footer-bottom">
-                    <p><i class="fas fa-bridge"></i> HippoBridge &mdash; Medical Data Intelligence</p>
+                    <p><i class="fas fa-bridge" aria-hidden="true"></i> HippoBridge &mdash; Medical Data Intelligence</p>
                 </div>
             </div>
         </footer>
 
-        <!-- Templates for dynamic content -->
+        <!-- Templates -->
         <template id="analysis-card-template">
             <article class="analysis-card">
                 <header class="card-identity">
@@ -443,7 +453,7 @@
         </template>
 
         <template id="history-item-template">
-            <li class="history-item">
+            <li class="history-item" role="listitem">
                 <button type="button" class="history-load">
                     <span class="history-period"></span>
                     <span class="history-diagnosis"></span>
@@ -453,7 +463,7 @@
         </template>
 
         <template id="recent-item-template">
-            <li class="recent-item">
+            <li class="recent-item" role="listitem">
                 <button type="button" class="recent-load">
                     <i class="fas" aria-hidden="true"></i>
                     <span class="recent-text">
@@ -472,11 +482,11 @@
         </template>
 
         <template id="imaging-study-link-template">
-            <a href="#" class="imaging-study-ref"><i class="fas fa-x-ray"></i> View Imaging Study <span class="study-ref-id"></span></a>
+            <a href="#" class="imaging-study-ref"><i class="fas fa-x-ray" aria-hidden="true"></i> View Imaging Study <span class="study-ref-id"></span></a>
         </template>
 
         <template id="series-item-template">
-            <li><strong><i class="fas fa-list-ol"></i> <span class="series-label"></span></strong> <span class="series-desc"></span><span class="series-modality"></span></li>
+            <li><strong><i class="fas fa-list-ol" aria-hidden="true"></i> <span class="series-label"></span></strong> <span class="series-desc"></span><span class="series-modality"></span></li>
         </template>
 
         <template id="imaging-study-modal-template">
@@ -484,27 +494,24 @@
                 <article>
                     <header>
                         <h2 id="imaging-study-modal-title"><i class="fas fa-x-ray" aria-hidden="true"></i> <span class="modal-title"></span></h2>
-                        <button class="close" aria-label="Close modal">
-                            <i class="fas fa-times"></i>
-                        </button>
+                        <button class="close" aria-label="Close modal"><i class="fas fa-times" aria-hidden="true"></i></button>
                     </header>
                     <div>
                         <div class="study-section">
-                            <h3><i class="fas fa-info-circle"></i> Study Information</h3>
+                            <h3><i class="fas fa-info-circle" aria-hidden="true"></i> Study Information</h3>
                             <div class="study-info" aria-label="Study information"></div>
                         </div>
                         <section class="study-section">
-                            <h3><i class="fas fa-list"></i> Series</h3>
+                            <h3><i class="fas fa-list" aria-hidden="true"></i> Series</h3>
                             <ul class="series-list" aria-label="Series list"></ul>
                         </section>
                         <section class="study-section">
-                            <p><a href="#" class="back-to-report" aria-label="Back to report"><i class="fas fa-arrow-left"></i> Back to Report <span class="back-report-id"></span></a></p>
+                            <p><a href="#" class="back-to-report" aria-label="Back to report"><i class="fas fa-arrow-left" aria-hidden="true"></i> Back to Report <span class="back-report-id"></span></a></p>
                         </section>
                     </div>
                     <footer>
                         <button class="btn-secondary" data-close-modal aria-label="Close modal">
-                            <i class="fas fa-times"></i>
-                            <span>Close</span>
+                            <i class="fas fa-times" aria-hidden="true"></i><span>Close</span>
                         </button>
                     </footer>
                 </article>
@@ -520,14 +527,14 @@
                                 <i class="fas fa-file-medical" aria-hidden="true"></i>
                                 <span class="modal-request-code"></span>
                             </h2>
-                            <button class="report-modal-close" aria-label="Close modal"><i class="fas fa-times"></i></button>
+                            <button class="report-modal-close" aria-label="Close modal"><i class="fas fa-times" aria-hidden="true"></i></button>
                         </div>
                         <dl class="report-modal-meta"></dl>
                     </header>
                     <div class="report-modal-body markdown-content"></div>
                     <footer class="report-modal-footer">
-                        <button class="btn-secondary" data-close-modal aria-label="Close"><i class="fas fa-times"></i> <span>Close</span></button>
-                        <button class="btn-primary modal-load-patient-btn" aria-label="Load patient"><i class="fas fa-user-injured"></i> <span>Load Patient</span></button>
+                        <button class="btn-secondary" data-close-modal><i class="fas fa-times" aria-hidden="true"></i> <span>Close</span></button>
+                        <button class="btn-primary modal-load-patient-btn"><i class="fas fa-user-injured" aria-hidden="true"></i> <span>Load Patient</span></button>
                     </footer>
                 </article>
             </dialog>
@@ -537,44 +544,32 @@
             <dialog class="modal user-modal" aria-modal="true" role="dialog" aria-labelledby="user-modal-title">
                 <article>
                     <header>
-                        <h2 id="user-modal-title"><i class="fas fa-user-circle" aria-hidden="true"></i> <span class="modal-title">User Account</span></h2>
-                        <button class="close" aria-label="Close modal">
-                            <i class="fas fa-times"></i>
-                        </button>
+                        <h2 id="user-modal-title"><i class="fas fa-circle-user" aria-hidden="true"></i> <span class="modal-title">User Account</span></h2>
+                        <button class="close" aria-label="Close modal"><i class="fas fa-times" aria-hidden="true"></i></button>
                     </header>
                     <div>
                         <div class="user-modal-identity">
-                            <div class="user-modal-avatar" aria-hidden="true">
-                                <i class="fas fa-user-md"></i>
-                            </div>
+                            <div class="user-modal-avatar" aria-hidden="true"><i class="fas fa-user-doctor"></i></div>
                             <p class="user-modal-name"></p>
                         </div>
                         <dl class="user-modal-details">
-                            <dt>Username</dt>
-                            <dd class="user-detail-username"></dd>
-                            <dt>User ID</dt>
-                            <dd class="user-detail-id"></dd>
+                            <dt>Username</dt><dd class="user-detail-username"></dd>
+                            <dt>User ID</dt><dd class="user-detail-id"></dd>
                         </dl>
                     </div>
                     <footer>
-                        <button class="btn-secondary" data-close-modal aria-label="Close modal">
-                            <i class="fas fa-times"></i>
-                            <span>Close</span>
-                        </button>
-                        <button class="btn-primary user-logout-btn" aria-label="Log out">
-                            <i class="fas fa-sign-out-alt"></i>
-                            <span>Log Out</span>
-                        </button>
+                        <button class="btn-secondary" data-close-modal><i class="fas fa-times" aria-hidden="true"></i> <span>Close</span></button>
+                        <button class="btn-primary user-logout-btn"><i class="fas fa-arrow-right-from-bracket" aria-hidden="true"></i> <span>Log Out</span></button>
                     </footer>
                 </article>
             </dialog>
         </template>
 
         <!-- Loading Overlay -->
-        <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+        <div class="loading-overlay" id="loadingOverlay" style="display:none;">
             <div class="loading-spinner">
                 <div class="spinner"></div>
-                <p id="loadingTitle">Loading patient data...</p>
+                <p id="loadingTitle">Loading patient data…</p>
                 <p id="loadingStep" class="loading-step"></p>
             </div>
         </div>
