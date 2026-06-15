@@ -2249,43 +2249,120 @@ select {
     margin-left: var(--spacing-xs);
 }
 
-/* Stacked card layout on narrow screens */
+/* ── Mobile schedule: compact 3-row card layout ─────────────────────────
+   td source order:  1=Time  2=Patient  3=Request  4=Ward  5=Referrer  6=Modality  7=Status
+   Card grid (auto 1fr auto):
+     row 1 │ patient·····················  time  │
+     row 2 │ [mod chip]  ward      [status]      │
+     row 3 │             [code]                  │
+   ────────────────────────────────────────────── */
 @media (max-width: 700px) {
     .schedule-table { min-width: 0; }
     .schedule-table thead { display: none; }
-    .schedule-table tbody, .schedule-table tr, .schedule-table td,
-    .schedule-table .schedule-day-row th { display: block; }
+    .schedule-table tbody { display: block; }
 
-    .schedule-table tr {
+    /* Day-group header row: simple block, full width */
+    .schedule-table .schedule-day-row { display: table-row; }
+    .schedule-table .schedule-day-row th { display: table-cell; }
+
+    /* Data rows: 3-row CSS grid card */
+    .schedule-table tbody tr:not(.schedule-day-row) {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        column-gap: var(--spacing-sm);
+        row-gap: 0.3rem;
         border: 1px solid var(--border);
+        border-left: 3px solid var(--border);
         border-radius: var(--radius-md);
         margin-bottom: var(--spacing-sm);
-        padding: var(--spacing-xs) var(--spacing-sm);
+        padding: var(--spacing-sm) var(--spacing-md);
         background: var(--card-bg);
+        box-shadow: var(--shadow-sm);
+        transition: box-shadow 0.15s ease;
     }
-    .schedule-table tr:hover td { background: transparent; }
+    .schedule-table tbody tr:not(.schedule-day-row):hover {
+        box-shadow: var(--shadow-md);
+    }
 
-    .schedule-table td {
-        display: flex;
-        gap: var(--spacing-sm);
-        align-items: baseline;
+    /* Modality accent on left border */
+    .schedule-table tr[data-modality="radio"] { border-left-color: var(--modality-radio); }
+    .schedule-table tr[data-modality="ct"]    { border-left-color: var(--modality-ct); }
+    .schedule-table tr[data-modality="irm"]   { border-left-color: var(--modality-irm); }
+    .schedule-table tr[data-modality="eco"]   { border-left-color: var(--modality-eco); }
+    .schedule-table tr[data-modality="rads"]  { border-left-color: var(--modality-rads); }
+
+    /* All tds: block, no border, no padding, no ::before label */
+    .schedule-table tbody tr:not(.schedule-day-row) td {
+        display: block;
         border-bottom: none;
-        padding: 0.15rem 0;
+        padding: 0;
+        font-size: var(--font-size-sm);
+        min-width: 0;
     }
-    .schedule-table td:empty { display: none; }
-    .schedule-table td::before {
-        content: attr(data-label);
-        flex: 0 0 5.5em;
+    .schedule-table td::before { display: none; }
+    .schedule-table td:empty   { display: none; }
+
+    /* td 1 – Time: top-right, stacks time + urgent badge */
+    .schedule-table tbody tr td:nth-child(1) {
+        grid-row: 1; grid-column: 3;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0.2rem;
         font-size: var(--font-size-xs);
-        font-weight: var(--font-weight-medium);
         color: var(--text-light);
+        white-space: nowrap;
+        align-self: start;
+    }
+    /* urgent badge inside time cell: no left margin on mobile */
+    .schedule-table tbody tr td:nth-child(1) .urgent-badge { margin-left: 0; }
+
+    /* td 2 – Patient: top row, spans cols 1–2 so name runs edge-to-edge */
+    .schedule-table tbody tr td:nth-child(2) {
+        grid-row: 1; grid-column: 1 / 3;
+        align-self: center;
+        overflow: hidden;
+    }
+    .schedule-table tbody tr td:nth-child(2) .schedule-patient-link {
+        font-size: var(--font-size-sm);
+        font-weight: var(--font-weight-semibold);
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
-    .schedule-table .schedule-day-row {
-        border: none;
-        background: transparent;
-        padding: 0;
-        margin-bottom: var(--spacing-xs);
+    /* td 3 – Request code: bottom-left */
+    .schedule-table tbody tr td:nth-child(3) {
+        grid-row: 3; grid-column: 2;
+        align-self: center;
+    }
+
+    /* td 4 – Ward: middle-centre, muted */
+    .schedule-table tbody tr td:nth-child(4) {
+        grid-row: 2; grid-column: 2;
+        font-size: var(--font-size-xs);
+        color: var(--text-light);
+        align-self: center;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* td 5 – Referrer: hidden (too verbose for mobile) */
+    .schedule-table tbody tr td:nth-child(5) { display: none; }
+
+    /* td 6 – Modality chip: middle-left anchor column */
+    .schedule-table tbody tr td:nth-child(6) {
+        grid-row: 2; grid-column: 1;
+        align-self: center;
+    }
+
+    /* td 7 – Status badge: middle-right */
+    .schedule-table tbody tr td:nth-child(7) {
+        grid-row: 2; grid-column: 3;
+        align-self: center;
+        text-align: right;
     }
 }
 

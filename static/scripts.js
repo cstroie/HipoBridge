@@ -2482,6 +2482,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const isUrgent = r.priority === 'urgent';
 
             const tr = document.createElement('tr');
+            if (modalitySlug) tr.dataset.modality = modalitySlug;
 
             // Time (+ urgent flag)
             const timeTd = document.createElement('td');
