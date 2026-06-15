@@ -1873,26 +1873,14 @@ select {
 }
 
 @media (max-width: 768px) {
-    .header-content {
-        flex-direction: column;
-        gap: var(--spacing-md);
-    }
+    /* Header stays a single row (search-quick is hidden, so brand + 2 icon
+       buttons fit in ~72px) — no need to make it static or re-pin the nav. */
 
-    /* Stacked header is taller than --header-height, so the 72px sticky
-       offset no longer matches — let the header scroll away and pin the
-       nav to the top instead */
-    .header {
-        position: static;
-    }
-
-    .main-nav {
-        top: 0;
-    }
-
-    
-    .search-quick input {
-        min-width: 200px;
-    }
+    /* Shrink brand to save horizontal space */
+    .brand-logo { width: 40px; height: 40px; }
+    .brand-name  { font-size: var(--font-size-xl); }
+    /* Hide tagline in compact single-row header */
+    .brand-info > p:not(.brand-name) { display: none; }
     
     .nav-menu {
         overflow-x: auto;
@@ -1923,10 +1911,6 @@ select {
         justify-content: center;
     }
 
-    .search-box input {
-        min-width: 150px;
-    }
-    
     .toast-container {
         right: var(--spacing-sm);
         left: var(--spacing-sm);
@@ -1954,19 +1938,14 @@ select {
 }
 
 @media (max-width: 480px) {
-    .brand-logo {
-        width: 40px;
-        height: 40px;
-    }
-    
-    .brand-name {
-        font-size: var(--font-size-lg);
-    }
-    
+    /* Further shrink brand on very small screens */
+    .brand-logo { width: 36px; height: 36px; }
+    .brand-name  { font-size: var(--font-size-base); }
+
     .hero-content h1 {
         font-size: var(--font-size-xl);
     }
-    
+
     .patient-avatar {
         width: 56px;
         height: 56px;
@@ -1980,13 +1959,10 @@ select {
     .patient-stats-strip {
         grid-template-columns: repeat(2, 1fr);
     }
-    
+
     .search-input-group {
         flex-direction: column;
     }
-    
-    /* Brand tagline: hide on small screens to reduce header height */
-    .brand-info > p:not(.brand-name) { display: none; }
 
     /* Tab header actions: stack vertically and stretch to full width */
     .tab-header .header-actions {
@@ -2313,16 +2289,6 @@ select {
 }
 .epicrisis-nav[hidden] { display: none; }
 
-@media (max-width: 768px) {
-    /* header scrolls away; only the pinned main nav (~51px) sits above */
-    .epicrisis-nav {
-        top: 52px;
-    }
-    /* scroll-margin: nav(52) + epicrisis chip bar(~56px) */
-    .epicrisis-card {
-        scroll-margin-top: 108px;
-    }
-}
 
 .epicrisis-chip {
     display: flex;
