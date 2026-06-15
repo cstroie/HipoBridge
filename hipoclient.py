@@ -844,7 +844,10 @@ class HipoClientPatient(HipoClient):
             data.store("patient.weight", extract_value_from_input(soup, element_id="strGreutate"))
             data.store("patient.height", extract_value_from_input(soup, element_id="strInaltime"))
             data.store("patient.mcp", extract_value_from_input(soup, element_id="strmcp"))
-            data.store("patient.address", extract_selected_from_dropdown(soup, element_id='strDomLegal_LocId'))
+            city = extract_selected_from_dropdown(soup, element_id='strDomLegal_LocId')
+            street = extract_value_from_input(soup, element_id='strDomLegal_strada')
+            address_parts = [p for p in [street, city] if p]
+            data.store("patient.address", ", ".join(address_parts) if address_parts else None)
 
             if data.get("patient.cnp"):
                 parsed_cnp = parse_cnp(data.get("patient.cnp"))
