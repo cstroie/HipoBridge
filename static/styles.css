@@ -1261,7 +1261,7 @@ select {
     cursor: pointer;
 }
 
-/* Uniform control height in every header-actions row */
+/* Uniform control height in every header-actions row (reverts on mobile where controls stack) */
 .header-actions .btn-primary,
 .header-actions .btn-secondary,
 .header-actions .btn-ghost,
@@ -1274,11 +1274,30 @@ select {
     padding-bottom: 0;
 }
 
+@media (max-width: 480px) {
+    .tab-header .header-actions .btn-primary,
+    .tab-header .header-actions .btn-secondary,
+    .tab-header .header-actions .btn-ghost,
+    .tab-header .header-actions select,
+    .tab-header .header-actions .search-box,
+    .tab-header .header-actions .schedule-date-input {
+        height: auto;
+        padding-top: var(--spacing-sm);
+        padding-bottom: var(--spacing-sm);
+    }
+}
+
 .header-actions .search-box input,
 .header-actions .search-quick input {
     height: 100%;
     padding-top: 0;
     padding-bottom: 0;
+}
+
+@media (max-width: 480px) {
+    .tab-header .header-actions .search-box input {
+        height: auto;
+    }
 }
 
 /* Analyses grid */
@@ -1870,9 +1889,6 @@ select {
         top: 0;
     }
 
-    .epicrisis-nav {
-        top: 60px; /* below the pinned main nav only */
-    }
     
     .search-quick input {
         min-width: 200px;
@@ -1915,10 +1931,26 @@ select {
         right: var(--spacing-sm);
         left: var(--spacing-sm);
     }
-    
+
     .toast {
         max-width: none;
     }
+
+    /* Hide header quick-search on mobile — the Search tab covers this */
+    .search-quick { display: none; }
+
+    /* Tab header: let action controls wrap onto their own full-width row */
+    .tab-header .header-actions {
+        flex-wrap: wrap;
+        width: 100%;
+    }
+
+    /* Analyses search box: fill available space instead of fixed min-width */
+    .search-box { flex: 1 1 auto; }
+    .search-box input { min-width: 0; flex: 1; }
+
+    /* Schedule date inputs: grow equally to share the row */
+    .schedule-date-input { flex: 1; min-width: 100px; }
 }
 
 @media (max-width: 480px) {
@@ -1953,13 +1985,19 @@ select {
         flex-direction: column;
     }
     
-    .search-quick input {
-        min-width: 100%;
+    /* Brand tagline: hide on small screens to reduce header height */
+    .brand-info > p:not(.brand-name) { display: none; }
+
+    /* Tab header actions: stack vertically and stretch to full width */
+    .tab-header .header-actions {
+        flex-direction: column;
+        align-items: stretch;
     }
-    
-    .btn-primary,
-    .btn-secondary,
-    .btn-ghost {
+
+    /* Full-width buttons in main content — scoped so modal footers are unaffected */
+    .main-content .btn-primary,
+    .main-content .btn-secondary,
+    .main-content .btn-ghost {
         width: 100%;
         justify-content: center;
     }
@@ -1973,6 +2011,9 @@ select {
     .btn-secondary {
         padding: var(--spacing-md) 1.25rem;
     }
+
+    /* Schedule header: hide dash separator between dates when stacked */
+    .schedule-date-sep { display: none; }
 
     /* Schedule filters: full-width on mobile */
     .schedule-filter-input,
@@ -2271,6 +2312,17 @@ select {
     padding: var(--spacing-sm) 0;
 }
 .epicrisis-nav[hidden] { display: none; }
+
+@media (max-width: 768px) {
+    /* header scrolls away; only the pinned main nav (~51px) sits above */
+    .epicrisis-nav {
+        top: 52px;
+    }
+    /* scroll-margin: nav(52) + epicrisis chip bar(~56px) */
+    .epicrisis-card {
+        scroll-margin-top: 108px;
+    }
+}
 
 .epicrisis-chip {
     display: flex;
