@@ -1754,7 +1754,8 @@ select {
 /* Toast notifications */
 .toast-container {
     position: fixed;
-    top: var(--spacing-lg);
+    /* sit below the sticky header so toasts never overlap the brand/nav */
+    top: calc(var(--header-height) + var(--spacing-sm));
     right: var(--spacing-lg);
     z-index: var(--z-toast);
     display: flex;
@@ -1806,6 +1807,11 @@ select {
 @keyframes slideIn {
     from { transform: translate(100%, -20px); opacity: 0; }
     to   { transform: translate(0, 0);        opacity: 1; }
+}
+
+@keyframes slideUp {
+    from { transform: translateY(100%); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
 }
 
 /* Loading Overlay */
@@ -1911,13 +1917,19 @@ select {
         justify-content: center;
     }
 
+    /* On mobile toasts live at the bottom — away from the sticky header,
+       matches iOS/Android conventions, and avoids the right-slide animation
+       looking wrong on a full-width container */
     .toast-container {
+        top: auto;
+        bottom: var(--spacing-lg);
         right: var(--spacing-sm);
         left: var(--spacing-sm);
+        max-width: none;
     }
 
     .toast {
-        max-width: none;
+        animation-name: slideUp;
     }
 
     /* Hide header quick-search on mobile — the Search tab covers this */
@@ -2355,6 +2367,16 @@ select {
     flex-shrink: 0;
     padding: var(--spacing-xs) var(--spacing-sm);
     font-size: var(--font-size-sm);
+}
+
+@media (max-width: 600px) {
+    /* Icon-only: hide the label, keep aria-label for screen readers */
+    .epicrisis-copy-btn span { display: none; }
+    .epicrisis-copy-btn {
+        padding: var(--spacing-xs);
+        aspect-ratio: 1;
+        justify-content: center;
+    }
 }
 
 .epicrisis-title {
