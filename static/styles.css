@@ -2373,14 +2373,18 @@ select {
 }
 
 @media (max-width: 600px) {
-    /* Icon-only: hide the label, keep aria-label for screen readers */
+    /* Collapse to a circular icon button — matches .btn-icon appearance.
+       width:auto lets the icon+padding determine the size naturally. */
     .epicrisis-copy-btn span { display: none; }
     .epicrisis-copy-btn {
-        padding: var(--spacing-xs);
-        width: 32px;
-        height: 32px;
+        width: auto;
+        height: 36px;
+        min-width: 36px;
+        padding: 0 var(--spacing-sm);
+        border-radius: var(--radius-full);
+        align-self: center;
         justify-content: center;
-        align-self: flex-start;
+        flex-shrink: 0;
     }
 }
 
