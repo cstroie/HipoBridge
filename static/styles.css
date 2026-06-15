@@ -402,7 +402,9 @@ small {
 }
 
 .search-quick {
-    display: flex;
+    /* hidden by default so it never contributes width on mobile;
+       revealed only on wider screens via the min-width query below */
+    display: none;
     align-items: center;
     gap: var(--spacing-sm);
     background: rgba(255, 255, 255, 0.1);
@@ -410,6 +412,10 @@ small {
     border-radius: var(--radius-full);
     border: 1px solid rgba(255, 255, 255, 0.2);
     backdrop-filter: blur(10px);
+}
+
+@media (min-width: 769px) {
+    .search-quick { display: flex; }
 }
 
 .search-quick input {
@@ -1932,9 +1938,6 @@ select {
         animation-name: slideUp;
     }
 
-    /* Hide header quick-search on mobile — the Search tab covers this */
-    .search-quick { display: none; }
-
     /* Tab header: let action controls wrap onto their own full-width row */
     .tab-header .header-actions {
         flex-wrap: wrap;
@@ -2374,8 +2377,10 @@ select {
     .epicrisis-copy-btn span { display: none; }
     .epicrisis-copy-btn {
         padding: var(--spacing-xs);
-        aspect-ratio: 1;
+        width: 32px;
+        height: 32px;
         justify-content: center;
+        align-self: flex-start;
     }
 }
 
