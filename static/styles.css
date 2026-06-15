@@ -1273,8 +1273,7 @@ select {
 .header-actions .btn-ghost,
 .header-actions select,
 .header-actions .search-box,
-.header-actions .search-quick,
-.header-actions .schedule-date-input {
+.header-actions .search-quick {
     height: 40px;
     padding-top: 0;
     padding-bottom: 0;
@@ -1285,8 +1284,7 @@ select {
     .tab-header .header-actions .btn-secondary,
     .tab-header .header-actions .btn-ghost,
     .tab-header .header-actions select,
-    .tab-header .header-actions .search-box,
-    .tab-header .header-actions .schedule-date-input {
+    .tab-header .header-actions .search-box {
         height: auto;
         padding-top: var(--spacing-sm);
         padding-bottom: var(--spacing-sm);
@@ -1985,10 +1983,11 @@ select {
         align-items: stretch;
     }
 
-    /* Full-width buttons in main content — scoped so modal footers are unaffected */
-    .main-content .btn-primary,
-    .main-content .btn-secondary,
-    .main-content .btn-ghost {
+    /* Full-width buttons in main content — scoped so modal footers and
+       toolbar buttons (schedule-refresh-btn) are unaffected */
+    .main-content .btn-primary:not(.schedule-refresh-btn),
+    .main-content .btn-secondary:not(.schedule-refresh-btn),
+    .main-content .btn-ghost:not(.schedule-refresh-btn) {
         width: 100%;
         justify-content: center;
     }
@@ -2053,6 +2052,26 @@ select {
 }
 
 /* ── Schedule tab ───────────────────────────────────────────────────────── */
+
+/* Date range + limit + refresh — sits between tab-header and filters */
+.schedule-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--spacing-sm);
+}
+
+/* Keep the refresh button compact — never let it go full-width */
+.schedule-refresh-btn {
+    margin-left: auto;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
 
 .schedule-filters {
     display: flex;

@@ -2958,15 +2958,16 @@ class HipoClientSchedule(HipoClient):
         super().__init__(service_url=service_url, request=request)
         self.request_url = "/PARA/NOM/Listare/"
 
-    def _build_url(self, start_date=None, end_date=None, lab_id=None, patient_text=None):
+    def _build_url(self, start_date=None, end_date=None, lab_id=None, patient_text=None, limit=None):
         def _fmt(date_str):
             if date_str:
                 return datetime.strptime(date_str, '%Y-%m-%d').strftime('%d/%m/%Y')
             return datetime.now().strftime('%d/%m/%Y')
         sd = _fmt(start_date)
         ed = _fmt(end_date or start_date)
+        per_page = int(limit) if limit and str(limit).isdigit() else 200
         url = (self.request_url +
-               f"?id=44&NrPePag=200"
+               f"?id=44&NrPePag={per_page}"
                f"&LR_requesteddateSD={sd}"
                f"&LR_requesteddateED={ed}"
                f"&PARA_ID_Laborator={lab_id or ''}"
@@ -2982,6 +2983,7 @@ class HipoClientSchedule(HipoClient):
             kwargs.get('end_date'),
             lab_id=kwargs.get('lab_id'),
             patient_text=kwargs.get('patient_text'),
+            limit=kwargs.get('limit'),
         )
         if kwargs.get('force'):
             self.cache_remove(self.get_full_url(url))

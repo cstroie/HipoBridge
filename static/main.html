@@ -320,17 +320,24 @@
                                 <p>Imaging and lab requests for the selected date</p>
                             </div>
                         </div>
-                        <div class="header-actions">
-                            <label for="scheduleStartDate" class="sr-only">From date</label>
-                            <input type="date" id="scheduleStartDate" class="schedule-date-input" aria-label="From date">
-                            <span class="schedule-date-sep" aria-hidden="true">–</span>
-                            <label for="scheduleEndDate" class="sr-only">To date</label>
-                            <input type="date" id="scheduleEndDate" class="schedule-date-input" aria-label="To date">
-                            <button class="btn-secondary" id="refreshScheduleBtn" aria-label="Refresh schedule">
-                                <i class="fas fa-sync-alt" aria-hidden="true"></i>
-                                <span>Refresh</span>
-                            </button>
-                        </div>
+                    </div>
+                    <div class="schedule-actions">
+                        <label for="scheduleStartDate" class="sr-only">From date</label>
+                        <input type="date" id="scheduleStartDate" class="schedule-date-input" aria-label="From date">
+                        <span class="schedule-date-sep" aria-hidden="true">–</span>
+                        <label for="scheduleEndDate" class="sr-only">To date</label>
+                        <input type="date" id="scheduleEndDate" class="schedule-date-input" aria-label="To date">
+                        <label for="scheduleLimitSelect" class="sr-only">Max results</label>
+                        <select id="scheduleLimitSelect" class="schedule-filter-select" aria-label="Max results">
+                            <option value="20">20 items</option>
+                            <option value="50">50 items</option>
+                            <option value="100">100 items</option>
+                            <option value="200" selected>200 items</option>
+                        </select>
+                        <button class="btn-secondary schedule-refresh-btn" id="refreshScheduleBtn" aria-label="Refresh schedule">
+                            <i class="fas fa-sync-alt" aria-hidden="true"></i>
+                            <span>Refresh</span>
+                        </button>
                     </div>
                     <div class="schedule-filters">
                         <label for="schedulePatientFilter" class="sr-only">Patient name</label>

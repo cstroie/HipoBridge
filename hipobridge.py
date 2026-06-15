@@ -359,11 +359,13 @@ async def get_fhir_schedule(request):
     section_name = request.rel_url.query.get('section_name')
     patient_text = request.rel_url.query.get('patient_text')
     force        = request.rel_url.query.get('refresh') == '1'
+    limit_raw    = request.rel_url.query.get('limit')
+    limit        = int(limit_raw) if limit_raw and limit_raw.isdigit() else None
     client = HipoClientSchedule(SERVICE_URL, request)
     response = await client.fetch_respond_fhir(
         start_date=start_date, end_date=end_date,
         lab_id=lab_id, section_name=section_name, patient_text=patient_text,
-        force=force, http_request=request)
+        force=force, limit=limit, http_request=request)
     return web_fhir_response(response)
 
 @require_auth

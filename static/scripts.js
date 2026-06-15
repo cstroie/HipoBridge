@@ -65,6 +65,7 @@ document.addEventListener('DOMContentLoaded', function() {
         schedulePatientFilter: document.getElementById('schedulePatientFilter'),
         scheduleLabFilter:     document.getElementById('scheduleLabFilter'),
         scheduleSectionFilter: document.getElementById('scheduleSectionFilter'),
+        scheduleLimitSelect:   document.getElementById('scheduleLimitSelect'),
         scheduleTable: document.getElementById('scheduleTable'),
         scheduleBody: document.getElementById('scheduleBody'),
         scheduleCount: document.getElementById('scheduleCount'),
@@ -266,6 +267,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         if (elements.scheduleSectionFilter) {
             elements.scheduleSectionFilter.addEventListener('change', fetchScheduleFromInputs);
+        }
+        if (elements.scheduleLimitSelect) {
+            elements.scheduleLimitSelect.addEventListener('change', fetchScheduleFromInputs);
         }
     }
     
@@ -2387,10 +2391,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const patientText = elements.schedulePatientFilter?.value.trim() || null;
         const labId       = elements.scheduleLabFilter?.value || null;
         const sectionName = elements.scheduleSectionFilter?.value || null;
-        fetchSchedule(start, end, force, patientText, labId, sectionName);
+        const limit       = elements.scheduleLimitSelect?.value || null;
+        fetchSchedule(start, end, force, patientText, labId, sectionName, limit);
     }
 
-    async function fetchSchedule(startDate, endDate, force = false, patientText = null, labId = null, sectionName = null) {
+    async function fetchSchedule(startDate, endDate, force = false, patientText = null, labId = null, sectionName = null, limit = null) {
         if (!elements.scheduleBody) return;
         const params = new URLSearchParams();
         if (startDate)   params.set('start_date', startDate);
@@ -2399,6 +2404,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (patientText) params.set('patient_text', patientText);
         if (labId)       params.set('lab_id', labId);
         if (sectionName) params.set('section_name', sectionName);
+        if (limit)       params.set('limit', limit);
         const url = `/fhir/Schedule${params.toString() ? '?' + params.toString() : ''}`;
         if (elements.scheduleLoading) elements.scheduleLoading.hidden = false;
         if (elements.noSchedule) elements.noSchedule.style.display = 'none';
