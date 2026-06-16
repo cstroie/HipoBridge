@@ -734,6 +734,8 @@ document.addEventListener('DOMContentLoaded', function() {
             delete elements.patientReportMarkdown.dataset.markdown;
             delete elements.patientReportMarkdown.dataset.loaded;
         }
+        const reportCard = document.getElementById('reportCard');
+        if (reportCard) reportCard.hidden = true;
         
         // Hide the patient nav group (keep always-visible tabs)
         if (elements.navPatientGroup) elements.navPatientGroup.hidden = true;
@@ -1074,57 +1076,187 @@ document.addEventListener('DOMContentLoaded', function() {
        
     async function displayPatientReport(patientData, analysesData) {
         log('Displaying patient report data');
-        
-        const markdownContainer = elements.patientReportMarkdown;
-        markdownContainer.replaceChildren((() => {
-            const wrap = document.createElement('div');
-            wrap.className = 'loading-content';
-            const icon = document.createElement('i');
-            icon.className = 'fas fa-spinner fa-spin';
-            const msg = document.createElement('p');
-            msg.textContent = 'Assembling report…';
-            wrap.append(icon, msg);
-            return wrap;
-        })());
-        
+
+        const reportCard = document.getElementById('reportCard');
+        const markdownStore = elements.patientReportMarkdown;
+        if (reportCard) reportCard.hidden = true;
+
         try {
-            // Generate patient identification markdown
-            // run all markdown generators in parallel when possible
-            const [patientMarkdown, analysesMarkdown, epicrisisMarkdown] = await Promise.all([
-                generatePatientMarkdown(patientData),
+            // ── §1 Patient identity ──────────────────────────────────────
+            const name     = formatPatientName(patientData.name);
+            const age      = calculateAge(patientData.birthDate);
+            const gender   = formatGender(patientData.gender);
+            const dob      = formatBirthDate(patientData.birthDate);
+            const cnp      = extractCNP(patientData.identifier) || '';
+            const pid      = patientData.id || '';
+
+            const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+            setText('reportPatientName', name);
+            setText('reportPatientId',   pid);
+            setText('reportCNP',         cnp);
+            setText('reportDOB',         dob ? `${dob}${age ? ' (' + age + ')' : ''}` : '');
+            setText('reportSex',         gender);
+
+            // ── §2 + §4 Encounters (parallel with analyses) ──────────────
+            const [analysesMarkdown, epicrisisMarkdown, encounters] = await Promise.all([
                 analysesData ? populateAnalysesMarkdown(analysesData) : Promise.resolve(''),
-                generateEpicrisisMarkdown(patientData)
+                generateEpicrisisMarkdown(patientData),
+                (async () => {
+                    const ids = extractCheckoutIds(patientData);
+                    if (!ids.length) return [];
+                    const enc = await limitedMap(ids, MAX_CONCURRENT_REQUESTS,
+                        async id => { try { return await fetchEncounterDataForCheckout(id); } catch { return null; } });
+                    return enc
+                        .map((e, i) => e ? { enc: e, id: ids[i] } : null)
+                        .filter(Boolean)
+                        .sort((a, b) => (b.enc.period?.end || '') > (a.enc.period?.end || '') ? 1 : -1);
+                })()
             ]);
 
-            log('Generated patient markdown content:', patientMarkdown);
-            log('Generated analyses markdown content:', analysesMarkdown);
-            log('Generated epicrisis markdown content:', epicrisisMarkdown);
-            
-            // Combine: patient → discharge summaries → imaging studies
-            const combinedMarkdown = patientMarkdown + epicrisisMarkdown + analysesMarkdown;
-            log('Combined markdown content:', combinedMarkdown);
-            
-            // Convert markdown to HTML using marked.js
-            const htmlContent = marked.parse(combinedMarkdown);
-            log('Converted markdown to HTML:', htmlContent);
-            
-            // Display the content and stash raw markdown for clipboard
-            markdownContainer.innerHTML = htmlContent;
-            markdownContainer.dataset.markdown = combinedMarkdown;
-            log('Patient report data displayed successfully');
-            
+            // Primary diagnosis from most recent encounter
+            const latestDx = encounters[0] ? extractDiagnosisText(encounters[0].enc) : '';
+            setText('reportDiagnosis', latestDx);
+
+            // §2 Current admission = most recent encounter with epicrisis
+            const currentAdm = encounters.find(e => extractEpicrisisText(e.enc));
+            const secAdmission = document.getElementById('reportSectionAdmission');
+            if (currentAdm && secAdmission) {
+                const enc = currentAdm.enc;
+                const start = enc.period?.start ? formatDate(enc.period.start) : '';
+                const end   = enc.period?.end   ? formatDate(enc.period.end)   : '';
+                const ms    = (enc.period?.start && enc.period?.end)
+                    ? new Date(enc.period.end) - new Date(enc.period.start) : 0;
+                const nights = ms > 0 ? Math.round(ms / 86400000) : 0;
+                const periodEl = document.getElementById('reportAdmissionPeriod');
+                if (periodEl) periodEl.textContent = `${start} → ${end}${nights ? ` (${nights} ${nights === 1 ? 'night' : 'nights'})` : ''}`;
+                const textEl = document.getElementById('reportAdmissionText');
+                if (textEl) textEl.textContent = extractEpicrisisText(enc).split('\n')[0].trim();
+                secAdmission.hidden = false;
+            }
+
+            // §3 Recent imaging — up to 5 most recent entries from analysesData
+            const secImaging = document.getElementById('reportSectionImaging');
+            const imagingList = document.getElementById('reportImagingList');
+            const MOD_SHORT = { radio: 'XR', ct: 'CT', irm: 'MR', eco: 'US', rads: 'FL' };
+            const MOD_LABEL = { radio: 'X-Ray', ct: 'CT', irm: 'MRI', eco: 'Ultrasound', rads: 'Fluoroscopy' };
+            const MOD_VAR   = { radio: '--mod-xr', ct: '--mod-ct', irm: '--mod-mr', eco: '--mod-us', rads: '--mod-fl' };
+            if (imagingList && analysesData?.entry?.length) {
+                const entries = [...analysesData.entry]
+                    .filter(e => MOD_SHORT[e.resource?.code?.coding?.[0]?.code])
+                    .sort((a, b) => (b.resource.authoredOn || '') > (a.resource.authoredOn || '') ? 1 : -1)
+                    .slice(0, 5);
+
+                const reports = await limitedMap(entries, MAX_CONCURRENT_REQUESTS, e => {
+                    const sr = e.resource;
+                    return getReportContent(sr.id, sr.code?.coding?.[0]?.code);
+                });
+
+                imagingList.innerHTML = '';
+                entries.forEach((entry, idx) => {
+                    const sr = entry.resource;
+                    const mod  = sr.code?.coding?.[0]?.code || '';
+                    const desc = sr.code?.coding?.[0]?.display || MOD_LABEL[mod] || mod;
+                    const date = sr.authoredOn ? formatDate(sr.authoredOn) : '';
+                    const code = sr.identifier?.[0]?.value || sr.id || '';
+                    const isUrgent = sr.priority === 'urgent';
+                    const physician = sr.performer?.[0]?.display || '';
+                    const reportText = reports[idx] || '';
+
+                    const row = document.createElement('div');
+                    row.className = 'report-imaging-row';
+
+                    const header = document.createElement('div');
+                    header.className = 'report-imaging-header';
+
+                    const badge = document.createElement('span');
+                    badge.className = 'report-mod-badge';
+                    badge.style.setProperty('--mod-color', `var(${MOD_VAR[mod] || '--accent'})`);
+                    badge.textContent = MOD_SHORT[mod] || mod.toUpperCase();
+
+                    const title = document.createElement('span');
+                    title.className = 'report-imaging-title';
+                    title.textContent = desc;
+
+                    const meta = document.createElement('span');
+                    meta.className = 'report-imaging-meta';
+                    meta.textContent = [date, code ? '#' + code : ''].filter(Boolean).join(' · ');
+
+                    header.append(badge, title, meta);
+
+                    if (isUrgent) {
+                        const urg = document.createElement('span');
+                        urg.className = 'report-urgent-tag';
+                        urg.textContent = 'URGENT';
+                        header.appendChild(urg);
+                    }
+
+                    row.appendChild(header);
+
+                    if (reportText) {
+                        const p = document.createElement('p');
+                        p.className = 'report-imaging-text';
+                        p.textContent = reportText.split('\n')[0].trim();
+                        row.appendChild(p);
+                    }
+
+                    if (physician) {
+                        const sig = document.createElement('div');
+                        sig.className = 'report-imaging-sig';
+                        sig.innerHTML = `<i class="fas fa-signature"></i> ${physician}`;
+                        row.appendChild(sig);
+                    }
+
+                    imagingList.appendChild(row);
+                });
+                if (secImaging) secImaging.hidden = false;
+            }
+
+            // §4 Hospitalisation timeline
+            const secTimeline = document.getElementById('reportSectionTimeline');
+            const timelineEl  = document.getElementById('reportTimeline');
+            if (timelineEl && encounters.length) {
+                timelineEl.innerHTML = '';
+                encounters.forEach((item, idx) => {
+                    const enc   = item.enc;
+                    const start = enc.period?.start ? formatDate(enc.period.start) : '';
+                    const end   = enc.period?.end   ? formatDate(enc.period.end)   : '';
+                    const dx    = extractDiagnosisText(enc) || '';
+                    const service = enc.serviceType?.display || enc.location?.slice(-1)[0]?.location?.display || '';
+                    const epicText = extractEpicrisisText(enc);
+
+                    const row = document.createElement('div');
+                    row.className = 'report-timeline-row';
+
+                    const dot = document.createElement('span');
+                    dot.className = 'report-tl-dot' + (idx < 2 ? ' report-tl-dot-accent' : '');
+
+                    const span = document.createElement('span');
+                    span.className = 'report-tl-range';
+                    span.textContent = end ? `${start}→${end}` : start;
+
+                    const label = document.createElement('span');
+                    label.textContent = [service, dx ? dx.split(' ').slice(1).join(' ') : ''].filter(Boolean).join(' — ') || dx;
+
+                    row.append(dot, span, label);
+                    timelineEl.appendChild(row);
+
+                    if (epicText && idx === 0) {
+                        // show first line of epicrisis as timeline detail
+                    }
+                });
+                if (secTimeline) secTimeline.hidden = false;
+            }
+
+            // Stash combined markdown for Copy button
+            const patientMarkdown = await generatePatientMarkdown(patientData);
+            const combined = patientMarkdown + epicrisisMarkdown + analysesMarkdown;
+            if (markdownStore) markdownStore.dataset.markdown = combined;
+
+            if (reportCard) reportCard.hidden = false;
+            log('Patient report displayed successfully');
+
         } catch (error) {
             console.error('Error displaying patient report:', error);
-            markdownContainer.replaceChildren((() => {
-                const wrap = document.createElement('div');
-                wrap.className = 'error-content';
-                const icon = document.createElement('i');
-                icon.className = 'fas fa-exclamation-triangle';
-                const msg = document.createElement('p');
-                msg.textContent = 'Error loading patient report data';
-                wrap.append(icon, msg);
-                return wrap;
-            })());
         }
     }
     

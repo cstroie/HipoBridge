@@ -256,23 +256,51 @@
 
                 <!-- ─── Report tab ─── -->
                 <section id="report-tab" class="tab-content" role="tabpanel" aria-labelledby="report-tab-heading" hidden>
-                    <div class="tab-header">
-                        <div class="header-left">
-                            <div class="header-text">
-                                <div class="tab-eyebrow">Clinical Report</div>
-                                <h1 id="report-tab-heading">Patient Report</h1>
-                                <p>Structured for LLM consumption — copy and paste into your AI assistant</p>
+                    <div class="report-header">
+                        <div>
+                            <div class="report-eyebrow">Clinical Report</div>
+                            <h1 id="report-tab-heading" class="report-hero-title">Patient Report</h1>
+                            <p class="report-hero-sub">Structured for LLM consumption — copy and paste into your AI assistant</p>
+                        </div>
+                        <button class="btn-secondary" id="copyReportBtn" aria-label="Copy report as Markdown">
+                            <i class="fas fa-copy"></i>
+                            <span>Copy Markdown</span>
+                        </button>
+                    </div>
+
+                    <!-- Structured card — populated by displayPatientReport() -->
+                    <div id="reportCard" class="report-card" hidden>
+                        <!-- §1 Patient identity -->
+                        <div class="report-section" id="reportSectionPatient">
+                            <h2 class="report-patient-name" id="reportPatientName"></h2>
+                            <div class="report-identity-grid">
+                                <div><span class="report-field-label">Patient ID</span><div class="report-field-mono" id="reportPatientId"></div></div>
+                                <div><span class="report-field-label">CNP</span><div class="report-field-mono" id="reportCNP"></div></div>
+                                <div><span class="report-field-label">Date of Birth</span><div class="report-field-value" id="reportDOB"></div></div>
+                                <div><span class="report-field-label">Sex</span><div class="report-field-value" id="reportSex"></div></div>
+                                <div style="grid-column: 1 / -1"><span class="report-field-label">Primary Diagnosis</span><div class="report-field-value" id="reportDiagnosis"></div></div>
                             </div>
                         </div>
-                        <div class="header-actions">
-                            <button class="btn-secondary" id="copyReportBtn" aria-label="Copy report as Markdown">
-                                <i class="fas fa-copy"></i>
-                                <span>Copy Markdown</span>
-                            </button>
+                        <!-- §2 Current admission -->
+                        <div class="report-section" id="reportSectionAdmission" hidden>
+                            <h3 class="report-section-title"><i class="fas fa-hospital"></i> Current Admission</h3>
+                            <div class="report-admission-period" id="reportAdmissionPeriod"></div>
+                            <p class="report-admission-text" id="reportAdmissionText"></p>
+                        </div>
+                        <!-- §3 Recent imaging -->
+                        <div class="report-section" id="reportSectionImaging" hidden>
+                            <h3 class="report-section-title"><i class="fas fa-file-medical"></i> Recent Imaging</h3>
+                            <div class="report-imaging-list" id="reportImagingList"></div>
+                        </div>
+                        <!-- §4 Hospitalisation timeline -->
+                        <div class="report-section report-section-last" id="reportSectionTimeline" hidden>
+                            <h3 class="report-section-title"><i class="fas fa-timeline"></i> Hospitalisation Timeline</h3>
+                            <div class="report-timeline" id="reportTimeline"></div>
                         </div>
                     </div>
 
-                    <div id="patientReportMarkdown" class="markdown-content"></div>
+                    <!-- Hidden markdown store for Copy button -->
+                    <div id="patientReportMarkdown" hidden></div>
                 </section>
 
                 <!-- ─── Schedule tab ─── -->
