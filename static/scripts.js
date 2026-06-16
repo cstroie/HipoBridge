@@ -70,7 +70,11 @@ document.addEventListener('DOMContentLoaded', function() {
         scheduleBody: document.getElementById('scheduleBody'),
         scheduleCount: document.getElementById('scheduleCount'),
         scheduleLoading: document.getElementById('scheduleLoading'),
-        noSchedule: document.getElementById('noSchedule')
+        noSchedule: document.getElementById('noSchedule'),
+        scheduleTimeline: document.getElementById('scheduleTimeline'),
+        scheduleHero: document.getElementById('scheduleHero'),
+        scheduleDayMetrics: document.getElementById('scheduleDayMetrics'),
+        scheduleModBars: document.getElementById('scheduleModBars')
     };
     
     // Bounded in-memory cache (100 entries per store; evicts oldest on overflow)
@@ -271,6 +275,32 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.scheduleLimitSelect) {
             elements.scheduleLimitSelect.addEventListener('change', fetchScheduleFromInputs);
         }
+
+        // Schedule modality chip buttons — update hidden select + re-fetch
+        document.querySelectorAll('.schedule-mod-chips .chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                document.querySelectorAll('.schedule-mod-chips .chip').forEach(c => c.classList.remove('chip-active'));
+                chip.classList.add('chip-active');
+                const val = chip.dataset.labId || chip.dataset.lab || '';
+                if (elements.scheduleLabFilter) {
+                    elements.scheduleLabFilter.value = val;
+                }
+                fetchScheduleFromInputs();
+            });
+        });
+
+        // Analyses modality chip buttons — update hidden select + filter
+        document.querySelectorAll('.analyses-chips .chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                document.querySelectorAll('.analyses-chips .chip').forEach(c => c.classList.remove('chip-active'));
+                chip.classList.add('chip-active');
+                const val = chip.dataset.filter || chip.dataset.type || '';
+                if (elements.analysesFilter) {
+                    elements.analysesFilter.value = val;
+                    elements.analysesFilter.dispatchEvent(new Event('change'));
+                }
+            });
+        });
     }
     
     function switchTab(tabId) {
@@ -1800,6 +1830,16 @@ document.addEventListener('DOMContentLoaded', function() {
         rads:  { icon: 'fa-radiation',  label: 'Fluoroscopy' },
     };
 
+    const MODALITY_AVATAR = {
+        radio:  { abbr: 'XR',  cls: 'mod-xr' },
+        ct:     { abbr: 'CT',  cls: 'mod-ct' },
+        irm:    { abbr: 'MR',  cls: 'mod-mr' },
+        eco:    { abbr: 'US',  cls: 'mod-us' },
+        fluoro: { abbr: 'FL',  cls: 'mod-fl' },
+        rads:   { abbr: 'FL',  cls: 'mod-fl' },
+        lab:    { abbr: 'LB',  cls: 'mod-lab' },
+    };
+
     // Helper function to create analysis card
     function createAnalysisCard(serviceRequest, analysisType, analysisText) {
         const cardTemplate = document.getElementById('analysis-card-template');
@@ -1816,6 +1856,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const modality = MODALITY_INFO[analysisType] || { icon: 'fa-file-medical', label: analysisText };
         const iconEl = article.querySelector('.modality-icon');
         if (iconEl) iconEl.className = `modality-icon fas ${modality.icon}`;
+
+        // Modality circle avatar (editorial redesign)
+        const circleEl = article.querySelector('.mod-circle');
+        if (circleEl) {
+            const circleAvatar = MODALITY_AVATAR[analysisType] || { abbr: '?', cls: '' };
+            circleEl.textContent = circleAvatar.abbr;
+            if (circleAvatar.cls) circleEl.classList.add(circleAvatar.cls);
+        }
 
         const typeText = article.querySelector('.type-text');
         if (typeText) typeText.textContent = analysisText || modality.label;
@@ -2439,9 +2487,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function renderSchedule() {
-        if (!elements.scheduleBody) return;
+        const container = elements.scheduleTimeline || elements.scheduleBody;
+        if (!container) return;
 
-        elements.scheduleBody.innerHTML = '';
+        container.innerHTML = '';
 
         if (elements.scheduleCount) {
             elements.scheduleCount.textContent = String(scheduleEntries.length);
@@ -2450,32 +2499,26 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (scheduleEntries.length === 0) {
             if (elements.scheduleTable) elements.scheduleTable.hidden = true;
+            if (elements.scheduleTimeline) elements.scheduleTimeline.hidden = true;
             if (elements.noSchedule) elements.noSchedule.style.display = '';
+            if (elements.scheduleModBars) elements.scheduleModBars.hidden = true;
             return;
         }
 
         if (elements.noSchedule) elements.noSchedule.style.display = 'none';
+        if (elements.scheduleTimeline) elements.scheduleTimeline.hidden = false;
+
+        // Render hero metrics + mod bars
+        renderScheduleHero();
+
         const isMultiDay = (elements.scheduleStartDate?.value || '') !== (elements.scheduleEndDate?.value || '');
         let currentDay = null;
 
-        scheduleEntries.forEach(r => {
+        scheduleEntries.forEach((r, idx) => {
             const authoredOn = r.authoredOn || '';
             const hasTime = authoredOn.includes(' ');
             const day = hasTime ? authoredOn.split(' ')[0] : authoredOn;
-            const time = hasTime ? authoredOn.split(' ')[1] : authoredOn;
-
-            // Day group header for multi-day ranges
-            if (isMultiDay && day && day !== currentDay) {
-                currentDay = day;
-                const dayTr = document.createElement('tr');
-                dayTr.className = 'schedule-day-row';
-                const dayTh = document.createElement('th');
-                dayTh.colSpan = 7;
-                dayTh.scope = 'colgroup';
-                dayTh.textContent = formatDayHeading(day);
-                dayTr.appendChild(dayTh);
-                elements.scheduleBody.appendChild(dayTr);
-            }
+            const time = hasTime ? authoredOn.split(' ')[1] : '';
 
             const patientName = r.subject?.display || '';
             const requestCode = r.identifier?.[0]?.value || r.id || '';
@@ -2486,83 +2529,186 @@ document.addEventListener('DOMContentLoaded', function() {
             const status = r.status || '';
             const statusClass = SCHEDULE_STATUS_CLASS[status] || '';
             const isUrgent = r.priority === 'urgent';
+            const avatar = MODALITY_AVATAR[modalitySlug] || { abbr: '?', cls: '' };
+            const isLast = idx === scheduleEntries.length - 1;
 
-            const tr = document.createElement('tr');
-            if (modalitySlug) tr.dataset.modality = modalitySlug;
-
-            // Time (+ urgent flag)
-            const timeTd = document.createElement('td');
-            timeTd.dataset.label = 'Time';
-            const timeEl = document.createElement('time');
-            timeEl.dateTime = authoredOn.replace(' ', 'T');
-            timeEl.textContent = time;
-            timeTd.appendChild(timeEl);
-            if (isUrgent) {
-                const urgent = document.createElement('strong');
-                urgent.className = 'urgent-badge';
-                urgent.textContent = 'Urgent';
-                timeTd.appendChild(urgent);
+            // Day group heading
+            if (isMultiDay && day && day !== currentDay) {
+                currentDay = day;
+                const heading = document.createElement('p');
+                heading.className = 'timeline-day-heading';
+                heading.textContent = formatDayHeading(day);
+                container.appendChild(heading);
             }
-            tr.appendChild(timeTd);
 
-            // Patient name — clickable, resolves patient ID via request page
-            const nameTd = document.createElement('td');
-            nameTd.dataset.label = 'Patient';
+            // Row: time col + card
+            const row = document.createElement('div');
+            row.className = 'timeline-row';
+            if (modalitySlug) row.dataset.modality = modalitySlug;
+
+            // ── Time column ──
+            const timeCol = document.createElement('div');
+            timeCol.className = 'timeline-time-col';
+
+            const timeEl = document.createElement('time');
+            timeEl.className = 'timeline-time';
+            timeEl.dateTime = authoredOn.replace(' ', 'T');
+            timeEl.textContent = isMultiDay ? (time || day) : (time || authoredOn);
+            timeCol.appendChild(timeEl);
+
+            const dot = document.createElement('span');
+            dot.className = `timeline-dot ${avatar.cls}`;
+            timeCol.appendChild(dot);
+
+            if (!isLast) {
+                const line = document.createElement('span');
+                line.className = 'timeline-line';
+                timeCol.appendChild(line);
+            }
+            row.appendChild(timeCol);
+
+            // ── Card ──
+            const card = document.createElement('div');
+            card.className = `timeline-card${isUrgent ? ' urgent-ring' : ''}`;
+
+            // Modality avatar circle
+            const avatarEl = document.createElement('div');
+            avatarEl.className = `timeline-mod-avatar ${avatar.cls}`;
+            avatarEl.textContent = avatar.abbr;
+            avatarEl.title = laboratory || modalitySlug;
+            card.appendChild(avatarEl);
+
+            // Card body
+            const body = document.createElement('div');
+            body.className = 'timeline-card-body';
+
+            const patientRow = document.createElement('div');
+            patientRow.className = 'timeline-patient-row';
+
             const nameBtn = document.createElement('button');
-            nameBtn.className = 'schedule-patient-link';
+            nameBtn.className = 'timeline-card-patient';
             nameBtn.textContent = patientName;
             nameBtn.title = `Load patient record for ${patientName}`;
             nameBtn.addEventListener('click', () => loadPatientFromRequest(r.id, patientName, nameBtn));
-            nameTd.appendChild(nameBtn);
-            tr.appendChild(nameTd);
+            patientRow.appendChild(nameBtn);
 
-            // Request code — opens request detail modal
-            const codeTd = document.createElement('td');
-            codeTd.dataset.label = 'Request';
+            if (isUrgent) {
+                const urgBadge = document.createElement('strong');
+                urgBadge.className = 'urgent-badge';
+                urgBadge.textContent = 'Urgent';
+                patientRow.appendChild(urgBadge);
+            }
+            body.appendChild(patientRow);
+
+            if (section || requestedBy) {
+                const region = document.createElement('p');
+                region.className = 'timeline-card-region';
+                region.textContent = [section, requestedBy].filter(Boolean).join(' · ');
+                body.appendChild(region);
+            }
+
+            const meta = document.createElement('div');
+            meta.className = 'timeline-card-meta';
+
             const codeBtn = document.createElement('button');
-            codeBtn.className = 'schedule-code-link';
+            codeBtn.className = 'timeline-code';
             codeBtn.textContent = requestCode;
             codeBtn.title = `View request details (${requestCode})`;
             codeBtn.addEventListener('click', () => showRequestModal(r.id, requestCode, patientName, modalitySlug, codeBtn));
-            codeTd.appendChild(codeBtn);
-            tr.appendChild(codeTd);
+            meta.appendChild(codeBtn);
+            body.appendChild(meta);
 
-            // Ward and referrer
-            [['Ward', section], ['Referrer', requestedBy]].forEach(([label, val]) => {
-                const td = document.createElement('td');
-                td.dataset.label = label;
-                td.textContent = val;
-                tr.appendChild(td);
+            card.appendChild(body);
+
+            // Status badge (right side)
+            const statusBadge = document.createElement('span');
+            statusBadge.className = `timeline-status-badge ${statusClass}`;
+            statusBadge.textContent = SCHEDULE_STATUS_LABEL[status] || status;
+            statusBadge.title = status;
+            card.appendChild(statusBadge);
+
+            row.appendChild(card);
+            container.appendChild(row);
+        });
+
+        if (elements.scheduleTable) elements.scheduleTable.hidden = false;
+    }
+
+    function renderScheduleHero() {
+        if (!elements.scheduleHero || !elements.scheduleDayMetrics) return;
+
+        // Update h1 with formatted date range
+        const h1 = document.getElementById('schedule-tab-heading');
+        if (h1) {
+            const start = elements.scheduleStartDate?.value || '';
+            const end   = elements.scheduleEndDate?.value   || '';
+            if (start && end && start === end) {
+                h1.textContent = formatDayHeading(start);
+            } else if (start && end) {
+                h1.textContent = `${formatDate(start)} – ${formatDate(end)}`;
+            } else {
+                h1.textContent = 'Schedule';
+            }
+        }
+
+        const total = scheduleEntries.length;
+        const urgent = scheduleEntries.filter(r => r.priority === 'urgent').length;
+        const inLab  = scheduleEntries.filter(r => ['draft', 'active'].includes(r.status)).length;
+        const done   = scheduleEntries.filter(r => ['completed', 'ended'].includes(r.status)).length;
+
+        const metricDefs = [
+            { label: 'Exams',    value: total,  color: 'var(--primary)' },
+            { label: 'Urgent',   value: urgent, color: 'var(--urgent, #dc2626)' },
+            { label: 'In lab',   value: inLab,  color: 'var(--st-inlab, #0891b2)' },
+            { label: 'Done',     value: done,   color: 'var(--st-completed, #16a34a)' },
+        ];
+
+        const sub = document.getElementById('scheduleHeroSub');
+        if (sub) sub.textContent = `${total} exam${total !== 1 ? 's' : ''} in queue · most recent first`;
+
+        elements.scheduleDayMetrics.innerHTML = '';
+        metricDefs.forEach(m => {
+            const div = document.createElement('div');
+            div.className = 'schedule-metric';
+            const val = document.createElement('span');
+            val.className = 'schedule-metric-value';
+            val.textContent = m.value;
+            val.style.color = m.color;
+            const lbl = document.createElement('span');
+            lbl.className = 'schedule-metric-label';
+            lbl.textContent = m.label;
+            div.append(val, lbl);
+            elements.scheduleDayMetrics.appendChild(div);
+        });
+
+        // Modality bars
+        if (elements.scheduleModBars && total > 0) {
+            const modalityCounts = {};
+            scheduleEntries.forEach(r => {
+                const slug = r.category?.[0]?.coding?.[0]?.code || 'other';
+                modalityCounts[slug] = (modalityCounts[slug] || 0) + 1;
             });
 
-            // Modality chip (coloured by slug); fall back to the lab name
-            const modalityTd = document.createElement('td');
-            modalityTd.dataset.label = 'Modality';
-            const chipInfo = SCHEDULE_MODALITY_CHIP[modalitySlug];
-            if (chipInfo) {
-                const chip = document.createElement('span');
-                chip.className = `modality-chip modality-chip-${chipInfo.cls}`;
-                chip.textContent = chipInfo.label;
-                chip.title = laboratory;
-                modalityTd.appendChild(chip);
-            } else {
-                modalityTd.textContent = laboratory;
-            }
-            tr.appendChild(modalityTd);
+            const modLabels = { radio: 'X-Ray', ct: 'CT', irm: 'MRI', eco: 'US', fluoro: 'Fluoro', lab: 'Lab' };
+            const modColors = { radio: 'var(--mod-xr)', ct: 'var(--mod-ct)', irm: 'var(--mod-mr)', eco: 'var(--mod-us)', fluoro: 'var(--mod-fl)', lab: 'var(--primary)' };
 
-            // Status badge — human label, raw FHIR status in title
-            const statusTd = document.createElement('td');
-            statusTd.dataset.label = 'Status';
-            const badge = document.createElement('span');
-            badge.className = `schedule-status ${statusClass}`;
-            badge.textContent = SCHEDULE_STATUS_LABEL[status] || status;
-            badge.title = status;
-            statusTd.appendChild(badge);
-            tr.appendChild(statusTd);
-
-            elements.scheduleBody.appendChild(tr);
-        });
-        if (elements.scheduleTable) elements.scheduleTable.hidden = false;
+            elements.scheduleModBars.innerHTML = '';
+            Object.entries(modalityCounts).sort((a, b) => b[1] - a[1]).forEach(([slug, count]) => {
+                const bar = document.createElement('div');
+                bar.className = 'schedule-mod-bar';
+                const pct = Math.round(count / total * 100);
+                const color = modColors[slug] || 'var(--muted)';
+                bar.innerHTML = `<div class="schedule-mod-bar-header">
+                    <span class="schedule-mod-bar-name">${modLabels[slug] || slug}</span>
+                    <span class="schedule-mod-bar-count" style="color:${color}">${count}</span>
+                </div>
+                <div class="schedule-mod-bar-track">
+                    <div class="schedule-mod-bar-fill" style="width:${pct}%;background:${color}"></div>
+                </div>`;
+                elements.scheduleModBars.appendChild(bar);
+            });
+            elements.scheduleModBars.hidden = false;
+        }
     }
 
     // "2026-06-11" → "Wednesday, 2026-06-11" (string split avoids UTC offset)
