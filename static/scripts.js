@@ -1091,6 +1091,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const pid      = patientData.id || '';
 
             const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+            const eyebrowEl = document.getElementById('reportEyebrow');
+            if (eyebrowEl) eyebrowEl.textContent = `Clinical Report · ${name}`;
             setText('reportPatientName', name);
             setText('reportPatientId',   pid);
             setText('reportCNP',         cnp);
