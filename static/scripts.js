@@ -1815,7 +1815,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const modality = MODALITY_INFO[analysisType] || { icon: 'fa-file-medical', label: analysisText };
         const iconEl = article.querySelector('.modality-icon');
-        if (iconEl) iconEl.className = `modality-icon fas ${modality.icon}`;
+        if (iconEl) {
+            // Editorial: show text abbreviation in a circular token, not an FA icon
+            const ABBR = { radio:'XR', ct:'CT', irm:'MR', eco:'US', rads:'FL' };
+            const abbr = ABBR[analysisType] || (modality.label || 'Rx').slice(0, 2).toUpperCase();
+            iconEl.className = `modality-icon`;
+            iconEl.textContent = abbr;
+            iconEl.setAttribute('aria-hidden', 'true');
+        }
 
         const typeText = article.querySelector('.type-text');
         if (typeText) typeText.textContent = analysisText || modality.label;
@@ -2438,9 +2445,77 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+
+    // ── Editorial stats strip ────────────────────────────────────
+    function renderScheduleStats() {
+        const statsEl = document.getElementById('scheduleStats');
+        if (!statsEl) return;
+        const total = scheduleEntries.length;
+        let urgent = 0, toread = 0, inlab = 0;
+        const modCount = {};
+        scheduleEntries.forEach(r => {
+            if (r.priority === 'urgent') urgent++;
+            const st = r.status || '';
+            if (st === 'ended')  toread++;
+            if (st === 'draft')  inlab++;
+            const slug = r.category?.[0]?.coding?.[0]?.code || 'other';
+            modCount[slug] = (modCount[slug] || 0) + 1;
+        });
+        const statsData = [
+            { value: total,   label: 'Today',   cls: '' },
+            { value: urgent,  label: 'Urgent',  cls: 'sstat--urgent' },
+            { value: toread,  label: 'To read', cls: 'sstat--toread' },
+            { value: inlab,   label: 'In lab',  cls: 'sstat--inlab' },
+        ];
+        const chips = Object.entries(SCHEDULE_MODALITY_CHIP)
+            .map(([slug, info]) => ({ slug, label: info.label, cls: info.cls, count: modCount[slug] || 0 }))
+            .filter(m => m.count > 0);
+
+        statsEl.innerHTML = '';
+
+        const tilesWrap = document.createElement('div');
+        tilesWrap.className = 'schedule-stats-tiles';
+        statsData.forEach(({ value, label, cls }) => {
+            const tile = document.createElement('div');
+            tile.className = 'sstat ' + cls;
+            tile.innerHTML = '<span class="sstat-value">' + value + '</span><span class="sstat-label">' + label + '</span>';
+            tilesWrap.appendChild(tile);
+        });
+        statsEl.appendChild(tilesWrap);
+
+        if (chips.length > 0) {
+            const barWrap = document.createElement('div');
+            barWrap.className = 'schedule-stats-modbar';
+            const lbl = document.createElement('div');
+            lbl.className = 'modbar-label';
+            lbl.textContent = 'Modality mix';
+            barWrap.appendChild(lbl);
+            const track = document.createElement('div');
+            track.className = 'modbar-track';
+            chips.forEach(({ cls, count }) => {
+                const seg = document.createElement('div');
+                seg.className = 'modbar-seg mod-' + cls;
+                seg.style.flexGrow = String(count);
+                track.appendChild(seg);
+            });
+            barWrap.appendChild(track);
+            const legend = document.createElement('div');
+            legend.className = 'modbar-legend';
+            chips.forEach(({ label, cls, count }) => {
+                const item = document.createElement('span');
+                item.className = 'modbar-item mod-' + cls;
+                item.innerHTML = '<i></i>' + label + ' ' + count;
+                legend.appendChild(item);
+            });
+            barWrap.appendChild(legend);
+            statsEl.appendChild(barWrap);
+        }
+        statsEl.hidden = false;
+    }
+
+    // ── Editorial timeline rail renderer ─────────────────────────
     function renderSchedule() {
         if (!elements.scheduleBody) return;
-
         elements.scheduleBody.innerHTML = '';
 
         if (elements.scheduleCount) {
@@ -2453,117 +2528,129 @@ document.addEventListener('DOMContentLoaded', function() {
             if (elements.noSchedule) elements.noSchedule.style.display = '';
             return;
         }
-
         if (elements.noSchedule) elements.noSchedule.style.display = 'none';
+        renderScheduleStats();
+
         const isMultiDay = (elements.scheduleStartDate?.value || '') !== (elements.scheduleEndDate?.value || '');
         let currentDay = null;
 
         scheduleEntries.forEach(r => {
             const authoredOn = r.authoredOn || '';
             const hasTime = authoredOn.includes(' ');
-            const day = hasTime ? authoredOn.split(' ')[0] : authoredOn;
+            const day  = hasTime ? authoredOn.split(' ')[0] : authoredOn;
             const time = hasTime ? authoredOn.split(' ')[1] : authoredOn;
 
-            // Day group header for multi-day ranges
             if (isMultiDay && day && day !== currentDay) {
                 currentDay = day;
-                const dayTr = document.createElement('tr');
-                dayTr.className = 'schedule-day-row';
-                const dayTh = document.createElement('th');
-                dayTh.colSpan = 7;
-                dayTh.scope = 'colgroup';
-                dayTh.textContent = formatDayHeading(day);
-                dayTr.appendChild(dayTh);
-                elements.scheduleBody.appendChild(dayTr);
+                const sep = document.createElement('div');
+                sep.className = 'schedule-day-sep';
+                sep.innerHTML = '<span>' + formatDayHeading(day) + '</span>';
+                elements.scheduleBody.appendChild(sep);
             }
 
-            const patientName = r.subject?.display || '';
-            const requestCode = r.identifier?.[0]?.value || r.id || '';
-            const section = r.note?.[0]?.text || '';
-            const requestedBy = r.requester?.display || '';
-            const laboratory = r.code?.text || '';
+            const patientName  = r.subject?.display || '';
+            const requestCode  = r.identifier?.[0]?.value || r.id || '';
+            const section      = r.note?.[0]?.text || '';
+            const requestedBy  = r.requester?.display || '';
+            const laboratory   = r.code?.text || '';
             const modalitySlug = r.category?.[0]?.coding?.[0]?.code || '';
-            const status = r.status || '';
-            const statusClass = SCHEDULE_STATUS_CLASS[status] || '';
-            const isUrgent = r.priority === 'urgent';
+            const status       = r.status || '';
+            const statusClass  = SCHEDULE_STATUS_CLASS[status] || '';
+            const isUrgent     = r.priority === 'urgent';
+            const chipInfo     = SCHEDULE_MODALITY_CHIP[modalitySlug];
+            const modLabel     = chipInfo ? chipInfo.label : (laboratory || '—');
+            const modCls       = chipInfo ? chipInfo.cls   : 'lab';
 
-            const tr = document.createElement('tr');
-            if (modalitySlug) tr.dataset.modality = modalitySlug;
+            // Outer rail wrapper
+            const item = document.createElement('div');
+            item.className = 'schedule-rail-item';
+            if (modalitySlug) item.dataset.modality = modalitySlug;
+            if (isUrgent)     item.dataset.urgent   = 'true';
 
-            // Time (+ urgent flag)
-            const timeTd = document.createElement('td');
-            timeTd.dataset.label = 'Time';
-            const timeEl = document.createElement('time');
-            timeEl.dateTime = authoredOn.replace(' ', 'T');
-            timeEl.textContent = time;
-            timeTd.appendChild(timeEl);
-            if (isUrgent) {
-                const urgent = document.createElement('strong');
-                urgent.className = 'urgent-badge';
-                urgent.textContent = 'Urgent';
-                timeTd.appendChild(urgent);
-            }
-            tr.appendChild(timeTd);
+            // Left rail: time + dot + connector line
+            const rail = document.createElement('div');
+            rail.className = 'sched-rail';
+            const railTime = document.createElement('span');
+            railTime.className = 'sched-rail-time';
+            railTime.textContent = time;
+            const railDot = document.createElement('span');
+            railDot.className = 'sched-rail-dot mod-' + modCls;
+            const railLine = document.createElement('span');
+            railLine.className = 'sched-rail-line';
+            rail.appendChild(railTime);
+            rail.appendChild(railDot);
+            rail.appendChild(railLine);
+            item.appendChild(rail);
 
-            // Patient name — clickable, resolves patient ID via request page
-            const nameTd = document.createElement('td');
-            nameTd.dataset.label = 'Patient';
+            // Card
+            const card = document.createElement('div');
+            card.className = 'sched-card' + (isUrgent ? ' sched-card--urgent' : '');
+
+            // Modality token
+            const token = document.createElement('div');
+            token.className = 'sched-mod-token mod-' + modCls;
+            token.textContent = modLabel;
+            token.title = laboratory;
+            card.appendChild(token);
+
+            // Card body
+            const body = document.createElement('div');
+            body.className = 'sched-card-body';
+
+            // Name row
+            const nameRow = document.createElement('div');
+            nameRow.className = 'sched-name-row';
             const nameBtn = document.createElement('button');
             nameBtn.className = 'schedule-patient-link';
             nameBtn.textContent = patientName;
-            nameBtn.title = `Load patient record for ${patientName}`;
+            nameBtn.title = 'Load patient record for ' + patientName;
             nameBtn.addEventListener('click', () => loadPatientFromRequest(r.id, patientName, nameBtn));
-            nameTd.appendChild(nameBtn);
-            tr.appendChild(nameTd);
+            nameRow.appendChild(nameBtn);
+            if (isUrgent) {
+                const ub = document.createElement('span');
+                ub.className = 'urgent-badge';
+                ub.textContent = 'Urgent';
+                nameRow.appendChild(ub);
+            }
+            body.appendChild(nameRow);
 
-            // Request code — opens request detail modal
-            const codeTd = document.createElement('td');
-            codeTd.dataset.label = 'Request';
+            // Exam label
+            const examLine = document.createElement('div');
+            examLine.className = 'sched-exam';
+            examLine.textContent = laboratory || modLabel;
+            body.appendChild(examLine);
+
+            // Meta: ward · referrer · code btn
+            const metaLine = document.createElement('div');
+            metaLine.className = 'sched-meta';
             const codeBtn = document.createElement('button');
             codeBtn.className = 'schedule-code-link';
             codeBtn.textContent = requestCode;
-            codeBtn.title = `View request details (${requestCode})`;
+            codeBtn.title = 'View request details (' + requestCode + ')';
             codeBtn.addEventListener('click', () => showRequestModal(r.id, requestCode, patientName, modalitySlug, codeBtn));
-            codeTd.appendChild(codeBtn);
-            tr.appendChild(codeTd);
+            const ward = document.createElement('span'); ward.textContent = section;
+            const sep1 = document.createElement('span'); sep1.className = 'meta-sep'; sep1.textContent = '·';
+            const ref  = document.createElement('span'); ref.textContent = requestedBy;
+            const sep2 = document.createElement('span'); sep2.className = 'meta-sep'; sep2.textContent = '·';
+            [ward, sep1, ref, sep2, codeBtn].forEach(el => metaLine.appendChild(el));
+            body.appendChild(metaLine);
 
-            // Ward and referrer
-            [['Ward', section], ['Referrer', requestedBy]].forEach(([label, val]) => {
-                const td = document.createElement('td');
-                td.dataset.label = label;
-                td.textContent = val;
-                tr.appendChild(td);
-            });
+            card.appendChild(body);
 
-            // Modality chip (coloured by slug); fall back to the lab name
-            const modalityTd = document.createElement('td');
-            modalityTd.dataset.label = 'Modality';
-            const chipInfo = SCHEDULE_MODALITY_CHIP[modalitySlug];
-            if (chipInfo) {
-                const chip = document.createElement('span');
-                chip.className = `modality-chip modality-chip-${chipInfo.cls}`;
-                chip.textContent = chipInfo.label;
-                chip.title = laboratory;
-                modalityTd.appendChild(chip);
-            } else {
-                modalityTd.textContent = laboratory;
-            }
-            tr.appendChild(modalityTd);
+            // Status pill
+            const pill = document.createElement('span');
+            pill.className = 'schedule-status ' + statusClass;
+            pill.textContent = SCHEDULE_STATUS_LABEL[status] || status;
+            pill.title = status;
+            card.appendChild(pill);
 
-            // Status badge — human label, raw FHIR status in title
-            const statusTd = document.createElement('td');
-            statusTd.dataset.label = 'Status';
-            const badge = document.createElement('span');
-            badge.className = `schedule-status ${statusClass}`;
-            badge.textContent = SCHEDULE_STATUS_LABEL[status] || status;
-            badge.title = status;
-            statusTd.appendChild(badge);
-            tr.appendChild(statusTd);
-
-            elements.scheduleBody.appendChild(tr);
+            item.appendChild(card);
+            elements.scheduleBody.appendChild(item);
         });
+
         if (elements.scheduleTable) elements.scheduleTable.hidden = false;
     }
+
 
     // "2026-06-11" → "Wednesday, 2026-06-11" (string split avoids UTC offset)
     function formatDayHeading(day) {

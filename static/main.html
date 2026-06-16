@@ -371,24 +371,12 @@
                         <div class="schedule-loading" id="scheduleLoading" role="status" aria-label="Loading schedule" hidden>
                             <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
                         </div>
+                        <div id="scheduleStats" class="schedule-stats-strip" hidden></div>
                         <div class="no-data" id="noSchedule" role="status">
                             <p>No requests found</p>
                         </div>
-                        <div class="schedule-table-wrap">
-                            <table id="scheduleTable" class="schedule-table" hidden>
-                                <thead>
-                                    <tr>
-                                        <th scope="col">Date/Time</th>
-                                        <th scope="col">Patient</th>
-                                        <th scope="col">Request</th>
-                                        <th scope="col">Ward</th>
-                                        <th scope="col">Referrer</th>
-                                        <th scope="col">Modality</th>
-                                        <th scope="col">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="scheduleBody"></tbody>
-                            </table>
+                        <div id="scheduleTable" class="schedule-rail-wrap" hidden>
+                            <div id="scheduleBody" class="schedule-rail"></div>
                         </div>
                     </div>
                 </section>

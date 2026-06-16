@@ -1687,3 +1687,699 @@ button.stat-pill {
     }
     .spinner { animation: none; opacity: .6; }
 }
+
+
+/* ═══════════════════════════════════════════════════════════════
+   EDITORIAL SCHEDULE — Stats strip + Timeline rail
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Modality CSS custom-property bridge ─────────────────────── */
+.mod-radio { --mod: var(--modality-radio, #2563eb); }
+.mod-ct    { --mod: var(--modality-ct,    #c2410c); }
+.mod-irm   { --mod: var(--modality-irm,   #7c3aed); }
+.mod-eco   { --mod: var(--modality-eco,   #0f766e); }
+.mod-rads  { --mod: var(--modality-rads,  #be123c); }
+.mod-lab   { --mod: var(--muted,          #64748b); }
+
+/* ── Stats strip ─────────────────────────────────────────────── */
+.schedule-stats-strip {
+    display: flex;
+    gap: var(--spacing-lg);
+    flex-wrap: wrap;
+    align-items: stretch;
+    margin-bottom: var(--spacing-lg);
+    padding: var(--spacing-lg) var(--spacing-xl);
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-sm);
+}
+.schedule-stats-strip[hidden] { display: none; }
+
+.schedule-stats-tiles {
+    display: flex;
+    gap: var(--spacing-xl);
+    flex-wrap: wrap;
+    align-items: center;
+    flex-shrink: 0;
+    padding-right: var(--spacing-xl);
+    border-right: 1px solid var(--border);
+}
+
+.sstat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .375rem;
+}
+.sstat-value {
+    font-family: var(--font-display);
+    font-size: 2.75rem;
+    font-weight: 700;
+    letter-spacing: -.035em;
+    line-height: 1;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
+.sstat-label {
+    font-size: .6875rem;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+.sstat--urgent .sstat-value { color: var(--danger); }
+.sstat--toread .sstat-value { color: var(--modality-ct); }
+.sstat--inlab  .sstat-value { color: var(--modality-radio); }
+
+/* ── Modality distribution bar ───────────────────────────────── */
+.schedule-stats-modbar {
+    flex: 1;
+    min-width: 200px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: .625rem;
+}
+
+.modbar-label {
+    font-size: .6875rem;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.modbar-track {
+    display: flex;
+    height: 10px;
+    border-radius: var(--radius-full);
+    overflow: hidden;
+    gap: 2px;
+    background: var(--surface-3);
+}
+
+.modbar-seg {
+    border-radius: var(--radius-full);
+    background: var(--mod);
+    min-width: 4px;
+    transition: flex-grow .3s ease;
+}
+
+.modbar-legend {
+    display: flex;
+    gap: var(--spacing-md);
+    flex-wrap: wrap;
+}
+
+.modbar-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: .75rem;
+    font-weight: 600;
+    color: var(--text-light);
+}
+.modbar-item i {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 3px;
+    background: var(--mod);
+    flex-shrink: 0;
+    font-style: normal;
+}
+
+/* ── Schedule rail wrapper ───────────────────────────────────── */
+.schedule-rail-wrap {
+    /* replaces the old schedule-table-wrap */
+}
+.schedule-rail-wrap[hidden] { display: none; }
+
+.schedule-rail {
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── Day separator ───────────────────────────────────────────── */
+.schedule-day-sep {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md) 0 var(--spacing-sm) 0;
+    margin-bottom: var(--spacing-xs);
+}
+.schedule-day-sep::before, .schedule-day-sep::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+.schedule-day-sep span {
+    font-family: var(--font-display);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--text-muted);
+    white-space: nowrap;
+    padding: 0 var(--spacing-sm);
+}
+
+/* ── Rail item = left rail + right card ──────────────────────── */
+.schedule-rail-item {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: var(--spacing-md);
+    margin-bottom: 0;
+}
+
+/* ── Left rail: time → dot → connector line ──────────────────── */
+.sched-rail {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.sched-rail-time {
+    font-family: var(--font-display);
+    font-size: .9375rem;
+    font-weight: 600;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    padding-top: 1.125rem; /* aligns with card centre */
+    text-align: center;
+}
+
+.sched-rail-dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: var(--mod);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--mod) 16%, transparent);
+    flex-shrink: 0;
+    margin-top: .625rem;
+}
+
+.sched-rail-line {
+    flex: 1;
+    width: 2px;
+    background: var(--border);
+    margin-top: .375rem;
+    min-height: 16px;
+}
+
+/* ── Card ────────────────────────────────────────────────────── */
+.sched-card {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    margin-bottom: .75rem;
+    padding: .875rem var(--spacing-lg);
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 1px 2px rgba(15,23,42,.04);
+    transition: border-color .18s, box-shadow .18s;
+}
+.sched-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-md); }
+
+.sched-card--urgent {
+    border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+    box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--danger) 35%, transparent);
+}
+.sched-card--urgent:hover { border-color: var(--danger); }
+
+/* ── Modality token (circular) ───────────────────────────────── */
+.sched-mod-token {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display);
+    font-size: .8125rem;
+    font-weight: 700;
+    background: color-mix(in srgb, var(--mod) 14%, transparent);
+    color: var(--mod);
+}
+
+/* ── Card body ───────────────────────────────────────────────── */
+.sched-card-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.sched-name-row {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin-bottom: .25rem;
+}
+
+/* Reuse .schedule-patient-link styles already in CSS */
+.schedule-patient-link {
+    font-family: var(--font-display);
+    font-size: 1.0625rem;
+    font-weight: 600;
+    letter-spacing: -.01em;
+    color: var(--text);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    text-align: left;
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 32ch;
+    transition: color .18s;
+}
+.schedule-patient-link:hover { color: var(--primary); text-decoration: underline; }
+
+.sched-exam {
+    font-size: var(--font-size-sm);
+    color: var(--text-light);
+    margin-bottom: .25rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sched-meta {
+    display: flex;
+    align-items: center;
+    gap: .375rem;
+    font-size: .75rem;
+    color: var(--text-muted);
+    flex-wrap: wrap;
+}
+.sched-meta .meta-sep { color: var(--border-strong); }
+
+/* ── Code link ───────────────────────────────────────────────── */
+.schedule-code-link {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: .1rem .4rem;
+    font-family: var(--font-mono);
+    font-size: .6875rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: border-color .18s, color .18s;
+}
+.schedule-code-link:hover { border-color: var(--primary); color: var(--primary); }
+
+/* ── Status pills ────────────────────────────────────────────── */
+.schedule-status {
+    display: inline-flex;
+    align-items: center;
+    gap: .375rem;
+    font-size: .75rem;
+    font-weight: 600;
+    padding: .3rem .75rem;
+    border-radius: var(--radius-full);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.schedule-status::before {
+    content: '';
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+}
+
+.status-pending  { color: var(--muted);          background: color-mix(in srgb, var(--muted) 12%,         transparent); }
+.status-sent     { color: var(--modality-radio);  background: color-mix(in srgb, var(--modality-radio) 12%, transparent); }
+.status-active   { color: var(--modality-irm);    background: color-mix(in srgb, var(--modality-irm) 12%,  transparent); }
+.status-done     { color: var(--success);         background: color-mix(in srgb, var(--success) 12%,       transparent); }
+.status-ended    { color: var(--modality-ct);     background: color-mix(in srgb, var(--modality-ct) 12%,   transparent); }
+.status-revoked  { color: var(--danger);          background: color-mix(in srgb, var(--danger) 12%,        transparent); }
+.status-error    { color: var(--text-muted);      background: color-mix(in srgb, var(--text-muted) 10%,    transparent); }
+
+/* ── Legacy modality-chip (kept for other uses) ──────────────── */
+.modality-chip {
+    display: inline-flex;
+    align-items: center;
+    font-size: .6875rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    padding: .15rem .5rem;
+    border-radius: 5px;
+    background: color-mix(in srgb, var(--mod) 14%, transparent);
+    color: var(--mod);
+}
+.modality-chip-radio { --mod: var(--modality-radio); }
+.modality-chip-ct    { --mod: var(--modality-ct); }
+.modality-chip-irm   { --mod: var(--modality-irm); }
+.modality-chip-eco   { --mod: var(--modality-eco); }
+.modality-chip-rads  { --mod: var(--modality-rads); }
+.modality-chip-lab   { --mod: var(--muted); }
+
+/* ── Responsive ──────────────────────────────────────────────── */
+@media (max-width: 768px) {
+    .schedule-stats-tiles {
+        border-right: none;
+        padding-right: 0;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: var(--spacing-md);
+        width: 100%;
+    }
+    .sstat-value { font-size: 2rem; }
+    .schedule-rail-item { grid-template-columns: 54px minmax(0, 1fr); gap: .75rem; }
+    .sched-rail-time { font-size: .8125rem; padding-top: 1rem; }
+    .sched-card { padding: .75rem var(--spacing-md); gap: .75rem; }
+    .sched-mod-token { width: 38px; height: 38px; font-size: .75rem; }
+    .schedule-patient-link { max-width: 24ch; font-size: var(--font-size-base); }
+}
+
+@media (max-width: 480px) {
+    .schedule-stats-strip { padding: var(--spacing-md); gap: var(--spacing-md); }
+    .schedule-rail-item { grid-template-columns: 48px minmax(0, 1fr); gap: .5rem; }
+    .sched-rail-time { display: none; }
+    .sched-card { flex-wrap: wrap; }
+    .schedule-status { align-self: flex-start; margin-top: .25rem; }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   EPICRISIS CARDS
+   ═══════════════════════════════════════════════════════════════ */
+
+.epicrisis-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    margin-bottom: var(--spacing-md);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow .18s;
+}
+.epicrisis-card:hover { box-shadow: var(--shadow-md); }
+
+.epicrisis-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--spacing-md);
+    padding: var(--spacing-lg) var(--spacing-xl);
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-2);
+}
+
+.epicrisis-card-heading { flex: 1; min-width: 0; }
+
+.epicrisis-title {
+    font-family: var(--font-display);
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    letter-spacing: -.02em;
+    color: var(--text);
+    margin-bottom: .5rem;
+}
+
+.epicrisis-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem var(--spacing-lg);
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--text-light);
+}
+.epicrisis-meta span { display: inline-flex; align-items: center; gap: .25rem; }
+.epicrisis-meta strong { font-weight: 600; color: var(--text-muted); font-size: .75rem; letter-spacing: .04em; text-transform: uppercase; }
+
+.epicrisis-copy-btn {
+    flex-shrink: 0;
+    font-size: var(--font-size-sm);
+    padding: .375rem .75rem;
+}
+
+.epicrisis-body {
+    padding: var(--spacing-xl);
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: var(--card-bg);
+}
+.epicrisis-body h1 { font-size: var(--font-size-xl); margin-bottom: var(--spacing-md); }
+.epicrisis-body h2 { font-size: var(--font-size-lg); margin-top: var(--spacing-lg); margin-bottom: var(--spacing-sm); }
+.epicrisis-body p  { font-size: var(--font-size-sm); line-height: 1.7; }
+.epicrisis-body strong { color: var(--text); }
+
+/* ── Epicrisis nav chips ──────────────────────────────────────── */
+.epicrisis-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    margin-bottom: var(--spacing-lg);
+    list-style: none;
+    padding: 0;
+}
+.epicrisis-nav[hidden] { display: none; }
+
+.epicrisis-chip {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: .1rem;
+    padding: .5rem .875rem;
+    background: var(--card-bg);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    text-align: left;
+    transition: border-color .18s, background .18s;
+    font: inherit;
+}
+.epicrisis-chip:hover { border-color: var(--primary); background: var(--primary-tint); }
+.epicrisis-chip.active {
+    border-color: var(--primary);
+    background: var(--primary-tint);
+    box-shadow: 0 0 0 1px var(--primary);
+}
+.epicrisis-chip-date {
+    font-size: .6875rem;
+    font-weight: 600;
+    letter-spacing: .06em;
+    color: var(--primary);
+    font-family: var(--font-mono);
+}
+.epicrisis-chip-diag {
+    font-size: .75rem;
+    font-weight: 500;
+    color: var(--text-light);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 18ch;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ANALYSIS CARD — editorial modality token
+   (JS now sets iconEl.textContent = abbr, no FA icon class)
+   ═══════════════════════════════════════════════════════════════ */
+
+.analysis-card .modality-icon {
+    /* token becomes a circular text badge */
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display);
+    font-size: .8125rem;
+    font-weight: 700;
+    flex-shrink: 0;
+    align-self: flex-start;
+    /* colour set by parent .analysis-card.TYPE .modality-icon rules below */
+}
+
+/* Override the per-type FA icon rules from earlier in the file
+   (JS no longer adds .fas so these become the only active rules) */
+.analysis-card.radio .modality-icon { background: color-mix(in srgb, var(--modality-radio) 13%, transparent); color: var(--modality-radio); }
+.analysis-card.ct    .modality-icon { background: color-mix(in srgb, var(--modality-ct)    13%, transparent); color: var(--modality-ct); }
+.analysis-card.irm   .modality-icon { background: color-mix(in srgb, var(--modality-irm)   13%, transparent); color: var(--modality-irm); }
+.analysis-card.eco   .modality-icon { background: color-mix(in srgb, var(--modality-eco)   13%, transparent); color: var(--modality-eco); }
+.analysis-card.rads  .modality-icon { background: color-mix(in srgb, var(--modality-rads)  13%, transparent); color: var(--modality-rads); }
+
+/* Remove the stacked-card grid; go single column so token + title are in one row */
+.analysis-card {
+    grid-template-columns: minmax(0, 1fr);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    border-left-width: 0;
+    padding: var(--spacing-lg) var(--spacing-lg);
+}
+
+.card-identity {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-md);
+}
+
+.card-request { padding-bottom: 0; }
+
+.report-section { margin-top: var(--spacing-xs); }
+
+/* Italic excerpt block */
+.report-preview {
+    border-left-width: 3px;
+    border-left-style: solid;
+    border-left-color: color-mix(in srgb, var(--primary) 30%, transparent);
+    background: var(--surface-2);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    font-style: italic;
+    font-size: var(--font-size-sm);
+    color: var(--text-light);
+}
+.report-preview pre {
+    font-family: var(--font-body);
+    font-style: italic;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+    text-wrap: pretty;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PATIENT PROFILE — extra polish
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Make the banner stand out more with the accent left stripe */
+.patient-banner {
+    border-left: 4px solid var(--primary);
+}
+
+/* Stat pills: larger numerals, bolder editorial look */
+.stat-pill {
+    padding: var(--spacing-lg) var(--spacing-lg);
+}
+.stat-pill-value {
+    font-family: var(--font-display);
+    font-size: 3rem;
+    font-weight: 700;
+    letter-spacing: -.04em;
+    line-height: 1;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
+.stat-pill-link .stat-pill-value { color: var(--primary); }
+.stat-pill-link .stat-pill-label { color: var(--primary); }
+
+/* History item — better editorial treatment */
+.history-load {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    gap: .15rem .75rem;
+    width: 100%;
+    padding: .75rem var(--spacing-md);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    text-align: left;
+    color: var(--text);
+    font: inherit;
+    transition: border-color .18s;
+}
+.history-load:hover { border-color: var(--primary); }
+
+.history-period {
+    grid-column: 1;
+    grid-row: 1 / 3;
+    font-size: .75rem;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    font-weight: 500;
+    white-space: nowrap;
+    align-self: center;
+    writing-mode: unset;
+}
+
+.history-diagnosis {
+    grid-column: 2;
+    grid-row: 1;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--text);
+}
+
+.history-detail {
+    grid-column: 2;
+    grid-row: 2;
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PATIENT SEARCH — hero layout
+   ═══════════════════════════════════════════════════════════════ */
+
+.hero-section {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    padding: var(--spacing-2xl) var(--spacing-xl);
+}
+.hero-content h1 {
+    font-family: var(--font-display);
+    font-size: clamp(1.75rem, 3.5vw, 2.5rem);
+    letter-spacing: -.025em;
+    margin-bottom: var(--spacing-sm);
+}
+
+/* Bigger search input */
+.input-with-icon input {
+    padding: .875rem var(--spacing-md) .875rem 2.75rem;
+    font-size: var(--font-size-lg);
+    border-radius: var(--radius-lg);
+    border-width: 1.5px;
+}
+.input-with-icon i { left: 1rem; font-size: 1rem; }
+
+.btn-primary {
+    padding: .875rem var(--spacing-xl);
+    font-size: var(--font-size-base);
+    border-radius: var(--radius-lg);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ANALYSES — 2-column grid + refined card
+   ═══════════════════════════════════════════════════════════════ */
+
+.analyses-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: var(--spacing-md);
+}
+
+/* analysis cards in a flex column — override grid from earlier */
+.analysis-card {
+    border: 1px solid var(--border);
+    border-left: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+}
+.analysis-card.radio { border-left-color: var(--modality-radio); border-left-width: 3px; }
+.analysis-card.ct    { border-left-color: var(--modality-ct);    border-left-width: 3px; }
+.analysis-card.irm   { border-left-color: var(--modality-irm);   border-left-width: 3px; }
+.analysis-card.eco   { border-left-color: var(--modality-eco);   border-left-width: 3px; }
+.analysis-card.rads  { border-left-color: var(--modality-rads);  border-left-width: 3px; }
+
+/* ═══════════════════════════════════════════════════════════════
+   REPORT — max width container
+   ═══════════════════════════════════════════════════════════════ */
+
+#patientReportMarkdown {
+    max-width: 760px;
+}
