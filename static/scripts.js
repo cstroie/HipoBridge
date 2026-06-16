@@ -881,7 +881,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Define modality mapping
         const modalityMap = {
             'radio': { name: 'X-Ray',        icon: 'fa-x-ray',    color: '#36a2eb' },
-            'ct':    { name: 'CT Scan',      icon: 'fa-computer', color: '#ff6384' },
+            'ct':    { name: 'CT',      icon: 'fa-computer', color: '#ff6384' },
             'irm':   { name: 'MRI',          icon: 'fa-magnet',   color: '#ffce56' },
             'eco':   { name: 'Ultrasound',   icon: 'fa-heartbeat',color: '#4bc0c0' },
             'rads':  { name: 'Fluoroscopy',  icon: 'fa-radiation',color: '#9966ff' }
@@ -1863,7 +1863,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     const MODALITY_INFO = {
         radio: { icon: 'fa-x-ray',      label: 'X-Ray' },
-        ct:    { icon: 'fa-computer',   label: 'CT Scan' },
+        ct:    { icon: 'fa-computer',   label: 'CT' },
         irm:   { icon: 'fa-magnet',     label: 'MRI' },
         eco:   { icon: 'fa-heartbeat',  label: 'Ultrasound' },
         rads:  { icon: 'fa-radiation',  label: 'Fluoroscopy' },
