@@ -35,7 +35,7 @@ service_url = http://192.168.3.230/hipocrate
 
 Open `http://localhost:44660` to access the single-page app. Navigation:
 
-- **Schedule** — daily imaging/lab worklist; always visible; filters by date range, modality (dropdown), ward (dropdown), patient name (Enter to search); clicking a request code opens the exam report in a modal; clicking a patient name loads the patient
+- **Schedule** — daily imaging/lab worklist; always visible; filters by date range, modality chips, ward (dropdown), patient name (Enter to search); clicking a request code opens the exam report in a modal (coloured modality circle, patient name, requester, indication, report text, examiner signature); clicking a patient name loads the patient
 - **Patient Search** — search by CNP, patient code, or name; multiple results show a keyboard-accessible selection dialog
 - **Patient Profile** — demographics and encounter counts
 - **Analyses** — imaging and lab cards grouped by modality; clicking a request code opens a detail popup
