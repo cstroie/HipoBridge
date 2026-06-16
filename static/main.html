@@ -239,23 +239,18 @@
 
                 <!-- ─── Epicrisis tab ─── -->
                 <section id="epicrisis-tab" class="tab-content" role="tabpanel" aria-labelledby="epicrisis-tab-heading" hidden>
-                    <div class="tab-header">
-                        <div class="header-left">
-                            <div class="header-text">
-                                <div class="tab-eyebrow">Epicrisis</div>
-                                <h1 id="epicrisis-tab-heading">Discharge Summaries</h1>
-                                <p id="epicrisisMeta">Discharge summary and medical conclusions</p>
-                            </div>
+                    <div class="epicrisis-header">
+                        <div>
+                            <div class="epicrisis-eyebrow" id="epicrisisEyebrow">Epicrisis</div>
+                            <h1 id="epicrisis-tab-heading" class="epicrisis-hero-title">Discharge Summaries</h1>
+                            <p class="epicrisis-meta" id="epicrisisMeta">Discharge summaries</p>
                         </div>
-                        <div class="header-actions">
-                            <button class="btn-secondary" id="copyEpicrisisBtn" aria-label="Copy epicrisis as Markdown">
-                                <i class="fas fa-copy"></i>
-                                <span>Copy Markdown</span>
-                            </button>
-                        </div>
+                        <button class="btn-secondary" id="copyEpicrisisBtn" aria-label="Copy epicrisis as Markdown">
+                            <i class="fas fa-copy"></i>
+                            <span>Copy Markdown</span>
+                        </button>
                     </div>
 
-                    <nav id="epicrisisNav" class="epicrisis-nav" aria-label="Epicrisis navigation" hidden></nav>
                     <div id="epicrisisContent" aria-live="polite"></div>
                 </section>
 

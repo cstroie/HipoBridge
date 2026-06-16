@@ -1389,7 +1389,7 @@ select {
     gap: 14px;
 }
 .analysis-card:hover { border-color: var(--line-2, #d4dbe8); }
-.analysis-card.urgent-card { box-shadow: 0 0 0 1.5px var(--urgent, #dc2626); }
+.analysis-card.urgent-card { border-color: var(--urgent, #dc2626); }
 
 /* Top row: mod circle + title block */
 .card-identity {
@@ -2229,7 +2229,7 @@ select {
     transition: border-color 0.15s ease;
 }
 .timeline-card:hover { border-color: var(--line-2); }
-.timeline-card.urgent-ring { box-shadow: 0 0 0 1.5px var(--urgent, #dc2626); }
+.timeline-card.urgent-ring { border-color: var(--urgent, #dc2626); }
 
 .timeline-mod-avatar {
     width: 48px;
@@ -2685,127 +2685,141 @@ select {
 
 /* ── Epicrisis cards + navigator ──────────────────────────────────────── */
 
-.epicrisis-nav {
-    display: flex;
-    gap: var(--spacing-sm);
-    flex-wrap: wrap;
-    margin-bottom: var(--spacing-md);
-    position: sticky;
-    top: calc(var(--header-height) + 60px);  /* below the main nav bar */
-    z-index: calc(var(--z-nav) - 1);
-    background: var(--bg);
-    padding: var(--spacing-sm) 0;
-}
-.epicrisis-nav[hidden] { display: none; }
-
-
-.epicrisis-chip {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.1rem;
-    padding: var(--spacing-xs) var(--spacing-md);
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    text-align: left;
-    max-width: 220px;
-    transition: border-color 0.2s ease;
-}
-.epicrisis-chip:hover { border-color: var(--primary); }
-.epicrisis-chip.active {
-    border-color: var(--primary);
-    /* color-mix follows the theme's --primary (the old rgba was light-only) */
-    background: color-mix(in srgb, var(--primary) 10%, transparent);
+/* ── Epicrisis tab content area ──────────────────────────────────────── */
+#epicrisis-tab .epicrisis-header,
+#epicrisis-tab #epicrisisContent {
+    max-width: 860px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
-.epicrisis-chip-date {
-    font-size: var(--font-size-xs);
-    color: var(--text-light);
-}
-
-.epicrisis-chip-diag {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-    color: var(--text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 100%;
-}
-
-.epicrisis-card {
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-left: 4px solid var(--primary);
-    border-radius: var(--radius-lg);
-    margin-bottom: var(--spacing-lg);
-    box-shadow: var(--shadow-sm);
-    overflow: hidden;
-    scroll-margin-top: calc(var(--header-height) + 135px);  /* main nav + sticky chip bar */
-}
-
-.epicrisis-card-header {
+/* ── Epicrisis tab header ─────────────────────────────────────────────── */
+.epicrisis-header {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
-    gap: var(--spacing-md);
-    padding: var(--spacing-md) var(--spacing-lg);
-    background: var(--bg);
-    border-bottom: 1px solid var(--border);
+    align-items: flex-end;
+    gap: var(--spacing-lg);
+    margin-bottom: 36px;
+    flex-wrap: wrap;
 }
 
-.epicrisis-card-heading {
-    min-width: 0;
+.epicrisis-eyebrow {
+    font: 600 11px 'Inter', sans-serif;
+    letter-spacing: 0.14em;
+    color: var(--primary);
+    text-transform: uppercase;
+    margin-bottom: 10px;
 }
 
-.epicrisis-copy-btn {
-    flex-shrink: 0;
-    padding: var(--spacing-xs) var(--spacing-sm);
-    font-size: var(--font-size-sm);
-}
-
-@media (max-width: 600px) {
-    /* Collapse to a circular icon button — matches .btn-icon appearance.
-       width:auto lets the icon+padding determine the size naturally. */
-    .epicrisis-copy-btn span { display: none; }
-    .epicrisis-copy-btn {
-        width: auto;
-        height: 36px;
-        min-width: 36px;
-        padding: 0 var(--spacing-sm);
-        border-radius: var(--radius-full);
-        align-self: center;
-        justify-content: center;
-        flex-shrink: 0;
-    }
-}
-
-.epicrisis-title {
-    margin: 0;
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-semibold);
+.epicrisis-hero-title {
+    font: 700 38px/1 'Space Grotesk', 'Inter', sans-serif;
+    letter-spacing: -0.028em;
     color: var(--text);
+    margin: 0 0 8px;
 }
 
 .epicrisis-meta {
-    display: flex;
-    gap: var(--spacing-md);
-    flex-wrap: wrap;
-    margin: var(--spacing-xs) 0 0;
-    font-size: var(--font-size-sm);
+    font: 500 14px 'Inter', sans-serif;
     color: var(--text-light);
+    margin: 0;
 }
-.epicrisis-meta strong { color: var(--text); font-weight: var(--font-weight-medium); }
 
-/* The card supplies the chrome; strip the markdown-content box styling */
-.epicrisis-body {
-    background: transparent;
-    border: none;
-    border-radius: 0;
-    padding: var(--spacing-md) var(--spacing-lg);
+/* ── Epicrisis accordion cards ────────────────────────────────────────── */
+.epi-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    margin-bottom: 12px;
+    overflow: hidden;
 }
+
+.epi-card-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    width: 100%;
+    background: none;
+    border: none;
+    padding: 20px 24px;
+    cursor: pointer;
+    text-align: left;
+}
+.epi-card-btn:hover { background: color-mix(in srgb, var(--primary) 4%, transparent); }
+
+.epi-btn-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex: 1;
+    min-width: 0;
+    flex-wrap: wrap;
+}
+
+.epi-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: var(--primary);
+}
+
+.epi-date-range {
+    font: 600 16px 'Space Grotesk', 'Inter', sans-serif;
+    color: var(--text);
+}
+
+.epi-service {
+    font: 500 12.5px 'Inter', sans-serif;
+    color: var(--text-light);
+    margin-top: 3px;
+}
+
+.epi-btn-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.epi-icd-badge {
+    font: 600 12px 'Inter', sans-serif;
+    color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 10%, transparent);
+    padding: 4px 11px;
+    border-radius: 7px;
+}
+
+.epi-nights {
+    font: 500 12px 'Inter', sans-serif;
+    color: var(--ink-3, #8a98ad);
+}
+
+.epi-chevron {
+    color: var(--ink-3, #8a98ad);
+    font-size: 12px;
+}
+
+/* Body — hidden until open */
+.epi-card-body { }
+.epi-card-body[hidden] { display: none; }
+
+.epi-card-inner {
+    padding: 0 24px 24px;
+    border-top: 1px solid var(--border);
+}
+
+.epi-prose {
+    margin-top: 20px;
+    padding-left: 24px;
+    border-left: 3px solid color-mix(in srgb, var(--primary) 30%, transparent);
+    font: 400 15px/1.7 'Inter', sans-serif;
+    color: var(--text-light);
+    white-space: pre-line;
+    text-wrap: pretty;
+}
+.epi-prose p { margin: 0 0 0.75em; }
+.epi-prose p:last-child { margin-bottom: 0; }
 
 /* ── Report modal (schedule request detail) ───────────────────────────── */
 

@@ -727,11 +727,6 @@ document.addEventListener('DOMContentLoaded', function() {
             delete elements.epicrisisContent.dataset.markdown;
             delete elements.epicrisisContent.dataset.loaded;
         }
-        if (elements.epicrisisNav) {
-            elements.epicrisisNav.innerHTML = '';
-            elements.epicrisisNav.hidden = true;
-        }
-        
         // Clear report tab
         pendingReportData = null;
         if (elements.patientReportMarkdown) {
@@ -2198,108 +2193,126 @@ document.addEventListener('DOMContentLoaded', function() {
         if (valid.length === 0) return;
 
         elements.epicrisisContent.innerHTML = '';
-        if (elements.epicrisisNav) {
-            elements.epicrisisNav.innerHTML = '';
-            elements.epicrisisNav.hidden = valid.length < 2;
+
+        // Update header eyebrow + meta
+        const eyebrowEl = document.getElementById('epicrisisEyebrow');
+        const metaEl = document.getElementById('epicrisisMeta');
+        const patientNameEl = elements.patientName;
+        if (eyebrowEl && patientNameEl?.textContent) {
+            eyebrowEl.textContent = `Epicrisis · ${patientNameEl.textContent}`;
         }
 
-        // One distinct card per encounter + a chip navigator; the combined
-        // markdown document is kept for the Copy Markdown button
+        // Accordion cards; combined markdown for Copy button
         let markdown = '';
         valid.forEach((item, index) => {
             const enc = item.enc;
             const epicrisisText = extractEpicrisisText(enc);
-            const diagnosis = extractDiagnosisText(enc) || 'Epicrisis';
+            const icd = extractDiagnosisText(enc) || '';
             const admission = enc.period?.start ? formatDate(enc.period.start) : '';
             const discharge = enc.period?.end ? formatDate(enc.period.end) : '';
-            const attender = enc.participant?.find(p =>
-                p.type?.some(t => t.coding?.some(c => c.code === 'ATND'))
-            )?.individual?.display || '';
             const service = enc.serviceType?.display || '';
 
-            // Markdown for the copy button
+            // Night count
+            let nights = '';
+            if (admission && discharge) {
+                const ms = new Date(discharge) - new Date(admission);
+                const n = Math.round(ms / 86400000);
+                nights = `${n} ${n === 1 ? 'night' : 'nights'}`;
+            }
+
+            // Markdown
             const meta = [];
             if (admission) meta.push(`**Admission:** ${admission}`);
             if (discharge) meta.push(`**Discharge:** ${discharge}`);
-            if (attender)  meta.push(`**Attending:** ${attender}`);
             if (service)   meta.push(`**Service:** ${service}`);
-            markdown += valid.length === 1 ? `# ${diagnosis}\n\n` : `## ${index + 1}. ${diagnosis}\n\n`;
+            markdown += valid.length === 1 ? `# ${icd}\n\n` : `## ${index + 1}. ${icd}\n\n`;
             if (meta.length) markdown += `${meta.join(' · ')}  \n\n`;
             markdown += epicrisisText.trim() + '\n\n';
             if (index < valid.length - 1) markdown += '---\n\n';
 
-            // Card
-            const card = document.createElement('article');
-            card.className = 'epicrisis-card';
+            // Accordion card
+            const isOpen = index === 0;
+            const card = document.createElement('div');
+            card.className = 'epi-card' + (isOpen ? ' epi-card-open' : '');
             card.id = `epicrisis-${item.checkoutId}`;
-
-            const header = document.createElement('header');
-            header.className = 'epicrisis-card-header';
-            const headText = document.createElement('div');
-            headText.className = 'epicrisis-card-heading';
-            const h2 = document.createElement('h2');
-            h2.className = 'epicrisis-title';
-            h2.textContent = diagnosis;
-            headText.appendChild(h2);
-
-            const metaP = document.createElement('p');
-            metaP.className = 'epicrisis-meta';
-            [['Admission', admission], ['Discharge', discharge],
-             ['Attending', attender], ['Service', service]].forEach(([label, value]) => {
-                if (!value) return;
-                const span = document.createElement('span');
-                const strong = document.createElement('strong');
-                strong.textContent = `${label}: `;
-                span.append(strong, value);
-                metaP.appendChild(span);
-            });
-            if (metaP.childElementCount) headText.appendChild(metaP);
-            header.appendChild(headText);
-
-            // Per-card copy button — only useful when there is more than one
-            card.dataset.markdown = `# ${diagnosis}\n\n`
+            card.dataset.markdown = `# ${icd}\n\n`
                 + (meta.length ? `${meta.join(' · ')}  \n\n` : '')
                 + epicrisisText.trim() + '\n';
-            if (valid.length > 1) {
-                const copyBtn = document.createElement('button');
-                copyBtn.type = 'button';
-                copyBtn.className = 'btn-secondary epicrisis-copy-btn';
-                copyBtn.setAttribute('aria-label', 'Copy this epicrisis as Markdown');
-                copyBtn.innerHTML = '<i class="fas fa-copy"></i> <span>Copy</span>';
-                copyBtn.addEventListener('click', () => copyMarkdown(card, copyBtn));
-                header.appendChild(copyBtn);
-            }
-            card.appendChild(header);
 
+            // Toggle button (header)
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'epi-card-btn';
+            btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+
+            // Left: dot + date range + service label
+            const btnLeft = document.createElement('div');
+            btnLeft.className = 'epi-btn-left';
+
+            const dot = document.createElement('div');
+            dot.className = 'epi-dot';
+
+            const dateBlock = document.createElement('div');
+            const dateRow = document.createElement('div');
+            dateRow.className = 'epi-date-range';
+            dateRow.textContent = `${admission} → ${discharge}`;
+            const serviceRow = document.createElement('div');
+            serviceRow.className = 'epi-service';
+            serviceRow.textContent = service || 'Admission';
+            dateBlock.append(dateRow, serviceRow);
+            btnLeft.append(dot, dateBlock);
+
+            // Right: ICD badge + nights + chevron
+            const btnRight = document.createElement('div');
+            btnRight.className = 'epi-btn-right';
+
+            if (icd) {
+                const icdBadge = document.createElement('span');
+                icdBadge.className = 'epi-icd-badge';
+                icdBadge.textContent = icd.split(' ')[0]; // just the code part e.g. Q44.2
+                btnRight.appendChild(icdBadge);
+            }
+            if (nights) {
+                const nightsSpan = document.createElement('span');
+                nightsSpan.className = 'epi-nights';
+                nightsSpan.textContent = nights;
+                btnRight.appendChild(nightsSpan);
+            }
+            const chevron = document.createElement('i');
+            chevron.className = `fas fa-chevron-${isOpen ? 'up' : 'down'} epi-chevron`;
+            btnRight.appendChild(chevron);
+
+            btn.append(btnLeft, btnRight);
+
+            // Body
             const body = document.createElement('div');
-            body.className = 'markdown-content epicrisis-body';
-            body.innerHTML = marked.parse(epicrisisText.trim());
-            card.appendChild(body);
+            body.className = 'epi-card-body';
+            body.hidden = !isOpen;
+            const inner = document.createElement('div');
+            inner.className = 'epi-card-inner';
+            const prose = document.createElement('div');
+            prose.className = 'epi-prose';
+            prose.innerHTML = marked.parse(epicrisisText.trim());
+            inner.appendChild(prose);
+            body.appendChild(inner);
 
+            // Toggle logic
+            btn.addEventListener('click', () => {
+                const open = card.classList.toggle('epi-card-open');
+                btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                body.hidden = !open;
+                chevron.className = `fas fa-chevron-${open ? 'up' : 'down'} epi-chevron`;
+            });
+
+            card.append(btn, body);
             elements.epicrisisContent.appendChild(card);
-
-            // Navigator chip: discharge date + diagnosis
-            if (elements.epicrisisNav && valid.length > 1) {
-                const chip = document.createElement('button');
-                chip.type = 'button';
-                chip.className = 'epicrisis-chip';
-                if (index === 0) chip.classList.add('active');
-                const dateSpan = document.createElement('span');
-                dateSpan.className = 'epicrisis-chip-date';
-                dateSpan.textContent = discharge || admission || '—';
-                const diagSpan = document.createElement('span');
-                diagSpan.className = 'epicrisis-chip-diag';
-                diagSpan.textContent = diagnosis;
-                chip.append(dateSpan, diagSpan);
-                chip.addEventListener('click', () => {
-                    elements.epicrisisNav.querySelectorAll('.epicrisis-chip')
-                        .forEach(c => c.classList.remove('active'));
-                    chip.classList.add('active');
-                    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                });
-                elements.epicrisisNav.appendChild(chip);
-            }
         });
+
+        if (metaEl) {
+            const icdSample = valid[0] ? (extractDiagnosisText(valid[0].enc) || '') : '';
+            const icdCode = icdSample.split(' ')[0];
+            metaEl.textContent = `${valid.length} ${valid.length === 1 ? 'admission' : 'admissions'}${icdCode ? ' · ' + icdCode : ''}`;
+        }
 
         elements.epicrisisContent.dataset.markdown = markdown;
     }
