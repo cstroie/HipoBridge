@@ -1623,6 +1623,9 @@ select {
     color: var(--text-light);
     margin: 0 0 6px;
 }
+.report-imaging-text p { margin: 0 0 4px; }
+.report-imaging-text p:last-child { margin: 0; }
+.report-imaging-text strong { font-weight: 600; color: var(--text); }
 .report-imaging-sig {
     font: 500 12px 'Inter', sans-serif;
     color: var(--muted);

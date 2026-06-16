@@ -1221,10 +1221,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     row.appendChild(header);
 
                     if (reportText) {
-                        const p = document.createElement('p');
-                        p.className = 'report-imaging-text';
-                        p.textContent = reportText.split('\n')[0].trim();
-                        row.appendChild(p);
+                        const div = document.createElement('div');
+                        div.className = 'report-imaging-text';
+                        div.innerHTML = marked.parse(reportText);
+                        row.appendChild(div);
                     }
 
                     if (physician) {
@@ -1248,7 +1248,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     const enc   = item.enc;
                     const start = enc.period?.start ? formatDate(enc.period.start) : '';
                     const end   = enc.period?.end   ? formatDate(enc.period.end)   : '';
-                    const dx    = extractDiagnosisText(enc) || '';
+                    if (!start && !end) return; // skip entries with no date
+                    const rawDx = extractDiagnosisText(enc) || '';
+                    const dx    = rawDx === '-' ? '' : rawDx;
                     const service = enc.serviceType?.display || enc.location?.slice(-1)[0]?.location?.display || '';
                     const epicText = extractEpicrisisText(enc);
 
@@ -1263,7 +1265,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     span.textContent = end ? `${start}→${end}` : start;
 
                     const label = document.createElement('span');
-                    label.textContent = [service, dx ? dx.split(' ').slice(1).join(' ') : ''].filter(Boolean).join(' — ') || dx;
+                    const dxShort = dx ? dx.split(' ').slice(1).join(' ') : '';
+                    label.textContent = [service, dxShort].filter(Boolean).join(' — ') || dx;
 
                     row.append(dot, span, label);
                     timelineEl.appendChild(row);
