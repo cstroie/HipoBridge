@@ -1855,7 +1855,7 @@ class HipoClientImagingStudy(HipoClient):
                 validator = validator_m.group(1).strip() if validator_m else None
                 study_type, region = identify_study_type_and_region(study_name)
                 studies.append({
-                    "title": study_name,
+                    "title": dedup_key,
                     "result": result_text,
                     "type": study_type,
                     "region": region,
@@ -1948,10 +1948,9 @@ class HipoClientImagingStudy(HipoClient):
             if identifiers:
                 fhir_imaging_study["identifier"] = identifiers
 
-            # Add description from first study (strip Hipocrate noise like "(Tip proba: PACIENT)")
+            # Add description from first study
             if studies and len(studies) > 0 and isinstance(studies[0], dict):
-                raw_desc = studies[0].get("title", "Imaging Study")
-                fhir_imaging_study["description"] = re.sub(r'\s*\(Tip proba:[^)]*\)', '', raw_desc).strip()
+                fhir_imaging_study["description"] = studies[0].get("title", "Imaging Study")
 
             # Add performer: use validator from first study, fall back to requesting medic
             validator = studies[0].get("validator") if studies and isinstance(studies[0], dict) else None
@@ -1980,7 +1979,7 @@ class HipoClientImagingStudy(HipoClient):
                             "code": "OT",  # Other
                             "display": "Other"
                         },
-                        "description": re.sub(r'\s*\(Tip proba:[^)]*\)', '', study.get("title", "Imaging Study")).strip()
+                        "description": study.get("title", "Imaging Study")
                     }
                     
                     # Add started date_time if available
