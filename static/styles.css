@@ -3304,13 +3304,10 @@ dialog.modal article > footer {
 .report-modal-body {
     flex: 1;
     overflow-y: auto;
-    padding: var(--spacing-lg) var(--spacing-xl);
-    padding-left: calc(var(--spacing-xl) + 17px);
+    padding: var(--spacing-md) var(--spacing-lg);
     font-size: var(--font-size-sm);
     line-height: 1.7;
     color: var(--text);
-    border-left: 3px solid color-mix(in srgb, var(--accent, #4338ca) 32%, transparent);
-    margin-left: var(--spacing-lg);
 }
 
 .report-modal-body.report-empty {
@@ -3319,6 +3316,17 @@ dialog.modal article > footer {
     justify-content: center;
     color: var(--text-light);
     font-style: italic;
+}
+
+.report-modal-signed {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    margin: var(--spacing-md) 0 0;
+    padding-top: var(--spacing-sm);
+    border-top: 1px solid var(--border);
+    font-size: var(--font-size-sm);
+    color: var(--ink-2);
 }
 
 .report-modal-footer {

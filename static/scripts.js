@@ -2646,15 +2646,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 const date = reportData.started || reportData.effectiveDateTime || reportData.authoredOn;
                 if (date) modal.querySelector('.modal-date').textContent = formatDateWithTime(date);
 
-                // Physician line
-                const performer = reportData.performer?.[0]?.actor?.display
-                    || reportData.resultsInterpreter?.[0]?.display;
-                if (performer) {
-                    modal.querySelector('.modal-physician').textContent = performer;
+                // Requester (ordering physician) in header
+                const requester = reportData.referrer?.display;
+                if (requester) {
+                    modal.querySelector('.modal-requester').textContent = requester;
                     modal.querySelector('.report-modal-referrer').hidden = false;
                 }
 
-                // Indication line
+                // Indication line in header
                 const allNotes = reportData.note || [];
                 const indicationNote = allNotes.find(n => n.category?.[0]?.text === 'clinical-indication');
                 if (indicationNote?.text) {
@@ -2662,7 +2661,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     modal.querySelector('.report-modal-indication').hidden = false;
                 }
 
+                // Examiner (reporting physician) appended below content
+                const examiner = reportData.performer?.[0]?.actor?.display
+                    || reportData.resultsInterpreter?.[0]?.display;
+
                 renderReportContent(reportData, isImaging);
+
+                if (examiner) {
+                    const signed = document.createElement('p');
+                    signed.className = 'report-modal-signed';
+                    signed.innerHTML = `<i class="fas fa-signature" aria-hidden="true"></i> ${examiner}`;
+                    bodyDiv.appendChild(signed);
+                }
             } else if (repResp.status === 404) {
                 bodyDiv.classList.add('report-empty');
                 bodyDiv.textContent = 'Report not yet available.';
