@@ -1808,17 +1808,22 @@ class HipoClientImagingStudy(HipoClient):
                                 tag.decompose()
                                 break
                         # Manipulate the already-parsed tree in-place (avoids
-                        # re-parsing via html_to_markdown which can drop <p>
-                        # children when the full page context causes block-element
-                        # promotion by html.parser).
+                        # re-parsing via html_to_markdown which can drop content).
+                        # IMPORTANT: process <br> first. html.parser parses the
+                        # sequence <br><p>...</p> by nesting <p> as a child of
+                        # the unclosed <br> element. Replacing <br> naively with
+                        # '\n' would silently drop those nested paragraphs.
+                        # We extract any children out before replacing.
+                        for br in result_cell.find_all('br'):
+                            for child in list(br.children):
+                                br.insert_before(child)
+                            br.replace_with('\n')
                         for p in result_cell.find_all('p'):
                             p.insert_after('\n\n')
                             p.unwrap()
                         for div in result_cell.find_all('div'):
                             div.insert_after('\n\n')
                             div.unwrap()
-                        for br in result_cell.find_all('br'):
-                            br.replace_with('\n')
                         raw = result_cell.get_text()
                         raw = raw.replace('\xa0', ' ')
                         raw = re.sub(r'[ \t]+', ' ', raw)
