@@ -1459,8 +1459,7 @@ select {
 .card-referrer-line i { font-size: 10px; color: var(--ink-3, #8a98ad); }
 .card-referrer { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-indication {
-    margin: 0;
-    padding-left: 66px; /* aligns with card-title-block: mod-circle(52px) + gap(14px) */
+    margin: -8px 0 0;
     font: 400 12.5px/1.5 'Inter', sans-serif;
     color: var(--ink-2, #46556b);
 }
