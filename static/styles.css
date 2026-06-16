@@ -1659,7 +1659,7 @@ select {
     border-left: 3px solid color-mix(in srgb, var(--accent, #4338ca) 32%, transparent);
     padding-left: 14px;
 }
-.report-preview p,
+.report-preview p:not(.series-result-title),
 .report-preview pre,
 .report-note,
 .report-note p {
@@ -1673,9 +1673,9 @@ select {
 
 .series-result-title {
     font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
-    color: var(--ink-2);
-    margin: var(--spacing-sm) 0 var(--spacing-xs);
+    font-weight: var(--font-weight-bold);
+    color: var(--ink-1);
+    margin: var(--spacing-md) 0 var(--spacing-xs);
     padding-bottom: var(--spacing-xs);
     border-bottom: 1px solid var(--border);
 }
