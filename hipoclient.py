@@ -1797,7 +1797,15 @@ class HipoClientImagingStudy(HipoClient):
                 if not dedup_key or dedup_key in seen:
                     continue
                 seen.add(dedup_key)
-                result_text = result_raw[len('rezultat:'):].strip()
+                # Use html_to_markdown on the cell's inner HTML so <div> paragraph
+                # breaks are preserved; strip the leading "Rezultat:" label first.
+                result_cell = cells[3]
+                # Remove the <b><u>Rezultat:</u></b> label node if present
+                for tag in result_cell.find_all(['b', 'u']):
+                    if 'rezultat' in tag.get_text(strip=True).lower():
+                        tag.decompose()
+                        break
+                result_text = html_to_markdown(str(result_cell)).strip()
                 study_type, region = identify_study_type_and_region(study_name)
                 validation_raw = cells[4].get_text(strip=True)
                 # Extract date from "Data validare: DD/MM/YYYY HH:MM" or "27 May 2023 07:36"
