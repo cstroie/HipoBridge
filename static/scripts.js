@@ -2138,27 +2138,26 @@ document.addEventListener('DOMContentLoaded', function() {
             if (line) line.hidden = false;
         }
 
-        // Request metadata: clinical indication + note
-        const metaDl = article.querySelector('.request-meta');
-        if (metaDl) {
-            const indication = serviceRequest.reason?.[0]?.display
-                || serviceRequest.reasonCode?.[0]?.text
-                || serviceRequest.reasonCode?.[0]?.coding?.[0]?.display;
-            const note = serviceRequest.note?.[0]?.text;
-            const info = serviceRequest.supportingInfo?.[0]?.display;
-            const addMeta = (label, value) => {
-                if (!value) return;
-                const dt = document.createElement('dt');
-                dt.textContent = label;
-                const dd = document.createElement('dd');
-                dd.textContent = value;
-                metaDl.append(dt, dd);
-            };
-            addMeta('Indication', indication);
-            addMeta('Clinical note', note || info);
+        // Clinical indication — show inline next to physician
+        const indication = serviceRequest.reason?.[0]?.display
+            || serviceRequest.reasonCode?.[0]?.text
+            || serviceRequest.reasonCode?.[0]?.coding?.[0]?.display;
+        if (indication) {
+            setCardIndication(article, indication);
         }
 
         return article;
+    }
+
+    function setCardIndication(article, text) {
+        if (!text) return;
+        const indSpan = article.querySelector('.card-indication');
+        const indText = article.querySelector('.card-indication-text');
+        if (indText) indText.textContent = text;
+        if (indSpan) indSpan.hidden = false;
+        // Ensure the referrer line is visible (indication lives inside it)
+        const refLine = article.querySelector('.card-referrer-line');
+        if (refLine) refLine.hidden = false;
     }
 
     async function fetchAndFillReport(article) {
@@ -2185,20 +2184,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (line) line.hidden = false;
             }
 
-            // Clinical indication note(s) → populate request-meta dl
+            // Clinical indication note(s) → show inline next to physician
             const allNotes = data.note || [];
             const indicationNotes = allNotes.filter(n => n.category?.[0]?.text === 'clinical-indication');
             const resultNotes = allNotes.filter(n => n.category?.[0]?.text !== 'clinical-indication');
             if (indicationNotes.length > 0) {
-                const metaDl = article.querySelector('.request-meta');
-                if (metaDl && metaDl.children.length === 0) {
-                    indicationNotes.forEach(n => {
-                        const dt = document.createElement('dt');
-                        dt.textContent = 'Indication';
-                        const dd = document.createElement('dd');
-                        dd.textContent = n.text;
-                        metaDl.append(dt, dd);
-                    });
+                const existing = article.querySelector('.card-indication-text');
+                if (!existing?.textContent) {
+                    setCardIndication(article, indicationNotes[0].text);
                 }
             }
 
@@ -2644,6 +2637,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 const performer = reportData.performer?.[0]?.actor?.display
                     || reportData.resultsInterpreter?.[0]?.display;
                 if (performer) addMeta('Physician', performer);
+                const allNotes = reportData.note || [];
+                const indicationNote = allNotes.find(n => n.category?.[0]?.text === 'clinical-indication');
+                if (indicationNote?.text) addMeta('Indication', indicationNote.text);
                 renderReportContent(reportData, isImaging);
             } else if (repResp.status === 404) {
                 bodyDiv.classList.add('report-empty');

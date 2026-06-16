@@ -397,7 +397,7 @@
         <!-- Templates -->
         <template id="analysis-card-template">
             <article class="analysis-card">
-                <!-- Top row: modality avatar + title block -->
+                <!-- Top: modality avatar + title + physician + indication -->
                 <div class="card-identity">
                     <div class="mod-circle" aria-hidden="true"></div>
                     <div class="card-title-block">
@@ -416,6 +416,7 @@
                         <p class="card-referrer-line" hidden>
                             <i class="fas fa-user-doctor" aria-hidden="true"></i>
                             <span class="card-referrer" aria-label="Ordering physician"></span>
+                            <span class="card-indication" hidden>· <em class="card-indication-text"></em></span>
                         </p>
                     </div>
                 </div>
@@ -433,11 +434,6 @@
                         </footer>
                         <div class="imaging-study-link" aria-label="Imaging study link"></div>
                     </div>
-                </div>
-
-                <!-- Clinical indication / notes (populated after fetch) -->
-                <div class="card-meta-row">
-                    <dl class="request-meta"></dl>
                 </div>
             </article>
         </template>

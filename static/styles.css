@@ -1459,6 +1459,9 @@ select {
 }
 .card-referrer-line i { font-size: 10px; color: var(--ink-3, #8a98ad); }
 .card-referrer { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-indication { color: var(--ink-3, #8a98ad); font-weight: 400; }
+.card-indication[hidden] { display: none; }
+.card-indication-text { font-style: italic; }
 
 /* Urgent badge */
 .urgent-badge {
