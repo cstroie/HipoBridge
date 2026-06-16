@@ -2543,7 +2543,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let scheduleEntries = [];
 
-    async function showRequestModal(requestId, requestCode, patientName, modality, triggerEl) {
+    async function showRequestModal(requestId, requestCode, patientName, modality, triggerEl, requesterName) {
         const tmpl = document.getElementById('schedule-request-modal-template');
         if (!tmpl) return;
         const modal = tmpl.content.cloneNode(true).querySelector('dialog');
@@ -2558,6 +2558,11 @@ document.addEventListener('DOMContentLoaded', function() {
             MODALITY_INFO[modality]?.label || 'Report';
         modal.querySelector('.modal-request-code').textContent = requestCode;
         modal.querySelector('.modal-patient-name').textContent = patientName;
+
+        if (requesterName) {
+            modal.querySelector('.modal-requester').textContent = requesterName;
+            modal.querySelector('.report-modal-referrer').hidden = false;
+        }
 
         const bodyDiv = modal.querySelector('.report-modal-body');
 
@@ -2646,11 +2651,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 const date = reportData.started || reportData.effectiveDateTime || reportData.authoredOn;
                 if (date) modal.querySelector('.modal-date').textContent = formatDateWithTime(date);
 
-                // Requester (ordering physician) in header
-                const requester = reportData.referrer?.display;
-                if (requester) {
-                    modal.querySelector('.modal-requester').textContent = requester;
-                    modal.querySelector('.report-modal-referrer').hidden = false;
+                // Requester fallback from report data if not passed from schedule row
+                if (!requesterName) {
+                    const requester = reportData.referrer?.display;
+                    if (requester) {
+                        modal.querySelector('.modal-requester').textContent = requester;
+                        modal.querySelector('.report-modal-referrer').hidden = false;
+                    }
                 }
 
                 // Indication line in header
@@ -2937,7 +2944,7 @@ document.addEventListener('DOMContentLoaded', function() {
             codeBtn.className = 'timeline-code';
             codeBtn.textContent = requestCode;
             codeBtn.title = `View request details (${requestCode})`;
-            codeBtn.addEventListener('click', () => showRequestModal(r.id, requestCode, patientName, modalitySlug, codeBtn));
+            codeBtn.addEventListener('click', () => showRequestModal(r.id, requestCode, patientName, modalitySlug, codeBtn, requestedBy));
 
             metaParts.forEach((part, i) => {
                 metaLine.appendChild(part);
