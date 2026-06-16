@@ -2260,7 +2260,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     div.innerHTML = marked.parse(data.conclusion);
                     reportPreview.appendChild(div);
                 } else {
-                    reportPreview.innerHTML = '<p class="no-report-text">No report text available yet</p>';
+                    article.classList.add('no-report');
                 }
             }
 
@@ -2277,8 +2277,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
         } catch (_) {
-            const previewEl = article.querySelector('.report-preview');
-            if (previewEl) previewEl.innerHTML = '<p class="no-report-text">Report could not be loaded</p>';
+            article.classList.add('no-report');
         } finally {
             if (loadingEl) loadingEl.hidden = true;
             if (bodyEl) bodyEl.hidden = false;

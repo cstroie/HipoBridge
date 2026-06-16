@@ -1705,10 +1705,12 @@ select {
 .report-signed[hidden] { display: none; }
 .report-signed i { font-size: 10px; }
 
-.no-report-text {
-    color: var(--ink-3, #8a98ad);
-    font-size: var(--font-size-sm);
-    margin: 0;
+.analysis-card.no-report {
+    opacity: 0.55;
+}
+.analysis-card.no-report .report-preview {
+    border-left-color: var(--border);
+    border-left-style: dashed;
 }
 
 /* Clinical indication / notes below report */
