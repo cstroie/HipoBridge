@@ -1522,16 +1522,6 @@ select {
 }
 .report-card[hidden] { display: none; }
 
-.report-section {
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 24px;
-    margin-bottom: 28px;
-}
-.report-section-last {
-    border-bottom: none;
-    padding-bottom: 0;
-    margin-bottom: 0;
-}
 .report-section[hidden] { display: none; }
 
 /* §1 Patient identity */
