@@ -1488,7 +1488,7 @@ select {
     gap: var(--spacing-lg);
     margin-bottom: 32px;
     flex-wrap: wrap;
-    max-width: 1200px;
+    max-width: 780px;
     margin-left: auto;
     margin-right: auto;
 }
@@ -1518,6 +1518,8 @@ select {
     border-radius: 18px;
     padding: 40px 44px;
     max-width: 780px;
+    margin-left: auto;
+    margin-right: auto;
 }
 .report-card[hidden] { display: none; }
 
