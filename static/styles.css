@@ -3321,10 +3321,9 @@ dialog.modal article > footer {
 .report-modal-signed {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: var(--spacing-xs);
-    margin: var(--spacing-md) 0 0;
-    padding-top: var(--spacing-sm);
-    border-top: 1px solid var(--border);
+    margin: var(--spacing-xs) 0 0;
     font-size: var(--font-size-sm);
     color: var(--ink-2);
 }
