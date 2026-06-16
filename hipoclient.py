@@ -83,8 +83,8 @@ logger = logging.getLogger('HipoClient')
 # Analysis types dictionary for reuse across functions
 ANALYSIS_TYPES = {
     "radio": {
-        "display": "Radiology",
-        "definition": "Radiology",
+        "display": "X-Ray",
+        "definition": "Radiography",
         "domain": 36
     },
     "ct": {
