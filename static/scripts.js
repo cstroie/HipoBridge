@@ -2269,7 +2269,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (icd) {
                 const icdBadge = document.createElement('span');
                 icdBadge.className = 'epi-icd-badge';
-                icdBadge.textContent = icd.split(' ')[0]; // just the code part e.g. Q44.2
+                icdBadge.textContent = icd;
                 btnRight.appendChild(icdBadge);
             }
             if (nights) {
@@ -2310,8 +2310,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (metaEl) {
             const icdSample = valid[0] ? (extractDiagnosisText(valid[0].enc) || '') : '';
-            const icdCode = icdSample.split(' ')[0];
-            metaEl.textContent = `${valid.length} ${valid.length === 1 ? 'admission' : 'admissions'}${icdCode ? ' · ' + icdCode : ''}`;
+            metaEl.textContent = `${valid.length} ${valid.length === 1 ? 'admission' : 'admissions'}${icdSample ? ' · ' + icdSample : ''}`;
         }
 
         elements.epicrisisContent.dataset.markdown = markdown;
