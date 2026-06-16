@@ -201,23 +201,19 @@
 
                 <!-- ─── Analyses tab ─── -->
                 <section id="analyses-tab" class="tab-content" role="tabpanel" aria-labelledby="analyses-tab-heading" hidden>
-                    <div class="tab-header analyses-header">
-                        <div class="header-left">
-                            <div class="header-text">
-                                <div class="tab-eyebrow">Analyses</div>
-                                <h1 id="analyses-tab-heading">Diagnostic Reports</h1>
-                                <p id="analysesMeta">Imaging studies</p>
-                            </div>
+                    <div class="analyses-header">
+                        <div>
+                            <div class="analyses-eyebrow" id="analysesEyebrow">Analyses</div>
+                            <h1 id="analyses-tab-heading" class="analyses-hero-title">Diagnostic Reports</h1>
+                            <p class="analyses-meta" id="analysesMeta">Imaging studies</p>
                         </div>
-                        <div class="header-actions">
-                            <div class="analyses-chips" id="analysesChips">
-                                <button type="button" class="chip chip-active" data-filter="all">All</button>
-                                <button type="button" class="chip" data-filter="radio">X-Ray</button>
-                                <button type="button" class="chip" data-filter="ct">CT</button>
-                                <button type="button" class="chip" data-filter="irm">MRI</button>
-                                <button type="button" class="chip" data-filter="eco">Ultrasound</button>
-                                <button type="button" class="chip" data-filter="rads">Fluoroscopy</button>
-                            </div>
+                        <div class="analyses-chips" id="analysesChips">
+                            <button type="button" class="chip chip-active" data-filter="all">All</button>
+                            <button type="button" class="chip" data-filter="eco">Ultrasound</button>
+                            <button type="button" class="chip" data-filter="radio">X-Ray</button>
+                            <button type="button" class="chip" data-filter="ct">CT</button>
+                            <button type="button" class="chip" data-filter="irm">MRI</button>
+                            <button type="button" class="chip" data-filter="rads">Fluoroscopy</button>
                         </div>
                     </div>
 
@@ -408,7 +404,6 @@
                         <footer class="report-signed" hidden>
                             <i class="fas fa-signature" aria-hidden="true"></i>
                             <span class="card-medic" aria-label="Reporting physician"></span>
-                            <time class="report-date" aria-label="Report date"></time>
                         </footer>
                         <div class="imaging-study-link" aria-label="Imaging study link"></div>
                     </div>

@@ -1838,6 +1838,32 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.reportsCount) elements.reportsCount.textContent = filteredEntries.length;
         elements.analysesGrid.innerHTML = '';
 
+        // Update analyses header eyebrow + meta + chip counts
+        const eyebrow = document.getElementById('analysesEyebrow');
+        const metaEl = document.getElementById('analysesMeta');
+        const patientNameEl = elements.patientName;
+        if (eyebrow && patientNameEl?.textContent) {
+            eyebrow.textContent = `Analyses · ${patientNameEl.textContent}`;
+        }
+        const countByType = {};
+        for (const e of filteredEntries) {
+            const t = e.resource?.code?.coding?.[0]?.code || 'unknown';
+            countByType[t] = (countByType[t] || 0) + 1;
+        }
+        if (metaEl) {
+            const MODALITY_LABEL = { radio: 'X-Ray', ct: 'CT', irm: 'MRI', eco: 'Ultrasound', rads: 'Fluoroscopy' };
+            const parts = includedTypes.filter(t => countByType[t]).map(t => `${countByType[t]} ${MODALITY_LABEL[t]}`);
+            metaEl.textContent = `${filteredEntries.length} imaging ${filteredEntries.length === 1 ? 'study' : 'studies'}${parts.length ? ' · ' + parts.join(', ') : ''}`;
+        }
+        document.querySelectorAll('.analyses-chips .chip').forEach(chip => {
+            const f = chip.dataset.filter;
+            const count = f === 'all' ? filteredEntries.length : (countByType[f] || 0);
+            const label = chip.textContent.replace(/\s*\(\d+\)$/, '');
+            chip.textContent = `${label} (${count})`;
+            if (f !== 'all' && count === 0) { chip.style.opacity = '0.4'; chip.disabled = true; }
+            else { chip.style.opacity = ''; chip.disabled = false; }
+        });
+
         // Create all cards immediately (request metadata is already available)
         const cards = filteredEntries.map(entry => {
             const sr = entry.resource;
@@ -2015,19 +2041,11 @@ document.addEventListener('DOMContentLoaded', function() {
             if (hasReport) {
                 const physician = data.resultsInterpreter?.[0]?.display
                     || data.performer?.[0]?.actor?.display || '';
-                const date = data.started || data.effectiveDateTime || data.authoredOn || '';
                 const medicEl = article.querySelector('.card-medic');
                 if (medicEl && physician) medicEl.textContent = physician;
-                const dateEl = article.querySelector('.report-date');
-                if (dateEl && date) {
-                    dateEl.textContent = formatExamDate(date);
-                    dateEl.dateTime = date;
-                }
-                // No performing physician means the report isn't signed — keep the footer hidden
-                if (physician) {
-                    const signedEl = article.querySelector('.report-signed');
-                    if (signedEl) signedEl.hidden = false;
-                }
+                // Only show signature footer when a physician is present
+                const signedEl = article.querySelector('.report-signed');
+                if (signedEl) signedEl.hidden = !physician;
             }
 
             const reportPreview = article.querySelector('.report-preview');

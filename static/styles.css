@@ -1263,13 +1263,31 @@ button.stat-pill {
 .analyses-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    margin-bottom: var(--spacing-lg);
+    align-items: flex-end;
+    gap: var(--spacing-lg);
+    margin-bottom: 36px;
+    flex-wrap: wrap;
 }
 
-.header-left p {
-    margin: 0;
+.analyses-eyebrow {
+    font: 600 11px 'Inter', sans-serif;
+    letter-spacing: 0.14em;
+    color: var(--primary);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+}
+
+.analyses-hero-title {
+    font: 700 38px/1 'Space Grotesk', 'Inter', sans-serif;
+    letter-spacing: -0.028em;
+    color: var(--text);
+    margin: 0 0 8px;
+}
+
+.analyses-meta {
+    font: 500 14px 'Inter', sans-serif;
     color: var(--text-light);
+    margin: 0;
 }
 
 .search-box {
@@ -1469,7 +1487,7 @@ select {
 .report-preview p,
 .report-preview pre,
 .report-note {
-    font: italic 400 13.5px/1.6 'Inter', sans-serif;
+    font: 400 13.5px/1.6 'Inter', sans-serif;
     color: var(--ink-2, #46556b);
     white-space: pre-wrap;
     word-break: break-word;
@@ -1490,18 +1508,17 @@ select {
 .report-signed {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 6px;
     margin-top: 8px;
     font: 500 12px 'Inter', sans-serif;
     color: var(--ink-3, #8a98ad);
 }
+.report-signed[hidden] { display: none; }
 .report-signed i { font-size: 10px; }
-.card-medic { }
-.report-date::before { content: '·\00a0'; }
 
 .no-report-text {
     color: var(--ink-3, #8a98ad);
-    font-style: italic;
     font-size: var(--font-size-sm);
     margin: 0;
 }
