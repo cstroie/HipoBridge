@@ -3288,9 +3288,9 @@ dialog.modal article > footer {
     display: flex;
     align-items: center;
     gap: var(--spacing-xs);
-    font-size: var(--font-size-sm);
-    color: var(--ink-2);
-    margin: var(--spacing-xs) 0 0;
+    font-size: var(--font-size-xs);
+    color: var(--ink-3);
+    margin: 2px 0 0;
 }
 
 .report-modal-indication {
