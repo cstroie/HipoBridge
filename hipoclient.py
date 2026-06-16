@@ -2771,6 +2771,115 @@ class HipoClientCheckin(HipoClient):
             data.set_error(str(e))
             return data
 
+    def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIREncounter, FHIROperationOutcome]:
+        """Convert parsed checkin HipoData to a FHIR Encounter resource (status=in-progress)."""
+        try:
+            if parsed_data.get("status") == "error":
+                return FHIROperationOutcome.from_error(
+                    message=parsed_data.get("message", "Error in parsed checkin data"),
+                    code="processing",
+                    severity="error"
+                )
+
+            encounter_id = parsed_data.get('checkin.id', '')
+            fhir_encounter = FHIREncounter(
+                id=encounter_id,
+                status="in-progress",
+                type=[{
+                    "coding": [{
+                        "system": "http://snomed.info/sct",
+                        "code": "305056002",
+                        "display": "Admission to hospital"
+                    }]
+                }],
+                subject={
+                    "reference": f"Patient/{parsed_data.get('patient.id', '')}"
+                }
+            )
+
+            # Attending physician from first transfer row or checkin.medic
+            medic = parsed_data.get("checkin.medic")
+            if not medic:
+                transfers = parsed_data.get("checkin.transfers") or []
+                if transfers:
+                    medic = transfers[0].get("medic")
+            if medic:
+                fhir_encounter["participant"] = [{
+                    "type": [{
+                        "coding": [{
+                            "system": "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
+                            "code": "ATND",
+                            "display": "attender"
+                        }]
+                    }],
+                    "individual": {"display": medic}
+                }]
+
+            # Admission period — start only (still in progress)
+            checkin_datetime = parsed_data.get("checkin.date_time") or parsed_data.get("presentation.date_time")
+            if checkin_datetime:
+                dt = parse_date_time(checkin_datetime)
+                fhir_encounter["period"] = {"start": dt.isoformat() if dt else checkin_datetime}
+
+            # Ward / location from transfers (most recent) or presentation.section
+            section = None
+            transfers = parsed_data.get("checkin.transfers") or []
+            if transfers:
+                section = transfers[-1].get("section")
+            if not section:
+                section = parsed_data.get("presentation.section")
+            if section:
+                fhir_encounter["location"] = [{
+                    "location": {"display": section},
+                    "status": "active"
+                }]
+
+            # Admission diagnosis
+            diagnosis = parsed_data.get("checkin.diagnosis")
+            if diagnosis:
+                fhir_encounter["reasonCode"] = [{"text": diagnosis}]
+                fhir_encounter["diagnosis"] = [{
+                    "condition": {
+                        "reference": f"Condition/admission-{encounter_id}",
+                        "display": diagnosis
+                    },
+                    "use": {
+                        "coding": [{
+                            "system": "http://terminology.hl7.org/CodeSystem/diagnosis-role",
+                            "code": "AD",
+                            "display": "Admission diagnosis"
+                        }]
+                    }
+                }]
+
+            # Urgency
+            if parsed_data.get("presentation.is_urgent"):
+                fhir_encounter["priority"] = {
+                    "coding": [{
+                        "system": "http://terminology.hl7.org/CodeSystem/v3-ActPriority",
+                        "code": "EM",
+                        "display": "emergency"
+                    }]
+                }
+
+            # Physical exam notes
+            notes = []
+            if parsed_data.get("checkin.exam_general"):
+                notes.append({"text": f"[Exam general] {parsed_data.get('checkin.exam_general')}"})
+            if parsed_data.get("checkin.exam_local"):
+                notes.append({"text": f"[Exam local] {parsed_data.get('checkin.exam_local')}"})
+            if notes:
+                fhir_encounter["note"] = notes
+
+            return fhir_encounter
+        except Exception as e:
+            logger.error(f"Error converting checkin data to FHIR: {e}")
+            return FHIROperationOutcome.from_exception(e, code="exception")
+
+    async def fetch_respond_fhir(self, **kwargs) -> Union[FHIREncounter, FHIROperationOutcome]:
+        parsed = await self.fetch_and_parse(**kwargs)
+        return self.fhir_response(parsed, **kwargs)
+
 
 class HipoClientCheckup(HipoClient):
     """Parses the emergency/outpatient consultation (/files/checkup.asp?cuid={id})."""

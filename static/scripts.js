@@ -1104,14 +1104,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 analysesData ? populateAnalysesMarkdown(analysesData) : Promise.resolve(''),
                 generateEpicrisisMarkdown(patientData),
                 (async () => {
-                    const ids = extractCheckoutIds(patientData);
-                    if (!ids.length) return [];
-                    const enc = await limitedMap(ids, MAX_CONCURRENT_REQUESTS,
+                    const checkoutIds = extractCheckoutIds(patientData);
+                    const checkinIds  = extractCheckinIds(patientData);
+                    const allIds = [...checkinIds, ...checkoutIds]; // active admissions first
+                    if (!allIds.length) return [];
+                    const enc = await limitedMap(allIds, MAX_CONCURRENT_REQUESTS,
                         async id => { try { return await fetchEncounterDataForCheckout(id); } catch { return null; } });
                     return enc
-                        .map((e, i) => e ? { enc: e, id: ids[i] } : null)
+                        .map((e, i) => e && e.resourceType === 'Encounter' ? { enc: e, id: allIds[i] } : null)
                         .filter(Boolean)
-                        .sort((a, b) => (b.enc.period?.end || '') > (a.enc.period?.end || '') ? 1 : -1);
+                        .sort((a, b) => {
+                            const da = a.enc.period?.end || a.enc.period?.start || '';
+                            const db = b.enc.period?.end || b.enc.period?.start || '';
+                            return db > da ? 1 : -1;
+                        });
                 })()
             ]);
 
@@ -1119,20 +1125,37 @@ document.addEventListener('DOMContentLoaded', function() {
             const latestDx = encounters[0] ? extractDiagnosisText(encounters[0].enc) : '';
             setText('reportDiagnosis', latestDx);
 
-            // §2 Current admission = most recent encounter with epicrisis
-            const currentAdm = encounters.find(e => extractEpicrisisText(e.enc));
+            // §2 Current admission — prefer encounter with epicrisis; fall back to most recent (active)
+            const currentAdm = encounters.find(e => extractEpicrisisText(e.enc)) || encounters[0];
             const secAdmission = document.getElementById('reportSectionAdmission');
             if (currentAdm && secAdmission) {
                 const enc = currentAdm.enc;
+                const isActive = enc.status === 'in-progress';
                 const start = enc.period?.start ? formatDate(enc.period.start) : '';
                 const end   = enc.period?.end   ? formatDate(enc.period.end)   : '';
                 const ms    = (enc.period?.start && enc.period?.end)
                     ? new Date(enc.period.end) - new Date(enc.period.start) : 0;
                 const nights = ms > 0 ? Math.round(ms / 86400000) : 0;
                 const periodEl = document.getElementById('reportAdmissionPeriod');
-                if (periodEl) periodEl.textContent = `${start} → ${end}${nights ? ` (${nights} ${nights === 1 ? 'night' : 'nights'})` : ''}`;
+                if (periodEl) {
+                    periodEl.textContent = isActive
+                        ? `${start} → present (ongoing)`
+                        : `${start} → ${end}${nights ? ` (${nights} ${nights === 1 ? 'night' : 'nights'})` : ''}`;
+                }
                 const textEl = document.getElementById('reportAdmissionText');
-                if (textEl) textEl.textContent = extractEpicrisisText(enc).split('\n')[0].trim();
+                if (textEl) {
+                    const epicrisis = extractEpicrisisText(enc);
+                    if (epicrisis) {
+                        textEl.textContent = epicrisis.split('\n')[0].trim();
+                    } else {
+                        // Active admission — use exam notes or diagnosis
+                        const examNote = enc.note?.find(n => n.text?.startsWith('[Exam general]'));
+                        const dx = extractDiagnosisText(enc);
+                        textEl.textContent = examNote
+                            ? examNote.text.replace('[Exam general] ', '')
+                            : (dx || '');
+                    }
+                }
                 secAdmission.hidden = false;
             }
 
@@ -2291,6 +2314,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const checkoutExt = patientData.extension.find(ext => ext.url && ext.url.includes('checkout-ids'));
         if (!checkoutExt || !checkoutExt.valueString) return [];
         return checkoutExt.valueString.split(',').filter(id => id.trim());
+    }
+
+    function extractCheckinIds(patientData) {
+        if (!patientData.extension) return [];
+        const checkinExt = patientData.extension.find(ext => ext.url && ext.url.includes('checkin-ids'));
+        if (!checkinExt || !checkinExt.valueString) return [];
+        return checkinExt.valueString.split(',').filter(id => id.trim());
     }
 
     function extractEpicrisisText(encounterData) {

@@ -399,14 +399,22 @@ async def debug_passthrough(request):
 
 @require_auth
 async def get_fhir_encounter(request):
-    """Retrieve encounter (discharge summary) by ID. Returns FHIR Encounter resource."""
+    """Retrieve encounter by ID. Tries checkout (discharged) first, falls back to checkin (in-progress)."""
     id = request.match_info.get('id')
     if not id:
         return web_fhir_response("Encounter ID is required")
     logger.info(f"Retrieving encounter with ID: {id}")
 
-    client = HipoClientCheckout(SERVICE_URL, request)
-    response = await client.fetch_respond_fhir(id=id)
+    # Try checkout (completed discharge) first
+    checkout_client = HipoClientCheckout(SERVICE_URL, request)
+    checkout_data = await checkout_client.fetch_and_parse(id=id)
+    if checkout_data.get("status") != "error":
+        return web_fhir_response(checkout_client.fhir_response(checkout_data, id=id))
+
+    # Fall back to checkin (active admission)
+    logger.info(f"Checkout {id} not found or empty — trying checkin")
+    checkin_client = HipoClientCheckin(SERVICE_URL, request)
+    response = await checkin_client.fetch_respond_fhir(id=id)
     return web_fhir_response(response)
 
 
