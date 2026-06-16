@@ -317,6 +317,8 @@
 
                     <!-- Controls row -->
                     <div class="schedule-actions">
+                        <label for="schedulePatientFilter" class="sr-only">Patient name</label>
+                        <input type="search" id="schedulePatientFilter" class="schedule-filter-input" placeholder="Filter by patient name…" aria-label="Filter by patient name">
                         <label for="scheduleStartDate" class="sr-only">From date</label>
                         <input type="date" id="scheduleStartDate" class="schedule-date-input" aria-label="From date">
                         <span class="schedule-date-sep" aria-hidden="true">–</span>
@@ -337,8 +339,6 @@
 
                     <!-- Filters row -->
                     <div class="schedule-filters">
-                        <label for="schedulePatientFilter" class="sr-only">Patient name</label>
-                        <input type="search" id="schedulePatientFilter" class="schedule-filter-input" placeholder="Filter by patient name…" aria-label="Filter by patient name">
 
                         <!-- Modality chips (visual) — updates the hidden select -->
                         <div class="schedule-mod-chips" role="group" aria-label="Filter by modality">
