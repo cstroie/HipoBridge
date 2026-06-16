@@ -355,21 +355,22 @@ document.addEventListener('DOMContentLoaded', function() {
     async function loadReportLazily() {
         if (!pendingReportData || elements.patientReportMarkdown?.dataset.loaded) return;
         elements.patientReportMarkdown.dataset.loaded = '1';
+        showLoading();
         try {
-            // displayPatientReport shows its own spinner while assembling
             await loadAndDisplayReport(pendingReportData.patientData, pendingReportData.analysesData);
         } catch (err) {
             console.error('Error loading report:', err);
             showToast('Failed to assemble patient report', 'error');
             delete elements.patientReportMarkdown.dataset.loaded;
+        } finally {
+            hideLoading();
         }
     }
 
     async function loadEpicrisisLazily() {
         if (!pendingEpicrisisData || elements.epicrisisContent?.dataset.loaded) return;
         elements.epicrisisContent.dataset.loaded = '1';
-        elements.epicrisisContent.innerHTML =
-            '<div class="loading-content"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i><p>Loading discharge summaries…</p></div>';
+        showLoading();
         try {
             await loadAndDisplayEpicrisis(pendingEpicrisisData);
         } catch (err) {
@@ -377,8 +378,7 @@ document.addEventListener('DOMContentLoaded', function() {
             showToast('Failed to load discharge summaries', 'error');
             delete elements.epicrisisContent.dataset.loaded;
         } finally {
-            const spinner = elements.epicrisisContent.querySelector('.loading-content');
-            if (spinner) spinner.remove();
+            hideLoading();
         }
     }
     
