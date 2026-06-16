@@ -3236,35 +3236,32 @@ dialog.modal article > footer {
     align-items: center;
     justify-content: space-between;
     gap: var(--spacing-md);
-    margin-bottom: var(--spacing-md);
+    margin-bottom: var(--spacing-sm);
+}
+
+.report-modal-identity {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    flex: 1;
+    min-width: 0;
+}
+
+.report-modal-title-block {
+    flex: 1;
+    min-width: 0;
 }
 
 .report-modal-title {
     margin: 0;
-    font-size: var(--font-size-xl);
+    font-size: var(--font-size-lg);
     font-weight: var(--font-weight-semibold);
-    letter-spacing: 0.01em;
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
 }
 
-.report-modal-title i {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.25rem;
-    height: 2.25rem;
-    font-size: var(--font-size-base);
-    color: var(--primary);
-    background: color-mix(in srgb, var(--primary) 12%, transparent);
-    border-radius: var(--radius-md);
-    flex-shrink: 0;
-}
-
-.report-modal-title .modal-request-code {
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 0.03em;
+.report-modal-subtitle {
+    font-size: var(--font-size-sm);
+    color: var(--ink-2);
+    margin: 2px 0 0;
 }
 
 .report-modal-close {
@@ -3282,43 +3279,38 @@ dialog.modal article > footer {
 
 .report-modal-close:hover { color: var(--text); background: var(--hover-bg); }
 
-.report-modal-meta {
+.report-modal-referrer {
     display: flex;
-    flex-wrap: wrap;
-    gap: var(--spacing-sm) var(--spacing-xl);
-    margin: 0;
+    align-items: center;
+    gap: var(--spacing-xs);
     font-size: var(--font-size-sm);
+    color: var(--ink-2);
+    margin: var(--spacing-xs) 0 0;
 }
 
-.report-modal-meta dt {
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-medium);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--text-light);
-    margin: 0;
+.report-modal-indication {
+    font-size: var(--font-size-sm);
+    color: var(--ink-2);
+    margin: var(--spacing-xs) 0 0;
 }
 
-.report-modal-meta dd {
-    margin: 0;
-    color: var(--text);
-    font-weight: var(--font-weight-medium);
+.report-modal-indication .modal-indication-label {
+    font-weight: var(--font-weight-semibold);
+    margin-right: 4px;
 }
 
-.report-modal-meta .meta-item {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    white-space: nowrap;
-}
+.report-modal-indication em { font-style: italic; }
 
 .report-modal-body {
     flex: 1;
     overflow-y: auto;
     padding: var(--spacing-lg) var(--spacing-xl);
+    padding-left: calc(var(--spacing-xl) + 17px);
     font-size: var(--font-size-sm);
     line-height: 1.7;
     color: var(--text);
+    border-left: 3px solid color-mix(in srgb, var(--accent, #4338ca) 32%, transparent);
+    margin-left: var(--spacing-lg);
 }
 
 .report-modal-body.report-empty {

@@ -2548,38 +2548,36 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!tmpl) return;
         const modal = tmpl.content.cloneNode(true).querySelector('dialog');
 
-        modal.querySelector('.modal-request-code').textContent = requestCode;
+        // Populate identity header immediately from data we already have
+        const circleEl = modal.querySelector('.modal-mod-circle');
+        const circleAvatar = MODALITY_AVATAR[modality] || { abbr: '?', cls: '' };
+        circleEl.textContent = circleAvatar.abbr;
+        if (circleAvatar.cls) circleEl.classList.add(circleAvatar.cls);
 
-        const metaDl  = modal.querySelector('.report-modal-meta');
+        modal.querySelector('.modal-type-name').textContent =
+            MODALITY_INFO[modality]?.label || 'Report';
+        modal.querySelector('.modal-request-code').textContent = requestCode;
+        modal.querySelector('.modal-patient-name').textContent = patientName;
+
         const bodyDiv = modal.querySelector('.report-modal-body');
 
         const originalText = triggerEl.textContent;
         triggerEl.textContent = '…';
         triggerEl.disabled = true;
 
-        function addMeta(label, value) {
-            if (!value) return;
-            const item = document.createElement('span');
-            item.className = 'meta-item';
-            const dt = document.createElement('dt');
-            dt.textContent = label;
-            const dd = document.createElement('dd');
-            dd.textContent = value;
-            item.appendChild(dt);
-            item.appendChild(dd);
-            metaDl.appendChild(item);
-        }
-
         function renderReportContent(reportData, isImaging) {
             bodyDiv.innerHTML = '';
             bodyDiv.classList.remove('report-empty');
             const forms = reportData.presentedForm || [];
-            const notes = reportData.note || [];
+            const allNotes = reportData.note || [];
+            const resultNotes = allNotes.filter(n => n.category?.[0]?.text !== 'clinical-indication');
+            const series = reportData.series || [];
 
             if (forms.length > 0) {
                 for (const form of forms) {
                     if (form.title && forms.length > 1) {
-                        const h = document.createElement('h3');
+                        const h = document.createElement('p');
+                        h.className = 'series-result-title';
                         h.textContent = form.title;
                         bodyDiv.appendChild(h);
                     }
@@ -2595,19 +2593,26 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                     bodyDiv.appendChild(div);
                 }
-            } else if (isImaging && notes.length > 0) {
-                for (const note of notes) {
-                    if (!note.text) continue;
+            } else if (isImaging && resultNotes.length > 0) {
+                const showTitles = resultNotes.length > 1 && series.length >= resultNotes.length;
+                resultNotes.forEach((note, i) => {
+                    if (!note.text) return;
+                    if (showTitles && series[i]?.description) {
+                        const titleEl = document.createElement('p');
+                        titleEl.className = 'series-result-title';
+                        titleEl.textContent = series[i].description;
+                        bodyDiv.appendChild(titleEl);
+                    }
                     const div = document.createElement('div');
+                    div.className = 'report-note';
                     const normalised = note.text.replace(/\n{2,}/g, '\n');
                     div.innerHTML = marked.parse(normalised).trim();
                     bodyDiv.appendChild(div);
-                }
+                });
             } else if (reportData.conclusion) {
                 bodyDiv.innerHTML = marked.parse(reportData.conclusion);
             } else {
                 bodyDiv.classList.add('report-empty');
-                bodyDiv.textContent = 'No report text available yet.';
             }
         }
 
@@ -2621,8 +2626,6 @@ document.addEventListener('DOMContentLoaded', function() {
             loadPatientFromRequest(requestId, patientName, triggerEl);
         });
 
-        // Show modal immediately with meta we already have from the schedule row
-        addMeta('Patient', patientName);
         bodyDiv.classList.add('report-empty');
         bodyDiv.textContent = 'Loading…';
         document.body.appendChild(modal);
@@ -2638,15 +2641,27 @@ document.addEventListener('DOMContentLoaded', function() {
             const repResp = await fetch(endpoint);
             if (repResp.ok) {
                 const reportData = await repResp.json();
-                // Enrich meta from report data
+
+                // Date in subtitle
                 const date = reportData.started || reportData.effectiveDateTime || reportData.authoredOn;
-                if (date) addMeta('Date', formatDateWithTime(date));
+                if (date) modal.querySelector('.modal-date').textContent = formatDateWithTime(date);
+
+                // Physician line
                 const performer = reportData.performer?.[0]?.actor?.display
                     || reportData.resultsInterpreter?.[0]?.display;
-                if (performer) addMeta('Physician', performer);
+                if (performer) {
+                    modal.querySelector('.modal-physician').textContent = performer;
+                    modal.querySelector('.report-modal-referrer').hidden = false;
+                }
+
+                // Indication line
                 const allNotes = reportData.note || [];
                 const indicationNote = allNotes.find(n => n.category?.[0]?.text === 'clinical-indication');
-                if (indicationNote?.text) addMeta('Indication', indicationNote.text);
+                if (indicationNote?.text) {
+                    modal.querySelector('.modal-indication-text').textContent = indicationNote.text;
+                    modal.querySelector('.report-modal-indication').hidden = false;
+                }
+
                 renderReportContent(reportData, isImaging);
             } else if (repResp.status === 404) {
                 bodyDiv.classList.add('report-empty');
