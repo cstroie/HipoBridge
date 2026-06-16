@@ -2245,9 +2245,6 @@ select {
         padding: var(--spacing-md) var(--spacing-lg);
     }
 
-    /* Tighter horizontal margins everywhere on mobile */
-    .container { padding-left: var(--spacing-sm); padding-right: var(--spacing-sm); }
-
     /* Schedule header: hide dash separator between dates when stacked */
     .schedule-date-sep { display: none; }
 
@@ -2594,28 +2591,10 @@ select {
         padding-top: 8px;
     }
     .timeline-time { padding-top: 0; font-size: 13px; }
-    .timeline-dot { display: none; }
+    .timeline-dot { margin-top: 0; }
     .timeline-line { display: none; }
-    .timeline-card { gap: 12px; padding: 10px 12px; }
-    .timeline-mod-avatar { width: 36px; height: 36px; font-size: 11px; flex-shrink: 0; }
-
-    /* Status badge moves below patient name, inside body */
-    .timeline-patient-row { flex-wrap: wrap; }
-    .timeline-status-badge {
-        font-size: 11px;
-        padding: 3px 8px;
-        order: 1;
-        flex-basis: 100%;
-        justify-content: flex-start;
-        margin-top: 4px;
-    }
-    .timeline-status-badge::before { width: 6px; height: 6px; }
-
-    /* Filters: chips and ward on separate lines */
-    .schedule-mod-chips { width: 100%; }
-    .schedule-filters-spacer { display: none; }
-    .schedule-ward-pill { margin-left: 0; width: 100%; }
-    .schedule-ward-pill select { width: 100%; }
+    .timeline-card { gap: 12px; }
+    .timeline-mod-avatar { width: 40px; height: 40px; font-size: 12px; }
 }
 
 /* Date range + limit + refresh */
