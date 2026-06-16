@@ -569,15 +569,18 @@ small {
     margin-bottom: 11px;
 }
 
-/* Search hero */
-.search-hero {
-    margin-bottom: 32px;
+/* Search tab column */
+.search-column {
+    max-width: 580px;
+    margin: 0 auto;
+    padding: 64px 0 80px;
 }
-.search-hero h1 {
+
+.search-hero-title {
     font: 700 46px/1 'Space Grotesk', 'Inter', sans-serif;
     letter-spacing: -0.032em;
     color: var(--text);
-    margin-bottom: 0;
+    margin: 0 0 32px;
 }
 
 /* Chip buttons (filter pills) */
@@ -677,106 +680,77 @@ small {
     margin: 0;
 }
 
-/* Search Section */
-.search-section {
-    display: grid;
-    grid-template-columns: 2fr 1fr;
-    gap: var(--spacing-lg);
-    margin-bottom: var(--spacing-lg);
-}
-
-.search-card {
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: var(--spacing-lg);
-    align-self: start;
-}
-
-.search-header h2 {
-    font-size: var(--font-size-2xl);
-    margin: 0 0 var(--spacing-sm) 0;
-    color: var(--text);
-}
-
-.search-input-group {
+/* Search input row */
+.search-input-row {
     display: flex;
-    gap: var(--spacing-md);
-    margin: var(--spacing-md) 0;
+    gap: 10px;
+    margin-bottom: 12px;
 }
 
-.input-with-icon {
-    position: relative;
+.search-input-box {
     flex: 1;
-}
-
-.input-with-icon i {
-    position: absolute;
-    left: 1rem;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--muted);
-    z-index: 1;
-}
-
-.input-with-icon input {
-    width: 100%;
-    padding: var(--spacing-md) var(--spacing-md) var(--spacing-md) 2.5rem;
-    border: 2px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--card-bg);
-    color: var(--text);
-    font-size: var(--font-size-base);
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.input-with-icon input:focus {
-    outline: none;
-    border-color: var(--primary);
-    box-shadow: var(--focus-ring-subtle);
-}
-
-.btn-primary {
-    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-    color: white;
-    border: none;
-    padding: var(--spacing-md) var(--spacing-lg);
-    border-radius: var(--radius-md);
-    font-weight: var(--font-weight-semibold);
-    cursor: pointer;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
     display: flex;
     align-items: center;
-    gap: var(--spacing-sm);
-}
-
-.btn-primary:hover {
-    box-shadow: var(--shadow-lg);
-}
-
-.form-help {
-    color: var(--text-light);
-    font-size: var(--font-size-sm);
-}
-
-.recent-searches {
+    gap: 10px;
     background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: var(--spacing-md);
+    border: 1.5px solid var(--line-2, #d4dbe8);
+    border-radius: 14px;
+    padding: 13px 18px;
+    transition: border-color 0.15s ease;
 }
+.search-input-box:focus-within {
+    border-color: var(--primary);
+}
+.search-input-box i { color: var(--muted); flex-shrink: 0; }
+.search-input-box input {
+    flex: 1;
+    border: none;
+    outline: none;
+    font: 500 16px 'Inter', sans-serif;
+    color: var(--text);
+    background: none;
+    min-width: 0;
+}
+.search-input-box input::placeholder { color: var(--muted); }
+
+.search-submit-btn {
+    flex-shrink: 0;
+    font: 600 14px 'Inter', sans-serif;
+    color: #fff;
+    background: var(--primary);
+    border: none;
+    border-radius: 14px;
+    padding: 13px 22px;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+    display: flex;
+    align-items: center;
+}
+.search-submit-btn:hover { opacity: 0.88; }
+
+.search-hint {
+    font: 400 13px 'Inter', sans-serif;
+    color: var(--muted);
+    margin: 0 0 42px;
+    padding-left: 2px;
+}
+
+/* Recent searches */
+.recent-searches { }
 
 .recent-header {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
     gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-sm);
+    margin-bottom: 14px;
 }
 
-.recent-header h3 {
-    margin: 0;
-    color: var(--text);
+.recent-heading-label {
+    font: 600 11px 'Inter', sans-serif;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    text-transform: uppercase;
 }
 
 .btn-link {
@@ -794,7 +768,7 @@ small {
 .recent-list {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-xs);
+    gap: 8px;
     list-style: none;
     margin: 0;
     padding: 0;
@@ -804,73 +778,91 @@ small {
     margin: 0;
     color: var(--text-light);
     font-size: var(--font-size-sm);
-    font-style: italic;
 }
 
-.recent-item {
-    display: flex;
-    align-items: stretch;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--card-bg);
-    overflow: hidden;
-    transition: border-color 0.2s ease, background 0.2s ease;
-}
-.recent-item:hover {
-    border-color: var(--primary);
-    background: var(--bg);
-}
+.recent-item { display: contents; }
 
 .recent-load {
-    flex: 1;
     display: flex;
     align-items: center;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-sm);
-    background: none;
-    border: none;
+    gap: 14px;
+    width: 100%;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 13px 16px;
     cursor: pointer;
     text-align: left;
     color: var(--text);
-    min-width: 0;
+    transition: border-color 0.15s ease;
 }
+.recent-load:hover { border-color: var(--primary); }
 
-.recent-load i {
+.recent-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--primary) 10%, transparent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
     color: var(--primary);
     flex-shrink: 0;
 }
 
 .recent-text {
+    flex: 1;
     display: flex;
     flex-direction: column;
     min-width: 0;
 }
 
 .recent-primary {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
+    font: 600 14px 'Inter', sans-serif;
+    color: var(--text);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .recent-secondary {
-    font-size: var(--font-size-xs);
-    color: var(--text-light);
+    font: 500 12.5px 'Inter', sans-serif;
+    color: var(--muted);
+    margin-top: 2px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.recent-remove {
+.recent-arrow {
+    color: var(--muted);
+    font-size: 12px;
     flex-shrink: 0;
-    background: none;
+}
+
+/* keep .btn-primary for any other uses, but search uses .search-submit-btn */
+.btn-primary {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
     border: none;
-    border-left: 1px solid var(--border);
-    padding: 0 var(--spacing-sm);
-    color: var(--text-light);
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-radius: var(--radius-md);
+    font-weight: var(--font-weight-semibold);
     cursor: pointer;
-    transition: color 0.2s ease, background 0.2s ease;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+.btn-primary:hover { box-shadow: var(--shadow-lg); }
+
+.form-help {
+    color: var(--text-light);
+    font-size: var(--font-size-sm);
+}
+
+.recent-remove {
+    display: none; /* removed from template; kept to avoid JS errors on old clones */
 }
 .recent-remove:hover {
     color: #991b1b;
@@ -2059,10 +2051,6 @@ select {
 
 /* Responsive Design */
 @media (max-width: 1024px) {
-    .search-section {
-        grid-template-columns: 1fr;
-    }
-
     .patient-stats-strip {
         grid-template-columns: repeat(2, 1fr);
     }
@@ -2086,11 +2074,6 @@ select {
     
     .hero-content h1 {
         font-size: var(--font-size-2xl);
-    }
-    
-    .search-card,
-    .recent-searches {
-        padding: var(--spacing-lg);
     }
     
     .patient-banner {
@@ -2157,10 +2140,6 @@ select {
 
     .patient-stats-strip {
         grid-template-columns: repeat(2, 1fr);
-    }
-
-    .search-input-group {
-        flex-direction: column;
     }
 
     /* Tab header actions: stack vertically and stretch to full width */

@@ -1368,10 +1368,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 elements.form.dispatchEvent(new Event('submit'));
             });
 
-            li.querySelector('.recent-remove').addEventListener('click', () => {
-                removeRecentSearch(searchTerm);
-            });
-
             elements.recentSearchesList.appendChild(li);
         });
     }

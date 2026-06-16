@@ -81,41 +81,37 @@
 
                 <!-- ─── Search tab ─── -->
                 <section id="search-tab" class="tab-content" role="tabpanel" aria-labelledby="search-tab-heading">
-                    <div class="search-hero">
+                    <div class="search-column">
                         <div class="search-hero-label">Patient Search</div>
-                        <h1 id="search-tab-heading">Find a patient</h1>
-                    </div>
+                        <h1 id="search-tab-heading" class="search-hero-title">Find a patient</h1>
 
-                    <div class="search-section">
-                        <div class="search-card">
-                            <form id="cnpForm" novalidate>
-                                <div class="search-input-group">
-                                    <div class="input-with-icon">
-                                        <i class="fas fa-magnifying-glass"></i>
-                                        <input type="search" id="cnpInput" name="cnp" inputmode="search"
-                                            autocomplete="off"
-                                            placeholder="CNP, patient code, or name…"
-                                            required aria-describedby="cnpHelp">
-                                    </div>
-                                    <button type="submit" id="analyzeBtn" class="btn-primary">
-                                        <i class="fas fa-arrow-right"></i>
-                                    </button>
+                        <form id="cnpForm" novalidate>
+                            <div class="search-input-row">
+                                <div class="search-input-box">
+                                    <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                                    <input type="search" id="cnpInput" name="cnp" inputmode="search"
+                                        autocomplete="off"
+                                        placeholder="CNP, patient code, or name…"
+                                        required aria-describedby="cnpHelp">
                                 </div>
-                                <div id="cnpHelp" class="form-help">13-digit CNP, partial CNP with wildcard (1234567*), patient code, or name</div>
-                            </form>
-                        </div>
+                                <button type="submit" id="analyzeBtn" class="search-submit-btn" aria-label="Search">
+                                    <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                            <p id="cnpHelp" class="search-hint">13-digit CNP, partial CNP with wildcard (1234567*), patient code, or name</p>
+                        </form>
 
                         <div class="recent-searches">
                             <div class="recent-header">
-                                <h3>Recent searches</h3>
+                                <span class="recent-heading-label">Recent searches</span>
                                 <button type="button" id="clearRecentBtn" class="btn-link" hidden>Clear</button>
                             </div>
                             <ul class="recent-list" id="recentSearchesList"></ul>
                             <p class="recent-empty" id="recentEmpty" hidden>No recent searches yet</p>
                         </div>
-                    </div>
 
-                    <div class="error" id="error" role="alert" aria-live="polite"></div>
+                        <div class="error" id="error" role="alert" aria-live="polite"></div>
+                    </div>
                 </section>
 
                 <!-- ─── Patient Profile tab ─── -->
@@ -465,14 +461,14 @@
         <template id="recent-item-template">
             <li class="recent-item">
                 <button type="button" class="recent-load">
-                    <i class="fas" aria-hidden="true"></i>
-                    <span class="recent-text">
+                    <div class="recent-avatar">
+                        <i class="fas" aria-hidden="true"></i>
+                    </div>
+                    <div class="recent-text">
                         <span class="recent-primary"></span>
                         <span class="recent-secondary"></span>
-                    </span>
-                </button>
-                <button type="button" class="recent-remove" aria-label="Remove from recent searches">
-                    <i class="fas fa-xmark" aria-hidden="true"></i>
+                    </div>
+                    <i class="fas fa-arrow-up-right-from-square recent-arrow" aria-hidden="true"></i>
                 </button>
             </li>
         </template>
