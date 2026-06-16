@@ -1870,6 +1870,22 @@ class HipoClientImagingStudy(HipoClient):
             logger.error(f"Error parsing imaging study data: {e}")
             return HipoData(status="error", message=str(e))
 
+    async def fetch_and_parse(self, *args, **kwargs) -> HipoData:
+        """Fetch and parse an imaging study, evicting the cache if all results are empty.
+
+        An empty result text means the report has not been filled yet in Hipocrate.
+        Caching that response would prevent the next request from picking up real data.
+        """
+        parsed_data = await super().fetch_and_parse(*args, **kwargs)
+        if parsed_data.get("status") != "error":
+            studies = parsed_data.get("studies") or []
+            all_empty = all(not s.get("result") for s in studies) if studies else True
+            if all_empty:
+                url = self.request_url.format(**kwargs)
+                self.cache_remove(self.get_full_url(url))
+                logger.debug(f"Evicted empty imaging study from cache: {url}")
+        return parsed_data
+
     def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRImagingStudy, FHIROperationOutcome]:
         """Convert parsed imaging study HipoData to a FHIR ImagingStudy resource."""
         http_request = kwargs.get('http_request', self.request)
