@@ -3329,8 +3329,8 @@ dialog.modal article > footer {
     justify-content: flex-end;
     gap: var(--spacing-xs);
     margin: var(--spacing-xs) 0 0;
-    font-size: var(--font-size-sm);
-    color: var(--ink-2);
+    font-size: var(--font-size-xs);
+    color: var(--ink-3);
 }
 
 .report-modal-footer {
