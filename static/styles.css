@@ -2181,7 +2181,10 @@ select {
 
     .schedule-filters {
         gap: var(--spacing-xs);
+        flex-wrap: wrap;
     }
+    .schedule-filters-spacer { display: none; }
+    .schedule-ward-pill { margin-left: auto; }
 }
 
 /* Honour the OS reduced-motion preference */
@@ -2538,10 +2541,38 @@ select {
 
 .schedule-filters {
     display: flex;
-    gap: var(--spacing-sm);
+    align-items: center;
+    gap: 8px;
     flex-wrap: wrap;
-    padding: var(--spacing-sm) 0;
+    margin-bottom: 28px;
 }
+
+.schedule-filters-spacer { flex: 1; }
+
+/* Ward pill — wraps the native select for styling */
+.schedule-ward-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--card-bg);
+    border: 1px solid var(--line-2, #d4dbe8);
+    border-radius: 10px;
+    padding: 8px 12px;
+    font: 500 12.5px 'Inter', sans-serif;
+    color: var(--text-light);
+    position: relative;
+}
+.schedule-ward-pill i { color: var(--muted); font-size: 11px; }
+.schedule-ward-pill i.fa-chevron-down { font-size: 10px; }
+.schedule-ward-pill select {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    width: 100%;
+    cursor: pointer;
+}
+/* Show the selected ward label via JS — see populateSectionFilter */
+.schedule-ward-pill .ward-label { pointer-events: none; }
 
 .schedule-filter-select {
     font-size: var(--font-size-sm);

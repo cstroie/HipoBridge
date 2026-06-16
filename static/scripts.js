@@ -271,7 +271,10 @@ document.addEventListener('DOMContentLoaded', function() {
             elements.scheduleLabFilter.addEventListener('change', fetchScheduleFromInputs);
         }
         if (elements.scheduleSectionFilter) {
-            elements.scheduleSectionFilter.addEventListener('change', fetchScheduleFromInputs);
+            elements.scheduleSectionFilter.addEventListener('change', () => {
+                updateWardPillLabel();
+                fetchScheduleFromInputs();
+            });
         }
         if (elements.scheduleLimitSelect) {
             elements.scheduleLimitSelect.addEventListener('change', fetchScheduleFromInputs);
@@ -2709,6 +2712,24 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    function updateWardPillLabel() {
+        const sel = elements.scheduleSectionFilter;
+        if (!sel) return;
+        const pill = sel.closest('.schedule-ward-pill');
+        if (!pill) return;
+        let label = pill.querySelector('.ward-label');
+        if (!label) {
+            label = document.createElement('span');
+            label.className = 'ward-label';
+            // insert between the two icons
+            const chevron = pill.querySelector('.fa-chevron-down');
+            pill.insertBefore(label, chevron);
+        }
+        label.textContent = sel.value
+            ? sel.options[sel.selectedIndex]?.text || 'All wards'
+            : 'All wards';
+    }
+
     function populateSectionFilter(entries) {
         if (!elements.scheduleSectionFilter) return;
         const sections = [...new Set(entries.map(r => r.note?.[0]?.text || '').filter(Boolean))].sort();
@@ -2721,6 +2742,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (s === current) opt.selected = true;
             elements.scheduleSectionFilter.appendChild(opt);
         });
+        updateWardPillLabel();
     }
 
     function renderSchedule() {

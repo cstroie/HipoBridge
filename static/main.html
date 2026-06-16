@@ -340,7 +340,7 @@
                     <!-- Filters row -->
                     <div class="schedule-filters">
 
-                        <!-- Modality chips (visual) — updates the hidden select -->
+                        <!-- Modality chips — updates the hidden select -->
                         <div class="schedule-mod-chips" role="group" aria-label="Filter by modality">
                             <button type="button" class="chip chip-active" data-lab-id="">All</button>
                             <button type="button" class="chip chip-ct"    data-lab-id="26">CT</button>
@@ -350,8 +350,8 @@
                             <button type="button" class="chip chip-rads"  data-lab-id="50">Fluoro</button>
                         </div>
 
-                        <!-- Hidden select kept for fetch-schedule logic -->
-                        <select id="scheduleLabFilter" class="schedule-filter-select" aria-label="Filter by modality" style="display:none">
+                        <!-- Hidden selects for fetch logic -->
+                        <select id="scheduleLabFilter" aria-label="Filter by modality" style="display:none">
                             <option value="">All modalities</option>
                             <option value="26">CT</option>
                             <option value="28">Ultrasound</option>
@@ -361,10 +361,17 @@
                             <option value="50">Fluoroscopy</option>
                         </select>
 
-                        <label for="scheduleSectionFilter" class="sr-only">Ward</label>
-                        <select id="scheduleSectionFilter" class="schedule-filter-select" aria-label="Filter by ward">
-                            <option value="">All wards</option>
-                        </select>
+                        <div class="schedule-filters-spacer"></div>
+
+                        <!-- Ward pill wrapping the native select -->
+                        <div class="schedule-ward-pill">
+                            <i class="fas fa-hospital" aria-hidden="true"></i>
+                            <label for="scheduleSectionFilter" class="sr-only">Ward</label>
+                            <select id="scheduleSectionFilter" aria-label="Filter by ward">
+                                <option value="">All wards</option>
+                            </select>
+                            <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                        </div>
                     </div>
 
                     <!-- Timeline -->
