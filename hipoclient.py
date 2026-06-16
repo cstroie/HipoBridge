@@ -1807,7 +1807,23 @@ class HipoClientImagingStudy(HipoClient):
                             if 'rezultat' in tag.get_text(strip=True).lower():
                                 tag.decompose()
                                 break
-                        result_text = html_to_markdown(str(result_cell)).strip()
+                        # Manipulate the already-parsed tree in-place (avoids
+                        # re-parsing via html_to_markdown which can drop <p>
+                        # children when the full page context causes block-element
+                        # promotion by html.parser).
+                        for p in result_cell.find_all('p'):
+                            p.insert_after('\n\n')
+                            p.unwrap()
+                        for div in result_cell.find_all('div'):
+                            div.insert_after('\n\n')
+                            div.unwrap()
+                        for br in result_cell.find_all('br'):
+                            br.replace_with('\n')
+                        raw = result_cell.get_text()
+                        raw = raw.replace('\xa0', ' ')
+                        raw = re.sub(r'[ \t]+', ' ', raw)
+                        raw = re.sub(r'\n{3,}', '\n\n', raw)
+                        result_text = raw.strip()
                 # Row i+2 is the validation row
                 if i + 2 < len(all_rows):
                     validation_raw = all_rows[i + 2].get_text(strip=True)
