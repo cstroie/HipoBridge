@@ -2052,6 +2052,7 @@ select {
     min-height: 1.25em;
 }
 
+.loading-error[hidden] { display: none; }
 .loading-error {
     display: flex;
     flex-direction: column;
