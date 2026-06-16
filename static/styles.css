@@ -1459,7 +1459,11 @@ select {
 }
 .card-referrer-line i { font-size: 10px; color: var(--ink-3, #8a98ad); }
 .card-referrer { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.card-indication { color: var(--ink-3, #8a98ad); font-weight: 400; }
+.card-indication {
+    margin: 4px 0 0;
+    font: 400 12px/1.4 'Inter', sans-serif;
+    color: var(--ink-3, #8a98ad);
+}
 .card-indication[hidden] { display: none; }
 .card-indication-text { font-style: italic; }
 

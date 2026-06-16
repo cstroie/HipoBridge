@@ -2151,13 +2151,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function setCardIndication(article, text) {
         if (!text) return;
-        const indSpan = article.querySelector('.card-indication');
+        const indEl   = article.querySelector('.card-indication');
         const indText = article.querySelector('.card-indication-text');
         if (indText) indText.textContent = text;
-        if (indSpan) indSpan.hidden = false;
-        // Ensure the referrer line is visible (indication lives inside it)
-        const refLine = article.querySelector('.card-referrer-line');
-        if (refLine) refLine.hidden = false;
+        if (indEl) indEl.hidden = false;
     }
 
     async function fetchAndFillReport(article) {
