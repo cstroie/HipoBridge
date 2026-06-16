@@ -1410,11 +1410,16 @@ select {
     justify-content: center;
     font: 700 15px 'Space Grotesk', 'Inter', sans-serif;
 }
-.analysis-card.radio .mod-circle { background: color-mix(in srgb,var(--mod-xr) 14%,transparent); color: var(--mod-xr); }
-.analysis-card.ct    .mod-circle { background: color-mix(in srgb,var(--mod-ct) 14%,transparent); color: var(--mod-ct); }
-.analysis-card.irm   .mod-circle { background: color-mix(in srgb,var(--mod-mr) 14%,transparent); color: var(--mod-mr); }
-.analysis-card.eco   .mod-circle { background: color-mix(in srgb,var(--mod-us) 14%,transparent); color: var(--mod-us); }
-.analysis-card.rads  .mod-circle { background: color-mix(in srgb,var(--mod-fl) 14%,transparent); color: var(--mod-fl); }
+.analysis-card.radio .mod-circle,
+.mod-circle.mod-xr { background: color-mix(in srgb,var(--mod-xr) 14%,transparent); color: var(--mod-xr); }
+.analysis-card.ct    .mod-circle,
+.mod-circle.mod-ct { background: color-mix(in srgb,var(--mod-ct) 14%,transparent); color: var(--mod-ct); }
+.analysis-card.irm   .mod-circle,
+.mod-circle.mod-mr { background: color-mix(in srgb,var(--mod-mr) 14%,transparent); color: var(--mod-mr); }
+.analysis-card.eco   .mod-circle,
+.mod-circle.mod-us { background: color-mix(in srgb,var(--mod-us) 14%,transparent); color: var(--mod-us); }
+.analysis-card.rads  .mod-circle,
+.mod-circle.mod-fl { background: color-mix(in srgb,var(--mod-fl) 14%,transparent); color: var(--mod-fl); }
 
 .modality-icon { display: none; }
 
