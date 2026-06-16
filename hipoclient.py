@@ -1948,9 +1948,10 @@ class HipoClientImagingStudy(HipoClient):
             if identifiers:
                 fhir_imaging_study["identifier"] = identifiers
 
-            # Add description from first study
+            # Add description from first study (strip Hipocrate noise like "(Tip proba: PACIENT)")
             if studies and len(studies) > 0 and isinstance(studies[0], dict):
-                fhir_imaging_study["description"] = studies[0].get("title", "Imaging Study")
+                raw_desc = studies[0].get("title", "Imaging Study")
+                fhir_imaging_study["description"] = re.sub(r'\s*\(Tip proba:[^)]*\)', '', raw_desc).strip()
 
             # Add performer: use validator from first study, fall back to requesting medic
             validator = studies[0].get("validator") if studies and isinstance(studies[0], dict) else None
@@ -1979,7 +1980,7 @@ class HipoClientImagingStudy(HipoClient):
                             "code": "OT",  # Other
                             "display": "Other"
                         },
-                        "description": study.get("title", "Imaging Study")
+                        "description": re.sub(r'\s*\(Tip proba:[^)]*\)', '', study.get("title", "Imaging Study")).strip()
                     }
                     
                     # Add started date_time if available

@@ -1671,6 +1671,18 @@ select {
     text-wrap: pretty;
 }
 
+.series-result-title {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--ink-2);
+    margin: var(--spacing-sm) 0 var(--spacing-xs);
+    padding-bottom: var(--spacing-xs);
+    border-bottom: 1px solid var(--border);
+}
+.series-result-title:first-child {
+    margin-top: 0;
+}
+
 .report-loading {
     display: flex;
     align-items: center;

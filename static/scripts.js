@@ -2237,17 +2237,24 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                     }
                 } else if (notes.length > 0) {
-                    for (const note of notes) {
-                        if (note.text) {
-                            const div = document.createElement('div');
-                            div.className = 'report-note';
-                            // Collapse \n\n paragraph breaks to \n so marked
-                            // renders lines as <br> (tight list) not spaced <p> blocks
-                            const normalised = note.text.replace(/\n{2,}/g, '\n');
-                            div.innerHTML = marked.parse(normalised).trim();
-                            reportPreview.appendChild(div);
+                    const series = data.series || [];
+                    const showTitles = notes.length > 1 && series.length >= notes.length;
+                    notes.forEach((note, i) => {
+                        if (!note.text) return;
+                        if (showTitles && series[i]?.description) {
+                            const titleEl = document.createElement('p');
+                            titleEl.className = 'series-result-title';
+                            titleEl.textContent = series[i].description;
+                            reportPreview.appendChild(titleEl);
                         }
-                    }
+                        const div = document.createElement('div');
+                        div.className = 'report-note';
+                        // Collapse \n\n paragraph breaks to \n so marked
+                        // renders lines as <br> (tight list) not spaced <p> blocks
+                        const normalised = note.text.replace(/\n{2,}/g, '\n');
+                        div.innerHTML = marked.parse(normalised).trim();
+                        reportPreview.appendChild(div);
+                    });
                 } else if (data.conclusion) {
                     const div = document.createElement('div');
                     div.innerHTML = marked.parse(data.conclusion);
