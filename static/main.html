@@ -124,42 +124,39 @@
                 <!-- ─── Patient Profile tab ─── -->
                 <section id="patient-tab" class="tab-content" role="tabpanel" aria-labelledby="patient-tab-heading" hidden>
 
-                    <div class="patient-header">
-                        <div class="patient-header-left">
-                            <div class="patient-header-eyebrow">Patient Profile</div>
-                            <h1 id="patient-tab-heading"><span id="patientName">Patient Name</span></h1>
-                            <div class="patient-meta">
-                                <span class="patient-badge" id="patientId"></span>
-                                <span class="patient-badge" id="patientGender"></span>
-                                <span class="patient-badge accent" id="patientAge"></span>
+                    <!-- Eyebrow + hero heading + badges + stats — all in one header block -->
+                    <div class="patient-hero-block">
+                        <div class="patient-eyebrow">Patient Profile</div>
+                        <div class="patient-header">
+                            <div class="patient-header-left">
+                                <h1 id="patient-tab-heading" class="patient-hero-name"><span id="patientName">Patient Name</span></h1>
+                                <div class="patient-meta">
+                                    <span class="patient-badge" id="patientId"></span>
+                                    <span class="patient-badge" id="patientGender"></span>
+                                    <span class="patient-badge accent" id="patientDiagnosis" hidden></span>
+                                </div>
+                            </div>
+
+                            <!-- Big-number stats (right side of header) -->
+                            <div class="patient-stats-strip">
+                                <div class="stat-pill">
+                                    <span class="stat-pill-value" id="presentationsCount">0</span>
+                                    <span class="stat-pill-label">Presentations</span>
+                                </div>
+                                <div class="stat-pill">
+                                    <span class="stat-pill-value" id="checkinsCount">0</span>
+                                    <span class="stat-pill-label">Admissions</span>
+                                </div>
+                                <button type="button" class="stat-pill stat-pill-link" data-goto="epicrisis" aria-label="View discharge summaries">
+                                    <span class="stat-pill-value accent" id="checkoutsCount">0</span>
+                                    <span class="stat-pill-label accent">Discharges ↗</span>
+                                </button>
+                                <button type="button" class="stat-pill stat-pill-link" data-goto="analyses" aria-label="View analysis reports">
+                                    <span class="stat-pill-value accent" id="reportsCount">0</span>
+                                    <span class="stat-pill-label accent">Reports ↗</span>
+                                </button>
                             </div>
                         </div>
-                        <div class="patient-header-actions">
-                            <button class="btn-secondary" id="backToSearch" aria-label="Start new search">
-                                <i class="fas fa-arrow-left" aria-hidden="true"></i>
-                                <span>New Search</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Big-number stats strip -->
-                    <div class="patient-stats-strip">
-                        <div class="stat-pill">
-                            <span class="stat-pill-value" id="presentationsCount">0</span>
-                            <span class="stat-pill-label">Presentations</span>
-                        </div>
-                        <div class="stat-pill">
-                            <span class="stat-pill-value" id="checkinsCount">0</span>
-                            <span class="stat-pill-label">Admissions</span>
-                        </div>
-                        <button type="button" class="stat-pill stat-pill-link" data-goto="epicrisis" aria-label="View discharge summaries">
-                            <span class="stat-pill-value" id="checkoutsCount">0</span>
-                            <span class="stat-pill-label">Discharges ↗</span>
-                        </button>
-                        <button type="button" class="stat-pill stat-pill-link" data-goto="analyses" aria-label="View analysis reports">
-                            <span class="stat-pill-value" id="reportsCount">0</span>
-                            <span class="stat-pill-label">Reports ↗</span>
-                        </button>
                     </div>
 
                     <div class="patient-panels">
@@ -427,10 +424,16 @@
 
         <template id="history-item-template">
             <li class="history-item">
+                <div class="history-rail-dot">
+                    <span class="history-dot"></span>
+                    <span class="history-line"></span>
+                </div>
                 <button type="button" class="history-load">
-                    <span class="history-period"></span>
+                    <div class="history-load-top">
+                        <span class="history-period"></span>
+                        <span class="history-nights"></span>
+                    </div>
                     <span class="history-diagnosis"></span>
-                    <span class="history-detail"></span>
                 </button>
             </li>
         </template>

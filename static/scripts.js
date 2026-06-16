@@ -15,8 +15,9 @@ document.addEventListener('DOMContentLoaded', function() {
         patientAvatar: document.querySelector('.patient-avatar i'),
         patientName: document.getElementById('patientName'),
         patientCnp: document.getElementById('patientCnp'),
-        patientAge: document.getElementById('patientAge'),
+        patientAge: document.getElementById('patientAge'),   // may be absent in new HTML
         patientGender: document.getElementById('patientGender'),
+        patientDiagnosis: document.getElementById('patientDiagnosis'),
         patientBirthDate: document.getElementById('patientBirthDate'),
         patientPhone: document.getElementById('patientPhone'),
         patientEmail: document.getElementById('patientEmail'),
@@ -697,12 +698,10 @@ document.addEventListener('DOMContentLoaded', function() {
     function clearResults() {
         // Clear patient data with null checks
         if (elements.patientId) elements.patientId.textContent = '';
-        if (elements.patientName) {
-            const nameSpan = elements.patientName.querySelector('#patient-tab-heading');
-            if (nameSpan) nameSpan.textContent = '';
-        }
+        if (elements.patientName) elements.patientName.textContent = '';
         if (elements.patientCnp) elements.patientCnp.textContent = '';
-        if (elements.patientGender) elements.patientGender.textContent = '';
+        if (elements.patientGender) elements.patientGender.innerHTML = '';
+        if (elements.patientDiagnosis) { elements.patientDiagnosis.textContent = ''; elements.patientDiagnosis.hidden = true; }
         if (elements.patientBirthDate) elements.patientBirthDate.textContent = '';
         if (elements.patientAvatar) elements.patientAvatar.className = 'fas fa-user-injured';
         if (elements.patientPhone) elements.patientPhone.textContent = '';
@@ -1426,23 +1425,40 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
+            // Populate diagnosis badge from most recent discharge if not already set
+            if (elements.patientDiagnosis && elements.patientDiagnosis.hidden) {
+                const latestDx = extractDiagnosisText(items[0].enc);
+                if (latestDx) {
+                    elements.patientDiagnosis.textContent = latestDx;
+                    elements.patientDiagnosis.hidden = false;
+                }
+            }
+
             const tmpl = document.getElementById('history-item-template');
-            items.forEach(({ enc, start, end }) => {
+            items.forEach(({ enc, start, end }, idx) => {
                 const li = tmpl.content.cloneNode(true).querySelector('.history-item');
 
                 const period = [start && formatDate(start), end && formatDate(end)]
                     .filter(Boolean).join(' → ');
                 li.querySelector('.history-period').textContent = period || 'Unknown period';
 
+                // Nights badge
+                const nightsEl = li.querySelector('.history-nights');
+                if (nightsEl && start && end) {
+                    const ms = new Date(end) - new Date(start);
+                    const nights = Math.round(ms / 86400000);
+                    if (nights > 0) nightsEl.textContent = `${nights}d`;
+                    else nightsEl.hidden = true;
+                } else if (nightsEl) nightsEl.hidden = true;
+
                 li.querySelector('.history-diagnosis').textContent =
                     extractDiagnosisText(enc) || 'No diagnosis recorded';
 
-                const ward = enc.serviceType?.display || '';
-                const attender = enc.participant?.find(p =>
-                    p.type?.some(t => t.coding?.some(c => c.code === 'ATND'))
-                )?.individual?.display || '';
-                li.querySelector('.history-detail').textContent =
-                    [ward, attender].filter(Boolean).join(' · ');
+                // Hide the connector line on the last item
+                if (idx === items.length - 1) {
+                    const line = li.querySelector('.history-line');
+                    if (line) line.hidden = true;
+                }
 
                 li.querySelector('.history-load').addEventListener('click', () => switchTab('epicrisis'));
                 elements.historyList.appendChild(li);
@@ -1461,8 +1477,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Patient Name
         const name = formatPatientName(patientData.name);
-        const headingEl = elements.patientName?.querySelector('#patient-tab-heading');
-        if (headingEl) headingEl.textContent = name;
+        if (elements.patientName) elements.patientName.textContent = name;
         log('Patient name set to:', name);
 
         // Show who is loaded in the nav: "FAMILY G." instead of "Patient Profile"
@@ -1473,14 +1488,30 @@ document.addEventListener('DOMContentLoaded', function() {
             elements.navPatientLabel.textContent = family ? `${family}${givenInitial}` : 'Patient Profile';
         }
         
-        // Meta badges (id, gender, age)
+        // Meta badges: ID · gender + age · diagnosis
         const age = calculateAge(patientData.birthDate);
-        if (elements.patientId)     elements.patientId.textContent     = patientData.id ? `ID: ${patientData.id}` : '';
-        if (elements.patientGender) elements.patientGender.textContent = formatGender(patientData.gender);
-        if (elements.patientAge)    elements.patientAge.textContent    = age !== 'N/A' ? `${age} years` : '';
+        if (elements.patientId) elements.patientId.textContent = patientData.id ? `ID: ${patientData.id}` : '';
+
+        // Gender icon + age in one badge
+        const genderIcon = patientData.gender === 'female' ? 'fa-venus' : patientData.gender === 'male' ? 'fa-mars' : null;
+        const genderLabel = formatGender(patientData.gender);
+        const ageLabel = age !== 'N/A' ? age : null;
+        if (elements.patientGender) {
+            elements.patientGender.innerHTML = '';
+            if (genderIcon) {
+                const icon = document.createElement('i');
+                icon.className = `fas ${genderIcon}`;
+                icon.style.fontSize = '11px';
+                elements.patientGender.appendChild(icon);
+                elements.patientGender.appendChild(document.createTextNode(` ${genderLabel}${ageLabel ? ' · ' + ageLabel : ''}`));
+            } else {
+                elements.patientGender.textContent = [genderLabel, ageLabel].filter(Boolean).join(' · ');
+            }
+        }
+        if (elements.patientAge) elements.patientAge.textContent = ageLabel || '';  // compat
 
         if (elements.patientAvatar) {
-            const ageNum = age !== 'N/A' ? parseInt(age, 10) : null;
+            const ageNum = ageLabel ? parseInt(ageLabel, 10) : null;
             const female = patientData.gender === 'female';
             let icon;
             if (ageNum === null)      icon = 'fa-user-injured';
@@ -1505,22 +1536,21 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Enhanced name formatting
+    function toTitleCase(str) {
+        return str.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+    }
+
     function formatPatientName(nameArray) {
         if (!nameArray) return 'N/A';
         const arr = Array.isArray(nameArray) ? nameArray : [nameArray];
         if (arr.length === 0) return 'N/A';
         const name = arr[0];
-        const family = name.family || '';
-        const given = name.given ? name.given.join(' ') : '';
-        
-        if (family && given) {
-            return `${family}, ${given}`;
-        } else if (family) {
-            return family;
-        } else if (given) {
-            return given;
-        }
-        
+        const family = name.family ? toTitleCase(name.family) : '';
+        const given  = name.given  ? toTitleCase(name.given.join(' ')) : '';
+
+        if (family && given) return `${family}, ${given}`;
+        if (family) return family;
+        if (given)  return given;
         return 'N/A';
     }
     
@@ -1648,15 +1678,22 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function calculateAge(birthDate) {
         if (!birthDate) return 'N/A';
-        // Parse YYYY-MM-DD directly to avoid UTC-offset day shift from new Date()
         const parts = String(birthDate).split('-').map(Number);
         if (parts.length < 2 || isNaN(parts[0])) return 'N/A';
         const [year, month, day = 1] = parts;
         const today = new Date();
-        let age = today.getFullYear() - year;
-        const m = today.getMonth() + 1 - month;
-        if (m < 0 || (m === 0 && today.getDate() < day)) age--;
-        return age >= 0 ? age : 'N/A';
+        const todayY = today.getFullYear(), todayM = today.getMonth() + 1, todayD = today.getDate();
+
+        let years = todayY - year;
+        let months = todayM - month;
+        let days = todayD - day;
+        if (days < 0)   { months--; days += 30; }
+        if (months < 0) { years--;  months += 12; }
+
+        if (years >= 2)  return `${years} years`;
+        if (years === 1) return months > 0 ? `1 year ${months} months` : '1 year';
+        if (months >= 1) return `${months} month${months !== 1 ? 's' : ''}`;
+        return `${Math.max(days, 0)} day${days !== 1 ? 's' : ''}`;
     }
     
     // Function to view imaging study
