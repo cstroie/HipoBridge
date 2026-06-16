@@ -1671,7 +1671,8 @@ select {
 }
 .report-preview p,
 .report-preview pre,
-.report-note {
+.report-note,
+.report-note p {
     font: 400 13.5px/1.6 'Inter', sans-serif;
     color: var(--ink-2, #46556b);
     white-space: pre-wrap;
