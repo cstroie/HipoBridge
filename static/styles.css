@@ -2108,6 +2108,14 @@ select {
     flex-wrap: wrap;
     margin-bottom: 32px;
 }
+.schedule-eyebrow {
+    font: 600 11px 'Inter', sans-serif;
+    letter-spacing: 0.14em;
+    color: var(--accent, #4338ca);
+    text-transform: uppercase;
+    margin-bottom: 11px;
+}
+
 .schedule-hero-date {
     font: 700 40px/1 'Space Grotesk', 'Inter', sans-serif;
     letter-spacing: -0.028em;
@@ -2144,7 +2152,7 @@ select {
     display: block;
     font: 600 10px 'Inter', sans-serif;
     letter-spacing: 0.08em;
-    color: var(--text-light);
+    color: var(--ink-3, #8a98ad);
     text-transform: uppercase;
     margin-top: 8px;
 }

@@ -2642,25 +2642,24 @@ document.addEventListener('DOMContentLoaded', function() {
         if (h1) {
             const start = elements.scheduleStartDate?.value || '';
             const end   = elements.scheduleEndDate?.value   || '';
-            if (start && end && start === end) {
-                h1.textContent = formatDayHeading(start);
-            } else if (start && end) {
-                h1.textContent = `${formatDate(start)} – ${formatDate(end)}`;
+            const dateToShow = end || start;
+            if (dateToShow) {
+                h1.textContent = formatDayHeading(dateToShow);
             } else {
                 h1.textContent = 'Schedule';
             }
         }
 
-        const total = scheduleEntries.length;
+        const total  = scheduleEntries.length;
         const urgent = scheduleEntries.filter(r => r.priority === 'urgent').length;
+        const toRead = scheduleEntries.filter(r => r.status === 'ended').length;
         const inLab  = scheduleEntries.filter(r => ['draft', 'active'].includes(r.status)).length;
-        const done   = scheduleEntries.filter(r => ['completed', 'ended'].includes(r.status)).length;
 
         const metricDefs = [
-            { label: 'Exams',    value: total,  color: 'var(--primary)' },
-            { label: 'Urgent',   value: urgent, color: 'var(--urgent, #dc2626)' },
-            { label: 'In lab',   value: inLab,  color: 'var(--st-inlab, #0891b2)' },
-            { label: 'Done',     value: done,   color: 'var(--st-completed, #16a34a)' },
+            { label: 'Exams',   value: total,  color: 'var(--ink, #0f172a)' },
+            { label: 'Urgent',  value: urgent, color: 'var(--urgent, #dc2626)' },
+            { label: 'To read', value: toRead, color: 'var(--st-finished, #d97706)' },
+            { label: 'In lab',  value: inLab,  color: 'var(--st-inlab, #0891b2)' },
         ];
 
         const sub = document.getElementById('scheduleHeroSub');
@@ -2717,7 +2716,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!m) return day;
         const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
         if (isNaN(d)) return day;
-        return `${d.toLocaleDateString('en-US', { weekday: 'long' })}, ${day}`;
+        const weekday = d.toLocaleDateString('en-US', { weekday: 'long' });
+        const dayNum  = d.getDate();
+        const month   = d.toLocaleDateString('en-US', { month: 'long' });
+        return `${weekday}, ${dayNum} ${month}`;
     }
 
     // Helper function to extract diagnosis text
