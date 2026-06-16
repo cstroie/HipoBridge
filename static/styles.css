@@ -842,17 +842,19 @@ small {
 
 /* keep .btn-primary for any other uses, but search uses .search-submit-btn */
 .btn-primary {
-    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-    color: white;
-    border: none;
-    padding: var(--spacing-md) var(--spacing-lg);
-    border-radius: var(--radius-md);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: var(--font-size-base);
     font-weight: var(--font-weight-semibold);
+    border-radius: var(--radius-md);
+    border: none;
     cursor: pointer;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
 }
 .btn-primary:hover { box-shadow: var(--shadow-lg); }
 
@@ -1169,17 +1171,19 @@ button.stat-pill {
 }
 
 .btn-secondary {
-    background: var(--bg);
-    color: var(--text);
-    border: 1px solid var(--border);
-    padding: 0.75rem var(--spacing-md);
-    border-radius: var(--radius-md);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: var(--font-size-base);
     font-weight: var(--font-weight-medium);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
     cursor: pointer;
     transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
+    background: var(--bg);
+    color: var(--text);
 }
 
 .btn-secondary:hover {
@@ -1189,17 +1193,19 @@ button.stat-pill {
 }
 
 .btn-ghost {
-    background: transparent;
-    color: var(--text);
-    border: 1px solid var(--border);
-    padding: 0.75rem var(--spacing-md);
-    border-radius: var(--radius-md);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: var(--font-size-base);
     font-weight: var(--font-weight-medium);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
     cursor: pointer;
     transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
+    background: transparent;
+    color: var(--text);
 }
 
 .btn-ghost:hover {
@@ -2213,7 +2219,7 @@ select {
     }
 
     .btn-secondary {
-        padding: var(--spacing-md) 1.25rem;
+        padding: var(--spacing-md) var(--spacing-lg);
     }
 
     /* Schedule header: hide dash separator between dates when stacked */
