@@ -1824,8 +1824,25 @@ class HipoClientImagingStudy(HipoClient):
                         for div in result_cell.find_all('div'):
                             div.insert_after('\n\n')
                             div.unwrap()
+                        # Apply markdown markers for inline formatting
+                        for tag in result_cell.find_all(['b', 'strong']):
+                            if tag.get_text(strip=True):
+                                tag.insert_before('**')
+                                tag.insert_after('**')
+                            tag.unwrap()
+                        for tag in result_cell.find_all(['i', 'em']):
+                            if tag.get_text(strip=True):
+                                tag.insert_before('*')
+                                tag.insert_after('*')
+                            tag.unwrap()
+                        for tag in result_cell.find_all('u'):
+                            if tag.get_text(strip=True):
+                                tag.insert_before('*')
+                                tag.insert_after('*')
+                            tag.unwrap()
                         raw = result_cell.get_text()
                         raw = raw.replace('\xa0', ' ')
+                        raw = re.sub(r'\*{4,}', '***', raw)
                         raw = re.sub(r'[ \t]+', ' ', raw)
                         raw = re.sub(r'\n{3,}', '\n\n', raw)
                         result_text = raw.strip()
