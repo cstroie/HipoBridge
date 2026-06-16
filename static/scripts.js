@@ -362,7 +362,7 @@ document.addEventListener('DOMContentLoaded', function() {
     async function loadReportLazily() {
         if (!pendingReportData || elements.patientReportMarkdown?.dataset.loaded) return;
         elements.patientReportMarkdown.dataset.loaded = '1';
-        showLoading();
+        showLoading('Creating patient report…');
         try {
             await loadAndDisplayReport(pendingReportData.patientData, pendingReportData.analysesData);
             hideLoading();
@@ -376,7 +376,7 @@ document.addEventListener('DOMContentLoaded', function() {
     async function loadEpicrisisLazily() {
         if (!pendingEpicrisisData || elements.epicrisisContent?.dataset.loaded) return;
         elements.epicrisisContent.dataset.loaded = '1';
-        showLoading();
+        showLoading('Loading discharge summaries…');
         try {
             await loadAndDisplayEpicrisis(pendingEpicrisisData);
             hideLoading();
@@ -408,12 +408,11 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Clear previous results and show loading state
         clearResults();
-        showLoading();
+        showLoading('Searching for patient…');
         hideError();
-        
-        
+
         try {
-            setLoadingStep('Searching Hipocrate for patient record...');
+            setLoadingStep('Querying Hipocrate…');
             log('Starting patient search...');
             const searchResult = await performPatientSearch(cnp);
             log('Patient search result:', searchResult);
@@ -423,8 +422,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     hideLoading();
                     const chosen = await showPatientSelection(searchResult.candidates);
                     if (!chosen) return; // user dismissed
-                    showLoading();
-                    setLoadingStep('Fetching selected patient record...');
+                    showLoading('Loading patient record…');
+                    setLoadingStep('Fetching selected patient…');
                     const r = await fetch(`/fhir/Patient/${chosen.id}`);
                     searchResult.patientData = r.ok ? await r.json() : chosen;
                     searchResult.patientCode = chosen.id;
@@ -443,7 +442,7 @@ document.addEventListener('DOMContentLoaded', function() {
             log('Patient data retrieved:', patientData);
             log('Patient code:', patientCode);
 
-            setLoadingStep('Fetching imaging studies and service requests...');
+            setLoadingStep('Fetching imaging studies…');
             log('Fetching analyses data for patient:', patientCode);
             const analysesResult = await fetchAnalysesData(patientCode);
             log('Analyses data result:', analysesResult);
@@ -457,11 +456,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const analysesData = analysesResult.data || { resourceType: 'Bundle', entry: [] };
             log('Analyses data retrieved:', analysesData);
 
-            setLoadingStep('Building patient profile...');
+            setLoadingStep('Building patient profile…');
             log('Displaying patient data...');
             await displayPatientData(patientData, analysesData);
 
-            setLoadingStep('Loading diagnostic reports...');
+            setLoadingStep('Loading diagnostic reports…');
             log('Loading and displaying reports...');
             await loadAndDisplayReports(analysesData);
 
@@ -1526,10 +1525,14 @@ document.addEventListener('DOMContentLoaded', function() {
         hideLoading();
     }
     
-    function showLoading() {
+    function showLoading(title = 'Loading patient data…') {
         elements.loadingOverlay.style.display = 'flex';
+        if (elements.loadingSpinner) elements.loadingSpinner.hidden = false;
+        if (elements.loadingError) elements.loadingError.hidden = true;
         elements.analyzeBtn.disabled = true;
         elements.analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Searching...';
+        const titleEl = document.getElementById('loadingTitle');
+        if (titleEl) titleEl.textContent = title;
         if (elements.loadingStep) elements.loadingStep.textContent = '';
     }
 
