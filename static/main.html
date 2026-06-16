@@ -535,6 +535,7 @@
                         <dl class="report-modal-meta"></dl>
                     </header>
                     <div class="report-modal-body markdown-content"></div>
+                    <p class="report-modal-error" hidden></p>
                     <footer class="report-modal-footer">
                         <button class="btn-secondary" data-close-modal aria-label="Close"><i class="fas fa-times"></i> <span>Close</span></button>
                         <button class="btn-primary modal-load-patient-btn" aria-label="Load patient"><i class="fas fa-user-injured"></i> <span>Load Patient</span></button>
@@ -574,10 +575,15 @@
 
         <!-- Loading Overlay -->
         <div class="loading-overlay" id="loadingOverlay" style="display: none;">
-            <div class="loading-spinner">
+            <div class="loading-spinner" id="loadingSpinner">
                 <div class="spinner"></div>
                 <p id="loadingTitle">Loading patient data...</p>
                 <p id="loadingStep" class="loading-step"></p>
+            </div>
+            <div class="loading-error" id="loadingError" hidden>
+                <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
+                <p id="loadingErrorMsg"></p>
+                <button id="loadingErrorDismiss" class="btn-secondary">Dismiss</button>
             </div>
         </div>
 

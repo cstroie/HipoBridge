@@ -2052,6 +2052,35 @@ select {
     min-height: 1.25em;
 }
 
+.loading-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-md);
+    text-align: center;
+    max-width: 360px;
+}
+.loading-error i {
+    font-size: 2.5rem;
+    color: var(--urgent, #dc2626);
+}
+.loading-error p {
+    margin: 0;
+    color: var(--text);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+}
+
+.report-modal-error {
+    margin: 0 var(--spacing-lg) var(--spacing-md);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: color-mix(in srgb, var(--urgent, #dc2626) 8%, transparent);
+    border-left: 3px solid var(--urgent, #dc2626);
+    border-radius: var(--radius-sm);
+    color: var(--urgent, #dc2626);
+    font-size: var(--font-size-sm);
+}
+
 /* Responsive Design */
 @media (max-width: 1024px) {
     .patient-stats-strip {

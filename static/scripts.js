@@ -56,7 +56,11 @@ document.addEventListener('DOMContentLoaded', function() {
         // Epicrisis actions
         // Loading overlay
         loadingOverlay: document.getElementById('loadingOverlay'),
+        loadingSpinner: document.getElementById('loadingSpinner'),
         loadingStep: document.getElementById('loadingStep'),
+        loadingError: document.getElementById('loadingError'),
+        loadingErrorMsg: document.getElementById('loadingErrorMsg'),
+        loadingErrorDismiss: document.getElementById('loadingErrorDismiss'),
         // Recent searches
         recentSearchesList: document.getElementById('recentSearchesList'),
         // Schedule tab elements
@@ -259,6 +263,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 elements.scheduleEndDate.addEventListener('change', fetchScheduleFromInputs);
             }
         }
+        if (elements.loadingErrorDismiss) {
+            elements.loadingErrorDismiss.addEventListener('click', hideLoading);
+        }
         if (elements.refreshScheduleBtn) {
             elements.refreshScheduleBtn.addEventListener('click', () => fetchScheduleFromInputs(true));
         }
@@ -358,12 +365,11 @@ document.addEventListener('DOMContentLoaded', function() {
         showLoading();
         try {
             await loadAndDisplayReport(pendingReportData.patientData, pendingReportData.analysesData);
+            hideLoading();
         } catch (err) {
             console.error('Error loading report:', err);
-            showToast('Failed to assemble patient report', 'error');
             delete elements.patientReportMarkdown.dataset.loaded;
-        } finally {
-            hideLoading();
+            showOverlayError('Failed to assemble patient report');
         }
     }
 
@@ -373,12 +379,11 @@ document.addEventListener('DOMContentLoaded', function() {
         showLoading();
         try {
             await loadAndDisplayEpicrisis(pendingEpicrisisData);
+            hideLoading();
         } catch (err) {
             console.error('Error loading epicrisis:', err);
-            showToast('Failed to load discharge summaries', 'error');
             delete elements.epicrisisContent.dataset.loaded;
-        } finally {
-            hideLoading();
+            showOverlayError('Failed to load discharge summaries');
         }
     }
     
@@ -425,14 +430,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     searchResult.patientCode = chosen.id;
                     addToRecentSearches(cnp, searchResult.patientData);
                 } else {
-                    showToast(searchResult.message, 'error');
+                    showOverlayError(searchResult.message);
                     return;
                 }
             }
 
             const { patientData, patientCode } = searchResult;
             if (!patientCode) {
-                showToast('Could not determine patient ID. Please try again.', 'error');
+                showOverlayError('Could not determine patient ID. Please try again.');
                 return;
             }
             log('Patient data retrieved:', patientData);
@@ -444,7 +449,9 @@ document.addEventListener('DOMContentLoaded', function() {
             log('Analyses data result:', analysesResult);
 
             if (!analysesResult.success) {
-                showToast(analysesResult.message + ' Showing patient data only.', 'warning');
+                // Non-fatal — patient loads, analyses are unavailable
+                const eyebrow = document.getElementById('analysesEyebrow');
+                if (eyebrow) eyebrow.dataset.warning = analysesResult.message;
             }
 
             const analysesData = analysesResult.data || { resourceType: 'Bundle', entry: [] };
@@ -469,14 +476,12 @@ document.addEventListener('DOMContentLoaded', function() {
             log('Switching to patient tab...');
             switchToPatientTab();
 
-            showToast('Patient data loaded', 'success');
             log('All data loading complete');
-            
+            hideLoading();
+
         } catch (err) {
             console.error('Error in handleFormSubmit:', err);
-            showToast('An unexpected error occurred. Please try again.', 'error');
-        } finally {
-            hideLoading();
+            showOverlayError('An unexpected error occurred. Please try again.');
         }
     }
     
@@ -696,6 +701,17 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function hideLoading() {
         elements.loadingOverlay.style.display = 'none';
+        if (elements.loadingSpinner) elements.loadingSpinner.hidden = false;
+        if (elements.loadingError) elements.loadingError.hidden = true;
+        elements.analyzeBtn.disabled = false;
+        elements.analyzeBtn.innerHTML = '<i class="fas fa-search"></i> Search Patient';
+    }
+
+    function showOverlayError(message) {
+        if (elements.loadingSpinner) elements.loadingSpinner.hidden = true;
+        if (elements.loadingErrorMsg) elements.loadingErrorMsg.textContent = message;
+        if (elements.loadingError) elements.loadingError.hidden = false;
+        elements.loadingOverlay.style.display = 'flex';
         elements.analyzeBtn.disabled = false;
         elements.analyzeBtn.innerHTML = '<i class="fas fa-search"></i> Search Patient';
     }
@@ -1859,17 +1875,16 @@ document.addEventListener('DOMContentLoaded', function() {
             const studyResponse = await fetch(`/fhir/ImagingStudy/${studyId}`);
             
             if (!studyResponse.ok) {
-                if (studyResponse.status === 401) {
-                    showToast('Authentication required. Please refresh the page and enter your credentials.', 'error');
-                    return;
-                }
-                showToast(`Error loading imaging study ${studyId}`, 'error');
+                const msg = studyResponse.status === 401
+                    ? 'Authentication required. Please refresh the page.'
+                    : `Error loading imaging study ${studyId} (HTTP ${studyResponse.status})`;
+                showToast(msg, 'error');
                 return;
             }
-            
+
             const studyData = await studyResponse.json();
             displayImagingStudyModal(studyData, studyId, reportId);
-            
+
         } catch (err) {
             console.error('Error fetching imaging study:', err);
             showToast(`Error loading imaging study ${studyId}`, 'error');
