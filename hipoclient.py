@@ -2873,11 +2873,53 @@ class HipoClientCerere(HipoClient):
         data = HipoData(status="success", message="")
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
+
+            # Patient ID
             ids = extract_ids_from_links(soup, r'[Pp]acient/edit\.asp\?id=(\d+)')
             if ids:
                 data.store("patient.id", ids[0])
             else:
                 data.set_error("Patient ID not found in request page")
+
+            # Exam names — try three patterns in priority order:
+
+            exams = []
+            seen = set()
+
+            def add_exam(text):
+                t = text.strip()
+                if t and t not in seen:
+                    seen.add(t)
+                    exams.append(t)
+
+            # Pattern 1: numbered rows (same as buletinRecoltari) — cell[0] is digit, cell[1] is name
+            for row in soup.find_all('tr'):
+                cells = row.find_all('td')
+                if len(cells) >= 2 and cells[0].get_text(strip=True).isdigit():
+                    add_exam(cells[1].get_text(strip=True))
+
+            # Pattern 2: checked checkboxes with an associated label or adjacent text node
+            if not exams:
+                for cb in soup.find_all('input', {'type': 'checkbox', 'checked': True}):
+                    label = cb.find_next_sibling(string=True) or ''
+                    if not label:
+                        lbl_el = cb.find_next('label') or cb.find_parent('label')
+                        label = lbl_el.get_text(strip=True) if lbl_el else ''
+                    add_exam(str(label))
+
+            # Pattern 3: <label> elements whose for= matches a checked checkbox id
+            if not exams:
+                checked_ids = {
+                    cb.get('id') for cb in soup.find_all('input', {'type': 'checkbox', 'checked': True})
+                    if cb.get('id')
+                }
+                for lbl in soup.find_all('label'):
+                    if lbl.get('for') in checked_ids:
+                        add_exam(lbl.get_text(strip=True))
+
+            if exams:
+                data.store_list("exams", exams)
+
             return data
         except Exception as e:
             logger.error(f"Error parsing cerere data: {e}")

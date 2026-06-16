@@ -2600,23 +2600,46 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             body.appendChild(patientRow);
 
-            if (section || requestedBy) {
-                const region = document.createElement('p');
-                region.className = 'timeline-card-region';
-                region.textContent = [section, requestedBy].filter(Boolean).join(' · ');
-                body.appendChild(region);
-            }
+            // Line 2: exam names (lazy-loaded) · modality
+            const regionLine = document.createElement('div');
+            regionLine.className = 'timeline-card-region';
+            regionLine.textContent = laboratory;  // placeholder until exams load
+            regionLine.dataset.requestId = r.id;
+            body.appendChild(regionLine);
 
-            const meta = document.createElement('div');
-            meta.className = 'timeline-card-meta';
+            // Line 3: department · physician · code
+            const metaLine = document.createElement('div');
+            metaLine.className = 'timeline-card-meta';
+
+            const metaParts = [];
+            if (section) {
+                const sp = document.createElement('span');
+                sp.innerHTML = `<i class="fas fa-hospital" aria-hidden="true"></i> `;
+                sp.appendChild(document.createTextNode(section));
+                metaParts.push(sp);
+            }
+            if (requestedBy) {
+                const rp = document.createElement('span');
+                rp.innerHTML = `<i class="fas fa-user-doctor" aria-hidden="true"></i> `;
+                rp.appendChild(document.createTextNode(requestedBy));
+                metaParts.push(rp);
+            }
 
             const codeBtn = document.createElement('button');
             codeBtn.className = 'timeline-code';
             codeBtn.textContent = requestCode;
             codeBtn.title = `View request details (${requestCode})`;
             codeBtn.addEventListener('click', () => showRequestModal(r.id, requestCode, patientName, modalitySlug, codeBtn));
-            meta.appendChild(codeBtn);
-            body.appendChild(meta);
+
+            metaParts.forEach((part, i) => {
+                metaLine.appendChild(part);
+                const sep = document.createElement('span');
+                sep.textContent = '·';
+                sep.setAttribute('aria-hidden', 'true');
+                metaLine.appendChild(sep);
+            });
+            metaLine.appendChild(codeBtn);
+            body.appendChild(metaLine);
 
             card.appendChild(body);
 
@@ -2629,9 +2652,37 @@ document.addEventListener('DOMContentLoaded', function() {
 
             row.appendChild(card);
             container.appendChild(row);
+            scheduleExamObserver.observe(regionLine);
         });
 
         if (elements.scheduleTable) elements.scheduleTable.hidden = false;
+    }
+
+    // Intersection observer: fetch exam names from cerere when card scrolls into view
+    const _examCache = {};
+    const scheduleExamObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (!entry.isIntersecting) return;
+            const el = entry.target;
+            scheduleExamObserver.unobserve(el);
+            const id = el.dataset.requestId;
+            if (!id) return;
+            if (_examCache[id]) { _applyExamLabel(el, _examCache[id]); return; }
+            fetch(`/api/request/${id}/patient`)
+                .then(r => r.ok ? r.json() : null)
+                .then(data => {
+                    const exams = data?.exams || [];
+                    _examCache[id] = exams;
+                    _applyExamLabel(el, exams);
+                })
+                .catch(() => {});
+        });
+    }, { rootMargin: '200px' });
+
+    function _applyExamLabel(el, exams) {
+        if (!exams.length) return;
+        const modality = el.textContent;  // was set to laboratory as placeholder
+        el.textContent = exams.join(', ') + (modality ? ' · ' + modality : '');
     }
 
     function renderScheduleHero() {
