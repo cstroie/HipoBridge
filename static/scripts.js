@@ -2211,6 +2211,10 @@ document.addEventListener('DOMContentLoaded', function() {
             const admission = enc.period?.start ? formatDate(enc.period.start) : '';
             const discharge = enc.period?.end ? formatDate(enc.period.end) : '';
             const service = enc.serviceType?.display || '';
+            const ward = enc.location?.slice(-1)[0]?.location?.display || '';
+            const attender = enc.participant?.find(p =>
+                p.type?.some(t => t.coding?.some(c => c.code === 'ATND'))
+            )?.individual?.display || '';
 
             // Night count
             let nights = '';
@@ -2224,6 +2228,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const meta = [];
             if (admission) meta.push(`**Admission:** ${admission}`);
             if (discharge) meta.push(`**Discharge:** ${discharge}`);
+            if (ward)      meta.push(`**Ward:** ${ward}`);
+            if (attender)  meta.push(`**Attending:** ${attender}`);
             if (service)   meta.push(`**Service:** ${service}`);
             markdown += valid.length === 1 ? `# ${icd}\n\n` : `## ${index + 1}. ${icd}\n\n`;
             if (meta.length) markdown += `${meta.join(' · ')}  \n\n`;
@@ -2258,7 +2264,8 @@ document.addEventListener('DOMContentLoaded', function() {
             dateRow.textContent = `${admission} → ${discharge}`;
             const serviceRow = document.createElement('div');
             serviceRow.className = 'epi-service';
-            serviceRow.textContent = service || 'Admission';
+            const serviceParts = [ward, attender].filter(Boolean);
+            serviceRow.textContent = serviceParts.length ? serviceParts.join(' · ') : (service || 'Admission');
             dateBlock.append(dateRow, serviceRow);
             btnLeft.append(dot, dateBlock);
 
