@@ -1780,40 +1780,42 @@ class HipoClientImagingStudy(HipoClient):
             # Parse shared header (same layout as DiagnosticReport)
             _parse_buletin_header(soup, data)
 
-            # 9-cell rows: cell1=category, cell2=study name, cell3="Rezultat:...", cell4=validation date
-            # Identify data rows by checking that cell3 starts with "Rezultat:"
+            # Row structure: each study spans 3 consecutive <tr> rows:
+            #   Row 1 (class contains "analiza"): study name in the single <td>
+            #   Row 2 (td.buletin_2_marit): "Rezultat:" label + result divs
+            #   Row 3 (span.conformitate): validation info
             studies = []
             seen = set()
-            for row in soup.find_all('tr'):
-                cells = row.find_all('td')
-                if len(cells) < 9:
+            all_rows = soup.find_all('tr')
+            for i, row in enumerate(all_rows):
+                if 'analiza' not in row.get('class', []):
                     continue
-                result_raw = cells[3].get_text(strip=True)
-                if not result_raw.lower().startswith('rezultat:'):
-                    continue
-                study_name = cells[2].get_text(strip=True)
+                study_name = row.get_text(strip=True)
                 # Strip "(Tip proba: ...)" suffix for deduplication key
                 dedup_key = re.sub(r'\s*\(Tip proba:.*?\)', '', study_name).strip()
                 if not dedup_key or dedup_key in seen:
                     continue
                 seen.add(dedup_key)
-                # Use html_to_markdown on the cell's inner HTML so <div> paragraph
-                # breaks are preserved; strip the leading "Rezultat:" label first.
-                result_cell = cells[3]
-                # Remove the <b><u>Rezultat:</u></b> label node if present
-                for tag in result_cell.find_all(['b', 'u']):
-                    if 'rezultat' in tag.get_text(strip=True).lower():
-                        tag.decompose()
-                        break
-                result_text = html_to_markdown(str(result_cell)).strip()
-                study_type, region = identify_study_type_and_region(study_name)
-                validation_raw = cells[4].get_text(strip=True)
-                # Extract date from "Data validare: DD/MM/YYYY HH:MM" or "27 May 2023 07:36"
+                # Row i+1 is the result row
+                result_text = ""
+                validation_raw = ""
+                if i + 1 < len(all_rows):
+                    result_cell = all_rows[i + 1].find('td', class_='buletin_2_marit')
+                    if result_cell:
+                        # Remove the <b><u>Rezultat:</u></b> label node
+                        for tag in result_cell.find_all(['b', 'u']):
+                            if 'rezultat' in tag.get_text(strip=True).lower():
+                                tag.decompose()
+                                break
+                        result_text = html_to_markdown(str(result_cell)).strip()
+                # Row i+2 is the validation row
+                if i + 2 < len(all_rows):
+                    validation_raw = all_rows[i + 2].get_text(strip=True)
                 date_m = re.search(r'(\d{2}/\d{2}/\d{4}(?:\s+\d{2}:\d{2})?|\d{2}\s+\w+\s+\d{4}(?:\s+\d{2}:\d{2})?)', validation_raw)
                 dt = parse_date_time(date_m.group(1)) if date_m else None
-                # Extract validator name: "Validat de: Dr. X Parafa: ..."
                 validator_m = re.search(r'Validat de:\s*(.*?)(?:Parafa:|$)', validation_raw)
                 validator = validator_m.group(1).strip() if validator_m else None
+                study_type, region = identify_study_type_and_region(study_name)
                 studies.append({
                     "title": study_name,
                     "result": result_text,
