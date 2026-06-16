@@ -310,7 +310,9 @@ document.addEventListener('DOMContentLoaded', function() {
             nav.classList.remove('active');
             nav.removeAttribute('aria-current');
         });
-        const activeNavItem = document.querySelector(`.nav-item[data-tab="${tabId}"]`);
+        // Prefer .nav-btn over the patient-ctx-pill when both share data-tab
+        const activeNavItem = document.querySelector(`.nav-btn.nav-item[data-tab="${tabId}"]`)
+            || document.querySelector(`.nav-item[data-tab="${tabId}"]`);
         if (activeNavItem) {
             activeNavItem.classList.add('active');
             activeNavItem.setAttribute('aria-current', 'page');
