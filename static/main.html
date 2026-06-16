@@ -375,26 +375,30 @@
         <!-- Templates -->
         <template id="analysis-card-template">
             <article class="analysis-card">
-                <header class="card-identity">
+                <!-- Top row: modality avatar + title block -->
+                <div class="card-identity">
                     <div class="mod-circle" aria-hidden="true"></div>
                     <div class="card-title-block">
-                        <h2 class="card-title">
-                            <span class="type-text"></span><span class="card-regions"></span>
-                        </h2>
-                        <p class="card-subtitle">
-                            <time class="exam-date" aria-label="Exam date"></time>
-                            <span class="report-id"></span>
-                        </p>
+                        <div class="card-title-row">
+                            <div>
+                                <h2 class="card-title">
+                                    <span class="type-text"></span><span class="card-regions"></span>
+                                </h2>
+                                <p class="card-subtitle">
+                                    <time class="exam-date" aria-label="Exam date"></time>
+                                    · <span class="report-id"></span>
+                                </p>
+                            </div>
+                            <strong class="urgent-badge" hidden>Urgent</strong>
+                        </div>
                         <p class="card-referrer-line" hidden>
                             <i class="fas fa-user-doctor" aria-hidden="true"></i>
                             <span class="card-referrer" aria-label="Ordering physician"></span>
                         </p>
                     </div>
-                    <strong class="urgent-badge" hidden>Urgent</strong>
-                </header>
-                <div class="card-meta-row">
-                    <dl class="request-meta"></dl>
                 </div>
+
+                <!-- Report body (lazy-loaded) -->
                 <div class="report-section">
                     <div class="report-loading" role="status" aria-label="Loading report">
                         <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
@@ -408,6 +412,11 @@
                         </footer>
                         <div class="imaging-study-link" aria-label="Imaging study link"></div>
                     </div>
+                </div>
+
+                <!-- Clinical indication / notes (populated after fetch) -->
+                <div class="card-meta-row">
+                    <dl class="request-meta"></dl>
                 </div>
             </article>
         </template>
