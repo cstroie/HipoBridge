@@ -2241,7 +2241,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (note.text) {
                             const div = document.createElement('div');
                             div.className = 'report-note';
-                            div.innerHTML = marked.parse(note.text).trim();
+                            // Collapse \n\n paragraph breaks to \n so marked
+                            // renders lines as <br> (tight list) not spaced <p> blocks
+                            const normalised = note.text.replace(/\n{2,}/g, '\n');
+                            div.innerHTML = marked.parse(normalised).trim();
                             reportPreview.appendChild(div);
                         }
                     }
@@ -2590,7 +2593,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 for (const note of notes) {
                     if (!note.text) continue;
                     const div = document.createElement('div');
-                    div.innerHTML = marked.parse(note.text).trim();
+                    const normalised = note.text.replace(/\n{2,}/g, '\n');
+                    div.innerHTML = marked.parse(normalised).trim();
                     bodyDiv.appendChild(div);
                 }
             } else if (reportData.conclusion) {
