@@ -3026,7 +3026,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const metricDefs = [
             { label: 'Exams',     value: total,     color: 'var(--ink, #0f172a)' },
             { label: 'Urgent',    value: urgent,    color: 'var(--urgent, #dc2626)' },
-            { label: 'In lab',    value: inLab,     color: 'var(--st-inlab, #0891b2)' },
+            { label: 'In lab',    value: inLab,     color: 'var(--st-inlab, #2563eb)' },
             { label: 'Completed', value: completed, color: 'var(--st-completed, #0f9d6b)' },
         ];
 
