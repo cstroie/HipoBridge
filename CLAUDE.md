@@ -54,7 +54,7 @@ HTTP client
 - `web_fhir_response` — FHIR-typed responses (`/fhir/*`); handles `OperationOutcome` on errors
 - `@require_auth` decorator extracts Basic Auth and attaches credentials to `request.auth_credentials`
 
-**`hipoclient.py`** — the core scraping layer. One base class + twelve specialised subclasses:
+**`hipoclient.py`** — the core scraping layer. One base class + fifteen specialised subclasses:
 
 | Class | Route | Hipocrate URL |
 |---|---|---|
@@ -68,8 +68,10 @@ HTTP client
 | `HipoClientCheckout` | `/api/checkout/{id}` | `/gen_printabile/BiletExternare.asp?RelId={id}&RelName=CO` |
 | `HipoClientCheckin` | `/api/checkin/{id}` | `/files/checkin.asp?id={id}` |
 | `HipoClientCheckup` | `/api/checkup/{id}` | `/files/checkup.asp?cuid={id}` |
+| `HipoClientPresentation` | `/api/presentation/{id}`, `/fhir/Encounter/{id}?type=presentation` | `/files/presentation.asp?id={id}` |
 | `HipoClientCerere` | `/api/request/{id}/patient` | `/PARA/NOM/Listare/cerere.asp?id={id}` |
 | `HipoClientSchedule` | `/api/schedule`, `/fhir/Schedule` | `/PARA/NOM/Listare/?id=44&NrPePag=100` |
+| `HipoClientObservationBundle` | `/fhir/Observation?patient=` | `/Pacient/analysesEpisod.asp` (parallel per lab domain) |
 | `HipoClientWhoami` | `/api/whoami` | `Template/menu.asp` (CONTUL MEU block) |
 
 Every subclass (except `HipoClientCheckin` / `HipoClientCheckup` which are raw-JSON only) implements three methods:
@@ -96,6 +98,7 @@ Every subclass (except `HipoClientCheckin` / `HipoClientCheckup` which are raw-J
 - `OperationOutcome.from_error()` default `code` is `"processing"` (a valid FHIR issue code). Always pass an explicit `code` for `"not-found"`, `"required"`, etc.
 - `Bundle.append_entry()` keeps `total` in sync with the actual entry count.
 - `Encounter` uses FHIR R4 field names: `period`, `reasonCode`, `reasonReference`, `hospitalization` — not the R5 names (`actualPeriod`, `businessStatus`, etc.).
+- `Observation` — added for lab analyte measurements: fields `status`, `code`, `subject`, `effectiveDateTime`, `valueQuantity`, `valueString`, `referenceRange`, `interpretation`, `basedOn`.
 
 **`hipodata.py`** — `HipoData(dict)` typed dict wrapper passed between the scraper and the FHIR converter.
 - `store(key, value)` normalises values via `_normalise()`: strips strings, unwraps single-item lists, converts `datetime` → ISO string, skips `None`. Dot-notation keys (`"patient.id"`) create nested dicts automatically. Empty section or sub-key after the dot is silently ignored.
@@ -172,6 +175,27 @@ Page: `Template/menu.asp` (sidebar menu iframe), CONTUL MEU / Informatii persona
 
 Future tip: `/gen_administrare/listare/cont.asp?id={user.id}&ses=1` ("Informatii personale") exposes employee details — `strIDAngajat`, name parts, CNP, parafa (`strParafa`), phone/email/address fields. **Do not scrape or expose it wholesale: the page echoes the user's current password in plaintext (`strParola`).**
 
+### Presentation (`HipoClientPresentation`) field notes
+
+Page: `/files/presentation.asp?id={id}`. Expected title text: `Fisa de Prezentare`. Extracts:
+- `patient.name` — from `Pacient/edit.asp` header link text (brackets stripped)
+- `patient.id` — from `hdnPacID` hidden input
+- `patient.cnp` / `patient.gender` / `patient.date` / `patient.age` — from `strCNP` input or CNP table row
+- `presentation.id`, `presentation.date`, `presentation.time`, `presentation.date_time` (combined)
+- `presentation.registry` — registry number (`strRefID`)
+- `presentation.checkin_id` — linked inpatient admission (`checkinID` input); present when visit led to hospitalisation
+- `presentation.checkup_id` — linked consultation ID (`savedCUId`)
+- `presentation.decision_code` — numeric decision code (`savedCUDecision`)
+- `presentation.section` — ward/triage unit from `Garda:` row (e.g. `UPU`)
+- `presentation.medic` — attending physician from `Medic:` label in same row
+- `presentation.is_urgent` — from `Urgenta: DA` cell
+- `presentation.reason` — from `EmergencyReason` select
+- `presentation.transport_type` / `transport_number` / `transport_medic` — from `selTransportType`, `strTransportNumber`, `strTransportDoctor`
+- `presentation.consult_type` — from `sCUType` select
+- `presentation.decision` — discharge decision text from the consultations table row matching `checkup_id`
+
+FHIR Encounter: class `EMER` for UPU/CPU/URGENTA/URGENTE sections, `AMB` otherwise. `partOf` references the linked checkin encounter when `checkin_id` is present. Transport details in nested `extension[]`. `reasonCode[0].text` = reason; `note[0]` = decision, `note[1]` = consult type. The FHIR Patient resource exposes presentation IDs in extension `presentation-ids`; the frontend passes `?type=presentation` to `/fhir/Encounter/{id}` to skip directly to this scraper.
+
 ### Cerere (`HipoClientCerere`) field notes
 
 Page: `/PARA/NOM/Listare/cerere.asp?id={id}` — the request edit form. Extracts:
@@ -197,6 +221,20 @@ Modality mapping (`_lab_to_modality`): `ecografie` → `eco`; `radioscopii` → 
 
 `fetch_and_parse` and `debug_page` are overridden (URL assembled from query params, not an `{id}` path segment). `force=True` kwarg evicts the cache entry before the fetch.
 
+### ObservationBundle (`HipoClientObservationBundle`) field notes
+
+Route: `GET /fhir/Observation?patient={id}`. Aggregates lab analyte measurements from the most recent episode across all 15 lab domains for the Trends table.
+
+`LAB_DOMAINS = [1, 2, 3, 5, 8, 9, 15, 19, 21, 22, 23, 24, 27, 39, 41]` — Hipocrate lab domain IDs (Bacteriologie, Biochimie, Hematologie, Coagulare, etc.). Fetches `analysesEpisod.asp?pacid={id}&strDomeniu={domain}&NrPePag=1` per domain (newest first; `NrPePag=1` = last episode only), then filters candidates to within ±1 day of the most recent date found across all domains. Each analyte row within those DiagnosticReports becomes one `Observation` resource.
+
+`_parse_observation_value(result_text, reference_text)` → `(value, unit, low, high, flag)` — shared helper used by both `HipoClientObservationBundle` and `HipoClientDiagnosticReport`. Parses numeric value (handles `<`/`>` qualifiers and comma decimals), extracts unit from reference range text, computes H/L/N flag by comparing value against low/high bounds.
+
+`HipoClientDiagnosticReport.fhir_response` enriches each `presentedForm` entry with `reference`, `section`, and `flag` fields (from `_parse_observation_value`) so the frontend can render lab results as grouped tables. Detection in the frontend: any `presentedForm` entry with a `reference` key is treated as a lab entry regardless of its `type` field — this handles immunology and other sections typed as `"other"` rather than `"lab"`.
+
+### Encounter route (`/fhir/Encounter/{id}`) type hint
+
+Accepts `?type=checkout|checkin|presentation` to skip directly to the right scraper. Without the hint: tries checkout → checkin → presentation in sequence (legacy fallback, produces noisy logs). The FHIR Patient resource exposes three separate ID lists as extensions (`checkout-ids`, `checkin-ids`, `presentation-ids`) derived from distinct href patterns on the patient page — the frontend always passes the correct `?type=` so sequential fallback is never triggered in normal operation.
+
 ### Frontend (`static/`)
 
 Single-page app: `main.html` + `scripts.js` + `styles.css` + `marked.js`.
@@ -212,7 +250,12 @@ Single-page app: `main.html` + `scripts.js` + `styles.css` + `marked.js`.
 - All dates are normalised to `YYYY-MM-DD` (or `YYYY-MM-DD HH:MM` with time) via `formatDate()` / `formatDateWithTime()` regardless of how Hipocrate sends them. **Never call `new Date(hipocrate_string).toISOString()`** — Hipocrate sends non-ISO date strings that produce invalid `Date` objects and throw `RangeError`. Always pass raw strings through `formatDate()` / `formatDateWithTime()`, which have `isNaN` guards and try/catch. **`calculateAge` uses string splitting on `YYYY-MM-DD` to avoid UTC midnight offset** — never `new Date(birthDate)` for age calculation.
 - Recent searches are persisted in `localStorage`.
 - All DOM elements are cached at startup in the `elements` object via `getElementById`. Never look up the same element inside a function that runs repeatedly.
-- Analysis cards use two maps: `MODALITY_INFO` (radio=X-Ray, ct=CT, irm=MRI, eco=Ultrasound, rads=Fluoroscopy) for icon and label, and `MODALITY_AVATAR` for the coloured circle abbreviation (abbr) and CSS class (cls: `mod-xr`, `mod-ct`, `mod-mr`, `mod-us`, `mod-fl`). Card type is stored in `article.dataset.type` and read by `filterAnalyses` — do not detect type from `className`. Modality colours use CSS custom properties `--mod-xr`, `--mod-ct`, `--mod-mr`, `--mod-us`, `--mod-fl` with separate light/dark values. The `.mod-circle` element receives both `mod-circle` and the modality class (e.g. `mod-xr`) — colour rules are keyed on `.mod-circle.mod-xr` so the modal circle works without an `.analysis-card` ancestor. Cards with no report result receive `no-report` class (faded, dashed border) instead of showing placeholder text. Multi-series imaging studies render each result under a `<p class="series-result-title">` label drawn from `series[i].description`.
+- Analysis cards use two maps: `MODALITY_INFO` (radio=X-Ray, ct=CT, irm=MRI, eco=Ultrasound, rads=Fluoroscopy, lab=Laboratory) for icon and label, and `MODALITY_AVATAR` for the coloured circle abbreviation (abbr) and CSS class (cls: `mod-xr`, `mod-ct`, `mod-mr`, `mod-us`, `mod-fl`, `mod-lab`). Card type is stored in `article.dataset.type` and read by `filterAnalyses` — do not detect type from `className`. The analyses filter chip strip includes a **Lab** chip (`data-filter="lab"`); its value must exist as `<option value="lab">` in the hidden `#analysesFilter` select or the filter silently no-ops. Modality colours use CSS custom properties `--mod-xr`, `--mod-ct`, `--mod-mr`, `--mod-us`, `--mod-fl` with separate light/dark values. The `.mod-circle` element receives both `mod-circle` and the modality class (e.g. `mod-xr`) — colour rules are keyed on `.mod-circle.mod-xr` so the modal circle works without an `.analysis-card` ancestor. Cards with no report result receive `no-report` class (faded, dashed border) instead of showing placeholder text. Multi-series imaging studies render each result under a `<p class="series-result-title">` label drawn from `series[i].description`.
+- **Lab result rendering**: `buildLabTable(forms)` detects lab entries as any `presentedForm` with a `reference` field (set by the enriched backend — includes immunology/`type="other"` entries). Groups by `section`, renders as `<table class="lab-result-table">` with analyte name / value (`.lab-high` / `.lab-low` highlight) / reference columns and H/L badges. Used in both `fetchAndFillReport` (card inline preview) and `renderReportContent` (modal).
+- **Lab trends**: `loadTrends(patientId)` fetches `/fhir/Observation?patient={id}` after patient loads; `renderTrends(observations)` groups by analyte, builds a date×analyte table with inline SVG sparklines. Non-fatal — a fetch failure shows a warning but does not block the patient tab. Trends section is in `#trendsSection` below the analyses grid.
+- **Analyses episode filter**: after collecting all service requests in the parallel-domain path, results older than 90 days before the most recent result are dropped server-side. This keeps only the current hospitalisation without needing a Hipocrate episode ID.
+- **Hospitalization history colour-coding**: `li.dataset.type` is set to `"inpatient"` or `"outpatient"` on each history item. CSS attribute selectors colour the dot, card border, and badge: inpatient = amber (`--mod-ct`), outpatient = teal (`--mod-us`).
+- **Page load**: all tab panels and the `<header class="app-bar">` start `hidden style="display:none"` in the HTML. `initApp()` calls `initializeTabs()` → `switchTab('schedule')` which removes `hidden` and sets `display:block` on the active panel, then reveals the header. `switchTab` always calls `removeAttribute('hidden')` before setting `display:block`.
 - Dynamic HTML uses `<template>` elements in `main.html` and `cloneNode(true)` + `textContent`/`className` in JS. Do not use `innerHTML` with interpolated strings for new elements. Do not put `id` attributes inside `<template>` — they are duplicated on every clone.
 - Theme cycles `auto → light → dark → auto` via `toggleTheme()`; `localStorage` key is `theme`.
 - The **Schedule** tab is always visible (first in nav, default active tab on page load; not gated on patient search). It fetches `/fhir/Schedule?start_date=…&end_date=…` on first visit; date range defaults to yesterday–today. Every filter change triggers a new server request — no client-side filtering. Filters: **patient name** (text input — fires on Enter only, sends `?patient_text=`), **modality** (hardcoded `<select>` with Hipocrate IDs, sends `?lab_id=`), **ward** (dynamic `<select>` populated from the first unfiltered fetch result and kept in memory, sends `?section_name=`). The Refresh button re-fetches with `?refresh=1` to bypass cache. `renderSchedule()` renders `scheduleEntries` as-is with no local filtering. The Date/Time column shows time only for same-day ranges and full `YYYY-MM-DD HH:MM` for multi-day ranges. Clicking a patient name calls `loadPatientFromRequest(requestId, patientName, el)`: fetches `/api/request/{id}/patient` to resolve the numeric patient ID, then submits the search form with that ID; falls back to name search if the fetch fails. Clicking a request code opens `showRequestModal(requestId, requestCode, patientName, modality, triggerEl, requesterName)`, which fetches the exam report (`ImagingStudy` or `DiagnosticReport` based on modality) and renders it in a centred `<dialog>` modal. The modal header shows: coloured mod-circle + patient name (h2) + type·date·code subtitle + requester physician (from the schedule row, immediately; falls back to `reportData.referrer` after fetch) + clinical indication. The examiner (reporting physician) is appended below the report text as `.report-modal-signed`. Multi-series results get `series-result-title` labels matching the analysis card pattern. The footer has Close and Load Patient buttons. `debounce(fn, ms)` helper is defined at the top of the IIFE.
