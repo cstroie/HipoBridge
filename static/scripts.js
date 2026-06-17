@@ -2128,10 +2128,7 @@ document.addEventListener('DOMContentLoaded', function() {
         article.dataset.analysisType = analysisType;
 
         const modality = MODALITY_INFO[analysisType] || { icon: 'fa-file-medical', label: analysisText };
-        const iconEl = article.querySelector('.modality-icon');
-        if (iconEl) iconEl.className = `modality-icon fas ${modality.icon}`;
-
-        // Modality circle avatar (editorial redesign)
+        // Modality circle avatar
         const circleEl = article.querySelector('.mod-circle');
         if (circleEl) {
             const circleAvatar = MODALITY_AVATAR[analysisType] || { icon: 'fa-question', cls: '' };

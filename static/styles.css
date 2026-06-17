@@ -556,7 +556,6 @@ small {
 }
 
 .brand-name { display: none; }
-.user-actions { display: none; }
 
 /* Main Content */
 .main-content {
@@ -1420,8 +1419,6 @@ select {
 .mod-circle.mod-us { background: color-mix(in srgb,var(--mod-us) 14%,transparent); color: var(--mod-us); }
 .analysis-card.rads  .mod-circle,
 .mod-circle.mod-fl { background: color-mix(in srgb,var(--mod-fl) 14%,transparent); color: var(--mod-fl); }
-
-.modality-icon { display: none; }
 
 .card-title-block {
     flex: 1;
