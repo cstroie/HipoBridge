@@ -610,7 +610,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 const name = nameObj?.text || [nameObj?.family, ...(nameObj?.given || [])].filter(Boolean).join(' ') || patient.id;
                 const cnp = extractCNP(patient.identifier);
                 const dob = formatBirthDate(patient.birthDate);
-                const meta = [cnp, dob].filter(Boolean).join(' · ');
+                const gender = patient.gender ? (patient.gender === 'male' ? 'M' : 'F') : null;
+                const meta = [cnp, dob, gender].filter(Boolean).join(' · ');
                 const btn = document.createElement('button');
                 btn.className = 'btn-secondary';
                 btn.style.cssText = 'display:block;width:100%;margin-top:var(--spacing-sm);text-align:left';

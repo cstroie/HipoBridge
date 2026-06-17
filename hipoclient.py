@@ -1099,20 +1099,46 @@ class HipoClientPatientSearch(HipoClientPatient):
 
     def parse_multiple_patients_data(self, html_content: str) -> HipoData:
         """Parse a multi-patient Hipocrate search results page into HipoData."""
-        # Initialize empty dict for patients
-        data = HipoData(status="success", message="", patients = {})
+        data = HipoData(status="success", message="", patients=[])
 
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
 
             if not self.is_expected_page(soup, 'Fisier'):
-                # Return empty list if not expected page
                 data.set_error(f"Unexpected page for PatientSearch: {self.get_title(soup)}")
                 logger.warning(f"{data['message']}: {self.get_error(soup)}")
                 return data
 
-            pattern = r"\.\./Pacient/edit\.asp\?id=(\d+)"
-            data["patients"] = extract_text_ids_from_links(soup, pattern)
+            id_pattern = re.compile(r"\.\./Pacient/edit\.asp\?id=(\d+)", re.IGNORECASE)
+            seen = set()
+            patients = []
+            for a in soup.find_all('a', href=id_pattern):
+                href = a.get('href', '')
+                m = id_pattern.search(href)
+                if not m or m.group(1) in seen:
+                    continue
+                patient_id = m.group(1)
+                seen.add(patient_id)
+                row = a.find_parent('tr')
+                cells = [td.get_text(separator=' ', strip=True) for td in row.find_all('td')] if row else []
+                name = cells[1] if len(cells) > 1 else a.get_text(strip=True)
+                sex_age = cells[2] if len(cells) > 2 else ''
+                gender = 'male' if sex_age.upper().startswith('M') else ('female' if sex_age.upper().startswith('F') else None)
+                raw_dob = cells[3] if len(cells) > 3 else ''
+                birth_date = None
+                if raw_dob:
+                    try:
+                        from datetime import datetime
+                        birth_date = datetime.strptime(raw_dob.strip(), '%d/%m/%Y').strftime('%Y-%m-%d')
+                    except ValueError:
+                        pass
+                patients.append({
+                    'id': patient_id,
+                    'name': name,
+                    'gender': gender,
+                    'birth_date': birth_date,
+                })
+            data["patients"] = patients
 
         except Exception as e:
             logger.error(f"Error parsing multiple patients data: {e}")
@@ -1133,22 +1159,29 @@ class HipoClientPatientSearch(HipoClientPatient):
                 )
 
             # Check if there are patients in response
-            if 'patients' in parsed_data and len(parsed_data['patients']) > 0:
+            patients = parsed_data.get('patients') or []
+            if patients:
                 response = FHIRBundle(
                     type="searchset",
-                    total=len(parsed_data['patients'])
+                    total=len(patients)
                 )
 
-                for patient_id, patient_name in parsed_data['patients'].items():
-                    patient_resource = FHIRPatient(
-                        id=patient_id,
-                        name=[{
-                            "use": "official",
-                            "text": patient_name
-                        }]
-                    )
+                for p in patients:
+                    patient_resource = FHIRPatient(id=p['id'])
+                    patient_resource['name'] = [{"use": "official", "text": p['name']}]
+                    if p.get('gender'):
+                        patient_resource['gender'] = p['gender']
+                    if p.get('birth_date'):
+                        patient_resource['birthDate'] = p['birth_date']
+                    # Expose patient id as identifier so frontend can display it
+                    identifiers = [{"system": "http://hipocrate/fhir/NamingSystem/patient-id", "value": p['id']}]
+                    # Derive CNP from patient ID if it looks like a CNP (13 digits starting with 1-9)
+                    if re.match(r'^[1-9]\d{12}$', p['id']) and parse_cnp(p['id']).get('valid'):
+                        base_url = f"{http_request.scheme}://{http_request.host}" if http_request else "http://hipocrate"
+                        identifiers.append({"system": f"{base_url}/fhir/NamingSystem/patient-cnp", "value": p['id']})
+                    patient_resource['identifier'] = identifiers
                     response.append_entry(resource=patient_resource)
-                
+
                 return response
             else:
                 return FHIROperationOutcome.from_error(
