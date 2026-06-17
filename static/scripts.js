@@ -2524,7 +2524,7 @@ document.addEventListener('DOMContentLoaded', function() {
         'completed':      'Completed',
         'ended':          'Finished',
         'revoked':        'Cancelled',
-        'entered-in-error': 'No exams',
+        'entered-in-error': 'No analyses',
         'unknown':        'Unknown',
     };
 
