@@ -2304,11 +2304,6 @@ select {
     overflow: hidden;
 }
 
-.timeline-meta-section,
-.timeline-meta-requester { min-width: 0; flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; }
-.timeline-meta-sep,
-.timeline-code { flex-shrink: 0; }
-
 .timeline-card-meta i {
     font-size: 10px;
 }
