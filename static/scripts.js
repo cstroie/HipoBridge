@@ -1180,7 +1180,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const secImaging = document.getElementById('reportSectionImaging');
             const imagingList = document.getElementById('reportImagingList');
             const MOD_SHORT = { radio: 'XR', ct: 'CT', irm: 'MR', eco: 'US', rads: 'FL' };
-            const MOD_LABEL = { radio: 'X-Ray', ct: 'CT', irm: 'MRI', eco: 'Ultrasound', rads: 'Fluoroscopy' };
             const MOD_VAR   = { radio: '--mod-xr', ct: '--mod-ct', irm: '--mod-mr', eco: '--mod-us', rads: '--mod-fl' };
             if (imagingList && analysesData?.entry?.length) {
                 const entries = [...analysesData.entry]
@@ -1197,7 +1196,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 entries.forEach((entry, idx) => {
                     const sr = entry.resource;
                     const mod  = sr.code?.coding?.[0]?.code || '';
-                    const desc = sr.code?.coding?.[0]?.display || MOD_LABEL[mod] || mod;
+                    const desc = sr.code?.coding?.[0]?.display || MODALITY_INFO[mod]?.label || mod;
                     const date = sr.authoredOn ? formatDate(sr.authoredOn) : '';
                     const code = sr.identifier?.[0]?.value || sr.id || '';
                     const isUrgent = sr.priority === 'urgent';
@@ -2021,8 +2020,7 @@ document.addEventListener('DOMContentLoaded', function() {
             countByType[t] = (countByType[t] || 0) + 1;
         }
         if (metaEl) {
-            const MODALITY_LABEL = { radio: 'X-Ray', ct: 'CT', irm: 'MRI', eco: 'Ultrasound', rads: 'Fluoroscopy' };
-            const parts = includedTypes.filter(t => countByType[t]).map(t => `${countByType[t]} ${MODALITY_LABEL[t]}`);
+            const parts = includedTypes.filter(t => countByType[t]).map(t => `${countByType[t]} ${MODALITY_INFO[t]?.label || t}`);
             metaEl.textContent = `${filteredEntries.length} imaging ${filteredEntries.length === 1 ? 'study' : 'studies'}${parts.length ? ' · ' + parts.join(', ') : ''}`;
         }
         document.querySelectorAll('.analyses-chips .chip').forEach(chip => {
