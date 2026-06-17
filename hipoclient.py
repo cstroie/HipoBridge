@@ -3256,7 +3256,7 @@ class HipoClientSchedule(HipoClient):
                 # Inner table has a header row then a data row; take the last tr
                 detail_rows = cells[2].select('div.div_detalii table tr')
                 detail_cells = detail_rows[-1].find_all('td') if detail_rows else []
-                if len(detail_cells) >= 7:
+                if len(detail_cells) >= 8:
                     raw_dt = detail_cells[0].get_text(strip=True)
                     parsed_dt = parse_date_time(raw_dt)
                     iso_dt = parsed_dt.strftime('%Y-%m-%d %H:%M') if parsed_dt else raw_dt
@@ -3269,8 +3269,8 @@ class HipoClientSchedule(HipoClient):
                         'payment_type': detail_cells[2].get_text(strip=True),
                         'priority': detail_cells[3].get_text(strip=True),
                         'section': detail_cells[4].get_text(strip=True),
-                        'requested_by': detail_cells[5].get_text(strip=True),
-                        'laboratory': detail_cells[6].get_text(strip=True),
+                        'requested_by': detail_cells[6].get_text(strip=True),
+                        'laboratory': detail_cells[7].get_text(strip=True),
                     })
 
             data.store_list("requests", requests)
