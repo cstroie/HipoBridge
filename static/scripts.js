@@ -576,22 +576,15 @@ document.addEventListener('DOMContentLoaded', function() {
     // Enhanced analyses fetching function
     function showPatientSelection(candidates) {
         return new Promise(resolve => {
-            const overlay = document.createElement('div');
-            overlay.className = 'modal-backdrop';
-            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:var(--z-overlay);display:flex;align-items:center;justify-content:center';
-
-            const box = document.createElement('div');
-            box.className = 'card';
-            box.style.cssText = 'min-width:320px;max-width:480px;max-height:70vh;overflow-y:auto;padding:var(--spacing-lg)';
-            box.setAttribute('role', 'dialog');
-            box.setAttribute('aria-modal', 'true');
-            box.setAttribute('aria-label', 'Select patient');
+            const dlg = document.createElement('dialog');
+            dlg.className = 'patient-select-dialog';
+            dlg.setAttribute('aria-label', 'Select patient');
 
             const heading = document.createElement('h3');
             heading.textContent = `${candidates.length} patients found — select one:`;
-            box.appendChild(heading);
+            dlg.appendChild(heading);
 
-            const dismiss = (result) => { document.body.removeChild(overlay); resolve(result); };
+            const dismiss = (result) => { dlg.close(); dlg.remove(); resolve(result); };
 
             candidates.forEach(patient => {
                 const nameObj = Array.isArray(patient.name) ? patient.name[0] : patient.name;
@@ -614,7 +607,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     btn.appendChild(metaEl);
                 }
                 btn.addEventListener('click', () => dismiss(patient));
-                box.appendChild(btn);
+                dlg.appendChild(btn);
             });
 
             const cancel = document.createElement('button');
@@ -622,26 +615,15 @@ document.addEventListener('DOMContentLoaded', function() {
             cancel.style.cssText = 'display:block;width:100%;margin-top:var(--spacing-md)';
             cancel.textContent = 'Cancel';
             cancel.addEventListener('click', () => dismiss(null));
-            box.appendChild(cancel);
+            dlg.appendChild(cancel);
 
-            overlay.appendChild(box);
-            document.body.appendChild(overlay);
+            // Native <dialog> handles Escape automatically via the cancel event
+            dlg.addEventListener('cancel', (e) => { e.preventDefault(); dismiss(null); });
 
-            // Trap focus inside the dialog; close on Escape
-            const focusable = () => [...box.querySelectorAll('button')];
-            const trapFocus = e => {
-                if (e.key === 'Escape') { dismiss(null); return; }
-                if (e.key !== 'Tab') return;
-                const els = focusable();
-                const first = els[0], last = els[els.length - 1];
-                if (e.shiftKey ? document.activeElement === first : document.activeElement === last) {
-                    e.preventDefault();
-                    (e.shiftKey ? last : first).focus();
-                }
-            };
-            overlay.addEventListener('keydown', trapFocus);
+            document.body.appendChild(dlg);
+            dlg.showModal();
             // Focus first button after paint
-            requestAnimationFrame(() => focusable()[0]?.focus());
+            requestAnimationFrame(() => dlg.querySelector('button')?.focus());
         });
     }
 
