@@ -15,7 +15,6 @@ document.addEventListener('DOMContentLoaded', function() {
         patientAvatar: document.querySelector('.patient-avatar i'),
         patientName: document.getElementById('patientName'),
         patientCnp: document.getElementById('patientCnp'),
-        patientAge: document.getElementById('patientAge'),   // may be absent in new HTML
         patientGender: document.getElementById('patientGender'),
         patientDiagnosis: document.getElementById('patientDiagnosis'),
         patientBirthDate: document.getElementById('patientBirthDate'),
@@ -1683,7 +1682,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 elements.patientGender.textContent = [genderLabel, ageLabel].filter(Boolean).join(' · ');
             }
         }
-        if (elements.patientAge) elements.patientAge.textContent = ageLabel || '';  // compat
 
         if (elements.patientAvatar) {
             const ageNum = ageLabel ? parseInt(ageLabel, 10) : null;
