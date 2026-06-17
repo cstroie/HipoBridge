@@ -3073,6 +3073,11 @@ select {
 .epi-prose p { margin: 0 0 0.75em; }
 .epi-prose p:last-child { margin-bottom: 0; }
 
+.epi-copy-btn {
+    margin-top: var(--spacing-md);
+    font-size: var(--font-size-xs);
+}
+
 /* ── Report modal (schedule request detail) ───────────────────────────── */
 
 dialog.modal,

@@ -2500,7 +2500,13 @@ document.addEventListener('DOMContentLoaded', function() {
             const prose = document.createElement('div');
             prose.className = 'epi-prose';
             prose.innerHTML = marked.parse(epicrisisText.trim());
-            inner.appendChild(prose);
+            const copyBtn = document.createElement('button');
+            copyBtn.type = 'button';
+            copyBtn.className = 'btn-secondary epi-copy-btn';
+            copyBtn.setAttribute('aria-label', 'Copy this epicrisis as Markdown');
+            copyBtn.innerHTML = '<i class="fas fa-copy"></i> <span>Copy</span>';
+            copyBtn.addEventListener('click', () => copyMarkdown(card, copyBtn));
+            inner.append(prose, copyBtn);
             body.appendChild(inner);
 
             // Toggle logic
