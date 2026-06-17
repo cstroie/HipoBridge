@@ -136,16 +136,19 @@ document.addEventListener('DOMContentLoaded', function() {
     function initApp() {
         // Initialize theme
         initTheme();
-        
+
         // Initialize tabs
         initializeTabs();
-        
+
         // Initialize event listeners
         initEventListeners();
-        
+
         // Load recent searches
         loadRecentSearches();
-        
+
+        // Reveal header and active tab now that JS is ready
+        const appBar = document.querySelector('.app-bar');
+        if (appBar) { appBar.removeAttribute('hidden'); appBar.style.display = ''; }
     }
     
     function initTheme() {
