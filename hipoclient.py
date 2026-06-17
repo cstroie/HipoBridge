@@ -1790,9 +1790,15 @@ class HipoClientImagingStudy(HipoClient):
             for i, row in enumerate(all_rows):
                 if 'analiza' not in row.get('class', []):
                     continue
-                study_name = row.get_text(strip=True)
-                # Strip "(Tip proba: ...)" suffix for deduplication key
-                dedup_key = re.sub(r'\s*\(Tip proba:.*?\)', '', study_name).strip()
+                td = row.find('td')
+                if td:
+                    for tag in td.find_all('i'):
+                        tag.decompose()
+                    b = td.find('b')
+                    study_name = (b or td).get_text(strip=True)
+                else:
+                    study_name = row.get_text(strip=True)
+                dedup_key = study_name
                 if not dedup_key or dedup_key in seen:
                     continue
                 seen.add(dedup_key)
