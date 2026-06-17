@@ -2426,81 +2426,32 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Accordion card
             const isOpen = index === 0;
-            const card = document.createElement('div');
-            card.className = 'epi-card' + (isOpen ? ' epi-card-open' : '');
+            const card = document.importNode(document.getElementById('epi-card-template').content, true).firstElementChild;
+            if (isOpen) card.classList.add('epi-card-open');
             card.id = `epicrisis-${item.checkoutId}`;
             card.dataset.markdown = `# ${icd}\n\n`
                 + (meta.length ? `${meta.join(' · ')}  \n\n` : '')
                 + epicrisisText.trim() + '\n';
 
-            // Toggle button (header)
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'epi-card-btn';
+            const btn    = card.querySelector('.epi-card-btn');
+            const body   = card.querySelector('.epi-card-body');
+            const chevron = card.querySelector('.epi-chevron');
+
             btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-
-            // Left: dot + date range + service label
-            const btnLeft = document.createElement('div');
-            btnLeft.className = 'epi-btn-left';
-
-            const dot = document.createElement('div');
-            dot.className = 'epi-dot';
-
-            const dateBlock = document.createElement('div');
-            const dateRow = document.createElement('div');
-            dateRow.className = 'epi-date-range';
-            dateRow.textContent = `${admission} → ${discharge}`;
-            const serviceRow = document.createElement('div');
-            serviceRow.className = 'epi-service';
+            card.querySelector('.epi-date-range').textContent = `${admission} → ${discharge}`;
             const serviceParts = [ward, attender].filter(Boolean);
-            serviceRow.textContent = serviceParts.length ? serviceParts.join(' · ') : (service || 'Admission');
-            dateBlock.append(dateRow, serviceRow);
-            btnLeft.append(dot, dateBlock);
+            card.querySelector('.epi-service').textContent = serviceParts.length ? serviceParts.join(' · ') : (service || 'Admission');
 
-            // Right: ICD badge + nights + chevron
-            const btnRight = document.createElement('div');
-            btnRight.className = 'epi-btn-right';
+            const icdBadge = card.querySelector('.epi-icd-badge');
+            if (icd) { icdBadge.textContent = icd; } else { icdBadge.remove(); }
+            const nightsSpan = card.querySelector('.epi-nights');
+            if (nights) { nightsSpan.textContent = nights; } else { nightsSpan.remove(); }
+            if (isOpen) chevron.className = 'fas fa-chevron-up epi-chevron';
 
-            if (icd) {
-                const icdBadge = document.createElement('span');
-                icdBadge.className = 'epi-icd-badge';
-                icdBadge.textContent = icd;
-                btnRight.appendChild(icdBadge);
-            }
-            if (nights) {
-                const nightsSpan = document.createElement('span');
-                nightsSpan.className = 'epi-nights';
-                nightsSpan.textContent = nights;
-                btnRight.appendChild(nightsSpan);
-            }
-            const chevron = document.createElement('i');
-            chevron.className = `fas fa-chevron-${isOpen ? 'up' : 'down'} epi-chevron`;
-            btnRight.appendChild(chevron);
-
-            btn.append(btnLeft, btnRight);
-
-            // Body
-            const body = document.createElement('div');
-            body.className = 'epi-card-body';
             body.hidden = !isOpen;
-            const inner = document.createElement('div');
-            inner.className = 'epi-card-inner';
-            const toolbar = document.createElement('div');
-            toolbar.className = 'epi-card-toolbar';
-            const copyBtn = document.createElement('button');
-            copyBtn.type = 'button';
-            copyBtn.className = 'btn-secondary epi-copy-btn';
-            copyBtn.setAttribute('aria-label', 'Copy this epicrisis as Markdown');
-            copyBtn.innerHTML = '<i class="fas fa-copy"></i> <span>Copy</span>';
-            copyBtn.addEventListener('click', () => copyMarkdown(card, copyBtn));
-            toolbar.appendChild(copyBtn);
-            const prose = document.createElement('div');
-            prose.className = 'epi-prose';
-            prose.innerHTML = marked.parse(epicrisisText.trim());
-            inner.append(toolbar, prose);
-            body.appendChild(inner);
+            card.querySelector('.epi-prose').innerHTML = marked.parse(epicrisisText.trim());
+            card.querySelector('.epi-copy-btn').addEventListener('click', () => copyMarkdown(card, card.querySelector('.epi-copy-btn')));
 
-            // Toggle logic
             btn.addEventListener('click', () => {
                 const open = card.classList.toggle('epi-card-open');
                 btn.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -2508,7 +2459,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 chevron.className = `fas fa-chevron-${open ? 'up' : 'down'} epi-chevron`;
             });
 
-            card.append(btn, body);
             elements.epicrisisContent.appendChild(card);
         });
 
@@ -2869,115 +2819,66 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             // Row: time col + card
-            const row = document.createElement('div');
-            row.className = 'timeline-row';
+            const row = document.importNode(document.getElementById('timeline-row-template').content, true).firstElementChild;
             if (modalitySlug) row.dataset.modality = modalitySlug;
 
-            // ── Time column ──
-            const timeCol = document.createElement('div');
-            timeCol.className = 'timeline-time-col';
-
-            const timeEl = document.createElement('time');
-            timeEl.className = 'timeline-time';
+            // Time column
+            const timeEl = row.querySelector('.timeline-time');
             timeEl.dateTime = authoredOn.replace(' ', 'T');
             timeEl.textContent = isMultiDay ? (time || day) : (time || authoredOn);
-            timeCol.appendChild(timeEl);
 
-            const dot = document.createElement('span');
-            dot.className = `timeline-dot ${avatar.cls}`;
-            timeCol.appendChild(dot);
+            const dot = row.querySelector('.timeline-dot');
+            dot.classList.add(avatar.cls);
+            if (isLast) row.querySelector('.timeline-line').remove();
 
-            if (!isLast) {
-                const line = document.createElement('span');
-                line.className = 'timeline-line';
-                timeCol.appendChild(line);
-            }
-            row.appendChild(timeCol);
+            // Card
+            const card = row.querySelector('.timeline-card');
+            if (isUrgent) card.classList.add('urgent-ring');
 
-            // ── Card ──
-            const card = document.createElement('div');
-            card.className = `timeline-card${isUrgent ? ' urgent-ring' : ''}`;
-
-            // Modality avatar circle
-            const avatarEl = document.createElement('div');
-            avatarEl.className = `timeline-mod-avatar ${avatar.cls}`;
+            const avatarEl = row.querySelector('.timeline-mod-avatar');
+            avatarEl.classList.add(avatar.cls);
             avatarEl.innerHTML = modAvatarHTML(modalitySlug);
             avatarEl.title = MODALITY_INFO[modalitySlug]?.label || laboratory || modalitySlug;
-            card.appendChild(avatarEl);
 
-            // Card body
-            const body = document.createElement('div');
-            body.className = 'timeline-card-body';
-
-            const patientRow = document.createElement('div');
-            patientRow.className = 'timeline-patient-row';
-
-            const nameBtn = document.createElement('button');
-            nameBtn.className = 'timeline-card-patient';
+            const nameBtn = row.querySelector('.timeline-card-patient');
             nameBtn.textContent = patientName;
             nameBtn.title = `Load patient record for ${patientName}`;
             nameBtn.addEventListener('click', () => loadPatientFromRequest(r.id, patientName, nameBtn));
-            patientRow.appendChild(nameBtn);
 
-            if (isUrgent) {
-                const urgBadge = document.createElement('strong');
-                urgBadge.className = 'urgent-badge';
-                urgBadge.textContent = 'Urgent';
-                patientRow.appendChild(urgBadge);
-            }
-            body.appendChild(patientRow);
+            const urgBadge = row.querySelector('.urgent-badge');
+            if (isUrgent) { urgBadge.hidden = false; } else { urgBadge.remove(); }
 
-            // Line 2: exam names (lazy-loaded) · modality
-            const regionLine = document.createElement('div');
-            regionLine.className = 'timeline-card-region';
-            regionLine.textContent = laboratory;  // placeholder until exams load
+            const regionLine = row.querySelector('.timeline-card-region');
+            regionLine.textContent = laboratory;
             regionLine.dataset.requestId = r.id;
-            body.appendChild(regionLine);
 
-            // Line 3: department · physician · code
-            const metaLine = document.createElement('div');
-            metaLine.className = 'timeline-card-meta';
-
-            const metaParts = [];
+            // Meta line: hide unused parts
+            const metaSectionEl  = row.querySelector('.timeline-meta-section');
+            const metaRequesterEl = row.querySelector('.timeline-meta-requester');
+            const seps = row.querySelectorAll('.timeline-meta-sep');
             if (section) {
-                const sp = document.createElement('span');
-                sp.innerHTML = `<i class="fas fa-hospital" aria-hidden="true"></i> `;
-                sp.appendChild(document.createTextNode(section));
-                metaParts.push(sp);
+                metaSectionEl.querySelector('span').textContent = section;
+            } else {
+                metaSectionEl.remove();
+                seps[0]?.remove();
             }
             if (requestedBy) {
-                const rp = document.createElement('span');
-                rp.innerHTML = `<i class="fas fa-user-doctor" aria-hidden="true"></i> `;
-                rp.appendChild(document.createTextNode(requestedBy));
-                metaParts.push(rp);
+                metaRequesterEl.querySelector('span').textContent = requestedBy;
+            } else {
+                metaRequesterEl.remove();
+                seps[1]?.remove();
             }
 
-            const codeBtn = document.createElement('button');
-            codeBtn.className = 'timeline-code';
+            const codeBtn = row.querySelector('.timeline-code');
             codeBtn.textContent = requestCode;
             codeBtn.title = `View request details (${requestCode})`;
             codeBtn.addEventListener('click', () => showRequestModal(r.id, requestCode, patientName, modalitySlug, codeBtn, requestedBy));
 
-            metaParts.forEach((part, i) => {
-                metaLine.appendChild(part);
-                const sep = document.createElement('span');
-                sep.textContent = '·';
-                sep.setAttribute('aria-hidden', 'true');
-                metaLine.appendChild(sep);
-            });
-            metaLine.appendChild(codeBtn);
-            body.appendChild(metaLine);
-
-            card.appendChild(body);
-
-            // Status badge (right side)
-            const statusBadge = document.createElement('span');
-            statusBadge.className = `timeline-status-badge ${statusClass}`;
+            const statusBadge = row.querySelector('.timeline-status-badge');
+            statusBadge.classList.add(statusClass);
             statusBadge.textContent = SCHEDULE_STATUS_LABEL[status] || status;
             statusBadge.title = status;
-            card.appendChild(statusBadge);
 
-            row.appendChild(card);
             container.appendChild(row);
             scheduleExamObserver.observe(regionLine);
         });
@@ -3043,18 +2944,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const sub = document.getElementById('scheduleHeroSub');
         if (sub) sub.textContent = `${total} exam${total !== 1 ? 's' : ''} in queue · most recent first`;
 
+        const metricTpl = document.getElementById('schedule-metric-template');
         elements.scheduleDayMetrics.innerHTML = '';
         metricDefs.forEach(m => {
-            const div = document.createElement('div');
-            div.className = 'schedule-metric';
-            const val = document.createElement('span');
-            val.className = 'schedule-metric-value';
+            const div = document.importNode(metricTpl.content, true).firstElementChild;
+            const val = div.querySelector('.schedule-metric-value');
             val.textContent = m.value;
             val.style.color = m.color;
-            const lbl = document.createElement('span');
-            lbl.className = 'schedule-metric-label';
-            lbl.textContent = m.label;
-            div.append(val, lbl);
+            div.querySelector('.schedule-metric-label').textContent = m.label;
             elements.scheduleDayMetrics.appendChild(div);
         });
 
@@ -3068,19 +2965,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const modColors = { radio: 'var(--mod-xr)', ct: 'var(--mod-ct)', irm: 'var(--mod-mr)', eco: 'var(--mod-us)', fluoro: 'var(--mod-fl)', lab: 'var(--mod-lab)' };
 
+            const barTpl = document.getElementById('schedule-mod-bar-template');
             elements.scheduleModBars.innerHTML = '';
             Object.entries(modalityCounts).sort((a, b) => b[1] - a[1]).forEach(([slug, count]) => {
-                const bar = document.createElement('div');
-                bar.className = 'schedule-mod-bar';
+                const bar = document.importNode(barTpl.content, true).firstElementChild;
                 const pct = Math.round(count / total * 100);
                 const color = modColors[slug] || 'var(--muted)';
-                bar.innerHTML = `<div class="schedule-mod-bar-header">
-                    <span class="schedule-mod-bar-name">${MODALITY_INFO[slug]?.label || slug}</span>
-                    <span class="schedule-mod-bar-count" style="color:${color}">${count}</span>
-                </div>
-                <div class="schedule-mod-bar-track">
-                    <div class="schedule-mod-bar-fill" style="width:${pct}%;background:${color}"></div>
-                </div>`;
+                bar.querySelector('.schedule-mod-bar-name').textContent = MODALITY_INFO[slug]?.label || slug;
+                const countEl = bar.querySelector('.schedule-mod-bar-count');
+                countEl.textContent = count;
+                countEl.style.color = color;
+                const fill = bar.querySelector('.schedule-mod-bar-fill');
+                fill.style.width = `${pct}%`;
+                fill.style.background = color;
                 elements.scheduleModBars.appendChild(bar);
             });
             elements.scheduleModBars.hidden = false;
