@@ -1118,12 +1118,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 analysesData ? populateAnalysesMarkdown(analysesData) : Promise.resolve(''),
                 generateEpicrisisMarkdown(patientData),
                 (async () => {
-                    const checkoutIds = extractCheckoutIds(patientData);
+                    const checkoutIds = new Set(extractCheckoutIds(patientData));
                     const checkinIds  = extractCheckinIds(patientData);
                     const allIds = [...checkinIds, ...checkoutIds]; // active admissions first
                     if (!allIds.length) return [];
                     const enc = await limitedMap(allIds, MAX_CONCURRENT_REQUESTS,
-                        async id => { try { return await fetchEncounterDataForCheckout(id); } catch { return null; } });
+                        async id => {
+                            try {
+                                const type = checkoutIds.has(id) ? 'checkout' : 'checkin';
+                                if (cache.encounters[id]) return cache.encounters[id];
+                                const r = await fetch(`/fhir/Encounter/${id}?type=${type}`);
+                                if (!r.ok) return null;
+                                const data = await r.json();
+                                cachePut(cache.encounters, id, data);
+                                return data;
+                            } catch { return null; }
+                        });
                     return enc
                         .map((e, i) => e && e.resourceType === 'Encounter' ? { enc: e, id: allIds[i] } : null)
                         .filter(Boolean)
@@ -1356,8 +1366,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         try {
-            const response = await fetch(`/fhir/Encounter/${checkoutId}`);
-            
+            const response = await fetch(`/fhir/Encounter/${checkoutId}?type=checkout`);
+
             if (!response.ok) {
                 console.error(`Error fetching encounter data for checkout ${checkoutId}:`, response.status);
                 return null;
@@ -2612,7 +2622,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function fetchPresentation(id) {
         if (cache.encounters[id]) return cache.encounters[id];
-        const response = await fetch(`/fhir/Encounter/${id}`);
+        const response = await fetch(`/fhir/Encounter/${id}?type=presentation`);
         if (!response.ok) return null;
         const data = await response.json();
         if (data.resourceType !== 'Encounter') return null;

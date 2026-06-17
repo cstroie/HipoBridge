@@ -430,31 +430,48 @@ async def debug_passthrough(request):
 
 @require_auth
 async def get_fhir_encounter(request):
-    """Retrieve encounter by ID. Tries checkout (discharged) first, falls back to checkin (in-progress)."""
+    """Retrieve encounter by ID.
+
+    Accepts an optional ?type=checkout|checkin|presentation hint so the caller
+    can skip straight to the right scraper.  Without the hint the handler falls
+    through checkout → checkin → presentation as before.
+    """
     id = request.match_info.get('id')
     if not id:
         return web_fhir_response("Encounter ID is required")
-    logger.info(f"Retrieving encounter with ID: {id}")
+    enc_type = request.rel_url.query.get('type', '').lower()
+    logger.info(f"Retrieving encounter {id} (type={enc_type or 'auto'})")
 
-    # Try checkout (completed discharge) first — reject if data is empty (wrong ID type)
+    if enc_type == 'presentation':
+        presentation_client = HipoClientPresentation(SERVICE_URL, request)
+        return web_fhir_response(await presentation_client.fetch_respond_fhir(id=id))
+
+    if enc_type == 'checkin':
+        checkin_client = HipoClientCheckin(SERVICE_URL, request)
+        checkin_data = await checkin_client.fetch_and_parse(id=id)
+        return web_fhir_response(checkin_client.fhir_response(checkin_data, id=id))
+
+    if enc_type == 'checkout':
+        checkout_client = HipoClientCheckout(SERVICE_URL, request)
+        checkout_data = await checkout_client.fetch_and_parse(id=id)
+        return web_fhir_response(checkout_client.fhir_response(checkout_data, id=id))
+
+    # No hint — try checkout (completed discharge) first
     checkout_client = HipoClientCheckout(SERVICE_URL, request)
     checkout_data = await checkout_client.fetch_and_parse(id=id)
     checkout_name = (checkout_data.get("patient.name") or "").replace("-", "").replace(" ", "")
     if checkout_data.get("status") != "error" and checkout_name:
         return web_fhir_response(checkout_client.fhir_response(checkout_data, id=id))
 
-    # Fall back to checkin (active admission) — reject if no admission date was found
     logger.info(f"Checkout {id} not found or empty — trying checkin")
     checkin_client = HipoClientCheckin(SERVICE_URL, request)
     checkin_data = await checkin_client.fetch_and_parse(id=id)
     if checkin_data.get("status") != "error" and checkin_data.get("checkin.diagnosis"):
         return web_fhir_response(checkin_client.fhir_response(checkin_data, id=id))
 
-    # Fall back to outpatient presentation
     logger.info(f"Checkin {id} not found or empty — trying presentation")
     presentation_client = HipoClientPresentation(SERVICE_URL, request)
-    response = await presentation_client.fetch_respond_fhir(id=id)
-    return web_fhir_response(response)
+    return web_fhir_response(await presentation_client.fetch_respond_fhir(id=id))
 
 
 async def serve_spec(request):
