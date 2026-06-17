@@ -329,6 +329,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const targetTab = document.getElementById(`${tabId}-tab`);
         if (targetTab) {
             targetTab.classList.add('active');
+            targetTab.removeAttribute('hidden');
             targetTab.style.display = 'block';
         }
 
