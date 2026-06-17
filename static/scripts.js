@@ -1274,7 +1274,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (physician) {
                         const sig = document.createElement('div');
                         sig.className = 'report-imaging-sig';
-                        sig.innerHTML = `<i class="fas fa-signature"></i> ${physician}`;
+                        const sigIcon = document.createElement('i');
+                        sigIcon.className = 'fas fa-signature';
+                        sigIcon.setAttribute('aria-hidden', 'true');
+                        sig.appendChild(sigIcon);
+                        sig.append(` ${physician}`);
                         row.appendChild(sig);
                     }
 
@@ -2719,7 +2723,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (examiner) {
                     const signed = document.createElement('p');
                     signed.className = 'report-modal-signed';
-                    signed.innerHTML = `<i class="fas fa-signature" aria-hidden="true"></i> ${examiner}`;
+                    const signedIcon = document.createElement('i');
+                    signedIcon.className = 'fas fa-signature';
+                    signedIcon.setAttribute('aria-hidden', 'true');
+                    signed.appendChild(signedIcon);
+                    signed.append(` ${examiner}`);
                     bodyDiv.appendChild(signed);
                 }
             } else if (repResp.status === 404) {
