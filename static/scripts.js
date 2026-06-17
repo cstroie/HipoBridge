@@ -2497,16 +2497,19 @@ document.addEventListener('DOMContentLoaded', function() {
             body.hidden = !isOpen;
             const inner = document.createElement('div');
             inner.className = 'epi-card-inner';
-            const prose = document.createElement('div');
-            prose.className = 'epi-prose';
-            prose.innerHTML = marked.parse(epicrisisText.trim());
+            const toolbar = document.createElement('div');
+            toolbar.className = 'epi-card-toolbar';
             const copyBtn = document.createElement('button');
             copyBtn.type = 'button';
             copyBtn.className = 'btn-secondary epi-copy-btn';
             copyBtn.setAttribute('aria-label', 'Copy this epicrisis as Markdown');
             copyBtn.innerHTML = '<i class="fas fa-copy"></i> <span>Copy</span>';
             copyBtn.addEventListener('click', () => copyMarkdown(card, copyBtn));
-            inner.append(prose, copyBtn);
+            toolbar.appendChild(copyBtn);
+            const prose = document.createElement('div');
+            prose.className = 'epi-prose';
+            prose.innerHTML = marked.parse(epicrisisText.trim());
+            inner.append(toolbar, prose);
             body.appendChild(inner);
 
             // Toggle logic

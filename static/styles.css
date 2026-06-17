@@ -3073,8 +3073,12 @@ select {
 .epi-prose p { margin: 0 0 0.75em; }
 .epi-prose p:last-child { margin-bottom: 0; }
 
+.epi-card-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    padding: var(--spacing-sm) 0 0;
+}
 .epi-copy-btn {
-    margin-top: var(--spacing-md);
     font-size: var(--font-size-xs);
 }
 
