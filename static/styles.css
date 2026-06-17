@@ -1002,6 +1002,38 @@ small {
 }
 .history-type[hidden] { display: none; }
 
+/* Inpatient (hospitalization) — amber */
+.history-item[data-type="inpatient"] .history-dot {
+    background: var(--mod-ct);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mod-ct) 18%, transparent);
+}
+.history-item[data-type="inpatient"] .history-load {
+    border-color: color-mix(in srgb, var(--mod-ct) 30%, var(--line));
+}
+.history-item[data-type="inpatient"] .history-load:hover {
+    border-color: var(--mod-ct);
+}
+.history-item[data-type="inpatient"] .history-nights {
+    color: var(--mod-ct);
+    background: color-mix(in srgb, var(--mod-ct) 12%, transparent);
+}
+
+/* Outpatient (consultation / presentation) — teal/primary */
+.history-item[data-type="outpatient"] .history-dot {
+    background: var(--mod-us);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mod-us) 18%, transparent);
+}
+.history-item[data-type="outpatient"] .history-load {
+    border-color: color-mix(in srgb, var(--mod-us) 30%, var(--line));
+}
+.history-item[data-type="outpatient"] .history-load:hover {
+    border-color: var(--mod-us);
+}
+.history-item[data-type="outpatient"] .history-type {
+    color: var(--mod-us);
+    background: color-mix(in srgb, var(--mod-us) 12%, transparent);
+}
+
 .history-diagnosis {
     font: 500 12.5px 'Inter', sans-serif;
     color: var(--ink-2);

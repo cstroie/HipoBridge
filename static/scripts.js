@@ -1658,6 +1658,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const tmpl = document.getElementById('history-item-template');
             items.forEach(({ type, enc, start, end, label, section, medic, extra }, idx) => {
                 const li = tmpl.content.cloneNode(true).querySelector('.history-item');
+                li.dataset.type = type;
 
                 if (type === 'inpatient') {
                     const period = [start && formatDate(start), end && formatDate(end)]
