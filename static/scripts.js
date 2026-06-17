@@ -2097,14 +2097,18 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     const MODALITY_AVATAR = {
-        radio:  { abbr: 'XR',  cls: 'mod-xr' },
-        ct:     { abbr: 'CT',  cls: 'mod-ct' },
-        irm:    { abbr: 'MR',  cls: 'mod-mr' },
-        eco:    { abbr: 'US',  cls: 'mod-us' },
-        fluoro: { abbr: 'FL',  cls: 'mod-fl' },
-        rads:   { abbr: 'FL',  cls: 'mod-fl' },
-        lab:    { abbr: 'LB',  cls: 'mod-lab' },
+        radio:  { icon: 'fa-x-ray',     cls: 'mod-xr' },
+        ct:     { icon: 'fa-computer',  cls: 'mod-ct' },
+        irm:    { icon: 'fa-magnet',    cls: 'mod-mr' },
+        eco:    { icon: 'fa-heartbeat', cls: 'mod-us' },
+        fluoro: { icon: 'fa-radiation', cls: 'mod-fl' },
+        rads:   { icon: 'fa-radiation', cls: 'mod-fl' },
+        lab:    { icon: 'fa-flask',     cls: 'mod-lab' },
     };
+    function modAvatarHTML(slug) {
+        const av = MODALITY_AVATAR[slug] || { icon: 'fa-question', cls: '' };
+        return `<i class="fas ${av.icon}" aria-hidden="true"></i>`;
+    }
 
     // Helper function to create analysis card
     function createAnalysisCard(serviceRequest, analysisType, analysisText) {
@@ -2126,8 +2130,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Modality circle avatar (editorial redesign)
         const circleEl = article.querySelector('.mod-circle');
         if (circleEl) {
-            const circleAvatar = MODALITY_AVATAR[analysisType] || { abbr: '?', cls: '' };
-            circleEl.textContent = circleAvatar.abbr;
+            const circleAvatar = MODALITY_AVATAR[analysisType] || { icon: 'fa-question', cls: '' };
+            circleEl.innerHTML = modAvatarHTML(analysisType);
             if (circleAvatar.cls) circleEl.classList.add(circleAvatar.cls);
         }
 
@@ -2588,8 +2592,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Populate identity header immediately from data we already have
         const circleEl = modal.querySelector('.modal-mod-circle');
-        const circleAvatar = MODALITY_AVATAR[modality] || { abbr: '?', cls: '' };
-        circleEl.textContent = circleAvatar.abbr;
+        const circleAvatar = MODALITY_AVATAR[modality] || { icon: 'fa-question', cls: '' };
+        circleEl.innerHTML = modAvatarHTML(modality);
         if (circleAvatar.cls) circleEl.classList.add(circleAvatar.cls);
 
         modal.querySelector('.modal-type-name').textContent =
@@ -2927,7 +2931,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Modality avatar circle
             const avatarEl = document.createElement('div');
             avatarEl.className = `timeline-mod-avatar ${avatar.cls}`;
-            avatarEl.textContent = avatar.abbr;
+            avatarEl.innerHTML = modAvatarHTML(modalitySlug);
             avatarEl.title = MODALITY_INFO[modalitySlug]?.label || laboratory || modalitySlug;
             card.appendChild(avatarEl);
 

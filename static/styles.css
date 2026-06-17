@@ -1408,7 +1408,7 @@ select {
     display: flex;
     align-items: center;
     justify-content: center;
-    font: 700 15px 'Space Grotesk', 'Inter', sans-serif;
+    font-size: 18px;
 }
 .analysis-card.radio .mod-circle,
 .mod-circle.mod-xr { background: color-mix(in srgb,var(--mod-xr) 14%,transparent); color: var(--mod-xr); }
@@ -2489,7 +2489,7 @@ select {
     display: flex;
     align-items: center;
     justify-content: center;
-    font: 700 14px 'Space Grotesk', 'Inter', sans-serif;
+    font-size: 16px;
 }
 .timeline-mod-avatar.mod-xr  { background: color-mix(in srgb,var(--mod-xr)  14%,transparent); color: var(--mod-xr); }
 .timeline-mod-avatar.mod-ct  { background: color-mix(in srgb,var(--mod-ct)  14%,transparent); color: var(--mod-ct); }
