@@ -211,7 +211,7 @@ class Patient(Resource):
                  link: Optional[List[Dict[str, Any]]] = None,
                  **kwargs):
         super().__init__(
-            resourceType="Patient",                          # Resource type
+            resourceType="Patient",
             id=id,                                           # Logical id of this artifact
             identifier=identifier,                           # An identifier for this patient
             active=active,                                   # Whether this patient's record is in active use
@@ -327,7 +327,7 @@ class ServiceRequest(Resource):
                  relevantHistory: Optional[List[Dict[str, Any]]] = None,
                  **kwargs):
         super().__init__(
-            resourceType="ServiceRequest",                   # Resource type
+            resourceType="ServiceRequest",
             id=id,                                           # Logical id of this artifact
             identifier=identifier,                           # Identifiers assigned to this order
             basedOn=basedOn,                                 # What request fulfills
@@ -399,7 +399,7 @@ class Condition(Resource):
                  note: Optional[List[Dict[str, Any]]] = None,
                  **kwargs):
         super().__init__(
-            resourceType="Condition",                        # Resource type
+            resourceType="Condition",
             identifier=identifier,                           # External Ids for this condition
             clinicalStatus=clinicalStatus,                   # active | recurrence | relapse | inactive | remission | resolved | unknown
             verificationStatus=verificationStatus,           # unconfirmed | provisional | differential | confirmed | refuted | entered-in-error
@@ -596,7 +596,7 @@ class ImagingStudy(Resource):
                  series: Optional[List[Dict[str, Any]]] = None,
                  **kwargs):
         super().__init__(
-            resourceType="ImagingStudy",       # Resource type
+            resourceType="ImagingStudy",
             id=id,                             # Logical id of this artifact
             identifier=identifier,             # Business identifier for imaging study
             status=status,                     # registered | available | cancelled | entered-in-error | unknown | inactive
@@ -650,7 +650,7 @@ class DiagnosticReport(Resource):
                  comparison: Optional[Dict[str, Any]] = None,
                  **kwargs):
         super().__init__(
-            resourceType="DiagnosticReport",   # Resource type
+            resourceType="DiagnosticReport",
             id=id,                             # Logical id of this artifact
             identifier=identifier,             # Business identifier for report
             basedOn=basedOn,                   # What was requested
@@ -729,7 +729,7 @@ class Encounter(Resource):
                  note: Optional[List[Dict[str, Any]]] = None,
                  **kwargs):
         super().__init__(
-            resourceType="Encounter",              # Resource type
+            resourceType="Encounter",
             id=id,                                 # Logical id of this artifact
             identifier=identifier,                 # Identifier(s) by which this encounter is known
             status=status,                         # planned | arrived | triaged | in-progress | on-leave | finished | cancelled | entered-in-error | unknown
@@ -770,7 +770,7 @@ class Bundle(Resource):
                  issues: Optional[Dict[str, Any]] = None,
                  **kwargs):
         super().__init__(
-            resourceType="Bundle",           # Resource type
+            resourceType="Bundle",
             id=id,                           # Logical id of this artifact
             identifier=identifier,           # Persistent identifier for the bundle
             type=type,                       # document | message | transaction | transaction-response | batch | batch-response | history | searchset | collection | subscription-notification
@@ -831,7 +831,7 @@ class OperationOutcome(Resource):
                  issue: Optional[List[Dict[str, Any]]] = None,
                  **kwargs):
         super().__init__(
-            resourceType="OperationOutcome",   # Resource type
+            resourceType="OperationOutcome",
             id=id,                             # Logical id of this artifact
             issue=issue,                       # A single issue associated with the action
             **kwargs
