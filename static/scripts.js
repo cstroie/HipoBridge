@@ -2462,7 +2462,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (reportPreview) {
                 const notes = resultNotes;
                 if (forms.length > 0) {
-                    const allLab = forms.every(f => f.type === 'lab' || (!f.type && f.reference !== undefined));
+                    const allLab = forms.every(f => f.type === 'lab' || f.reference !== undefined);
                     if (allLab) {
                         reportPreview.appendChild(buildLabTable(forms));
                     } else {
@@ -2796,7 +2796,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const series = reportData.series || [];
 
             if (forms.length > 0) {
-                const allLab = forms.every(f => f.type === 'lab' || (!f.type && f.reference !== undefined));
+                const allLab = forms.every(f => f.type === 'lab' || f.reference !== undefined);
                 if (allLab) {
                     bodyDiv.appendChild(buildLabTable(forms));
                 } else {
