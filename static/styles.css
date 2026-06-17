@@ -1271,7 +1271,8 @@ select {
 .analysis-card.eco   .mod-circle,
 .mod-circle.mod-us { background: color-mix(in srgb,var(--mod-us) 14%,transparent); color: var(--mod-us); }
 .analysis-card.rads  .mod-circle,
-.mod-circle.mod-fl { background: color-mix(in srgb,var(--mod-fl) 14%,transparent); color: var(--mod-fl); }
+.mod-circle.mod-fl  { background: color-mix(in srgb,var(--mod-fl)  14%,transparent); color: var(--mod-fl);  }
+.mod-circle.mod-lab { background: color-mix(in srgb,var(--mod-lab) 14%,transparent); color: var(--mod-lab); }
 
 .card-title-block {
     flex: 1;

@@ -2041,7 +2041,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Function to load and display reports progressively
     async function loadAndDisplayReports(analysesData) {
-        const includedTypes = ['radio', 'ct', 'irm', 'eco', 'rads'];
+        const includedTypes = ['radio', 'ct', 'irm', 'eco', 'rads', 'lab'];
 
         if (!(analysesData.resourceType === 'Bundle' && analysesData.entry?.length > 0)) {
             elements.noAnalyses.style.display = 'block';
