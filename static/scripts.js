@@ -3022,7 +3022,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const urgent    = scheduleEntries.filter(r => r.priority === 'urgent').length;
         const toRead    = scheduleEntries.filter(r => r.status === 'ended').length;
         const inLab     = scheduleEntries.filter(r => ['draft', 'active'].includes(r.status)).length;
-        const completed = scheduleEntries.filter(r => r.status === 'completed').length;
+        const completed = scheduleEntries.filter(r => ['completed', 'ended'].includes(r.status)).length;
 
         const metricDefs = [
             { label: 'Exams',     value: total,     color: 'var(--ink, #0f172a)' },
