@@ -2886,7 +2886,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const status = r.status || '';
             const statusClass = SCHEDULE_STATUS_CLASS[status] || '';
             const isUrgent = r.priority === 'urgent';
-            const avatar = MODALITY_AVATAR[modalitySlug] || { abbr: '?', cls: '' };
+            const avatar = MODALITY_AVATAR[modalitySlug] || { icon: 'fa-question', cls: '' };
             const isLast = idx === scheduleEntries.length - 1;
 
             // Day group heading
