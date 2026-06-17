@@ -3260,6 +3260,108 @@ class HipoClientPresentation(HipoClient):
             data.set_error(str(e))
             return data
 
+    def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIREncounter, FHIROperationOutcome]:
+        """Convert parsed presentation HipoData to a FHIR R4 Encounter (ambulatory/emergency)."""
+        try:
+            if parsed_data.get("status") == "error":
+                return FHIROperationOutcome.from_error(
+                    message=parsed_data.get("message", "Error in parsed presentation data"),
+                    code="processing",
+                    severity="error"
+                )
+
+            presentation_id = parsed_data.get("presentation.id", "")
+            section = parsed_data.get("presentation.section", "")
+
+            # UPU = emergency department → EMER class; otherwise ambulatory
+            is_emer = section.upper() in ("UPU", "CPU", "URGENTA", "URGENTE")
+            encounter_class = "EMER" if is_emer else "AMB"
+            encounter_class_display = "emergency" if is_emer else "ambulatory"
+            encounter_type_display = "Emergency presentation" if is_emer else "Outpatient presentation"
+
+            fhir_encounter = FHIREncounter(
+                id=presentation_id,
+                status="finished",
+                class_={
+                    "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+                    "code": encounter_class,
+                    "display": encounter_class_display
+                },
+                type=[{
+                    "coding": [{
+                        "system": "http://snomed.info/sct",
+                        "code": "11429006" if not is_emer else "50849002",
+                        "display": encounter_type_display
+                    }]
+                }],
+                subject={
+                    "reference": f"Patient/{parsed_data.get('patient.id', '')}",
+                    "display": parsed_data.get("patient.name", "")
+                }
+            )
+
+            # Identifier: registry number
+            registry = parsed_data.get("presentation.registry")
+            if registry:
+                fhir_encounter["identifier"] = [{"system": "NrRegistru", "value": registry}]
+
+            # Period: presentation date/time (start only — no discharge time on this page)
+            date_time = parsed_data.get("presentation.date_time")
+            if date_time:
+                dt = parse_date_time(date_time)
+                if dt:
+                    fhir_encounter["period"] = {"start": dt.isoformat()}
+
+            # Attending physician
+            medic = parsed_data.get("presentation.medic")
+            if medic:
+                fhir_encounter["participant"] = [{
+                    "type": [{"coding": [{
+                        "system": "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
+                        "code": "ATND",
+                        "display": "attender"
+                    }]}],
+                    "individual": {"display": medic}
+                }]
+
+            # Location / ward
+            if section:
+                fhir_encounter["location"] = [{
+                    "location": {"display": section},
+                    "status": "completed"
+                }]
+
+            # Priority
+            if parsed_data.get("presentation.is_urgent"):
+                fhir_encounter["priority"] = {
+                    "coding": [{"system": "http://terminology.hl7.org/CodeSystem/v3-ActPriority", "code": "EM", "display": "emergency"}]
+                }
+
+            # Reason for visit / chief complaint
+            reason = parsed_data.get("presentation.reason")
+            if reason:
+                fhir_encounter["reasonCode"] = [{"text": reason}]
+
+            # Discharge decision as note
+            decision = parsed_data.get("presentation.decision")
+            consult_type = parsed_data.get("presentation.consult_type")
+            notes = []
+            if decision:
+                notes.append({"text": decision})
+            if consult_type:
+                notes.append({"text": consult_type})
+            if notes:
+                fhir_encounter["note"] = notes
+
+            return fhir_encounter
+        except Exception as e:
+            logger.error(f"Error converting presentation data to FHIR: {e}")
+            return FHIROperationOutcome.from_exception(e, code="exception")
+
+    async def fetch_respond_fhir(self, **kwargs) -> Union[FHIREncounter, FHIROperationOutcome]:
+        parsed_data = await self.fetch_and_parse(**kwargs)
+        return self.fhir_response(parsed_data, **kwargs)
+
 
 class HipoClientWhoami(HipoClient):
     """Extracts the logged-in user identity from the sidebar menu iframe

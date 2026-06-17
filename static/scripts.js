@@ -1604,20 +1604,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 extra: '',
             }));
 
-            const presItems = presentations.filter(Boolean).map(p => {
-                const pr = p.presentation || {};
-                const dt = pr.date_time || pr.date || '';
-                const isoDate = dt ? formatDate(dt) : '';
+            const presItems = presentations.filter(Boolean).map(enc => {
+                const start = enc.period?.start || '';
+                const section = enc.location?.[0]?.location?.display || '';
+                const reason = enc.reasonCode?.[0]?.text || '';
+                const notes = enc.note || [];
+                const decision = notes[0]?.text || '';
+                const consultType = notes[1]?.text || '';
+                const label = reason || consultType || 'Outpatient visit';
                 return {
                     type: 'outpatient',
-                    enc: p,
-                    sortKey: isoDate,
-                    start: isoDate,
+                    enc,
+                    sortKey: start,
+                    start: start ? formatDate(start) : '',
                     end: '',
-                    label: pr.reason || pr.consult_type || 'Outpatient visit',
-                    section: pr.section || '',
-                    medic: pr.medic || '',
-                    extra: pr.decision || '',
+                    label,
+                    section,
+                    medic: enc.participant?.[0]?.individual?.display || '',
+                    extra: decision,
                 };
             });
 
@@ -2398,10 +2402,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function fetchPresentation(id) {
         if (cache.encounters[id]) return cache.encounters[id];
-        const response = await fetch(`/api/presentation/${id}`, { headers: authHeaders() });
+        const response = await fetch(`/fhir/Encounter/${id}`, { headers: authHeaders() });
         if (!response.ok) return null;
         const data = await response.json();
-        if (data.status !== 'success') return null;
+        if (data.resourceType !== 'Encounter') return null;
         cachePut(cache.encounters, id, data);
         return data;
     }
