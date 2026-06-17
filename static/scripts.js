@@ -3084,7 +3084,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 modalityCounts[slug] = (modalityCounts[slug] || 0) + 1;
             });
 
-            const modLabels = { radio: 'X-Ray', ct: 'CT', irm: 'MRI', eco: 'Ultrasound', fluoro: 'Fluoroscopy', lab: 'Laboratory' };
             const modColors = { radio: 'var(--mod-xr)', ct: 'var(--mod-ct)', irm: 'var(--mod-mr)', eco: 'var(--mod-us)', fluoro: 'var(--mod-fl)', lab: 'var(--mod-lab)' };
 
             elements.scheduleModBars.innerHTML = '';
@@ -3094,7 +3093,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const pct = Math.round(count / total * 100);
                 const color = modColors[slug] || 'var(--muted)';
                 bar.innerHTML = `<div class="schedule-mod-bar-header">
-                    <span class="schedule-mod-bar-name">${modLabels[slug] || slug}</span>
+                    <span class="schedule-mod-bar-name">${MODALITY_INFO[slug]?.label || slug}</span>
                     <span class="schedule-mod-bar-count" style="color:${color}">${count}</span>
                 </div>
                 <div class="schedule-mod-bar-track">
