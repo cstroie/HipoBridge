@@ -2300,7 +2300,8 @@ select {
     display: flex;
     align-items: center;
     gap: 8px;
-    flex-wrap: wrap;
+    white-space: nowrap;
+    overflow: hidden;
 }
 
 .timeline-card-meta i {
