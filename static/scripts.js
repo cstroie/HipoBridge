@@ -608,10 +608,22 @@ document.addEventListener('DOMContentLoaded', function() {
             candidates.forEach(patient => {
                 const nameObj = Array.isArray(patient.name) ? patient.name[0] : patient.name;
                 const name = nameObj?.text || [nameObj?.family, ...(nameObj?.given || [])].filter(Boolean).join(' ') || patient.id;
+                const cnp = extractCNP(patient.identifier);
+                const dob = formatBirthDate(patient.birthDate);
+                const meta = [cnp, dob].filter(Boolean).join(' · ');
                 const btn = document.createElement('button');
                 btn.className = 'btn-secondary';
                 btn.style.cssText = 'display:block;width:100%;margin-top:var(--spacing-sm);text-align:left';
-                btn.textContent = name;
+                const nameEl = document.createElement('span');
+                nameEl.style.cssText = 'display:block;font-weight:var(--font-weight-semibold)';
+                nameEl.textContent = name;
+                btn.appendChild(nameEl);
+                if (meta) {
+                    const metaEl = document.createElement('span');
+                    metaEl.style.cssText = 'display:block;font-size:var(--font-size-xs);color:var(--text-muted);margin-top:2px';
+                    metaEl.textContent = meta;
+                    btn.appendChild(metaEl);
+                }
                 btn.addEventListener('click', () => dismiss(patient));
                 box.appendChild(btn);
             });
