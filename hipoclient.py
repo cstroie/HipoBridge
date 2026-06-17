@@ -3285,7 +3285,8 @@ class HipoClientSchedule(HipoClient):
                         'priority': detail_cells[3].get_text(strip=True),
                         'section': detail_cells[4].get_text(strip=True),
                         'requested_by': detail_cells[6].get_text(strip=True),
-                        'laboratory': self._lab_to_display(detail_cells[7].get_text(strip=True)),
+                        'laboratory': self._lab_to_display(raw_lab := detail_cells[7].get_text(strip=True)),
+                        'modality': self._lab_to_modality(raw_lab),
                     })
 
             data.store_list("requests", requests)
@@ -3349,7 +3350,7 @@ class HipoClientSchedule(HipoClient):
                     }] if req.get('request_code') else None,
                     subject=FHIRReference(display=req.get('patient_name')),
                     code=FHIRCodeableConcept(text=req.get('laboratory')),
-                    category=[FHIRCodeableConcept(coding=[{"code": modality}])] if (modality := self._lab_to_modality(req.get('laboratory') or '')) else None,
+                    category=[FHIRCodeableConcept(coding=[{"code": modality}])] if (modality := req.get('modality')) else None,
                     authoredOn=req.get('date_time'),
                     requester=FHIRReference(display=req.get('requested_by')) if req.get('requested_by') else None,
                     note=[n for n in [
