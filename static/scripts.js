@@ -894,11 +894,11 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Define modality mapping
         const modalityMap = {
-            'radio': { name: 'X-Ray',        icon: 'fa-x-ray',    color: '#36a2eb' },
-            'ct':    { name: 'CT',      icon: 'fa-computer', color: '#ff6384' },
-            'irm':   { name: 'MRI',          icon: 'fa-magnet',   color: '#ffce56' },
-            'eco':   { name: 'Ultrasound',   icon: 'fa-heartbeat',color: '#4bc0c0' },
-            'rads':  { name: 'Fluoroscopy',  icon: 'fa-radiation',color: '#9966ff' }
+            'radio': { name: 'X-Ray',       icon: 'fa-x-ray'     },
+            'ct':    { name: 'CT',          icon: 'fa-computer'  },
+            'irm':   { name: 'MRI',         icon: 'fa-magnet'    },
+            'eco':   { name: 'Ultrasound',  icon: 'fa-heartbeat' },
+            'rads':  { name: 'Fluoroscopy', icon: 'fa-radiation' },
         };
         
         // Group analyses by modality
@@ -3053,7 +3053,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
 
             const modLabels = { radio: 'X-Ray', ct: 'CT', irm: 'MRI', eco: 'Ultrasound', fluoro: 'Fluoroscopy', lab: 'Laboratory' };
-            const modColors = { radio: 'var(--mod-xr)', ct: 'var(--mod-ct)', irm: 'var(--mod-mr)', eco: 'var(--mod-us)', fluoro: 'var(--mod-fl)', lab: 'var(--primary)' };
+            const modColors = { radio: 'var(--mod-xr)', ct: 'var(--mod-ct)', irm: 'var(--mod-mr)', eco: 'var(--mod-us)', fluoro: 'var(--mod-fl)', lab: 'var(--mod-lab)' };
 
             elements.scheduleModBars.innerHTML = '';
             Object.entries(modalityCounts).sort((a, b) => b[1] - a[1]).forEach(([slug, count]) => {

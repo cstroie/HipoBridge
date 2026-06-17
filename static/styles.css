@@ -44,17 +44,19 @@
     --header-primary:   #4338ca;
     --header-secondary: #047857;
     --secondary-light: #10b981;
-    /* Modality colours — keep both old and editorial names */
-    --modality-radio: #2563eb;
-    --modality-ct:    #c2410c;
-    --modality-irm:   #7c3aed;
-    --modality-eco:   #0f766e;
-    --modality-rads:  #be123c;
-    --mod-xr:  #2563eb;
-    --mod-ct:  #c2410c;
-    --mod-us:  #0f766e;
-    --mod-mr:  #7c3aed;
-    --mod-fl:  #be123c;
+    /* Modality colours — verified WCAG AA on 14% self-tinting circles */
+    --mod-xr:  #1d4ed8;  /* blue-700    5.37:1 */
+    --mod-ct:  #9a3412;  /* orange-800  5.79:1 */
+    --mod-mr:  #6d28d9;  /* violet-700  5.59:1 */
+    --mod-us:  #115e59;  /* teal-800    6.06:1 */
+    --mod-fl:  #be123c;  /* rose-700    4.89:1 */
+    --mod-lab: var(--primary);
+    /* legacy aliases */
+    --modality-radio: var(--mod-xr);
+    --modality-ct:    var(--mod-ct);
+    --modality-irm:   var(--mod-mr);
+    --modality-eco:   var(--mod-us);
+    --modality-rads:  var(--mod-fl);
     /* Status colours — all verified WCAG AA on self-tinting badge */
     --st-notsent:  #475569;  /* slate-600  */
     --st-inlab:    #1d4ed8;  /* blue-700   */
@@ -158,16 +160,17 @@
     --hover-bg: rgba(255, 255, 255, 0.06);
     --header-primary:    #1d4ed8;
     --header-secondary:  #065f46;
-    --modality-radio: #60a5fa;
-    --modality-ct:    #fb923c;
-    --modality-irm:   #a78bfa;
-    --modality-eco:   #2dd4bf;
-    --modality-rads:  #fb7185;
-    --mod-xr:  #60a5fa;
-    --mod-ct:  #fb923c;
-    --mod-us:  #2dd4bf;
-    --mod-mr:  #a78bfa;
-    --mod-fl:  #fb7185;
+    --mod-xr:  #60a5fa;  /* blue-400   */
+    --mod-ct:  #fb923c;  /* orange-400 */
+    --mod-mr:  #a78bfa;  /* violet-400 */
+    --mod-us:  #2dd4bf;  /* teal-400   */
+    --mod-fl:  #fb7185;  /* rose-400   */
+    --mod-lab: var(--primary);
+    --modality-radio: var(--mod-xr);
+    --modality-ct:    var(--mod-ct);
+    --modality-irm:   var(--mod-mr);
+    --modality-eco:   var(--mod-us);
+    --modality-rads:  var(--mod-fl);
     --st-notsent:  #94a3b8;
     --st-inlab:    #60a5fa;
     --st-finished: #fbbf24;
@@ -2446,7 +2449,7 @@ select {
 .timeline-dot.mod-us  { background: var(--mod-us);  box-shadow: 0 0 0 4px color-mix(in srgb,var(--mod-us)  16%,transparent); }
 .timeline-dot.mod-mr  { background: var(--mod-mr);  box-shadow: 0 0 0 4px color-mix(in srgb,var(--mod-mr)  16%,transparent); }
 .timeline-dot.mod-fl  { background: var(--mod-fl);  box-shadow: 0 0 0 4px color-mix(in srgb,var(--mod-fl)  16%,transparent); }
-.timeline-dot.mod-lab { background: var(--primary);  box-shadow: 0 0 0 4px color-mix(in srgb,var(--primary) 16%,transparent); }
+.timeline-dot.mod-lab { background: var(--mod-lab);  box-shadow: 0 0 0 4px color-mix(in srgb,var(--mod-lab) 16%,transparent); }
 
 .timeline-line {
     flex: 1;
@@ -2489,7 +2492,7 @@ select {
 .timeline-mod-avatar.mod-us  { background: color-mix(in srgb,var(--mod-us)  14%,transparent); color: var(--mod-us); }
 .timeline-mod-avatar.mod-mr  { background: color-mix(in srgb,var(--mod-mr)  14%,transparent); color: var(--mod-mr); }
 .timeline-mod-avatar.mod-fl  { background: color-mix(in srgb,var(--mod-fl)  14%,transparent); color: var(--mod-fl); }
-.timeline-mod-avatar.mod-lab { background: color-mix(in srgb,var(--primary) 14%,transparent); color: var(--primary); }
+.timeline-mod-avatar.mod-lab { background: color-mix(in srgb,var(--mod-lab) 14%,transparent); color: var(--mod-lab); }
 
 .timeline-card-body {
     flex: 1;
