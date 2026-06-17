@@ -361,15 +361,7 @@ small {
     box-shadow: var(--shadow-xl);
 }
 
-.card-header {
-    padding: var(--spacing-lg);
-    border-bottom: 1px solid var(--border);
-}
 
-.card-footer {
-    padding: var(--spacing-lg);
-    border-top: 1px solid var(--border);
-}
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {
@@ -1151,23 +1143,6 @@ button.stat-pill {
     font-weight: var(--font-weight-medium);
 }
 
-.badge-primary {
-    background: color-mix(in srgb, var(--primary) 10%, transparent);
-    color: var(--primary);
-    border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
-}
-
-.badge-secondary {
-    background: color-mix(in srgb, var(--muted) 10%, transparent);
-    color: var(--muted);
-    border: 1px solid color-mix(in srgb, var(--muted) 30%, transparent);
-}
-
-.badge-info {
-    background: color-mix(in srgb, var(--info) 10%, transparent);
-    color: var(--info);
-    border: 1px solid color-mix(in srgb, var(--info) 30%, transparent);
-}
 
 .btn-secondary {
     display: inline-flex;
@@ -1191,27 +1166,6 @@ button.stat-pill {
     border-color: var(--primary);
 }
 
-.btn-ghost {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-sm) var(--spacing-md);
-    font-size: var(--font-size-base);
-    font-weight: var(--font-weight-medium);
-    border-radius: var(--radius-md);
-    border: 1px solid var(--border);
-    cursor: pointer;
-    transition: all 0.2s ease;
-    background: transparent;
-    color: var(--text);
-}
-
-.btn-ghost:hover {
-    background: var(--primary);
-    color: white;
-    border-color: var(--primary);
-}
 
 /* Tab section headers — title on the left, action buttons on the right */
 .tab-header {
@@ -1326,7 +1280,6 @@ select {
 /* Uniform control height in every header-actions row (reverts on mobile where controls stack) */
 .header-actions .btn-primary,
 .header-actions .btn-secondary,
-.header-actions .btn-ghost,
 .header-actions select,
 .header-actions .search-box,
 .header-actions .search-quick {
@@ -1338,7 +1291,6 @@ select {
 @media (max-width: 480px) {
     .tab-header .header-actions .btn-primary,
     .tab-header .header-actions .btn-secondary,
-    .tab-header .header-actions .btn-ghost,
     .tab-header .header-actions select,
     .tab-header .header-actions .search-box {
         height: auto;
@@ -2149,11 +2101,6 @@ select {
         width: 100%;
     }
 
-    .btn-outline-white {
-        width: 100%;
-        justify-content: center;
-    }
-
     /* On mobile toasts live at the bottom — away from the sticky header,
        matches iOS/Android conventions, and avoids the right-slide animation
        looking wrong on a full-width container */
@@ -2233,8 +2180,7 @@ select {
     /* Full-width buttons in main content — scoped so modal footers and
        toolbar buttons (schedule-refresh-btn) are unaffected */
     .main-content .btn-primary:not(.schedule-refresh-btn),
-    .main-content .btn-secondary:not(.schedule-refresh-btn),
-    .main-content .btn-ghost:not(.schedule-refresh-btn) {
+    .main-content .btn-secondary:not(.schedule-refresh-btn) {
         width: 100%;
         justify-content: center;
     }
