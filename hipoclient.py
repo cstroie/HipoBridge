@@ -3216,7 +3216,7 @@ class HipoClientPresentation(HipoClient):
                     data.store("patient.date", parsed["birth_date"])
                     data.store("patient.age", parsed["age"])
 
-            # Date/time and registry from known input names
+            # Date/time, registry, and linked IDs from known input names
             for inp in soup.find_all('input'):
                 name = inp.get('name', '')
                 val = inp.get('value', '').strip()
@@ -3232,6 +3232,26 @@ class HipoClientPresentation(HipoClient):
                     data.store("presentation.checkup_id", val)
                 elif name == 'savedCUDecision':
                     data.store("presentation.decision_code", val)
+                elif name == 'hdnPacID':
+                    data.store("patient.id", val)
+                elif name == 'checkinID':
+                    data.store("presentation.checkin_id", val)
+                elif name == 'strTransportNumber':
+                    data.store("presentation.transport_number", val)
+                elif name == 'strTransportDoctor':
+                    data.store("presentation.transport_medic", val)
+
+            # Reason for visit and transport type from selects
+            for sel in soup.find_all('select'):
+                sel_name = sel.get('name', '')
+                opt = sel.find('option', selected=True)
+                val = opt.get_text(strip=True) if opt else ''
+                if not val or val.upper() in ('SELECTATI', 'NONE', ''):
+                    continue
+                if sel_name == 'EmergencyReason':
+                    data.store("presentation.reason", val)
+                elif sel_name == 'selTransportType':
+                    data.store("presentation.transport_type", val)
 
             # Combine date + time into a single date_time string
             date = data.get("presentation.date", "")
@@ -3370,6 +3390,28 @@ class HipoClientPresentation(HipoClient):
             reason = parsed_data.get("presentation.reason")
             if reason:
                 fhir_encounter["reasonCode"] = [{"text": reason}]
+
+            # Link to the inpatient admission this presentation led to
+            checkin_id = parsed_data.get("presentation.checkin_id")
+            if checkin_id:
+                fhir_encounter["partOf"] = {"reference": f"Encounter/{checkin_id}"}
+
+            # Transport details as extension
+            transport_type = parsed_data.get("presentation.transport_type")
+            transport_number = parsed_data.get("presentation.transport_number")
+            transport_medic = parsed_data.get("presentation.transport_medic")
+            transport_exts = []
+            if transport_type:
+                transport_exts.append({"url": "type", "valueString": transport_type})
+            if transport_number:
+                transport_exts.append({"url": "number", "valueString": transport_number})
+            if transport_medic:
+                transport_exts.append({"url": "medic", "valueString": transport_medic})
+            if transport_exts:
+                fhir_encounter.setdefault("extension", []).append({
+                    "url": f"{fhir_encounter.get('id', '')}/transport",
+                    "extension": transport_exts
+                })
 
             # Discharge decision as note
             decision = parsed_data.get("presentation.decision")
