@@ -2300,8 +2300,26 @@ select {
     display: flex;
     align-items: center;
     gap: 8px;
-    white-space: nowrap;
     overflow: hidden;
+}
+.timeline-meta-section,
+.timeline-meta-requester {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    flex-shrink: 1;
+    overflow: hidden;
+}
+.timeline-meta-section span,
+.timeline-meta-requester span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.timeline-meta-sep,
+.timeline-code {
+    flex-shrink: 0;
 }
 
 .timeline-card-meta i {
