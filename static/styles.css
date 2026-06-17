@@ -1585,6 +1585,7 @@ select {
     font: 400 14.5px/1.7 'Inter', sans-serif;
     color: var(--text-light);
     text-wrap: pretty;
+    white-space: pre-wrap;
     margin: 0;
 }
 
