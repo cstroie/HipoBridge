@@ -31,11 +31,13 @@ document.addEventListener('DOMContentLoaded', function() {
         reportsCount: document.getElementById('reportsCount'),
         // Analyses tab elements
         analysesGrid: document.getElementById('analysesGrid'),
+        analysesEyebrow: document.getElementById('analysesEyebrow'),
         noAnalyses: document.getElementById('noAnalyses'),
         // Epicrisis tab elements
         epicrisisContent: document.getElementById('epicrisisContent'),
         copyEpicrisisBtn: document.getElementById('copyEpicrisisBtn'),
         // Report tab elements
+        reportCard: document.getElementById('reportCard'),
         patientReportMarkdown: document.getElementById('patientReportMarkdown'),
         copyReportBtn: document.getElementById('copyReportBtn'),
         // Header elements
@@ -436,7 +438,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (!analysesResult.success) {
                 // Non-fatal — patient loads, analyses are unavailable
-                const eyebrow = document.getElementById('analysesEyebrow');
+                const eyebrow = elements.analysesEyebrow;
                 if (eyebrow) eyebrow.dataset.warning = analysesResult.message;
             }
 
@@ -734,7 +736,7 @@ document.addEventListener('DOMContentLoaded', function() {
             delete elements.patientReportMarkdown.dataset.markdown;
             delete elements.patientReportMarkdown.dataset.loaded;
         }
-        const reportCard = document.getElementById('reportCard');
+        const reportCard = elements.reportCard;
         if (reportCard) reportCard.hidden = true;
         
         // Hide the patient nav group (keep always-visible tabs)
@@ -1077,7 +1079,7 @@ document.addEventListener('DOMContentLoaded', function() {
     async function displayPatientReport(patientData, analysesData) {
         log('Displaying patient report data');
 
-        const reportCard = document.getElementById('reportCard');
+        const reportCard = elements.reportCard;
         const markdownStore = elements.patientReportMarkdown;
         if (reportCard) reportCard.hidden = true;
 
@@ -2013,7 +2015,7 @@ document.addEventListener('DOMContentLoaded', function() {
         elements.analysesGrid.innerHTML = '';
 
         // Update analyses header eyebrow + meta + chip counts
-        const eyebrow = document.getElementById('analysesEyebrow');
+        const eyebrow = elements.analysesEyebrow;
         const metaEl = document.getElementById('analysesMeta');
         const patientNameEl = elements.patientName;
         if (eyebrow && patientNameEl?.textContent) {
