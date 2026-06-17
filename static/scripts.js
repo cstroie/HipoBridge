@@ -1575,39 +1575,64 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.historyEmpty) elements.historyEmpty.hidden = true;
 
         const checkoutIds = extractCheckoutIds(patientData);
-        if (checkoutIds.length === 0) {
+        const presentationIds = extractPresentationIds(patientData);
+
+        if (checkoutIds.length === 0 && presentationIds.length === 0) {
             if (elements.historyEmpty) elements.historyEmpty.hidden = false;
             return;
         }
 
         if (elements.historyLoading) elements.historyLoading.hidden = false;
         try {
-            const encounters = await limitedMap(
-                checkoutIds,
-                MAX_CONCURRENT_REQUESTS,
-                async id => {
-                    try { return await fetchEncounterDataForCheckout(id); }
-                    catch (_) { return null; }
-                }
-            );
+            const [encounters, presentations] = await Promise.all([
+                limitedMap(checkoutIds, MAX_CONCURRENT_REQUESTS,
+                    async id => { try { return await fetchEncounterDataForCheckout(id); } catch (_) { return null; } }),
+                limitedMap(presentationIds, MAX_CONCURRENT_REQUESTS,
+                    async id => { try { return await fetchPresentation(id); } catch (_) { return null; } })
+            ]);
 
-            const items = encounters
-                .filter(Boolean)
-                .map(enc => ({
-                    enc,
-                    start: enc.period?.start || '',
-                    end: enc.period?.end || ''
-                }))
-                .sort((a, b) => (b.end || b.start).localeCompare(a.end || a.start));
+            // Build a unified list with type tags
+            const encItems = encounters.filter(Boolean).map(enc => ({
+                type: 'inpatient',
+                enc,
+                sortKey: enc.period?.end || enc.period?.start || '',
+                start: enc.period?.start || '',
+                end: enc.period?.end || '',
+                label: extractDiagnosisText(enc) || 'No diagnosis recorded',
+                section: enc.location?.[0]?.location?.display || '',
+                medic: enc.participant?.[0]?.individual?.display || '',
+                extra: '',
+            }));
+
+            const presItems = presentations.filter(Boolean).map(p => {
+                const pr = p.presentation || {};
+                const dt = pr.date_time || pr.date || '';
+                const isoDate = dt ? formatDate(dt) : '';
+                return {
+                    type: 'outpatient',
+                    enc: p,
+                    sortKey: isoDate,
+                    start: isoDate,
+                    end: '',
+                    label: pr.reason || pr.consult_type || 'Outpatient visit',
+                    section: pr.section || '',
+                    medic: pr.medic || '',
+                    extra: pr.decision || '',
+                };
+            });
+
+            const items = [...encItems, ...presItems]
+                .sort((a, b) => b.sortKey.localeCompare(a.sortKey));
 
             if (items.length === 0) {
                 if (elements.historyEmpty) elements.historyEmpty.hidden = false;
                 return;
             }
 
-            // Populate diagnosis badge from most recent discharge if not already set
+            // Populate diagnosis badge from most recent inpatient discharge if not already set
             if (elements.patientDiagnosis && elements.patientDiagnosis.hidden) {
-                const latestDx = extractDiagnosisText(items[0].enc);
+                const latest = items.find(i => i.type === 'inpatient');
+                const latestDx = latest && extractDiagnosisText(latest.enc);
                 if (latestDx) {
                     elements.patientDiagnosis.textContent = latestDx;
                     elements.patientDiagnosis.hidden = false;
@@ -1615,36 +1640,48 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             const tmpl = document.getElementById('history-item-template');
-            items.forEach(({ enc, start, end }, idx) => {
+            items.forEach(({ type, enc, start, end, label, section, medic, extra }, idx) => {
                 const li = tmpl.content.cloneNode(true).querySelector('.history-item');
 
-                const period = [start && formatDate(start), end && formatDate(end)]
-                    .filter(Boolean).join(' → ');
-                li.querySelector('.history-period').textContent = period || 'Unknown period';
+                if (type === 'inpatient') {
+                    const period = [start && formatDate(start), end && formatDate(end)]
+                        .filter(Boolean).join(' → ');
+                    li.querySelector('.history-period').textContent = period || 'Unknown period';
 
-                // Nights badge
-                const nightsEl = li.querySelector('.history-nights');
-                if (nightsEl && start && end) {
-                    const ms = new Date(end) - new Date(start);
-                    const nights = Math.round(ms / 86400000);
-                    if (nights > 0) nightsEl.textContent = `${nights}d`;
-                    else nightsEl.hidden = true;
-                } else if (nightsEl) nightsEl.hidden = true;
+                    const nightsEl = li.querySelector('.history-nights');
+                    if (nightsEl && start && end) {
+                        const ms = new Date(end) - new Date(start);
+                        const nights = Math.round(ms / 86400000);
+                        if (nights > 0) nightsEl.textContent = `${nights}d`;
+                        else nightsEl.hidden = true;
+                    } else if (nightsEl) nightsEl.hidden = true;
 
-                li.querySelector('.history-diagnosis').textContent =
-                    extractDiagnosisText(enc) || 'No diagnosis recorded';
+                    li.querySelector('.history-load').addEventListener('click', () => switchTab('epicrisis'));
+                } else {
+                    // Outpatient presentation: show date + section
+                    const period = [start, section].filter(Boolean).join(' · ');
+                    li.querySelector('.history-period').textContent = period || 'Unknown date';
 
-                // Hide the connector line on the last item
+                    const nightsEl = li.querySelector('.history-nights');
+                    if (nightsEl) nightsEl.hidden = true;
+
+                    const typeEl = li.querySelector('.history-type');
+                    if (typeEl) { typeEl.textContent = extra || 'Outpatient'; typeEl.hidden = false; }
+
+                    li.querySelector('.history-load').addEventListener('click', () => switchTab('analyses'));
+                }
+
+                li.querySelector('.history-diagnosis').textContent = label;
+
                 if (idx === items.length - 1) {
                     const line = li.querySelector('.history-line');
                     if (line) line.hidden = true;
                 }
 
-                li.querySelector('.history-load').addEventListener('click', () => switchTab('epicrisis'));
                 elements.historyList.appendChild(li);
             });
         } catch (err) {
-            log('Failed to load hospitalisation history:', err);
+            log('Failed to load history:', err);
             if (elements.historyEmpty) elements.historyEmpty.hidden = false;
         } finally {
             if (elements.historyLoading) elements.historyLoading.hidden = true;
@@ -2350,6 +2387,23 @@ document.addEventListener('DOMContentLoaded', function() {
         const checkinExt = patientData.extension.find(ext => ext.url && ext.url.includes('checkin-ids'));
         if (!checkinExt || !checkinExt.valueString) return [];
         return checkinExt.valueString.split(',').filter(id => id.trim());
+    }
+
+    function extractPresentationIds(patientData) {
+        if (!patientData.extension) return [];
+        const ext = patientData.extension.find(e => e.url && e.url.includes('presentation-ids'));
+        if (!ext || !ext.valueString) return [];
+        return ext.valueString.split(',').filter(id => id.trim());
+    }
+
+    async function fetchPresentation(id) {
+        if (cache.encounters[id]) return cache.encounters[id];
+        const response = await fetch(`/api/presentation/${id}`, { headers: authHeaders() });
+        if (!response.ok) return null;
+        const data = await response.json();
+        if (data.status !== 'success') return null;
+        cachePut(cache.encounters, id, data);
+        return data;
     }
 
     function extractEpicrisisText(encounterData) {

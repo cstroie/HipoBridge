@@ -3139,6 +3139,128 @@ class HipoClientCerere(HipoClient):
             return data
 
 
+class HipoClientPresentation(HipoClient):
+    """Parses an outpatient/ER presentation (/files/presentation.asp?id={id})."""
+
+    def __init__(self, service_url=None, request=None):
+        super().__init__(service_url=service_url, request=request)
+        self.request_url = "/files/presentation.asp?id={id}"
+
+    def parse_data(self, html_content: str, **kwargs) -> HipoData:
+        data = HipoData(status="success", message="")
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            title = self.get_title(soup)
+            if not title or 'prezentare' not in title.lower():
+                data.set_error(f"Unexpected page for Presentation: {title}")
+                logger.warning(data['message'])
+                return data
+
+            if 'id' in kwargs:
+                data.store("presentation.id", kwargs["id"])
+
+            # Patient identity from the header link text "[ NAME ]"
+            patient_link = soup.find('a', href=re.compile(r'[Pp]acient/edit\.asp\?id='))
+            if patient_link:
+                name = re.sub(r'[\[\]]', '', patient_link.get_text(strip=True)).strip()
+                data.store("patient.name", name)
+            # CNP from hidden input or inline text
+            cnp_inp = soup.find('input', attrs={'name': 'strCNP'})
+            if not cnp_inp:
+                # try to find it from visible CNP label row
+                for tr in soup.find_all('tr'):
+                    cells = [td.get_text(' ', strip=True) for td in tr.find_all('td')]
+                    if len(cells) >= 2 and cells[0].strip() == 'CNP':
+                        parsed = parse_cnp(cells[1].strip())
+                        if parsed.get("valid"):
+                            data.store("patient.cnp", cells[1].strip())
+                            data.store("patient.gender", parsed["gender"])
+                            data.store("patient.date", parsed["birth_date"])
+                            data.store("patient.age", parsed["age"])
+                        break
+            else:
+                cnp = cnp_inp.get('value', '').strip()
+                parsed = parse_cnp(cnp)
+                if parsed.get("valid"):
+                    data.store("patient.cnp", cnp)
+                    data.store("patient.gender", parsed["gender"])
+                    data.store("patient.date", parsed["birth_date"])
+                    data.store("patient.age", parsed["age"])
+
+            # Date/time and registry from known input names
+            for inp in soup.find_all('input'):
+                name = inp.get('name', '')
+                val = inp.get('value', '').strip()
+                if not val:
+                    continue
+                if name == 'strDate':
+                    data.store("presentation.date", val)
+                elif name == 'strTime':
+                    data.store("presentation.time", val)
+                elif name == 'strRefID':
+                    data.store("presentation.registry", val)
+                elif name == 'savedCUId':
+                    data.store("presentation.checkup_id", val)
+                elif name == 'savedCUDecision':
+                    data.store("presentation.decision_code", val)
+
+            # Combine date + time into a single date_time string
+            date = data.get("presentation.date", "")
+            time = data.get("presentation.time", "")
+            if date and time:
+                dt = parse_date_time(f"{date} {time}")
+                if dt:
+                    data.store("presentation.date_time", dt.strftime("%d/%m/%Y %H:%M"))
+
+            # Section, medic, urgency, and reason from the triage table row
+            # The row looks like: "Garda: UPU  Medic: DR. X  Data/Ora: ...  Nr. registru: ..."
+            for tr in soup.find_all('tr'):
+                cells = [td.get_text(' ', strip=True) for td in tr.find_all('td')]
+                if not cells:
+                    continue
+                row_text = cells[0]
+
+                if 'Garda:' in row_text:
+                    m = re.search(r'Garda:\s*(\S+)', row_text)
+                    if m:
+                        data.store("presentation.section", m.group(1).strip())
+                    m2 = re.search(r'Medic:\s*(DR\.\s*\S+(?:\s+\S+)*?)(?:\s+Data/Ora:|$)', row_text)
+                    if m2:
+                        data.store("presentation.medic", m2.group(1).strip())
+
+                elif len(cells) >= 2 and 'Urgenta:' in cells[0]:
+                    data.store("presentation.is_urgent", cells[1].strip().upper() == 'DA')
+
+                elif len(cells) >= 2 and 'Motiv prezentare:' in cells[0]:
+                    data.store("presentation.reason", cells[1].strip())
+
+            # Consultation type from select
+            cu_sel = soup.find('select', attrs={'name': 'sCUType'})
+            if cu_sel:
+                opt = cu_sel.find('option', selected=True)
+                if opt:
+                    val = opt.get_text(strip=True)
+                    if val and val != 'SELECTATI':
+                        data.store("presentation.consult_type", val)
+
+            # Linked checkup decision text from the consults table
+            # Row: "checkup_id | section | medic | date | decision"
+            for tr in soup.find_all('tr'):
+                cells = [td.get_text(' ', strip=True) for td in tr.find_all('td')]
+                checkup_id = data.get("presentation.checkup_id", "")
+                if len(cells) >= 5 and checkup_id and cells[0].strip() == checkup_id:
+                    data.store("presentation.section", data.get("presentation.section") or cells[1].strip())
+                    data.store("presentation.medic", data.get("presentation.medic") or cells[2].strip())
+                    data.store("presentation.decision", cells[4].strip())
+                    break
+
+            return data
+        except Exception as e:
+            logger.error(f"Error parsing presentation data: {e}")
+            data.set_error(str(e))
+            return data
+
+
 class HipoClientWhoami(HipoClient):
     """Extracts the logged-in user identity from the sidebar menu iframe
     (Template/menu.asp), CONTUL MEU / Informatii personale section."""
