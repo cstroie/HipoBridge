@@ -165,12 +165,6 @@
     --mod-mr:  #a78bfa;  /* violet-400 */
     --mod-us:  #2dd4bf;  /* teal-400   */
     --mod-fl:  #fb7185;  /* rose-400   */
-    --mod-lab: var(--primary);
-    --modality-radio: var(--mod-xr);
-    --modality-ct:    var(--mod-ct);
-    --modality-irm:   var(--mod-mr);
-    --modality-eco:   var(--mod-us);
-    --modality-rads:  var(--mod-fl);
     --st-notsent:  #94a3b8;
     --st-inlab:    #60a5fa;
     --st-finished: #fbbf24;
@@ -630,7 +624,6 @@ small {
 }
 
 /* Recent searches */
-.recent-searches { }
 
 .recent-header {
     display: flex;
@@ -2048,7 +2041,6 @@ select {
 
 /* ── Schedule timeline ─────────────────────────────────────────────────── */
 
-.schedule-timeline { }
 .schedule-timeline[hidden] { display: none; }
 
 /* Day group heading inside timeline */
@@ -2455,7 +2447,6 @@ select {
 }
 
 /* Body — hidden until open */
-.epi-card-body { }
 .epi-card-body[hidden] { display: none; }
 
 .epi-card-inner {
