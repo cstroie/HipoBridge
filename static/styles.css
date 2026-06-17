@@ -1585,9 +1585,12 @@ select {
     font: 400 14.5px/1.7 'Inter', sans-serif;
     color: var(--text-light);
     text-wrap: pretty;
-    white-space: pre-wrap;
     margin: 0;
 }
+.report-admission-text p,
+.report-admission-text li { margin: 0 0 0.4em; }
+.report-admission-text p:last-child,
+.report-admission-text li:last-child { margin-bottom: 0; }
 
 /* §3 Imaging rows */
 .report-imaging-list { display: flex; flex-direction: column; gap: 10px; }

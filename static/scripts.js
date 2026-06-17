@@ -1168,10 +1168,10 @@ document.addEventListener('DOMContentLoaded', function() {
                                 .trim();
                             if (clean) parts.push(clean);
                         });
-                        textEl.textContent = parts.join('\n\n');
+                        textEl.innerHTML = marked.parse(parts.join('\n\n'));
                     } else {
                         // Discharged — show full epicrisis
-                        textEl.textContent = extractEpicrisisText(enc).trim();
+                        textEl.innerHTML = marked.parse(extractEpicrisisText(enc).trim());
                     }
                 }
                 secAdmission.hidden = false;
