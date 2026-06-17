@@ -3022,8 +3022,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const metricDefs = [
             { label: 'Exams',     value: total,     color: 'var(--ink, #0f172a)' },
             { label: 'Urgent',    value: urgent,    color: 'var(--urgent, #dc2626)' },
-            { label: 'In lab',    value: inLab,     color: 'var(--st-inlab, #2563eb)' },
-            { label: 'Completed', value: completed, color: 'var(--st-completed, #0f9d6b)' },
+            { label: 'In lab',    value: inLab,     color: 'var(--st-inlab, #1d4ed8)' },
+            { label: 'Completed', value: completed, color: 'var(--st-completed, #065f46)' },
         ];
 
         const sub = document.getElementById('scheduleHeroSub');
