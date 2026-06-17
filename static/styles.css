@@ -1308,7 +1308,10 @@ select {
     display: flex;
     align-items: center;
     gap: 4px;
+    white-space: nowrap;
+    overflow: hidden;
 }
+.card-subtitle .exam-date { white-space: nowrap; }
 
 /* Ordering physician */
 .card-referrer-line {
