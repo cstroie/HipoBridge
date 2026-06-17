@@ -2088,7 +2088,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     const MODALITY_INFO = {
         radio:  { icon: 'fa-x-ray',      label: 'X-Ray' },
-        ct:     { icon: 'fa-computer',   label: 'CT' },
+        ct:     { icon: 'fa-ring',        label: 'CT' },
         irm:    { icon: 'fa-magnet',     label: 'MRI' },
         eco:    { icon: 'fa-water',      label: 'Ultrasound' },
         rads:   { icon: 'fa-radiation',  label: 'Fluoroscopy' },
@@ -2098,7 +2098,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const MODALITY_AVATAR = {
         radio:  { icon: 'fa-x-ray',     cls: 'mod-xr' },
-        ct:     { icon: 'fa-computer',  cls: 'mod-ct' },
+        ct:     { icon: 'fa-ring',      cls: 'mod-ct' },
         irm:    { icon: 'fa-magnet',    cls: 'mod-mr' },
         eco:    { icon: 'fa-water',     cls: 'mod-us' },
         fluoro: { icon: 'fa-radiation', cls: 'mod-fl' },
