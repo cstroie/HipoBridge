@@ -2493,17 +2493,6 @@ document.addEventListener('DOMContentLoaded', function() {
         'unknown':        'Unknown',
     };
 
-    // Modality slug (category[0].coding[0].code) → compact chip; fluoro shares
-    // the rads colour class used by the analysis cards
-    const SCHEDULE_MODALITY_CHIP = {
-        radio:  { label: 'X-Ray',  cls: 'radio' },
-        ct:     { label: 'CT',     cls: 'ct' },
-        irm:    { label: 'MRI',    cls: 'irm' },
-        eco:    { label: 'Ultrasound',   cls: 'eco' },
-        fluoro: { label: 'Fluoroscopy', cls: 'rads' },
-        lab:    { label: 'Lab',    cls: 'lab' },
-    };
-
     let scheduleEntries = [];
 
     async function showRequestModal(requestId, requestCode, patientName, modality, triggerEl, requesterName) {
