@@ -3067,10 +3067,9 @@ select {
     border-left: 3px solid color-mix(in srgb, var(--primary) 30%, transparent);
     font: 400 15px/1.7 'Inter', sans-serif;
     color: var(--text-light);
-    white-space: pre-line;
     text-wrap: pretty;
 }
-.epi-prose p { margin: 0 0 0.75em; }
+.epi-prose p { margin: 0 0 0.4em; }
 .epi-prose p:last-child { margin-bottom: 0; }
 
 .epi-card-toolbar {
