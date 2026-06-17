@@ -55,7 +55,7 @@ import configparser
 
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from extractors import extract_id_from_link, extract_ids_from_links, extract_text_ids_from_links, extract_selected_from_dropdown, extract_text_after_label, extract_text_from_element, extract_textarea_after_label, extract_value_from_input
+from extractors import extract_id_from_link, extract_ids_from_links, extract_selected_from_dropdown, extract_text_after_label, extract_text_from_element, extract_value_from_input
 from extractors import parse_cnp, parse_date_time
 from urlcache import URLCache
 import asyncio
