@@ -54,12 +54,23 @@ Search results table. Each row contains:
 
 ## Outpatient presentation — `files/presentation.asp?id={presentation_id}`
 
-**HippoBridge:** not implemented (redirect without session)
+**HippoBridge:** `/api/presentation/{id}` (JSON) · `/fhir/Encounter/{id}?type=presentation` (FHIR Encounter)
 
 An outpatient visit / triage record. Linked from the patient page as `Fara nr.Reg` (no registry number) or with a presentation code.
 
-**Fields expected:** presentation date, triage level, section, reason for visit, medic.
-**Note:** page redirects to login without a valid Hipocrate session cookie — not accessible via static URL.
+**Fields scraped:**
+- Patient name (from `Pacient/edit.asp` header link) and CNP (from input or table row)
+- `presentation.date`, `presentation.time`, `presentation.date_time` (combined)
+- `presentation.registry` — registry number (`strRefID`)
+- `presentation.section` — ward/triage unit (e.g. `UPU`)
+- `presentation.medic` — attending physician
+- `presentation.is_urgent` — urgency flag
+- `presentation.reason` — reason for visit (`Motiv prezentare:`)
+- `presentation.consult_type` — consultation type from `sCUType` select
+- `presentation.decision` — discharge decision from linked consultation row
+- `presentation.checkup_id` — linked checkup ID (`savedCUId`)
+
+**FHIR Encounter:** class `EMER` for UPU/CPU/URGENTA sections, `AMB` otherwise. Period start from date/time; `reasonCode[0].text` = reason for visit; `note[0].text` = decision, `note[1].text` = consult type; `priority` = emergency if urgent.
 
 ---
 
@@ -356,7 +367,7 @@ Sidebar menu iframe. Provides authenticated user identity.
 | Schedule / request list | `PARA/NOM/Listare/?id=44` | `/api/schedule`, `/fhir/Schedule` | ✅ Full |
 | User identity | `Template/menu.asp` | `/api/whoami` | ✅ Full |
 | Logout | session close | `POST /api/logout` | ✅ Full |
-| Outpatient presentation | `files/presentation.asp` | — | ❌ Not implemented |
+| Outpatient presentation | `files/presentation.asp` | `/api/presentation/{id}`, `/fhir/Encounter/{id}?type=presentation` | ✅ Full |
 | Discharge edit form | `files/checkout.asp` | — | ❌ Not implemented (BiletExternare covers key fields) |
 | Companions/visitors | `files/companions.asp` | — | ❌ Not implemented |
 | Procedures (standalone) | `files/procedures.asp` | — | ❌ Not implemented |
@@ -375,8 +386,8 @@ Sidebar menu iframe. Provides authenticated user identity.
 ## High-value candidates for future implementation
 
 1. **Procedures in checkin** (`checkin.asp` embedded table) — DRACO procedure codes, dates, quantities. Already scraped, not yet exposed in HipoData/FHIR.
-2. **Outpatient presentation** (`presentation.asp`) — triage data, reason for visit. Common entry point.
-3. **Discharge medication** (`FMD_medicatie.asp`) — medication list at discharge, richer than BiletExternare treatment text.
-4. **Analysis trends** (`analyse/evolution/show.asp`) — longitudinal lab values per patient. Useful for clinical summary.
-5. **Ambulatory prescription** (`amb_recepy.asp`) — prescriptions issued at outpatient consultations.
-6. **Request edit form** (`cerere.asp`) — full request data beyond just patient ID.
+2. **Discharge medication** (`FMD_medicatie.asp`) — medication list at discharge, richer than BiletExternare treatment text.
+3. **Analysis trends** (`analyse/evolution/show.asp`) — longitudinal lab values per patient. Useful for clinical summary.
+4. **Ambulatory prescription** (`amb_recepy.asp`) — prescriptions issued at outpatient consultations.
+5. **Request edit form** (`cerere.asp`) — full request data beyond just patient ID.
+6. ~~**Outpatient presentation** (`presentation.asp`)~~ — ✅ implemented.
