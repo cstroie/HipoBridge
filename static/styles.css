@@ -214,9 +214,7 @@ h1.schedule-hero-date,
 }
 
 /* JetBrains Mono for codes */
-.report-id, .timeline-code, #patientCnp, .epi-dates {
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-}
+.report-id, .timeline-code, #patientCnp, 
 
 /* Container */
 .container {
@@ -265,11 +263,6 @@ small {
 }
 
 /* Layout */
-.layout {
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-}
 
 /* Buttons */
 .btn {
@@ -310,43 +303,6 @@ small {
 }
 
 /* Forms */
-.form-group {
-    margin-bottom: var(--spacing-md);
-}
-
-.form-label {
-    display: block;
-    margin-bottom: var(--spacing-xs);
-    font-weight: var(--font-weight-medium);
-    color: var(--text);
-}
-
-.form-input {
-    width: 100%;
-    padding: var(--spacing-sm) var(--spacing-md);
-    font-size: var(--font-size-base);
-    color: var(--text);
-    background-color: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    transition: all 0.2s ease;
-}
-
-.form-input:focus {
-    outline: none;
-    border-color: var(--primary);
-    box-shadow: var(--focus-ring-subtle);
-}
-
-.form-input::placeholder {
-    color: var(--text-light);
-}
-
-.form-error {
-    color: var(--danger);
-    font-size: var(--font-size-sm);
-    margin-top: var(--spacing-xs);
-}
 
 /* Cards */
 .card {
@@ -360,8 +316,6 @@ small {
 .card:hover {
     box-shadow: var(--shadow-xl);
 }
-
-
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {
@@ -547,7 +501,7 @@ small {
     .patient-ctx-pill { padding: 0 10px; }
 }
 
-.brand-name { display: none; }
+
 
 /* Main Content */
 .main-content {
@@ -608,15 +562,6 @@ small {
 .schedule-mod-chips { display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* Hero Section */
-.hero-section {
-    background: linear-gradient(135deg,
-        color-mix(in srgb, var(--primary) 10%, transparent),
-        color-mix(in srgb, var(--secondary) 10%, transparent));
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: var(--spacing-lg);
-    margin-bottom: var(--spacing-lg);
-}
 
 .hero-content h1 {
     font-size: var(--font-size-3xl);
@@ -627,52 +572,6 @@ small {
 .hero-content h1 i {
     margin-right: var(--spacing-sm);
     color: var(--primary);
-}
-
-.hero-subtitle {
-    font-size: var(--font-size-lg);
-    color: var(--text-light);
-    margin: 0;
-}
-
-.stat-item {
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    padding: var(--spacing-lg);
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-md);
-}
-
-.stat-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: var(--radius-full);
-    background: linear-gradient(135deg, var(--primary), var(--secondary));
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: var(--font-size-lg);
-}
-
-.stat-content {
-    display: flex;
-    flex-direction: column;
-}
-
-.stat-label {
-    font-size: var(--font-size-xs);
-    color: var(--text-light);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-
-.stat-value {
-    font-size: var(--font-size-3xl);
-    font-weight: var(--font-weight-bold);
-    margin: 0;
 }
 
 /* Search input row */
@@ -853,19 +752,6 @@ small {
 }
 .btn-primary:hover { box-shadow: var(--shadow-lg); }
 
-.form-help {
-    color: var(--text-light);
-    font-size: var(--font-size-sm);
-}
-
-.recent-remove {
-    display: none; /* removed from template; kept to avoid JS errors on old clones */
-}
-.recent-remove:hover {
-    color: var(--urgent);
-    background: color-mix(in srgb, var(--urgent) 12%, transparent);
-}
-
 /* ── Patient Profile ────────────────────────────── */
 
 /* ── Patient hero block ─────────────────────────────────────────────────── */
@@ -899,8 +785,6 @@ small {
     color: var(--ink);
     margin-bottom: 14px;
 }
-
-.patient-header-actions { flex-shrink: 0; }
 
 .patient-meta {
     display: flex;
@@ -1143,7 +1027,6 @@ button.stat-pill {
     font-weight: var(--font-weight-medium);
 }
 
-
 .btn-secondary {
     display: inline-flex;
     align-items: center;
@@ -1166,49 +1049,9 @@ button.stat-pill {
     border-color: var(--primary);
 }
 
-
 /* Tab section headers — title on the left, action buttons on the right */
-.tab-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: var(--spacing-md);
-    margin-bottom: var(--spacing-lg);
-    flex-wrap: wrap;
-}
-
-.tab-header .header-left {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    align-items: stretch;
-    gap: var(--spacing-sm);
-}
 
 /* Tab glyph: spans the full height of the h1 + subtitle column */
-.tab-header .header-glyph {
-    align-self: stretch;
-    display: flex;
-    align-items: center;
-    font-size: var(--font-size-5xl);
-    color: var(--primary);
-    flex-shrink: 0;
-}
-
-.tab-header .header-text {
-    min-width: 0;
-}
-
-.tab-header h1 {
-    font-size: var(--font-size-2xl);
-    margin: 0;
-}
-
-.tab-header .header-left p {
-    margin: var(--spacing-xs) 0 0;
-    font-size: var(--font-size-sm);
-    color: var(--text-light);
-}
 
 /* Analyses (alias kept for backwards compat) */
 .analyses-header {
@@ -1241,33 +1084,6 @@ button.stat-pill {
     margin: 0;
 }
 
-.search-box {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    padding: var(--spacing-sm) var(--spacing-md);
-}
-
-.search-box i {
-    color: var(--muted);
-}
-
-.search-box input {
-    background: transparent;
-    border: none;
-    outline: none;
-    color: var(--text);
-    padding: var(--spacing-sm);
-    min-width: 250px;
-}
-
-.search-box input::placeholder {
-    color: var(--text-light);
-}
-
 select {
     background: var(--card-bg);
     border: 1px solid var(--border);
@@ -1275,41 +1091,6 @@ select {
     padding: var(--spacing-sm);
     color: var(--text);
     cursor: pointer;
-}
-
-/* Uniform control height in every header-actions row (reverts on mobile where controls stack) */
-.header-actions .btn-primary,
-.header-actions .btn-secondary,
-.header-actions select,
-.header-actions .search-box,
-.header-actions .search-quick {
-    height: 40px;
-    padding-top: 0;
-    padding-bottom: 0;
-}
-
-@media (max-width: 480px) {
-    .tab-header .header-actions .btn-primary,
-    .tab-header .header-actions .btn-secondary,
-    .tab-header .header-actions select,
-    .tab-header .header-actions .search-box {
-        height: auto;
-        padding-top: var(--spacing-sm);
-        padding-bottom: var(--spacing-sm);
-    }
-}
-
-.header-actions .search-box input,
-.header-actions .search-quick input {
-    height: 100%;
-    padding-top: 0;
-    padding-bottom: 0;
-}
-
-@media (max-width: 480px) {
-    .tab-header .header-actions .search-box input {
-        height: auto;
-    }
 }
 
 /* Analyses grid — 2-col editorial layout */
@@ -1620,7 +1401,6 @@ select {
 }
 
 /* Report blockquote (analysis cards, not the report tab) */
-.report-section-card { }
 
 .report-preview {
     border-left: 3px solid color-mix(in srgb, var(--accent) 32%, transparent);
@@ -1682,31 +1462,6 @@ select {
 
 /* Clinical indication / notes below report */
 .card-meta-row:empty { display: none; }
-.request-meta {
-    display: grid;
-    grid-template-columns: max-content 1fr;
-    gap: var(--spacing-xs) var(--spacing-sm);
-    font-size: var(--font-size-sm);
-}
-.request-meta:empty { display: none; }
-.request-meta dt { font-weight: var(--font-weight-medium); color: var(--ink-3); white-space: nowrap; }
-.request-meta dd { margin: 0; color: var(--ink); }
-
-
-.error-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-xl);
-    color: var(--text-light);
-}
-
-.error-content i {
-    font-size: var(--font-size-3xl);
-    color: var(--danger);
-}
 
 .study-title {
     font-size: var(--font-size-sm);
@@ -1761,20 +1516,9 @@ select {
 }
 
 /* Report loading placeholder */
-.markdown-content .loading-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: var(--spacing-md);
-    padding: var(--spacing-2xl) var(--spacing-md);
-    color: var(--text-light);
-}
+.markdown-content 
 
-.markdown-content .loading-content i {
-    font-size: var(--font-size-4xl);
-    color: var(--primary);
-}
+.markdown-content 
 
 /* Markdown report content */
 .markdown-content {
@@ -1905,16 +1649,6 @@ select {
     margin-top: auto;
 }
 
-.footer-bottom {
-    text-align: center;
-}
-
-.footer-bottom p {
-    margin: 0;
-    color: var(--text-light);
-    font-size: var(--font-size-sm);
-}
-
 /* Toast notifications */
 .toast-container {
     position: fixed;
@@ -1948,25 +1682,6 @@ select {
 
 /* Solid darkened backgrounds — white text passes 4.5:1 (the old pastel
    gradients were ~2.3:1); the border accent keeps the brighter hue */
-.toast-success {
-    background: rgba(4, 120, 87, 0.95);
-    border-left: 4px solid var(--success);
-}
-
-.toast-error {
-    background: rgba(185, 28, 28, 0.95);
-    border-left: 4px solid var(--danger);
-}
-
-.toast-warning {
-    background: rgba(146, 64, 14, 0.95);
-    border-left: 4px solid var(--warning);
-}
-
-.toast-info {
-    background: rgba(29, 78, 216, 0.95);
-    border-left: 4px solid var(--info);
-}
 
 @keyframes slideIn {
     from { transform: translate(100%, -20px); opacity: 0; }
@@ -2076,30 +1791,18 @@ select {
     /* Header stays a single row (search-quick is hidden, so brand + 2 icon
        buttons fit in ~72px) — no need to make it static or re-pin the nav. */
 
-    /* Shrink brand to save horizontal space */
-    .brand-logo { width: 40px; height: 40px; }
-    .brand-name  { font-size: var(--font-size-xl); }
     /* Hide tagline in compact single-row header */
-    .brand-info > p:not(.brand-name) { display: none; }
+    .brand-info > p { display: none; }
     
-    .nav-menu {
-        overflow-x: auto;
-        white-space: nowrap;
-        padding-bottom: var(--spacing-sm);
-    }
+    
     
     .hero-content h1 {
         font-size: var(--font-size-2xl);
     }
     
-    .patient-banner {
-        flex-direction: column;
-        align-items: flex-start;
-    }
+    
 
-    .patient-banner-actions {
-        width: 100%;
-    }
+    
 
     /* On mobile toasts live at the bottom — away from the sticky header,
        matches iOS/Android conventions, and avoids the right-slide animation
@@ -2117,23 +1820,17 @@ select {
     }
 
     /* Tab header: let action controls wrap onto their own full-width row */
-    .tab-header .header-actions {
-        flex-wrap: wrap;
-        width: 100%;
-    }
+    
 
     /* Analyses search box: fill available space instead of fixed min-width */
-    .search-box { flex: 1 1 auto; }
-    .search-box input { min-width: 0; flex: 1; }
+    
+    
 
     /* Schedule date inputs: grow equally to share the row */
     .schedule-date-input { flex: 1; min-width: 100px; }
 }
 
 @media (max-width: 480px) {
-    /* Further shrink brand on very small screens */
-    .brand-logo { width: 36px; height: 36px; }
-    .brand-name  { font-size: var(--font-size-base); }
 
     .hero-content h1 {
         font-size: var(--font-size-xl);
@@ -2172,10 +1869,7 @@ select {
     }
 
     /* Tab header actions: stack vertically and stretch to full width */
-    .tab-header .header-actions {
-        flex-direction: column;
-        align-items: stretch;
-    }
+    
 
     /* Full-width buttons in main content — scoped so modal footers and
        toolbar buttons (schedule-refresh-btn) are unaffected */
@@ -2611,8 +2305,6 @@ select {
     color: var(--text);
     min-width: 160px;
 }
-
-
 
 .schedule-date-input {
     font-size: var(--font-size-sm);
