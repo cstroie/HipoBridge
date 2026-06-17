@@ -2402,7 +2402,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function fetchPresentation(id) {
         if (cache.encounters[id]) return cache.encounters[id];
-        const response = await fetch(`/fhir/Encounter/${id}`, { headers: authHeaders() });
+        const response = await fetch(`/fhir/Encounter/${id}`);
         if (!response.ok) return null;
         const data = await response.json();
         if (data.resourceType !== 'Encounter') return null;
