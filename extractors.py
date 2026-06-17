@@ -292,29 +292,6 @@ def extract_ids_from_links(soup: BeautifulSoup, id_pattern: str = r'id=([^&"]+)'
         logger.debug(f"Extracted ids for link pattern '{id_pattern}': {','.join(ids_list)}")
     return ids_list
 
-def extract_text_ids_from_links(soup: BeautifulSoup, id_pattern: str = r'id=([^&"]+)') -> dict:
-    """Extract text and IDs from multiple link elements' href attributes.
-
-    Args:
-        soup: BeautifulSoup object of the parsed HTML content
-        id_pattern: Regex pattern to extract ID from href (default: r'id=([^&"]+)')
-
-    Returns:
-        Dictionary mapping extracted IDs to their corresponding text content
-    """
-    result = {}
-    for item in soup.find_all('a', href=re.compile(id_pattern)):
-        href = item.get('href', '')
-        id_match = re.search(id_pattern, href)
-        if not id_match:
-            continue
-        item_id = id_match.group(1) if id_match.lastindex else id_match.group(0)
-        text = item.get_text().strip().upper()
-        if text == item_id:
-            continue
-        result[item_id] = text
-    return result
-
 def extract_value_from_input(soup: 'BeautifulSoup', element_id: str = None, name: str = None) -> str:
     """Extract the value attribute from an HTML input element by its ID or name.
 
@@ -401,32 +378,4 @@ def extract_selected_from_dropdown(soup: 'BeautifulSoup', element_id: str = None
     return ""
 
 
-def extract_textarea_after_label(soup: 'BeautifulSoup', label_regex: str) -> str:
-    """Extract content from the first textarea that appears after a label matching the regex.
-
-    Searches for a label matching the regex pattern and returns the content
-    of the first textarea element that follows it in the DOM.
-
-    Args:
-        soup: BeautifulSoup object of the parsed HTML content
-        label_regex: Regular expression pattern to match label text (case insensitive)
-
-    Returns:
-        Content of the textarea converted to markdown, or empty string if not found
-    """
-    try:
-        # Find elements with text matching the label regex
-        label_elements = soup.find_all(string=re.compile(label_regex, re.IGNORECASE))
-        if label_elements:
-            # Get the parent element which should contain the label
-            parent = label_elements[0].parent
-            if parent:
-                # Find the next textarea sibling
-                textarea = parent.find_next('textarea')
-                if textarea:
-                    return html_to_markdown(str(textarea))
-        return ""
-    except Exception as e:
-        logger.error(f"Error extracting textarea content after label '{label_regex}': {e}")
-        return ""
 
