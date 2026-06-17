@@ -2111,6 +2111,51 @@ document.addEventListener('DOMContentLoaded', function() {
         for (const card of cards) observer.observe(card);
     }
 
+    // ── Lab result table ────────────────────────────────────────────────────
+
+    function buildLabTable(forms) {
+        // Group by section
+        const sections = {};
+        for (const form of forms) {
+            const sec = form.section || '';
+            if (!sections[sec]) sections[sec] = [];
+            sections[sec].push(form);
+        }
+        const wrap = document.createElement('div');
+        wrap.className = 'lab-result-wrap';
+        for (const [sec, entries] of Object.entries(sections)) {
+            if (sec) {
+                const heading = document.createElement('p');
+                heading.className = 'lab-section-heading';
+                heading.textContent = sec;
+                wrap.appendChild(heading);
+            }
+            const table = document.createElement('table');
+            table.className = 'lab-result-table';
+            const tbody = table.createTBody();
+            for (const form of entries) {
+                const row = tbody.insertRow();
+                const tdName = row.insertCell();
+                tdName.className = 'lab-name';
+                tdName.textContent = form.title || '';
+                const tdVal = row.insertCell();
+                tdVal.className = 'lab-value' + (form.flag === 'H' ? ' lab-high' : form.flag === 'L' ? ' lab-low' : '');
+                tdVal.textContent = form.data || '';
+                const tdRef = row.insertCell();
+                tdRef.className = 'lab-ref';
+                tdRef.textContent = form.reference || '';
+                if (form.flag && form.flag !== 'N') {
+                    const badge = document.createElement('span');
+                    badge.className = 'lab-flag lab-flag-' + form.flag.toLowerCase();
+                    badge.textContent = form.flag;
+                    tdVal.appendChild(badge);
+                }
+            }
+            wrap.appendChild(table);
+        }
+        return wrap;
+    }
+
     // ── Lab Trends ──────────────────────────────────────────────────────────
 
     function sparkline(measurements, low, high, width, height) {
@@ -2417,25 +2462,30 @@ document.addEventListener('DOMContentLoaded', function() {
             if (reportPreview) {
                 const notes = resultNotes;
                 if (forms.length > 0) {
-                    for (const form of forms) {
-                        if (forms.length > 1 && form.title) {
-                            const h3 = document.createElement('h3');
-                            h3.className = 'study-title';
-                            h3.textContent = form.title;
-                            reportPreview.appendChild(h3);
-                        }
-                        if (form.contentType === 'text/markdown' && form.data) {
-                            const div = document.createElement('div');
-                            div.innerHTML = marked.parse(form.data);
-                            reportPreview.appendChild(div);
-                        } else if (form.contentType === 'text/html' && form.data) {
-                            const div = document.createElement('div');
-                            div.innerHTML = form.data;
-                            reportPreview.appendChild(div);
-                        } else if (form.contentType === 'text/plain' && form.data) {
-                            const pre = document.createElement('pre');
-                            pre.textContent = form.data;
-                            reportPreview.appendChild(pre);
+                    const allLab = forms.every(f => f.type === 'lab' || (!f.type && f.reference !== undefined));
+                    if (allLab) {
+                        reportPreview.appendChild(buildLabTable(forms));
+                    } else {
+                        for (const form of forms) {
+                            if (forms.length > 1 && form.title) {
+                                const h3 = document.createElement('h3');
+                                h3.className = 'study-title';
+                                h3.textContent = form.title;
+                                reportPreview.appendChild(h3);
+                            }
+                            if (form.contentType === 'text/markdown' && form.data) {
+                                const div = document.createElement('div');
+                                div.innerHTML = marked.parse(form.data);
+                                reportPreview.appendChild(div);
+                            } else if (form.contentType === 'text/html' && form.data) {
+                                const div = document.createElement('div');
+                                div.innerHTML = form.data;
+                                reportPreview.appendChild(div);
+                            } else if (form.contentType === 'text/plain' && form.data) {
+                                const pre = document.createElement('pre');
+                                pre.textContent = form.data;
+                                reportPreview.appendChild(pre);
+                            }
                         }
                     }
                 } else if (notes.length > 0) {
@@ -2746,24 +2796,29 @@ document.addEventListener('DOMContentLoaded', function() {
             const series = reportData.series || [];
 
             if (forms.length > 0) {
-                for (const form of forms) {
-                    if (form.title && forms.length > 1) {
-                        const h = document.createElement('p');
-                        h.className = 'series-result-title';
-                        h.textContent = form.title;
-                        bodyDiv.appendChild(h);
+                const allLab = forms.every(f => f.type === 'lab' || (!f.type && f.reference !== undefined));
+                if (allLab) {
+                    bodyDiv.appendChild(buildLabTable(forms));
+                } else {
+                    for (const form of forms) {
+                        if (form.title && forms.length > 1) {
+                            const h = document.createElement('p');
+                            h.className = 'series-result-title';
+                            h.textContent = form.title;
+                            bodyDiv.appendChild(h);
+                        }
+                        const div = document.createElement('div');
+                        if (form.contentType === 'text/markdown' && form.data) {
+                            div.innerHTML = marked.parse(form.data);
+                        } else if (form.contentType === 'text/html' && form.data) {
+                            div.innerHTML = form.data;
+                        } else if (form.data) {
+                            const pre = document.createElement('pre');
+                            pre.textContent = form.data;
+                            div.appendChild(pre);
+                        }
+                        bodyDiv.appendChild(div);
                     }
-                    const div = document.createElement('div');
-                    if (form.contentType === 'text/markdown' && form.data) {
-                        div.innerHTML = marked.parse(form.data);
-                    } else if (form.contentType === 'text/html' && form.data) {
-                        div.innerHTML = form.data;
-                    } else if (form.data) {
-                        const pre = document.createElement('pre');
-                        pre.textContent = form.data;
-                        div.appendChild(pre);
-                    }
-                    bodyDiv.appendChild(div);
                 }
             } else if (isImaging && resultNotes.length > 0) {
                 const showTitles = resultNotes.length > 1 && series.length >= resultNotes.length;

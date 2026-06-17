@@ -2293,15 +2293,21 @@ class HipoClientDiagnosticReport(HipoClient):
                 fhir_report["presentedForm"] = []
                 for study in studies:
                     if isinstance(study, dict) and study.get("result"):
-                        fhir_report["presentedForm"].append(
-                            {
-                                "contentType": "text/markdown",
-                                "title": study.get("title", ""),
-                                "data": study["result"],
-                                "type": study.get("type", ""),
-                                "region": study.get("region", "")
-                            }
+                        _, _, low, high, flag = _parse_observation_value(
+                            study.get("result", ""), study.get("reference", "")
                         )
+                        entry = {
+                            "contentType": "text/markdown",
+                            "title":     study.get("title", ""),
+                            "data":      study["result"],
+                            "type":      study.get("type", ""),
+                            "region":    study.get("region", ""),
+                            "reference": study.get("reference", ""),
+                            "section":   study.get("section", ""),
+                        }
+                        if flag:
+                            entry["flag"] = flag
+                        fhir_report["presentedForm"].append(entry)
 
             # Add extensions for additional data
             extensions = []
@@ -3461,32 +3467,58 @@ class HipoClientObservationBundle(HipoClient):
             return data
         try:
             # 1. Get all service requests for this patient
+            # 1. Fetch the most recent lab result per domain directly (NrPePag=1).
+            #    This targets the last episode without loading historical data.
             sr_client = HipoClientServiceRequestSearch(self.service_url, self.request)
-            requests_data = await sr_client.search(patient_id)
-            if requests_data.get("status") == "error":
-                data.set_error(requests_data.get("message", "Failed to fetch service requests"))
-                return data
+            episode_url = sr_client.request_url_episode  # "/Pacient/analysesEpisod.asp?pacid={pacid}"
+            lab_fetch_tasks = []
+            for domain_id in LAB_DOMAINS:
+                url = (episode_url + f"&strDomeniu={domain_id}&NrPePag=1").format(pacid=patient_id)
+                lab_fetch_tasks.append(self.get_page(url))
+            domain_results = await asyncio.gather(*lab_fetch_tasks)
 
-            all_requests = requests_data.get("requests") or []
+            # Collect all candidate lab requests with result_ids
+            seen_ids: set = set()
+            candidates = []
+            for html, err in domain_results:
+                if err or not html:
+                    continue
+                parsed = sr_client.parse_data(html)
+                for req in parsed.get("requests") or []:
+                    req['type'] = 'lab'
+                    rid = req.get("result_id")
+                    if rid and rid not in seen_ids:
+                        seen_ids.add(rid)
+                        candidates.append(req)
 
-            # 2. Filter: lab type only, must have a result, optional date range
+            # Keep only results from the most recent date (last episode).
+            # Tolerance: ±1 day to catch overnight draws within the same admission.
+            if candidates:
+                most_recent = max(
+                    (r.get("date_time", "") for r in candidates if r.get("date_time")),
+                    default=""
+                )
+                if most_recent:
+                    try:
+                        anchor = datetime.fromisoformat(most_recent[:10])
+                        candidates = [
+                            r for r in candidates
+                            if abs((datetime.fromisoformat(r["date_time"][:10]) - anchor).days) <= 1
+                        ]
+                    except ValueError:
+                        pass
+
+            # Apply explicit date range filter if provided
             sd = datetime.strptime(start_date, '%Y-%m-%d') if start_date else None
             ed = datetime.strptime(end_date,   '%Y-%m-%d') if end_date   else None
             lab_requests = []
-            for req in all_requests:
-                if req.get("type") != "lab":
-                    continue
-                result_id = req.get("result_id")
-                if not result_id:
-                    continue
+            for req in candidates:
                 dt_str = req.get("date_time", "")
                 if dt_str and (sd or ed):
                     try:
                         dt = datetime.fromisoformat(dt_str[:10])
-                        if sd and dt.replace(tzinfo=None) < sd:
-                            continue
-                        if ed and dt.replace(tzinfo=None) > ed:
-                            continue
+                        if sd and dt < sd: continue
+                        if ed and dt > ed: continue
                     except ValueError:
                         pass
                 lab_requests.append(req)

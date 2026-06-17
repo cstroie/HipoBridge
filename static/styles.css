@@ -1105,6 +1105,63 @@ select {
 
 /* ── Lab Trends ─────────────────────────────────────────────────────────── */
 
+/* ── Lab result table (card + modal) ────────────────────────────────────── */
+
+.lab-result-wrap { width: 100%; }
+
+.lab-section-heading {
+    font: var(--font-weight-semibold) var(--font-size-xs) 'Inter', sans-serif;
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: var(--spacing-sm) 0 4px;
+}
+.lab-section-heading:first-child { margin-top: 0; }
+
+.lab-result-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--font-size-xs);
+    margin-bottom: var(--spacing-sm);
+}
+.lab-result-table td {
+    padding: 3px var(--spacing-xs);
+    border-bottom: 1px solid var(--line);
+    vertical-align: middle;
+}
+.lab-name {
+    color: var(--ink-1);
+    font-weight: var(--font-weight-medium);
+    width: 45%;
+}
+.lab-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-align: right;
+    white-space: nowrap;
+    width: 25%;
+}
+.lab-ref {
+    color: var(--ink-3);
+    font-size: 11px;
+    text-align: right;
+    white-space: nowrap;
+    width: 30%;
+}
+.lab-high { color: var(--danger, #dc2626); font-weight: var(--font-weight-semibold); }
+.lab-low  { color: var(--primary);          font-weight: var(--font-weight-semibold); }
+
+.lab-flag {
+    display: inline-block;
+    font: var(--font-weight-bold) 9px 'Inter', sans-serif;
+    padding: 1px 4px;
+    border-radius: 3px;
+    margin-left: 4px;
+    vertical-align: middle;
+}
+.lab-flag-h { background: color-mix(in srgb, var(--danger, #dc2626) 15%, transparent); color: var(--danger, #dc2626); }
+.lab-flag-l { background: color-mix(in srgb, var(--primary) 15%, transparent); color: var(--primary); }
+
 #trendsSection {
     margin-top: var(--spacing-xl);
     padding-top: var(--spacing-xl);
