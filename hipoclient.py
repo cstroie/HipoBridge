@@ -3158,8 +3158,17 @@ class HipoClientWhoami(HipoClient):
 class HipoClientSchedule(HipoClient):
     """Parses the daily imaging/lab request worklist (/PARA/NOM/Listare/?id=44)."""
 
-    @staticmethod
-    def _lab_to_modality(lab: str) -> Optional[str]:
+    _MODALITY_DISPLAY = {
+        'eco':   'Ultrasound',
+        'fluoro': 'Fluoroscopy',
+        'radio': 'X-Ray',
+        'ct':    'CT',
+        'irm':   'MRI',
+        'lab':   'Laboratory',
+    }
+
+    @classmethod
+    def _lab_to_modality(cls, lab: str) -> Optional[str]:
         """Map Hipocrate laboratory label to a modality slug."""
         l = lab.lower().strip()
         if 'ecografie' in l:                            return 'eco'
@@ -3171,6 +3180,12 @@ class HipoClientSchedule(HipoClient):
         if 'imagistica' in l or 'rezonanta' in l:       return 'irm'
         if 'laborator' in l:                            return 'lab'
         return None
+
+    @classmethod
+    def _lab_to_display(cls, lab: str) -> str:
+        """Return a normalised display name for a Hipocrate laboratory label."""
+        slug = cls._lab_to_modality(lab)
+        return cls._MODALITY_DISPLAY.get(slug, lab) if slug else lab
 
     def __init__(self, service_url=None, request=None):
         super().__init__(service_url=service_url, request=request)
@@ -3270,7 +3285,7 @@ class HipoClientSchedule(HipoClient):
                         'priority': detail_cells[3].get_text(strip=True),
                         'section': detail_cells[4].get_text(strip=True),
                         'requested_by': detail_cells[6].get_text(strip=True),
-                        'laboratory': detail_cells[7].get_text(strip=True),
+                        'laboratory': self._lab_to_display(detail_cells[7].get_text(strip=True)),
                     })
 
             data.store_list("requests", requests)

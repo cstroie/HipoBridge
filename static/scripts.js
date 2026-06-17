@@ -2060,11 +2060,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     const MODALITY_INFO = {
-        radio: { icon: 'fa-x-ray',      label: 'X-Ray' },
-        ct:    { icon: 'fa-computer',   label: 'CT' },
-        irm:   { icon: 'fa-magnet',     label: 'MRI' },
-        eco:   { icon: 'fa-heartbeat',  label: 'Ultrasound' },
-        rads:  { icon: 'fa-radiation',  label: 'Fluoroscopy' },
+        radio:  { icon: 'fa-x-ray',      label: 'X-Ray' },
+        ct:     { icon: 'fa-computer',   label: 'CT' },
+        irm:    { icon: 'fa-magnet',     label: 'MRI' },
+        eco:    { icon: 'fa-heartbeat',  label: 'Ultrasound' },
+        rads:   { icon: 'fa-radiation',  label: 'Fluoroscopy' },
+        fluoro: { icon: 'fa-radiation',  label: 'Fluoroscopy' },
+        lab:    { icon: 'fa-flask',      label: 'Laboratory' },
     };
 
     const MODALITY_AVATAR = {
@@ -2536,8 +2538,8 @@ document.addEventListener('DOMContentLoaded', function() {
         radio:  { label: 'X-Ray',  cls: 'radio' },
         ct:     { label: 'CT',     cls: 'ct' },
         irm:    { label: 'MRI',    cls: 'irm' },
-        eco:    { label: 'US',     cls: 'eco' },
-        fluoro: { label: 'Fluoro', cls: 'rads' },
+        eco:    { label: 'Ultrasound',   cls: 'eco' },
+        fluoro: { label: 'Fluoroscopy', cls: 'rads' },
         lab:    { label: 'Lab',    cls: 'lab' },
     };
 
@@ -2890,7 +2892,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const avatarEl = document.createElement('div');
             avatarEl.className = `timeline-mod-avatar ${avatar.cls}`;
             avatarEl.textContent = avatar.abbr;
-            avatarEl.title = laboratory || modalitySlug;
+            avatarEl.title = MODALITY_INFO[modalitySlug]?.label || laboratory || modalitySlug;
             card.appendChild(avatarEl);
 
             // Card body
@@ -3054,7 +3056,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 modalityCounts[slug] = (modalityCounts[slug] || 0) + 1;
             });
 
-            const modLabels = { radio: 'X-Ray', ct: 'CT', irm: 'MRI', eco: 'US', fluoro: 'Fluoro', lab: 'Lab' };
+            const modLabels = { radio: 'X-Ray', ct: 'CT', irm: 'MRI', eco: 'Ultrasound', fluoro: 'Fluoroscopy', lab: 'Laboratory' };
             const modColors = { radio: 'var(--mod-xr)', ct: 'var(--mod-ct)', irm: 'var(--mod-mr)', eco: 'var(--mod-us)', fluoro: 'var(--mod-fl)', lab: 'var(--primary)' };
 
             elements.scheduleModBars.innerHTML = '';
