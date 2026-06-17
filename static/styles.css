@@ -1533,6 +1533,7 @@ select {
 }
 .report-card[hidden] { display: none; }
 
+.report-section { margin-top: var(--spacing-xl); }
 .report-section[hidden] { display: none; }
 
 /* §1 Patient identity */
