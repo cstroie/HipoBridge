@@ -130,6 +130,10 @@ ANALYSIS_TYPES = {
     }
 }
 
+# Lab domain IDs on this Hipocrate installation (from analysesALL.asp?type=PA dropdown).
+# These are fetched in parallel alongside imaging domains in HipoClientServiceRequestSearch.
+LAB_DOMAINS = [1, 2, 3, 5, 8, 9, 15, 19, 21, 22, 23, 24, 27, 39, 41]
+
 
 
 
@@ -1436,17 +1440,20 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                     year = datetime.now().year
                 request_url = self.request_url_episode + f"&strAN={year}&NrPePag=100"
             else:
-                # Fetch all imaging domains in parallel and merge
+                # Fetch all imaging + lab domains in parallel and merge
                 imaging_types = [t for t, v in ANALYSIS_TYPES.items() if v['domain'] != 0]
+                # (type_tag, domain_id) — imaging types use their slug; lab domains all map to 'lab'
+                fetch_specs = [(t, ANALYSIS_TYPES[t]['domain']) for t in imaging_types]
+                fetch_specs += [('lab', d) for d in LAB_DOMAINS]
                 tasks = []
-                for t in imaging_types:
-                    url = (self.request_url_episode + f"&strDomeniu={ANALYSIS_TYPES[t]['domain']}&NrPePag=100").format(pacid=patient_id)
+                for _type_tag, domain_id in fetch_specs:
+                    url = (self.request_url_episode + f"&strDomeniu={domain_id}&NrPePag=100").format(pacid=patient_id)
                     tasks.append(self.get_page(url))
                 results = await asyncio.gather(*tasks)
                 merged = HipoData(status="success", message="")
                 seen_ids = set()
                 all_requests = []
-                for html, err in results:
+                for (type_tag, _domain_id), (html, err) in zip(fetch_specs, results):
                     if err or not html:
                         continue
                     parsed = self.parse_data(html)
@@ -1455,6 +1462,9 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                     for req in parsed.get('requests', []):
                         if req['id'] not in seen_ids:
                             seen_ids.add(req['id'])
+                            # Lab domains override whatever type the barcode parser detected
+                            if type_tag == 'lab':
+                                req['type'] = 'lab'
                             all_requests.append(req)
                 all_requests.sort(key=lambda r: r.get('date_time', ''), reverse=True)
                 merged['requests'] = all_requests
