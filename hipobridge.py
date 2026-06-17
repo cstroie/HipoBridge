@@ -34,7 +34,7 @@ import base64
 from fhir import OperationOutcome, Resource
 
 from hipoclient import ANALYSIS_TYPES
-from hipoclient import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientImagingStudy, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientServiceRequestSearch, HipoClientCheckout, HipoClientCheckin, HipoClientCheckup, HipoClientSchedule, HipoClientCerere, HipoClientPresentation, HipoClientWhoami
+from hipoclient import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientImagingStudy, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientServiceRequestSearch, HipoClientCheckout, HipoClientCheckin, HipoClientCheckup, HipoClientSchedule, HipoClientCerere, HipoClientPresentation, HipoClientObservationBundle, HipoClientWhoami
 from hipoclient import user_session_manager
 from hipodata import HipoData
 
@@ -380,6 +380,23 @@ async def get_fhir_schedule(request):
         start_date=start_date, end_date=end_date,
         lab_id=lab_id, section_name=section_name, patient_text=patient_text,
         force=force, limit=limit, http_request=request)
+    return web_fhir_response(response)
+
+@require_auth
+async def get_fhir_observation(request):
+    """FHIR Bundle of Observations aggregated from all lab DiagnosticReports for a patient.
+    ?patient={id}&start_date=YYYY-MM-DD&end_date=YYYY-MM-DD&refresh=1"""
+    patient_id = request.rel_url.query.get('patient')
+    if not patient_id:
+        return web_fhir_response("patient parameter is required")
+    start_date = request.rel_url.query.get('start_date')
+    end_date   = request.rel_url.query.get('end_date')
+    client = HipoClientObservationBundle(SERVICE_URL, request)
+    response = await client.fetch_respond_fhir(
+        patient_id=patient_id,
+        start_date=start_date,
+        end_date=end_date,
+    )
     return web_fhir_response(response)
 
 @require_auth
@@ -737,6 +754,7 @@ async def init_app():
     app.router.add_get('/fhir/ImagingStudy/{id}', get_fhir_imaging_study)
     app.router.add_get('/fhir/DiagnosticReport/{id}', get_fhir_diagnostic_report)
     app.router.add_get('/fhir/Encounter/{id}', get_fhir_encounter)
+    app.router.add_get('/fhir/Observation', get_fhir_observation)
     app.router.add_get('/fhir/ValueSet/cnp', serve_validate_cnp)
     app.router.add_post('/fhir/md2html', serve_md2html)
     app.router.add_get('/fhir/CodeSystem/analysis-types', serve_fhir_analysis_types)

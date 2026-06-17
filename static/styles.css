@@ -1106,6 +1106,124 @@ select {
     .analyses-grid { grid-template-columns: 1fr; }
 }
 
+/* ── Lab Trends ─────────────────────────────────────────────────────────── */
+
+#trendsSection {
+    margin-top: var(--spacing-xl);
+    padding-top: var(--spacing-xl);
+    border-top: 1px solid var(--line);
+}
+
+.trends-header {
+    display: flex;
+    align-items: baseline;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+}
+
+.trends-header h2 {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    color: var(--ink-1);
+    margin: 0;
+}
+
+.trends-subtitle {
+    font-size: var(--font-size-xs);
+    color: var(--ink-3);
+    margin: 0;
+}
+
+.trends-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.trends-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--font-size-xs);
+    color: var(--ink-1);
+}
+
+.trends-table th,
+.trends-table td {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    text-align: left;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.trends-table th {
+    font-weight: var(--font-weight-medium);
+    color: var(--ink-3);
+    background: var(--surface-2);
+    position: sticky;
+    top: 0;
+}
+
+.trend-name {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 160px;
+    white-space: normal;
+}
+
+.trend-meta {
+    font-size: 10px;
+    color: var(--ink-3);
+}
+
+.trend-date-col {
+    min-width: 90px;
+    text-align: right;
+}
+
+.trend-spark-col {
+    min-width: 90px;
+    text-align: center;
+}
+
+.trend-empty {
+    color: var(--ink-3);
+    text-align: right;
+}
+
+.trend-high {
+    color: var(--danger, #dc2626);
+    font-weight: var(--font-weight-semibold);
+    text-align: right;
+}
+
+.trend-low {
+    color: var(--primary);
+    font-weight: var(--font-weight-semibold);
+    text-align: right;
+}
+
+.trends-table td:not(.trend-name):not(.trend-spark-col) {
+    text-align: right;
+}
+
+.trend-sparkline {
+    display: block;
+    margin: 0 auto;
+    color: var(--ink-2);
+    overflow: visible;
+}
+
+.trend-band {
+    fill: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.trend-line {
+    stroke: currentColor;
+    stroke-width: 1.5;
+    fill: none;
+}
+
 /* Analysis Cards */
 /* ── Analysis card ──────────────────────────────────────────────────────── */
 

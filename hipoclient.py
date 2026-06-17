@@ -72,6 +72,7 @@ from fhir import ImagingStudy as FHIRImagingStudy
 from fhir import DiagnosticReport as FHIRDiagnosticReport
 from fhir import Encounter as FHIREncounter
 from fhir import Bundle as FHIRBundle
+from fhir import Observation as FHIRObservation
 
 # Import HipoData class
 from hipodata import HipoData
@@ -3361,6 +3362,236 @@ class HipoClientPresentation(HipoClient):
     async def fetch_respond_fhir(self, **kwargs) -> Union[FHIREncounter, FHIROperationOutcome]:
         parsed_data = await self.fetch_and_parse(**kwargs)
         return self.fhir_response(parsed_data, **kwargs)
+
+
+def _parse_observation_value(result_text: str, reference_text: str):
+    """Extract numeric value, unit, reference range, and H/L/N flag from result + reference strings.
+
+    Returns (value_float, unit_str, low_float, high_float, flag_str).
+    Any field may be None if not parseable.
+    """
+    result_text  = (result_text  or '').strip()
+    reference_text = (reference_text or '').strip()
+
+    # Numeric value from result (handle leading < / > qualifiers and comma decimals)
+    value = None
+    val_m = re.match(r'^[<>]?\s*([\d]+(?:[.,][\d]+)?)', result_text)
+    if val_m:
+        try:
+            value = float(val_m.group(1).replace(',', '.'))
+        except ValueError:
+            pass
+
+    # Unit: text following the numeric range in reference_text
+    # Patterns: "12.0-16.0 g/dL", "4.0-10.0 x10^9/L", "< 5.0 mg/L", "> 35 %"
+    unit = None
+    range_m = re.match(r'^([\d.,]+)\s*[-–]\s*([\d.,]+)\s*(.*)', reference_text)
+    lt_m    = re.match(r'^[<≤]\s*[\d.,]+\s+(.*)',              reference_text)
+    gt_m    = re.match(r'^[>≥]\s*[\d.,]+\s+(.*)',              reference_text)
+    if range_m:
+        unit = range_m.group(3).strip() or None
+    elif lt_m:
+        unit = lt_m.group(1).strip() or None
+    elif gt_m:
+        unit = gt_m.group(1).strip() or None
+
+    # Low / high bounds
+    low = high = None
+    if range_m:
+        try:
+            low  = float(range_m.group(1).replace(',', '.'))
+            high = float(range_m.group(2).replace(',', '.'))
+        except ValueError:
+            pass
+    elif lt_m:
+        lt_val_m = re.search(r'[\d.,]+', reference_text)
+        if lt_val_m:
+            try:
+                high = float(lt_val_m.group(0).replace(',', '.'))
+            except ValueError:
+                pass
+    elif gt_m:
+        gt_val_m = re.search(r'[\d.,]+', reference_text)
+        if gt_val_m:
+            try:
+                low = float(gt_val_m.group(0).replace(',', '.'))
+            except ValueError:
+                pass
+
+    # H / L / N flag
+    flag = None
+    if value is not None:
+        if low is not None and high is not None:
+            flag = 'N' if low <= value <= high else ('H' if value > high else 'L')
+        elif high is not None:
+            flag = 'N' if value <= high else 'H'
+        elif low is not None:
+            flag = 'N' if value >= low else 'L'
+
+    return value, unit, low, high, flag
+
+
+class HipoClientObservationBundle(HipoClient):
+    """Aggregates lab analyte Observations for a patient across all DiagnosticReports.
+
+    Fetches all lab service requests for the patient, then fetches each DiagnosticReport
+    in parallel and emits one FHIR Observation per analyte measurement.
+    Route: GET /fhir/Observation?patient={id}
+    """
+
+    MAX_CONCURRENT = 5
+
+    def __init__(self, service_url=None, request=None):
+        super().__init__(service_url=service_url, request=request)
+
+    async def fetch_and_parse(self, patient_id=None, start_date=None, end_date=None, **kwargs) -> HipoData:
+        data = HipoData(status="success", message="")
+        if not patient_id:
+            data.set_error("patient_id is required")
+            return data
+        try:
+            # 1. Get all service requests for this patient
+            sr_client = HipoClientServiceRequestSearch(self.service_url, self.request)
+            requests_data = await sr_client.search(patient_id)
+            if requests_data.get("status") == "error":
+                data.set_error(requests_data.get("message", "Failed to fetch service requests"))
+                return data
+
+            all_requests = requests_data.get("requests") or []
+
+            # 2. Filter: lab type only, must have a result, optional date range
+            sd = datetime.strptime(start_date, '%Y-%m-%d') if start_date else None
+            ed = datetime.strptime(end_date,   '%Y-%m-%d') if end_date   else None
+            lab_requests = []
+            for req in all_requests:
+                if req.get("type") != "lab":
+                    continue
+                result_id = req.get("result_id")
+                if not result_id:
+                    continue
+                dt_str = req.get("date_time", "")
+                if dt_str and (sd or ed):
+                    try:
+                        dt = datetime.fromisoformat(dt_str[:10])
+                        if sd and dt.replace(tzinfo=None) < sd:
+                            continue
+                        if ed and dt.replace(tzinfo=None) > ed:
+                            continue
+                    except ValueError:
+                        pass
+                lab_requests.append(req)
+
+            # 3. Fetch DiagnosticReports in parallel (capped concurrency)
+            sem = asyncio.Semaphore(self.MAX_CONCURRENT)
+
+            async def fetch_report(req):
+                async with sem:
+                    dr_client = HipoClientDiagnosticReport(self.service_url, self.request)
+                    try:
+                        return req, await dr_client.fetch_and_parse(id=req["result_id"])
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch DiagnosticReport {req['result_id']}: {e}")
+                        return req, None
+
+            fetch_tasks = [fetch_report(req) for req in lab_requests]
+            results = await asyncio.gather(*fetch_tasks)
+
+            # 4. Build flat observations list
+            observations = []
+            for req, parsed in results:
+                if parsed is None or parsed.get("status") == "error":
+                    continue
+                studies = parsed.get("studies") or []
+                date_time = parsed.get("request.date_time") or parsed.get("study.date_time") or req.get("date_time", "")
+                effective = date_time[:10] if date_time else None   # YYYY-MM-DD
+                report_id = req.get("result_id", "")
+                for study in studies:
+                    if not isinstance(study, dict):
+                        continue
+                    if study.get("type") not in ("lab", "unknown", None):
+                        continue
+                    title      = study.get("title", "")
+                    result_txt = study.get("result", "")
+                    ref_txt    = study.get("reference", "")
+                    if not title or not result_txt:
+                        continue
+                    val, unit, low, high, flag = _parse_observation_value(result_txt, ref_txt)
+                    observations.append({
+                        "report_id":   report_id,
+                        "date":        effective,
+                        "analyte":     title,
+                        "value":       val,
+                        "value_text":  result_txt if val is None else None,
+                        "unit":        unit,
+                        "reference":   ref_txt,
+                        "low":         low,
+                        "high":        high,
+                        "flag":        flag,
+                        "section":     study.get("section", ""),
+                    })
+
+            data.store_list("observations", observations)
+            data.store("patient.id", patient_id)
+            return data
+
+        except Exception as e:
+            logger.error(f"HipoClientObservationBundle.fetch_and_parse failed: {e}")
+            data.set_error(str(e))
+            return data
+
+    def fhir_response(self, parsed_data: HipoData, patient_id=None, **kwargs) -> Union[FHIRBundle, FHIROperationOutcome]:
+        if parsed_data.get("status") == "error":
+            return FHIROperationOutcome.from_error(
+                message=parsed_data.get("message", "Unknown error"),
+                code="processing", severity="error"
+            )
+        try:
+            bundle = FHIRBundle(type="searchset", total=0)
+            pid = patient_id or parsed_data.get("patient.id", "")
+            for obs in (parsed_data.get("observations") or []):
+                slug = re.sub(r'\W+', '-', obs["analyte"].lower()).strip('-')
+                obs_id = f"{obs['report_id']}-{slug}"
+
+                value_quantity = None
+                value_string   = None
+                if obs["value"] is not None:
+                    vq = {"value": obs["value"]}
+                    if obs["unit"]:
+                        vq["unit"] = obs["unit"]
+                    value_quantity = vq
+                elif obs.get("value_text"):
+                    value_string = obs["value_text"]
+
+                ref_range = None
+                if obs.get("reference"):
+                    rr = {"text": obs["reference"]}
+                    if obs["low"]  is not None: rr["low"]  = {"value": obs["low"],  "unit": obs["unit"] or ""}
+                    if obs["high"] is not None: rr["high"] = {"value": obs["high"], "unit": obs["unit"] or ""}
+                    ref_range = [rr]
+
+                interp = [{"text": obs["flag"]}] if obs.get("flag") else None
+
+                observation = FHIRObservation(
+                    id=obs_id,
+                    status="final",
+                    code={"text": obs["analyte"]},
+                    subject={"reference": f"Patient/{pid}"} if pid else None,
+                    effectiveDateTime=obs.get("date"),
+                    valueQuantity=value_quantity,
+                    valueString=value_string,
+                    referenceRange=ref_range,
+                    interpretation=interp,
+                    basedOn=[{"reference": f"ServiceRequest/{obs['report_id']}"}] if obs.get("report_id") else None,
+                )
+                bundle.append_entry(resource=observation)
+            return bundle
+        except Exception as e:
+            logger.error(f"HipoClientObservationBundle.fhir_response failed: {e}")
+            return FHIROperationOutcome.from_exception(e, code="exception")
+
+    async def fetch_respond_fhir(self, patient_id=None, **kwargs) -> Union[FHIRBundle, FHIROperationOutcome]:
+        parsed = await self.fetch_and_parse(patient_id=patient_id, **kwargs)
+        return self.fhir_response(parsed, patient_id=patient_id, **kwargs)
 
 
 class HipoClientWhoami(HipoClient):

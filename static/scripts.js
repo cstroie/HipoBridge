@@ -33,6 +33,9 @@ document.addEventListener('DOMContentLoaded', function() {
         analysesGrid: document.getElementById('analysesGrid'),
         analysesEyebrow: document.getElementById('analysesEyebrow'),
         noAnalyses: document.getElementById('noAnalyses'),
+        trendsSection: document.getElementById('trendsSection'),
+        trendsContainer: document.getElementById('trendsContainer'),
+        trendsSubtitle: document.getElementById('trendsSubtitle'),
         // Epicrisis tab elements
         epicrisisContent: document.getElementById('epicrisisContent'),
         copyEpicrisisBtn: document.getElementById('copyEpicrisisBtn'),
@@ -453,6 +456,9 @@ document.addEventListener('DOMContentLoaded', function() {
             log('Loading and displaying reports...');
             await loadAndDisplayReports(analysesData);
 
+            // Trends are loaded in the background — non-fatal
+            loadTrends(patientData.id);
+
             // Epicrisis is lazy-loaded on first visit to its tab
             pendingEpicrisisData = patientData;
             if (elements.epicrisisContent) delete elements.epicrisisContent.dataset.loaded;
@@ -721,6 +727,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Clear analyses with null checks
         if (elements.analysesGrid) elements.analysesGrid.innerHTML = '';
         if (elements.noAnalyses) elements.noAnalyses.style.display = 'none';
+        if (elements.trendsSection) elements.trendsSection.hidden = true;
+        if (elements.trendsContainer) elements.trendsContainer.innerHTML = '';
         
         // Clear epicrisis
         pendingEpicrisisData = null;
@@ -2102,7 +2110,154 @@ document.addEventListener('DOMContentLoaded', function() {
 
         for (const card of cards) observer.observe(card);
     }
-    
+
+    // ── Lab Trends ──────────────────────────────────────────────────────────
+
+    function sparkline(measurements, low, high, width, height) {
+        width  = width  || 80;
+        height = height || 22;
+        const vals = measurements.map(m => m.v).filter(v => v !== null && v !== undefined);
+        if (vals.length < 2) return '';
+        const lo  = Math.min(...vals, low  !== null ? low  : Infinity);
+        const hi  = Math.max(...vals, high !== null ? high : -Infinity);
+        const span = hi - lo || 1;
+        const pts = measurements
+            .filter(m => m.v !== null && m.v !== undefined)
+            .map((m, i, arr) => {
+                const x = arr.length === 1 ? width / 2 : (i / (arr.length - 1)) * width;
+                const y = height - ((m.v - lo) / span) * (height - 2) - 1;
+                return `${x.toFixed(1)},${y.toFixed(1)}`;
+            }).join(' ');
+        // Reference band
+        let band = '';
+        if (low !== null && high !== null) {
+            const y1 = height - ((high - lo) / span) * (height - 2) - 1;
+            const y2 = height - ((low  - lo) / span) * (height - 2) - 1;
+            band = `<rect x="0" y="${y1.toFixed(1)}" width="${width}" height="${(y2 - y1).toFixed(1)}" class="trend-band"/>`;
+        }
+        return `<svg class="trend-sparkline" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" aria-hidden="true">${band}<polyline points="${pts}" fill="none" class="trend-line"/></svg>`;
+    }
+
+    function renderTrends(observations) {
+        if (!elements.trendsContainer || !elements.trendsSection) return;
+
+        // Group by analyte name, collect all measurements sorted by date
+        const byAnalyte = {};
+        for (const obs of observations) {
+            const name = obs.code?.text;
+            if (!name) continue;
+            if (!byAnalyte[name]) {
+                byAnalyte[name] = {
+                    name,
+                    unit: obs.valueQuantity?.unit || '',
+                    low:  obs.referenceRange?.[0]?.low?.value  ?? null,
+                    high: obs.referenceRange?.[0]?.high?.value ?? null,
+                    ref:  obs.referenceRange?.[0]?.text || '',
+                    measurements: [],
+                };
+            }
+            byAnalyte[name].measurements.push({
+                date: obs.effectiveDateTime || '',
+                v:    obs.valueQuantity?.value ?? null,
+                text: obs.valueString || null,
+                flag: obs.interpretation?.[0]?.text || null,
+            });
+        }
+
+        // Only analytes with at least one numeric value
+        const analytes = Object.values(byAnalyte).filter(a =>
+            a.measurements.some(m => m.v !== null)
+        );
+        if (!analytes.length) return;
+
+        // Sort measurements chronologically per analyte
+        for (const a of analytes) {
+            a.measurements.sort((x, y) => x.date.localeCompare(y.date));
+        }
+
+        // All unique dates (newest first) for column headers
+        const allDates = [...new Set(observations.map(o => o.effectiveDateTime?.slice(0, 10)).filter(Boolean))].sort().reverse();
+        const colDates = allDates.slice(0, 10);  // cap table at 10 most recent dates
+
+        // Build table
+        const table = document.createElement('table');
+        table.className = 'trends-table';
+
+        // Header row
+        const thead = table.createTHead();
+        const hrow  = thead.insertRow();
+        const th0 = document.createElement('th');
+        th0.textContent = 'Analyte';
+        hrow.appendChild(th0);
+        for (const d of colDates) {
+            const th = document.createElement('th');
+            th.textContent = d;
+            th.className = 'trend-date-col';
+            hrow.appendChild(th);
+        }
+        const thSpark = document.createElement('th');
+        thSpark.textContent = 'Trend';
+        thSpark.className = 'trend-spark-col';
+        hrow.appendChild(thSpark);
+
+        // Data rows
+        const tbody = table.createTBody();
+        for (const a of analytes) {
+            const row = tbody.insertRow();
+
+            // Analyte name + unit + reference
+            const tdName = row.insertCell();
+            tdName.className = 'trend-name';
+            const nameEl = document.createElement('span');
+            nameEl.textContent = a.name;
+            tdName.appendChild(nameEl);
+            if (a.unit || a.ref) {
+                const sub = document.createElement('span');
+                sub.className = 'trend-meta';
+                sub.textContent = [a.unit, a.ref ? `(${a.ref})` : ''].filter(Boolean).join(' ');
+                tdName.appendChild(sub);
+            }
+
+            // Value columns — one per date
+            const byDate = {};
+            for (const m of a.measurements) byDate[m.date?.slice(0, 10) || ''] = m;
+
+            for (const d of colDates) {
+                const td  = row.insertCell();
+                const m   = byDate[d];
+                if (!m) { td.textContent = '–'; td.className = 'trend-empty'; continue; }
+                td.textContent = m.v !== null ? (m.v + (a.unit ? ' ' + a.unit : '')) : (m.text || '–');
+                if (m.flag === 'H') td.className = 'trend-high';
+                else if (m.flag === 'L') td.className = 'trend-low';
+            }
+
+            // Sparkline cell
+            const tdSpark = row.insertCell();
+            tdSpark.className = 'trend-spark-col';
+            tdSpark.innerHTML = sparkline(a.measurements, a.low, a.high);
+        }
+
+        elements.trendsContainer.innerHTML = '';
+        elements.trendsContainer.appendChild(table);
+        if (elements.trendsSubtitle) {
+            elements.trendsSubtitle.textContent = `${analytes.length} analytes · ${allDates.length} dates`;
+        }
+        elements.trendsSection.hidden = false;
+    }
+
+    async function loadTrends(patientId) {
+        if (!patientId || !elements.trendsSection) return;
+        try {
+            const resp = await fetch(`/fhir/Observation?patient=${encodeURIComponent(patientId)}`);
+            if (!resp.ok) return;
+            const bundle = await resp.json();
+            if (bundle.resourceType !== 'Bundle' || !bundle.entry?.length) return;
+            renderTrends(bundle.entry.map(e => e.resource).filter(Boolean));
+        } catch (e) {
+            // Trends are non-fatal — silently skip on error
+        }
+    }
+
     const MODALITY_INFO = {
         radio:  { icon: 'fa-x-ray',      label: 'X-Ray' },
         ct:     { icon: 'fa-ring',        label: 'CT' },

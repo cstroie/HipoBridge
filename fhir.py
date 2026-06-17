@@ -757,6 +757,23 @@ class Encounter(Resource):
         )
 
 
+class Observation(Resource):
+    def __init__(self, id=None, status=None, code=None, subject=None,
+                 effectiveDateTime=None, valueQuantity=None, valueString=None,
+                 referenceRange=None, interpretation=None, basedOn=None, **kwargs):
+        super().__init__(
+            resourceType="Observation",
+            id=id, status=status, code=code, subject=subject,
+            effectiveDateTime=effectiveDateTime,
+            valueQuantity=valueQuantity,
+            valueString=valueString,
+            referenceRange=referenceRange,
+            interpretation=interpretation,
+            basedOn=basedOn,
+            **kwargs
+        )
+
+
 class Bundle(Resource):
     def __init__(self,
                  id: Optional[str] = None,
