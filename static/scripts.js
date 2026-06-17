@@ -7,7 +7,6 @@ document.addEventListener('DOMContentLoaded', function() {
         cnpInput: document.getElementById('cnpInput'),
         analyzeBtn: document.getElementById('analyzeBtn'),
         errorDiv: document.getElementById('error'),
-        backToSearchBtn: document.getElementById('backToSearch'),
         navItems: document.querySelectorAll('.nav-item'),
         tabContents: document.querySelectorAll('.tab-content'),
         // Patient tab elements
@@ -35,7 +34,6 @@ document.addEventListener('DOMContentLoaded', function() {
         noAnalyses: document.getElementById('noAnalyses'),
         // Epicrisis tab elements
         epicrisisContent: document.getElementById('epicrisisContent'),
-        epicrisisNav: document.getElementById('epicrisisNav'),
         copyEpicrisisBtn: document.getElementById('copyEpicrisisBtn'),
         // Report tab elements
         patientReportMarkdown: document.getElementById('patientReportMarkdown'),
@@ -72,7 +70,6 @@ document.addEventListener('DOMContentLoaded', function() {
         scheduleLimitSelect:   document.getElementById('scheduleLimitSelect'),
         scheduleTable: document.getElementById('scheduleTable'),
         scheduleBody: document.getElementById('scheduleBody'),
-        scheduleCount: document.getElementById('scheduleCount'),
         scheduleLoading: document.getElementById('scheduleLoading'),
         noSchedule: document.getElementById('noSchedule'),
         scheduleTimeline: document.getElementById('scheduleTimeline'),
@@ -179,15 +176,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 switchTab(this.getAttribute('data-tab'));
             });
         });
-        
-        // Back to search button
-        if (elements.backToSearchBtn) {
-            elements.backToSearchBtn.addEventListener('click', function() {
-                elements.form.reset();
-                clearResults();
-                switchTab('search');
-            });
-        }
         
         // Form submission
         elements.form.addEventListener('submit', handleFormSubmit);
@@ -2853,11 +2841,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!container) return;
 
         container.innerHTML = '';
-
-        if (elements.scheduleCount) {
-            elements.scheduleCount.textContent = String(scheduleEntries.length);
-            elements.scheduleCount.hidden = false;
-        }
 
         if (scheduleEntries.length === 0) {
             if (elements.scheduleTable) elements.scheduleTable.hidden = true;
