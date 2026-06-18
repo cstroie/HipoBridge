@@ -1424,9 +1424,14 @@ select {
     align-items: center;
     justify-content: center;
 }
-.mod-circle svg, .timeline-mod-avatar svg, .modal-mod-circle svg {
+.mod-circle svg, .modal-mod-circle svg {
     width: 36px;
     height: 36px;
+    fill: currentColor;
+}
+.timeline-mod-avatar svg {
+    width: 64px;
+    height: 64px;
     fill: currentColor;
 }
 .analysis-card.radio .mod-circle,
@@ -2412,8 +2417,8 @@ select {
 }
 
 .timeline-mod-avatar {
-    width: 40px;
-    height: 40px;
+    width: 64px;
+    height: 64px;
     flex-shrink: 0;
     display: flex;
     align-items: center;
