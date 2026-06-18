@@ -1467,18 +1467,26 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                                 req['type'] = 'lab'
                             all_requests.append(req)
                 all_requests.sort(key=lambda r: r.get('date_time', ''), reverse=True)
-                # Keep only results from the current episode: within 90 days of the
-                # most recent result. Older results belong to prior hospitalisations.
-                if all_requests:
+                # For lab requests only: keep the current episode (within 90 days of
+                # the most recent lab result). Imaging requests are kept in full —
+                # the patient's imaging history is always relevant regardless of episode.
+                lab_requests = [r for r in all_requests if r.get('type') == 'lab']
+                imaging_requests = [r for r in all_requests if r.get('type') != 'lab']
+                if lab_requests:
                     from datetime import datetime, timedelta
-                    max_dt_str = all_requests[0].get('date_time', '')
+                    max_dt_str = lab_requests[0].get('date_time', '')
                     if max_dt_str:
                         try:
                             max_dt = datetime.fromisoformat(max_dt_str)
                             cutoff = (max_dt - timedelta(days=90)).strftime('%Y-%m-%d %H:%M')
-                            all_requests = [r for r in all_requests if r.get('date_time', '') >= cutoff]
+                            lab_requests = [r for r in lab_requests if r.get('date_time', '') >= cutoff]
                         except ValueError:
                             pass
+                all_requests = sorted(
+                    imaging_requests + lab_requests,
+                    key=lambda r: r.get('date_time', ''),
+                    reverse=True,
+                )
                 merged['requests'] = all_requests
                 return merged
 
