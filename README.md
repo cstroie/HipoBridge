@@ -42,7 +42,7 @@ Open `http://localhost:44660` to access the single-page app. Navigation:
 - **Epicrisis** — all encounters with an epicrisis, most-recent first, rendered as markdown
 - **Report** — full clinical document (patient header + discharge summaries + imaging studies) formatted for LLM consumption
 - Three-state theme toggle: auto (OS preference) → light → dark
-- Respects `prefers-reduced-motion`; no external font requests (system font stack)
+- Respects `prefers-reduced-motion`; all fonts and icons served locally — no external requests
 
 ## API
 
@@ -115,6 +115,17 @@ python3 runtests.py hipodata      # offline
 ```
 
 Groups requiring a live server: `root`, `auth`, `patients`, `analyses`, `reports`, `checkout`, `cnp`.
+
+## Acknowledgements
+
+- [aiohttp](https://docs.aiohttp.org/) — async HTTP server and client
+- [Beautiful Soup 4](https://www.crummy.com/software/BeautifulSoup/) — HTML scraping
+- [marked.js](https://marked.js.org/) — client-side Markdown rendering
+- [Inter](https://rsms.me/inter/) by Rasmus Andersson — UI typeface
+- [Space Grotesk](https://floriankarsten.github.io/space-grotesk/) by Florian Karsten — display typeface
+- [JetBrains Mono](https://www.jetbrains.com/lp/mono/) by JetBrains — monospace typeface
+- [Font Awesome 6](https://fontawesome.com/) — icons (Free / solid subset)
+- [HL7 FHIR R4](https://hl7.org/fhir/R4/) — resource model and API conventions
 
 ## License
 
