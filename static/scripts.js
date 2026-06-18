@@ -1293,7 +1293,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             const activeAdm    = encounters.find(e => e.enc.status === 'in-progress');
-            const lastDischarge = encounters.find(e => e.enc.status !== 'in-progress' && extractEpicrisisText(e.enc));
+            const lastDischarge = encounters.find(e => e.enc.status !== 'in-progress' && isSubstantiveText(extractEpicrisisText(e.enc)));
 
             if (activeAdm) {
                 fillAdmissionBlock('reportSectionAdmission', 'reportAdmissionPeriod', 'reportAdmissionText', activeAdm.enc, true);
@@ -2791,6 +2791,11 @@ document.addEventListener('DOMContentLoaded', function() {
         return encounterData.note.map(note => note.text || '').join('\n\n');
     }
 
+    // Returns true if text has meaningful content beyond markdown markers and punctuation.
+    function isSubstantiveText(text) {
+        return /[a-zA-ZÀ-žА-я0-9]/.test(text || '');
+    }
+
     async function loadAndDisplayEpicrisis(patientData) {
         const checkoutIds = extractCheckoutIds(patientData);
         if (checkoutIds.length === 0) return;
@@ -2885,8 +2890,14 @@ document.addEventListener('DOMContentLoaded', function() {
             if (isOpen) chevron.className = 'fas fa-chevron-up epi-chevron';
 
             body.hidden = !isOpen;
-            card.querySelector('.epi-prose').innerHTML = marked.parse(epicrisisText.trim());
-            card.querySelector('.epi-copy-btn').addEventListener('click', () => copyMarkdown(card, card.querySelector('.epi-copy-btn')));
+            const copyBtn = card.querySelector('.epi-copy-btn');
+            if (isSubstantiveText(epicrisisText)) {
+                card.querySelector('.epi-prose').innerHTML = marked.parse(epicrisisText.trim());
+                copyBtn.addEventListener('click', () => copyMarkdown(card, copyBtn));
+            } else {
+                card.querySelector('.epi-prose').innerHTML = '<p class="epi-empty">— no content —</p>';
+                copyBtn.hidden = true;
+            }
 
             btn.addEventListener('click', () => {
                 const open = card.classList.toggle('epi-card-open');

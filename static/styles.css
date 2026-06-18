@@ -2786,6 +2786,11 @@ select {
 .epi-copy-btn {
     font-size: var(--font-size-xs);
 }
+.epi-empty {
+    color: var(--muted);
+    font-style: italic;
+    margin: 0;
+}
 
 /* ── Report modal (schedule request detail) ───────────────────────────── */
 

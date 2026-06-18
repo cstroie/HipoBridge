@@ -2696,8 +2696,8 @@ class HipoClientCheckout(HipoClient):
             if epicrisis:
                 notes.append({"text": epicrisis})
             treatment = parsed_data.get("checkout.treatment")
-            if treatment:
-                notes.append({"text": f"[Treatment] {treatment}"})
+            if treatment and treatment.strip('-– \t'):
+                notes.append({"text": f"#### Treatment\n\n{treatment}"})
             if notes:
                 fhir_encounter["note"] = notes
 
