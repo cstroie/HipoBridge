@@ -1417,31 +1417,29 @@ select {
 
 /* Modality circle — 52px per editorial */
 .mod-circle {
-    width: 52px;
-    height: 52px;
-    border-radius: 50%;
+    width: 48px;
+    height: 48px;
     flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 18px;
 }
 .mod-circle svg, .timeline-mod-avatar svg, .modal-mod-circle svg {
-    width: 24px;
-    height: 24px;
+    width: 36px;
+    height: 36px;
     fill: currentColor;
 }
 .analysis-card.radio .mod-circle,
-.mod-circle.mod-xr { background: color-mix(in srgb,var(--mod-xr) 14%,transparent); color: var(--mod-xr); }
+.mod-circle.mod-xr { color: var(--mod-xr); }
 .analysis-card.ct    .mod-circle,
-.mod-circle.mod-ct { background: color-mix(in srgb,var(--mod-ct) 14%,transparent); color: var(--mod-ct); }
+.mod-circle.mod-ct { color: var(--mod-ct); }
 .analysis-card.irm   .mod-circle,
-.mod-circle.mod-mr { background: color-mix(in srgb,var(--mod-mr) 14%,transparent); color: var(--mod-mr); }
+.mod-circle.mod-mr { color: var(--mod-mr); }
 .analysis-card.eco   .mod-circle,
-.mod-circle.mod-us { background: color-mix(in srgb,var(--mod-us) 14%,transparent); color: var(--mod-us); }
+.mod-circle.mod-us { color: var(--mod-us); }
 .analysis-card.rads  .mod-circle,
-.mod-circle.mod-fl  { background: color-mix(in srgb,var(--mod-fl)  14%,transparent); color: var(--mod-fl);  }
-.mod-circle.mod-lab { background: color-mix(in srgb,var(--mod-lab) 14%,transparent); color: var(--mod-lab); }
+.mod-circle.mod-fl  { color: var(--mod-fl);  }
+.mod-circle.mod-lab { color: var(--mod-lab); }
 
 .card-title-block {
     flex: 1;
@@ -2414,21 +2412,19 @@ select {
 }
 
 .timeline-mod-avatar {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
+    width: 40px;
+    height: 40px;
     flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
 }
-.timeline-mod-avatar.mod-xr  { background: color-mix(in srgb,var(--mod-xr)  14%,transparent); color: var(--mod-xr); }
-.timeline-mod-avatar.mod-ct  { background: color-mix(in srgb,var(--mod-ct)  14%,transparent); color: var(--mod-ct); }
-.timeline-mod-avatar.mod-us  { background: color-mix(in srgb,var(--mod-us)  14%,transparent); color: var(--mod-us); }
-.timeline-mod-avatar.mod-mr  { background: color-mix(in srgb,var(--mod-mr)  14%,transparent); color: var(--mod-mr); }
-.timeline-mod-avatar.mod-fl  { background: color-mix(in srgb,var(--mod-fl)  14%,transparent); color: var(--mod-fl); }
-.timeline-mod-avatar.mod-lab { background: color-mix(in srgb,var(--mod-lab) 14%,transparent); color: var(--mod-lab); }
+.timeline-mod-avatar.mod-xr  { color: var(--mod-xr); }
+.timeline-mod-avatar.mod-ct  { color: var(--mod-ct); }
+.timeline-mod-avatar.mod-us  { color: var(--mod-us); }
+.timeline-mod-avatar.mod-mr  { color: var(--mod-mr); }
+.timeline-mod-avatar.mod-fl  { color: var(--mod-fl); }
+.timeline-mod-avatar.mod-lab { color: var(--mod-lab); }
 
 .timeline-card-body {
     flex: 1;
