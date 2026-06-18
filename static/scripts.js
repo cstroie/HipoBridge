@@ -836,6 +836,7 @@ document.addEventListener('DOMContentLoaded', function() {
             delete elements.epicrisisContent.dataset.markdown;
             delete elements.epicrisisContent.dataset.loaded;
         }
+        if (elements.copyEpicrisisBtn) elements.copyEpicrisisBtn.hidden = false;
         // Clear report tab
         pendingReportData = null;
         if (elements.patientReportMarkdown) {
@@ -2895,8 +2896,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 card.querySelector('.epi-prose').innerHTML = marked.parse(epicrisisText.trim());
                 copyBtn.addEventListener('click', () => copyMarkdown(card, copyBtn));
             } else {
-                card.querySelector('.epi-prose').innerHTML = '<p class="epi-empty">— no content —</p>';
-                copyBtn.hidden = true;
+                const prose = card.querySelector('.epi-prose');
+                prose.innerHTML = '<p class="epi-empty">— no content —</p>';
+                prose.classList.add('epi-prose--empty');
+                card.querySelector('.epi-card-toolbar').hidden = true;
             }
 
             btn.addEventListener('click', () => {
@@ -2915,6 +2918,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         elements.epicrisisContent.dataset.markdown = markdown;
+        if (elements.copyEpicrisisBtn) elements.copyEpicrisisBtn.hidden = !markdown.trim();
     }
     
     const SCHEDULE_STATUS_CLASS = {

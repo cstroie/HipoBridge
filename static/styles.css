@@ -2761,6 +2761,8 @@ select {
 
 /* Body — hidden until open */
 .epi-card-body[hidden] { display: none; }
+.epi-card-toolbar[hidden] { display: none; }
+.epi-copy-btn[hidden] { display: none; }
 
 .epi-card-inner {
     padding: 0 24px 24px;
@@ -2785,6 +2787,11 @@ select {
 }
 .epi-copy-btn {
     font-size: var(--font-size-xs);
+}
+.epi-prose--empty {
+    border-left: none;
+    padding-left: 0;
+    text-align: center;
 }
 .epi-empty {
     color: var(--muted);
