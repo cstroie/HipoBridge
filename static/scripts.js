@@ -1246,56 +1246,65 @@ document.addEventListener('DOMContentLoaded', function() {
             const latestDx = encounters[0] ? extractDiagnosisText(encounters[0].enc) : '';
             setText('reportDiagnosis', latestDx);
 
-            // §2 Admission — active inpatient first, then most recent discharged with epicrisis
-            const currentAdm = encounters.find(e => e.enc.status === 'in-progress')
-                             || encounters.find(e => extractEpicrisisText(e.enc))
-                             || encounters[0];
-            const secAdmission = document.getElementById('reportSectionAdmission');
-            if (currentAdm && secAdmission) {
-                const enc = currentAdm.enc;
-                const isActive = enc.status === 'in-progress';
+            // §2 Admission
+            // Active inpatient → Current Admission block.
+            // Most recent discharged with epicrisis → Last Admission block.
+            // Last Admission is also shown for outpatients, and for inpatients whose
+            // checkin text is sparse (< 100 chars), so there is always useful context.
+            const SPARSE_THRESHOLD = 100;
 
-                const titleEl = document.getElementById('reportAdmissionTitle');
-                if (titleEl) {
-                    const icon = titleEl.querySelector('i');
-                    titleEl.textContent = isActive ? ' Current Admission' : ' Last Admission';
-                    if (icon) titleEl.prepend(icon);
-                }
+            function buildCheckinText(enc) {
+                const parts = [];
+                const dx = extractDiagnosisText(enc);
+                if (dx) parts.push(dx);
+                (enc.note || []).forEach(n => {
+                    if (!n.text) return;
+                    const clean = n.text
+                        .replace(/^\[Exam general\]\s*/i, '')
+                        .replace(/^\[Exam local\]\s*/i, '')
+                        .trim();
+                    if (clean) parts.push(clean);
+                });
+                return parts.join('\n\n');
+            }
 
+            function fillAdmissionBlock(secId, periodId, textId, enc, isActive) {
+                const sec = document.getElementById(secId);
+                if (!sec) return;
                 const start = enc.period?.start ? formatDate(enc.period.start) : '';
                 const end   = enc.period?.end   ? formatDate(enc.period.end)   : '';
                 const ms    = (enc.period?.start && enc.period?.end)
                     ? new Date(enc.period.end) - new Date(enc.period.start) : 0;
                 const nights = ms > 0 ? Math.round(ms / 86400000) : 0;
-                const periodEl = document.getElementById('reportAdmissionPeriod');
+                const periodEl = document.getElementById(periodId);
                 if (periodEl) {
                     periodEl.textContent = isActive
                         ? `${start} → present (ongoing)`
                         : `${start} → ${end}${nights ? ` (${nights} ${nights === 1 ? 'night' : 'nights'})` : ''}`;
                 }
-
-                const textEl = document.getElementById('reportAdmissionText');
+                const textEl = document.getElementById(textId);
                 if (textEl) {
-                    if (isActive) {
-                        // Inpatient — compose from checkin fields
-                        const parts = [];
-                        const dx = extractDiagnosisText(enc);
-                        if (dx) parts.push(dx);
-                        (enc.note || []).forEach(n => {
-                            if (!n.text) return;
-                            const clean = n.text
-                                .replace(/^\[Exam general\]\s*/i, '')
-                                .replace(/^\[Exam local\]\s*/i, '')
-                                .trim();
-                            if (clean) parts.push(clean);
-                        });
-                        textEl.innerHTML = marked.parse(parts.join('\n\n'));
-                    } else {
-                        // Discharged — show full epicrisis
-                        textEl.innerHTML = marked.parse(extractEpicrisisText(enc).trim());
-                    }
+                    const body = isActive
+                        ? buildCheckinText(enc)
+                        : extractEpicrisisText(enc).trim();
+                    textEl.innerHTML = marked.parse(body);
                 }
-                secAdmission.hidden = false;
+                sec.hidden = false;
+            }
+
+            const activeAdm    = encounters.find(e => e.enc.status === 'in-progress');
+            const lastDischarge = encounters.find(e => e.enc.status !== 'in-progress' && extractEpicrisisText(e.enc));
+
+            if (activeAdm) {
+                fillAdmissionBlock('reportSectionAdmission', 'reportAdmissionPeriod', 'reportAdmissionText', activeAdm.enc, true);
+                // Also show last discharge if checkin text is sparse
+                const checkinBody = buildCheckinText(activeAdm.enc);
+                if (checkinBody.length < SPARSE_THRESHOLD && lastDischarge) {
+                    fillAdmissionBlock('reportSectionLastAdmission', 'reportLastAdmissionPeriod', 'reportLastAdmissionText', lastDischarge.enc, false);
+                }
+            } else if (lastDischarge) {
+                // Outpatient — show last admission only
+                fillAdmissionBlock('reportSectionLastAdmission', 'reportLastAdmissionPeriod', 'reportLastAdmissionText', lastDischarge.enc, false);
             }
 
             // §3 Recent imaging — up to 5 most recent entries from analysesData
