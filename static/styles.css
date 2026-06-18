@@ -3024,3 +3024,75 @@ dialog.report-modal[open]::backdrop {
     dialog.modal[open], dialog.report-modal[open],
     dialog.modal[open]::backdrop, dialog.report-modal[open]::backdrop { animation: none; }
 }
+
+/* ── Login dialog ───────────────────────────────────────────────── */
+#loginDialog {
+    border: none;
+    border-radius: var(--radius-lg);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.28);
+    padding: 0;
+    width: min(420px, 96vw);
+    background: var(--surface);
+    color: var(--text);
+    margin: auto;
+}
+#loginDialog::backdrop {
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(4px);
+}
+.login-dialog-header {
+    padding: var(--spacing-lg) var(--spacing-lg) var(--spacing-sm);
+    border-bottom: 1px solid var(--border);
+}
+.login-dialog-header h2 {
+    margin: 0;
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+.login-dialog-body {
+    padding: var(--spacing-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+.login-msg {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+}
+.login-msg:empty { display: none; }
+.form-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+}
+.form-field label {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-muted);
+}
+.form-field input {
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: var(--font-size-base);
+    outline: none;
+    transition: border-color 0.15s;
+}
+.form-field input:focus { border-color: var(--primary); }
+.login-error {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--danger, #c0392b);
+    font-weight: var(--font-weight-medium);
+}
+.login-dialog-footer {
+    padding: var(--spacing-sm) var(--spacing-lg) var(--spacing-lg);
+    display: flex;
+    justify-content: flex-end;
+}

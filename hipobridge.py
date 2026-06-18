@@ -632,17 +632,8 @@ async def serve_validate_cnp(request):
     return web_json_response(response_data)
 
 
-@require_auth
 async def serve_web_page(request):
-    """Serve the SPA after verifying Hipocrate credentials are valid."""
-    username, password = request['auth_credentials']
-
-    client = HipoClient(SERVICE_URL, request)
-    session, login_success = await client.get_authenticated_session(username, password)
-
-    if not login_success:
-        return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HipoBridge"'})
-
+    """Serve the SPA. Auth is handled client-side via JS login dialog."""
     return web.FileResponse(os.path.join(os.path.dirname(__file__), 'static', 'main.html'))
 
 

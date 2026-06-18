@@ -101,6 +101,96 @@ document.addEventListener('DOMContentLoaded', function() {
         return function(...args) { clearTimeout(timer); timer = setTimeout(() => fn.apply(this, args), ms); };
     }
 
+    // ── Credential storage ────────────────────────────────────────────
+    const CRED_KEY = 'hb_creds';
+
+    function getCredentials() {
+        const raw = sessionStorage.getItem(CRED_KEY);
+        return raw ? JSON.parse(raw) : null;
+    }
+
+    function setCredentials(username, password) {
+        sessionStorage.setItem(CRED_KEY, JSON.stringify({ username, password }));
+    }
+
+    function clearCredentials() {
+        sessionStorage.removeItem(CRED_KEY);
+    }
+
+    function authHeader() {
+        const creds = getCredentials();
+        if (!creds) return {};
+        return { 'Authorization': 'Basic ' + btoa(`${creds.username}:${creds.password}`) };
+    }
+
+    // Wrapper around fetch() that injects auth and handles 401 by re-showing login dialog
+    async function apiFetch(url, options = {}) {
+        const headers = { ...authHeader(), ...(options.headers || {}) };
+        const resp = await fetch(url, { ...options, headers });
+        if (resp.status === 401) {
+            clearCredentials();
+            showLoginDialog('Session expired or wrong credentials. Please sign in again.');
+            throw new Error('Authentication required');
+        }
+        return resp;
+    }
+
+    // ── Login dialog ──────────────────────────────────────────────────
+    const loginDialog = document.getElementById('loginDialog');
+    const loginForm   = document.getElementById('loginForm');
+    const loginError  = document.getElementById('loginError');
+    const loginMsg    = document.getElementById('loginDialogMessage');
+
+    function showLoginDialog(message = '') {
+        loginMsg.textContent = message;
+        loginError.hidden = true;
+        loginError.textContent = '';
+        document.getElementById('loginUsername').value = getCredentials()?.username || '';
+        document.getElementById('loginPassword').value = '';
+        loginDialog.showModal();
+        // Focus password if username already filled
+        const target = document.getElementById('loginUsername').value
+            ? document.getElementById('loginPassword')
+            : document.getElementById('loginUsername');
+        target.focus();
+    }
+
+    loginForm.addEventListener('submit', async e => {
+        e.preventDefault();
+        const username = document.getElementById('loginUsername').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        const submitBtn = document.getElementById('loginSubmitBtn');
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Signing in…';
+        loginError.hidden = true;
+
+        // Validate against /api/whoami
+        try {
+            const resp = await fetch('/api/whoami', {
+                headers: { 'Authorization': 'Basic ' + btoa(`${username}:${password}`) }
+            });
+            if (resp.status === 401) {
+                loginError.textContent = 'Wrong username or password.';
+                loginError.hidden = false;
+                document.getElementById('loginPassword').focus();
+                return;
+            }
+            // Any non-401 response means Hipocrate accepted the credentials
+            setCredentials(username, password);
+            whoamiData = null; // reset cached whoami so it re-fetches with new creds
+            loginDialog.close();
+            // Trigger the initial schedule load now that we have credentials
+            fetchScheduleFromInputs();
+        } catch (err) {
+            loginError.textContent = `Network error: ${err.message}`;
+            loginError.hidden = false;
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Sign in';
+        }
+    });
+
     // limit for simultaneous network requests (helpful when handling many IDs)
     const MAX_CONCURRENT_REQUESTS = 5;
 
@@ -149,6 +239,11 @@ document.addEventListener('DOMContentLoaded', function() {
         // Reveal header and active tab now that JS is ready
         const appBar = document.querySelector('.app-bar');
         if (appBar) { appBar.removeAttribute('hidden'); appBar.style.display = ''; }
+
+        // Show login dialog if no credentials are stored
+        if (!getCredentials()) {
+            showLoginDialog();
+        }
     }
     
     function initTheme() {
@@ -339,7 +434,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Reflect the tab in the URL fragment (no scroll, no history entry)
         history.replaceState(null, '', `#${tabId}`);
 
-        if (tabId === 'schedule' && !elements.scheduleTable?.dataset.loaded) {
+        if (tabId === 'schedule' && !elements.scheduleTable?.dataset.loaded && getCredentials()) {
             fetchScheduleFromInputs();
         }
 
@@ -420,7 +515,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (!chosen) return; // user dismissed
                     showLoading('Loading patient record…');
                     setLoadingStep('Fetching selected patient…');
-                    const r = await fetch(`/fhir/Patient/${chosen.id}`);
+                    const r = await apiFetch(`/fhir/Patient/${chosen.id}`);
                     searchResult.patientData = r.ok ? await r.json() : chosen;
                     searchResult.patientCode = chosen.id;
                     addToRecentSearches(cnp, searchResult.patientData);
@@ -512,13 +607,13 @@ document.addEventListener('DOMContentLoaded', function() {
     
     async function performPatientSearch(identifier) {
         try {
-            const searchResponse = await fetch(`/fhir/Patient?q=${encodeURIComponent(identifier)}`);
+            const searchResponse = await apiFetch(`/fhir/Patient?q=${encodeURIComponent(identifier)}`);
             
             if (!searchResponse.ok) {
                 if (searchResponse.status === 401) {
                     return {
                         success: false,
-                        message: 'Authentication required. Please refresh the page and enter your credentials.'
+                        message: 'Authentication required. Please sign in again.'
                     };
                 }
                 if (searchResponse.status === 404) {
@@ -544,7 +639,7 @@ document.addEventListener('DOMContentLoaded', function() {
             } else if (searchData.resourceType === "Bundle" && searchData.entry && searchData.entry.length > 0) {
                 if (searchData.entry.length === 1) {
                     patientCode = searchData.entry[0].resource.id;
-                    const r = await fetch(`/fhir/Patient/${patientCode}`);
+                    const r = await apiFetch(`/fhir/Patient/${patientCode}`);
                     patientData = r.ok ? await r.json() : searchData.entry[0].resource;
                 } else {
                     // Multiple matches — let the user choose
@@ -642,13 +737,13 @@ document.addEventListener('DOMContentLoaded', function() {
     async function fetchAnalysesData(patientCode) {
         try {
             
-            const analysesResponse = await fetch(`/fhir/ServiceRequest?patient=${patientCode}`);
+            const analysesResponse = await apiFetch(`/fhir/ServiceRequest?patient=${patientCode}`);
             
             if (!analysesResponse.ok) {
                 if (analysesResponse.status === 401) {
                     return {
                         success: false,
-                        message: 'Authentication required. Please refresh the page and enter your credentials.'
+                        message: 'Authentication required. Please sign in again.'
                     };
                 }
                 if (analysesResponse.status === 404) {
@@ -777,7 +872,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function fetchWhoami() {
         if (whoamiData) return whoamiData;
-        const resp = await fetch('/api/whoami');
+        const resp = await apiFetch('/api/whoami');
         if (!resp.ok) throw new Error(`Whoami request failed (${resp.status})`);
         const data = await resp.json();
         if (data.status !== 'success' || !data.user) {
@@ -803,11 +898,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
         modal.querySelector('.user-logout-btn').addEventListener('click', async () => {
             try {
-                const resp = await fetch('/api/logout', { method: 'POST' });
+                const resp = await apiFetch('/api/logout', { method: 'POST' });
                 if (!resp.ok) throw new Error(`Logout failed (${resp.status})`);
                 whoamiData = null;
+                clearCredentials();
                 closeModal();
-                showToast('Hipocrate session closed. Close the browser to clear saved credentials.', 'success');
+                showToast('Signed out.', 'success');
+                showLoginDialog();
             } catch (err) {
                 showToast(`Logout failed: ${err.message}`, 'error');
             }
@@ -985,7 +1082,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const endpoint = isImaging
                 ? `/fhir/ImagingStudy/${serviceRequestId}`
                 : `/fhir/DiagnosticReport/${serviceRequestId}`;
-            const reportResponse = await fetch(endpoint);
+            const reportResponse = await apiFetch(endpoint);
 
             if (!reportResponse.ok) {
                 log(`Report not found for service request ${serviceRequestId}`);
@@ -1127,7 +1224,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             try {
                                 const type = checkoutIds.has(id) ? 'checkout' : 'checkin';
                                 if (cache.encounters[id]) return cache.encounters[id];
-                                const r = await fetch(`/fhir/Encounter/${id}?type=${type}`);
+                                const r = await apiFetch(`/fhir/Encounter/${id}?type=${type}`);
                                 if (!r.ok) return null;
                                 const data = await r.json();
                                 cachePut(cache.encounters, id, data);
@@ -1366,7 +1463,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         try {
-            const response = await fetch(`/fhir/Encounter/${checkoutId}?type=checkout`);
+            const response = await apiFetch(`/fhir/Encounter/${checkoutId}?type=checkout`);
 
             if (!response.ok) {
                 console.error(`Error fetching encounter data for checkout ${checkoutId}:`, response.status);
@@ -1943,11 +2040,11 @@ document.addEventListener('DOMContentLoaded', function() {
     async function viewImagingStudy(studyId, reportId) {
         try {
             // Fetch imaging study data using FHIR API
-            const studyResponse = await fetch(`/fhir/ImagingStudy/${studyId}`);
+            const studyResponse = await apiFetch(`/fhir/ImagingStudy/${studyId}`);
             
             if (!studyResponse.ok) {
                 const msg = studyResponse.status === 401
-                    ? 'Authentication required. Please refresh the page.'
+                    ? 'Authentication required. Please sign in again.'
                     : `Error loading imaging study ${studyId} (HTTP ${studyResponse.status})`;
                 showToast(msg, 'error');
                 return;
@@ -2308,7 +2405,7 @@ document.addEventListener('DOMContentLoaded', function() {
     async function loadTrends(patientId) {
         if (!patientId || !elements.trendsSection) return;
         try {
-            const resp = await fetch(`/fhir/Observation?patient=${encodeURIComponent(patientId)}`);
+            const resp = await apiFetch(`/fhir/Observation??patient=${encodeURIComponent(patientId)}`);
             if (!resp.ok) return;
             const bundle = await resp.json();
             if (bundle.resourceType !== 'Bundle' || !bundle.entry?.length) return;
@@ -2431,7 +2528,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const bodyEl    = article.querySelector('.report-body');
 
         try {
-            const resp = await fetch(endpoint);
+            const resp = await apiFetch(endpoint);
             if (!resp.ok) throw new Error(resp.status);
             const data = await resp.json();
 
@@ -2622,7 +2719,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function fetchPresentation(id) {
         if (cache.encounters[id]) return cache.encounters[id];
-        const response = await fetch(`/fhir/Encounter/${id}?type=presentation`);
+        const response = await apiFetch(`/fhir/Encounter/${id}?type=presentation`);
         if (!response.ok) return null;
         const data = await response.json();
         if (data.resourceType !== 'Encounter') return null;
@@ -2880,7 +2977,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 ? `/fhir/ImagingStudy/${requestId}`
                 : `/fhir/DiagnosticReport/${requestId}`;
 
-            const repResp = await fetch(endpoint);
+            const repResp = await apiFetch(endpoint);
             if (repResp.ok) {
                 const reportData = await repResp.json();
 
@@ -2949,7 +3046,7 @@ document.addEventListener('DOMContentLoaded', function() {
         triggerEl.textContent = '…';
         triggerEl.disabled = true;
         try {
-            const resp = await fetch(`/api/request/${requestId}/patient`);
+            const resp = await apiFetch(`/api/request/${requestId}/patient`);
             if (resp.ok) {
                 const json = await resp.json();
                 const patientId = json['patient.id'] || json.patient?.id;
@@ -2994,7 +3091,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.scheduleLoading) elements.scheduleLoading.hidden = false;
         if (elements.noSchedule) elements.noSchedule.style.display = 'none';
         try {
-            const resp = await fetch(url);
+            const resp = await apiFetch(url);
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const bundle = await resp.json();
             scheduleEntries = (bundle.entry || []).map(e => e.resource);
@@ -3170,7 +3267,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const id = el.dataset.requestId;
             if (!id) return;
             if (_examCache[id]) { _applyExamLabel(el, _examCache[id]); return; }
-            fetch(`/api/request/${id}/patient`)
+            apiFetch(`/api/request/${id}/patient`)
                 .then(r => r.ok ? r.json() : null)
                 .then(data => {
                     const exams = data?.exams || [];

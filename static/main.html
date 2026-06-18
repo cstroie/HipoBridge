@@ -676,6 +676,30 @@
             </div>
         </template>
 
+        <!-- Login Dialog -->
+        <dialog id="loginDialog" aria-labelledby="loginDialogTitle" aria-modal="true">
+            <form id="loginForm" method="dialog">
+                <div class="login-dialog-header">
+                    <h2 id="loginDialogTitle"><i class="fas fa-hospital-user" aria-hidden="true"></i> Sign in to HippoBridge</h2>
+                </div>
+                <div class="login-dialog-body">
+                    <p id="loginDialogMessage" class="login-msg"></p>
+                    <div class="form-field">
+                        <label for="loginUsername">Username</label>
+                        <input type="text" id="loginUsername" name="username" autocomplete="username" required>
+                    </div>
+                    <div class="form-field">
+                        <label for="loginPassword">Password</label>
+                        <input type="password" id="loginPassword" name="password" autocomplete="current-password" required>
+                    </div>
+                    <p id="loginError" class="login-error" hidden></p>
+                </div>
+                <div class="login-dialog-footer">
+                    <button type="submit" class="btn-primary" id="loginSubmitBtn">Sign in</button>
+                </div>
+            </form>
+        </dialog>
+
         <!-- Loading Overlay -->
         <div class="loading-overlay" id="loadingOverlay" style="display: none;">
             <div class="loading-spinner" id="loadingSpinner">
