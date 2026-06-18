@@ -155,6 +155,7 @@
     --surface-2: #f0f2f8;
     --surface-3: #e8eaf2;
     --hover-bg: rgba(15, 23, 42, 0.06);
+    --scrollbar-thumb: #b0bac8;
     /* Editorial aliases */
     --accent: var(--primary);
     --ink:    var(--text);
@@ -236,6 +237,7 @@
     --surface-2: #131d30;
     --surface-3: #18233a;
     --hover-bg: rgba(255, 255, 255, 0.06);
+    --scrollbar-thumb: #2e3f5c;
     --header-primary:    #1d4ed8;
     --header-secondary:  #065f46;
     --mod-xr:  #60a5fa;  /* blue-400   */
@@ -397,7 +399,7 @@ small {
 }
 
 ::-webkit-scrollbar-thumb {
-    background: var(--border);
+    background: var(--scrollbar-thumb);
     border-radius: var(--radius-full);
 }
 
@@ -1424,9 +1426,18 @@ select {
     align-items: center;
     justify-content: center;
 }
-.mod-circle svg, .modal-mod-circle svg {
+.mod-circle svg {
     width: 36px;
     height: 36px;
+    fill: currentColor;
+}
+.modal-mod-circle {
+    width: 64px;
+    height: 64px;
+}
+.modal-mod-circle svg {
+    width: 52px;
+    height: 52px;
     fill: currentColor;
 }
 .timeline-mod-avatar svg {
