@@ -1015,7 +1015,7 @@ small {
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding-top: 10px;
+    padding-top: 15px;
 }
 
 .history-dot {

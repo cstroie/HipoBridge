@@ -268,7 +268,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Honour the URL fragment, but only for tabs available without a
         // loaded patient; patient-scoped tabs fall back to the default
         const hash = location.hash.replace('#', '');
-        switchTab(['schedule', 'search'].includes(hash) ? hash : 'schedule');
+        switchTab(['schedule', 'search'].includes(hash) ? hash : 'search');
     }
     
     function initEventListeners() {
