@@ -1313,15 +1313,25 @@ document.addEventListener('DOMContentLoaded', function() {
             const MOD_SHORT = { radio: 'XR', ct: 'CT', irm: 'MR', eco: 'US', rads: 'FL' };
             const MOD_VAR   = { radio: '--mod-xr', ct: '--mod-ct', irm: '--mod-mr', eco: '--mod-us', rads: '--mod-fl' };
             if (imagingList && analysesData?.entry?.length) {
-                const entries = [...analysesData.entry]
+                const candidates = [...analysesData.entry]
                     .filter(e => MOD_SHORT[e.resource?.code?.coding?.[0]?.code])
                     .sort((a, b) => (b.resource.authoredOn || '') > (a.resource.authoredOn || '') ? 1 : -1)
-                    .slice(0, 5);
+                    .slice(0, 20); // fetch more than needed so we can skip empty ones
 
-                const reports = await limitedMap(entries, MAX_CONCURRENT_REQUESTS, e => {
+                const candidateReports = await limitedMap(candidates, MAX_CONCURRENT_REQUESTS, e => {
                     const sr = e.resource;
                     return getReportContent(sr.id, sr.code?.coding?.[0]?.code);
                 });
+
+                // Keep only entries that have actual report text, up to 5
+                const entries = [];
+                const reports = [];
+                for (let i = 0; i < candidates.length && entries.length < 5; i++) {
+                    if (candidateReports[i]) {
+                        entries.push(candidates[i]);
+                        reports.push(candidateReports[i]);
+                    }
+                }
 
                 imagingList.innerHTML = '';
                 entries.forEach((entry, idx) => {
