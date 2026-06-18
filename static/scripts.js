@@ -988,11 +988,11 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Define modality mapping
         const modalityMap = {
-            'radio': { name: 'X-Ray',       icon: 'fa-x-ray'     },
-            'ct':    { name: 'CT',          icon: 'fa-computer'  },
-            'irm':   { name: 'MRI',         icon: 'fa-magnet'    },
-            'eco':   { name: 'Ultrasound',  icon: 'fa-heartbeat' },
-            'rads':  { name: 'Fluoroscopy', icon: 'fa-radiation' },
+            'radio': { name: 'X-Ray',       icon: 'mod-radio'  },
+            'ct':    { name: 'CT',          icon: 'mod-ct'     },
+            'irm':   { name: 'MRI',         icon: 'mod-irm'    },
+            'eco':   { name: 'Ultrasound',  icon: 'mod-eco'    },
+            'rads':  { name: 'Fluoroscopy', icon: 'mod-fluoro' },
         };
         
         // Group analyses by modality
@@ -2416,27 +2416,27 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     const MODALITY_INFO = {
-        radio:  { icon: 'fa-x-ray',      label: 'X-Ray' },
-        ct:     { icon: 'fa-ring',        label: 'CT' },
-        irm:    { icon: 'fa-magnet',     label: 'MRI' },
-        eco:    { icon: 'fa-water',      label: 'Ultrasound' },
-        rads:   { icon: 'fa-radiation',  label: 'Fluoroscopy' },
-        fluoro: { icon: 'fa-radiation',  label: 'Fluoroscopy' },
-        lab:    { icon: 'fa-flask',      label: 'Laboratory' },
+        radio:  { icon: 'mod-radio',  label: 'X-Ray' },
+        ct:     { icon: 'mod-ct',     label: 'CT' },
+        irm:    { icon: 'mod-irm',    label: 'MRI' },
+        eco:    { icon: 'mod-eco',    label: 'Ultrasound' },
+        rads:   { icon: 'mod-fluoro', label: 'Fluoroscopy' },
+        fluoro: { icon: 'mod-fluoro', label: 'Fluoroscopy' },
+        lab:    { icon: 'mod-lab',    label: 'Laboratory' },
     };
 
     const MODALITY_AVATAR = {
-        radio:  { icon: 'fa-x-ray',     cls: 'mod-xr' },
-        ct:     { icon: 'fa-ring',      cls: 'mod-ct' },
-        irm:    { icon: 'fa-magnet',    cls: 'mod-mr' },
-        eco:    { icon: 'fa-water',     cls: 'mod-us' },
-        fluoro: { icon: 'fa-radiation', cls: 'mod-fl' },
-        rads:   { icon: 'fa-radiation', cls: 'mod-fl' },
-        lab:    { icon: 'fa-flask',     cls: 'mod-lab' },
+        radio:  { icon: 'mod-radio',  cls: 'mod-xr' },
+        ct:     { icon: 'mod-ct',     cls: 'mod-ct' },
+        irm:    { icon: 'mod-irm',    cls: 'mod-mr' },
+        eco:    { icon: 'mod-eco',    cls: 'mod-us' },
+        fluoro: { icon: 'mod-fluoro', cls: 'mod-fl' },
+        rads:   { icon: 'mod-fluoro', cls: 'mod-fl' },
+        lab:    { icon: 'mod-lab',    cls: 'mod-lab' },
     };
     function modAvatarHTML(slug) {
-        const av = MODALITY_AVATAR[slug] || { icon: 'fa-question', cls: '' };
-        return `<i class="fas ${av.icon}" aria-hidden="true"></i>`;
+        const id = MODALITY_AVATAR[slug]?.icon || 'mod-lab';
+        return `<svg aria-hidden="true" focusable="false"><use href="#${id}"></use></svg>`;
     }
 
     // Helper function to create analysis card

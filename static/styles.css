@@ -1426,6 +1426,11 @@ select {
     justify-content: center;
     font-size: 18px;
 }
+.mod-circle svg, .timeline-mod-avatar svg, .modal-mod-circle svg {
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+}
 .analysis-card.radio .mod-circle,
 .mod-circle.mod-xr { background: color-mix(in srgb,var(--mod-xr) 14%,transparent); color: var(--mod-xr); }
 .analysis-card.ct    .mod-circle,
