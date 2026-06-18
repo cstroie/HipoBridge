@@ -1312,6 +1312,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const imagingList = document.getElementById('reportImagingList');
             const MOD_SHORT = { radio: 'XR', ct: 'CT', irm: 'MR', eco: 'US', rads: 'FL' };
             const MOD_VAR   = { radio: '--mod-xr', ct: '--mod-ct', irm: '--mod-mr', eco: '--mod-us', rads: '--mod-fl' };
+            // Hoisted so the markdown builder below can reference them
+            let entries = [], reports = [];
             if (imagingList && analysesData?.entry?.length) {
                 const candidates = [...analysesData.entry]
                     .filter(e => MOD_SHORT[e.resource?.code?.coding?.[0]?.code])
@@ -1324,8 +1326,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
 
                 // Keep only entries that have actual report text, up to 5
-                const entries = [];
-                const reports = [];
                 for (let i = 0; i < candidates.length && entries.length < 5; i++) {
                     if (candidateReports[i]) {
                         entries.push(candidates[i]);
@@ -1436,9 +1436,49 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (secTimeline) secTimeline.hidden = false;
             }
 
-            // Stash combined markdown for Copy button
+            // Stash combined markdown for Copy button — mirrors what is rendered,
+            // not the full epicrisis history (that belongs to the Epicrisis tab).
             const patientMarkdown = await generatePatientMarkdown(patientData);
-            const combined = patientMarkdown + epicrisisMarkdown + analysesMarkdown;
+
+            function admissionMarkdown(label, enc, isActive) {
+                const start = enc.period?.start ? formatDate(enc.period.start) : '';
+                const end   = enc.period?.end   ? formatDate(enc.period.end)   : '';
+                const ms    = (enc.period?.start && enc.period?.end)
+                    ? new Date(enc.period.end) - new Date(enc.period.start) : 0;
+                const nights = ms > 0 ? Math.round(ms / 86400000) : 0;
+                const period = isActive
+                    ? `${start} → present (ongoing)`
+                    : `${start} → ${end}${nights ? ` (${nights} ${nights === 1 ? 'night' : 'nights'})` : ''}`;
+                const body = isActive
+                    ? buildCheckinText(enc)
+                    : extractEpicrisisText(enc).trim();
+                return `## ${label}\n\n_${period}_\n\n${body}\n\n`;
+            }
+
+            let admissionsMd = '';
+            if (activeAdm) {
+                admissionsMd += admissionMarkdown('Current Admission', activeAdm.enc, true);
+                const sparse = buildCheckinText(activeAdm.enc).length < SPARSE_THRESHOLD;
+                if (sparse && lastDischarge)
+                    admissionsMd += admissionMarkdown('Last Admission', lastDischarge.enc, false);
+            } else if (lastDischarge) {
+                admissionsMd += admissionMarkdown('Last Admission', lastDischarge.enc, false);
+            }
+
+            let imagingMd = '';
+            if (entries.length) {
+                imagingMd = '## Recent Imaging\n\n';
+                entries.forEach((entry, idx) => {
+                    const sr   = entry.resource;
+                    const mod  = sr.code?.coding?.[0]?.code || '';
+                    const desc = sr.code?.coding?.[0]?.display || MODALITY_INFO[mod]?.label || mod;
+                    const date = sr.authoredOn ? formatDate(sr.authoredOn) : '';
+                    const code = sr.identifier?.[0]?.value || sr.id || '';
+                    imagingMd += `### ${desc}  ·  ${date}${code ? '  #' + code : ''}\n\n${reports[idx]}\n\n`;
+                });
+            }
+
+            const combined = patientMarkdown + admissionsMd + imagingMd;
             if (markdownStore) markdownStore.dataset.markdown = combined;
 
             if (reportCard) reportCard.hidden = false;
