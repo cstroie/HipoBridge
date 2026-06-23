@@ -456,7 +456,8 @@ class WorklistServer:
 
                 # Section filter (exact match; empty list = all sections)
                 target_sections = profile.get('sections') or []
-                if target_sections and r.get('section', '') not in target_sections:
+                section = r.get('section', '').upper()
+                if target_sections and not any(s.upper() in section for s in target_sections):
                     continue
 
                 # Time window: exclude entries too far in the future
