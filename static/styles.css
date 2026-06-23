@@ -3208,7 +3208,7 @@ dialog.report-modal[open]::backdrop {
 #patientQrPanel { margin-top: var(--spacing-md); }
 .qr-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: var(--spacing-md);
     padding: var(--spacing-md) 0;
 }
@@ -3228,7 +3228,4 @@ dialog.report-modal[open]::backdrop {
     color: var(--text-secondary);
     text-align: center;
     margin: 0;
-}
-@media (max-width: 600px) {
-    .qr-grid { grid-template-columns: repeat(2, 1fr); }
 }
