@@ -310,45 +310,40 @@ def _build_dataset(entry: dict, patient_info: Optional[dict]) -> Dataset:
 # ---------------------------------------------------------------------------
 
 class WorklistCache:
-    """Thread-safe store of pre-built DICOM Datasets and their raw schedule dicts."""
+    """Thread-safe per-modality store of pre-built DICOM Datasets.
+
+    Each lab_id (Hipocrate modality ID) gets its own independent slot so that
+    a CT refresh never touches the Ultrasound entries and vice-versa.
+    """
 
     def __init__(self) -> None:
-        self._lock    = threading.Lock()
-        self._entries: List[Dataset] = []
-        self._raw:     List[dict]    = []
-        self._updated_at: Optional[datetime] = None
+        self._lock  = threading.Lock()
+        # lab_id → (datasets, raw_dicts, updated_at)
+        self._slots: Dict[str, Tuple[List[Dataset], List[dict], datetime]] = {}
 
-    def update(self, entries: List[Dataset], raw: List[dict]) -> None:
+    def update(self, lab_id: str, entries: List[Dataset], raw: List[dict]) -> None:
         with self._lock:
-            self._entries    = entries
-            self._raw        = raw
-            self._updated_at = datetime.now()
+            self._slots[lab_id] = (list(entries), list(raw), datetime.now())
 
-    def update_partial(self, new_entries: List[Dataset], new_raw: List[dict]) -> None:
-        """Replace entries whose request_id appears in new_raw; keep all others.
-
-        Used by modality-specific refreshes so that e.g. a CT refresh doesn't
-        discard the current MRI or Ultrasound entries from the cache.
-        """
-        new_ids = {r.get('request_id') for r in new_raw}
+    def snapshot(self, lab_id: Optional[str] = None) -> Tuple[List[Dataset], List[dict]]:
+        """Return entries for one modality, or all modalities merged if lab_id is None."""
         with self._lock:
-            kept = [(d, r) for d, r in zip(self._entries, self._raw)
-                    if r.get('request_id') not in new_ids]
-            kept_ds  = [d for d, _ in kept]
-            kept_raw = [r for _, r in kept]
-            self._entries    = kept_ds  + new_entries
-            self._raw        = kept_raw + new_raw
-            self._updated_at = datetime.now()
+            if lab_id is not None:
+                slot = self._slots.get(lab_id)
+                if not slot:
+                    return [], []
+                return list(slot[0]), list(slot[1])
+            all_ds:  List[Dataset] = []
+            all_raw: List[dict]    = []
+            for ds_list, raw_list, _ in self._slots.values():
+                all_ds.extend(ds_list)
+                all_raw.extend(raw_list)
+            return all_ds, all_raw
 
-    def snapshot(self) -> Tuple[List[Dataset], List[dict]]:
-        """Return copies of the current cache contents (safe for the calling thread)."""
+    def updated_at(self, lab_id: str) -> Optional[datetime]:
         with self._lock:
-            return list(self._entries), list(self._raw)
-
-    @property
-    def updated_at(self) -> Optional[datetime]:
-        with self._lock:
-            return self._updated_at
+            slot = self._slots.get(lab_id)
+            return slot[2] if slot else None
 
 
 # ---------------------------------------------------------------------------
@@ -485,12 +480,17 @@ class WorklistServer:
 
         return result
 
-    def _on_demand_refresh(self, profile: Optional[dict]) -> None:
-        """Trigger a modality-filtered refresh from a pynetdicom thread and wait."""
-        if not self._refresher or not self._loop:
-            return
+    def _lab_id_for_profile(self, profile: Optional[dict]) -> Optional[str]:
         modality_slug = profile.get('modality') if profile else None
-        lab_id = _MODALITY_SLUG_TO_LAB_ID.get(modality_slug) if modality_slug else None
+        return _MODALITY_SLUG_TO_LAB_ID.get(modality_slug) if modality_slug else None
+
+    def _on_demand_refresh(self, lab_id: Optional[str]) -> None:
+        """Trigger a modality-specific refresh from a pynetdicom thread and wait.
+
+        Skipped when lab_id is None (unknown device — no profile modality to refresh).
+        """
+        if not self._refresher or not self._loop or lab_id is None:
+            return
         future = asyncio.run_coroutine_threadsafe(
             self._refresher.refresh_if_stale(
                 lab_id=lab_id, max_age_seconds=self._on_demand_sec
@@ -510,14 +510,15 @@ class WorklistServer:
         profile = self._profile_for(calling_ae)
         if profile is None:
             self._unknown_log.warning(
-                "Unknown AE title '%s' — serving unfiltered worklist. "
+                "Unknown AE title '%s' — serving merged cached worklist (no refresh). "
                 "Add a [%s] section to worklist.cfg to configure this device.",
                 calling_ae, calling_ae,
             )
 
-        self._on_demand_refresh(profile)
+        lab_id = self._lab_id_for_profile(profile)
+        self._on_demand_refresh(lab_id)
 
-        entries, raw = self._cache.snapshot()
+        entries, raw = self._cache.snapshot(lab_id)
         candidates = self._filter(entries, raw, profile, calling_ae)
 
         count = 0
@@ -638,27 +639,20 @@ class WorklistRefresher:
 
         return entries
 
-    async def refresh(self, lab_id: Optional[str] = None) -> None:
-        """One refresh cycle: fetch → enrich → build Datasets → update cache.
-
-        If lab_id is given, only that modality's entries are fetched and the
-        cache is updated in-place (other modalities are preserved).
-        If lab_id is None, the full schedule is fetched and replaces the cache.
-        """
-        label = f"lab_id={lab_id}" if lab_id else "full"
-        logger.debug("Worklist refresh starting (%s)", label)
+    async def refresh(self, lab_id: str) -> None:
+        """One refresh cycle for a single modality: fetch → enrich → update cache slot."""
+        logger.debug("Worklist refresh starting (lab_id=%s)", lab_id)
         entries = await self._fetch_schedule(lab_id=lab_id)
         if not entries:
-            logger.warning("Empty schedule for %s — keeping previous cache", label)
+            logger.warning("Empty schedule for lab_id=%s — keeping previous cache", lab_id)
             return
 
-        # For a full refresh, evict patient cache entries that left the schedule.
-        if lab_id is None:
-            current_ids = {e['request_id'] for e in entries if e.get('request_id')}
-            for stale in [k for k in self._patient_cache if k not in current_ids]:
-                del self._patient_cache[stale]
+        # Evict patient cache entries that left this modality's schedule.
+        current_ids = {e['request_id'] for e in entries if e.get('request_id')}
+        for stale in [k for k in self._patient_cache if k not in current_ids]:
+            del self._patient_cache[stale]
 
-        # Only enrich active entries
+        # Only enrich active entries.
         active = [e for e in entries if e.get('_fhir_status') in _ACTIVE_FHIR_STATUSES]
 
         # Bounded concurrency: 2 patients at a time = max 4 Hipocrate calls,
@@ -690,36 +684,32 @@ class WorklistRefresher:
             except Exception as exc:
                 logger.warning("Dataset build failed for request %s: %s", rid, exc)
 
-        if lab_id is not None:
-            self._cache.update_partial(datasets, raw_out)
-        else:
-            self._cache.update(datasets, raw_out)
+        self._cache.update(lab_id, datasets, raw_out)
 
         logger.info(
-            "Worklist refreshed (%s): %d entries, %d active",
-            label, len(datasets), len(active),
+            "Worklist refreshed (lab_id=%s): %d entries, %d active",
+            lab_id, len(datasets), len(active),
         )
 
-    async def refresh_if_stale(self, lab_id: Optional[str] = None,
+    async def refresh_if_stale(self, lab_id: str,
                                max_age_seconds: float = 60.0) -> None:
-        """Refresh only if the last refresh for this lab_id is older than max_age_seconds.
+        """Refresh a modality's cache slot only if older than max_age_seconds.
 
         Safe to call from a non-async thread via asyncio.run_coroutine_threadsafe().
         The throttle check-and-set is protected by a threading.Lock so concurrent
         C-FIND handlers cannot both slip through simultaneously.
         """
-        key = lab_id or '*'
         now = datetime.now()
         with self._throttle_lock:
-            last = self._last_refresh.get(key)
+            last = self._last_refresh.get(lab_id)
             if last and (now - last).total_seconds() < max_age_seconds:
                 logger.debug(
                     "On-demand refresh skipped (lab_id=%s, %.0fs old < %.0fs threshold)",
-                    key, (now - last).total_seconds(), max_age_seconds,
+                    lab_id, (now - last).total_seconds(), max_age_seconds,
                 )
                 return
-            self._last_refresh[key] = now   # claim the slot before releasing the lock
-        await self.refresh(lab_id=lab_id)
+            self._last_refresh[lab_id] = now   # claim the slot before releasing the lock
+        await self.refresh(lab_id)
 
 
 # ---------------------------------------------------------------------------
