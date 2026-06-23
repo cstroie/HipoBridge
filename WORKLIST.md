@@ -49,20 +49,19 @@ time_window_hours = 48
 | Key | Description |
 |-----|-------------|
 | `ae_title` | Calling AE title the device sends (matched case-insensitively) |
-| `modality` | Modality slug — see table below. Determines which Hipocrate lab is queried and which cache slot is read |
+| `modality` | DICOM modality code: `CT`, `MR`, `US`, `CR`, `RF`. Determines which Hipocrate lab is queried and which cache slot is read. `RF` covers both Fluoroscopy and Interventional Radiology. Both old slugs (`eco`, `irm`, etc.) and DICOM codes are accepted |
 | `wards` | Comma-separated substrings matched case-insensitively against the Hipocrate ward name (e.g. `ZI` matches `SPITALIZARE DE ZI`). Empty = all wards |
 | `time_window_hours` | Exclude entries scheduled more than N hours from now. `0` = no limit |
 
 ### Modality slugs
 
-| Slug | Hipocrate lab ID | DICOM code | Fetch window |
-|------|-----------------|------------|--------------|
-| `ct` | 26 | CT | 7 days |
-| `eco` | 28 | US | 3 days |
-| `irm` | 32 | MR | 7 days |
-| `radio` | 49 | CR | 3 days |
-| `rads` | 35 | RF | 3 days |
-| `fluoro` | 50 | RF | 3 days |
+| DICOM code | Hipocrate lab ID(s) | Internal slug(s) | Fetch window |
+|------------|--------------------|--------------------|--------------|
+| `CT` | 26 | `ct` | 7 days |
+| `US` | 28 | `eco` | 3 days |
+| `MR` | 32 | `irm` | 7 days |
+| `CR` | 49 | `radio` | 3 days |
+| `RF` | 35, 50 | `rads`, `fluoro` | 3 days |
 
 Fetch window is the lookahead from today. Lookback is always 1 day (yesterday).
 

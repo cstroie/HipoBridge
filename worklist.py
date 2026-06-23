@@ -84,6 +84,14 @@ _MODALITY_CODE: Dict[str, str] = {
     'rads':   'RF',
 }
 
+# Reverse map: DICOM code → list of Hipocrate lab IDs.
+# RF maps to two labs (Fluoroscopy=50, Interventional Radiology=35).
+_DICOM_CODE_TO_LAB_IDS: Dict[str, List[str]] = {}
+for _slug, _lab_id in _MODALITY_SLUG_TO_LAB_ID.items():
+    _code = _MODALITY_CODE.get(_slug)
+    if _code:
+        _DICOM_CODE_TO_LAB_IDS.setdefault(_code, []).append(_lab_id)
+
 # HipoClientSchedule._FHIR_STATUS values that mean the study is still pending.
 # Entries with any other status (completed, ended, entered-in-error) are excluded.
 _ACTIVE_FHIR_STATUSES = frozenset({'on-hold', 'draft', 'active'})
@@ -134,7 +142,11 @@ def _load_config(config_path: str) -> Tuple[dict, List[dict]]:
         ae = config.get(section, 'ae_title', fallback='').strip()
         if not ae:
             continue
-        modality = config.get(section, 'modality', fallback='').strip().lower() or None
+        modality_raw = config.get(section, 'modality', fallback='').strip()
+        if modality_raw.upper() in _DICOM_CODE_TO_LAB_IDS:
+            modality = modality_raw.upper()               # already a DICOM code
+        else:
+            modality = _MODALITY_CODE.get(modality_raw.lower())  # slug → DICOM code
         wards_raw = config.get(section, 'wards', fallback='').strip()
         wards = [w.strip() for w in wards_raw.split(',') if w.strip()]
         time_window = config.getfloat(section, 'time_window_hours', fallback=0.0)
@@ -345,6 +357,18 @@ class WorklistCache:
                 all_raw.extend(raw_list)
             return all_ds, all_raw
 
+    def snapshot_multi(self, lab_ids: List[str]) -> Tuple[List[Dataset], List[dict]]:
+        """Merge entries from a specific set of lab_id slots (e.g. RF = fluoro + rads)."""
+        with self._lock:
+            all_ds:  List[Dataset] = []
+            all_raw: List[dict]    = []
+            for lab_id in lab_ids:
+                slot = self._slots.get(lab_id)
+                if slot:
+                    all_ds.extend(slot[0])
+                    all_raw.extend(slot[1])
+            return all_ds, all_raw
+
     def updated_at(self, lab_id: str) -> Optional[datetime]:
         with self._lock:
             slot = self._slots.get(lab_id)
@@ -449,9 +473,9 @@ class WorklistServer:
                 continue
 
             if profile:
-                # Modality filter
+                # Modality filter: compare DICOM codes
                 target_mod = profile.get('modality')
-                if target_mod and r.get('modality') != target_mod:
+                if target_mod and _MODALITY_CODE.get(r.get('modality') or '') != target_mod:
                     continue
 
                 # Ward filter: case-insensitive substring match; empty list = all wards
@@ -486,27 +510,29 @@ class WorklistServer:
 
         return result
 
-    def _lab_id_for_profile(self, profile: Optional[dict]) -> Optional[str]:
-        modality_slug = profile.get('modality') if profile else None
-        return _MODALITY_SLUG_TO_LAB_ID.get(modality_slug) if modality_slug else None
+    def _lab_ids_for_profile(self, profile: Optional[dict]) -> List[str]:
+        """Return the Hipocrate lab IDs for a device profile's DICOM modality code."""
+        code = profile.get('modality') if profile else None
+        return _DICOM_CODE_TO_LAB_IDS.get(code, []) if code else []
 
-    def _on_demand_refresh(self, lab_id: Optional[str]) -> None:
-        """Trigger a modality-specific refresh from a pynetdicom thread and wait.
+    def _on_demand_refresh(self, lab_ids: List[str]) -> None:
+        """Trigger modality-specific refreshes from a pynetdicom thread and wait.
 
-        Skipped when lab_id is None (unknown device — no profile modality to refresh).
+        Skipped when lab_ids is empty (unknown device — no modality to refresh).
         """
-        if not self._refresher or not self._loop or lab_id is None:
+        if not self._refresher or not self._loop or not lab_ids:
             return
-        future = asyncio.run_coroutine_threadsafe(
-            self._refresher.refresh_if_stale(
-                lab_id=lab_id, max_age_seconds=self._on_demand_sec
-            ),
-            self._loop,
-        )
-        try:
-            future.result(timeout=self._on_demand_timeout)
-        except Exception as exc:
-            logger.warning("On-demand refresh failed (lab_id=%s): %s", lab_id, exc)
+        for lab_id in lab_ids:
+            future = asyncio.run_coroutine_threadsafe(
+                self._refresher.refresh_if_stale(
+                    lab_id=lab_id, max_age_seconds=self._on_demand_sec
+                ),
+                self._loop,
+            )
+            try:
+                future.result(timeout=self._on_demand_timeout)
+            except Exception as exc:
+                logger.warning("On-demand refresh failed (lab_id=%s): %s", lab_id, exc)
 
     def handle_find(self, event):
         """C-FIND SCP handler (called by pynetdicom in its own thread)."""
@@ -523,10 +549,10 @@ class WorklistServer:
             yield 0xA700, Dataset()   # C-FIND Failure — Refused: Out of Resources
             return
 
-        lab_id = self._lab_id_for_profile(profile)
-        self._on_demand_refresh(lab_id)
+        lab_ids = self._lab_ids_for_profile(profile)
+        self._on_demand_refresh(lab_ids)
 
-        entries, raw = self._cache.snapshot(lab_id)
+        entries, raw = self._cache.snapshot_multi(lab_ids) if lab_ids else self._cache.snapshot()
         candidates = self._filter(entries, raw, profile, calling_ae)
 
         count = 0
