@@ -42,6 +42,7 @@ logger = logging.getLogger('Worklist')
 # Maps modality slugs → Hipocrate lab IDs used by the schedule page filter
 # (PARA_ID_Laborator). Used to do modality-specific on-demand refreshes.
 # IDs come from /gen_lib/filtre_ajax_dropdown.asp — do not guess them.
+# LAB is intentionally absent: lab requests don't use a DICOM worklist.
 _MODALITY_SLUG_TO_LAB_ID: Dict[str, str] = {
     'ct':     '26',
     'eco':    '28',
@@ -49,6 +50,26 @@ _MODALITY_SLUG_TO_LAB_ID: Dict[str, str] = {
     'radio':  '49',
     'rads':   '35',   # interventional radiology
     'fluoro': '50',
+}
+
+# How many days ahead to fetch per modality slug.
+# X-Ray / Ultrasound / Fluoroscopy: 2 days (mostly same-day or next-day).
+# CT / MRI: 7 days (slots booked well in advance; MRI prep needs lead time).
+_MODALITY_FETCH_DAYS: Dict[str, int] = {
+    'radio':  2,
+    'eco':    2,
+    'fluoro': 2,
+    'rads':   2,
+    'ct':     7,
+    'irm':    7,
+}
+_DEFAULT_FETCH_DAYS = 2   # default when no modality is specified
+
+# Reverse lookup: lab_id → days ahead, derived from the two maps above.
+_LAB_ID_FETCH_DAYS: Dict[str, int] = {
+    lab_id: _MODALITY_FETCH_DAYS[slug]
+    for slug, lab_id in _MODALITY_SLUG_TO_LAB_ID.items()
+    if slug in _MODALITY_FETCH_DAYS
 }
 
 # Maps schedule modality slugs → DICOM modality codes.
@@ -61,7 +82,6 @@ _MODALITY_CODE: Dict[str, str] = {
     'mri':    'MR',
     'fluoro': 'RF',
     'rads':   'RF',
-    'lab':    'LAB',
 }
 
 # HipoClientSchedule._FHIR_STATUS values that mean the study is still pending.
@@ -588,12 +608,15 @@ class WorklistRefresher:
     async def _fetch_schedule(self, lab_id: Optional[str] = None) -> List[dict]:
         """Pull the schedule from Hipocrate.
 
-        Fetches yesterday through 4 days ahead so that even MRI devices with
-        a 72-hour window always see their full horizon.  Pass lab_id to restrict
-        to a single modality (uses Hipocrate's native PARA_ID_Laborator filter).
+        Lookback is always 1 day.  Lookahead depends on modality:
+          - X-Ray / Ultrasound / Fluoroscopy: 2 days (mostly same-day slots)
+          - CT / MRI: 7 days (slots booked well in advance)
+          - No modality (full refresh): 2 days (_DEFAULT_FETCH_DAYS)
+        Pass lab_id to restrict to one modality (Hipocrate PARA_ID_Laborator).
         """
         start = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-        end   = (datetime.now() + timedelta(days=4)).strftime('%Y-%m-%d')
+        days_ahead = _LAB_ID_FETCH_DAYS.get(lab_id, _DEFAULT_FETCH_DAYS) if lab_id else _DEFAULT_FETCH_DAYS
+        end   = (datetime.now() + timedelta(days=days_ahead)).strftime('%Y-%m-%d')
 
         client = self._client(HipoClientSchedule)
         data = await client.fetch_and_parse(
