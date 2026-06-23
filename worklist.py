@@ -262,7 +262,7 @@ def _build_dataset(entry: dict, patient_info: Optional[dict]) -> Dataset:
     # Patient demographics (enriched when available, falls back to schedule data)
     if patient_info:
         patient_name = _name_to_dicom(patient_info.get('name') or entry.get('patient_name', ''))
-        patient_id   = patient_info.get('id', '')
+        patient_id   = patient_info.get('cnp') or patient_info.get('id', '')
         birth_date   = _date_to_dicom(patient_info.get('birth_date', ''))
         sex          = _sex_to_dicom(patient_info.get('sex', ''))
     else:
@@ -601,6 +601,7 @@ class WorklistRefresher:
 
             info = {
                 'id':         patient_id,
+                'cnp':        patient_data.get('patient.cnp'),
                 'name':       patient_data.get('patient.name'),
                 'birth_date': patient_data.get('patient.birth_date'),
                 'sex':        patient_data.get('patient.sex'),
