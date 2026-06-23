@@ -30,7 +30,7 @@ try:
     from pydicom.sequence import Sequence
     from pydicom.uid import generate_uid
     from pynetdicom import AE, evt
-    from pynetdicom.sop_class import ModalityWorklistInformationFind
+    from pynetdicom.sop_class import ModalityWorklistInformationFind, Verification
     DICOM_AVAILABLE = True
 except ImportError:
     DICOM_AVAILABLE = False
@@ -547,6 +547,7 @@ class WorklistServer:
             return
 
         self._ae = AE(ae_title=self._ae_title)
+        self._ae.add_supported_context(Verification)
         self._ae.add_supported_context(ModalityWorklistInformationFind)
 
         logger.info(
