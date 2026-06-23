@@ -269,12 +269,17 @@ def _sex_to_dicom(sex: str) -> str:
     return {'male': 'M', 'female': 'F'}.get(s, 'O')
 
 
-def _build_dataset(entry: dict, patient_info: Optional[dict],
-                   accession_prefix: str = '') -> Dataset:
-    """Build a pydicom Dataset for one MWL Scheduled Procedure Step."""
-    ds = Dataset()
+def _build_datasets(entry: dict, patient_info: Optional[dict],
+                    accession_prefix: str = '') -> List['Dataset']:
+    """Build one pydicom Dataset per exam in the request.
 
-    # Patient demographics (enriched when available, falls back to schedule data)
+    A single Hipocrate request can contain multiple exams.  Each becomes an
+    independent MWL entry with a unique ScheduledProcedureStepID suffix
+    (request_id-1, request_id-2, …) so devices treat them as separate steps.
+    If there is only one exam (or no enriched exam list), a single entry is
+    returned with no suffix.
+    """
+    # Patient demographics
     if patient_info:
         patient_name = _name_to_dicom(patient_info.get('name') or entry.get('patient_name', ''))
         cnp          = patient_info.get('cnp', '')
@@ -295,43 +300,46 @@ def _build_dataset(entry: dict, patient_info: Optional[dict],
         birth_date   = ''
         sex          = 'O'
 
-    ds.PatientName      = patient_name
-    ds.PatientID        = patient_id
-    ds.PatientBirthDate = birth_date
-    ds.PatientSex       = sex
-
-    # Order-level attributes
     request_id   = entry.get('request_id', '')
     request_code = entry.get('request_code', '')
     lab_display  = entry.get('laboratory', '')
+    exams        = (patient_info or {}).get('exams') or []
+    dt_str       = entry.get('date_time', '')
+    modality     = _MODALITY_CODE.get(entry.get('modality') or '', 'OT')
+    referrer     = _name_to_dicom(entry.get('requested_by', ''))
+    study_uid    = f'1.2.840.99999999.1.{request_id}' if request_id else generate_uid()
+    accession    = f"{accession_prefix}{request_id}" if request_id else request_code
 
-    # Procedure description: exam names from cerere.asp (e.g. "ULTRASONOGRAFIA ABDOMINALA"),
-    # joined when multiple; falls back to the generic laboratory name from the schedule.
-    exams = (patient_info or {}).get('exams') or []
-    description = ' / '.join(exams) if exams else lab_display
+    # One entry per exam; fall back to lab_display when no exams were scraped.
+    exam_list = exams if exams else [lab_display]
+    multi = len(exam_list) > 1
+    datasets = []
 
-    ds.AccessionNumber               = f"{accession_prefix}{request_id}" if request_id else request_code
-    ds.ReferringPhysicianName        = _name_to_dicom(entry.get('requested_by', ''))
-    ds.RequestedProcedureDescription = description
-    ds.RequestedProcedureID          = request_id
-    ds.StudyInstanceUID              = (
-        f'1.2.840.99999999.1.{request_id}' if request_id else generate_uid()
-    )
+    for idx, exam_name in enumerate(exam_list, start=1):
+        ds = Dataset()
+        ds.PatientName      = patient_name
+        ds.PatientID        = patient_id
+        ds.PatientBirthDate = birth_date
+        ds.PatientSex       = sex
 
-    # Scheduled Procedure Step Sequence (mandatory for MWL)
-    sps = Dataset()
-    dt_str = entry.get('date_time', '')
-    sps.ScheduledProcedureStepStartDate = _date_to_dicom(dt_str.split(' ')[0] if dt_str else '')
-    sps.ScheduledProcedureStepStartTime = _time_to_dicom(dt_str)
-    sps.Modality                         = _MODALITY_CODE.get(entry.get('modality') or '', 'OT')
-    sps.ScheduledProcedureStepDescription = description
-    sps.ScheduledProcedureStepID          = request_id
-    sps.ScheduledStationAETitle            = ''
-    sps.ScheduledPerformingPhysicianName   = _name_to_dicom(entry.get('requested_by', ''))
+        ds.AccessionNumber               = accession
+        ds.ReferringPhysicianName        = referrer
+        ds.RequestedProcedureDescription = exam_name
+        ds.RequestedProcedureID          = f'{request_id}-{idx}' if multi else request_id
+        ds.StudyInstanceUID              = study_uid
 
-    ds.ScheduledProcedureStepSequence = Sequence([sps])
+        sps = Dataset()
+        sps.ScheduledProcedureStepStartDate  = _date_to_dicom(dt_str.split(' ')[0] if dt_str else '')
+        sps.ScheduledProcedureStepStartTime  = _time_to_dicom(dt_str)
+        sps.Modality                          = modality
+        sps.ScheduledProcedureStepDescription = exam_name
+        sps.ScheduledProcedureStepID          = f'{request_id}-{idx}' if multi else request_id
+        sps.ScheduledStationAETitle           = ''
+        sps.ScheduledPerformingPhysicianName  = referrer
+        ds.ScheduledProcedureStepSequence = Sequence([sps])
+        datasets.append(ds)
 
-    return ds
+    return datasets
 
 
 # ---------------------------------------------------------------------------
@@ -755,9 +763,9 @@ class WorklistRefresher:
         for entry in entries:
             rid = entry.get('request_id')
             try:
-                ds = _build_dataset(entry, patient_map.get(rid), self._accession_prefix)
-                datasets.append(ds)
-                raw_out.append(entry)
+                ds_list = _build_datasets(entry, patient_map.get(rid), self._accession_prefix)
+                datasets.extend(ds_list)
+                raw_out.extend([entry] * len(ds_list))
             except Exception as exc:
                 logger.warning("Dataset build failed for request %s: %s", rid, exc)
 
