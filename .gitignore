@@ -1,4 +1,5 @@
 .aider*
 local.cfg
+worklist.cfg
 samples/*
 __pycache__

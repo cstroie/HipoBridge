@@ -1,0 +1,67 @@
+# worklist.cfg — DICOM Modality Worklist server configuration.
+#
+# Copy this file to worklist.cfg and edit to suit your installation.
+# worklist.cfg is not tracked by git (add it to .gitignore if needed).
+#
+# The server starts automatically when hipobridge.py is launched and this
+# file exists with valid credentials.
+
+[worklist]
+# DICOM AE Title this server presents to devices (max 16 chars, uppercase).
+ae_title = HIPPOBRIDGE
+
+# TCP port for DICOM associations. Use 11112 (no root needed) or 104 (root).
+port = 11112
+
+# Schedule refresh interval in minutes.
+refresh_minutes = 5
+
+# Hipocrate credentials used to pull the schedule in the background.
+# Can also be supplied via HYP_USER / HYP_PASS environment variables.
+username =
+password =
+
+# ---------------------------------------------------------------------------
+# Device profiles — one section per device or group.
+#
+# Keys:
+#   ae_title          Calling AE title the device sends (case-insensitive match).
+#   modality          Modality slug to filter: ct, irm, eco, radio, fluoro, lab.
+#                     Leave empty to allow any modality.
+#   sections          Comma-separated list of Hipocrate section names to include.
+#                     Leave empty to include all sections.
+#   time_window_hours How many hours ahead of now to include. 0 = no limit.
+#
+# Devices not listed here receive the full unfiltered worklist and generate a
+# warning in the log. Add them here once their AE title is known.
+# ---------------------------------------------------------------------------
+
+[CT_MAIN]
+ae_title = CT_SCANNER
+modality = ct
+sections =
+time_window_hours = 48
+
+[MRI_1]
+ae_title = MRI_SIEMENS
+modality = irm
+sections =
+time_window_hours = 72
+
+[US_UPU]
+ae_title = MINDRAY_UPU
+modality = eco
+sections = UPU, CPU, URGENTA
+time_window_hours = 6
+
+[US_DAYHOSPITAL]
+ae_title = MINDRAY_DAY
+modality = eco
+sections = SPITALIZARE DE ZI
+time_window_hours = 24
+
+[XRAY_1]
+ae_title = XRAY_CR
+modality = radio
+sections =
+time_window_hours = 24

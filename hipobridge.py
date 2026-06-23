@@ -40,6 +40,7 @@ from hipodata import HipoData
 
 from extractors import parse_cnp
 from markdown import markdown_to_html
+from worklist import start_worklist
 
 logging.basicConfig(
     level=getattr(logging, os.getenv('LOG_LEVEL', 'INFO').upper(), logging.INFO),
@@ -771,6 +772,8 @@ async def init_app():
     app.router.add_static('/static/', path=os.path.join(os.path.dirname(__file__), 'static'), name='static')
 
     app.on_cleanup.append(on_cleanup)
+
+    start_worklist(SERVICE_URL)
 
     return app
 
