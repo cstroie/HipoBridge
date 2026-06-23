@@ -779,9 +779,7 @@ async def init_app():
     app.on_cleanup.append(on_cleanup)
 
     global _wl_server
-    wl = start_worklist(SERVICE_URL)
-    if wl is not None:
-        _, _wl_server = wl
+    _wl_server = start_worklist(SERVICE_URL)
 
     return app
 

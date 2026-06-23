@@ -110,7 +110,7 @@ def _load_config(config_path: str) -> Tuple[dict, List[dict]]:
 
     Returns (server_cfg, device_profiles).
 
-    server_cfg keys: ae_title, port, refresh_minutes, username, password.
+    server_cfg keys: ae_title, port, on_demand_refresh_seconds, username, password.
     device_profiles: list of dicts with keys name, ae_title, modality,
                      sections (list), time_window_hours.
     """
@@ -120,7 +120,6 @@ def _load_config(config_path: str) -> Tuple[dict, List[dict]]:
     server = {
         'ae_title':                   config.get('worklist', 'ae_title', fallback='HIPPOBRIDGE'),
         'port':                       config.getint('worklist', 'port', fallback=11112),
-        'refresh_minutes':            config.getfloat('worklist', 'refresh_minutes', fallback=5.0),
         'on_demand_refresh_seconds':  config.getfloat('worklist', 'on_demand_refresh_seconds', fallback=60.0),
         'username':                   config.get('worklist', 'username',
                                                  fallback=os.getenv('HYP_USER', '')),
@@ -563,12 +562,11 @@ class WorklistRefresher:
     """Asyncio background task: fetches schedule and enriches patient data."""
 
     def __init__(self, cache: WorklistCache, service_url: str,
-                 username: str, password: str, refresh_interval: float) -> None:
+                 username: str, password: str) -> None:
         self._cache    = cache
         self._svc_url  = service_url
         self._username = username
         self._password = password
-        self._interval = refresh_interval   # minutes
         # Per-request_id patient info cache (cleared when entry leaves the schedule)
         self._patient_cache: Dict[str, dict] = {}
         # Throttle: track last on-demand refresh time per lab_id key ('*' = full)
@@ -723,15 +721,6 @@ class WorklistRefresher:
             self._last_refresh[key] = now   # claim the slot before releasing the lock
         await self.refresh(lab_id=lab_id)
 
-    async def run(self) -> None:
-        """Loop: refresh immediately on startup, then every refresh_interval minutes."""
-        while True:
-            try:
-                await self.refresh()
-            except Exception as exc:
-                logger.error("Worklist refresh error: %s", exc)
-            await asyncio.sleep(self._interval * 60)
-
 
 # ---------------------------------------------------------------------------
 # Entry point
@@ -775,7 +764,6 @@ def start_worklist(service_url: str,
         service_url=service_url,
         username=server_cfg['username'],
         password=server_cfg['password'],
-        refresh_interval=server_cfg['refresh_minutes'],
     )
 
     loop = asyncio.get_event_loop()
@@ -786,12 +774,9 @@ def start_worklist(service_url: str,
     t = threading.Thread(target=server.serve, daemon=True, name='DicomMWL')
     t.start()
 
-    # Schedule the async refresher in the current event loop.
-    task = asyncio.create_task(refresher.run(), name='WorklistRefresher')
-
     logger.info(
-        "DICOM MWL server started: AE=%s port=%d refresh=%.1fmin on-demand=%.0fs profiles=%d",
+        "DICOM MWL server started: AE=%s port=%d on-demand=%.0fs profiles=%d",
         server_cfg['ae_title'], server_cfg['port'],
-        server_cfg['refresh_minutes'], server_cfg['on_demand_refresh_seconds'], len(profiles),
+        server_cfg['on_demand_refresh_seconds'], len(profiles),
     )
-    return task, server
+    return server
