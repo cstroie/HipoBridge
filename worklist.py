@@ -562,6 +562,13 @@ class WorklistServer:
             if self._matches_cfind(ds, identifier):
                 yield 0xFF00, ds   # C-FIND Pending
                 count += 1
+                logger.debug(
+                    "C-FIND match: %s | %s | %s",
+                    getattr(ds, 'AccessionNumber', ''),
+                    getattr(ds, 'PatientName', ''),
+                    getattr(ds.ScheduledProcedureStepSequence[0],
+                            'ScheduledProcedureStepDescription', ''),
+                )
 
         logger.info(
             "C-FIND from '%s' (profile: %s): %d/%d entries returned",
