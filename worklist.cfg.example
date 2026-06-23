@@ -1,0 +1,95 @@
+# worklist.cfg — DICOM Modality Worklist (MWL) server configuration.
+#
+# SETUP
+# -----
+# 1. Copy this file to worklist.cfg in the same directory as hipobridge.py.
+# 2. Fill in your Hipocrate credentials (or export HYP_USER / HYP_PASS).
+# 3. Add one [SECTION] per imaging device (see "Device profiles" below).
+# 4. Start hipobridge.py — the DICOM MWL SCP starts automatically.
+#
+# If worklist.cfg is absent the MWL server is silently disabled; the main
+# HTTP server starts normally.  worklist.cfg is listed in .gitignore and
+# must never be committed — it contains credentials.
+
+[worklist]
+# DICOM AE Title this server presents to calling devices (max 16 chars, uppercase).
+ae_title = HIPPOBRIDGE
+
+# TCP port for DICOM associations.
+# 11112 is the DICOM standard port and needs no root privileges.
+# 104 is the legacy well-known port and requires root (or CAP_NET_BIND_SERVICE).
+port = 11112
+
+# On-demand refresh: minimum seconds between Hipocrate fetches triggered by a
+# C-FIND.  A device querying more frequently than this reuses the cached result.
+# The refresh is scoped to the device's configured modality.
+on_demand_refresh_seconds = 60
+
+# Hipocrate credentials used to pull the schedule in the background.
+# Can also be supplied via HYP_USER / HYP_PASS environment variables
+# (environment takes precedence over these keys).
+username =
+password =
+
+# ---------------------------------------------------------------------------
+# Device profiles — one [SECTION] per device or logical group.
+#
+# ACCESS CONTROL
+# --------------
+# Only devices whose calling AE title matches a section here are served.
+# Any unknown AE title receives a DICOM Failure response (0xA700) and a
+# warning in the log.  Add the device's AE title to worklist.cfg once it
+# is known; no server restart is needed (config is re-read per association).
+#
+# Future improvement: add an `ip` key per section to also validate the
+# source IP address, preventing a rogue host from impersonating a known
+# AE title.  pynetdicom exposes the peer address via
+# event.assoc.requestor.address at association time.
+#
+# KEYS
+# ----
+#   ae_title          Calling AE title the device sends (matched case-insensitively).
+#   modality          Modality slug: ct, irm, eco, radio, fluoro, rads.
+#                     Determines which Hipocrate lab is queried and which cache
+#                     slot is read.  Leave empty only for diagnostic/test SCUs
+#                     that should see the merged worklist (all modalities).
+#   sections          Comma-separated Hipocrate section/ward names to include.
+#                     Leave empty to include all sections for this modality.
+#   time_window_hours Exclude entries scheduled more than N hours from now.
+#                     0 = no limit (include the full fetch window).
+#
+# FETCH WINDOWS (days ahead, from yesterday)
+# ------------------------------------------
+#   X-Ray (radio), Ultrasound (eco), Fluoroscopy (fluoro / rads) : 3 days
+#   CT (ct), MRI (irm)                                           : 7 days
+# ---------------------------------------------------------------------------
+
+[CT_MAIN]
+ae_title = CT_SCANNER
+modality = ct
+sections =
+time_window_hours = 48
+
+[MRI_1]
+ae_title = MRI_SIEMENS
+modality = irm
+sections =
+time_window_hours = 72
+
+[US_UPU]
+ae_title = MINDRAY_UPU
+modality = eco
+sections = UPU, CPU, URGENTA
+time_window_hours = 6
+
+[US_DAYHOSPITAL]
+ae_title = MINDRAY_DAY
+modality = eco
+sections = SPITALIZARE DE ZI
+time_window_hours = 24
+
+[XRAY_1]
+ae_title = XRAY_CR
+modality = radio
+sections =
+time_window_hours = 24

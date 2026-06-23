@@ -117,6 +117,23 @@ Every subclass (except `HipoClientCheckin` / `HipoClientCheckup` which are raw-J
 - `html_to_markdown`: decomposes icon-only `<i>` tags (no text content) so they don't produce stray `*` markers; replaces heading tags with a plain text node to preserve `#` prefix inside block containers.
 - `markdown_to_html`: processes bold before italic using STX/ETX sentinels to avoid `*` interference; uses distinct sentinel tags for `<ul>` vs `<ol>` items to prevent double-wrapping.
 
+**`worklist.py`** — optional DICOM Modality Worklist (MWL) SCP. Runs in a daemon thread alongside the aiohttp server. Started by `init_app()` if `worklist.cfg` exists. See `WORKLIST.md` for full documentation.
+
+Key constants:
+- `_MODALITY_SLUG_TO_LAB_ID` — maps modality slugs (`ct`, `eco`, `irm`, `radio`, `rads`, `fluoro`) to Hipocrate `PARA_ID_Laborator` values. Do not guess these IDs.
+- `_MODALITY_FETCH_DAYS` — days ahead to fetch per slug: 3 for X-Ray/US/Fluoro, 7 for CT/MRI. `_DEFAULT_FETCH_DAYS = 2` when no modality is specified.
+- `_LAB_ID_FETCH_DAYS` — reverse of the above: `lab_id → days ahead`.
+- `_MODALITY_CODE` — maps slugs to DICOM modality codes (`CT`, `US`, `MR`, `CR`, `RF`). LAB is absent — lab requests do not use the DICOM worklist.
+
+Key classes:
+- `WorklistCache` — per-modality slots: `Dict[lab_id → (datasets, raw, updated_at)]` under one `threading.Lock`. `update(lab_id, ...)` replaces a single slot; `snapshot(lab_id)` returns one slot; `snapshot(None)` merges all (for unconfigured devices).
+- `WorklistRefresher` — asyncio task. `refresh(lab_id)` fetches the schedule for one modality, enriches patient demographics via `HipoClientCerere` + `HipoClientPatient`, builds pydicom Datasets, updates the cache slot. `refresh_if_stale(lab_id, max_age_seconds)` throttles concurrent C-FIND triggers with a `threading.Lock`. No periodic background refresh — cache is warmed on-demand.
+- `WorklistServer` — pynetdicom `AE`. `handle_find()` runs in pynetdicom's thread; bridges to the asyncio loop via `asyncio.run_coroutine_threadsafe`. Unknown AE titles → `0xA700` Failure (AE allowlist). `_matches_cfind()` applies PatientName (substring), PatientID (exact), AccessionNumber (exact), date range, and Modality filters from the C-FIND identifier.
+
+Name conversion: `_name_to_dicom(name)` converts Romanian name strings to DICOM PN (`Family^Given^Middle^Prefix`). Title prefixes (`DR`, `PROF`, `CONF`, `SL`, `S.L`, etc.) go into the fourth component; no trailing `^` when the fifth component is empty. `_split_glued_prefix(tok)` handles cases like `DR.POPESCU` where the prefix is glued to the family name.
+
+Config: `worklist.cfg` (gitignored, contains credentials + device profiles) and `worklist.cfg.example` (tracked, template with full documentation). `start_worklist()` returns the `WorklistServer` instance or `None` if the server is disabled; `on_cleanup` calls `server.shutdown()` via `run_in_executor` to avoid blocking the event loop.
+
 ### Entry point (`hipobridge.py`) conventions
 
 - **Log level** is controlled by the `LOG_LEVEL` environment variable (default `INFO`). Set `LOG_LEVEL=DEBUG` for development. Never hardcode `DEBUG` in the source.

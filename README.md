@@ -7,6 +7,7 @@ HippoBridge is a scraping proxy that exposes a FHIR R4 API and a web interface o
 - Python 3.8+
 - Access to a Hipocrate instance
 - Hipocrate credentials
+- `pynetdicom` + `pydicom` — optional, required only for the DICOM MWL server
 
 ## Installation
 
@@ -105,6 +106,17 @@ python3 client.py -u USER -w PASS --cnp {cnp}
 
 `--patient` accepts a patient code, a 13-digit CNP (validated then resolved to a code), or a partial CNP ending with `*`.
 
+## DICOM Modality Worklist
+
+HippoBridge can serve the imaging schedule to CT, MRI, ultrasound, and X-Ray devices via the DICOM MWL protocol (C-FIND, SOP Class `1.2.840.10008.5.1.4.31`), so technicians don't type patient demographics at the console.
+
+The MWL server starts automatically alongside the HTTP server when `worklist.cfg` is present. Copy `worklist.cfg.example` to get started. See [WORKLIST.md](WORKLIST.md) for full documentation.
+
+```bash
+pip install pynetdicom pydicom
+cp worklist.cfg.example worklist.cfg   # fill in credentials and device sections
+```
+
 ## Running tests
 
 ```bash
@@ -126,6 +138,8 @@ Groups requiring a live server: `root`, `auth`, `patients`, `analyses`, `reports
 - [JetBrains Mono](https://www.jetbrains.com/lp/mono/) by JetBrains — monospace typeface
 - [Font Awesome 6](https://fontawesome.com/) — icons (Free / solid subset)
 - [HL7 FHIR R4](https://hl7.org/fhir/R4/) — resource model and API conventions
+- [pynetdicom](https://pydicom.github.io/pynetdicom/) — DICOM network stack (MWL SCP)
+- [pydicom](https://pydicom.github.io/pydicom/) — DICOM Dataset construction
 
 ## License
 

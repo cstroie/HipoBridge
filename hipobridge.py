@@ -21,6 +21,7 @@ FHIR R4 API bridge to Hipocrate: scrapes HTML on every request, no database.
 Routes: /api/* returns raw HipoData JSON; /fhir/* returns FHIR R4 resources.
 Config: hipobridge.cfg (defaults) overridden by local.cfg (not tracked by git).
 """
+import asyncio
 import os
 from aiohttp import web
 from typing import Dict, Any
@@ -40,6 +41,7 @@ from hipodata import HipoData
 
 from extractors import parse_cnp
 from markdown import markdown_to_html
+from worklist import start_worklist
 
 logging.basicConfig(
     level=getattr(logging, os.getenv('LOG_LEVEL', 'INFO').upper(), logging.INFO),
@@ -723,9 +725,13 @@ def load_config():
 
     return config
 
+_wl_server = None   # set by init_app; used by on_cleanup for graceful DICOM shutdown
+
 async def on_cleanup(app):
-    """Close all user HTTP sessions on shutdown."""
+    """Graceful shutdown: stop DICOM SCP then close Hipocrate HTTP sessions."""
     logger.info("Application cleanup")
+    if _wl_server is not None:
+        await asyncio.get_event_loop().run_in_executor(None, _wl_server.shutdown)
     await user_session_manager.close_all_sessions()
 
 async def init_app():
@@ -771,6 +777,9 @@ async def init_app():
     app.router.add_static('/static/', path=os.path.join(os.path.dirname(__file__), 'static'), name='static')
 
     app.on_cleanup.append(on_cleanup)
+
+    global _wl_server
+    _wl_server = start_worklist(SERVICE_URL)
 
     return app
 
