@@ -405,6 +405,12 @@ class WorklistServer:
             if pattern and pattern not in str(ds.PatientName).upper():
                 return False
 
+        # Patient ID: exact match
+        req_pid = str(getattr(identifier, 'PatientID', '') or '')
+        if req_pid and req_pid not in ('*', ''):
+            if str(ds.PatientID) != req_pid:
+                return False
+
         # Accession number: exact match
         req_acc = str(getattr(identifier, 'AccessionNumber', '') or '')
         if req_acc and req_acc not in ('*', ''):
