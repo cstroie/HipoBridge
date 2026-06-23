@@ -510,10 +510,12 @@ class WorklistServer:
         profile = self._profile_for(calling_ae)
         if profile is None:
             self._unknown_log.warning(
-                "Unknown AE title '%s' — serving merged cached worklist (no refresh). "
-                "Add a [%s] section to worklist.cfg to configure this device.",
+                "Rejected C-FIND from unknown AE title '%s'. "
+                "Add a [%s] section to worklist.cfg to authorise this device.",
                 calling_ae, calling_ae,
             )
+            yield 0xA700, Dataset()   # C-FIND Failure — Refused: Out of Resources
+            return
 
         lab_id = self._lab_id_for_profile(profile)
         self._on_demand_refresh(lab_id)
@@ -528,9 +530,8 @@ class WorklistServer:
                 count += 1
 
         logger.info(
-            "C-FIND from '%s': %d/%d entries%s",
-            calling_ae, count, len(entries),
-            f" (profile: {profile['name']})" if profile else " (unfiltered)",
+            "C-FIND from '%s' (profile: %s): %d/%d entries returned",
+            calling_ae, profile['name'], count, len(entries),
         )
 
     def shutdown(self) -> None:
