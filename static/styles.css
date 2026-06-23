@@ -574,45 +574,36 @@ small {
         align-items: center;
     }
 
-    /* Row 1: brand | spacer | end controls */
+    /* Row 1: brand | search+schedule (app-nav) | spacer | end controls */
     .app-bar-brand {
-        order: 1;
         height: 60px;
         border-right: none;
         padding-right: 0;
         margin-right: 0;
     }
     .brand-wordmark { display: none; }
-    .app-bar-spacer { order: 2; }
-    #themeToggle    { order: 2; }
-    .app-bar-user   { order: 2; }
 
-    /* Row 2: nav full width */
-    .app-nav {
-        order: 3;
+    /* Row 2: patient sub-nav, full width, pushed last via order */
+    #navPatientGroup {
+        order: 10;
         width: 100%;
-        border-top: 1px solid var(--line);
-        justify-content: flex-start;
         height: 50px;
+        border-top: 1px solid var(--line);
+        justify-content: space-around;
+        align-items: stretch;
     }
 
-    /* Nav buttons: icon-only, spread evenly */
-    .nav-btn {
+    /* Patient tab buttons: icon-only, spread evenly */
+    #navPatientGroup .nav-btn {
         flex: 1;
         justify-content: center;
         padding: 0;
         height: 100%;
     }
-    .nav-btn span { display: none; }
-    .nav-btn i { font-size: 14px; }
+    #navPatientGroup .nav-btn span { display: none; }
+    #navPatientGroup .nav-btn i { font-size: 14px; }
 
-    /* Patient area stretches to fill remaining space */
-    .patient-nav-area {
-        flex: 1;
-        justify-content: space-around;
-    }
-
-    /* Separator and patient pill not needed in flat icon row */
+    /* Separator and patient pill not needed in the flat icon row */
     .nav-sep { display: none; }
     .patient-ctx-pill { display: none; }
 }

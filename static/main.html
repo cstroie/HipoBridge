@@ -27,7 +27,7 @@
                 <span class="brand-wordmark">HippoBridge</span>
             </div>
 
-            <!-- Global nav -->
+            <!-- Global nav: always visible -->
             <nav class="app-nav" aria-label="Main navigation">
                 <button class="nav-btn nav-item" data-tab="search">
                     <i class="fas fa-magnifying-glass" aria-hidden="true"></i><span>Search</span>
@@ -35,31 +35,31 @@
                 <button class="nav-btn nav-item" data-tab="schedule">
                     <i class="fas fa-calendar-day" aria-hidden="true"></i><span>Schedule</span>
                 </button>
+            </nav>
 
-                <!-- Vertical separator + patient context — hidden until a patient is loaded -->
-                <div id="navPatientGroup" class="patient-nav-area" hidden>
-                    <div class="nav-sep" aria-hidden="true"></div>
+            <!-- Patient sub-nav: hidden until a patient is loaded -->
+            <nav id="navPatientGroup" class="patient-nav-area" aria-label="Patient navigation" hidden>
+                <div class="nav-sep" aria-hidden="true"></div>
 
-                    <!-- Patient pill -->
-                    <button type="button" class="patient-ctx-pill nav-item" data-tab="patient">
-                        <i class="fas fa-user-injured" aria-hidden="true"></i>
-                        <span id="navPatientLabel">Patient</span>
-                    </button>
+                <!-- Patient pill -->
+                <button type="button" class="patient-ctx-pill nav-item" data-tab="patient">
+                    <i class="fas fa-user-injured" aria-hidden="true"></i>
+                    <span id="navPatientLabel">Patient</span>
+                </button>
 
-                    <!-- Patient sub-nav -->
-                    <button class="nav-btn nav-item" data-tab="patient" data-sub="profile">
-                        <i class="fas fa-user-injured" aria-hidden="true"></i><span>Profile</span>
-                    </button>
-                    <button class="nav-btn nav-item" data-tab="analyses">
-                        <i class="fas fa-file-medical" aria-hidden="true"></i><span>Analyses</span>
-                    </button>
-                    <button class="nav-btn nav-item" data-tab="epicrisis">
-                        <i class="fas fa-file-prescription" aria-hidden="true"></i><span>Epicrisis</span>
-                    </button>
-                    <button class="nav-btn nav-item" data-tab="report">
-                        <i class="fas fa-notes-medical" aria-hidden="true"></i><span>Report</span>
-                    </button>
-                </div>
+                <!-- Patient sub-nav -->
+                <button class="nav-btn nav-item" data-tab="patient" data-sub="profile">
+                    <i class="fas fa-user-injured" aria-hidden="true"></i><span>Profile</span>
+                </button>
+                <button class="nav-btn nav-item" data-tab="analyses">
+                    <i class="fas fa-file-medical" aria-hidden="true"></i><span>Analyses</span>
+                </button>
+                <button class="nav-btn nav-item" data-tab="epicrisis">
+                    <i class="fas fa-file-prescription" aria-hidden="true"></i><span>Epicrisis</span>
+                </button>
+                <button class="nav-btn nav-item" data-tab="report">
+                    <i class="fas fa-notes-medical" aria-hidden="true"></i><span>Report</span>
+                </button>
             </nav>
 
             <!-- Spacer -->
