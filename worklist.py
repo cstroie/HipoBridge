@@ -289,7 +289,7 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
         # Derive birth date and sex from CNP when the patient record lacks them
         if (not birth_date or sex == 'O') and cnp:
             parsed = parse_cnp(cnp)
-            if parsed.get('status') == 'success':
+            if parsed.get('valid'):
                 if not birth_date:
                     birth_date = _date_to_dicom(parsed.get('birth_date', ''))
                 if sex == 'O':
