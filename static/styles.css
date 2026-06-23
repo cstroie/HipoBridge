@@ -3205,7 +3205,11 @@ dialog.report-modal[open]::backdrop {
 }
 
 /* ── QR code panel ── */
-#patientQrPanel { margin-top: var(--spacing-lg); }
+#patientQrPanel {
+    margin-top: var(--spacing-lg);
+    padding-top: var(--spacing-lg);
+    border-top: 1px solid var(--line);
+}
 .qr-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
