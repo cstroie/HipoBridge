@@ -387,7 +387,8 @@ class WorklistServer:
     def __init__(self, cache: WorklistCache, profiles: List[dict],
                  server_cfg: dict,
                  refresher: 'WorklistRefresher' = None,
-                 loop: 'asyncio.AbstractEventLoop' = None) -> None:
+                 loop: 'asyncio.AbstractEventLoop' = None,
+                 config_path: str = '') -> None:
         self._cache     = cache
         self._profiles  = {p['ae_title']: p for p in profiles}
         self._ae_title  = server_cfg['ae_title']
@@ -398,10 +399,29 @@ class WorklistServer:
         self._loop          = loop
         self._on_demand_sec = server_cfg.get('on_demand_refresh_seconds', 60.0)
         self._on_demand_timeout = 30.0  # max seconds to wait for a refresh to complete
+        # Config hot-reload
+        self._config_path = config_path
+        self._config_mtime: float = os.path.getmtime(config_path) if config_path else 0.0
         # Set by serve() once the AE is running; used by shutdown()
         self._ae: Optional['AE'] = None
 
+    def _reload_profiles_if_changed(self) -> None:
+        """Re-read device profiles from worklist.cfg if the file has been modified."""
+        if not self._config_path:
+            return
+        try:
+            mtime = os.path.getmtime(self._config_path)
+            if mtime <= self._config_mtime:
+                return
+            _, profiles = _load_config(self._config_path)
+            self._profiles = {p['ae_title']: p for p in profiles}
+            self._config_mtime = mtime
+            logger.info("worklist.cfg changed — reloaded %d device profile(s)", len(profiles))
+        except Exception as exc:
+            logger.warning("Failed to reload worklist.cfg: %s", exc)
+
     def _profile_for(self, calling_ae: str) -> Optional[dict]:
+        self._reload_profiles_if_changed()
         return self._profiles.get(calling_ae.strip().upper())
 
     @staticmethod
@@ -806,7 +826,7 @@ def start_worklist(service_url: str,
 
     loop = asyncio.get_event_loop()
     server = WorklistServer(cache=cache, profiles=profiles, server_cfg=server_cfg,
-                            refresher=refresher, loop=loop)
+                            refresher=refresher, loop=loop, config_path=config_path)
 
     # pynetdicom's start_server() is blocking — run it in a daemon thread.
     t = threading.Thread(target=server.serve, daemon=True, name='DicomMWL')
