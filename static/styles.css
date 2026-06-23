@@ -592,7 +592,7 @@ small {
         order: 3;
         width: 100%;
         border-top: 1px solid var(--line);
-        justify-content: space-around;
+        justify-content: flex-start;
         height: 50px;
     }
 
