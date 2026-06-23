@@ -1,6 +1,6 @@
 # DICOM Modality Worklist (MWL) Server
 
-HippoBridge includes an optional DICOM Modality Worklist SCP that serves the Hipocrate imaging schedule to physical devices (CT scanners, MRI, ultrasound, X-Ray) via the standard C-FIND protocol (SOP Class `1.2.840.10008.5.1.4.31`).
+HippoBridge includes an optional DICOM Modality Worklist SCP that serves the Hipocrate imaging schedule to physical devices (CT scanners, MRI, ultrasound, X-Ray) via the standard C-FIND protocol (SOP Class `1.2.840.10008.5.1.4.31`). C-ECHO (Verification) is also supported so devices can ping the server before querying.
 
 Devices query the worklist instead of having technicians type patient demographics manually at the console. Each device sees only its own modality's slice of the schedule, filtered by ward and time window.
 
@@ -31,8 +31,11 @@ python3 hipobridge.py         # MWL server starts automatically alongside the HT
 | `ae_title` | `HIPPOBRIDGE` | DICOM AE Title this server presents to devices (max 16 chars, uppercase) |
 | `port` | `11112` | TCP port. 11112 needs no root; 104 requires root or `CAP_NET_BIND_SERVICE` |
 | `on_demand_refresh_seconds` | `60` | Minimum seconds between Hipocrate fetches triggered by a C-FIND. Queries within this window reuse the cached result |
+| `accession_prefix` | _(empty)_ | Optional string prepended to the numeric request ID to form the AccessionNumber (e.g. `HB-` → `HB-1721991`). Leave empty for the bare numeric ID |
 | `username` | — | Hipocrate username. Can also be set via `HYP_USER` environment variable |
 | `password` | — | Hipocrate password. Can also be set via `HYP_PASS` environment variable |
+
+Device profiles are hot-reloaded: edit `worklist.cfg` to add or modify a device section and the change takes effect on the next C-FIND association — no server restart needed.
 
 ### Device profiles
 
@@ -41,7 +44,7 @@ One `[SECTION]` per device or logical group:
 ```ini
 [CT_MAIN]
 ae_title = CT_SCANNER
-modality = ct
+modality = CT
 wards =
 time_window_hours = 48
 ```
@@ -49,34 +52,32 @@ time_window_hours = 48
 | Key | Description |
 |-----|-------------|
 | `ae_title` | Calling AE title the device sends (matched case-insensitively) |
-| `modality` | DICOM modality code: `CT`, `MR`, `US`, `CR`, `RF`. Determines which Hipocrate lab is queried and which cache slot is read. `RF` covers both Fluoroscopy and Interventional Radiology. Both old slugs (`eco`, `irm`, etc.) and DICOM codes are accepted |
+| `modality` | DICOM modality code: `CT`, `MR`, `US`, `CR`, `RF`. Determines which Hipocrate lab is queried and which cache slot is read. `RF` covers both Fluoroscopy and Interventional Radiology. Legacy slugs (`eco`, `irm`, `radio`, `fluoro`, `rads`, `ct`) are also accepted |
 | `wards` | Comma-separated substrings matched case-insensitively against the Hipocrate ward name (e.g. `ZI` matches `SPITALIZARE DE ZI`). Empty = all wards |
 | `time_window_hours` | Exclude entries scheduled more than N hours from now. `0` = no limit |
 
-### Modality slugs
+### Modality reference
 
-| DICOM code | Hipocrate lab ID(s) | Internal slug(s) | Fetch window |
-|------------|--------------------|--------------------|--------------|
-| `CT` | 26 | `ct` | 7 days |
-| `US` | 28 | `eco` | 3 days |
-| `MR` | 32 | `irm` | 7 days |
-| `CR` | 49 | `radio` | 3 days |
-| `RF` | 35, 50 | `rads`, `fluoro` | 3 days |
+| DICOM code | Hipocrate lab ID(s) | Fetch window |
+|------------|---------------------|--------------|
+| `CT` | 26 | 7 days ahead |
+| `US` | 28 | 3 days ahead |
+| `MR` | 32 | 7 days ahead |
+| `CR` | 49 | 3 days ahead |
+| `RF` | 35, 50 | 3 days ahead |
 
-Fetch window is the lookahead from today. Lookback is always 1 day (yesterday).
-
-LAB is intentionally excluded — lab requests do not use a DICOM worklist.
+Lookback is always 1 day (yesterday). LAB is intentionally excluded — lab requests do not use a DICOM worklist.
 
 ## Access control
 
 **AE Title allowlist** — only devices with a matching `[SECTION]` in `worklist.cfg` are served. Any unknown calling AE title receives a DICOM Failure response (`0xA700`) and a warning in the log:
 
 ```
-WARNING Worklist.UnknownAE: Rejected C-FIND from unknown AE title 'FINDSCU'.
-Add a [FINDSCU] section to worklist.cfg to authorise this device.
+WARNING Worklist.UnknownAE: Rejected C-FIND from unknown AE title 'NEWDEVICE'.
+Add a [NEWDEVICE] section to worklist.cfg to authorise this device.
 ```
 
-Once the device's AE title is known, add a section to `worklist.cfg`. No server restart is required — config is re-read on each association.
+To discover a new device's AE title: point it at HippoBridge and let it connect once — the warning log tells you exactly what to add to `worklist.cfg`.
 
 **Future improvement**: add an `ip` key per device section to also validate the source IP address, preventing a rogue host from impersonating a known AE title. The peer address is available via `event.assoc.requestor.address` at association time in pynetdicom.
 
@@ -87,17 +88,20 @@ There is no username/password at the DICOM protocol level. For environments wher
 ```
 pynetdicom thread (sync)
   handle_find(event)
-    → _lab_id_for_profile(profile)
-    → _on_demand_refresh(lab_id)          # asyncio.run_coroutine_threadsafe → asyncio loop
+    → _reload_profiles_if_changed()       # hot-reload on cfg mtime change
+    → AE title allowlist check            # unknown → 0xA700 Failure
+    → _lab_ids_for_profile(profile)       # DICOM code → [lab_id, ...]
+    → _on_demand_refresh(lab_ids)         # asyncio.run_coroutine_threadsafe
         → WorklistRefresher.refresh_if_stale(lab_id)
-            → _fetch_schedule(lab_id)     # HipoClientSchedule via existing scraping layer
+            → _fetch_schedule(lab_id)     # HipoClientSchedule
             → _enrich(request_id)         # HipoClientCerere → HipoClientPatient
-            → _build_dataset(entry, info) # pydicom Dataset
+            → _build_datasets(entry, info)# one Dataset per exam
             → WorklistCache.update(lab_id, datasets, raw)
-    → WorklistCache.snapshot(lab_id)
+    → WorklistCache.snapshot_multi(lab_ids)
     → _filter(entries, raw, profile, calling_ae)
     → _matches_cfind(ds, identifier)
     → yield 0xFF00, ds                    # C-FIND Pending per match
+    → DEBUG log: accession | patient | exam
 ```
 
 ### `WorklistCache`
@@ -106,6 +110,7 @@ Per-modality slots: `Dict[lab_id → (datasets, raw_dicts, updated_at)]` under a
 
 - `update(lab_id, entries, raw)` — replaces one modality's slot; other modalities are untouched
 - `snapshot(lab_id)` — returns entries for one modality
+- `snapshot_multi(lab_ids)` — merges several slots (used for `RF` which spans two Hipocrate labs)
 - `snapshot(None)` — merges all slots (used for unconfigured devices with no modality set)
 
 ### `WorklistRefresher`
@@ -119,41 +124,42 @@ There is no periodic background refresh. The cache is warmed on the first C-FIND
 
 ### `WorklistServer`
 
-pynetdicom `AE` instance. Runs in a daemon thread (`DicomMWL`). Handles one C-FIND event type.
-
-- Unknown AE titles → `0xA700` Failure, return
-- Known profile → on-demand refresh → snapshot → filter → C-FIND Pending per match
+pynetdicom `AE` instance. Runs in a daemon thread (`DicomMWL`). Supports C-ECHO (Verification) and C-FIND (MWL).
 
 ### Patient enrichment
 
 For each active schedule entry:
-1. `HipoClientCerere(request_id)` → `patient.id` (numeric Hipocrate ID)
+1. `HipoClientCerere(request_id)` → `patient.id` + exam names (e.g. `ULTRASONOGRAFIA ABDOMINALA`)
 2. `HipoClientPatient(patient_id)` → name, DOB, sex, CNP
 
-Results are cached in `_patient_cache` (keyed by `request_id`) for the lifetime of the entry in the schedule. Falls back to name-only if enrichment fails.
+`PatientID` is set to the CNP (13-digit Romanian national ID), which falls back to the Hipocrate numeric patient ID. `PatientBirthDate` and sex are derived from the CNP when the patient record itself doesn't provide them — the CNP encodes both.
+
+Results are cached in `_patient_cache` for the lifetime of the entry in the schedule. Falls back to name-only if enrichment fails.
 
 Enrichment runs with `asyncio.Semaphore(2)` — at most 2 patients enriched concurrently, leaving headroom for normal HTTP traffic through the global `_hipocrate_semaphore(6)`.
 
 ## DICOM Dataset fields
 
+A single Hipocrate request with multiple exams produces multiple Datasets — one per exam — each with a distinct `ScheduledProcedureStepID` suffix (`request_id-1`, `request_id-2`, …). Single-exam requests produce one Dataset with no suffix. All steps of the same request share the same `AccessionNumber` and `StudyInstanceUID`.
+
 | Tag | Attribute | Source |
 |-----|-----------|--------|
-| `(0010,0010)` | PatientName | `patient_name` → DICOM PN (`Family^Given^Middle^Prefix`) |
-| `(0010,0020)` | PatientID | `patient.id` (enriched) or `request_id` as fallback |
-| `(0010,0030)` | PatientBirthDate | `patient.birth_date` (enriched) |
-| `(0010,0040)` | PatientSex | `patient.sex` (enriched) |
-| `(0008,0050)` | AccessionNumber | `request_code` (e.g. `ES9686`) |
+| `(0010,0010)` | PatientName | Hipocrate name → DICOM PN (`Family^Given^Middle^Prefix`) |
+| `(0010,0020)` | PatientID | CNP (enriched), falls back to Hipocrate numeric patient ID |
+| `(0010,0030)` | PatientBirthDate | From patient record; derived from CNP if absent |
+| `(0010,0040)` | PatientSex | From patient record; derived from CNP if absent |
+| `(0008,0050)` | AccessionNumber | `{accession_prefix}{request_id}` (e.g. `1721991` or `HB-1721991`) |
 | `(0008,0090)` | ReferringPhysicianName | `requested_by` → DICOM PN |
-| `(0032,1060)` | RequestedProcedureDescription | laboratory display name |
+| `(0032,1060)` | RequestedProcedureDescription | Exam name from cerere.asp; falls back to lab name |
 | `(0020,000D)` | StudyInstanceUID | `1.2.840.99999999.1.{request_id}` |
-| `(0040,0100)[0]` | ScheduledProcedureStepSequence | see below |
+| `(0040,0100)[n]` | ScheduledProcedureStepSequence | one entry per exam |
 | ↳ `(0040,0001)` | ScheduledStationAETitle | calling device AE title (stamped per-query) |
 | ↳ `(0040,0002)` | ScheduledProcedureStepStartDate | date part of `date_time` |
 | ↳ `(0040,0003)` | ScheduledProcedureStepStartTime | time part of `date_time` |
-| ↳ `(0008,0060)` | Modality | DICOM code from `_MODALITY_CODE[slug]` |
-| ↳ `(0040,0007)` | ScheduledProcedureStepDescription | laboratory display name |
-| ↳ `(0040,0009)` | ScheduledProcedureStepID | `request_id` |
-| ↳ `(0040,1001)` | RequestedProcedureID | `request_id` |
+| ↳ `(0008,0060)` | Modality | DICOM code (`CT`, `US`, `MR`, `CR`, `RF`) |
+| ↳ `(0040,0007)` | ScheduledProcedureStepDescription | exam name from cerere.asp |
+| ↳ `(0040,0009)` | ScheduledProcedureStepID | `request_id` (or `request_id-N` for multi-exam) |
+| ↳ `(0040,1001)` | RequestedProcedureID | same as ScheduledProcedureStepID |
 
 ### C-FIND matching keys honoured
 
@@ -192,8 +198,15 @@ Romanian physician and patient names are converted to DICOM PN format (`Family^G
 ## Testing
 
 ```bash
-# Verify the server is listening
-findscu -v -S -k "0008,0052=IMAGE" \
+# Automated offline tests (no server or credentials needed)
+python3 runtests.py worklist
+
+# Verify the live server responds to C-ECHO
+echoscu -aet FINDSCU -aec HIPPOBRIDGE 127.0.0.1 11112
+
+# Query by modality and date range
+findscu -v -S \
+  -k "0008,0052=IMAGE" \
   -k "ScheduledProcedureStepSequence[0].ScheduledProcedureStepStartDate=20260101-20261231" \
   -k "ScheduledProcedureStepSequence[0].Modality=CT" \
   -aet FINDSCU -aec HIPPOBRIDGE \

@@ -1,3 +1,10 @@
+# Core HTTP server and client
 aiohttp>=3.8.0
-beautifulsoup4>=4.9.0
 yarl>=1.6.0
+
+# HTML scraping
+beautifulsoup4>=4.9.0
+
+# DICOM Modality Worklist server (optional — MWL SCP disabled if not installed)
+pynetdicom>=2.0.0
+pydicom>=2.3.0
