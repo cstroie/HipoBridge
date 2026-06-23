@@ -36,6 +36,7 @@ except ImportError:
     DICOM_AVAILABLE = False
 
 from hipoclient import HipoClientSchedule, HipoClientCerere, HipoClientPatient
+from extractors import parse_cnp
 
 logger = logging.getLogger('Worklist')
 
@@ -276,9 +277,18 @@ def _build_dataset(entry: dict, patient_info: Optional[dict],
     # Patient demographics (enriched when available, falls back to schedule data)
     if patient_info:
         patient_name = _name_to_dicom(patient_info.get('name') or entry.get('patient_name', ''))
-        patient_id   = patient_info.get('cnp') or patient_info.get('id', '')
+        cnp          = patient_info.get('cnp', '')
+        patient_id   = cnp or patient_info.get('id', '')
         birth_date   = _date_to_dicom(patient_info.get('birth_date', ''))
         sex          = _sex_to_dicom(patient_info.get('sex', ''))
+        # Derive birth date and sex from CNP when the patient record lacks them
+        if (not birth_date or sex == 'O') and cnp:
+            parsed = parse_cnp(cnp)
+            if parsed.get('status') == 'success':
+                if not birth_date:
+                    birth_date = _date_to_dicom(parsed.get('birth_date', ''))
+                if sex == 'O':
+                    sex = _sex_to_dicom(parsed.get('gender', ''))
     else:
         patient_name = _name_to_dicom(entry.get('patient_name', ''))
         patient_id   = entry.get('request_id', '')
