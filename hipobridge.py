@@ -36,7 +36,8 @@ from fhir import OperationOutcome, Resource
 
 from hipoclient import ANALYSIS_TYPES
 from hipoclient import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientImagingStudy, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientServiceRequestSearch, HipoClientCheckout, HipoClientCheckin, HipoClientCheckup, HipoClientSchedule, HipoClientCerere, HipoClientPresentation, HipoClientObservationBundle, HipoClientWhoami
-from hipoclient import user_session_manager
+from hipoclient import user_session_manager, url_cache
+from urlcache import FilesystemCache
 from hipodata import HipoData
 
 from extractors import parse_cnp
@@ -56,7 +57,12 @@ DEFAULT_CONFIG = {
     },
     'hipocrate': {
         'service_url': 'http://127.0.0.1/hipocrate'
-    }
+    },
+    'cache': {
+        'dir': '',
+        'ttl': '604800',
+        'max_age_days': '30',
+    },
 }
 
 
@@ -708,6 +714,25 @@ def web_fhir_response(data) -> web.Response:
                              content_type=FHIR_CONTENT_TYPE)
 
 
+@require_auth
+async def get_cache_stats(request):
+    """Return filesystem cache statistics as JSON."""
+    if url_cache.fs_cache is None:
+        return web.json_response({'enabled': False})
+    return web.json_response({'enabled': True, **url_cache.fs_cache.stats()})
+
+
+@require_auth
+async def post_cache_cleanup(request):
+    """Trigger a filesystem cache cleanup and return deleted/freed counts."""
+    if url_cache.fs_cache is None:
+        return web.json_response({'enabled': False, 'deleted': 0, 'freed_bytes': 0})
+    result = await asyncio.get_event_loop().run_in_executor(
+        None, url_cache.fs_cache.cleanup
+    )
+    return web.json_response({'enabled': True, **result})
+
+
 def load_config():
     """Load hipobridge.cfg then overlay local.cfg if present."""
     config = configparser.ConfigParser()
@@ -727,6 +752,19 @@ def load_config():
 
 _wl_server = None   # set by init_app; used by on_cleanup for graceful DICOM shutdown
 
+async def _periodic_cache_cleanup():
+    """Background task: run FilesystemCache.cleanup() once at startup then every 24 h."""
+    while True:
+        if url_cache.fs_cache is not None:
+            try:
+                result = await asyncio.get_event_loop().run_in_executor(
+                    None, url_cache.fs_cache.cleanup
+                )
+                logger.info(f"Periodic cache cleanup: {result['deleted']} files deleted, {result['freed_bytes']} bytes freed")
+            except Exception as exc:
+                logger.warning(f"Periodic cache cleanup failed: {exc}")
+        await asyncio.sleep(86400)
+
 async def on_cleanup(app):
     """Graceful shutdown: stop DICOM SCP then close Hipocrate HTTP sessions."""
     logger.info("Application cleanup")
@@ -742,6 +780,15 @@ async def init_app():
     _PORT = config.getint('server', 'port')
     _HOST = config.get('server', 'host')
     logger.info(f"Service URL: {SERVICE_URL}")
+
+    cache_dir = config.get('cache', 'dir').strip()
+    if cache_dir:
+        cache_ttl = config.getint('cache', 'ttl')
+        cache_max_age = config.getint('cache', 'max_age_days')
+        url_cache.fs_cache = FilesystemCache(cache_dir, ttl=cache_ttl, max_age_days=cache_max_age)
+        asyncio.get_event_loop().create_task(_periodic_cache_cleanup())
+    else:
+        logger.info("Persistent filesystem cache disabled (no cache.dir configured)")
 
     app = web.Application()
     app.router.add_get('/', serve_web_page)
@@ -761,6 +808,8 @@ async def init_app():
     app.router.add_get('/api/whoami', get_whoami)
     app.router.add_post('/api/logout', post_logout)
     app.router.add_get('/api/debug', debug_passthrough)
+    app.router.add_get('/api/cache/stats', get_cache_stats)
+    app.router.add_post('/api/cache/cleanup', post_cache_cleanup)
     app.router.add_get('/fhir/Patient', search_fhir_patient)
     app.router.add_get('/fhir/Patient/{id}', get_fhir_patient)
     app.router.add_get('/fhir/ServiceRequest', search_fhir_service_request)

@@ -57,8 +57,16 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 from extractors import extract_id_from_link, extract_ids_from_links, extract_selected_from_dropdown, extract_text_after_label, extract_text_from_element, extract_value_from_input
 from extractors import parse_cnp, parse_date_time
-from urlcache import URLCache
+from urlcache import URLCache, FilesystemCache
 import asyncio
+
+# URLs whose content is user-specific or too volatile for long-term persistence.
+# cache_put() sets persist=False for any URL that contains one of these substrings.
+_NO_PERSIST_PATTERNS = (
+    '/Template/menu.asp',   # whoami — user-specific content on a shared URL
+    '/files/search.asp',    # patient search — ephemeral query results
+    '/PARA/NOM/Listare/',   # schedule — refreshed on demand
+)
 
 from markdown import html_to_markdown
 
@@ -393,7 +401,9 @@ class HipoClient:
             url: URL key for caching
             response_text: Response text to cache
         """
-        self.url_cache.put(self.get_full_url(url), response_text)
+        full_url = self.get_full_url(url)
+        persist = not any(p in full_url for p in _NO_PERSIST_PATTERNS)
+        self.url_cache.put(full_url, response_text, persist=persist)
 
     def cache_remove(self, url: str):
         """Remove cached response for URL.
