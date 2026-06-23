@@ -53,8 +53,9 @@ password =
 #                     Determines which Hipocrate lab is queried and which cache
 #                     slot is read.  Leave empty only for diagnostic/test SCUs
 #                     that should see the merged worklist (all modalities).
-#   sections          Comma-separated Hipocrate section/ward names to include.
-#                     Leave empty to include all sections for this modality.
+#   wards             Comma-separated substrings matched case-insensitively against
+#                     the Hipocrate ward/section name (e.g. "ZI" matches
+#                     "SPITALIZARE DE ZI"). Leave empty to include all wards.
 #   time_window_hours Exclude entries scheduled more than N hours from now.
 #                     0 = no limit (include the full fetch window).
 #
@@ -67,29 +68,29 @@ password =
 [CT_MAIN]
 ae_title = CT_SCANNER
 modality = ct
-sections =
+wards =
 time_window_hours = 48
 
 [MRI_1]
 ae_title = MRI_SIEMENS
 modality = irm
-sections =
+wards =
 time_window_hours = 72
 
 [US_UPU]
 ae_title = MINDRAY_UPU
 modality = eco
-sections = UPU, CPU, URGENTA
+wards = UPU, CPU, URGENTA
 time_window_hours = 6
 
 [US_DAYHOSPITAL]
 ae_title = MINDRAY_DAY
 modality = eco
-sections = SPITALIZARE DE ZI
+wards = SPITALIZARE DE ZI
 time_window_hours = 24
 
 [XRAY_1]
 ae_title = XRAY_CR
 modality = radio
-sections =
+wards =
 time_window_hours = 24

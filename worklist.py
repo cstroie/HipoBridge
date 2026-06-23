@@ -112,7 +112,7 @@ def _load_config(config_path: str) -> Tuple[dict, List[dict]]:
 
     server_cfg keys: ae_title, port, on_demand_refresh_seconds, username, password.
     device_profiles: list of dicts with keys name, ae_title, modality,
-                     sections (list), time_window_hours.
+                     wards (list), time_window_hours.
     """
     config = configparser.ConfigParser()
     config.read(config_path)
@@ -135,14 +135,14 @@ def _load_config(config_path: str) -> Tuple[dict, List[dict]]:
         if not ae:
             continue
         modality = config.get(section, 'modality', fallback='').strip().lower() or None
-        sections_raw = config.get(section, 'sections', fallback='').strip()
-        sections = [s.strip() for s in sections_raw.split(',') if s.strip()]
+        wards_raw = config.get(section, 'wards', fallback='').strip()
+        wards = [w.strip() for w in wards_raw.split(',') if w.strip()]
         time_window = config.getfloat(section, 'time_window_hours', fallback=0.0)
         profiles.append({
             'name':              section,
             'ae_title':          ae.upper(),
             'modality':          modality,
-            'sections':          sections,
+            'wards':             wards,
             'time_window_hours': time_window,
         })
 
@@ -454,10 +454,10 @@ class WorklistServer:
                 if target_mod and r.get('modality') != target_mod:
                     continue
 
-                # Section filter (exact match; empty list = all sections)
-                target_sections = profile.get('sections') or []
+                # Ward filter: case-insensitive substring match; empty list = all wards
+                target_wards = profile.get('wards') or []
                 section = r.get('section', '').upper()
-                if target_sections and not any(s.upper() in section for s in target_sections):
+                if target_wards and not any(w.upper() in section for w in target_wards):
                     continue
 
                 # Time window: exclude entries too far in the future

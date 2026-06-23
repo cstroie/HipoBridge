@@ -42,7 +42,7 @@ One `[SECTION]` per device or logical group:
 [CT_MAIN]
 ae_title = CT_SCANNER
 modality = ct
-sections =
+wards =
 time_window_hours = 48
 ```
 
@@ -50,7 +50,7 @@ time_window_hours = 48
 |-----|-------------|
 | `ae_title` | Calling AE title the device sends (matched case-insensitively) |
 | `modality` | Modality slug — see table below. Determines which Hipocrate lab is queried and which cache slot is read |
-| `sections` | Comma-separated Hipocrate ward/section names to include. Empty = all sections for this modality |
+| `wards` | Comma-separated substrings matched case-insensitively against the Hipocrate ward name (e.g. `ZI` matches `SPITALIZARE DE ZI`). Empty = all wards |
 | `time_window_hours` | Exclude entries scheduled more than N hours from now. `0` = no limit |
 
 ### Modality slugs
