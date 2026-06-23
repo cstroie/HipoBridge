@@ -39,6 +39,18 @@ from hipoclient import HipoClientSchedule, HipoClientCerere, HipoClientPatient
 
 logger = logging.getLogger('Worklist')
 
+# Maps modality slugs → Hipocrate lab IDs used by the schedule page filter
+# (PARA_ID_Laborator). Used to do modality-specific on-demand refreshes.
+# IDs come from /gen_lib/filtre_ajax_dropdown.asp — do not guess them.
+_MODALITY_SLUG_TO_LAB_ID: Dict[str, str] = {
+    'ct':     '26',
+    'eco':    '28',
+    'irm':    '32',
+    'radio':  '49',
+    'rads':   '35',   # interventional radiology
+    'fluoro': '50',
+}
+
 # Maps schedule modality slugs → DICOM modality codes.
 # 'irm' is the slug HipoClientSchedule uses for MRI (from _lab_to_modality).
 _MODALITY_CODE: Dict[str, str] = {
@@ -86,13 +98,14 @@ def _load_config(config_path: str) -> Tuple[dict, List[dict]]:
     config.read(config_path)
 
     server = {
-        'ae_title':        config.get('worklist', 'ae_title', fallback='HIPPOBRIDGE'),
-        'port':            config.getint('worklist', 'port', fallback=11112),
-        'refresh_minutes': config.getfloat('worklist', 'refresh_minutes', fallback=5.0),
-        'username':        config.get('worklist', 'username',
-                                      fallback=os.getenv('HYP_USER', '')),
-        'password':        config.get('worklist', 'password',
-                                      fallback=os.getenv('HYP_PASS', '')),
+        'ae_title':                   config.get('worklist', 'ae_title', fallback='HIPPOBRIDGE'),
+        'port':                       config.getint('worklist', 'port', fallback=11112),
+        'refresh_minutes':            config.getfloat('worklist', 'refresh_minutes', fallback=5.0),
+        'on_demand_refresh_seconds':  config.getfloat('worklist', 'on_demand_refresh_seconds', fallback=60.0),
+        'username':                   config.get('worklist', 'username',
+                                                 fallback=os.getenv('HYP_USER', '')),
+        'password':                   config.get('worklist', 'password',
+                                                 fallback=os.getenv('HYP_PASS', '')),
     }
 
     profiles = []
@@ -292,6 +305,22 @@ class WorklistCache:
             self._raw        = raw
             self._updated_at = datetime.now()
 
+    def update_partial(self, new_entries: List[Dataset], new_raw: List[dict]) -> None:
+        """Replace entries whose request_id appears in new_raw; keep all others.
+
+        Used by modality-specific refreshes so that e.g. a CT refresh doesn't
+        discard the current MRI or Ultrasound entries from the cache.
+        """
+        new_ids = {r.get('request_id') for r in new_raw}
+        with self._lock:
+            kept = [(d, r) for d, r in zip(self._entries, self._raw)
+                    if r.get('request_id') not in new_ids]
+            kept_ds  = [d for d, _ in kept]
+            kept_raw = [r for _, r in kept]
+            self._entries    = kept_ds  + new_entries
+            self._raw        = kept_raw + new_raw
+            self._updated_at = datetime.now()
+
     def snapshot(self) -> Tuple[List[Dataset], List[dict]]:
         """Return copies of the current cache contents (safe for the calling thread)."""
         with self._lock:
@@ -311,12 +340,21 @@ class WorklistServer:
     """pynetdicom AE configured as a C-FIND SCP for the MWL SOP Class."""
 
     def __init__(self, cache: WorklistCache, profiles: List[dict],
-                 server_cfg: dict) -> None:
+                 server_cfg: dict,
+                 refresher: 'WorklistRefresher' = None,
+                 loop: 'asyncio.AbstractEventLoop' = None) -> None:
         self._cache     = cache
         self._profiles  = {p['ae_title']: p for p in profiles}
         self._ae_title  = server_cfg['ae_title']
         self._port      = server_cfg['port']
-        self._unknown_log = logging.getLogger('Worklist.UnknownAE')
+        self._unknown_log   = logging.getLogger('Worklist.UnknownAE')
+        # On-demand refresh wiring
+        self._refresher     = refresher
+        self._loop          = loop
+        self._on_demand_sec = server_cfg.get('on_demand_refresh_seconds', 60.0)
+        self._on_demand_timeout = 30.0  # max seconds to wait for a refresh to complete
+        # Set by serve() once the AE is running; used by shutdown()
+        self._ae: Optional['AE'] = None
 
     def _profile_for(self, calling_ae: str) -> Optional[dict]:
         return self._profiles.get(calling_ae.strip().upper())
@@ -422,6 +460,23 @@ class WorklistServer:
 
         return result
 
+    def _on_demand_refresh(self, profile: Optional[dict]) -> None:
+        """Trigger a modality-filtered refresh from a pynetdicom thread and wait."""
+        if not self._refresher or not self._loop:
+            return
+        modality_slug = profile.get('modality') if profile else None
+        lab_id = _MODALITY_SLUG_TO_LAB_ID.get(modality_slug) if modality_slug else None
+        future = asyncio.run_coroutine_threadsafe(
+            self._refresher.refresh_if_stale(
+                lab_id=lab_id, max_age_seconds=self._on_demand_sec
+            ),
+            self._loop,
+        )
+        try:
+            future.result(timeout=self._on_demand_timeout)
+        except Exception as exc:
+            logger.warning("On-demand refresh failed (lab_id=%s): %s", lab_id, exc)
+
     def handle_find(self, event):
         """C-FIND SCP handler (called by pynetdicom in its own thread)."""
         calling_ae = (event.assoc.requestor.ae_title or '').strip()
@@ -434,6 +489,8 @@ class WorklistServer:
                 "Add a [%s] section to worklist.cfg to configure this device.",
                 calling_ae, calling_ae,
             )
+
+        self._on_demand_refresh(profile)
 
         entries, raw = self._cache.snapshot()
         candidates = self._filter(entries, raw, profile, calling_ae)
@@ -450,20 +507,26 @@ class WorklistServer:
             f" (profile: {profile['name']})" if profile else " (unfiltered)",
         )
 
+    def shutdown(self) -> None:
+        """Signal the DICOM SCP to stop accepting new associations and close cleanly."""
+        if self._ae is not None:
+            logger.info("Shutting down DICOM MWL SCP")
+            self._ae.shutdown()
+
     def serve(self) -> None:
-        """Start the DICOM SCP. Blocks until the process exits."""
+        """Start the DICOM SCP. Blocks until shutdown() is called or the process exits."""
         if not DICOM_AVAILABLE:
             logger.error("pynetdicom/pydicom not installed — DICOM MWL disabled")
             return
 
-        ae = AE(ae_title=self._ae_title)
-        ae.add_supported_context(ModalityWorklistInformationFind)
+        self._ae = AE(ae_title=self._ae_title)
+        self._ae.add_supported_context(ModalityWorklistInformationFind)
 
         logger.info(
             "DICOM MWL SCP listening on port %d (AE: %s)", self._port, self._ae_title
         )
-        ae.start_server(('', self._port), block=True,
-                        evt_handlers=[(evt.EVT_C_FIND, self.handle_find)])
+        self._ae.start_server(('', self._port), block=True,
+                              evt_handlers=[(evt.EVT_C_FIND, self.handle_find)])
 
 
 # ---------------------------------------------------------------------------
@@ -482,6 +545,9 @@ class WorklistRefresher:
         self._interval = refresh_interval   # minutes
         # Per-request_id patient info cache (cleared when entry leaves the schedule)
         self._patient_cache: Dict[str, dict] = {}
+        # Throttle: track last on-demand refresh time per lab_id key ('*' = full)
+        self._throttle_lock  = threading.Lock()
+        self._last_refresh:   Dict[str, datetime] = {}
 
     def _client(self, cls):
         """Return a HipoClient subclass instance authenticated with the service account."""
@@ -519,17 +585,20 @@ class WorklistRefresher:
             logger.warning("Patient enrichment failed for request %s: %s", request_id, exc)
             return None
 
-    async def _fetch_schedule(self) -> List[dict]:
+    async def _fetch_schedule(self, lab_id: Optional[str] = None) -> List[dict]:
         """Pull the schedule from Hipocrate.
 
         Fetches yesterday through 4 days ahead so that even MRI devices with
-        a 72-hour window always see their full horizon.
+        a 72-hour window always see their full horizon.  Pass lab_id to restrict
+        to a single modality (uses Hipocrate's native PARA_ID_Laborator filter).
         """
         start = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
         end   = (datetime.now() + timedelta(days=4)).strftime('%Y-%m-%d')
 
         client = self._client(HipoClientSchedule)
-        data = await client.fetch_and_parse(start_date=start, end_date=end, force=True)
+        data = await client.fetch_and_parse(
+            start_date=start, end_date=end, lab_id=lab_id, force=True
+        )
 
         if data.get('status') == 'error':
             logger.error("Schedule fetch failed: %s", data.get('message'))
@@ -542,20 +611,27 @@ class WorklistRefresher:
 
         return entries
 
-    async def refresh(self) -> None:
-        """One refresh cycle: fetch → enrich → build Datasets → update cache."""
-        logger.debug("Worklist refresh starting")
-        entries = await self._fetch_schedule()
+    async def refresh(self, lab_id: Optional[str] = None) -> None:
+        """One refresh cycle: fetch → enrich → build Datasets → update cache.
+
+        If lab_id is given, only that modality's entries are fetched and the
+        cache is updated in-place (other modalities are preserved).
+        If lab_id is None, the full schedule is fetched and replaces the cache.
+        """
+        label = f"lab_id={lab_id}" if lab_id else "full"
+        logger.debug("Worklist refresh starting (%s)", label)
+        entries = await self._fetch_schedule(lab_id=lab_id)
         if not entries:
-            logger.warning("Empty schedule — keeping previous worklist cache")
+            logger.warning("Empty schedule for %s — keeping previous cache", label)
             return
 
-        # Evict patient cache for requests that left the schedule
-        current_ids = {e['request_id'] for e in entries if e.get('request_id')}
-        for stale in [k for k in self._patient_cache if k not in current_ids]:
-            del self._patient_cache[stale]
+        # For a full refresh, evict patient cache entries that left the schedule.
+        if lab_id is None:
+            current_ids = {e['request_id'] for e in entries if e.get('request_id')}
+            for stale in [k for k in self._patient_cache if k not in current_ids]:
+                del self._patient_cache[stale]
 
-        # Only enrich active entries (no point enriching completed ones)
+        # Only enrich active entries
         active = [e for e in entries if e.get('_fhir_status') in _ACTIVE_FHIR_STATUSES]
 
         # Bounded concurrency: 2 patients at a time = max 4 Hipocrate calls,
@@ -587,11 +663,36 @@ class WorklistRefresher:
             except Exception as exc:
                 logger.warning("Dataset build failed for request %s: %s", rid, exc)
 
-        self._cache.update(datasets, raw_out)
+        if lab_id is not None:
+            self._cache.update_partial(datasets, raw_out)
+        else:
+            self._cache.update(datasets, raw_out)
+
         logger.info(
-            "Worklist refreshed: %d entries total, %d active",
-            len(datasets), len(active),
+            "Worklist refreshed (%s): %d entries, %d active",
+            label, len(datasets), len(active),
         )
+
+    async def refresh_if_stale(self, lab_id: Optional[str] = None,
+                               max_age_seconds: float = 60.0) -> None:
+        """Refresh only if the last refresh for this lab_id is older than max_age_seconds.
+
+        Safe to call from a non-async thread via asyncio.run_coroutine_threadsafe().
+        The throttle check-and-set is protected by a threading.Lock so concurrent
+        C-FIND handlers cannot both slip through simultaneously.
+        """
+        key = lab_id or '*'
+        now = datetime.now()
+        with self._throttle_lock:
+            last = self._last_refresh.get(key)
+            if last and (now - last).total_seconds() < max_age_seconds:
+                logger.debug(
+                    "On-demand refresh skipped (lab_id=%s, %.0fs old < %.0fs threshold)",
+                    key, (now - last).total_seconds(), max_age_seconds,
+                )
+                return
+            self._last_refresh[key] = now   # claim the slot before releasing the lock
+        await self.refresh(lab_id=lab_id)
 
     async def run(self) -> None:
         """Loop: refresh immediately on startup, then every refresh_interval minutes."""
@@ -648,7 +749,9 @@ def start_worklist(service_url: str,
         refresh_interval=server_cfg['refresh_minutes'],
     )
 
-    server = WorklistServer(cache=cache, profiles=profiles, server_cfg=server_cfg)
+    loop = asyncio.get_event_loop()
+    server = WorklistServer(cache=cache, profiles=profiles, server_cfg=server_cfg,
+                            refresher=refresher, loop=loop)
 
     # pynetdicom's start_server() is blocking — run it in a daemon thread.
     t = threading.Thread(target=server.serve, daemon=True, name='DicomMWL')
@@ -658,8 +761,8 @@ def start_worklist(service_url: str,
     task = asyncio.create_task(refresher.run(), name='WorklistRefresher')
 
     logger.info(
-        "DICOM MWL server started: AE=%s port=%d refresh=%.1fmin profiles=%d",
+        "DICOM MWL server started: AE=%s port=%d refresh=%.1fmin on-demand=%.0fs profiles=%d",
         server_cfg['ae_title'], server_cfg['port'],
-        server_cfg['refresh_minutes'], len(profiles),
+        server_cfg['refresh_minutes'], server_cfg['on_demand_refresh_seconds'], len(profiles),
     )
-    return task
+    return task, server

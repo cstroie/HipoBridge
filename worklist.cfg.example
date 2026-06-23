@@ -13,8 +13,13 @@ ae_title = HIPPOBRIDGE
 # TCP port for DICOM associations. Use 11112 (no root needed) or 104 (root).
 port = 11112
 
-# Schedule refresh interval in minutes.
+# Schedule refresh interval in minutes (background periodic refresh).
 refresh_minutes = 5
+
+# On-demand refresh: minimum seconds between refreshes triggered by a C-FIND.
+# A device querying more frequently than this reuses the cached result.
+# The refresh is modality-filtered when the device has a profile with a modality set.
+on_demand_refresh_seconds = 60
 
 # Hipocrate credentials used to pull the schedule in the background.
 # Can also be supplied via HYP_USER / HYP_PASS environment variables.
