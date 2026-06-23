@@ -3220,9 +3220,12 @@ dialog.report-modal[open]::backdrop {
     border-radius: var(--radius-lg);
     padding: var(--spacing-md);
     box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.05);
+    min-width: 0;
 }
 .qr-cell canvas {
     display: block;
+    max-width: 100%;
+    height: auto;
 }
 .qr-label {
     font-size: var(--font-size-sm);
