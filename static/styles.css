@@ -3228,7 +3228,7 @@ dialog.report-modal[open]::backdrop {
     height: auto;
 }
 .qr-label {
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-xs);
     font-weight: var(--font-weight-semibold);
     color: #0f172a;
     text-align: center;
