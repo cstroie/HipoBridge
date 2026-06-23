@@ -281,9 +281,14 @@ def _build_dataset(entry: dict, patient_info: Optional[dict]) -> Dataset:
     request_code = entry.get('request_code', '')
     lab_display  = entry.get('laboratory', '')
 
+    # Procedure description: exam names from cerere.asp (e.g. "ULTRASONOGRAFIA ABDOMINALA"),
+    # joined when multiple; falls back to the generic laboratory name from the schedule.
+    exams = (patient_info or {}).get('exams') or []
+    description = ' / '.join(exams) if exams else lab_display
+
     ds.AccessionNumber               = request_code
     ds.ReferringPhysicianName        = _name_to_dicom(entry.get('requested_by', ''))
-    ds.RequestedProcedureDescription = lab_display
+    ds.RequestedProcedureDescription = description
     ds.RequestedProcedureID          = request_id
     ds.StudyInstanceUID              = (
         f'1.2.840.99999999.1.{request_id}' if request_id else generate_uid()
@@ -295,7 +300,7 @@ def _build_dataset(entry: dict, patient_info: Optional[dict]) -> Dataset:
     sps.ScheduledProcedureStepStartDate = _date_to_dicom(dt_str.split(' ')[0] if dt_str else '')
     sps.ScheduledProcedureStepStartTime = _time_to_dicom(dt_str)
     sps.Modality                         = _MODALITY_CODE.get(entry.get('modality') or '', 'OT')
-    sps.ScheduledProcedureStepDescription = lab_display
+    sps.ScheduledProcedureStepDescription = description
     sps.ScheduledProcedureStepID          = request_id
     sps.ScheduledStationAETitle            = ''
     sps.ScheduledPerformingPhysicianName   = _name_to_dicom(entry.get('requested_by', ''))
@@ -605,6 +610,7 @@ class WorklistRefresher:
                 'name':       patient_data.get('patient.name'),
                 'birth_date': patient_data.get('patient.birth_date'),
                 'sex':        patient_data.get('patient.sex'),
+                'exams':      cerere_data.get('exams') or [],
             }
             self._patient_cache[request_id] = info
             return info

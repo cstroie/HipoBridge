@@ -3130,7 +3130,7 @@ class HipoClientCerere(HipoClient):
             else:
                 data.set_error("Patient ID not found in request page")
 
-            # Exam names — try three patterns in priority order:
+            # Exam names — try four patterns in priority order:
 
             exams = []
             seen = set()
@@ -3140,6 +3140,15 @@ class HipoClientCerere(HipoClient):
                 if t and t not in seen:
                     seen.add(t)
                     exams.append(t)
+
+            # Pattern 0: cerere.asp generic rows — <tr class="tr_class_generic_1">
+            #   <td class="tdh"><b>EXAM NAME</b>...</td>
+            for row in soup.find_all('tr', class_='tr_class_generic_1'):
+                td = row.find('td', class_='tdh')
+                if td:
+                    b = td.find('b')
+                    if b:
+                        add_exam(b.get_text(strip=True))
 
             # Pattern 1: numbered rows (same as buletinRecoltari) — cell[0] is digit, cell[1] is name
             for row in soup.find_all('tr'):
