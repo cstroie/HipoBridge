@@ -3209,7 +3209,7 @@ dialog.report-modal[open]::backdrop {
 .qr-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: var(--spacing-md);
+    gap: var(--spacing-lg);
     padding: var(--spacing-md) 0;
 }
 .qr-cell {
@@ -3222,6 +3222,8 @@ dialog.report-modal[open]::backdrop {
     border-radius: var(--radius-sm);
     border: 1px solid var(--border);
     display: block;
+    padding: var(--spacing-sm);
+    background: #ffffff;
 }
 .qr-label {
     font-size: var(--font-size-xs);
