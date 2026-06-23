@@ -181,6 +181,25 @@
                                     <dd id="patientAddress">—</dd>
                                 </div>
                             </dl>
+                            <!-- QR codes for scanning -->
+                            <div class="qr-grid" id="patientQrPanel" hidden>
+                                <div class="qr-cell">
+                                    <canvas id="qrLastName"></canvas>
+                                    <p class="qr-label">Last Name</p>
+                                </div>
+                                <div class="qr-cell">
+                                    <canvas id="qrFirstName"></canvas>
+                                    <p class="qr-label">First Name</p>
+                                </div>
+                                <div class="qr-cell">
+                                    <canvas id="qrCnp"></canvas>
+                                    <p class="qr-label">CNP</p>
+                                </div>
+                                <div class="qr-cell">
+                                    <canvas id="qrBirthDate"></canvas>
+                                    <p class="qr-label">Birth Date</p>
+                                </div>
+                            </div>
                         </section>
 
                         <!-- Hospitalisation history -->
@@ -735,6 +754,7 @@
         </svg>
 
         <script src="/static/marked.js"></script>
+        <script src="/static/qrcode.js"></script>
         <script src="/static/scripts.js"></script>
     </body>
 </html>

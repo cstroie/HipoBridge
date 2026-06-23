@@ -3203,3 +3203,32 @@ dialog.report-modal[open]::backdrop {
     display: flex;
     justify-content: flex-end;
 }
+
+/* ── QR code panel ── */
+#patientQrPanel { margin-top: var(--spacing-md); }
+.qr-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--spacing-md);
+    padding: var(--spacing-md) 0;
+}
+.qr-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+.qr-cell canvas {
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    display: block;
+}
+.qr-label {
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+    text-align: center;
+    margin: 0;
+}
+@media (max-width: 600px) {
+    .qr-grid { grid-template-columns: repeat(2, 1fr); }
+}

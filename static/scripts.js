@@ -20,6 +20,11 @@ document.addEventListener('DOMContentLoaded', function() {
         patientPhone: document.getElementById('patientPhone'),
         patientEmail: document.getElementById('patientEmail'),
         patientAddress: document.getElementById('patientAddress'),
+        qrPanel:        document.getElementById('patientQrPanel'),
+        qrLastName:     document.getElementById('qrLastName'),
+        qrFirstName:    document.getElementById('qrFirstName'),
+        qrCnp:          document.getElementById('qrCnp'),
+        qrBirthDate:    document.getElementById('qrBirthDate'),
         navPatientLabel: document.getElementById('navPatientLabel'),
         navPatientGroup: document.getElementById('navPatientGroup'),
         historyList: document.getElementById('historyList'),
@@ -1933,11 +1938,42 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.patientEmail) elements.patientEmail.textContent = contactInfo.email || '—';
         if (elements.patientAddress) elements.patientAddress.textContent = patientData.address?.[0]?.text || '—';
         log('CNP:', cnp, 'Phone:', contactInfo.phone, 'Email:', contactInfo.email);
+
+        // QR codes
+        const nameObj   = Array.isArray(patientData.name) ? patientData.name[0] : patientData.name;
+        const lastName  = nameObj?.family || '';
+        const firstName = nameObj?.given?.[0] || '';
+        renderQr(elements.qrLastName,  lastName);
+        renderQr(elements.qrFirstName, firstName);
+        renderQr(elements.qrCnp,       cnp || '');
+        renderQr(elements.qrBirthDate, patientData.birthDate || '');
+        if (elements.qrPanel) elements.qrPanel.hidden = !(lastName || firstName || cnp);
     }
     
     // Enhanced name formatting
     function toTitleCase(str) {
         return str.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+    }
+
+    function renderQr(canvas, text) {
+        if (!canvas || !text) return;
+        const qr = qrcode(0, 'M');
+        qr.addData(text);
+        qr.make();
+        const size = 128;
+        canvas.width  = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const modules = qr.getModuleCount();
+        const cell = size / modules;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, size, size);
+        ctx.fillStyle = '#000000';
+        for (let r = 0; r < modules; r++) {
+            for (let c = 0; c < modules; c++) {
+                if (qr.isDark(r, c)) ctx.fillRect(c * cell, r * cell, cell, cell);
+            }
+        }
     }
 
     function formatPatientName(nameArray) {
