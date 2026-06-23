@@ -20,11 +20,15 @@ document.addEventListener('DOMContentLoaded', function() {
         patientPhone: document.getElementById('patientPhone'),
         patientEmail: document.getElementById('patientEmail'),
         patientAddress: document.getElementById('patientAddress'),
-        qrPanel:        document.getElementById('patientQrPanel'),
-        qrLastName:     document.getElementById('qrLastName'),
-        qrFirstName:    document.getElementById('qrFirstName'),
-        qrCnp:          document.getElementById('qrCnp'),
-        qrBirthDate:    document.getElementById('qrBirthDate'),
+        qrPanel:          document.getElementById('patientQrPanel'),
+        qrLastName:       document.getElementById('qrLastName'),
+        qrFirstName:      document.getElementById('qrFirstName'),
+        qrCnp:            document.getElementById('qrCnp'),
+        qrBirthDate:      document.getElementById('qrBirthDate'),
+        qrLabelLastName:  document.getElementById('qrLabelLastName'),
+        qrLabelFirstName: document.getElementById('qrLabelFirstName'),
+        qrLabelCnp:       document.getElementById('qrLabelCnp'),
+        qrLabelBirthDate: document.getElementById('qrLabelBirthDate'),
         navPatientLabel: document.getElementById('navPatientLabel'),
         navPatientGroup: document.getElementById('navPatientGroup'),
         historyList: document.getElementById('historyList'),
@@ -1943,10 +1947,15 @@ document.addEventListener('DOMContentLoaded', function() {
         const nameObj   = Array.isArray(patientData.name) ? patientData.name[0] : patientData.name;
         const lastName  = nameObj?.family || '';
         const firstName = nameObj?.given?.[0] || '';
+        const birthDate = patientData.birthDate || '';
         renderQr(elements.qrLastName,  lastName);
         renderQr(elements.qrFirstName, firstName);
         renderQr(elements.qrCnp,       cnp || '');
-        renderQr(elements.qrBirthDate, patientData.birthDate || '');
+        renderQr(elements.qrBirthDate, birthDate);
+        if (elements.qrLabelLastName)  elements.qrLabelLastName.textContent  = lastName;
+        if (elements.qrLabelFirstName) elements.qrLabelFirstName.textContent = firstName;
+        if (elements.qrLabelCnp)       elements.qrLabelCnp.textContent       = cnp || '';
+        if (elements.qrLabelBirthDate) elements.qrLabelBirthDate.textContent = birthDate;
         if (elements.qrPanel) elements.qrPanel.hidden = !(lastName || firstName || cnp);
     }
     
@@ -1960,7 +1969,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const qr = qrcode(0, 'M');
         qr.addData(text);
         qr.make();
-        const size = 128;
+        const size = 180;
         canvas.width  = size;
         canvas.height = size;
         const ctx = canvas.getContext('2d');
