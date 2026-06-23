@@ -20,6 +20,11 @@ ae_title = HIPPOBRIDGE
 # 104 is the legacy well-known port and requires root (or CAP_NET_BIND_SERVICE).
 port = 11112
 
+# Optional prefix prepended to the numeric request ID to form the AccessionNumber
+# sent to devices (e.g. accession_prefix = HB- → AccessionNumber = HB-1721991).
+# Leave empty to use the bare numeric ID.
+accession_prefix =
+
 # On-demand refresh: minimum seconds between Hipocrate fetches triggered by a
 # C-FIND.  A device querying more frequently than this reuses the cached result.
 # The refresh is scoped to the device's configured modality.

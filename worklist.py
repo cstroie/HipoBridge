@@ -129,6 +129,7 @@ def _load_config(config_path: str) -> Tuple[dict, List[dict]]:
         'ae_title':                   config.get('worklist', 'ae_title', fallback='HIPPOBRIDGE'),
         'port':                       config.getint('worklist', 'port', fallback=11112),
         'on_demand_refresh_seconds':  config.getfloat('worklist', 'on_demand_refresh_seconds', fallback=60.0),
+        'accession_prefix':           config.get('worklist', 'accession_prefix', fallback=''),
         'username':                   config.get('worklist', 'username',
                                                  fallback=os.getenv('HYP_USER', '')),
         'password':                   config.get('worklist', 'password',
@@ -267,7 +268,8 @@ def _sex_to_dicom(sex: str) -> str:
     return {'male': 'M', 'female': 'F'}.get(s, 'O')
 
 
-def _build_dataset(entry: dict, patient_info: Optional[dict]) -> Dataset:
+def _build_dataset(entry: dict, patient_info: Optional[dict],
+                   accession_prefix: str = '') -> Dataset:
     """Build a pydicom Dataset for one MWL Scheduled Procedure Step."""
     ds = Dataset()
 
@@ -298,7 +300,7 @@ def _build_dataset(entry: dict, patient_info: Optional[dict]) -> Dataset:
     exams = (patient_info or {}).get('exams') or []
     description = ' / '.join(exams) if exams else lab_display
 
-    ds.AccessionNumber               = request_code
+    ds.AccessionNumber               = f"{accession_prefix}{request_id}" if request_id else request_code
     ds.ReferringPhysicianName        = _name_to_dicom(entry.get('requested_by', ''))
     ds.RequestedProcedureDescription = description
     ds.RequestedProcedureID          = request_id
@@ -597,9 +599,11 @@ class WorklistRefresher:
     """Asyncio background task: fetches schedule and enriches patient data."""
 
     def __init__(self, cache: WorklistCache, service_url: str,
-                 username: str, password: str) -> None:
-        self._cache    = cache
-        self._svc_url  = service_url
+                 username: str, password: str,
+                 accession_prefix: str = '') -> None:
+        self._cache             = cache
+        self._svc_url           = service_url
+        self._accession_prefix  = accession_prefix
         self._username = username
         self._password = password
         # Per-request_id patient info cache (cleared when entry leaves the schedule)
@@ -714,7 +718,7 @@ class WorklistRefresher:
         for entry in entries:
             rid = entry.get('request_id')
             try:
-                ds = _build_dataset(entry, patient_map.get(rid))
+                ds = _build_dataset(entry, patient_map.get(rid), self._accession_prefix)
                 datasets.append(ds)
                 raw_out.append(entry)
             except Exception as exc:
@@ -790,6 +794,7 @@ def start_worklist(service_url: str,
         service_url=service_url,
         username=server_cfg['username'],
         password=server_cfg['password'],
+        accession_prefix=server_cfg.get('accession_prefix', ''),
     )
 
     loop = asyncio.get_event_loop()
