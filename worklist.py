@@ -53,17 +53,17 @@ _MODALITY_SLUG_TO_LAB_ID: Dict[str, str] = {
 }
 
 # How many days ahead to fetch per modality slug.
-# X-Ray / Ultrasound / Fluoroscopy: 2 days (mostly same-day or next-day).
+# X-Ray / Ultrasound / Fluoroscopy: 3 days.
 # CT / MRI: 7 days (slots booked well in advance; MRI prep needs lead time).
 _MODALITY_FETCH_DAYS: Dict[str, int] = {
-    'radio':  2,
-    'eco':    2,
-    'fluoro': 2,
-    'rads':   2,
+    'radio':  3,
+    'eco':    3,
+    'fluoro': 3,
+    'rads':   3,
     'ct':     7,
     'irm':    7,
 }
-_DEFAULT_FETCH_DAYS = 2   # default when no modality is specified
+_DEFAULT_FETCH_DAYS = 3   # default when no modality is specified
 
 # Reverse lookup: lab_id → days ahead, derived from the two maps above.
 _LAB_ID_FETCH_DAYS: Dict[str, int] = {
@@ -609,7 +609,7 @@ class WorklistRefresher:
         """Pull the schedule from Hipocrate.
 
         Lookback is always 1 day.  Lookahead depends on modality:
-          - X-Ray / Ultrasound / Fluoroscopy: 2 days (mostly same-day slots)
+          - X-Ray / Ultrasound / Fluoroscopy: 3 days
           - CT / MRI: 7 days (slots booked well in advance)
           - No modality (full refresh): 2 days (_DEFAULT_FETCH_DAYS)
         Pass lab_id to restrict to one modality (Hipocrate PARA_ID_Laborator).
