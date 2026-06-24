@@ -562,7 +562,10 @@ class HipoClient:
                     async with self.session.post(url, headers=post_headers) as response:
                         response_text = await self.handle_response_encoding(response)
                         logger.debug(f"POST response status: {response.status}")
-            return html.unescape(response_text)
+            text = html.unescape(response_text)
+            text = re.sub(r'\r\n|\r', '\n', text)
+            text = re.sub(r'[ \t]+', ' ', text)
+            return text
 
         # For GET requests: check cache first, then deduplicate in-flight fetches
         if method == "GET":
