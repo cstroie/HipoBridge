@@ -1581,7 +1581,6 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                 lab_requests = [r for r in all_requests if r.get('type') == 'lab']
                 imaging_requests = [r for r in all_requests if r.get('type') != 'lab']
                 if lab_requests:
-                    from datetime import datetime, timedelta
                     max_dt_str = lab_requests[0].get('date_time', '')
                     if max_dt_str:
                         try:
