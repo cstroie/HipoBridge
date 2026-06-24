@@ -3627,7 +3627,7 @@ class HipoClientPresentation(HipoClient):
                 sel_name = sel.get('name', '')
                 opt = sel.find('option', selected=True)
                 val = opt.get_text(strip=True) if opt else ''
-                if not val or val.upper() in ('SELECTATI', 'NONE', ''):
+                if not val or val.upper() in ('NONE', '') or val.upper().startswith('SELECTATI'):
                     continue
                 if sel_name == 'EmergencyReason':
                     data.store("presentation.reason", val)
@@ -3670,7 +3670,7 @@ class HipoClientPresentation(HipoClient):
                 opt = cu_sel.find('option', selected=True)
                 if opt:
                     val = opt.get_text(strip=True)
-                    if val and val != 'SELECTATI':
+                    if val and not val.upper().startswith('SELECTATI'):
                         data.store("presentation.consult_type", val)
 
             # Linked checkup decision text from the consults table

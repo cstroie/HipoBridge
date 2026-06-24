@@ -7,6 +7,8 @@ export HYP_USER=<username> HYP_PASS=<password>
 python3 hipobridge.py
 ```
 
+Test credentials are in `worklist.cfg` (`username` / `password` fields under `[worklist]`). Server runs on `http://127.0.0.1:44660`.
+
 Default: `http://0.0.0.0:44660`. Override with `local.cfg` (not tracked by git):
 
 ```ini
