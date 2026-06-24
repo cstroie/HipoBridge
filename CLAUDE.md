@@ -218,29 +218,31 @@ FHIR Encounter: class `EMER` for UPU/CPU/URGENTA/URGENTE sections, `AMB` otherwi
 
 ### Cerere (`HipoClientCerere`) field notes
 
-Page: `/PARA/NOM/Listare/cerere.asp?id={id}` — the request edit form. Extracts:
+Page: `/PARA/NOM/Listare/cerere.asp?id={id}` — the request edit form. Title: `HIPOCRATE - Cerere laborator`. Redirects to the main page (title `HIPOCRATE - PAGINA PRINCIPALA`) when the user lacks access to the lab — detected by title check; error message taken from `div#divError`. Extracts:
 - `request.id` — from the `id` kwarg (URL path parameter)
-- `patient.id` — from the first `Pacient/edit.asp?id=(\d+)` link; error if absent
-- `patient.name` — from the `Pacient/edit.asp` link text (brackets stripped)
-- `patient.cnp` — from `strCNP` input or "CNP" label; fallback: first 13-digit number in page text
+- `request.code` — request barcode/code (e.g. `ET6987`) from `div.div_sectiunePACFULL_titlu` text
+- `request.laboratory` — lab name (e.g. `Ecografie`) from the same div
+- `request.date_time` — from `strRequestedDate` + `strRequestedDateHour` inputs (ISO format)
+- `request.priority` — from `strPriorityId` select (Normala / Urgenta)
+- `request.payment_type` — from `strPaymentTypeId` select (Spitalizare de zi / Ambulatoriu / etc.)
+- `request.physician` — from `strMedicId` select (ordering physician)
+- `request.section` — from `strSectionCode` select (ward)
+- `request.diagnosis` — from `SituatieClinicaId` select (clinical situation / SIUI code text)
+- `request.justification` — from `Justificare` text input
+- `request.clinical_indication` — from `strObs` textarea (labelled "Info suplimentare")
+- `patient.id` — from hidden input `strPacientId`; fallback: `Pacient/edit.asp?id=` link
+- `patient.name` — from `Pacient/edit.asp` link text (`\xa0` normalised to space)
+- `patient.cnp` — from `strCNP` input
 - `patient.gender` / `patient.date` / `patient.age` — derived from CNP via `parse_cnp()` when valid
-- `request.date_time` — from `strDataCerere` input or "Data cerere" label (ISO format after `parse_date_time`)
-- `request.priority` — from `PARA_ID_Prioritate` select or "Prioritate" label
-- `request.hospitalization_type` — from `PARA_ID_TipSpitalizare` select or "Tip internare" label
-- `request.physician` — from `PARA_ID_Medic` select or `strMedic` input or "Medic" label
-- `request.section` — from `PARA_ID_Sectie` select or "Sectie" label
-- `request.diagnosis` — from `strDiagnostic` input or "Diagnostic" label
-- `request.justification` — from `strJustificare` textarea or "Justificare" label
-- `request.clinical_indication` — from `strInfoSuplimentar` textarea, "Informatii suplimentare" label, or `<p class="NoteSubsol">` INFO SUPLIMENTAR footer
-- `exams` — list of ordered exam names (four patterns: `tr_class_generic_1` rows → numbered rows → checked checkboxes → checkbox labels)
+- `exams` — list of ordered exam names; loaded dynamically so usually empty in static HTML (four fallback patterns preserved for edge cases)
 
-Returns an error if `patient.id` is not found. All other fields are optional — absent from HipoData if not extractable. Selector patterns were designed from the Hipocrate form conventions; use `?debug=page` to inspect the raw HTML and tune if needed.
+Hipocrate cerere.asp renders only the selected option per `<select>` (no `selected=` attribute) — field extraction uses `_select_text()` which takes the first `<option>` text.
 
 Routes:
 - `GET /api/request/{id}/patient` — returns full `HipoData` JSON; supports `?debug=page`
 - `GET /fhir/ServiceRequest/{id}?type=cerere` — returns FHIR `ServiceRequest`
 
-FHIR mapping: `patient.id` → `subject.reference`; `patient.name` → `subject.display`; `request.date_time` → `authoredOn`; `request.priority` → `priority` (`urgent`/`routine`); `request.physician` → `requester.display`; `request.diagnosis` → `reason[0].display`; `request.hospitalization_type` → `category[0].text`; `exams` → `orderDetail[{text}]`; `request.section` → `note[0].text`; `request.clinical_indication` → `note[1].text`; `request.justification` → `note[2].text`.
+FHIR mapping: `patient.id` → `subject.reference`; `patient.name` → `subject.display`; `request.id` + `request.code` → `identifier[]`; `request.date_time` → `authoredOn`; `request.priority` → `priority` (`urgent`/`routine`); `request.physician` → `requester.display`; `request.diagnosis` → `reason[0].display`; `request.payment_type` → `category[0].text`; `exams` → `orderDetail[{text}]`; notes[]: section → [0], laboratory → [1], clinical indication → [2], justification → [3].
 
 Also used internally by `WorklistRefresher` to resolve `patient.id` and `exams` for DICOM MWL dataset building.
 

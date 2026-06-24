@@ -3128,37 +3128,60 @@ class HipoClientCerere(HipoClient):
         super().__init__(service_url=service_url, request=request)
         self.request_url = "/PARA/NOM/Listare/cerere.asp?id={id}"
 
+    @staticmethod
+    def _select_text(soup, name: str) -> str:
+        """Return text of the first <option> in a <select name=…>.
+
+        Hipocrate cerere.asp renders only the selected option per select (no
+        selected= attribute), so we just take the first option's text.
+        """
+        sel = soup.find('select', {'name': name})
+        if sel:
+            opt = sel.find('option', selected=True) or sel.find('option')
+            if opt:
+                return opt.get_text(strip=True)
+        return ''
+
     def parse_data(self, html_content: str, **kwargs) -> HipoData:
         data = HipoData(status="success", message="")
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
 
+            # Detect redirect to main page (access denied or session expired)
+            title = soup.find('title')
+            title_text = title.get_text(strip=True) if title else ''
+            if 'cerere' not in title_text.lower():
+                error_div = soup.find('div', id='divError')
+                # divError has two child divs: message text + timing ("0,02 sec.")
+                # Take only the first child div's text to exclude the timing suffix
+                first_child = error_div.find('div') if error_div else None
+                error_msg = (first_child or error_div).get_text(strip=True) if (first_child or error_div) else ''
+                data.set_error(error_msg or "Access denied or unexpected page")
+                return data
+
             # Request ID from kwarg
             request_id = kwargs.get('id')
             data.store("request.id", request_id)
 
-            # Patient ID from Pacient/edit.asp link
-            ids = extract_ids_from_links(soup, r'[Pp]acient/edit\.asp\?id=(\d+)')
-            if ids:
-                data.store("patient.id", ids[0])
+            # Patient ID — hidden input is most reliable; link is fallback
+            patient_id = extract_value_from_input(soup, name='strPacientId')
+            if not patient_id:
+                ids = extract_ids_from_links(soup, r'[Pp]acient/edit\.asp\?id=(\d+)')
+                patient_id = ids[0] if ids else None
+            if patient_id:
+                data.store("patient.id", patient_id)
             else:
                 data.set_error("Patient ID not found in request page")
 
-            # Patient name from the link text — typically "[ FAMILY GIVEN ]"
-            link = soup.find('a', href=re.compile(r'[Pp]acient/edit\.asp'))
-            if link:
-                name_text = re.sub(r'[\[\]]', '', link.get_text()).strip()
+            # Patient name — link text inside the patient detail div
+            name_link = soup.find('a', href=re.compile(r'[Pp]acient/edit\.asp'))
+            if name_link:
+                name_text = re.sub(r'\xa0', ' ', name_link.get_text()).strip()
                 if name_text:
                     data.store("patient.name", name_text)
 
-            # CNP — try named/id input first, then label, then 13-digit regex fallback
-            cnp = (extract_value_from_input(soup, element_id='strCNP') or
-                   extract_value_from_input(soup, name='strCNP') or
-                   extract_text_after_label(soup, r'\bCNP\b'))
-            if not cnp:
-                m = re.search(r'\b(\d{13})\b', soup.get_text())
-                if m:
-                    cnp = m.group(1)
+            # CNP
+            cnp = extract_value_from_input(soup, name='strCNP')
             if cnp:
                 data.store("patient.cnp", cnp)
                 parsed_cnp = parse_cnp(cnp)
@@ -3167,65 +3190,49 @@ class HipoClientCerere(HipoClient):
                     data.store("patient.date", parsed_cnp.get("birth_date"))
                     data.store("patient.age", parsed_cnp.get("age"))
 
-            # Request date/time (DD/MM/YYYY HH:MM format on Hipocrate forms)
-            date_val = (extract_value_from_input(soup, element_id='strDataCerere') or
-                        extract_value_from_input(soup, name='strDataCerere') or
-                        extract_value_from_input(soup, name='LR_requesteddateSD') or
-                        extract_text_after_label(soup, r'Data\s+(?:cerere|si\s+ora)', stop_at=r'Medic'))
-            if date_val:
-                dt = parse_date_time(date_val)
-                data.store("request.date_time", dt.isoformat() if dt else date_val)
+            # Request date + time (two separate inputs: DD/MM/YYYY and HH:MM)
+            date_part = extract_value_from_input(soup, name='strRequestedDate')
+            hour_part = extract_value_from_input(soup, name='strRequestedDateHour')
+            if date_part:
+                dt = parse_date_time(f"{date_part} {hour_part}".strip() if hour_part else date_part)
+                data.store("request.date_time", dt.isoformat() if dt else date_part)
 
             # Priority (Normala / Urgenta)
-            priority = (extract_selected_from_dropdown(soup, name='PARA_ID_Prioritate') or
-                        extract_selected_from_dropdown(soup, element_id='PARA_ID_Prioritate') or
-                        extract_text_after_label(soup, r'Prioritat'))
-            data.store("request.priority", priority)
+            data.store("request.priority", self._select_text(soup, 'strPriorityId'))
 
-            # Hospitalization type (Ambulatoriu / Spitalizare / etc.)
-            hosp_type = (extract_selected_from_dropdown(soup, name='PARA_ID_TipSpitalizare') or
-                         extract_selected_from_dropdown(soup, element_id='PARA_ID_TipSpitalizare') or
-                         extract_text_after_label(soup, r'Tip\s+(?:internare|spitalizare)'))
-            data.store("request.hospitalization_type", hosp_type)
+            # Payment / hospitalization type (Spitalizare de zi / Ambulatoriu / etc.)
+            data.store("request.payment_type", self._select_text(soup, 'strPaymentTypeId'))
 
-            # Referring physician — dropdown or free-text input
-            physician = (extract_selected_from_dropdown(soup, name='PARA_ID_Medic') or
-                         extract_selected_from_dropdown(soup, element_id='PARA_ID_Medic') or
-                         extract_value_from_input(soup, element_id='strMedic') or
-                         extract_value_from_input(soup, name='strMedic') or
-                         extract_text_after_label(soup, r'Medic\b'))
-            data.store("request.physician", physician)
+            # Ordering physician
+            data.store("request.physician", self._select_text(soup, 'strMedicId'))
 
             # Ward/section
-            section = (extract_selected_from_dropdown(soup, name='PARA_ID_Sectie') or
-                       extract_selected_from_dropdown(soup, element_id='PARA_ID_Sectie') or
-                       extract_text_after_label(soup, r'Sec[tț]i'))
-            data.store("request.section", section)
+            data.store("request.section", self._select_text(soup, 'strSectionCode'))
 
-            # Clinical diagnosis
-            diagnosis = (extract_value_from_input(soup, element_id='strDiagnostic') or
-                         extract_value_from_input(soup, name='strDiagnostic') or
-                         extract_text_after_label(soup, r'Diagnostic'))
-            data.store("request.diagnosis", diagnosis)
+            # Clinical situation (SIUI field — closest to a diagnosis on this form)
+            data.store("request.diagnosis", self._select_text(soup, 'SituatieClinicaId'))
 
-            # Justification / motivation
-            justification = (extract_text_from_element(soup, element_id='strJustificare') or
-                             extract_value_from_input(soup, name='strJustificare') or
-                             extract_text_after_label(soup, r'Justific'))
-            data.store("request.justification", justification)
+            # Justification (text input named "Justificare")
+            data.store("request.justification", extract_value_from_input(soup, name='Justificare'))
 
-            # Clinical indication / supplementary info
-            clinical = (extract_text_from_element(soup, element_id='strInfoSuplimentar') or
-                        extract_value_from_input(soup, name='strInfoSuplimentar') or
-                        extract_text_after_label(soup, r'[Ii]nfo(?:rma[tț]ii)?\s+suplimentar'))
-            if not clinical:
-                # Buletin-style footer: <p class="NoteSubsol"><b>INFO SUPLIMENTAR:</b> …</p>
-                note_p = soup.find('p', class_='NoteSubsol')
-                if note_p:
-                    note_text = note_p.get_text(strip=True)
-                    if 'INFO SUPLIMENTAR' in note_text.upper():
-                        clinical = re.sub(r'^[^:]+:\s*', '', note_text).strip()
-            data.store("request.clinical_indication", clinical)
+            # Supplementary info / clinical indication (textarea "strObs", labelled "Info suplimentare")
+            ta = soup.find('textarea', {'name': 'strObs'})
+            if ta:
+                data.store("request.clinical_indication", ta.get_text(strip=True))
+
+            # Request code and laboratory from the header div
+            # The div contains nested <p> tags so we use get_text() not string=
+            # "Cerere paraclinic ET6987 / Laborator : Ecografie / ..."
+            for div in soup.find_all('div', class_='div_sectiunePACFULL_titlu'):
+                header_text = div.get_text(' ', strip=True)
+                if 'Cerere paraclinic' in header_text:
+                    m = re.search(r'Cerere paraclinic\s+(\S+)', header_text)
+                    if m:
+                        data.store("request.code", m.group(1))
+                    m = re.search(r'Laborator\s*:\s*([^/]+)', header_text)
+                    if m:
+                        data.store("request.laboratory", m.group(1).strip())
+                    break
 
             # Exam names — four patterns in priority order:
             exams = []
@@ -3322,15 +3329,20 @@ class HipoClientCerere(HipoClient):
             if physician:
                 fhir_sr["requester"] = FHIRReference(display=physician)
 
-            # Diagnosis → reason
+            # Diagnosis (clinical situation) → reason
             diagnosis = parsed_data.get("request.diagnosis")
             if diagnosis:
                 fhir_sr["reason"] = [FHIRReference(display=diagnosis)]
 
-            # Hospitalization type → category
-            hosp_type = parsed_data.get("request.hospitalization_type")
-            if hosp_type:
-                fhir_sr["category"] = [FHIRCodeableConcept(text=hosp_type)]
+            # Payment / hospitalization type → category
+            payment_type = parsed_data.get("request.payment_type")
+            if payment_type:
+                fhir_sr["category"] = [FHIRCodeableConcept(text=payment_type)]
+
+            # Request code (e.g. ET6987) → additional identifier
+            req_code = parsed_data.get("request.code")
+            if req_code:
+                fhir_sr["identifier"] = (fhir_sr.get("identifier") or []) + [{"value": req_code}]
 
             # Ordered exams → orderDetail
             exams = parsed_data.get("exams") or []
@@ -3339,11 +3351,14 @@ class HipoClientCerere(HipoClient):
             if exams:
                 fhir_sr["orderDetail"] = [FHIRCodeableConcept(text=e) for e in exams]
 
-            # Notes: section, clinical indication, justification
+            # Notes: section, laboratory, clinical indication, justification
             notes = []
             section = parsed_data.get("request.section")
             if section:
                 notes.append({"text": section})
+            laboratory = parsed_data.get("request.laboratory")
+            if laboratory:
+                notes.append({"text": laboratory})
             clinical = parsed_data.get("request.clinical_indication")
             if clinical:
                 notes.append({"text": clinical})
