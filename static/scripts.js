@@ -3389,25 +3389,34 @@ document.addEventListener('DOMContentLoaded', function() {
             apiFetch(`/api/study/${id}`)
                 .then(r => r.ok ? r.json() : null)
                 .then(data => {
-                    const exams = (data?.studies || []).map(s => s.title).filter(Boolean);
-                    if (exams.length) { _examCache[id] = exams; _applyExamLabel(el, exams); return; }
+                    const regions = _extractRegions(data);
+                    if (regions.length) { _examCache[id] = regions; _applyExamLabel(el, regions); return; }
                     // Study not yet reported — fall back to buletinRecoltari for ordered procedure names
                     return apiFetch(`/api/request/${id}`)
                         .then(r => r.ok ? r.json() : null)
                         .then(d => {
-                            const e = (d?.studies || []).map(s => s.title).filter(Boolean);
-                            _examCache[id] = e;
-                            _applyExamLabel(el, e);
+                            const r = _extractRegions(d);
+                            _examCache[id] = r;
+                            _applyExamLabel(el, r);
                         });
                 })
                 .catch(() => {});
         });
     }, { rootMargin: '200px' });
 
-    function _applyExamLabel(el, exams) {
-        if (!exams.length) return;
+    function _extractRegions(data) {
+        return [...new Set(
+            (data?.studies || [])
+                .map(s => s.region)
+                .filter(r => r && r !== 'unknown')
+                .map(r => r.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase()))
+        )];
+    }
+
+    function _applyExamLabel(el, regions) {
+        if (!regions.length) return;
         const modality = el.textContent;  // was set to laboratory as placeholder
-        el.textContent = exams.join(', ') + (modality ? ' · ' + modality : '');
+        el.textContent = regions.join(', ') + (modality ? ' · ' + modality : '');
     }
 
     function renderScheduleHero() {
