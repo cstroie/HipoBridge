@@ -1223,19 +1223,93 @@ class HipoClientServiceRequest(HipoClient):
         self.request_url = "/PARA/Printabile/buletinRecoltari.asp?id={id}"
 
     def parse_data(self, html_content: str, **kwargs) -> HipoData:
-        """Parse a Hipocrate service request page into HipoData."""
+        """Parse a Hipocrate buletinRecoltari page into HipoData."""
         data = HipoData(status="success", message="")
-
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
 
-            data.store("patient.name", extract_text_after_label(soup, r'NUME PACIENT:'))
-            data.store("checkin.medic", extract_text_after_label(soup, r'MEDICUL:'))
-            data.store("request.date_time", extract_text_after_label(soup, r'DATA SI ORA CERERII:', stop_at=r'RECEPTIONAT'))
-            data.store("request.barcode", soup.find('div', class_='div_barCode').get_text(strip=True) if soup.find('div', class_='div_barCode') else None)
-            data.store("request.is_urgent", bool(soup.find('p', class_='pUrgenta')))
+            data.store("request.id", kwargs.get('id'))
 
-            # Studies: numbered rows in table (index in first cell)
+            # Laboratory name from TitluPrintabil heading
+            lab_p = soup.find('p', class_='TitluPrintabil')
+            if lab_p:
+                data.store("request.laboratory", lab_p.get_text(strip=True))
+
+            # Info table — labeled cells: LABEL:<br><b>VALUE</b>
+            # Row 1: COD CERERE | NR FO | NUME PACIENT | CNP | VARSTA
+            # Row 2: DIAGNOSTIC | SECTIA | URGENTA
+            for row in soup.find_all('tr', class_='Rap_tr_class_generic_4'):
+                for td in row.find_all('td'):
+                    b = td.find('b')
+                    if not b:
+                        continue
+                    raw = td.get_text(' ', strip=True).upper()
+                    value = b.get_text(strip=True)
+                    if 'COD CERERE' in raw:
+                        data.store("request.code", value)
+                    elif 'NR FO' in raw:
+                        data.store("request.fo_number", value)
+                    elif 'NUME PACIENT' in raw:
+                        data.store("patient.name", value)
+                    elif raw.startswith('CNP'):
+                        data.store("patient.cnp", value)
+                        parsed_cnp = parse_cnp(value)
+                        if parsed_cnp.get('valid'):
+                            data.store("patient.gender", parsed_cnp.get("gender"))
+                            data.store("patient.date", parsed_cnp.get("birth_date"))
+                            data.store("patient.age", parsed_cnp.get("age"))
+                    elif 'VARSTA' in raw:
+                        data.store("patient.age_text", value)
+                    elif 'DIAGNOSTIC' in raw:
+                        data.store("request.diagnosis", value)
+                    elif raw.startswith('SECTIA') or (raw.startswith('SECT') and 'SECTIA' in raw):
+                        data.store("request.section", value)
+                    elif 'URGENTA' in raw:
+                        data.store("request.is_urgent", value.upper() == 'DA')
+
+            # Header Antet paragraphs for physician, section, payment type, dates
+            for p in soup.find_all('p', class_='Antet'):
+                text = p.get_text(' ', strip=True)
+                if 'MEDICUL:' in text:
+                    # "SECTIA: CHIRURGIE I MEDICUL: H52047 DR. CARDONEANU ANCUTA (Spitalizare de zi)"
+                    m = re.search(r'SECTIA:\s*(.+?)\s+MEDICUL:', text)
+                    if m and not data.get("request.section"):
+                        data.store("request.section", m.group(1).strip())
+                    m = re.search(r'MEDICUL:\s*(.+?)(?=\s*\(|$)', text)
+                    if m:
+                        physician = m.group(1).strip()
+                        data.store("request.physician", physician)
+                        data.store("checkin.medic", physician)  # backward compat for fhir_response
+                    m = re.search(r'\(([^)]+)\)', text)
+                    if m:
+                        data.store("request.payment_type", m.group(1).strip())
+                if 'INREGISTRAT DE:' in text:
+                    m = re.search(r'INREGISTRAT DE:\s*(.+?)\s+DATA SI ORA', text)
+                    if m:
+                        data.store("request.registered_by", m.group(1).strip())
+                if 'DATA SI ORA CERERII:' in text:
+                    m = re.search(r'DATA SI ORA CERERII:\s*(.+)', text)
+                    if m:
+                        dt = parse_date_time(m.group(1).strip())
+                        data.store("request.date_time", dt.isoformat() if dt else m.group(1).strip())
+
+            # Request barcode (also available in the div_barCode element)
+            barcode_div = soup.find('div', class_='div_barCode')
+            if barcode_div and not data.get("request.code"):
+                data.store("request.code", barcode_div.get_text(strip=True))
+
+            # Checkin ID from back link "…/files/checkin.asp?id=654546"
+            back_link = soup.find('a', href=re.compile(r'checkin\.asp\?id=', re.I))
+            if back_link:
+                m = re.search(r'checkin\.asp\?id=(\d+)', back_link.get('href', ''), re.I)
+                if m:
+                    data.store("checkin.id", m.group(1))
+
+            # Urgency fallback: pUrgenta class used in some page variants
+            if data.get("request.is_urgent") is None:
+                data.store("request.is_urgent", bool(soup.find('p', class_='pUrgenta')))
+
+            # Studies: numbered rows (3+ cells, first cell is digit)
             studies = []
             seen_titles = set()
             for row in soup.find_all('tr'):
@@ -1251,7 +1325,7 @@ class HipoClientServiceRequest(HipoClient):
             data.store_list("studies", studies)
 
             return data
-        
+
         except Exception as e:
             logger.error(f"Error parsing service request data: {e}")
             data.set_error(str(e))
