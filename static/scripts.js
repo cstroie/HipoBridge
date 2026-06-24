@@ -3166,10 +3166,11 @@ document.addEventListener('DOMContentLoaded', function() {
         triggerEl.textContent = '…';
         triggerEl.disabled = true;
         try {
-            const resp = await apiFetch(`/api/study/${requestId}`);
+            const resp = await apiFetch(`/fhir/ImagingStudy/${requestId}`);
             if (resp.ok) {
                 const json = await resp.json();
-                const patientId = json.patient?.id;
+                const ref = json.subject?.reference || '';
+                const patientId = ref.startsWith('Patient/') ? ref.slice(8) : null;
                 if (patientId) {
                     elements.cnpInput.value = patientId;
                     triggerEl.textContent = originalText;
@@ -3388,13 +3389,13 @@ document.addEventListener('DOMContentLoaded', function() {
             const id = el.dataset.requestId;
             if (!id) return;
             if (_examCache[id]) { _applyExamLabel(el, _examCache[id]); return; }
-            apiFetch(`/api/study/${id}`)
+            apiFetch(`/fhir/ImagingStudy/${id}`)
                 .then(r => r.ok ? r.json() : null)
                 .then(data => {
                     const regions = _extractRegions(data);
                     if (regions.length) { _examCache[id] = regions; _applyExamLabel(el, regions); return; }
-                    // Study not yet reported — fall back to buletinRecoltari for ordered procedure names
-                    return apiFetch(`/api/request/${id}`)
+                    // Study not yet reported — fall back to ServiceRequest for ordered procedure regions
+                    return apiFetch(`/fhir/ServiceRequest/${id}`)
                         .then(r => r.ok ? r.json() : null)
                         .then(d => {
                             const r = _extractRegions(d);
@@ -3406,13 +3407,21 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }, { rootMargin: '200px' });
 
-    function _extractRegions(data) {
-        return [...new Set(
-            (data?.studies || [])
-                .map(s => s.region)
-                .filter(r => r && r !== 'unknown')
-                .map(r => r.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase()))
-        )];
+    function _extractRegions(resource) {
+        // ImagingStudy: series[].bodySite.display
+        if (resource?.series) {
+            const regions = [...new Set(
+                resource.series
+                    .map(s => s.bodySite?.display)
+                    .filter(Boolean)
+            )];
+            if (regions.length) return regions;
+        }
+        // ServiceRequest: bodySite[].text
+        if (resource?.bodySite) {
+            return [...new Set(resource.bodySite.map(b => b.text).filter(Boolean))];
+        }
+        return [];
     }
 
     function _applyExamLabel(el, regions) {

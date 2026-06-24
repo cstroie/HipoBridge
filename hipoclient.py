@@ -1476,6 +1476,18 @@ class HipoClientServiceRequest(HipoClient):
                 else:
                     fhir_service_request["authoredOn"] = request_date_time
 
+            # bodySite: unique non-unknown regions across all ordered studies
+            if studies:
+                seen_regions = set()
+                body_sites = []
+                for study_info in studies:
+                    region = study_info.get("region") if isinstance(study_info, dict) else None
+                    if region and region != "unknown" and region not in seen_regions:
+                        seen_regions.add(region)
+                        body_sites.append({"text": region.replace("_", " ").title()})
+                if body_sites:
+                    fhir_service_request["bodySite"] = body_sites
+
             return fhir_service_request
         except Exception as e:
             logger.error(f"Error converting service request data: {e}")
@@ -2169,7 +2181,11 @@ class HipoClientImagingStudy(HipoClient):
                         "code": s_code,
                         "display": s_display
                     }
-                        
+
+                    region = study.get("region")
+                    if region and region != "unknown":
+                        series["bodySite"] = {"display": region.replace("_", " ").title()}
+
                     series_list.append(series)
 
             if series_list:
