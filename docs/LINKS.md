@@ -184,13 +184,14 @@ FHIR ServiceRequest status mapping:
 
 ---
 
-## Request → Patient Resolution
+## Request Details (cerere)
 
 | HippoBridge endpoint | Hipocrate URL |
 |---|---|
 | `GET /api/request/{id}/patient` | `/PARA/NOM/Listare/cerere.asp?id={id}` |
+| `GET /fhir/ServiceRequest/{id}?type=cerere` | `/PARA/NOM/Listare/cerere.asp?id={id}` |
 
-Extracts the numeric patient ID from the first `Pacient/edit.asp?id=` link on the request edit page. Used by the Schedule tab to resolve a patient before loading their record. Falls back to name search on failure.
+Full request edit form. Returns patient name, CNP, demographics (derived from CNP), request date/time, priority, payment type, ordering physician, ward/section, clinical diagnosis, clinical indication, justification, request code, laboratory name, and exam list (when present). Also resolves the numeric `patient.id` — used by the Schedule tab to load a patient record. Returns an access-denied error for labs the authenticated user cannot view (e.g. Ecografie); use `/api/request/{id}` (buletinRecoltari) as fallback for patient demographics in that case.
 
 ---
 
