@@ -3165,10 +3165,10 @@ document.addEventListener('DOMContentLoaded', function() {
         triggerEl.textContent = '…';
         triggerEl.disabled = true;
         try {
-            const resp = await apiFetch(`/api/request/${requestId}/patient`);
+            const resp = await apiFetch(`/api/study/${requestId}`);
             if (resp.ok) {
                 const json = await resp.json();
-                const patientId = json['patient.id'] || json.patient?.id;
+                const patientId = json.patient?.id;
                 if (patientId) {
                     elements.cnpInput.value = patientId;
                     triggerEl.textContent = originalText;
@@ -3386,10 +3386,10 @@ document.addEventListener('DOMContentLoaded', function() {
             const id = el.dataset.requestId;
             if (!id) return;
             if (_examCache[id]) { _applyExamLabel(el, _examCache[id]); return; }
-            apiFetch(`/api/request/${id}/patient`)
+            apiFetch(`/api/study/${id}`)
                 .then(r => r.ok ? r.json() : null)
                 .then(data => {
-                    const exams = data?.exams || [];
+                    const exams = (data?.studies || []).map(s => s.title).filter(Boolean);
                     _examCache[id] = exams;
                     _applyExamLabel(el, exams);
                 })
