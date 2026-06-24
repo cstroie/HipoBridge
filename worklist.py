@@ -316,6 +316,7 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
     datasets = []
 
     for idx, exam_name in enumerate(exam_list, start=1):
+        exam_name = exam_name[:64]
         ds = Dataset()
         ds.PatientName      = patient_name
         ds.PatientID        = patient_id
