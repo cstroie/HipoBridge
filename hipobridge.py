@@ -783,13 +783,14 @@ async def on_cleanup(app):
         await asyncio.get_event_loop().run_in_executor(None, _wl_server.shutdown)
     await user_session_manager.close_all_sessions()
 
-async def init_app(no_disk_cache: bool = False):
+async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
+                   port: int = None, host: str = None, service_url: str = None):
     """Load config, wire up routes and lifecycle handlers, return the configured app."""
     global SERVICE_URL, _PORT, _HOST
     config = load_config()
-    SERVICE_URL = config.get('hipocrate', 'service_url')
-    _PORT = config.getint('server', 'port')
-    _HOST = config.get('server', 'host')
+    SERVICE_URL = service_url or config.get('hipocrate', 'service_url')
+    _PORT = port or config.getint('server', 'port')
+    _HOST = host or config.get('server', 'host')
     logger.info(f"Service URL: {SERVICE_URL}")
 
     cache_dir = config.get('cache', 'dir').strip()
@@ -841,7 +842,10 @@ async def init_app(no_disk_cache: bool = False):
     app.on_cleanup.append(on_cleanup)
 
     global _wl_server
-    _wl_server = start_worklist(SERVICE_URL)
+    if no_worklist:
+        logger.info("DICOM worklist disabled (--no-worklist)")
+    else:
+        _wl_server = start_worklist(SERVICE_URL)
 
     return app
 
@@ -861,8 +865,24 @@ if __name__ == "__main__":
         help='Override log level (default: INFO or $LOG_LEVEL)'
     )
     parser.add_argument(
+        '--port', type=int, metavar='PORT',
+        help='Override server port (default: from config)'
+    )
+    parser.add_argument(
+        '--host', metavar='HOST',
+        help='Override bind address (default: from config)'
+    )
+    parser.add_argument(
+        '--service-url', metavar='URL',
+        help='Override Hipocrate base URL (default: from config)'
+    )
+    parser.add_argument(
         '--no-disk-cache', action='store_true',
         help='Disable persistent filesystem cache even if cache.dir is configured'
+    )
+    parser.add_argument(
+        '--no-worklist', action='store_true',
+        help='Disable DICOM worklist SCP even if worklist.cfg is present'
     )
     args = parser.parse_args()
 
@@ -871,7 +891,13 @@ if __name__ == "__main__":
 
     async def _main():
         global SERVICE_URL, _PORT, _HOST
-        app = await init_app(no_disk_cache=args.no_disk_cache)
+        app = await init_app(
+            no_disk_cache=args.no_disk_cache,
+            no_worklist=args.no_worklist,
+            port=args.port,
+            host=args.host,
+            service_url=args.service_url,
+        )
         logger.info(f"Starting HipoBridge server on {_HOST}:{_PORT}")
         runner = web.AppRunner(app)
         await runner.setup()
