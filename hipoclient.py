@@ -1526,7 +1526,16 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
 
         try:
             if kwargs.get('type'):
-                request_url = self.request_url_episode + f"&strDomeniu={ANALYSIS_TYPES[kwargs['type']]['domain']}&NrPePag=100"
+                domain = ANALYSIS_TYPES[kwargs['type']]['domain']
+                year_suffix = ""
+                if kwargs.get('dt'):
+                    try:
+                        dt_param = kwargs['dt']
+                        dt_obj = datetime.fromisoformat(dt_param.replace('Z', '+00:00')) if 'T' in dt_param else datetime.strptime(dt_param, '%Y-%m-%d')
+                        year_suffix = f"&strAN={dt_obj.year}"
+                    except (ValueError, TypeError):
+                        pass
+                request_url = self.request_url_episode + f"&strDomeniu={domain}{year_suffix}&NrPePag=100"
             elif kwargs.get('dt'):
                 dt_param = kwargs.get('dt')
                 try:
