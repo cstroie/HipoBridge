@@ -564,7 +564,7 @@
     "/fhir/ServiceRequest/{id}": {
       "get": {
         "summary": "Get a single service request",
-        "description": "Retrieve a single service request by ID as FHIR ServiceRequest resource",
+        "description": "Retrieve a single service request by ID. Without ?type, scrapes buletinRecoltari.asp (collection sheet: patient demographics, ordered procedures, physician, section). With ?type=cerere, scrapes cerere.asp (full request edit form: adds priority, clinical indication, justification, diagnosis, payment type, and numeric patient ID — returns 403 if the authenticated user lacks access to the lab).",
         "parameters": [
           {
             "name": "id",
@@ -573,6 +573,16 @@
             "description": "ServiceRequest ID",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "description": "Source hint: omit for buletinRecoltari (default), or pass 'cerere' for the full request edit form",
+            "schema": {
+              "type": "string",
+              "enum": ["cerere"]
             }
           }
         ],
@@ -1090,14 +1100,15 @@
     },
     "/api/request/{id}/patient": {
       "get": {
-        "summary": "Resolve patient ID from request",
-        "description": "Extracts the numeric patient ID from the request edit page (cerere.asp). Used by the Schedule tab to load a patient from a request code.",
+        "summary": "Full request details from cerere.asp",
+        "description": "Scrapes cerere.asp (request edit form) and returns patient name, CNP, demographics, numeric patient ID, request date/time, priority, payment type, physician, section, diagnosis, clinical indication, justification, request code, laboratory name, and exam list. Returns an access-denied error for labs the authenticated user cannot view; use /api/request/{id} (buletinRecoltari) as fallback for patient demographics in that case. Supports ?debug=page.",
         "parameters": [
-          {"name": "id", "in": "path", "required": true, "description": "Request ID", "schema": {"type": "string"}}
+          {"name": "id", "in": "path", "required": true, "description": "Request ID", "schema": {"type": "string"}},
+          {"name": "debug", "in": "query", "required": false, "description": "Pass 'page' to get raw Hipocrate HTML", "schema": {"type": "string"}}
         ],
         "responses": {
-          "200": {"description": "HipoData JSON with patient.id"},
-          "404": {"description": "Patient link not found on the request page"},
+          "200": {"description": "Full request and patient details as HipoData JSON"},
+          "403": {"description": "Access denied to this lab"},
           "401": {"description": "Authentication required"}
         }
       }

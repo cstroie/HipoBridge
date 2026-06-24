@@ -21,6 +21,17 @@ service_url = http://192.168.3.230/hipocrate
 
 `local.cfg` takes precedence over `hipobridge.cfg` and is not tracked by git.
 
+CLI switches (all override their config-file equivalents):
+
+```bash
+python3 hipobridge.py --port 8080
+python3 hipobridge.py --host 127.0.0.1
+python3 hipobridge.py --service-url http://192.168.3.230/hipocrate
+python3 hipobridge.py --log-level DEBUG        # choices: DEBUG INFO WARNING ERROR
+python3 hipobridge.py --no-disk-cache          # disable FilesystemCache even if cache.dir is set
+python3 hipobridge.py --no-worklist            # skip DICOM MWL SCP even if worklist.cfg exists
+```
+
 ## Running tests
 
 ```bash
@@ -63,7 +74,7 @@ HTTP client
 | `HipoClientPatientSearch` | `/api/patient?q=` | `/files/search.asp?what=PA` |
 | `HipoClientServiceRequest` | `/api/request/{id}` | `/PARA/Printabile/buletinRecoltari.asp?id={id}` |
 | `HipoClientServiceRequestSearch` | `/api/request?patient=` | `/Pacient/analysesEpisod.asp` (parallel per domain) |
-| `HipoClientImagingStudy` | `/api/study/{id}` | `/PARA/Printabile/BuletinAnalize.asp?id={id}&type=2` |
+| `HipoClientImagingStudy` | `/api/study/{id}` | `/PARA/Printabile/BuletinAnalize.asp?id={id}&type=3` |
 | `HipoClientDiagnosticReport` | `/api/report/{id}` | `/PARA/Printabile/BuletinAnalize.asp?id={id}&type=1` |
 | `HipoClientCheckout` | `/api/checkout/{id}` | `/gen_printabile/BiletExternare.asp?RelId={id}&RelName=CO` |
 | `HipoClientCheckin` | `/api/checkin/{id}` | `/files/checkin.asp?id={id}` |
@@ -139,7 +150,7 @@ Config: `worklist.cfg` (gitignored, contains credentials + device profiles) and 
 
 ### Entry point (`hipobridge.py`) conventions
 
-- **Log level** is controlled by the `LOG_LEVEL` environment variable (default `INFO`). Set `LOG_LEVEL=DEBUG` for development. Never hardcode `DEBUG` in the source.
+- **Log level** is controlled by the `LOG_LEVEL` environment variable (default `INFO`) or the `--log-level` CLI switch. Never hardcode `DEBUG` in the source.
 - **Config loading** happens inside `init_app()`, not at module-import time. Module-level globals (`SERVICE_URL`, `_PORT`, `_HOST`) hold safe defaults and are overwritten by `init_app()` before any route is served.
 - **All file paths** (`spec.json`, `static/`) are constructed with `os.path.join(os.path.dirname(__file__), ...)` so the server works regardless of the current working directory.
 - **Request credentials** are stored as `request['auth_credentials']` (aiohttp dict-style storage), not as a plain attribute. Read them the same way in `HipoClient.__init__`.
@@ -157,7 +168,9 @@ Config: `worklist.cfg` (gitignored, contains credentials + device profiles) and 
 
 ### Buletin pages (`HipoClientImagingStudy` / `HipoClientDiagnosticReport`) shared header
 
-`_parse_buletin_header` parses the common BuletinAnalize header (patient, request date, barcode, urgency, medic) **and the clinical indication**: the `<p class="NoteSubsol"><b>INFO SUPLIMENTAR:</b> …</p>` footer note → `request.clinical_comments`. Both FHIR converters emit it as `note[]` entry with `category[0].text = "clinical-indication"`; the frontend filters notes on that category to populate the analysis card's `request-meta` (Indication) and treats the rest as result notes.
+`_parse_buletin_header` parses the common BuletinAnalize header (type=1, type=2, type=3) and stores: `patient.name`, `patient.cnp` + derived demographics, `patient.id` (from `COD PACIENT`), `request.date_time`, `request.barcode`, `request.is_urgent`, `request.section` (from `SECTIE:`), `checkin.medic` (from `MEDIC:`), and `request.clinical_comments` from the `<p class="NoteSubsol"><b>INFO SUPLIMENTAR:</b> …</p>` footer note. Both FHIR converters emit `clinical_comments` as a `note[]` entry with `category[0].text = "clinical-indication"`; the frontend filters on that category to populate the analysis card's `request-meta` (Indication).
+
+`HipoClientImagingStudy` uses `BuletinAnalize.asp?type=3` (BULETIN RADIOLOGIE SI IMAGISTICA MEDICALA), which contains actual report text in `Rap_table_class_generic` / `Rap_tr_class_generic_1` rows. Each row has two cells: name cell (`<b>` stripped of `<i>`/`<span>`/`<br>`) and result cell (markdown conversion). Section label comes from the first `thead Rap_tr_class_generic_2` row; validation date and validator from `tfoot Rap_tr_class_generic_3`. Studies include a `section` field alongside `title`, `result`, `type`, `region`, `validation_date`, `validator`.
 
 ### Checkout (`HipoClientCheckout`) field notes
 
@@ -305,7 +318,7 @@ Single-page app: `main.html` + `scripts.js` + `styles.css` + `marked.js`. All fo
 - **Page load**: all tab panels and the `<header class="app-bar">` start `hidden style="display:none"` in the HTML. `initApp()` calls `initializeTabs()` → `switchTab('schedule')` which removes `hidden` and sets `display:block` on the active panel, then reveals the header. `switchTab` always calls `removeAttribute('hidden')` before setting `display:block`.
 - Dynamic HTML uses `<template>` elements in `main.html` and `cloneNode(true)` + `textContent`/`className` in JS. Do not use `innerHTML` with interpolated strings for new elements. Do not put `id` attributes inside `<template>` — they are duplicated on every clone.
 - Theme cycles `auto → light → dark → auto` via `toggleTheme()`; `localStorage` key is `theme`.
-- The **Schedule** tab is always visible (first in nav, default active tab on page load; not gated on patient search). It fetches `/fhir/Schedule?start_date=…&end_date=…` on first visit; date range defaults to yesterday–today. Every filter change triggers a new server request — no client-side filtering. Filters: **patient name** (text input — fires on Enter only, sends `?patient_text=`), **modality** (hardcoded `<select>` with Hipocrate IDs, sends `?lab_id=`), **ward** (dynamic `<select>` populated from the first unfiltered fetch result and kept in memory, sends `?section_name=`). The Refresh button re-fetches with `?refresh=1` to bypass cache. `renderSchedule()` renders `scheduleEntries` as-is with no local filtering. The Date/Time column shows time only for same-day ranges and full `YYYY-MM-DD HH:MM` for multi-day ranges. Clicking a patient name calls `loadPatientFromRequest(requestId, patientName, el)`: fetches `/api/request/{id}/patient` to resolve the numeric patient ID, then submits the search form with that ID; falls back to name search if the fetch fails. Clicking a request code opens `showRequestModal(requestId, requestCode, patientName, modality, triggerEl, requesterName)`, which fetches the exam report (`ImagingStudy` or `DiagnosticReport` based on modality) and renders it in a centred `<dialog>` modal. The modal header shows: coloured mod-circle + patient name (h2) + type·date·code subtitle + requester physician (from the schedule row, immediately; falls back to `reportData.referrer` after fetch) + clinical indication. The examiner (reporting physician) is appended below the report text as `.report-modal-signed`. Multi-series results get `series-result-title` labels matching the analysis card pattern. The footer has Close and Load Patient buttons. `debounce(fn, ms)` helper is defined at the top of the IIFE.
+- The **Schedule** tab is always visible (first in nav, default active tab on page load; not gated on patient search). It fetches `/fhir/Schedule?start_date=…&end_date=…` on first visit; date range defaults to yesterday–today. Every filter change triggers a new server request — no client-side filtering. Filters: **patient name** (text input — fires on Enter only, sends `?patient_text=`), **modality** (hardcoded `<select>` with Hipocrate IDs, sends `?lab_id=`), **ward** (dynamic `<select>` populated from the first unfiltered fetch result and kept in memory, sends `?section_name=`). The Refresh button re-fetches with `?refresh=1` to bypass cache. `renderSchedule()` renders `scheduleEntries` as-is with no local filtering. The Date/Time column shows time only for same-day ranges and full `YYYY-MM-DD HH:MM` for multi-day ranges. Clicking a patient name calls `loadPatientFromRequest(requestId, patientName, el)`: fetches `/api/study/{id}` (BuletinAnalize type=3) to resolve `patient.id` from `COD PACIENT`, then submits the search form with that ID; falls back to name search if the fetch fails. Clicking a request code opens `showRequestModal(requestId, requestCode, patientName, modality, triggerEl, requesterName)`, which fetches the exam report (`ImagingStudy` or `DiagnosticReport` based on modality) and renders it in a centred `<dialog>` modal. The modal header shows: coloured mod-circle + patient name (h2) + type·date·code·`#numericId` subtitle + requester physician (from the schedule row, immediately; falls back to `reportData.referrer` after fetch) + clinical indication. The examiner (reporting physician) is appended below the report text as `.report-modal-signed`. Multi-series results get `series-result-title` labels matching the analysis card pattern. The footer has Close and Load Patient buttons. `debounce(fn, ms)` helper is defined at the top of the IIFE. Each schedule card's `.timeline-card-region` shows the anatomical **region** (e.g. `Chest · Ultrasound`) rather than the full Romanian procedure title — `_extractRegions(data)` maps `studies[].region` (from `regions.cfg`) to capitalised English labels, deduped. For completed exams the region comes from `/api/study/{id}`; for in-progress exams it falls back to `/api/request/{id}` (buletinRecoltari, which always has ordered procedure names). The card meta line shows both the barcode (`.timeline-code` button, e.g. `ET6987`) and the numeric request ID (`.timeline-numeric-id`, e.g. `#1722298`); the modal subtitle shows the same pair.
 
 ### HTML / accessibility conventions (`main.html`)
 

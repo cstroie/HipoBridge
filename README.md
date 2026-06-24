@@ -22,7 +22,7 @@ export HYP_USER=<username> HYP_PASS=<password>
 python3 hipobridge.py
 ```
 
-Server listens on `http://0.0.0.0:44660` by default. Set `LOG_LEVEL=DEBUG` for verbose logging. Override host/port/service URL with `local.cfg` (not tracked by git):
+Server listens on `http://0.0.0.0:44660` by default. Override with `local.cfg` (not tracked by git) or CLI switches:
 
 ```ini
 [server]
@@ -31,6 +31,16 @@ port = 8080
 [hipocrate]
 service_url = http://192.168.3.230/hipocrate
 ```
+
+```bash
+python3 hipobridge.py --port 8080 --host 127.0.0.1
+python3 hipobridge.py --service-url http://192.168.3.230/hipocrate
+python3 hipobridge.py --log-level DEBUG    # DEBUG | INFO | WARNING | ERROR
+python3 hipobridge.py --no-disk-cache      # disable FilesystemCache even if configured
+python3 hipobridge.py --no-worklist        # skip DICOM MWL SCP even if worklist.cfg exists
+```
+
+CLI switches take precedence over config files.
 
 ## Web interface
 
@@ -62,7 +72,8 @@ Key endpoints:
 GET  /fhir/Patient?q={search_term}
 GET  /fhir/Patient/{id}
 GET  /fhir/ServiceRequest?patient={id}[&type={code}][&region={region}][&dt={iso_datetime}]
-GET  /fhir/ServiceRequest/{id}
+GET  /fhir/ServiceRequest/{id}               — buletinRecoltari (collection sheet)
+GET  /fhir/ServiceRequest/{id}?type=cerere  — cerere.asp (full request edit form)
 GET  /fhir/DiagnosticReport/{id}
 GET  /fhir/ImagingStudy/{id}
 GET  /fhir/Encounter/{id}
@@ -78,7 +89,7 @@ Raw-JSON-only endpoints (no FHIR equivalent yet):
 
 ```
 GET  /api/schedule[?start_date=&end_date=&lab_id=&section_name=&patient_text=&refresh=1]
-GET  /api/request/{id}/patient  — resolve numeric patient ID from a request page
+GET  /api/request/{id}/patient  — full request details from cerere.asp (patient name, CNP, priority, clinical indication, physician, section, etc.)
 GET  /api/checkin/{id}          — admission record (checkin.asp)
 GET  /api/checkup/{id}          — emergency consultation (checkup.asp)
 GET  /api/debug?path=...        — raw Hipocrate HTML passthrough for any path

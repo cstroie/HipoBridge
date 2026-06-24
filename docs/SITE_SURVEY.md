@@ -184,9 +184,9 @@ Printable collection slip for lab or imaging.
 
 ---
 
-## Analysis result buletin — `PARA/Printabile/BuletinAnalize.asp?id={id}&type=1` (lab) or `&type=2` (imaging)
+## Analysis result buletin — `PARA/Printabile/BuletinAnalize.asp?id={id}&type=1` (lab) or `&type=3` (imaging)
 
-**HippoBridge:** `/api/report/{id}` (type=1, DiagnosticReport) · `/api/study/{id}` (type=2, ImagingStudy)
+**HippoBridge:** `/api/report/{id}` (type=1, DiagnosticReport) · `/api/study/{id}` (type=3, ImagingStudy)
 
 The result document. Both types use the same URL with `type` param.
 
@@ -229,11 +229,11 @@ Lists lab/imaging requests for a date range. One row per request.
 
 ## Request edit form — `PARA/NOM/Listare/cerere.asp?id={request_id}`
 
-**HippoBridge:** `/api/request/{id}/patient` (extracts patient ID only)
+**HippoBridge:** `/api/request/{id}/patient` (full HipoData JSON) · `/fhir/ServiceRequest/{id}?type=cerere` (FHIR ServiceRequest)
 
-The full request edit form. HippoBridge currently only extracts the `Pacient/edit.asp?id=(\d+)` link to resolve patient ID.
+The full request edit form. Fully implemented: patient name, CNP, demographics (derived from CNP), request date/time, priority, payment type, ordering physician, section, diagnosis, clinical indication, justification, and ordered exam list.
 
-**Additional data likely present:** requested tests, clinical indication, ordering physician, request date, section, priority, payment.
+Hipocrate renders only the selected `<option>` per `<select>` (no `selected=` attribute) — field extraction reads the first `<option>` text. Exam list is loaded dynamically and is usually empty in static HTML; four fallback patterns are preserved for edge cases.
 
 ---
 
@@ -358,9 +358,9 @@ Sidebar menu iframe. Provides authenticated user identity.
 | Patient demographics | `Pacient/edit.asp` | `/api/patient/{id}`, `/fhir/Patient/{id}` | ✅ Full |
 | Patient search | `files/search.asp?what=PA` | `/api/patient?q=`, `/fhir/Patient?q=` | ✅ Full |
 | Lab/imaging request slip | `PARA/Printabile/buletinRecoltari.asp` | `/api/request/{id}`, `/fhir/ServiceRequest/{id}` | ✅ Full |
-| Request patient lookup | `PARA/NOM/Listare/cerere.asp` | `/api/request/{id}/patient` | ✅ Partial (patient ID only) |
+| Request details (cerere) | `PARA/NOM/Listare/cerere.asp` | `/api/request/{id}/patient`, `/fhir/ServiceRequest/{id}?type=cerere` | ✅ Full |
 | Lab result (DiagnosticReport) | `BuletinAnalize.asp?type=1` | `/api/report/{id}`, `/fhir/DiagnosticReport/{id}` | ✅ Full |
-| Imaging result (ImagingStudy) | `BuletinAnalize.asp?type=2` | `/api/study/{id}`, `/fhir/ImagingStudy/{id}` | ✅ Full |
+| Imaging result (ImagingStudy) | `BuletinAnalize.asp?type=3` | `/api/study/{id}`, `/fhir/ImagingStudy/{id}` | ✅ Full |
 | Discharge summary (printable) | `gen_printabile/BiletExternare.asp` | `/api/checkout/{id}`, `/fhir/Encounter/{id}` | ✅ Full |
 | Inpatient admission form | `files/checkin.asp` | `/api/checkin/{id}` | ⚠️ JSON only, no FHIR, no procedures |
 | Outpatient consultation | `files/checkup.asp` | `/api/checkup/{id}` | ⚠️ JSON only, no FHIR |
@@ -389,5 +389,5 @@ Sidebar menu iframe. Provides authenticated user identity.
 2. **Discharge medication** (`FMD_medicatie.asp`) — medication list at discharge, richer than BiletExternare treatment text.
 3. **Analysis trends** (`analyse/evolution/show.asp`) — longitudinal lab values per patient. Useful for clinical summary.
 4. **Ambulatory prescription** (`amb_recepy.asp`) — prescriptions issued at outpatient consultations.
-5. **Request edit form** (`cerere.asp`) — full request data beyond just patient ID.
+5. ~~**Request edit form** (`cerere.asp`)~~ — ✅ implemented (`/api/request/{id}/patient`, `/fhir/ServiceRequest/{id}?type=cerere`).
 6. ~~**Outpatient presentation** (`presentation.asp`)~~ — ✅ implemented.
