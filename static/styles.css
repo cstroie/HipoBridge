@@ -2534,6 +2534,10 @@ select {
     cursor: pointer;
 }
 .timeline-code:hover { color: var(--primary); }
+.timeline-numeric-id {
+    font: 400 11px 'JetBrains Mono', monospace;
+    color: var(--text-muted);
+}
 
 .timeline-status-badge {
     display: inline-flex;

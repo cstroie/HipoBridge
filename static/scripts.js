@@ -3005,6 +3005,7 @@ document.addEventListener('DOMContentLoaded', function() {
         modal.querySelector('.modal-type-name').textContent =
             MODALITY_INFO[modality]?.label || 'Report';
         modal.querySelector('.modal-request-code').textContent = requestCode;
+        modal.querySelector('.modal-request-id').textContent = `#${requestId}`;
         modal.querySelector('.modal-patient-name').textContent = patientName;
 
         if (requesterName) {
@@ -3363,6 +3364,7 @@ document.addEventListener('DOMContentLoaded', function() {
             codeBtn.textContent = requestCode;
             codeBtn.title = `View request details (${requestCode})`;
             codeBtn.addEventListener('click', () => showRequestModal(r.id, requestCode, patientName, modalitySlug, codeBtn, requestedBy));
+            row.querySelector('.timeline-numeric-id').textContent = `#${r.id}`;
 
             const statusBadge = row.querySelector('.timeline-status-badge');
             statusBadge.classList.add(statusClass);
