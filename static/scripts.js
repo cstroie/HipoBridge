@@ -1979,18 +1979,27 @@ document.addEventListener('DOMContentLoaded', function() {
         const qr = qrcode(0, 'M');
         qr.addData(text);
         qr.make();
-        const size = 180;
+        const modules = qr.getModuleCount();
+        const quiet   = 3;
+        const total   = modules + quiet * 2;
+        const size    = 160;
+        const cell    = size / total;
         canvas.width  = size;
         canvas.height = size;
         const ctx = canvas.getContext('2d');
-        const modules = qr.getModuleCount();
-        const cell = size / modules;
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, size, size);
-        ctx.fillStyle = '#000000';
+        ctx.fillStyle = '#312e81';
+        const rad = cell * 0.28;
         for (let r = 0; r < modules; r++) {
             for (let c = 0; c < modules; c++) {
-                if (qr.isDark(r, c)) ctx.fillRect(c * cell, r * cell, cell, cell);
+                if (!qr.isDark(r, c)) continue;
+                const x = (c + quiet) * cell + 0.5;
+                const y = (r + quiet) * cell + 0.5;
+                const w = cell - 1;
+                ctx.beginPath();
+                ctx.roundRect(x, y, w, w, rad);
+                ctx.fill();
             }
         }
     }

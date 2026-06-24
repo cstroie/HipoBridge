@@ -3259,24 +3259,26 @@ dialog.report-modal[open]::backdrop {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--spacing-sm);
+    gap: var(--spacing-xs);
     background: #ffffff;
     border-radius: var(--radius-lg);
-    padding: var(--spacing-md);
+    padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-md);
     box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.05);
     min-width: 0;
 }
 .qr-cell canvas {
     display: block;
-    max-width: 100%;
+    max-width: 140px;
     height: auto;
+    border-radius: var(--radius-sm);
 }
 .qr-label {
     font-size: var(--font-size-xs);
     font-weight: var(--font-weight-semibold);
-    color: #0f172a;
+    color: var(--primary);
     text-align: center;
     margin: 0;
-    word-break: break-all;
-    letter-spacing: 0.02em;
+    word-break: break-word;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
 }
