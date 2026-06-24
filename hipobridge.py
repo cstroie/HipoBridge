@@ -783,7 +783,7 @@ async def on_cleanup(app):
         await asyncio.get_event_loop().run_in_executor(None, _wl_server.shutdown)
     await user_session_manager.close_all_sessions()
 
-async def init_app():
+async def init_app(no_disk_cache: bool = False):
     """Load config, wire up routes and lifecycle handlers, return the configured app."""
     global SERVICE_URL, _PORT, _HOST
     config = load_config()
@@ -793,11 +793,13 @@ async def init_app():
     logger.info(f"Service URL: {SERVICE_URL}")
 
     cache_dir = config.get('cache', 'dir').strip()
-    if cache_dir:
+    if cache_dir and not no_disk_cache:
         cache_ttl = config.getint('cache', 'ttl')
         cache_max_age = config.getint('cache', 'max_age_days')
         url_cache.fs_cache = FilesystemCache(cache_dir, ttl=cache_ttl, max_age_days=cache_max_age)
         asyncio.get_event_loop().create_task(_periodic_cache_cleanup())
+    elif no_disk_cache and cache_dir:
+        logger.info("Persistent filesystem cache disabled (--no-disk-cache)")
     else:
         logger.info("Persistent filesystem cache disabled (no cache.dir configured)")
 
@@ -849,11 +851,27 @@ _PORT: int = int(DEFAULT_CONFIG['server']['port'])
 _HOST: str = DEFAULT_CONFIG['server']['host']
 
 if __name__ == "__main__":
+    import argparse
     import asyncio
+
+    parser = argparse.ArgumentParser(description='HipoBridge scraping proxy server')
+    parser.add_argument(
+        '--log-level', metavar='LEVEL',
+        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
+        help='Override log level (default: INFO or $LOG_LEVEL)'
+    )
+    parser.add_argument(
+        '--no-disk-cache', action='store_true',
+        help='Disable persistent filesystem cache even if cache.dir is configured'
+    )
+    args = parser.parse_args()
+
+    if args.log_level:
+        logging.getLogger().setLevel(getattr(logging, args.log_level))
 
     async def _main():
         global SERVICE_URL, _PORT, _HOST
-        app = await init_app()
+        app = await init_app(no_disk_cache=args.no_disk_cache)
         logger.info(f"Starting HipoBridge server on {_HOST}:{_PORT}")
         runner = web.AppRunner(app)
         await runner.setup()
