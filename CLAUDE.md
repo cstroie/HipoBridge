@@ -69,7 +69,7 @@ HTTP client
 | `HipoClientCheckin` | `/api/checkin/{id}` | `/files/checkin.asp?id={id}` |
 | `HipoClientCheckup` | `/api/checkup/{id}` | `/files/checkup.asp?cuid={id}` |
 | `HipoClientPresentation` | `/api/presentation/{id}`, `/fhir/Encounter/{id}?type=presentation` | `/files/presentation.asp?id={id}` |
-| `HipoClientCerere` | `/api/request/{id}/patient` | `/PARA/NOM/Listare/cerere.asp?id={id}` |
+| `HipoClientCerere` | `/api/request/{id}/patient`, `/fhir/ServiceRequest/{id}?type=cerere` | `/PARA/NOM/Listare/cerere.asp?id={id}` |
 | `HipoClientSchedule` | `/api/schedule`, `/fhir/Schedule` | `/PARA/NOM/Listare/?id=44&NrPePag=100` |
 | `HipoClientObservationBundle` | `/fhir/Observation?patient=` | `/Pacient/analysesEpisod.asp` (parallel per lab domain) |
 | `HipoClientWhoami` | `/api/whoami` | `Template/menu.asp` (CONTUL MEU block) |
@@ -81,7 +81,7 @@ Every subclass (except `HipoClientCheckin` / `HipoClientCheckup` which are raw-J
 
 `HipoClientCheckin` and `HipoClientCheckup` implement only `fetch_and_parse()`; they return `HipoData` via `/api/*` routes with no FHIR equivalent yet.
 
-`HipoClientCerere` implements only `fetch_and_parse()`; it extracts `patient.id` from a `Pacient/edit.asp?id=` link in the request edit page. Used by the Schedule frontend to resolve a precise patient ID before triggering a search.
+`HipoClientCerere` implements all three methods; it parses the full request edit form (patient name/CNP, physician, ward, priority, diagnosis, clinical indication, exam list). See the Cerere field notes section for details.
 
 `HipoClientSchedule` overrides `fetch_and_parse` and `debug_page` (URL built from `?start_date=` / `?end_date=` / `?lab_id=` / `?patient_text=` query params, not an `{id}` path segment) and implements all three methods; the FHIR response is a `searchset` Bundle of `ServiceRequest` resources. Section filtering is Python-side in `fhir_response`.
 
@@ -219,9 +219,30 @@ FHIR Encounter: class `EMER` for UPU/CPU/URGENTA/URGENTE sections, `AMB` otherwi
 ### Cerere (`HipoClientCerere`) field notes
 
 Page: `/PARA/NOM/Listare/cerere.asp?id={id}` — the request edit form. Extracts:
-- `patient.id` — from the first `Pacient/edit.asp?id=(\d+)` link (case-insensitive)
+- `request.id` — from the `id` kwarg (URL path parameter)
+- `patient.id` — from the first `Pacient/edit.asp?id=(\d+)` link; error if absent
+- `patient.name` — from the `Pacient/edit.asp` link text (brackets stripped)
+- `patient.cnp` — from `strCNP` input or "CNP" label; fallback: first 13-digit number in page text
+- `patient.gender` / `patient.date` / `patient.age` — derived from CNP via `parse_cnp()` when valid
+- `request.date_time` — from `strDataCerere` input or "Data cerere" label (ISO format after `parse_date_time`)
+- `request.priority` — from `PARA_ID_Prioritate` select or "Prioritate" label
+- `request.hospitalization_type` — from `PARA_ID_TipSpitalizare` select or "Tip internare" label
+- `request.physician` — from `PARA_ID_Medic` select or `strMedic` input or "Medic" label
+- `request.section` — from `PARA_ID_Sectie` select or "Sectie" label
+- `request.diagnosis` — from `strDiagnostic` input or "Diagnostic" label
+- `request.justification` — from `strJustificare` textarea or "Justificare" label
+- `request.clinical_indication` — from `strInfoSuplimentar` textarea, "Informatii suplimentare" label, or `<p class="NoteSubsol">` INFO SUPLIMENTAR footer
+- `exams` — list of ordered exam names (four patterns: `tr_class_generic_1` rows → numbered rows → checked checkboxes → checkbox labels)
 
-Returns an error if no such link is found. Used exclusively by the Schedule tab to resolve a numeric patient ID before triggering a patient search; the frontend falls back to name search if this fails.
+Returns an error if `patient.id` is not found. All other fields are optional — absent from HipoData if not extractable. Selector patterns were designed from the Hipocrate form conventions; use `?debug=page` to inspect the raw HTML and tune if needed.
+
+Routes:
+- `GET /api/request/{id}/patient` — returns full `HipoData` JSON; supports `?debug=page`
+- `GET /fhir/ServiceRequest/{id}?type=cerere` — returns FHIR `ServiceRequest`
+
+FHIR mapping: `patient.id` → `subject.reference`; `patient.name` → `subject.display`; `request.date_time` → `authoredOn`; `request.priority` → `priority` (`urgent`/`routine`); `request.physician` → `requester.display`; `request.diagnosis` → `reason[0].display`; `request.hospitalization_type` → `category[0].text`; `exams` → `orderDetail[{text}]`; `request.section` → `note[0].text`; `request.clinical_indication` → `note[1].text`; `request.justification` → `note[2].text`.
+
+Also used internally by `WorklistRefresher` to resolve `patient.id` and `exams` for DICOM MWL dataset building.
 
 ### Schedule (`HipoClientSchedule`) field notes
 

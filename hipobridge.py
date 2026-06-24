@@ -213,11 +213,19 @@ async def get_request(request):
 
 @require_auth
 async def get_fhir_service_request(request):
-    """Retrieve service request by ID. Returns FHIR ServiceRequest resource."""
+    """Retrieve service request by ID. Returns FHIR ServiceRequest resource.
+
+    Accepts ?type=cerere to fetch from cerere.asp (full request metadata).
+    Without the hint, fetches buletinRecoltari.asp (lab/imaging order content).
+    """
     id = request.match_info.get('id')
     if not id:
         return web_fhir_response("Service request ID is required")
     logger.info(f"Retrieving service request with ID: {id}")
+
+    if request.rel_url.query.get('type', '').lower() == 'cerere':
+        cerere_client = HipoClientCerere(SERVICE_URL, request)
+        return web_fhir_response(await cerere_client.fetch_respond_fhir(id=id))
 
     client = HipoClientServiceRequest(SERVICE_URL, request)
     response = await client.fetch_respond_fhir(id=id)
@@ -345,11 +353,14 @@ async def get_presentation(request):
 
 @require_auth
 async def get_request_patient(request):
-    """Return patient ID for a given request ID. Fetches cerere.asp to extract it."""
+    """Return patient and request metadata for a given request ID. Fetches cerere.asp."""
     id = request.match_info.get('id')
     if not id:
         return web_error_response("Request ID is required")
     client = HipoClientCerere(SERVICE_URL, request)
+    debug_resp = await web_debug_response(client, request, id=id)
+    if debug_resp is not None:
+        return debug_resp
     parsed_data = await client.fetch_and_parse(id=id)
     return web_json_response(parsed_data)
 

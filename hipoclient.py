@@ -3122,7 +3122,7 @@ class HipoClientCheckup(HipoClient):
 
 
 class HipoClientCerere(HipoClient):
-    """Fetches a request edit page (cerere.asp) and extracts the patient ID."""
+    """Fetches a request edit page (cerere.asp) and extracts patient and request metadata."""
 
     def __init__(self, service_url=None, request=None):
         super().__init__(service_url=service_url, request=request)
@@ -3133,15 +3133,101 @@ class HipoClientCerere(HipoClient):
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
 
-            # Patient ID
+            # Request ID from kwarg
+            request_id = kwargs.get('id')
+            data.store("request.id", request_id)
+
+            # Patient ID from Pacient/edit.asp link
             ids = extract_ids_from_links(soup, r'[Pp]acient/edit\.asp\?id=(\d+)')
             if ids:
                 data.store("patient.id", ids[0])
             else:
                 data.set_error("Patient ID not found in request page")
 
-            # Exam names — try four patterns in priority order:
+            # Patient name from the link text — typically "[ FAMILY GIVEN ]"
+            link = soup.find('a', href=re.compile(r'[Pp]acient/edit\.asp'))
+            if link:
+                name_text = re.sub(r'[\[\]]', '', link.get_text()).strip()
+                if name_text:
+                    data.store("patient.name", name_text)
 
+            # CNP — try named/id input first, then label, then 13-digit regex fallback
+            cnp = (extract_value_from_input(soup, element_id='strCNP') or
+                   extract_value_from_input(soup, name='strCNP') or
+                   extract_text_after_label(soup, r'\bCNP\b'))
+            if not cnp:
+                m = re.search(r'\b(\d{13})\b', soup.get_text())
+                if m:
+                    cnp = m.group(1)
+            if cnp:
+                data.store("patient.cnp", cnp)
+                parsed_cnp = parse_cnp(cnp)
+                if parsed_cnp.get('valid'):
+                    data.store("patient.gender", parsed_cnp.get("gender"))
+                    data.store("patient.date", parsed_cnp.get("birth_date"))
+                    data.store("patient.age", parsed_cnp.get("age"))
+
+            # Request date/time (DD/MM/YYYY HH:MM format on Hipocrate forms)
+            date_val = (extract_value_from_input(soup, element_id='strDataCerere') or
+                        extract_value_from_input(soup, name='strDataCerere') or
+                        extract_value_from_input(soup, name='LR_requesteddateSD') or
+                        extract_text_after_label(soup, r'Data\s+(?:cerere|si\s+ora)', stop_at=r'Medic'))
+            if date_val:
+                dt = parse_date_time(date_val)
+                data.store("request.date_time", dt.isoformat() if dt else date_val)
+
+            # Priority (Normala / Urgenta)
+            priority = (extract_selected_from_dropdown(soup, name='PARA_ID_Prioritate') or
+                        extract_selected_from_dropdown(soup, element_id='PARA_ID_Prioritate') or
+                        extract_text_after_label(soup, r'Prioritat'))
+            data.store("request.priority", priority)
+
+            # Hospitalization type (Ambulatoriu / Spitalizare / etc.)
+            hosp_type = (extract_selected_from_dropdown(soup, name='PARA_ID_TipSpitalizare') or
+                         extract_selected_from_dropdown(soup, element_id='PARA_ID_TipSpitalizare') or
+                         extract_text_after_label(soup, r'Tip\s+(?:internare|spitalizare)'))
+            data.store("request.hospitalization_type", hosp_type)
+
+            # Referring physician — dropdown or free-text input
+            physician = (extract_selected_from_dropdown(soup, name='PARA_ID_Medic') or
+                         extract_selected_from_dropdown(soup, element_id='PARA_ID_Medic') or
+                         extract_value_from_input(soup, element_id='strMedic') or
+                         extract_value_from_input(soup, name='strMedic') or
+                         extract_text_after_label(soup, r'Medic\b'))
+            data.store("request.physician", physician)
+
+            # Ward/section
+            section = (extract_selected_from_dropdown(soup, name='PARA_ID_Sectie') or
+                       extract_selected_from_dropdown(soup, element_id='PARA_ID_Sectie') or
+                       extract_text_after_label(soup, r'Sec[tț]i'))
+            data.store("request.section", section)
+
+            # Clinical diagnosis
+            diagnosis = (extract_value_from_input(soup, element_id='strDiagnostic') or
+                         extract_value_from_input(soup, name='strDiagnostic') or
+                         extract_text_after_label(soup, r'Diagnostic'))
+            data.store("request.diagnosis", diagnosis)
+
+            # Justification / motivation
+            justification = (extract_text_from_element(soup, element_id='strJustificare') or
+                             extract_value_from_input(soup, name='strJustificare') or
+                             extract_text_after_label(soup, r'Justific'))
+            data.store("request.justification", justification)
+
+            # Clinical indication / supplementary info
+            clinical = (extract_text_from_element(soup, element_id='strInfoSuplimentar') or
+                        extract_value_from_input(soup, name='strInfoSuplimentar') or
+                        extract_text_after_label(soup, r'[Ii]nfo(?:rma[tț]ii)?\s+suplimentar'))
+            if not clinical:
+                # Buletin-style footer: <p class="NoteSubsol"><b>INFO SUPLIMENTAR:</b> …</p>
+                note_p = soup.find('p', class_='NoteSubsol')
+                if note_p:
+                    note_text = note_p.get_text(strip=True)
+                    if 'INFO SUPLIMENTAR' in note_text.upper():
+                        clinical = re.sub(r'^[^:]+:\s*', '', note_text).strip()
+            data.store("request.clinical_indication", clinical)
+
+            # Exam names — four patterns in priority order:
             exams = []
             seen = set()
 
@@ -3160,13 +3246,13 @@ class HipoClientCerere(HipoClient):
                     if b:
                         add_exam(b.get_text(strip=True))
 
-            # Pattern 1: numbered rows (same as buletinRecoltari) — cell[0] is digit, cell[1] is name
+            # Pattern 1: numbered rows — cell[0] is digit, cell[1] is name
             for row in soup.find_all('tr'):
                 cells = row.find_all('td')
                 if len(cells) >= 2 and cells[0].get_text(strip=True).isdigit():
                     add_exam(cells[1].get_text(strip=True))
 
-            # Pattern 2: checked checkboxes with an associated label or adjacent text node
+            # Pattern 2: checked checkboxes with adjacent text or label
             if not exams:
                 for cb in soup.find_all('input', {'type': 'checkbox', 'checked': True}):
                     label = cb.find_next_sibling(string=True) or ''
@@ -3193,6 +3279,88 @@ class HipoClientCerere(HipoClient):
             logger.error(f"Error parsing cerere data: {e}")
             data.set_error(str(e))
             return data
+
+    def fhir_response(self, parsed_data: HipoData, id=None, **kwargs) -> Union[FHIRServiceRequest, FHIROperationOutcome]:
+        """Convert parsed cerere data to a FHIR ServiceRequest resource."""
+        request_id = id or parsed_data.get("request.id", "")
+        try:
+            if parsed_data.get("status") == "error":
+                return FHIROperationOutcome.from_error(
+                    message=parsed_data.get("message", "Error parsing cerere data"),
+                    code="processing",
+                    severity="error"
+                )
+
+            priority_text = (parsed_data.get("request.priority") or "").lower()
+            fhir_sr = FHIRServiceRequest(
+                id=request_id,
+                status="active",
+                intent="order",
+                priority="urgent" if "urgent" in priority_text else "routine",
+            )
+
+            # Subject (patient)
+            patient_id = parsed_data.get("patient.id")
+            subject = FHIRReference(reference=f"Patient/{patient_id}")
+            patient_name = parsed_data.get("patient.name")
+            if patient_name:
+                subject["display"] = patient_name
+            fhir_sr["subject"] = subject
+
+            # Identifier
+            if request_id:
+                fhir_sr["identifier"] = [{"value": request_id}]
+
+            # Authored date
+            date_time = parsed_data.get("request.date_time")
+            if date_time:
+                dt = parse_date_time(date_time)
+                fhir_sr["authoredOn"] = dt.isoformat() if dt else date_time
+
+            # Requester (referring physician)
+            physician = parsed_data.get("request.physician")
+            if physician:
+                fhir_sr["requester"] = FHIRReference(display=physician)
+
+            # Diagnosis → reason
+            diagnosis = parsed_data.get("request.diagnosis")
+            if diagnosis:
+                fhir_sr["reason"] = [FHIRReference(display=diagnosis)]
+
+            # Hospitalization type → category
+            hosp_type = parsed_data.get("request.hospitalization_type")
+            if hosp_type:
+                fhir_sr["category"] = [FHIRCodeableConcept(text=hosp_type)]
+
+            # Ordered exams → orderDetail
+            exams = parsed_data.get("exams") or []
+            if isinstance(exams, str):
+                exams = [exams]
+            if exams:
+                fhir_sr["orderDetail"] = [FHIRCodeableConcept(text=e) for e in exams]
+
+            # Notes: section, clinical indication, justification
+            notes = []
+            section = parsed_data.get("request.section")
+            if section:
+                notes.append({"text": section})
+            clinical = parsed_data.get("request.clinical_indication")
+            if clinical:
+                notes.append({"text": clinical})
+            justification = parsed_data.get("request.justification")
+            if justification:
+                notes.append({"text": justification})
+            if notes:
+                fhir_sr["note"] = notes
+
+            return fhir_sr
+        except Exception as e:
+            logger.error(f"Error converting cerere data to FHIR: {e}")
+            return FHIROperationOutcome.from_exception(e, code="exception")
+
+    async def fetch_respond_fhir(self, id=None, **kwargs) -> Union[FHIRServiceRequest, FHIROperationOutcome]:
+        parsed = await self.fetch_and_parse(id=id)
+        return self.fhir_response(parsed, id=id, **kwargs)
 
 
 class HipoClientPresentation(HipoClient):
