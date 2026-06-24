@@ -930,4 +930,7 @@ if __name__ == "__main__":
         finally:
             await runner.cleanup()
 
-    asyncio.run(_main())
+    try:
+        asyncio.run(_main())
+    except KeyboardInterrupt:
+        pass
