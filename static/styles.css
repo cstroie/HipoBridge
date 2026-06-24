@@ -1240,15 +1240,19 @@ select {
     cursor: pointer;
 }
 
-/* Analyses grid — 2-col editorial layout */
+/* Analyses grid — masonry via CSS columns */
 .analyses-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
-    gap: 16px;
+    columns: 2 420px;
+    column-gap: 16px;
+}
+
+.analyses-grid > * {
+    break-inside: avoid;
+    margin-bottom: 16px;
 }
 
 @media (max-width: 600px) {
-    .analyses-grid { grid-template-columns: 1fr; }
+    .analyses-grid { columns: 1; }
 }
 
 /* ── Lab Trends ─────────────────────────────────────────────────────────── */
