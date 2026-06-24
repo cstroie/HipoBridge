@@ -3390,8 +3390,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(r => r.ok ? r.json() : null)
                 .then(data => {
                     const exams = (data?.studies || []).map(s => s.title).filter(Boolean);
-                    _examCache[id] = exams;
-                    _applyExamLabel(el, exams);
+                    if (exams.length) { _examCache[id] = exams; _applyExamLabel(el, exams); return; }
+                    // Study not yet reported — fall back to buletinRecoltari for ordered procedure names
+                    return apiFetch(`/api/request/${id}`)
+                        .then(r => r.ok ? r.json() : null)
+                        .then(d => {
+                            const e = (d?.studies || []).map(s => s.title).filter(Boolean);
+                            _examCache[id] = e;
+                            _applyExamLabel(el, e);
+                        });
                 })
                 .catch(() => {});
         });
