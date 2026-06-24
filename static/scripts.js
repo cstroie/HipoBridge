@@ -1220,6 +1220,16 @@ document.addEventListener('DOMContentLoaded', function() {
             setText('reportDOB',         dob ? `${dob}${age ? ' (' + age + ')' : ''}` : '');
             setText('reportSex',         gender);
 
+            const ext = patientData.extension || [];
+            const weight = (ext.find(e => e.url?.endsWith('body-weight')) || {}).valueString || '';
+            const height = (ext.find(e => e.url?.endsWith('height'))      || {}).valueString || '';
+            const weightWrap = document.getElementById('reportWeightWrap');
+            const heightWrap = document.getElementById('reportHeightWrap');
+            if (weight && weightWrap) { document.getElementById('reportWeight').textContent = weight + ' kg'; weightWrap.hidden = false; }
+            else if (weightWrap) weightWrap.hidden = true;
+            if (height && heightWrap) { document.getElementById('reportHeight').textContent = height + ' cm'; heightWrap.hidden = false; }
+            else if (heightWrap) heightWrap.hidden = true;
+
             // ── §2 + §4 Encounters (parallel with analyses) ──────────────
             const [analysesMarkdown, epicrisisMarkdown, encounters] = await Promise.all([
                 analysesData ? populateAnalysesMarkdown(analysesData) : Promise.resolve(''),
