@@ -2510,7 +2510,7 @@ document.addEventListener('DOMContentLoaded', function() {
     async function loadTrends(patientId) {
         if (!patientId || !elements.trendsSection) return;
         try {
-            const resp = await apiFetch(`/fhir/Observation??patient=${encodeURIComponent(patientId)}`);
+            const resp = await apiFetch(`/fhir/Observation?patient=${encodeURIComponent(patientId)}`);
             if (!resp.ok) return;
             const bundle = await resp.json();
             if (bundle.resourceType !== 'Bundle' || !bundle.entry?.length) return;

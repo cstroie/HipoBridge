@@ -419,6 +419,22 @@ async def get_fhir_observation(request):
     return web_fhir_response(response)
 
 @require_auth
+async def get_observation(request):
+    """Raw HipoData aggregation of lab Observations for a patient. ?patient={id}&start_date=YYYY-MM-DD&end_date=YYYY-MM-DD"""
+    patient_id = request.rel_url.query.get('patient')
+    if not patient_id:
+        return web_error_response("patient parameter is required")
+    start_date = request.rel_url.query.get('start_date')
+    end_date   = request.rel_url.query.get('end_date')
+    client = HipoClientObservationBundle(SERVICE_URL, request)
+    parsed = await client.fetch_and_parse(
+        patient_id=patient_id,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    return web_json_response(parsed)
+
+@require_auth
 async def get_whoami(request):
     """Return the logged-in Hipocrate user identity. Returns raw HipoData JSON."""
     client = HipoClientWhoami(SERVICE_URL, request)
@@ -451,9 +467,9 @@ async def debug_passthrough(request):
 async def get_fhir_encounter(request):
     """Retrieve encounter by ID.
 
-    Accepts an optional ?type=checkout|checkin|presentation hint so the caller
-    can skip straight to the right scraper.  Without the hint the handler falls
-    through checkout → checkin → presentation as before.
+    Accepts an optional ?type=checkout|checkin|checkup|presentation hint so the
+    caller can skip straight to the right scraper.  Without the hint the handler
+    falls through checkout → checkin → presentation as before.
     """
     id = request.match_info.get('id')
     if not id:
@@ -474,6 +490,11 @@ async def get_fhir_encounter(request):
         checkout_client = HipoClientCheckout(SERVICE_URL, request)
         checkout_data = await checkout_client.fetch_and_parse(id=id)
         return web_fhir_response(checkout_client.fhir_response(checkout_data, id=id))
+
+    if enc_type == 'checkup':
+        checkup_client = HipoClientCheckup(SERVICE_URL, request)
+        checkup_data = await checkup_client.fetch_and_parse(id=id)
+        return web_fhir_response(checkup_client.fhir_response(checkup_data, id=id))
 
     # No hint — try checkout (completed discharge) first
     checkout_client = HipoClientCheckout(SERVICE_URL, request)
@@ -831,6 +852,7 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     app.router.add_get('/fhir/ImagingStudy/{id}', get_fhir_imaging_study)
     app.router.add_get('/fhir/DiagnosticReport/{id}', get_fhir_diagnostic_report)
     app.router.add_get('/fhir/Encounter/{id}', get_fhir_encounter)
+    app.router.add_get('/api/observation', get_observation)
     app.router.add_get('/fhir/Observation', get_fhir_observation)
     app.router.add_get('/fhir/ValueSet/cnp', serve_validate_cnp)
     app.router.add_post('/fhir/md2html', serve_md2html)

@@ -3214,6 +3214,62 @@ class HipoClientCheckup(HipoClient):
             data.set_error(str(e))
             return data
 
+    def fhir_response(self, parsed_data: HipoData, id=None, **kwargs) -> Union[FHIREncounter, FHIROperationOutcome]:
+        if parsed_data.get("status") == "error":
+            return FHIROperationOutcome.from_error(parsed_data.get("message", "Unknown error"), code="not-found")
+
+        encounter = FHIREncounter()
+        encounter["id"] = id or parsed_data.get("checkup.id")
+        encounter["status"] = "finished"
+        encounter["class"] = {
+            "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+            "code": "AMB",
+            "display": "ambulatory",
+        }
+
+        if parsed_data.get("patient.name"):
+            encounter["subject"] = {"display": parsed_data["patient.name"]}
+
+        if parsed_data.get("presentation.date_time"):
+            encounter["period"] = {"start": parsed_data["presentation.date_time"]}
+
+        reason_code = {}
+        if parsed_data.get("diagnosis.icd10"):
+            reason_code["coding"] = [{"code": parsed_data["diagnosis.icd10"]}]
+        if parsed_data.get("diagnosis.text"):
+            reason_code["text"] = parsed_data["diagnosis.text"]
+        if reason_code:
+            encounter["reasonCode"] = [reason_code]
+
+        notes = []
+        for key, label in [
+            ("diagnosis.initial",  "initial"),
+            ("diagnosis.final",    "final"),
+            ("diagnosis.referral", "referral"),
+            ("exam.general",       "exam-general"),
+            ("exam.local",         "exam-local"),
+        ]:
+            val = parsed_data.get(key)
+            if val:
+                notes.append({"text": val, "extension": [{"url": "label", "valueString": label}]})
+        if notes:
+            encounter["note"] = notes
+
+        if parsed_data.get("presentation.section"):
+            encounter["serviceProvider"] = {"display": parsed_data["presentation.section"]}
+
+        if parsed_data.get("presentation.is_urgent"):
+            encounter["priority"] = {"coding": [{"code": "EM", "display": "emergency"}]}
+
+        if parsed_data.get("checkin.id"):
+            encounter["partOf"] = {"reference": f"Encounter/{parsed_data['checkin.id']}"}
+
+        return encounter
+
+    async def fetch_respond_fhir(self, id=None, **kwargs) -> Union[FHIREncounter, FHIROperationOutcome]:
+        parsed = await self.fetch_and_parse(id=id, **kwargs)
+        return self.fhir_response(parsed, id=id, **kwargs)
+
 
 class HipoClientCerere(HipoClient):
     """Fetches a request edit page (cerere.asp) and extracts patient and request metadata."""

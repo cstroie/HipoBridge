@@ -77,20 +77,18 @@ HTTP client
 | `HipoClientImagingStudy` | `/api/study/{id}` | `/PARA/Printabile/BuletinAnalize.asp?id={id}&type=3` |
 | `HipoClientDiagnosticReport` | `/api/report/{id}` | `/PARA/Printabile/BuletinAnalize.asp?id={id}&type=1` |
 | `HipoClientCheckout` | `/api/checkout/{id}` | `/gen_printabile/BiletExternare.asp?RelId={id}&RelName=CO` |
-| `HipoClientCheckin` | `/api/checkin/{id}` | `/files/checkin.asp?id={id}` |
-| `HipoClientCheckup` | `/api/checkup/{id}` | `/files/checkup.asp?cuid={id}` |
+| `HipoClientCheckin` | `/api/checkin/{id}`, `/fhir/Encounter/{id}?type=checkin` | `/files/checkin.asp?id={id}` |
+| `HipoClientCheckup` | `/api/checkup/{id}`, `/fhir/Encounter/{id}?type=checkup` | `/files/checkup.asp?cuid={id}` |
 | `HipoClientPresentation` | `/api/presentation/{id}`, `/fhir/Encounter/{id}?type=presentation` | `/files/presentation.asp?id={id}` |
 | `HipoClientCerere` | `/api/request/{id}/patient`, `/fhir/ServiceRequest/{id}?type=cerere` | `/PARA/NOM/Listare/cerere.asp?id={id}` |
 | `HipoClientSchedule` | `/api/schedule`, `/fhir/Schedule` | `/PARA/NOM/Listare/?id=44&NrPePag=100` |
-| `HipoClientObservationBundle` | `/fhir/Observation?patient=` | `/Pacient/analysesEpisod.asp` (parallel per lab domain) |
+| `HipoClientObservationBundle` | `/api/observation?patient=`, `/fhir/Observation?patient=` | `/Pacient/analysesEpisod.asp` (parallel per lab domain) |
 | `HipoClientWhoami` | `/api/whoami` | `Template/menu.asp` (CONTUL MEU block) |
 
-Every subclass (except `HipoClientCheckin` / `HipoClientCheckup` which are raw-JSON only) implements three methods:
+Every subclass implements three methods:
 - `fetch_and_parse(**kwargs)` → `HipoData` (raw dict)
 - `fhir_response(parsed_data)` → FHIR resource object
 - `fetch_respond_fhir(**kwargs)` → calls both, returns FHIR resource directly
-
-`HipoClientCheckin` and `HipoClientCheckup` implement only `fetch_and_parse()`; they return `HipoData` via `/api/*` routes with no FHIR equivalent yet.
 
 `HipoClientCerere` implements all three methods; it parses the full request edit form (patient name/CNP, physician, ward, priority, diagnosis, clinical indication, exam list). See the Cerere field notes section for details.
 
@@ -187,20 +185,21 @@ Page: `/files/checkin.asp?id={id}`. Expected title text: `FISA INTERNARE`. Extra
 - `checkin.transfers` — list of ward movements (7-cell rows; header rows with `Nr.Crt.` / `Cod cerere` / `Sectie` as first/second cell are excluded)
 - `checkin.exam_general`, `checkin.exam_local`
 
-No FHIR response implemented yet.
+FHIR Encounter: `/fhir/Encounter/{id}?type=checkin`. Status `in-progress` for active admissions.
 
 ### Checkup (`HipoClientCheckup`) field notes
 
 Page: `/files/checkup.asp?cuid={id}`. Expected title text: `Consult`. Extracts:
 - `patient.name`, `patient.cnp`
-- `checkup.presentation_date/urgency/section`
-- `checkup.admission_id/date/section/medic` — linked inpatient admission if present
-- `checkup.icd10`, `checkup.icd10_text`
-- `checkup.initial_diagnosis`, `checkup.final_diagnosis`, `checkup.referral_diagnosis`
-- `checkup.discharge_status`
-- `checkup.exam_general`, `checkup.exam_local`
+- `presentation.date_time`, `presentation.is_urgent`, `presentation.section`
+- `checkin.id`, `checkin.date_time`, `checkin.section`, `checkin.medic` — linked inpatient admission if present
+- `diagnosis.icd10`, `diagnosis.text`
+- `diagnosis.initial`, `diagnosis.final`, `diagnosis.referral`
+- `discharge.status` — one of `ameliorat`, `stationar`, `agravat`, `decedat`
+- `exam.general`, `exam.local`
+- `checkup.id` — from `id` kwarg
 
-No FHIR response implemented yet.
+FHIR Encounter: `/fhir/Encounter/{id}?type=checkup`. Class `AMB`, status `finished`. Diagnosis in `reasonCode`; exam findings, initial/final/referral diagnoses in `note[]` with `label` extension. Links to inpatient admission via `partOf` when `checkin.id` is present.
 
 ### Whoami (`HipoClientWhoami`) field notes
 
