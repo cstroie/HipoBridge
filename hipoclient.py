@@ -1531,7 +1531,7 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                 if kwargs.get('dt'):
                     try:
                         dt_param = kwargs['dt']
-                        dt_obj = datetime.fromisoformat(dt_param.replace('Z', '+00:00')) if 'T' in dt_param else datetime.strptime(dt_param, '%Y-%m-%d')
+                        dt_obj = datetime.fromisoformat(dt_param.replace('Z', '+00:00').replace(' ', 'T'))
                         year_suffix = f"&strAN={dt_obj.year}"
                     except (ValueError, TypeError):
                         pass
@@ -1539,10 +1539,7 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
             elif kwargs.get('dt'):
                 dt_param = kwargs.get('dt')
                 try:
-                    if 'T' in dt_param:
-                        dt_obj = datetime.fromisoformat(dt_param.replace('Z', '+00:00'))
-                    else:
-                        dt_obj = datetime.strptime(dt_param, '%Y-%m-%d')
+                    dt_obj = datetime.fromisoformat(dt_param.replace('Z', '+00:00').replace(' ', 'T'))
                     year = dt_obj.year
                 except (ValueError, TypeError):
                     year = datetime.now().year
