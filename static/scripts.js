@@ -2477,7 +2477,14 @@ document.addEventListener('DOMContentLoaded', function() {
             const tdName = row.insertCell();
             tdName.className = 'trend-name';
             const nameEl = document.createElement('span');
-            nameEl.textContent = a.name;
+            const MAX_NAME = 48;
+            if (a.name.length > MAX_NAME) {
+                const cut = a.name.lastIndexOf(' ', MAX_NAME);
+                nameEl.textContent = a.name.slice(0, cut > 0 ? cut : MAX_NAME) + '…';
+                nameEl.title = a.name;
+            } else {
+                nameEl.textContent = a.name;
+            }
             tdName.appendChild(nameEl);
             if (a.unit || a.ref) {
                 const sub = document.createElement('span');
