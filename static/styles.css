@@ -489,6 +489,7 @@ small {
 
 /* Vertical separator between global and patient nav */
 .nav-sep {
+    border: none;
     width: 1px;
     background: var(--line);
     margin: 12px 8px;
@@ -961,13 +962,14 @@ small {
 /* ── Patient panels ─────────────────────────────────────────────────────── */
 
 .patient-panels {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
-    gap: 22px;
-    align-items: start;
+    columns: 2 360px;
+    column-gap: 22px;
+    margin-bottom: -22px;
 }
 
 .patient-info-panel {
+    break-inside: avoid;
+    margin-bottom: 22px;
     background: var(--surface);
     border: 1px solid var(--line);
     border-radius: 18px;
@@ -3250,11 +3252,6 @@ dialog.report-modal[open]::backdrop {
 }
 
 /* ── QR code panel ── */
-#patientQrPanel {
-    margin-top: var(--spacing-lg);
-    padding-top: var(--spacing-lg);
-    border-top: 1px solid var(--line);
-}
 .qr-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);

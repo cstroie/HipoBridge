@@ -39,7 +39,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
 
             <!-- Patient sub-nav: hidden until a patient is loaded -->
             <nav id="navPatientGroup" class="patient-nav-area" aria-label="Patient navigation" hidden>
-                <div class="nav-sep" aria-hidden="true"></div>
+                <hr class="nav-sep" aria-hidden="true">
 
                 <!-- Patient pill -->
                 <button type="button" class="patient-ctx-pill nav-item" data-tab="patient">
@@ -181,24 +181,28 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                                     <dd id="patientAddress">—</dd>
                                 </div>
                             </dl>
-                            <!-- QR codes for scanning -->
-                            <div class="qr-grid" id="patientQrPanel" hidden>
-                                <div class="qr-cell">
+                        </section>
+
+                        <!-- QR codes for scanning -->
+                        <section class="patient-info-panel" id="patientQrPanel" hidden>
+                            <h2 class="panel-heading">Scan Codes</h2>
+                            <div class="qr-grid">
+                                <figure class="qr-cell">
                                     <canvas id="qrLastName"></canvas>
-                                    <p class="qr-label" id="qrLabelLastName"></p>
-                                </div>
-                                <div class="qr-cell">
+                                    <figcaption class="qr-label" id="qrLabelLastName"></figcaption>
+                                </figure>
+                                <figure class="qr-cell">
                                     <canvas id="qrFirstName"></canvas>
-                                    <p class="qr-label" id="qrLabelFirstName"></p>
-                                </div>
-                                <div class="qr-cell">
+                                    <figcaption class="qr-label" id="qrLabelFirstName"></figcaption>
+                                </figure>
+                                <figure class="qr-cell">
                                     <canvas id="qrCnp"></canvas>
-                                    <p class="qr-label" id="qrLabelCnp"></p>
-                                </div>
-                                <div class="qr-cell">
+                                    <figcaption class="qr-label" id="qrLabelCnp"></figcaption>
+                                </figure>
+                                <figure class="qr-cell">
                                     <canvas id="qrBirthDate"></canvas>
-                                    <p class="qr-label" id="qrLabelBirthDate"></p>
-                                </div>
+                                    <figcaption class="qr-label" id="qrLabelBirthDate"></figcaption>
+                                </figure>
                             </div>
                         </section>
 
@@ -225,7 +229,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             <h1 id="analyses-tab-heading" class="analyses-hero-title">Diagnostic Reports</h1>
                             <p class="analyses-meta" id="analysesMeta">Imaging studies</p>
                         </div>
-                        <div class="analyses-chips" id="analysesChips">
+                        <div class="analyses-chips" id="analysesChips" role="group" aria-label="Filter by type">
                             <button type="button" class="chip chip-active" data-filter="all">All</button>
                             <button type="button" class="chip" data-filter="eco">Ultrasound</button>
                             <button type="button" class="chip" data-filter="radio">X-Ray</button>
@@ -437,7 +441,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
         <template id="analysis-card-template">
             <article class="analysis-card">
                 <!-- Top: modality avatar + title + physician + indication -->
-                <div class="card-identity">
+                <header class="card-identity">
                     <div class="mod-circle" aria-hidden="true"></div>
                     <div class="card-title-block">
                         <div class="card-title-row">
@@ -457,7 +461,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             <span class="card-referrer" aria-label="Ordering physician"></span>
                         </p>
                     </div>
-                </div>
+                </header>
 
                 <p class="card-indication" hidden>
                     <span class="card-indication-label">Indication:</span>
@@ -540,10 +544,10 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                         <button class="close" aria-label="Close modal"><i class="fas fa-times"></i></button>
                     </header>
                     <div>
-                        <div class="study-section">
+                        <section class="study-section">
                             <h3><i class="fas fa-info-circle"></i> Study Information</h3>
                             <div class="study-info" aria-label="Study information"></div>
-                        </div>
+                        </section>
                         <section class="study-section">
                             <h3><i class="fas fa-list"></i> Series</h3>
                             <ul class="series-list" aria-label="Series list"></ul>
@@ -631,7 +635,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
         </template>
 
         <template id="epi-card-template">
-            <div class="epi-card">
+            <article class="epi-card">
                 <button type="button" class="epi-card-btn" aria-expanded="false">
                     <div class="epi-btn-left">
                         <div class="epi-dot"></div>
@@ -648,7 +652,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                 </button>
                 <div class="epi-card-body" hidden>
                     <div class="epi-card-inner">
-                        <div class="epi-card-toolbar">
+                        <div class="epi-card-toolbar" role="toolbar">
                             <button type="button" class="btn-secondary epi-copy-btn" aria-label="Copy this epicrisis as Markdown">
                                 <i class="fas fa-copy" aria-hidden="true"></i> <span>Copy</span>
                             </button>
@@ -656,7 +660,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                         <div class="epi-prose"></div>
                     </div>
                 </div>
-            </div>
+            </article>
         </template>
 
         <template id="timeline-row-template">
@@ -674,14 +678,14 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             <strong class="urgent-badge" hidden>Urgent</strong>
                         </div>
                         <div class="timeline-card-region"></div>
-                        <div class="timeline-card-meta">
+                        <footer class="timeline-card-meta">
                             <span class="timeline-meta-section"><i class="fas fa-hospital" aria-hidden="true"></i> <span></span></span>
                             <span class="timeline-meta-sep" aria-hidden="true">·</span>
                             <span class="timeline-meta-requester"><i class="fas fa-user-doctor" aria-hidden="true"></i> <span></span></span>
                             <span class="timeline-meta-sep" aria-hidden="true">·</span>
                             <button class="timeline-code"></button>
                             <span class="timeline-numeric-id"></span>
-                        </div>
+                        </footer>
                     </div>
                     <span class="timeline-status-badge"></span>
                 </div>
@@ -697,10 +701,10 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
 
         <template id="schedule-mod-bar-template">
             <div class="schedule-mod-bar">
-                <div class="schedule-mod-bar-header">
+                <header class="schedule-mod-bar-header">
                     <span class="schedule-mod-bar-name"></span>
                     <span class="schedule-mod-bar-count"></span>
-                </div>
+                </header>
                 <div class="schedule-mod-bar-track">
                     <div class="schedule-mod-bar-fill"></div>
                 </div>
