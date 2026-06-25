@@ -1,5 +1,9 @@
 # CLAUDE.md
 
+## Server restarts
+
+**Never restart the server yourself.** Tell the user when a restart is needed and wait for them to do it.
+
 ## Running the server
 
 ```bash

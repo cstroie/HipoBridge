@@ -2443,9 +2443,9 @@ document.addEventListener('DOMContentLoaded', function() {
             a.measurements.sort((x, y) => x.date.localeCompare(y.date));
         }
 
-        // All unique dates (newest first) for column headers
-        const allDates = [...new Set(observations.map(o => o.effectiveDateTime?.slice(0, 10)).filter(Boolean))].sort().reverse();
-        const colDates = allDates.slice(0, 10);  // cap table at 10 most recent dates
+        // All unique dates (oldest first) for column headers
+        const allDates = [...new Set(observations.map(o => o.effectiveDateTime?.slice(0, 10)).filter(Boolean))].sort();
+        const colDates = allDates.slice(-10);  // cap table at 10 most recent dates
 
         // Build table
         const table = document.createElement('table');
