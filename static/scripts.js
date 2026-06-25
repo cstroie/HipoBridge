@@ -341,10 +341,6 @@ document.addEventListener('DOMContentLoaded', function() {
             elements.imagingFilter.addEventListener('change', () =>
                 filterGrid(elements.imagingGrid, elements.imagingNoData, elements.imagingFilter.value));
         }
-        if (elements.labFilter) {
-            elements.labFilter.addEventListener('change', () =>
-                filterGrid(elements.labGrid, elements.labNoData, elements.labFilter.value));
-        }
 
         
         // Epicrisis tab buttons
@@ -403,20 +399,25 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
 
-        // Imaging/lab chip buttons — scoped per chip container
-        document.querySelectorAll('#imagingChips .chip, #labChips .chip').forEach(chip => {
-            chip.addEventListener('click', () => {
-                const container = chip.closest('.analyses-chips');
-                container.querySelectorAll('.chip').forEach(c => c.classList.remove('chip-active'));
-                chip.classList.add('chip-active');
-                const val = chip.dataset.filter || '';
-                const isImaging = container.id === 'imagingChips';
-                const filterEl = isImaging ? elements.imagingFilter : elements.labFilter;
-                if (filterEl) {
-                    filterEl.value = val;
-                    filterEl.dispatchEvent(new Event('change'));
-                }
-            });
+        // Imaging chips — delegated so it works regardless of when chips render
+        document.getElementById('imagingChips')?.addEventListener('click', e => {
+            const chip = e.target.closest('.chip');
+            if (!chip) return;
+            document.querySelectorAll('#imagingChips .chip').forEach(c => c.classList.remove('chip-active'));
+            chip.classList.add('chip-active');
+            if (elements.imagingFilter) {
+                elements.imagingFilter.value = chip.dataset.filter || 'all';
+                elements.imagingFilter.dispatchEvent(new Event('change'));
+            }
+        });
+
+        // Lab chips — delegated to cover dynamically-added section chips
+        document.getElementById('labChips')?.addEventListener('click', e => {
+            const chip = e.target.closest('.chip');
+            if (!chip) return;
+            document.querySelectorAll('#labChips .chip').forEach(c => c.classList.remove('chip-active'));
+            chip.classList.add('chip-active');
+            filterLabGrid(chip.dataset.filter || 'all');
         });
     }
     
@@ -914,9 +915,25 @@ document.addEventListener('DOMContentLoaded', function() {
         // Clear imaging tab
         if (elements.imagingGrid) elements.imagingGrid.innerHTML = '';
         if (elements.imagingNoData) elements.imagingNoData.style.display = 'none';
+        if (elements.imagingEyebrow) elements.imagingEyebrow.textContent = 'Imaging';
+        document.getElementById('imagingMeta')?.replaceChildren();
+        document.querySelectorAll('#imagingChips .chip').forEach(c => {
+            c.classList.toggle('chip-active', c.dataset.filter === 'all');
+            c.textContent = c.textContent.replace(/\s*\(\d+\)$/, '');
+            c.style.opacity = '';
+            c.disabled = false;
+        });
+        if (elements.imagingCount) elements.imagingCount.textContent = '?';
+
         // Clear laboratory tab
         if (elements.labGrid) elements.labGrid.innerHTML = '';
         if (elements.labNoData) elements.labNoData.style.display = 'none';
+        if (elements.labEyebrow) elements.labEyebrow.textContent = 'Laboratory';
+        document.getElementById('labMeta')?.replaceChildren();
+        // Remove dynamically-added section chips, keep only "All"
+        document.querySelectorAll('#labChips .chip:not([data-filter="all"])').forEach(c => c.remove());
+        document.querySelector('#labChips .chip[data-filter="all"]')?.classList.add('chip-active');
+        if (elements.labCount) elements.labCount.textContent = '?';
         if (elements.trendsSection) elements.trendsSection.hidden = true;
         if (elements.trendsContainer) elements.trendsContainer.innerHTML = '';
         
@@ -1036,6 +1053,32 @@ document.addEventListener('DOMContentLoaded', function() {
             if (show) visible++;
         });
         if (noDataEl) noDataEl.style.display = visible === 0 ? 'block' : 'none';
+    }
+
+    function filterLabGrid(section = 'all') {
+        if (!elements.labGrid) return;
+        let visible = 0;
+        elements.labGrid.querySelectorAll('.analysis-card').forEach(card => {
+            const secs = card.dataset.labSection ? card.dataset.labSection.split('\t') : [];
+            const show = section === 'all' || secs.includes(section);
+            card.style.display = show ? 'block' : 'none';
+            if (show) visible++;
+        });
+        if (elements.labNoData) elements.labNoData.style.display = visible === 0 ? 'block' : 'none';
+    }
+
+    function addLabChips(sections) {
+        const container = document.getElementById('labChips');
+        if (!container) return;
+        for (const sec of sections) {
+            if (!sec || container.querySelector(`[data-filter="${CSS.escape(sec)}"]`)) continue;
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'chip';
+            chip.dataset.filter = sec;
+            chip.textContent = sec.split(' ').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ');
+            container.appendChild(chip);
+        }
     }
     
     async function copyMarkdown(markdownEl, btn) {
@@ -2785,6 +2828,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     const allLab = forms.every(f => f.type === 'lab' || f.reference !== undefined);
                     if (allLab) {
                         reportPreview.appendChild(buildLabTable(forms));
+                        // Tag card with lab sections for dynamic chip filtering
+                        const sections = [...new Set(forms.map(f => f.section).filter(Boolean))];
+                        if (sections.length) {
+                            article.dataset.labSection = sections.join('\t');
+                            if (article.closest('#labGrid')) addLabChips(sections);
+                        }
                     } else {
                         for (const form of forms) {
                             if (forms.length > 1 && form.title) {

@@ -1270,6 +1270,7 @@ select {
 .lab-result-table {
     width: 100%;
     border-collapse: collapse;
+    table-layout: fixed;
     font-size: var(--font-size-xs);
     margin-bottom: var(--spacing-sm);
 }
@@ -1282,12 +1283,14 @@ select {
     color: var(--ink-1);
     font-weight: var(--font-weight-medium);
     width: 45%;
+    word-break: break-word;
 }
 .lab-value {
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
     text-align: right;
-    white-space: nowrap;
+    white-space: normal;
+    word-break: break-word;
     width: 25%;
 }
 .lab-ref {
