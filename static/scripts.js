@@ -2401,6 +2401,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (entries.length === 0) {
             if (noData) noData.style.display = 'block';
             if (grid) grid.innerHTML = '';
+            if (grid?.id === 'imagingGrid' && elements.imagingCount) elements.imagingCount.textContent = '0';
+            if (grid?.id === 'labGrid' && elements.labCount) elements.labCount.textContent = '0';
             return;
         }
 
