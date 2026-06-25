@@ -2451,6 +2451,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const table = document.createElement('table');
         table.className = 'trends-table';
 
+        // Column widths (fixed layout — ensures header/data cells share the same column width)
+        const colgroup = document.createElement('colgroup');
+        const mkCol = w => { const c = document.createElement('col'); c.style.width = w; return c; };
+        colgroup.appendChild(mkCol('220px'));
+        colDates.forEach(() => colgroup.appendChild(mkCol('110px')));
+        colgroup.appendChild(mkCol('100px'));
+        table.appendChild(colgroup);
+
         // Header row
         const thead = table.createTHead();
         const hrow  = thead.insertRow();

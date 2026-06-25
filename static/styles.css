@@ -1345,6 +1345,7 @@ select {
 .trends-table {
     width: 100%;
     border-collapse: collapse;
+    table-layout: fixed;
     font-size: var(--font-size-xs);
     color: var(--ink-1);
 }
