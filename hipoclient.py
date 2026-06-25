@@ -865,8 +865,11 @@ class HipoClientPatient(HipoClient):
             data.store("patient.mcp", extract_value_from_input(soup, element_id="strmcp"))
             city = extract_selected_from_dropdown(soup, element_id='strDomLegal_LocId')
             street = extract_value_from_input(soup, element_id='strDomLegal_strada')
+            county = extract_selected_from_dropdown(soup, element_id='strDomLegal_JudId')
             address_parts = [p for p in [street, city] if p]
             data.store("patient.address", ", ".join(address_parts) if address_parts else None)
+            data.store("patient.city", city)
+            data.store("patient.county", county)
 
             if data.get("patient.cnp"):
                 parsed_cnp = parse_cnp(data.get("patient.cnp"))
@@ -942,8 +945,13 @@ class HipoClientPatient(HipoClient):
             if telecom:
                 fhir_patient["telecom"] = telecom
 
-            if parsed_data.get("patient.address"):
-                fhir_patient["address"] = [{"text": parsed_data.get("patient.address")}]
+            if parsed_data.get("patient.address") or parsed_data.get("patient.city") or parsed_data.get("patient.county"):
+                addr = {"text": parsed_data.get("patient.address") or ""}
+                if parsed_data.get("patient.city"):
+                    addr["city"] = parsed_data.get("patient.city")
+                if parsed_data.get("patient.county"):
+                    addr["district"] = parsed_data.get("patient.county")
+                fhir_patient["address"] = [addr]
 
             extensions = []
             if parsed_data.get("patient.weight"):

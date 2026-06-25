@@ -36,11 +36,18 @@ document.addEventListener('DOMContentLoaded', function() {
         presentationsCount: document.getElementById('presentationsCount'),
         checkinsCount: document.getElementById('checkinsCount'),
         checkoutsCount: document.getElementById('checkoutsCount'),
-        reportsCount: document.getElementById('reportsCount'),
-        // Analyses tab elements
-        analysesGrid: document.getElementById('analysesGrid'),
-        analysesEyebrow: document.getElementById('analysesEyebrow'),
-        noAnalyses: document.getElementById('noAnalyses'),
+        imagingCount: document.getElementById('imagingCount'),
+        labCount: document.getElementById('labCount'),
+        // Imaging tab elements
+        imagingGrid: document.getElementById('imagingGrid'),
+        imagingNoData: document.getElementById('imagingNoData'),
+        imagingEyebrow: document.getElementById('imagingEyebrow'),
+        imagingFilter: document.getElementById('imagingFilter'),
+        // Laboratory tab elements
+        labGrid: document.getElementById('labGrid'),
+        labNoData: document.getElementById('labNoData'),
+        labEyebrow: document.getElementById('labEyebrow'),
+        labFilter: document.getElementById('labFilter'),
         trendsSection: document.getElementById('trendsSection'),
         trendsContainer: document.getElementById('trendsContainer'),
         trendsSubtitle: document.getElementById('trendsSubtitle'),
@@ -60,9 +67,6 @@ document.addEventListener('DOMContentLoaded', function() {
         clearRecentBtn: document.getElementById('clearRecentBtn'),
         recentEmpty: document.getElementById('recentEmpty'),
         // Patient actions
-        // Analyses actions
-        analysesSearch: document.getElementById('analysesSearch'),
-        analysesFilter: document.getElementById('analysesFilter'),
         // Epicrisis actions
         // Loading overlay
         loadingOverlay: document.getElementById('loadingOverlay'),
@@ -332,15 +336,16 @@ document.addEventListener('DOMContentLoaded', function() {
             pill.addEventListener('click', () => switchTab(pill.dataset.goto));
         });
 
-        // Analyses search and filter
-        if (elements.analysesSearch) {
-            elements.analysesSearch.addEventListener('input', filterAnalyses);
+        // Imaging and lab filter selects
+        if (elements.imagingFilter) {
+            elements.imagingFilter.addEventListener('change', () =>
+                filterGrid(elements.imagingGrid, elements.imagingNoData, elements.imagingFilter.value));
         }
-        
-        if (elements.analysesFilter) {
-            elements.analysesFilter.addEventListener('change', filterAnalyses);
+        if (elements.labFilter) {
+            elements.labFilter.addEventListener('change', () =>
+                filterGrid(elements.labGrid, elements.labNoData, elements.labFilter.value));
         }
-        
+
         
         // Epicrisis tab buttons
         if (elements.copyEpicrisisBtn) {
@@ -398,15 +403,18 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
 
-        // Analyses modality chip buttons — update hidden select + filter
-        document.querySelectorAll('.analyses-chips .chip').forEach(chip => {
+        // Imaging/lab chip buttons — scoped per chip container
+        document.querySelectorAll('#imagingChips .chip, #labChips .chip').forEach(chip => {
             chip.addEventListener('click', () => {
-                document.querySelectorAll('.analyses-chips .chip').forEach(c => c.classList.remove('chip-active'));
+                const container = chip.closest('.analyses-chips');
+                container.querySelectorAll('.chip').forEach(c => c.classList.remove('chip-active'));
                 chip.classList.add('chip-active');
-                const val = chip.dataset.filter || chip.dataset.type || '';
-                if (elements.analysesFilter) {
-                    elements.analysesFilter.value = val;
-                    elements.analysesFilter.dispatchEvent(new Event('change'));
+                const val = chip.dataset.filter || '';
+                const isImaging = container.id === 'imagingChips';
+                const filterEl = isImaging ? elements.imagingFilter : elements.labFilter;
+                if (filterEl) {
+                    filterEl.value = val;
+                    filterEl.dispatchEvent(new Event('change'));
                 }
             });
         });
@@ -446,8 +454,12 @@ document.addEventListener('DOMContentLoaded', function() {
             fetchScheduleFromInputs();
         }
 
-        if (tabId === 'analyses') {
-            loadAnalysesLazily();
+        if (tabId === 'imaging') {
+            loadImagingLazily();
+        }
+
+        if (tabId === 'laboratory') {
+            loadLaboratoryLazily();
         }
 
         if (tabId === 'epicrisis') {
@@ -462,30 +474,65 @@ document.addEventListener('DOMContentLoaded', function() {
     let pendingEpicrisisData = null;
     let pendingReportData = null;
     let pendingAnalysesData = null;
+    let cachedServiceRequests = null;
 
-    async function loadAnalysesLazily() {
-        if (!pendingAnalysesData || elements.analysesGrid?.dataset.loaded) return;
-        elements.analysesGrid.dataset.loaded = '1';
-        const { patientCode, patientData } = pendingAnalysesData;
-        const patientLabel = patientData.name?.[0]?.text || patientCode;
-        showLoading(`Loading studies for ${patientLabel}…`);
+    async function fetchServiceBundle() {
+        if (cachedServiceRequests !== null) return cachedServiceRequests;
+        const result = await fetchAnalysesData(pendingAnalysesData.patientCode);
+        cachedServiceRequests = result;
+        return result;
+    }
+
+    async function loadImagingLazily() {
+        if (!pendingAnalysesData || elements.imagingGrid?.dataset.loaded) return;
+        elements.imagingGrid.dataset.loaded = '1';
+        const { patientData } = pendingAnalysesData;
+        const patientLabel = patientData.name?.[0]?.text || pendingAnalysesData.patientCode;
+        showLoading(`Loading imaging studies for ${patientLabel}…`);
         try {
-            setLoadingStep('Querying Hipocrate for lab and imaging requests…');
-            const analysesResult = await fetchAnalysesData(patientCode);
-            if (!analysesResult.success) {
-                const eyebrow = elements.analysesEyebrow;
-                if (eyebrow) eyebrow.dataset.warning = analysesResult.message;
-            }
-            const analysesData = analysesResult.data || { resourceType: 'Bundle', entry: [] };
-            const total = analysesData.entry?.length || 0;
-            setLoadingStep(total ? `Organising ${total} studies…` : 'No studies found.');
-            await loadAndDisplayReports(analysesData);
-            if (pendingReportData) pendingReportData.analysesData = analysesData;
+            setLoadingStep('Querying Hipocrate for imaging requests…');
+            const result = await fetchServiceBundle();
+            const bundle = result.data || { resourceType: 'Bundle', entry: [] };
+            const IMAGING = ['radio', 'ct', 'irm', 'eco', 'rads'];
+            const entries = (bundle.entry || []).filter(e => IMAGING.includes(e.resource?.code?.coding?.[0]?.code));
+            setLoadingStep(entries.length ? `Organising ${entries.length} imaging studies…` : 'No imaging studies found.');
+            await populateStudyGrid(entries, {
+                grid: elements.imagingGrid, noData: elements.imagingNoData,
+                eyebrow: elements.imagingEyebrow, eyebrowLabel: `Imaging · ${patientLabel}`,
+                metaId: 'imagingMeta', types: IMAGING,
+            });
+            if (pendingReportData) pendingReportData.analysesData = bundle;
+            hideLoading();
+        } catch (err) {
+            delete elements.imagingGrid.dataset.loaded;
+            console.error('Error loading imaging:', err);
+            hideLoading();
+        }
+    }
+
+    async function loadLaboratoryLazily() {
+        if (!pendingAnalysesData || elements.labGrid?.dataset.loaded) return;
+        elements.labGrid.dataset.loaded = '1';
+        const { patientData } = pendingAnalysesData;
+        const patientLabel = patientData.name?.[0]?.text || pendingAnalysesData.patientCode;
+        showLoading(`Loading lab results for ${patientLabel}…`);
+        try {
+            setLoadingStep('Querying Hipocrate for lab requests…');
+            const result = await fetchServiceBundle();
+            const bundle = result.data || { resourceType: 'Bundle', entry: [] };
+            const LAB = ['lab'];
+            const entries = (bundle.entry || []).filter(e => LAB.includes(e.resource?.code?.coding?.[0]?.code));
+            setLoadingStep(entries.length ? `Organising ${entries.length} lab results…` : 'No lab results found.');
+            await populateStudyGrid(entries, {
+                grid: elements.labGrid, noData: elements.labNoData,
+                eyebrow: elements.labEyebrow, eyebrowLabel: `Laboratory · ${patientLabel}`,
+                metaId: 'labMeta', types: LAB,
+            });
             loadTrends(patientData.id);
             hideLoading();
         } catch (err) {
-            delete elements.analysesGrid.dataset.loaded;
-            console.error('Error loading analyses:', err);
+            delete elements.labGrid.dataset.loaded;
+            console.error('Error loading lab results:', err);
             hideLoading();
         }
     }
@@ -594,9 +641,11 @@ document.addEventListener('DOMContentLoaded', function() {
             log('Displaying patient data...');
             await displayPatientData(patientData);
 
-            // Analyses + trends are lazy-loaded on first visit to the Analyses tab
+            // Imaging + lab + trends are lazy-loaded on first visit to their respective tabs
             pendingAnalysesData = { patientCode, patientData };
-            if (elements.analysesGrid) delete elements.analysesGrid.dataset.loaded;
+            cachedServiceRequests = null;
+            if (elements.imagingGrid) delete elements.imagingGrid.dataset.loaded;
+            if (elements.labGrid) delete elements.labGrid.dataset.loaded;
 
             // Epicrisis is lazy-loaded on first visit to its tab
             pendingEpicrisisData = patientData;
@@ -820,7 +869,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Unhide the patient nav group hidden by clearResults
         if (elements.navPatientGroup) elements.navPatientGroup.hidden = false;
         // Unhide sibling tab content panels (clearResults set hidden=true)
-        ['analyses-tab', 'epicrisis-tab', 'report-tab'].forEach(id => {
+        ['imaging-tab', 'laboratory-tab', 'epicrisis-tab', 'report-tab'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.hidden = false;
         });
@@ -862,15 +911,20 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.checkinsCount) elements.checkinsCount.textContent = '0';
         if (elements.checkoutsCount) elements.checkoutsCount.textContent = '0';
         
-        // Clear analyses with null checks
-        if (elements.analysesGrid) elements.analysesGrid.innerHTML = '';
-        if (elements.noAnalyses) elements.noAnalyses.style.display = 'none';
+        // Clear imaging tab
+        if (elements.imagingGrid) elements.imagingGrid.innerHTML = '';
+        if (elements.imagingNoData) elements.imagingNoData.style.display = 'none';
+        // Clear laboratory tab
+        if (elements.labGrid) elements.labGrid.innerHTML = '';
+        if (elements.labNoData) elements.labNoData.style.display = 'none';
         if (elements.trendsSection) elements.trendsSection.hidden = true;
         if (elements.trendsContainer) elements.trendsContainer.innerHTML = '';
         
         // Clear lazy-load state
         pendingAnalysesData = null;
-        if (elements.analysesGrid) delete elements.analysesGrid.dataset.loaded;
+        cachedServiceRequests = null;
+        if (elements.imagingGrid) delete elements.imagingGrid.dataset.loaded;
+        if (elements.labGrid) delete elements.labGrid.dataset.loaded;
 
         // Clear epicrisis
         pendingEpicrisisData = null;
@@ -972,21 +1026,16 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     
-    function filterAnalyses() {
-        const searchTerm = elements.analysesSearch ? elements.analysesSearch.value.toLowerCase() : '';
-        const filterType = elements.analysesFilter ? elements.analysesFilter.value : 'all';
-
-        const cards = elements.analysesGrid.querySelectorAll('.analysis-card');
+    function filterGrid(gridEl, noDataEl, filterType = 'all') {
+        if (!gridEl) return;
+        const cards = gridEl.querySelectorAll('.analysis-card');
         let visible = 0;
         cards.forEach(card => {
-            const type = card.dataset.type || '';
-            const text = card.textContent.toLowerCase();
-            const show = (searchTerm ? text.includes(searchTerm) : true) &&
-                         (filterType === 'all' || type === filterType);
+            const show = filterType === 'all' || card.dataset.type === filterType;
             card.style.display = show ? 'block' : 'none';
             if (show) visible++;
         });
-        if (elements.noAnalyses) elements.noAnalyses.style.display = visible === 0 ? 'block' : 'none';
+        if (noDataEl) noDataEl.style.display = visible === 0 ? 'block' : 'none';
     }
     
     async function copyMarkdown(markdownEl, btn) {
@@ -1791,8 +1840,8 @@ document.addEventListener('DOMContentLoaded', function() {
         log('Extracted medical stats:', stats);
         displayMedicalStats(stats);
         
-        elements.analysesGrid.innerHTML = '';
-        elements.noAnalyses.style.display = 'none';
+        if (elements.imagingGrid) elements.imagingGrid.innerHTML = '';
+        if (elements.labGrid) elements.labGrid.innerHTML = '';
 
         // Hospitalisation history loads lazily; don't block the profile render
         loadHospitalisationHistory(patientData);
@@ -1904,7 +1953,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     const typeEl = li.querySelector('.history-type');
                     if (typeEl) { typeEl.textContent = extra || 'Outpatient'; typeEl.hidden = false; }
 
-                    li.querySelector('.history-load').addEventListener('click', () => switchTab('analyses'));
+                    li.querySelector('.history-load').addEventListener('click', () => switchTab('imaging'));
                 }
 
                 li.querySelector('.history-diagnosis').textContent = label;
@@ -1972,7 +2021,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const contactInfo = extractContactInfo(patientData.telecom);
         if (elements.patientPhone) elements.patientPhone.textContent = contactInfo.phone || '—';
         if (elements.patientEmail) elements.patientEmail.textContent = contactInfo.email || '—';
-        if (elements.patientAddress) elements.patientAddress.textContent = patientData.address?.[0]?.text || '—';
+        if (elements.patientAddress) {
+            const addr = patientData.address?.[0];
+            const parts = [addr?.text, addr?.city, addr?.district].filter(Boolean);
+            // deduplicate consecutive identical parts (city may already be in text)
+            const deduped = parts.filter((p, i) => i === 0 || p !== parts[i - 1]);
+            elements.patientAddress.textContent = deduped.join(', ') || '—';
+        }
         log('CNP:', cnp, 'Phone:', contactInfo.phone, 'Email:', contactInfo.email);
 
         // QR codes
@@ -2155,10 +2210,8 @@ document.addEventListener('DOMContentLoaded', function() {
         log('Stats displayed - Encounters:', stats.encounters, 'Admissions:', stats.admissions, 'Discharges:', stats.discharges);
         
         // Update reports count if element exists
-        if (elements.reportsCount) {
-            elements.reportsCount.textContent = '0'; // Will be updated when reports load
-            log('Reports count updated');
-        }
+        if (elements.imagingCount) elements.imagingCount.textContent = '?';
+        if (elements.labCount) elements.labCount.textContent = '?';
     }
     
     
@@ -2297,68 +2350,59 @@ document.addEventListener('DOMContentLoaded', function() {
     window.viewImagingStudy = viewImagingStudy;
     window.closeImagingStudyModal = closeImagingStudyModal;
     
-    // Function to load and display reports progressively
-    async function loadAndDisplayReports(analysesData) {
-        const includedTypes = ['radio', 'ct', 'irm', 'eco', 'rads', 'lab'];
+    // Populate a study grid (imaging or lab) from a pre-filtered entries array.
+    // ctx: { grid, noData, eyebrow, eyebrowLabel, metaId, types }
+    async function populateStudyGrid(entries, ctx) {
+        const { grid, noData, eyebrow, eyebrowLabel, metaId, types } = ctx;
 
-        if (!(analysesData.resourceType === 'Bundle' && analysesData.entry?.length > 0)) {
-            elements.noAnalyses.style.display = 'block';
-            elements.analysesGrid.innerHTML = '';
+        if (entries.length === 0) {
+            if (noData) noData.style.display = 'block';
+            if (grid) grid.innerHTML = '';
             return;
         }
 
-        const filteredEntries = analysesData.entry.filter(e =>
-            includedTypes.includes(e.resource?.code?.coding?.[0]?.code)
-        );
+        if (noData) noData.style.display = 'none';
+        if (grid) grid.innerHTML = '';
 
-        if (filteredEntries.length === 0) {
-            elements.noAnalyses.style.display = 'block';
-            elements.analysesGrid.innerHTML = '';
-            return;
-        }
+        if (eyebrow) eyebrow.textContent = eyebrowLabel;
+        if (grid?.id === 'imagingGrid' && elements.imagingCount) elements.imagingCount.textContent = entries.length;
+        if (grid?.id === 'labGrid' && elements.labCount) elements.labCount.textContent = entries.length;
 
-        elements.noAnalyses.style.display = 'none';
-        if (elements.reportsCount) elements.reportsCount.textContent = filteredEntries.length;
-        elements.analysesGrid.innerHTML = '';
-
-        // Update analyses header eyebrow + meta + chip counts
-        const eyebrow = elements.analysesEyebrow;
-        const metaEl = document.getElementById('analysesMeta');
-        const patientNameEl = elements.patientName;
-        if (eyebrow && patientNameEl?.textContent) {
-            eyebrow.textContent = `Analyses · ${patientNameEl.textContent}`;
-        }
         const countByType = {};
-        for (const e of filteredEntries) {
+        for (const e of entries) {
             const t = e.resource?.code?.coding?.[0]?.code || 'unknown';
             countByType[t] = (countByType[t] || 0) + 1;
         }
+
+        const metaEl = metaId ? document.getElementById(metaId) : null;
         if (metaEl) {
-            const parts = includedTypes.filter(t => countByType[t]).map(t => `${countByType[t]} ${MODALITY_INFO[t]?.label || t}`);
-            metaEl.textContent = `${filteredEntries.length} imaging ${filteredEntries.length === 1 ? 'study' : 'studies'}${parts.length ? ' · ' + parts.join(', ') : ''}`;
+            const parts = types.filter(t => countByType[t]).map(t => `${countByType[t]} ${MODALITY_INFO[t]?.label || t}`);
+            metaEl.textContent = parts.join(', ') || `${entries.length} studies`;
         }
-        document.querySelectorAll('.analyses-chips .chip').forEach(chip => {
+
+        // Update chip counts for this grid's chip container
+        const chipsId = grid?.id === 'imagingGrid' ? 'imagingChips' : 'labChips';
+        document.querySelectorAll(`#${chipsId} .chip`).forEach(chip => {
             const f = chip.dataset.filter;
-            const count = f === 'all' ? filteredEntries.length : (countByType[f] || 0);
+            const count = f === 'all' ? entries.length : (countByType[f] || 0);
             const label = chip.textContent.replace(/\s*\(\d+\)$/, '');
             chip.textContent = `${label} (${count})`;
             if (f !== 'all' && count === 0) { chip.style.opacity = '0.4'; chip.disabled = true; }
             else { chip.style.opacity = ''; chip.disabled = false; }
         });
 
-        // Create all cards immediately (request metadata is already available)
-        const cards = filteredEntries.map(entry => {
+        // Create cards immediately; lazily load report content as cards scroll into view
+        const cards = entries.map(entry => {
             const sr = entry.resource;
             const type = sr.code?.coding?.[0]?.code || 'unknown';
             const text = sr.code?.coding?.[0]?.display || 'analysis';
             const card = createAnalysisCard(sr, type, text);
-            elements.analysesGrid.appendChild(card);
+            grid.appendChild(card);
             return card;
         });
 
-        // Lazily fetch report for each card as it scrolls into view
-        const observer = new IntersectionObserver((entries, obs) => {
-            for (const entry of entries) {
+        const observer = new IntersectionObserver((observed, obs) => {
+            for (const entry of observed) {
                 if (entry.isIntersecting) {
                     obs.unobserve(entry.target);
                     fetchAndFillReport(entry.target);

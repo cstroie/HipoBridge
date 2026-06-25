@@ -51,8 +51,11 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                 <button class="nav-btn nav-item" data-tab="patient" data-sub="profile">
                     <i class="fas fa-user-injured" aria-hidden="true"></i><span>Profile</span>
                 </button>
-                <button class="nav-btn nav-item" data-tab="analyses">
-                    <i class="fas fa-file-medical" aria-hidden="true"></i><span>Analyses</span>
+                <button class="nav-btn nav-item" data-tab="imaging">
+                    <i class="fas fa-x-ray" aria-hidden="true"></i><span>Imaging</span>
+                </button>
+                <button class="nav-btn nav-item" data-tab="laboratory">
+                    <i class="fas fa-flask" aria-hidden="true"></i><span>Lab</span>
                 </button>
                 <button class="nav-btn nav-item" data-tab="epicrisis">
                     <i class="fas fa-file-prescription" aria-hidden="true"></i><span>Epicrisis</span>
@@ -146,9 +149,13 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                                     <span class="stat-pill-value accent" id="checkoutsCount">0</span>
                                     <span class="stat-pill-label accent">Discharges ↗</span>
                                 </button>
-                                <button type="button" class="stat-pill stat-pill-link" data-goto="analyses" aria-label="View analysis reports">
-                                    <span class="stat-pill-value accent" id="reportsCount">0</span>
-                                    <span class="stat-pill-label accent">Reports ↗</span>
+                                <button type="button" class="stat-pill stat-pill-link" data-goto="imaging" aria-label="View imaging studies">
+                                    <span class="stat-pill-value accent" id="imagingCount">?</span>
+                                    <span class="stat-pill-label accent">Imaging ↗</span>
+                                </button>
+                                <button type="button" class="stat-pill stat-pill-link" data-goto="laboratory" aria-label="View lab results">
+                                    <span class="stat-pill-value accent" id="labCount">?</span>
+                                    <span class="stat-pill-label accent">Lab ↗</span>
                                 </button>
                             </div>
                         </div>
@@ -218,43 +225,63 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
 
                 </section>
 
-                <!-- ─── Analyses tab ─── -->
-                <section id="analyses-tab" class="tab-content" role="tabpanel" aria-labelledby="analyses-tab-heading" hidden>
+                <!-- ─── Imaging tab ─── -->
+                <section id="imaging-tab" class="tab-content" role="tabpanel" aria-labelledby="imaging-tab-heading" hidden>
                     <header class="analyses-header">
                         <div>
-                            <p class="analyses-eyebrow" id="analysesEyebrow">Analyses</p>
-                            <h1 id="analyses-tab-heading" class="analyses-hero-title">Diagnostic Reports</h1>
-                            <p class="analyses-meta" id="analysesMeta">Imaging studies</p>
+                            <p class="analyses-eyebrow" id="imagingEyebrow">Imaging</p>
+                            <h1 id="imaging-tab-heading" class="analyses-hero-title">Imaging Studies</h1>
+                            <p class="analyses-meta" id="imagingMeta"></p>
                         </div>
-                        <div class="analyses-chips" id="analysesChips" role="group" aria-label="Filter by type">
+                        <div class="analyses-chips" id="imagingChips" role="group" aria-label="Filter by modality">
                             <button type="button" class="chip chip-active" data-filter="all">All</button>
                             <button type="button" class="chip" data-filter="eco">Ultrasound</button>
                             <button type="button" class="chip" data-filter="radio">X-Ray</button>
                             <button type="button" class="chip" data-filter="ct">CT</button>
                             <button type="button" class="chip" data-filter="irm">MRI</button>
                             <button type="button" class="chip" data-filter="rads">Fluoroscopy</button>
-                            <button type="button" class="chip" data-filter="lab">Lab</button>
                         </div>
                     </header>
-
-                    <!-- Hidden select kept for JS compatibility (filter still driven by chips above) -->
-                    <select id="analysesFilter" aria-label="Filter reports" style="display:none">
-                        <option value="all">All Types</option>
+                    <select id="imagingFilter" aria-label="Filter by modality" style="display:none">
+                        <option value="all">All</option>
+                        <option value="eco">Ultrasound</option>
                         <option value="radio">X-Ray</option>
                         <option value="ct">CT</option>
                         <option value="irm">MRI</option>
-                        <option value="eco">Ultrasound</option>
                         <option value="rads">Fluoroscopy</option>
+                    </select>
+                    <div class="analyses-container" aria-live="polite">
+                        <div class="no-data" id="imagingNoData" role="status" aria-label="No imaging studies available">
+                            <i class="fas fa-x-ray fa-3x" aria-hidden="true"></i>
+                            <p>No imaging studies found for this patient</p>
+                        </div>
+                        <div id="imagingGrid" class="analyses-grid" aria-label="Imaging studies grid"></div>
+                    </div>
+                </section>
+
+                <!-- ─── Laboratory tab ─── -->
+                <section id="laboratory-tab" class="tab-content" role="tabpanel" aria-labelledby="laboratory-tab-heading" hidden>
+                    <header class="analyses-header">
+                        <div>
+                            <p class="analyses-eyebrow" id="labEyebrow">Laboratory</p>
+                            <h1 id="laboratory-tab-heading" class="analyses-hero-title">Lab Results</h1>
+                            <p class="analyses-meta" id="labMeta"></p>
+                        </div>
+                        <div class="analyses-chips" id="labChips" role="group" aria-label="Filter lab results">
+                            <button type="button" class="chip chip-active" data-filter="all">All</button>
+                            <button type="button" class="chip" data-filter="lab">Lab</button>
+                        </div>
+                    </header>
+                    <select id="labFilter" aria-label="Filter lab results" style="display:none">
+                        <option value="all">All</option>
                         <option value="lab">Lab</option>
                     </select>
-                    <input type="search" id="analysesSearch" style="display:none" aria-hidden="true">
-
                     <div class="analyses-container" aria-live="polite">
-                        <div class="no-data" id="noAnalyses" role="status" aria-label="No analyses available">
-                            <i class="fas fa-file-medical fa-3x" aria-hidden="true"></i>
-                            <p>No analyses found for this patient</p>
+                        <div class="no-data" id="labNoData" role="status" aria-label="No lab results available">
+                            <i class="fas fa-flask fa-3x" aria-hidden="true"></i>
+                            <p>No lab results found for this patient</p>
                         </div>
-                        <div id="analysesGrid" class="analyses-grid" aria-label="Medical analyses grid"></div>
+                        <div id="labGrid" class="analyses-grid" aria-label="Lab results grid"></div>
                     </div>
 
                     <section id="trendsSection" hidden aria-labelledby="trends-heading">
