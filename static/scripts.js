@@ -466,17 +466,19 @@ document.addEventListener('DOMContentLoaded', function() {
     async function loadAnalysesLazily() {
         if (!pendingAnalysesData || elements.analysesGrid?.dataset.loaded) return;
         elements.analysesGrid.dataset.loaded = '1';
-        showLoading('Loading analyses…');
+        const { patientCode, patientData } = pendingAnalysesData;
+        const patientLabel = patientData.name?.[0]?.text || patientCode;
+        showLoading(`Loading studies for ${patientLabel}…`);
         try {
-            const { patientCode, patientData } = pendingAnalysesData;
-            setLoadingStep('Fetching lab and imaging request list…');
+            setLoadingStep('Querying Hipocrate for lab and imaging requests…');
             const analysesResult = await fetchAnalysesData(patientCode);
             if (!analysesResult.success) {
                 const eyebrow = elements.analysesEyebrow;
                 if (eyebrow) eyebrow.dataset.warning = analysesResult.message;
             }
             const analysesData = analysesResult.data || { resourceType: 'Bundle', entry: [] };
-            setLoadingStep('Building study cards…');
+            const total = analysesData.entry?.length || 0;
+            setLoadingStep(total ? `Organising ${total} studies…` : 'No studies found.');
             await loadAndDisplayReports(analysesData);
             if (pendingReportData) pendingReportData.analysesData = analysesData;
             loadTrends(patientData.id);
@@ -491,8 +493,10 @@ document.addEventListener('DOMContentLoaded', function() {
     async function loadReportLazily() {
         if (!pendingReportData || elements.patientReportMarkdown?.dataset.loaded) return;
         elements.patientReportMarkdown.dataset.loaded = '1';
-        showLoading('Creating patient report…');
+        const name = pendingReportData.patientData?.name?.[0]?.text || 'patient';
+        showLoading(`Assembling clinical report for ${name}…`);
         try {
+            setLoadingStep('Compiling diagnoses, admissions and imaging history…');
             await loadAndDisplayReport(pendingReportData.patientData, pendingReportData.analysesData);
             hideLoading();
         } catch (err) {
@@ -505,8 +509,10 @@ document.addEventListener('DOMContentLoaded', function() {
     async function loadEpicrisisLazily() {
         if (!pendingEpicrisisData || elements.epicrisisContent?.dataset.loaded) return;
         elements.epicrisisContent.dataset.loaded = '1';
-        showLoading('Loading discharge summaries…');
+        const name = pendingEpicrisisData?.name?.[0]?.text || 'patient';
+        showLoading(`Loading discharge summaries for ${name}…`);
         try {
+            setLoadingStep('Fetching hospitalisation episodes from Hipocrate…');
             await loadAndDisplayEpicrisis(pendingEpicrisisData);
             hideLoading();
         } catch (err) {
@@ -537,11 +543,23 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Clear previous results and show loading state
         clearResults();
-        showLoading('Searching for patient…');
+        const searchTitles = {
+            cnp:         'Looking up patient by CNP…',
+            partial_cnp: 'Searching by partial CNP…',
+            code:        'Looking up patient by ID…',
+            name:        `Searching by name "${cnp}"…`,
+        };
+        showLoading(searchTitles[validation.type] || 'Searching for patient…');
         hideError();
 
         try {
-            setLoadingStep('Searching patient registry…');
+            const searchSteps = {
+                cnp:         `Querying Hipocrate for CNP ${cnp}…`,
+                partial_cnp: `Querying Hipocrate for partial CNP ${cnp}…`,
+                code:        `Querying Hipocrate for patient ID ${cnp}…`,
+                name:        `Searching patient registry for "${cnp}"…`,
+            };
+            setLoadingStep(searchSteps[validation.type] || 'Searching patient registry…');
             log('Starting patient search...');
             const searchResult = await performPatientSearch(cnp);
             log('Patient search result:', searchResult);
@@ -551,8 +569,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     hideLoading();
                     const chosen = await showPatientSelection(searchResult.candidates);
                     if (!chosen) return; // user dismissed
-                    showLoading('Loading patient record…');
-                    setLoadingStep('Fetching selected patient record…');
+                    showLoading(`Loading record for ${chosen.name?.[0]?.text || chosen.id}…`);
+                    setLoadingStep('Fetching full patient record from Hipocrate…');
                     const r = await apiFetch(`/fhir/Patient/${chosen.id}`);
                     searchResult.patientData = r.ok ? await r.json() : chosen;
                     searchResult.patientCode = chosen.id;
@@ -571,7 +589,8 @@ document.addEventListener('DOMContentLoaded', function() {
             log('Patient data retrieved:', patientData);
             log('Patient code:', patientCode);
 
-            setLoadingStep('Rendering patient profile…');
+            const patientName = patientData.name?.[0]?.text || patientCode;
+            setLoadingStep(`Building profile for ${patientName}…`);
             log('Displaying patient data...');
             await displayPatientData(patientData);
 
