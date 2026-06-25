@@ -446,6 +446,10 @@ document.addEventListener('DOMContentLoaded', function() {
             fetchScheduleFromInputs();
         }
 
+        if (tabId === 'analyses') {
+            loadAnalysesLazily();
+        }
+
         if (tabId === 'epicrisis') {
             loadEpicrisisLazily();
         }
@@ -457,6 +461,32 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let pendingEpicrisisData = null;
     let pendingReportData = null;
+    let pendingAnalysesData = null;
+
+    async function loadAnalysesLazily() {
+        if (!pendingAnalysesData || elements.analysesGrid?.dataset.loaded) return;
+        elements.analysesGrid.dataset.loaded = '1';
+        showLoading('Loading analyses…');
+        try {
+            const { patientCode, patientData } = pendingAnalysesData;
+            setLoadingStep('Fetching lab and imaging request list…');
+            const analysesResult = await fetchAnalysesData(patientCode);
+            if (!analysesResult.success) {
+                const eyebrow = elements.analysesEyebrow;
+                if (eyebrow) eyebrow.dataset.warning = analysesResult.message;
+            }
+            const analysesData = analysesResult.data || { resourceType: 'Bundle', entry: [] };
+            setLoadingStep('Building study cards…');
+            await loadAndDisplayReports(analysesData);
+            if (pendingReportData) pendingReportData.analysesData = analysesData;
+            loadTrends(patientData.id);
+            hideLoading();
+        } catch (err) {
+            delete elements.analysesGrid.dataset.loaded;
+            console.error('Error loading analyses:', err);
+            hideLoading();
+        }
+    }
 
     async function loadReportLazily() {
         if (!pendingReportData || elements.patientReportMarkdown?.dataset.loaded) return;
@@ -511,7 +541,7 @@ document.addEventListener('DOMContentLoaded', function() {
         hideError();
 
         try {
-            setLoadingStep('Querying Hipocrate…');
+            setLoadingStep('Searching patient registry…');
             log('Starting patient search...');
             const searchResult = await performPatientSearch(cnp);
             log('Patient search result:', searchResult);
@@ -522,7 +552,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     const chosen = await showPatientSelection(searchResult.candidates);
                     if (!chosen) return; // user dismissed
                     showLoading('Loading patient record…');
-                    setLoadingStep('Fetching selected patient…');
+                    setLoadingStep('Fetching selected patient record…');
                     const r = await apiFetch(`/fhir/Patient/${chosen.id}`);
                     searchResult.patientData = r.ok ? await r.json() : chosen;
                     searchResult.patientCode = chosen.id;
@@ -541,37 +571,20 @@ document.addEventListener('DOMContentLoaded', function() {
             log('Patient data retrieved:', patientData);
             log('Patient code:', patientCode);
 
-            setLoadingStep('Fetching imaging studies…');
-            log('Fetching analyses data for patient:', patientCode);
-            const analysesResult = await fetchAnalysesData(patientCode);
-            log('Analyses data result:', analysesResult);
-
-            if (!analysesResult.success) {
-                // Non-fatal — patient loads, analyses are unavailable
-                const eyebrow = elements.analysesEyebrow;
-                if (eyebrow) eyebrow.dataset.warning = analysesResult.message;
-            }
-
-            const analysesData = analysesResult.data || { resourceType: 'Bundle', entry: [] };
-            log('Analyses data retrieved:', analysesData);
-
-            setLoadingStep('Building patient profile…');
+            setLoadingStep('Rendering patient profile…');
             log('Displaying patient data...');
-            await displayPatientData(patientData, analysesData);
+            await displayPatientData(patientData);
 
-            setLoadingStep('Loading diagnostic reports…');
-            log('Loading and displaying reports...');
-            await loadAndDisplayReports(analysesData);
-
-            // Trends are loaded in the background — non-fatal
-            loadTrends(patientData.id);
+            // Analyses + trends are lazy-loaded on first visit to the Analyses tab
+            pendingAnalysesData = { patientCode, patientData };
+            if (elements.analysesGrid) delete elements.analysesGrid.dataset.loaded;
 
             // Epicrisis is lazy-loaded on first visit to its tab
             pendingEpicrisisData = patientData;
             if (elements.epicrisisContent) delete elements.epicrisisContent.dataset.loaded;
 
-            // Report is lazy-loaded on first visit to its tab
-            pendingReportData = { patientData, analysesData };
+            // Report is lazy-loaded on first visit to its tab (analysesData filled in after Analyses tab loads)
+            pendingReportData = { patientData, analysesData: { resourceType: 'Bundle', entry: [] } };
             if (elements.patientReportMarkdown) delete elements.patientReportMarkdown.dataset.loaded;
 
             log('Switching to patient tab...');
@@ -836,6 +849,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.trendsSection) elements.trendsSection.hidden = true;
         if (elements.trendsContainer) elements.trendsContainer.innerHTML = '';
         
+        // Clear lazy-load state
+        pendingAnalysesData = null;
+        if (elements.analysesGrid) delete elements.analysesGrid.dataset.loaded;
+
         // Clear epicrisis
         pendingEpicrisisData = null;
         if (elements.epicrisisContent) {
@@ -1731,7 +1748,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.loadingSpinner) elements.loadingSpinner.hidden = false;
         if (elements.loadingError) elements.loadingError.hidden = true;
         elements.analyzeBtn.disabled = true;
-        elements.analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Searching...';
+        elements.analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading…';
         const titleEl = document.getElementById('loadingTitle');
         if (titleEl) titleEl.textContent = title;
         if (elements.loadingStep) elements.loadingStep.textContent = '';
@@ -1744,9 +1761,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Markdown to HTML conversion now uses marked.js library
     // marked.parse(markdownText) converts markdown to HTML
 
-    function displayPatientData(patientData, analysesData) {
+    function displayPatientData(patientData) {
         log('Displaying patient data:', patientData);
-        log('Analyses data:', analysesData);
         
         // Enhanced patient information display with better formatting
         displayPatientBasicInfo(patientData);
