@@ -1243,12 +1243,13 @@ select {
 /* Analyses grid — masonry via CSS columns */
 .analyses-grid {
     columns: 2 420px;
-    column-gap: 16px;
+    column-gap: var(--spacing-md);
+    margin-bottom: calc(-1 * var(--spacing-md));
 }
 
 .analyses-grid > * {
     break-inside: avoid;
-    margin-bottom: 16px;
+    margin-bottom: var(--spacing-md);
 }
 
 @media (max-width: 600px) {
