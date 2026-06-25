@@ -11,7 +11,6 @@ document.addEventListener('DOMContentLoaded', function() {
         tabContents: document.querySelectorAll('.tab-content'),
         // Patient tab elements
         patientId: document.getElementById('patientId'),
-        patientAvatar: document.querySelector('.patient-avatar i'),
         patientName: document.getElementById('patientName'),
         patientCnp: document.getElementById('patientCnp'),
         patientGender: document.getElementById('patientGender'),
@@ -821,7 +820,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.patientGender) elements.patientGender.innerHTML = '';
         if (elements.patientDiagnosis) { elements.patientDiagnosis.textContent = ''; elements.patientDiagnosis.hidden = true; }
         if (elements.patientBirthDate) elements.patientBirthDate.textContent = '';
-        if (elements.patientAvatar) elements.patientAvatar.className = 'fas fa-user-injured';
         if (elements.patientPhone) elements.patientPhone.textContent = '';
         if (elements.patientEmail) elements.patientEmail.textContent = '';
         if (elements.patientAddress) elements.patientAddress.textContent = '';
@@ -1929,17 +1927,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        if (elements.patientAvatar) {
-            const ageNum = ageLabel ? parseInt(ageLabel, 10) : null;
-            const female = patientData.gender === 'female';
-            let icon;
-            if (ageNum === null)      icon = 'fa-user-injured';
-            else if (ageNum <= 2)     icon = 'fa-baby';
-            else if (ageNum <= 12)    icon = female ? 'fa-child-dress' : 'fa-child';
-            else if (ageNum <= 64)    icon = female ? 'fa-person-dress' : 'fa-person';
-            else                      icon = 'fa-person-cane';
-            elements.patientAvatar.className = `fas ${icon}`;
-        }
         log('Age set to:', age);
         
         // Personal info fields
@@ -2507,7 +2494,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const td  = row.insertCell();
                 const m   = byDate[d];
                 if (!m) { td.textContent = '–'; td.className = 'trend-empty'; continue; }
-                td.textContent = m.v !== null ? (m.v + (a.unit ? ' ' + a.unit : '')) : (m.text || '–');
+                td.textContent = m.v !== null ? ((Number.isInteger(m.v) ? m.v : parseFloat(m.v.toPrecision(4))) + (a.unit ? ' ' + a.unit : '')) : (m.text || '–');
                 if (m.flag === 'H') td.className = 'trend-high';
                 else if (m.flag === 'L') td.className = 'trend-low';
             }
@@ -2528,14 +2515,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function loadTrends(patientId) {
         if (!patientId || !elements.trendsSection) return;
+        const sd = new Date();
+        sd.setDate(sd.getDate() - 90);
+        const startDate = sd.toISOString().slice(0, 10);
         try {
-            const resp = await apiFetch(`/fhir/Observation?patient=${encodeURIComponent(patientId)}`);
+            const resp = await apiFetch(`/fhir/Observation?patient=${encodeURIComponent(patientId)}&start_date=${startDate}`);
             if (!resp.ok) return;
             const bundle = await resp.json();
             if (bundle.resourceType !== 'Bundle' || !bundle.entry?.length) return;
             renderTrends(bundle.entry.map(e => e.resource).filter(Boolean));
         } catch (e) {
-            // Trends are non-fatal — silently skip on error
+            console.warn('Trends load failed:', e);
         }
     }
 

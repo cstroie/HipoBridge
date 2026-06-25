@@ -288,15 +288,6 @@ h1.schedule-hero-date,
 }
 
 /* Container */
-.container {
-    width: 100%;
-    max-width: 1200px;
-    margin-left: auto;
-    margin-right: auto;
-    padding-left: var(--spacing-lg);
-    padding-right: var(--spacing-lg);
-}
-
 /* Typography */
 h1, h2, h3, h4, h5, h6 {
     font-weight: var(--font-weight-semibold);
@@ -614,7 +605,11 @@ small {
 /* Main Content */
 .main-content {
     flex: 1;
-    padding: var(--spacing-xl) 0 4rem;
+    width: 100%;
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+    padding: var(--spacing-xl) var(--spacing-lg) 4rem;
 }
 
 /* Tab eyebrow (small uppercase label above heading) */
@@ -885,6 +880,7 @@ small {
     padding-bottom: 32px;
     border-bottom: 1px solid var(--line);
 }
+.patient-header-left { min-width: 0; flex: 1 1 auto; }
 
 .patient-hero-name {
     font: 700 40px/1.05 'Space Grotesk', 'Inter', sans-serif;
@@ -908,6 +904,7 @@ small {
     padding: 4px 11px;
     border-radius: 8px;
     white-space: nowrap;
+    flex-shrink: 0;
 }
 .patient-badge:empty { display: none; }
 .patient-badge[hidden] { display: none; }
@@ -917,9 +914,6 @@ small {
     background: color-mix(in srgb, var(--accent) 10%, transparent);
     border-color: transparent;
 }
-
-/* Hidden avatar kept for JS compat */
-.patient-avatar { display: none !important; }
 
 /* Stats strip — big editorial numbers, right side of header */
 .patient-stats-strip {
@@ -2184,12 +2178,6 @@ select {
 
     .hero-content h1 {
         font-size: var(--font-size-xl);
-    }
-
-    .patient-avatar {
-        width: 56px;
-        height: 56px;
-        font-size: var(--font-size-2xl);
     }
 
     .patient-main-info h1 {

@@ -50,7 +50,8 @@ import logging
 import re
 from bs4 import BeautifulSoup, Comment
 import html
-from datetime import datetime, timedelta
+import json
+from datetime import date, datetime, timedelta
 import configparser
 
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -3815,6 +3816,28 @@ class HipoClientPresentation(HipoClient):
         return self.fhir_response(parsed_data, **kwargs)
 
 
+def _filter_observations_by_date(items, start_date=None, end_date=None, date_key="date"):
+    """Filter a list of dicts by date range. date_key is the dict key holding a YYYY-MM-DD... string."""
+    if not start_date and not end_date:
+        return items
+    sd = datetime.strptime(start_date, '%Y-%m-%d') if start_date else None
+    ed = datetime.strptime(end_date,   '%Y-%m-%d') if end_date   else None
+    out = []
+    for item in items:
+        dt_str = (item.get(date_key) or "")[:10]
+        if dt_str:
+            try:
+                dt = datetime.fromisoformat(dt_str)
+                if sd and dt < sd:
+                    continue
+                if ed and dt > ed:
+                    continue
+            except ValueError:
+                pass
+        out.append(item)
+    return out
+
+
 def _parse_observation_value(result_text: str, reference_text: str):
     """Extract numeric value, unit, reference range, and H/L/N flag from result + reference strings.
 
@@ -3829,7 +3852,9 @@ def _parse_observation_value(result_text: str, reference_text: str):
     val_m = re.match(r'^[<>]?\s*([\d]+(?:[.,][\d]+)?)', result_text)
     if val_m:
         try:
-            value = float(val_m.group(1).replace(',', '.'))
+            raw = val_m.group(1).replace(',', '.')
+            if raw not in ('.', ''):
+                value = float(raw)
         except ValueError:
             pass
 
@@ -3900,19 +3925,41 @@ class HipoClientObservationBundle(HipoClient):
         if not patient_id:
             data.set_error("patient_id is required")
             return data
+
+        bundle_key = f"__obs_bundle__:{patient_id}"
+
+        # Serve from cache if available (date filters applied below after lookup)
+        cached_json = self.url_cache.get(bundle_key)
+        if cached_json is not None:
+            observations = json.loads(cached_json)
+            observations = _filter_observations_by_date(observations, start_date, end_date)
+            data.store_list("observations", observations)
+            data.store("patient.id", patient_id)
+            return data
+
+        # In-flight deduplication
+        if self.url_cache.is_inflight(bundle_key):
+            await self.url_cache.wait_inflight(bundle_key)
+            cached_json = self.url_cache.get(bundle_key)
+            if cached_json is not None:
+                observations = json.loads(cached_json)
+                observations = _filter_observations_by_date(observations, start_date, end_date)
+                data.store_list("observations", observations)
+                data.store("patient.id", patient_id)
+                return data
+
+        self.url_cache.mark_inflight(bundle_key)
         try:
-            # 1. Get all service requests for this patient
-            # 1. Fetch the most recent lab result per domain directly (NrPePag=1).
-            #    This targets the last episode without loading historical data.
+            # 1. Fetch historical lab results per domain (NrPePag=50 to cover multiple episodes)
             sr_client = HipoClientServiceRequestSearch(self.service_url, self.request)
             episode_url = sr_client.request_url_episode  # "/Pacient/analysesEpisod.asp?pacid={pacid}"
             lab_fetch_tasks = []
             for domain_id in LAB_DOMAINS:
-                url = (episode_url + f"&strDomeniu={domain_id}&NrPePag=1").format(pacid=patient_id)
+                url = (episode_url + f"&strDomeniu={domain_id}&NrPePag=50").format(pacid=patient_id)
                 lab_fetch_tasks.append(self.get_page(url))
             domain_results = await asyncio.gather(*lab_fetch_tasks)
 
-            # Collect all candidate lab requests with result_ids
+            # 2. Collect all candidate lab requests, deduplicated by result_id
             seen_ids: set = set()
             candidates = []
             for html, err in domain_results:
@@ -3926,8 +3973,8 @@ class HipoClientObservationBundle(HipoClient):
                         seen_ids.add(rid)
                         candidates.append(req)
 
-            # Keep only results from the most recent date (last episode).
-            # Tolerance: ±1 day to catch overnight draws within the same admission.
+            # 3. Default to 90-day window from most recent result when no explicit range given
+            default_start = None
             if candidates:
                 most_recent = max(
                     (r.get("date_time", "") for r in candidates if r.get("date_time")),
@@ -3935,30 +3982,17 @@ class HipoClientObservationBundle(HipoClient):
                 )
                 if most_recent:
                     try:
-                        anchor = datetime.fromisoformat(most_recent[:10])
-                        candidates = [
-                            r for r in candidates
-                            if abs((datetime.fromisoformat(r["date_time"][:10]) - anchor).days) <= 1
-                        ]
+                        anchor = date.fromisoformat(most_recent[:10])
+                        default_start = (anchor - timedelta(days=90)).isoformat()
                     except ValueError:
                         pass
 
-            # Apply explicit date range filter if provided
-            sd = datetime.strptime(start_date, '%Y-%m-%d') if start_date else None
-            ed = datetime.strptime(end_date,   '%Y-%m-%d') if end_date   else None
-            lab_requests = []
-            for req in candidates:
-                dt_str = req.get("date_time", "")
-                if dt_str and (sd or ed):
-                    try:
-                        dt = datetime.fromisoformat(dt_str[:10])
-                        if sd and dt < sd: continue
-                        if ed and dt > ed: continue
-                    except ValueError:
-                        pass
-                lab_requests.append(req)
+            # Apply 90-day window before fetching reports (avoids unnecessary report fetches)
+            window_start = start_date or default_start
+            window_end   = end_date
+            lab_requests = _filter_observations_by_date(candidates, window_start, window_end, date_key="date_time")
 
-            # 3. Fetch DiagnosticReports in parallel (capped concurrency)
+            # 4. Fetch DiagnosticReports in parallel (capped concurrency)
             sem = asyncio.Semaphore(self.MAX_CONCURRENT)
 
             async def fetch_report(req):
@@ -3973,7 +4007,7 @@ class HipoClientObservationBundle(HipoClient):
             fetch_tasks = [fetch_report(req) for req in lab_requests]
             results = await asyncio.gather(*fetch_tasks)
 
-            # 4. Build flat observations list
+            # 5. Build flat observations list
             observations = []
             for req, parsed in results:
                 if parsed is None or parsed.get("status") == "error":
@@ -3985,7 +4019,7 @@ class HipoClientObservationBundle(HipoClient):
                 for study in studies:
                     if not isinstance(study, dict):
                         continue
-                    if study.get("type") not in ("lab", "unknown", None):
+                    if study.get("type") not in ("lab", "other", "unknown", None):
                         continue
                     title      = study.get("title", "")
                     result_txt = study.get("result", "")
@@ -4007,14 +4041,19 @@ class HipoClientObservationBundle(HipoClient):
                         "section":     study.get("section", ""),
                     })
 
-            data.store_list("observations", observations)
-            data.store("patient.id", patient_id)
-            return data
+            # Cache the assembled bundle (L1-only, 30-min TTL)
+            self.url_cache.put(bundle_key, json.dumps(observations), persist=False)
+            self.url_cache.resolve_inflight(bundle_key)
 
         except Exception as e:
+            self.url_cache.resolve_inflight(bundle_key)
             logger.error(f"HipoClientObservationBundle.fetch_and_parse failed: {e}")
             data.set_error(str(e))
             return data
+
+        data.store_list("observations", observations)
+        data.store("patient.id", patient_id)
+        return data
 
     def fhir_response(self, parsed_data: HipoData, patient_id=None, **kwargs) -> Union[FHIRBundle, FHIROperationOutcome]:
         if parsed_data.get("status") == "error":
