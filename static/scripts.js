@@ -2767,10 +2767,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function setCardIndication(article, text) {
         if (!text) return;
-        const indEl   = article.querySelector('.card-indication');
         const indText = article.querySelector('.card-indication-text');
-        if (indText) indText.textContent = text;
-        if (indEl) indEl.hidden = false;
+        if (indText) indText.textContent = ' · ' + text;
     }
 
     async function fetchAndFillReport(article) {
