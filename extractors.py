@@ -369,7 +369,7 @@ def extract_selected_from_dropdown(soup: 'BeautifulSoup', element_id: str = None
     element = soup.find('select', attrs={'name': name}) if name else soup.find('select', id=element_id)
 
     if element:
-        option = element.find('option', selected=True)
+        option = element.find('option', selected=True) or element.find('option')
         if option:
             identifier = name if name else element_id
             content = option.get_text().strip()
