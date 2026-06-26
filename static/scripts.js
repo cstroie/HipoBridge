@@ -386,19 +386,6 @@ document.addEventListener('DOMContentLoaded', function() {
             elements.scheduleLimitSelect.addEventListener('change', fetchScheduleFromInputs);
         }
 
-        // Schedule modality chip buttons — update hidden select + re-fetch
-        document.querySelectorAll('.schedule-mod-chips .chip').forEach(chip => {
-            chip.addEventListener('click', () => {
-                document.querySelectorAll('.schedule-mod-chips .chip').forEach(c => c.classList.remove('chip-active'));
-                chip.classList.add('chip-active');
-                const val = chip.dataset.labId || chip.dataset.lab || '';
-                if (elements.scheduleLabFilter) {
-                    elements.scheduleLabFilter.value = val;
-                }
-                fetchScheduleFromInputs();
-            });
-        });
-
         // Imaging chips — delegated so it works regardless of when chips render
         document.getElementById('imagingChips')?.addEventListener('click', e => {
             const chip = e.target.closest('.chip');

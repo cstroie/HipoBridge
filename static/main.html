@@ -390,10 +390,20 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                         <span class="schedule-date-sep" aria-hidden="true">–</span>
                         <label for="scheduleEndDate" class="sr-only">To date</label>
                         <input type="date" id="scheduleEndDate" class="schedule-date-input" aria-label="To date">
+                        <label for="scheduleLabFilter" class="sr-only">Modality</label>
+                        <select id="scheduleLabFilter" class="schedule-filter-select" aria-label="Filter by modality">
+                            <option value="">All modalities</option>
+                            <option value="26">CT</option>
+                            <option value="28">Ultrasound</option>
+                            <option value="32">MRI</option>
+                            <option value="49">X-Ray</option>
+                            <option value="35">Interventional Radiology</option>
+                            <option value="50">Fluoroscopy</option>
+                        </select>
                         <label for="scheduleLimitSelect" class="sr-only">Max results</label>
                         <select id="scheduleLimitSelect" class="schedule-filter-select" aria-label="Max results">
-                            <option value="20" selected>20 items</option>
-                            <option value="50">50 items</option>
+                            <option value="20">20 items</option>
+                            <option value="50" selected>50 items</option>
                             <option value="100">100 items</option>
                             <option value="200">200 items</option>
                         </select>
@@ -405,27 +415,6 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
 
                     <!-- Filters row -->
                     <div class="schedule-filters">
-
-                        <!-- Modality chips — updates the hidden select -->
-                        <div class="schedule-mod-chips" role="group" aria-label="Filter by modality">
-                            <button type="button" class="chip chip-active" data-lab-id="">All</button>
-                            <button type="button" class="chip chip-ct"    data-lab-id="26">CT</button>
-                            <button type="button" class="chip chip-eco"   data-lab-id="28">US</button>
-                            <button type="button" class="chip chip-irm"   data-lab-id="32">MRI</button>
-                            <button type="button" class="chip chip-radio" data-lab-id="49">X-Ray</button>
-                            <button type="button" class="chip chip-rads"  data-lab-id="50">Fluoro</button>
-                        </div>
-
-                        <!-- Hidden selects for fetch logic -->
-                        <select id="scheduleLabFilter" aria-label="Filter by modality" style="display:none">
-                            <option value="">All modalities</option>
-                            <option value="26">CT</option>
-                            <option value="28">Ultrasound</option>
-                            <option value="32">MRI</option>
-                            <option value="49">X-Ray</option>
-                            <option value="35">Interventional Radiology</option>
-                            <option value="50">Fluoroscopy</option>
-                        </select>
 
                         <div class="schedule-filters-spacer"></div>
 
