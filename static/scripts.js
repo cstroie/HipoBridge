@@ -2785,9 +2785,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const bodyEl    = article.querySelector('.report-body');
 
         try {
-            const resp = await apiFetch(endpoint);
+            const [resp, srResp] = await Promise.all([
+                apiFetch(endpoint),
+                apiFetch(`/fhir/ServiceRequest/${id}`),
+            ]);
             if (!resp.ok) throw new Error(resp.status);
             const data = await resp.json();
+            const srData = srResp.ok ? await srResp.json() : null;
 
             // Ordering physician from referrer (if not already set from ServiceRequest)
             const referrerEl = article.querySelector('.card-referrer');
@@ -2797,15 +2801,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (line) line.hidden = false;
             }
 
-            // Clinical indication note(s) → show inline next to physician
+            // Clinical indication: prefer clinical-indication note from report, fall back to physician comment
             const allNotes = data.note || [];
             const indicationNotes = allNotes.filter(n => n.category?.[0]?.text === 'clinical-indication');
             const resultNotes = allNotes.filter(n => n.category?.[0]?.text !== 'clinical-indication');
-            if (indicationNotes.length > 0) {
+            const indicationText = indicationNotes[0]?.text || srData?.note?.[0]?.text || '';
+            if (indicationText) {
                 const existing = article.querySelector('.card-indication-text');
-                if (!existing?.textContent) {
-                    setCardIndication(article, indicationNotes[0].text);
-                }
+                if (!existing?.textContent) setCardIndication(article, indicationText);
             }
 
             // Report text
@@ -3271,9 +3274,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 ? `/fhir/ImagingStudy/${requestId}`
                 : `/fhir/DiagnosticReport/${requestId}`;
 
-            const repResp = await apiFetch(endpoint);
+            const [repResp, srResp] = await Promise.all([
+                apiFetch(endpoint),
+                apiFetch(`/fhir/ServiceRequest/${requestId}`),
+            ]);
             if (repResp.ok) {
                 const reportData = await repResp.json();
+                const srData = srResp.ok ? await srResp.json() : null;
 
                 // Date in subtitle
                 const date = reportData.started || reportData.effectiveDateTime || reportData.authoredOn;
@@ -3288,11 +3295,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
 
-                // Indication line in header
+                // Indication: prefer clinical-indication note from report, fall back to physician comment
                 const allNotes = reportData.note || [];
                 const indicationNote = allNotes.find(n => n.category?.[0]?.text === 'clinical-indication');
-                if (indicationNote?.text) {
-                    modal.querySelector('.modal-indication-text').textContent = indicationNote.text;
+                const indicationText = indicationNote?.text || srData?.note?.[0]?.text || '';
+                if (indicationText) {
+                    modal.querySelector('.modal-indication-text').textContent = indicationText;
                     modal.querySelector('.report-modal-indication').hidden = false;
                 }
 
