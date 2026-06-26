@@ -3576,7 +3576,7 @@ class HipoClientPresentation(HipoClient):
         'plecat din upu la domiciliu':    ('home',         True),
         'plecat fara aviz':               ('aadvice',      True),
         'plecat fara consult':            ('aadvice',      True),
-        'plecat in asezaminte sociale':   ('other',        True),
+        'plecat in asezaminte sociale':   ('long',         True),
     }
 
     @staticmethod
