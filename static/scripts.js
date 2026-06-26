@@ -53,6 +53,7 @@ document.addEventListener('DOMContentLoaded', function() {
         trendsSubtitle: document.getElementById('trendsSubtitle'),
         // Epicrisis tab elements
         epicrisisContent: document.getElementById('epicrisisContent'),
+        epicrisisNoData:  document.getElementById('epicrisisNoData'),
         copyEpicrisisBtn: document.getElementById('copyEpicrisisBtn'),
         // Report tab elements
         reportCard: document.getElementById('reportCard'),
@@ -937,6 +938,7 @@ document.addEventListener('DOMContentLoaded', function() {
             delete elements.epicrisisContent.dataset.markdown;
             delete elements.epicrisisContent.dataset.loaded;
         }
+        if (elements.epicrisisNoData) elements.epicrisisNoData.style.display = 'none';
         if (elements.copyEpicrisisBtn) elements.copyEpicrisisBtn.hidden = false;
         // Clear report tab
         pendingReportData = null;
@@ -2053,10 +2055,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.patientEmail) elements.patientEmail.textContent = contactInfo.email || '—';
         if (elements.patientAddress) {
             const addr = patientData.address?.[0];
-            const parts = [addr?.text, addr?.city, addr?.district].filter(Boolean);
-            // deduplicate consecutive identical parts (city may already be in text)
-            const deduped = parts.filter((p, i) => i === 0 || p !== parts[i - 1]);
-            elements.patientAddress.textContent = deduped.join(', ') || '—';
+            const text = addr?.text || '';
+            const district = addr?.district || '';
+            const display = district && !text.includes(district) ? `${text}, ${district}` : text;
+            elements.patientAddress.textContent = display || '—';
         }
         log('CNP:', cnp, 'Phone:', contactInfo.phone, 'Email:', contactInfo.email);
 
@@ -2093,9 +2095,12 @@ document.addEventListener('DOMContentLoaded', function() {
         canvas.width  = size;
         canvas.height = size;
         const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#ffffff';
+        const cs = getComputedStyle(document.documentElement);
+        const bg  = cs.getPropertyValue('--card-bg').trim() || '#ffffff';
+        const fg  = cs.getPropertyValue('--primary').trim()  || '#312e81';
+        ctx.fillStyle = bg;
         ctx.fillRect(0, 0, size, size);
-        ctx.fillStyle = '#312e81';
+        ctx.fillStyle = fg;
         for (let r = 0; r < modules; r++) {
             for (let c = 0; c < modules; c++) {
                 if (!qr.isDark(r, c)) continue;
@@ -2979,7 +2984,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function loadAndDisplayEpicrisis(patientData) {
         const checkoutIds = extractCheckoutIds(patientData);
-        if (checkoutIds.length === 0) return;
+        if (checkoutIds.length === 0) {
+            if (elements.epicrisisNoData) elements.epicrisisNoData.style.display = 'block';
+            return;
+        }
 
         const encounters = await limitedMap(
             checkoutIds,
@@ -3000,7 +3008,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 return db > da ? 1 : -1;
             });
 
-        if (valid.length === 0) return;
+        if (valid.length === 0) {
+            if (elements.epicrisisNoData) elements.epicrisisNoData.style.display = 'block';
+            return;
+        }
 
         elements.epicrisisContent.innerHTML = '';
 
