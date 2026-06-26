@@ -151,32 +151,14 @@ def load_region_rules():
     """Load region identification rules from regions.cfg file."""
     config = configparser.ConfigParser()
     config.read('regions.cfg')
-    
-    radio_rules = {}
-    eco_rules = {}
-    ct_rules = {}
-    mri_rules = {}
-    
-    if 'radiography' in config:
-        for key in config['radiography']:
-            radio_rules[key] = [word.strip() for word in config['radiography'][key].split(',')]
-    
-    if 'ultrasound' in config:
-        for key in config['ultrasound']:
-            eco_rules[key] = [word.strip() for word in config['ultrasound'][key].split(',')]
-    
-    if 'ct' in config:
-        for key in config['ct']:
-            ct_rules[key] = [word.strip() for word in config['ct'][key].split(',')]
-    
-    if 'mri' in config:
-        for key in config['mri']:
-            mri_rules[key] = [word.strip() for word in config['mri'][key].split(',')]
-    
-    return radio_rules, eco_rules, ct_rules, mri_rules
+
+    def _section(name):
+        return {k: [w.strip() for w in v.split(',')] for k, v in config[name].items()} if name in config else {}
+
+    return _section('radiography'), _section('ultrasound'), _section('ct'), _section('mri'), _section('fluoroscopy')
 
 # Load the region rules
-RADIO_REGION_RULES, ECO_REGION_RULES, CT_REGION_RULES, MRI_REGION_RULES = load_region_rules()
+RADIO_REGION_RULES, ECO_REGION_RULES, CT_REGION_RULES, MRI_REGION_RULES, FLUORO_REGION_RULES = load_region_rules()
 
 
 
@@ -218,21 +200,34 @@ def identify_study_type_and_region(desc: str) -> Tuple[str, str]:
     
     desc_lower = desc.strip().lower()
     
-    # Check if it's an MRI study (contains REZONANTA MAGNETICA)
+    _FLUORO_PREFIXES = (
+        'cistografi', 'uretro-cistografi', 'clisma', 'conductografi',
+        'defecografi', 'fluoroscopi', 'insuflatia', 'pielografi',
+        'reducerea', 'studii palatofaringiene', 'tranzitul baritat',
+    )
+    _FLUORO_CONTAINS = ('cistosonografi', 'urografi',)
+
+    # Check if it's an MRI study
     if 'rezonanta' in desc_lower:
-        study_type = 'mri'
+        study_type = 'irm'
         region_rules = MRI_REGION_RULES
-    # Check if it's a CT study (contains TOMOGRAFIA COMPUTERIZATA)
+    # Check if it's a CT study
     elif desc_lower.startswith('tomografia') or \
          desc_lower.startswith('angiotomografia') or \
          desc_lower.startswith('densitometria'):
         study_type = 'ct'
         region_rules = CT_REGION_RULES
-    # Check if it's a radiography study (starts with RADIOGRAFIA or RADIO)
+    # Check if it's a fluoroscopy / contrast study (rads)
+    elif any(desc_lower.startswith(p) for p in _FLUORO_PREFIXES) or \
+         any(k in desc_lower for k in _FLUORO_CONTAINS) or \
+         'radioscopie' in desc_lower:
+        study_type = 'rads'
+        region_rules = FLUORO_REGION_RULES
+    # Check if it's a radiography study
     elif desc_lower.startswith('radiografia'):
         study_type = 'radio'
         region_rules = RADIO_REGION_RULES
-    # Check if it's an ultrasound study (starts with ECOGRAFIA, ULTRASONOGRAFIA, or ECO)
+    # Check if it's an ultrasound study
     elif desc_lower.startswith('ecografia') or desc_lower.startswith('ultrasonografia'):
         study_type = 'eco'
         region_rules = ECO_REGION_RULES
