@@ -3553,7 +3553,17 @@ document.addEventListener('DOMContentLoaded', function() {
             codeBtn.textContent = requestCode;
             codeBtn.title = `View request details (${requestCode})`;
             codeBtn.addEventListener('click', () => showRequestModal(r.id, requestCode, patientName, modalitySlug, codeBtn, requestedBy));
-            row.querySelector('.timeline-numeric-id').textContent = `#${r.id}`;
+            const numericIdEl = row.querySelector('.timeline-numeric-id');
+            if (hipocrateUrl) {
+                const idLink = document.createElement('a');
+                idLink.href = `${hipocrateUrl}/PARA/NOM/Listare/cerere.asp?id=${r.id}`;
+                idLink.target = '_blank';
+                idLink.rel = 'noopener noreferrer';
+                idLink.textContent = `#${r.id}`;
+                numericIdEl.appendChild(idLink);
+            } else {
+                numericIdEl.textContent = `#${r.id}`;
+            }
 
             const statusBadge = row.querySelector('.timeline-status-badge');
             statusBadge.classList.add(statusClass);
