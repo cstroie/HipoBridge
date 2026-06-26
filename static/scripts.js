@@ -884,7 +884,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function clearResults() {
         // Clear patient data with null checks
-        if (elements.patientId) elements.patientId.textContent = '';
+        if (elements.patientId) elements.patientId.innerHTML = '';
         if (elements.patientName) elements.patientName.textContent = '';
         if (elements.patientCnp) elements.patientCnp.textContent = '';
         if (elements.patientGender) elements.patientGender.innerHTML = '';
@@ -970,9 +970,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const themeIcon = elements.themeToggle?.querySelector('i');
         if (themeIcon) themeIcon.className = newTheme === 'dark' ? 'fas fa-sun' : newTheme === 'light' ? 'fas fa-moon' : 'fas fa-circle-half-stroke';
+
+        // Re-render QR codes with the new theme colours
+        [elements.qrLastName, elements.qrFirstName, elements.qrCnp, elements.qrBirthDate].forEach(c => {
+            if (c?.dataset.qrText) renderQr(c, c.dataset.qrText);
+        });
     }
 
     let whoamiData = null;
+    let hipocrateUrl = null;
 
     async function fetchWhoami() {
         if (whoamiData) return whoamiData;
@@ -983,6 +989,7 @@ document.addEventListener('DOMContentLoaded', function() {
             throw new Error(data.message || 'User data not available');
         }
         whoamiData = data.user;
+        hipocrateUrl = (data.hipocrate_url || '').replace(/\/$/, '');
         return whoamiData;
     }
 
@@ -2024,7 +2031,19 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Meta badges: ID · gender + age · diagnosis
         const age = calculateAge(patientData.birthDate);
-        if (elements.patientId) elements.patientId.textContent = patientData.id ? `ID: ${patientData.id}` : '';
+        if (elements.patientId) {
+            const pid = patientData.id || '';
+            elements.patientId.textContent = pid ? `ID: ${pid}` : '';
+            if (pid && hipocrateUrl) {
+                const a = document.createElement('a');
+                a.href = `${hipocrateUrl}/Pacient/edit.asp?id=${pid}`;
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
+                a.textContent = `ID: ${pid}`;
+                elements.patientId.textContent = '';
+                elements.patientId.appendChild(a);
+            }
+        }
 
         // Gender icon + age in one badge
         const genderIcon = patientData.gender === 'female' ? 'fa-venus' : patientData.gender === 'male' ? 'fa-mars' : null;
@@ -2085,6 +2104,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function renderQr(canvas, text) {
         if (!canvas || !text) return;
+        canvas.dataset.qrText = text;
         const qr = qrcode(0, 'L');
         qr.addData(text);
         qr.make();
@@ -2095,12 +2115,10 @@ document.addEventListener('DOMContentLoaded', function() {
         canvas.width  = size;
         canvas.height = size;
         const ctx = canvas.getContext('2d');
-        const cs = getComputedStyle(document.documentElement);
-        const bg  = cs.getPropertyValue('--card-bg').trim() || '#ffffff';
-        const fg  = cs.getPropertyValue('--primary').trim()  || '#312e81';
-        ctx.fillStyle = bg;
+        const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+        ctx.fillStyle = dark ? '#0e1626' : '#ffffff';
         ctx.fillRect(0, 0, size, size);
-        ctx.fillStyle = fg;
+        ctx.fillStyle = dark ? '#8b93f8' : '#312e81';
         for (let r = 0; r < modules; r++) {
             for (let c = 0; c < modules; c++) {
                 if (!qr.isDark(r, c)) continue;

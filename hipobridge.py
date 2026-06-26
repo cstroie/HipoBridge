@@ -442,6 +442,7 @@ async def get_whoami(request):
     if debug_resp is not None:
         return debug_resp
     parsed_data = await client.fetch_and_parse()
+    parsed_data.store("hipocrate_url", SERVICE_URL)
     return web_json_response(parsed_data)
 
 @require_auth
