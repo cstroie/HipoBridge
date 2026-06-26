@@ -256,6 +256,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Show login dialog if no credentials are stored
         if (!getCredentials()) {
             showLoginDialog();
+        } else {
+            fetchWhoami().catch(() => {});
         }
     }
     
