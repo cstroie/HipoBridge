@@ -2015,8 +2015,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Enhanced patient basic info display
-    function displayPatientBasicInfo(patientData) {
+    async function displayPatientBasicInfo(patientData) {
         log('Displaying patient basic info:', patientData);
+        await fetchWhoami().catch(() => {});
         
         // Patient Name
         const name = formatPatientName(patientData.name);
