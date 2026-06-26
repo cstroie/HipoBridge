@@ -2562,7 +2562,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // All unique dates (oldest first) for column headers
         const allDates = [...new Set(observations.map(o => o.effectiveDateTime?.slice(0, 10)).filter(Boolean))].sort();
-        const colDates = allDates.slice(-10);  // cap table at 10 most recent dates
+        const colDates = allDates.slice(-5);  // cap table at 5 most recent dates
 
         // Build table
         const table = document.createElement('table');
@@ -2631,16 +2631,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 else if (m.flag === 'L') td.className = 'trend-low';
             }
 
-            // Sparkline cell
+            // Sparkline cell — restricted to the same colDates window
             const tdSpark = row.insertCell();
             tdSpark.className = 'trend-spark-col';
-            tdSpark.innerHTML = sparkline(a.measurements, a.low, a.high);
+            const colSet = new Set(colDates);
+            tdSpark.innerHTML = sparkline(a.measurements.filter(m => colSet.has(m.date?.slice(0, 10))), a.low, a.high);
         }
 
         elements.trendsContainer.innerHTML = '';
         elements.trendsContainer.appendChild(table);
         if (elements.trendsSubtitle) {
-            elements.trendsSubtitle.textContent = `${analytes.length} analytes · ${allDates.length} dates`;
+            elements.trendsSubtitle.textContent = `${analytes.length} analytes · ${colDates.length} most recent dates`;
         }
         elements.trendsSection.hidden = false;
     }
