@@ -206,5 +206,6 @@ Full request edit form. Returns patient name, CNP, demographics (derived from CN
 | User info | `/gen_administrare/listare/cont.asp?id={id}&ses=1` |
 | Imaging request bulletin (BuletinSolicitare) | `/PARA/Printabile/BuletinSolicitare.asp?id={id}&type=2&IdP={IdP}` — example: `id=1723502`, `type=2` (imaging), `IdP=12` |
 | Presentation printable sheet (FisaPrezentare) | `/gen_printabile/FisaPrezentare.asp?relname=PR&id={id}` — printable version; data source is `/files/presentation.asp?id={id}` |
+| Emergency Department Sheet (FUPU / Foaie UPU) | `/gen_printabile/FUPU.asp?id={presentation_id}#pg={page}` — full ED clinical record: triage, vitals, anamnesis, systematic exam, meds, discharge; up to 8 pages + medications page |
 | Checkup from presentation (back-link) | `/files/checkup.asp?presid={presentation_id}&cuid={checkup_id}` — same as `/files/checkup.asp?cuid={id}`; `presid` is navigation context only, no extra data |
 | Procedures per consultation | `/files/procedures.asp?cuid={checkup_id}` — section procedure groups + procedures recorded against a specific checkup; appears empty if none added |
