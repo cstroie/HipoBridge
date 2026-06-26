@@ -1544,6 +1544,8 @@ select {
     overflow: hidden;
 }
 .card-subtitle .exam-date { white-space: nowrap; }
+.card-subtitle a { color: inherit; text-decoration: none; }
+.card-subtitle a:hover { color: var(--primary); }
 
 /* Ordering physician */
 .card-referrer-line {

@@ -2726,7 +2726,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (typeText) typeText.textContent = analysisText || modality.label;
 
         const reportId = article.querySelector('.report-id');
-        if (reportId) reportId.textContent = `#${serviceRequest.id}`;
+        if (reportId) {
+            if (hipocrateUrl) {
+                const a = document.createElement('a');
+                a.href = `${hipocrateUrl}/PARA/NOM/Listare/cerere.asp?id=${serviceRequest.id}`;
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
+                a.textContent = `#${serviceRequest.id}`;
+                reportId.appendChild(a);
+            } else {
+                reportId.textContent = `#${serviceRequest.id}`;
+            }
+        }
 
         const examDateEl = article.querySelector('.exam-date');
         if (examDateEl && serviceRequest.authoredOn) {
