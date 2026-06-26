@@ -128,6 +128,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function clearCredentials() {
         sessionStorage.removeItem(CRED_KEY);
+        localStorage.removeItem('hipocrateUrl');
+        hipocrateUrl = null;
     }
 
     function authHeader() {
@@ -980,18 +982,21 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     let whoamiData = null;
-    let hipocrateUrl = null;
+    let hipocrateUrl = localStorage.getItem('hipocrateUrl') || null;
 
     async function fetchWhoami() {
         if (whoamiData) return whoamiData;
         const resp = await apiFetch('/api/whoami');
         if (!resp.ok) throw new Error(`Whoami request failed (${resp.status})`);
         const data = await resp.json();
+        if (data.hipocrate_url) {
+            hipocrateUrl = data.hipocrate_url.replace(/\/$/, '');
+            localStorage.setItem('hipocrateUrl', hipocrateUrl);
+        }
         if (data.status !== 'success' || !data.user) {
             throw new Error(data.message || 'User data not available');
         }
         whoamiData = data.user;
-        hipocrateUrl = (data.hipocrate_url || '').replace(/\/$/, '');
         return whoamiData;
     }
 
