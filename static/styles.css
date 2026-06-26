@@ -1466,18 +1466,18 @@ select {
     gap: 14px;
 }
 
-/* Modality circle — 52px per editorial */
+/* Modality circle */
 .mod-circle {
-    width: 48px;
-    height: 48px;
+    width: 56px;
+    height: 56px;
     flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
 }
 .mod-circle svg {
-    width: 36px;
-    height: 36px;
+    width: 48px;
+    height: 48px;
     fill: currentColor;
 }
 .modal-mod-circle {
@@ -1550,6 +1550,7 @@ select {
     display: flex;
     align-items: center;
     gap: 6px;
+    margin-top: 6px;
     font: 500 12.5px 'Inter', sans-serif;
     color: var(--ink-2);
 }
