@@ -52,7 +52,7 @@ HTTP client → hipobridge.py (@require_auth) → HipoClient* (cache + semaphore
 | `HipoClientCheckout` | `/api/checkout/{id}` | `/gen_printabile/BiletExternare.asp?RelId={id}&RelName=CO` |
 | `HipoClientCheckin` | `/api/checkin/{id}`, `/fhir/Encounter/{id}?type=checkin` | `/files/checkin.asp?id={id}` |
 | `HipoClientCheckup` | `/api/checkup/{id}`, `/fhir/Encounter/{id}?type=checkup` | `/files/checkup.asp?cuid={id}` |
-| `HipoClientPresentation` | `/api/presentation/{id}`, `/fhir/Encounter/{id}?type=presentation` | `/files/presentation.asp?id={id}` |
+| `HipoClientPresentation` | `/api/presentation/{id}`, `/fhir/Encounter/{id}?type=presentation` | `/gen_printabile/FisaPrezentare.asp?relname=PR&id={id}` |
 | `HipoClientCerere` | `/api/request/{id}/patient`, `/fhir/ServiceRequest/{id}?type=cerere` | `/PARA/NOM/Listare/cerere.asp?id={id}` |
 | `HipoClientSchedule` | `/api/schedule`, `/fhir/Schedule` | `/PARA/NOM/Listare/?id=44&NrPePag=100` |
 | `HipoClientObservationBundle` | `/fhir/Observation?patient=` | `/Pacient/analysesEpisod.asp` (parallel per domain) |

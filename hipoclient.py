@@ -3559,11 +3559,33 @@ class HipoClientCerere(HipoClient):
 
 
 class HipoClientPresentation(HipoClient):
-    """Parses an outpatient/ER presentation (/files/presentation.asp?id={id})."""
+    """Parses an outpatient/ER presentation printable form (/gen_printabile/FisaPrezentare.asp)."""
 
     def __init__(self, service_url=None, request=None):
         super().__init__(service_url=service_url, request=request)
-        self.request_url = "/files/presentation.asp?id={id}"
+        self.request_url = "/gen_printabile/FisaPrezentare.asp?relname=PR&id={id}"
+
+    # Maps decision display text → (fhir_code, is_final)
+    # fhir_code maps to hospitalization.dischargeDisposition coding
+    _DECISION = {
+        'preluat upu':                    ('in-progress',  False),
+        'alta unitate sanitara':          ('other-hcf',    True),
+        'decedat (upu)':                  ('exp',          True),
+        'internare':                      ('oth',          True),   # → checkin
+        'internat la decizia medic upu':  ('oth',          True),   # → checkin
+        'plecat din upu la domiciliu':    ('home',         True),
+        'plecat fara aviz':               ('aadvice',      True),
+        'plecat fara consult':            ('aadvice',      True),
+        'plecat in asezaminte sociale':   ('other',        True),
+    }
+
+    @staticmethod
+    def _v(cell: str, prefix: str) -> str:
+        """Strip a label prefix from a table cell and return the value, or '' if absent."""
+        s = cell.strip()
+        if s.startswith(prefix):
+            return s[len(prefix):].strip()
+        return ''
 
     def parse_data(self, html_content: str, **kwargs) -> HipoData:
         data = HipoData(status="success", message="")
@@ -3578,120 +3600,110 @@ class HipoClientPresentation(HipoClient):
             if 'id' in kwargs:
                 data.store("presentation.id", kwargs["id"])
 
-            # Patient identity from the header link text "[ NAME ]"
-            patient_link = soup.find('a', href=re.compile(r'[Pp]acient/edit\.asp\?id='))
-            if patient_link:
-                name = re.sub(r'[\[\]]', '', patient_link.get_text(strip=True)).strip()
-                data.store("patient.name", name)
-            # CNP from hidden input or inline text
-            cnp_inp = soup.find('input', attrs={'name': 'strCNP'})
-            if not cnp_inp:
-                # try to find it from visible CNP label row
-                for tr in soup.find_all('tr'):
-                    cells = [td.get_text(' ', strip=True) for td in tr.find_all('td')]
-                    if len(cells) >= 2 and cells[0].strip() == 'CNP':
-                        parsed = parse_cnp(cells[1].strip())
-                        if parsed.get("valid"):
-                            data.store("patient.cnp", cells[1].strip())
-                            data.store("patient.gender", parsed["gender"])
-                            data.store("patient.date", parsed["birth_date"])
-                            data.store("patient.age", parsed["age"])
+            # Header div: "FISA PREZENTARE\nCod prezentare:{id}\nData prezentare:{date}"
+            header_div = soup.find('div', string=re.compile(r'FISA PREZENTARE'))
+            if not header_div:
+                # fallback: find by partial text
+                for div in soup.find_all('div'):
+                    if 'FISA PREZENTARE' in div.get_text():
+                        header_div = div
                         break
-            else:
-                cnp = cnp_inp.get('value', '').strip()
-                parsed = parse_cnp(cnp)
-                if parsed.get("valid"):
-                    data.store("patient.cnp", cnp)
-                    data.store("patient.gender", parsed["gender"])
-                    data.store("patient.date", parsed["birth_date"])
-                    data.store("patient.age", parsed["age"])
+            if header_div:
+                lines = [t.strip() for t in header_div.get_text('\n').split('\n') if t.strip()]
+                for line in lines:
+                    if line.startswith('Cod prezentare:'):
+                        data.store("presentation.id", line[len('Cod prezentare:'):].strip())
+                    elif line.startswith('Data prezentare:'):
+                        raw_dt = line[len('Data prezentare:'):].strip()
+                        dt = parse_date_time(raw_dt)
+                        if dt:
+                            data.store("presentation.date_time", dt.strftime("%d/%m/%Y %H:%M"))
 
-            # Date/time, registry, and linked IDs from known input names
-            for inp in soup.find_all('input'):
-                name = inp.get('name', '')
-                val = inp.get('value', '').strip()
-                if not val:
-                    continue
-                if name == 'strDate':
-                    data.store("presentation.date", val)
-                elif name == 'strTime':
-                    data.store("presentation.time", val)
-                elif name == 'strRefID':
-                    data.store("presentation.registry", val)
-                elif name == 'savedCUId':
-                    data.store("presentation.checkup_id", val)
-                elif name == 'savedCUDecision':
-                    data.store("presentation.decision_code", val)
-                elif name == 'hdnPacID':
-                    data.store("patient.id", val)
-                elif name == 'checkinID':
-                    data.store("presentation.checkin_id", val)
-                elif name == 'strTransportNumber':
-                    data.store("presentation.transport_number", val)
-                elif name == 'strTransportDoctor':
-                    data.store("presentation.transport_medic", val)
-
-            # Reason for visit and transport type from selects
-            for sel in soup.find_all('select'):
-                sel_name = sel.get('name', '')
-                opt = sel.find('option', selected=True)
-                val = opt.get_text(strip=True) if opt else ''
-                if not val or val.upper() in ('NONE', '') or val.upper().startswith('SELECTATI'):
-                    continue
-                if sel_name == 'EmergencyReason':
-                    data.store("presentation.reason", val)
-                elif sel_name == 'selTransportType':
-                    data.store("presentation.transport_type", val)
-
-            # Combine date + time into a single date_time string
-            date = data.get("presentation.date", "")
-            time = data.get("presentation.time", "")
-            if date and time:
-                dt = parse_date_time(f"{date} {time}")
-                if dt:
-                    data.store("presentation.date_time", dt.strftime("%d/%m/%Y %H:%M"))
-
-            # Section, medic, urgency, and reason from the triage table row
-            # The row looks like: "Garda: UPU  Medic: DR. X  Data/Ora: ...  Nr. registru: ..."
+            # Table rows — fixed positions in the printable layout
+            rows = []
             for tr in soup.find_all('tr'):
                 cells = [td.get_text(' ', strip=True) for td in tr.find_all('td')]
-                if not cells:
-                    continue
-                row_text = cells[0]
+                if any(c.strip() for c in cells):
+                    rows.append(cells)
 
-                if 'Garda:' in row_text:
-                    m = re.search(r'Garda:\s*(\S+)', row_text)
-                    if m:
-                        data.store("presentation.section", m.group(1).strip())
-                    m2 = re.search(r'Medic:\s*(DR\.\s*\S+(?:\s+\S+)*?)(?:\s+Data/Ora:|$)', row_text)
-                    if m2:
-                        data.store("presentation.medic", m2.group(1).strip())
+            for cells in rows:
+                n = len(cells)
 
-                elif len(cells) >= 2 and 'Urgenta:' in cells[0]:
-                    data.store("presentation.is_urgent", cells[1].strip().upper() == 'DA')
+                # Row: [name, gender, age, registry_nr/year]
+                if n >= 1 and cells[0] and not any(
+                    cells[0].startswith(p) for p in ('Data nasterii', 'Prenume', 'Telefon',
+                                                       'Ocupatie', 'Medic de familie', 'Casa',
+                                                       'Alte', 'Tip venire', 'Sectie', '[')
+                ) and not data.get("patient.name") and cells[0] != 'FISA PREZENTARE':
+                    if n >= 1:
+                        data.store("patient.name", cells[0])
+                    if n >= 2 and cells[1] in ('M', 'F'):
+                        data.store("patient.gender", 'male' if cells[1] == 'M' else 'female')
+                    if n >= 3:
+                        data.store("patient.age", cells[2])
 
-                elif len(cells) >= 2 and 'Motiv prezentare:' in cells[0]:
-                    data.store("presentation.reason", cells[1].strip())
+                # Row: [Data nasterii: {dob}, Act: {}, CNP: {cnp}]
+                elif n >= 1 and cells[0].startswith('Data nasterii:'):
+                    data.store("patient.birth_date", self._v(cells[0], 'Data nasterii:'))
+                    if n >= 3:
+                        cnp_raw = self._v(cells[2], 'CNP:')
+                        if cnp_raw:
+                            parsed = parse_cnp(cnp_raw)
+                            if parsed.get("valid"):
+                                data.store("patient.cnp", cnp_raw)
+                                data.store("patient.gender", parsed["gender"])
+                                data.store("patient.birth_date", parsed["birth_date"])
+                                data.store("patient.age", parsed["age"])
 
-            # Consultation type from select
-            cu_sel = soup.find('select', attrs={'name': 'sCUType'})
-            if cu_sel:
-                opt = cu_sel.find('option', selected=True)
-                if opt:
-                    val = opt.get_text(strip=True)
-                    if val and not val.upper().startswith('SELECTATI'):
-                        data.store("presentation.consult_type", val)
+                # Row: [Prenume mama: {}, Prenume tata: {}, Adresa: {addr}, Mediu: {rural/urban}]
+                elif n >= 1 and cells[0].startswith('Prenume mama:'):
+                    if n >= 3:
+                        data.store("patient.address", self._v(cells[2], 'Adresa:'))
+                    if n >= 4:
+                        data.store("patient.mediu", self._v(cells[3], 'Mediu:'))
 
-            # Linked checkup decision text from the consults table
-            # Row: "checkup_id | section | medic | date | decision"
-            for tr in soup.find_all('tr'):
-                cells = [td.get_text(' ', strip=True) for td in tr.find_all('td')]
-                checkup_id = data.get("presentation.checkup_id", "")
-                if len(cells) >= 5 and checkup_id and cells[0].strip() == checkup_id:
-                    data.store("presentation.section", data.get("presentation.section") or cells[1].strip())
-                    data.store("presentation.medic", data.get("presentation.medic") or cells[2].strip())
-                    data.store("presentation.decision", cells[4].strip())
-                    break
+                # Row: [Telefon: {}, Sector/Judet: {}, Localitate: {}, Tara: {}]
+                elif n >= 1 and cells[0].startswith('Telefon:'):
+                    data.store("patient.phone",  self._v(cells[0], 'Telefon:'))
+                    if n >= 2:
+                        data.store("patient.county", self._v(cells[1], 'Sector/Judet:'))
+                    if n >= 3:
+                        data.store("patient.city",   self._v(cells[2], 'Localitate:'))
+
+                # Row: [Casa de asigurari: {}, Judetul casei: {}, Nr.carnet: {}, Reducere: {}]
+                elif n >= 1 and cells[0].startswith('Casa de asigurari:'):
+                    data.store("patient.insurance", self._v(cells[0], 'Casa de asigurari:'))
+
+                # Row: [Tip venire: {}, Judet venire: {}, Tip vehicul: {}, Nr.vehicul: {}]
+                elif n >= 1 and cells[0].startswith('Tip venire:'):
+                    data.store("presentation.transport_type",   self._v(cells[0], 'Tip venire:'))
+                    if n >= 3:
+                        data.store("presentation.transport_vehicle", self._v(cells[2], 'Tip vehicul:'))
+                    if n >= 4:
+                        data.store("presentation.transport_number",  self._v(cells[3], 'Nr.vehicul:'))
+
+                # Row: [Sectie prezentare: {}, Medic prezentare: {}, Motiv: {}, Decizie: {}]
+                elif n >= 1 and cells[0].startswith('Sectie prezentare:'):
+                    data.store("presentation.section", self._v(cells[0], 'Sectie prezentare:'))
+                    if n >= 2:
+                        data.store("presentation.medic",    self._v(cells[1], 'Medic prezentare:'))
+                    if n >= 3:
+                        data.store("presentation.reason",   self._v(cells[2], 'Motiv:'))
+                    if n >= 4:
+                        data.store("presentation.decision", self._v(cells[3], 'Decizie:'))
+
+            # Consult div: "Consult de specialitate in: {section}\nNr.reg: {nr}"
+            for div in soup.find_all('div'):
+                txt = div.get_text(' ', strip=True)
+                if txt.startswith('Consult de specialitate in:'):
+                    lines = [l.strip() for l in div.get_text('\n').split('\n') if l.strip()]
+                    for line in lines:
+                        if line.startswith('Consult de specialitate in:'):
+                            data.store("presentation.consult_section",
+                                       line[len('Consult de specialitate in:'):].strip())
+                        elif line.startswith('Nr.reg:'):
+                            data.store("presentation.registry",
+                                       line[len('Nr.reg:'):].strip().split()[0])
 
             return data
         except Exception as e:
@@ -3711,6 +3723,10 @@ class HipoClientPresentation(HipoClient):
 
             presentation_id = parsed_data.get("presentation.id", "")
             section = parsed_data.get("presentation.section", "")
+            decision_text = (parsed_data.get("presentation.decision") or "").strip()
+            decision_key  = re.sub(r'\s*\(F\)\s*$', '', decision_text).strip().lower()
+            disp_code, is_final = self._DECISION.get(decision_key, (None, True))
+            enc_status = "finished" if is_final else "in-progress"
 
             # UPU = emergency department → EMER class; otherwise ambulatory
             is_emer = section.upper() in ("UPU", "CPU", "URGENTA", "URGENTE")
@@ -3720,7 +3736,7 @@ class HipoClientPresentation(HipoClient):
 
             fhir_encounter = FHIREncounter(
                 id=presentation_id,
-                status="finished",
+                status=enc_status,
                 class_={
                     "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
                     "code": encounter_class,
@@ -3733,10 +3749,7 @@ class HipoClientPresentation(HipoClient):
                         "display": encounter_type_display
                     }]
                 }],
-                subject={
-                    "reference": f"Patient/{parsed_data.get('patient.id', '')}",
-                    "display": parsed_data.get("patient.name", "")
-                }
+                subject={"display": parsed_data.get("patient.name", "")}
             )
 
             # Identifier: registry number
@@ -3770,49 +3783,62 @@ class HipoClientPresentation(HipoClient):
                     "status": "completed"
                 }]
 
-            # Priority
-            if parsed_data.get("presentation.is_urgent"):
-                fhir_encounter["priority"] = {
-                    "coding": [{"system": "http://terminology.hl7.org/CodeSystem/v3-ActPriority", "code": "EM", "display": "emergency"}]
-                }
-
             # Reason for visit / chief complaint
             reason = parsed_data.get("presentation.reason")
             if reason:
                 fhir_encounter["reasonCode"] = [{"text": reason}]
 
-            # Link to the inpatient admission this presentation led to
-            checkin_id = parsed_data.get("presentation.checkin_id")
-            if checkin_id:
-                fhir_encounter["partOf"] = {"reference": f"Encounter/{checkin_id}"}
-
             # Transport details as extension
-            transport_type = parsed_data.get("presentation.transport_type")
+            transport_type   = parsed_data.get("presentation.transport_type")
+            transport_vehicle = parsed_data.get("presentation.transport_vehicle")
             transport_number = parsed_data.get("presentation.transport_number")
-            transport_medic = parsed_data.get("presentation.transport_medic")
             transport_exts = []
             if transport_type:
-                transport_exts.append({"url": "type", "valueString": transport_type})
+                transport_exts.append({"url": "type",    "valueString": transport_type})
+            if transport_vehicle:
+                transport_exts.append({"url": "vehicle", "valueString": transport_vehicle})
             if transport_number:
-                transport_exts.append({"url": "number", "valueString": transport_number})
-            if transport_medic:
-                transport_exts.append({"url": "medic", "valueString": transport_medic})
+                transport_exts.append({"url": "number",  "valueString": transport_number})
             if transport_exts:
                 fhir_encounter.setdefault("extension", []).append({
                     "url": f"{fhir_encounter.get('id', '')}/transport",
                     "extension": transport_exts
                 })
 
-            # Discharge decision as note
-            decision = parsed_data.get("presentation.decision")
-            consult_type = parsed_data.get("presentation.consult_type")
+            # Patient address + insurance as extensions (richer than what /api/patient returns)
+            pat_exts = []
+            if parsed_data.get("patient.address"):
+                pat_exts.append({"url": "patientAddress",  "valueString": parsed_data.get("patient.address")})
+            if parsed_data.get("patient.city"):
+                pat_exts.append({"url": "patientCity",     "valueString": parsed_data.get("patient.city")})
+            if parsed_data.get("patient.county"):
+                pat_exts.append({"url": "patientCounty",   "valueString": parsed_data.get("patient.county")})
+            if parsed_data.get("patient.insurance"):
+                pat_exts.append({"url": "patientInsurance","valueString": parsed_data.get("patient.insurance")})
+            if pat_exts:
+                fhir_encounter.setdefault("extension", []).extend(pat_exts)
+
+            # Discharge decision + consult section as notes
+            consult_section = parsed_data.get("presentation.consult_section")
             notes = []
-            if decision:
-                notes.append({"text": decision})
-            if consult_type:
-                notes.append({"text": consult_type})
+            if decision_text:
+                notes.append({"text": decision_text})
+            if consult_section:
+                notes.append({"text": f"Consult: {consult_section}"})
             if notes:
                 fhir_encounter["note"] = notes
+
+            # Discharge disposition
+            if disp_code and is_final:
+                fhir_encounter["hospitalization"] = {
+                    "dischargeDisposition": {
+                        "coding": [{
+                            "system": "http://terminology.hl7.org/CodeSystem/discharge-disposition",
+                            "code": disp_code,
+                            "display": decision_text,
+                        }]
+                    }
+                }
 
             return fhir_encounter
         except Exception as e:

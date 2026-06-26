@@ -205,3 +205,4 @@ Full request edit form. Returns patient name, CNP, demographics (derived from CN
 | Appointments list | `/gen_apps/` |
 | User info | `/gen_administrare/listare/cont.asp?id={id}&ses=1` |
 | Imaging request bulletin (BuletinSolicitare) | `/PARA/Printabile/BuletinSolicitare.asp?id={id}&type=2&IdP={IdP}` — example: `id=1723502`, `type=2` (imaging), `IdP=12` |
+| Presentation printable sheet (FisaPrezentare) | `/gen_printabile/FisaPrezentare.asp?relname=PR&id={id}` — printable version; data source is `/files/presentation.asp?id={id}` |
