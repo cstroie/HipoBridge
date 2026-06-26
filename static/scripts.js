@@ -3528,6 +3528,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const regionLine = row.querySelector('.timeline-card-region');
             regionLine.textContent = laboratory;
             regionLine.dataset.requestId = r.id;
+            regionLine.dataset.modality = laboratory;
 
             // Meta line: hide unused parts
             const metaSectionEl  = row.querySelector('.timeline-meta-section');
@@ -3578,14 +3579,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(r => r.ok ? r.json() : null)
                 .then(data => {
                     const regions = _extractRegions(data);
-                    if (regions.length) { _examCache[id] = regions; _applyExamLabel(el, regions); return; }
+                    const indication = (data?.note || []).find(n => n.category?.[0]?.text === 'clinical-indication')?.text || '';
+                    if (regions.length || indication) {
+                        _examCache[id] = { regions, indication };
+                        _applyExamLabel(el, _examCache[id]);
+                        return;
+                    }
                     // Study not yet reported — fall back to ServiceRequest for ordered procedure regions
                     return apiFetch(`/fhir/ServiceRequest/${id}`)
                         .then(r => r.ok ? r.json() : null)
                         .then(d => {
-                            const r = _extractRegions(d);
-                            _examCache[id] = r;
-                            _applyExamLabel(el, r);
+                            const cached = { regions: _extractRegions(d), indication: '' };
+                            _examCache[id] = cached;
+                            _applyExamLabel(el, cached);
                         });
                 })
                 .catch(() => {});
@@ -3609,10 +3615,21 @@ document.addEventListener('DOMContentLoaded', function() {
         return [];
     }
 
-    function _applyExamLabel(el, regions) {
-        if (!regions.length) return;
-        const modality = el.textContent;  // was set to laboratory as placeholder
-        el.textContent = regions.join(', ') + (modality ? ' · ' + modality : '');
+    function _applyExamLabel(el, { regions, indication }) {
+        el.innerHTML = '';
+        const modality = el.dataset.modality || '';
+        const regionText = regions.length
+            ? regions.join(', ') + (modality ? ' · ' + modality : '')
+            : modality;
+        if (regionText) {
+            el.appendChild(document.createTextNode(regionText));
+        }
+        if (indication) {
+            const em = document.createElement('em');
+            em.className = 'timeline-indication';
+            em.textContent = indication;
+            el.appendChild(em);
+        }
     }
 
     function renderScheduleHero() {
