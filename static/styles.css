@@ -1466,20 +1466,7 @@ select {
     gap: 14px;
 }
 
-/* Modality circle */
-.mod-circle {
-    width: 64px;
-    height: 64px;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.mod-circle svg {
-    width: 56px;
-    height: 56px;
-    fill: currentColor;
-}
+
 .modal-mod-circle {
     width: 64px;
     height: 64px;
@@ -1494,17 +1481,6 @@ select {
     height: 64px;
     fill: currentColor;
 }
-.analysis-card.radio .mod-circle,
-.mod-circle.mod-xr { color: var(--mod-xr); }
-.analysis-card.ct    .mod-circle,
-.mod-circle.mod-ct { color: var(--mod-ct); }
-.analysis-card.irm   .mod-circle,
-.mod-circle.mod-mr { color: var(--mod-mr); }
-.analysis-card.eco   .mod-circle,
-.mod-circle.mod-us { color: var(--mod-us); }
-.analysis-card.rads  .mod-circle,
-.mod-circle.mod-fl  { color: var(--mod-fl);  }
-.mod-circle.mod-lab { color: var(--mod-lab); }
 
 .card-title-block {
     flex: 1;

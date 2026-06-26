@@ -2710,13 +2710,6 @@ document.addEventListener('DOMContentLoaded', function() {
         article.dataset.analysisType = analysisType;
 
         const modality = MODALITY_INFO[analysisType] || { icon: 'fa-file-medical', label: analysisText };
-        // Modality circle avatar
-        const circleEl = article.querySelector('.mod-circle');
-        if (circleEl) {
-            const circleAvatar = MODALITY_AVATAR[analysisType] || { icon: 'fa-question', cls: '' };
-            circleEl.innerHTML = modAvatarHTML(analysisType);
-            if (circleAvatar.cls) circleEl.classList.add(circleAvatar.cls);
-        }
 
         const typeText = article.querySelector('.type-text');
         if (typeText) typeText.textContent = analysisText || modality.label;
