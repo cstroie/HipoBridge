@@ -460,7 +460,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                     <div class="mod-circle" aria-hidden="true"></div>
                     <div class="card-title-block">
                         <div class="card-title-row">
-                            <div>
+                            <hgroup>
                                 <h2 class="card-title">
                                     <span class="type-text"></span><span class="card-regions"></span><em class="card-indication-text"></em>
                                 </h2>
@@ -472,7 +472,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                                     <i class="fas fa-user-doctor" aria-hidden="true"></i>
                                     <span class="card-referrer" aria-label="Ordering physician"></span>
                                 </p>
-                            </div>
+                            </hgroup>
                             <strong class="urgent-badge" hidden>Urgent</strong>
                         </div>
                     </div>
@@ -582,7 +582,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                         <div class="report-modal-title-row">
                             <div class="report-modal-identity">
                                 <div class="mod-circle modal-mod-circle" aria-hidden="true"></div>
-                                <div class="report-modal-title-block">
+                                <hgroup class="report-modal-title-block">
                                     <h2 id="schedule-request-modal-title" class="report-modal-title">
                                         <span class="modal-patient-name"></span>
                                     </h2>
@@ -596,14 +596,14 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                                         <i class="fas fa-user-doctor" aria-hidden="true"></i>
                                         <span class="modal-requester"></span>
                                     </p>
-                                </div>
+                                    <p class="report-modal-indication" hidden>
+                                        <span class="modal-indication-label">Indication:</span>
+                                        <em class="modal-indication-text"></em>
+                                    </p>
+                                </hgroup>
                             </div>
                             <button class="report-modal-close" aria-label="Close modal"><i class="fas fa-times"></i></button>
                         </div>
-                        <p class="report-modal-indication" hidden>
-                            <span class="modal-indication-label">Indication:</span>
-                            <em class="modal-indication-text"></em>
-                        </p>
                     </header>
                     <div class="report-modal-body markdown-content"></div>
                     <p class="report-modal-error" hidden></p>
