@@ -555,8 +555,8 @@ small {
     cursor: pointer;
 }
 
-/* Two-row nav on narrow screens */
-@media (max-width: 680px) {
+/* Two-row nav on screens narrower than 1024px */
+@media (max-width: 1023px) {
     :root { --header-height: 110px; }
 
     .app-bar {
@@ -573,7 +573,6 @@ small {
         padding-right: 0;
         margin-right: 0;
     }
-    .brand-wordmark { display: none; }
 
     /* Row 2: patient sub-nav, full width, pushed last via order */
     #navPatientGroup {
@@ -585,19 +584,24 @@ small {
         align-items: stretch;
     }
 
-    /* Patient tab buttons: icon-only, spread evenly */
+    /* Patient tab buttons: spread evenly */
     #navPatientGroup .nav-btn {
         flex: 1;
         justify-content: center;
         padding: 0;
         height: 100%;
     }
-    #navPatientGroup .nav-btn span { display: none; }
-    #navPatientGroup .nav-btn i { font-size: 14px; }
 
     /* Separator and patient pill not needed in the flat icon row */
     .nav-sep { display: none; }
     .patient-ctx-pill { display: none; }
+}
+
+/* Very narrow: hide wordmark and collapse patient nav to icon-only */
+@media (max-width: 680px) {
+    .brand-wordmark { display: none; }
+    #navPatientGroup .nav-btn span { display: none; }
+    #navPatientGroup .nav-btn i { font-size: 14px; }
 }
 
 
