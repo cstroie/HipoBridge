@@ -207,5 +207,6 @@ Full request edit form. Returns patient name, CNP, demographics (derived from CN
 | Imaging request bulletin (BuletinSolicitare) | `/PARA/Printabile/BuletinSolicitare.asp?id={id}&type=2&IdP={IdP}` — example: `id=1723502`, `type=2` (imaging), `IdP=12` |
 | Presentation printable sheet (FisaPrezentare) | `/gen_printabile/FisaPrezentare.asp?relname=PR&id={id}` — printable version; data source is `/files/presentation.asp?id={id}` |
 | Emergency Department Sheet (FUPU / Foaie UPU) | `/gen_printabile/FUPU.asp?id={presentation_id}#pg={page}` — full ED clinical record: triage, vitals, anamnesis, systematic exam, meds, discharge; up to 8 pages + medications page |
+| Medical Letter (ScrisoareMedicala / Anexa 43) | `/gen_printabile/ScrisoareMedicala.asp?relname=PR&id={presentation_id}` — referral/discharge letter to GP or outpatient specialist; includes diagnosis, labs, imaging, treatment, prescriptions, follow-up; valid 6 months |
 | Checkup from presentation (back-link) | `/files/checkup.asp?presid={presentation_id}&cuid={checkup_id}` — same as `/files/checkup.asp?cuid={id}`; `presid` is navigation context only, no extra data |
 | Procedures per consultation | `/files/procedures.asp?cuid={checkup_id}` — section procedure groups + procedures recorded against a specific checkup; appears empty if none added |
