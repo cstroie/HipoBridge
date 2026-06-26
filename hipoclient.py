@@ -1278,6 +1278,8 @@ class HipoClientServiceRequest(HipoClient):
                         data.store("request.section", value)
                     elif 'URGENTA' in raw:
                         data.store("request.is_urgent", value.upper() == 'DA')
+                    elif 'COMENTARIILE MEDICULUI' in raw:
+                        data.store("request.comment", value)
 
             # Header Antet paragraphs for physician, section, payment type, dates
             for p in soup.find_all('p', class_='Antet'):
@@ -1444,12 +1446,10 @@ class HipoClientServiceRequest(HipoClient):
                     "display": clinical_comments
                 }]
 
-            # Add note for lab comments
-            lab_comments = parsed_data.get("request.lab_comments")
-            if lab_comments:
-                fhir_service_request["note"] = [{
-                    "text": lab_comments
-                }]
+            # Physician comment (Comentariile medicului)
+            comment = parsed_data.get("request.comment")
+            if comment:
+                fhir_service_request["note"] = [{"text": comment}]
 
             # Add order details for imaging studies
             studies = parsed_data.get("studies")
