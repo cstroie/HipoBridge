@@ -949,6 +949,12 @@ class HipoClientPatient(HipoClient):
                 fhir_patient["address"] = [addr]
 
             extensions = []
+            pid = parsed_data.get("patient.id", patient_id)
+            if pid and self.service_url:
+                extensions.append({
+                    "url": "hipocrateUrl",
+                    "valueUri": f"{self.service_url}/Pacient/edit.asp?id={pid}"
+                })
             if parsed_data.get("patient.weight"):
                 extensions.append({
                     "url": "http://hl7.org/fhir/us/vitals/StructureDefinition/body-weight",

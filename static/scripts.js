@@ -2015,9 +2015,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Enhanced patient basic info display
-    async function displayPatientBasicInfo(patientData) {
+    function displayPatientBasicInfo(patientData) {
         log('Displaying patient basic info:', patientData);
-        await fetchWhoami().catch(() => {});
         
         // Patient Name
         const name = formatPatientName(patientData.name);
@@ -2036,15 +2035,17 @@ document.addEventListener('DOMContentLoaded', function() {
         const age = calculateAge(patientData.birthDate);
         if (elements.patientId) {
             const pid = patientData.id || '';
-            elements.patientId.textContent = pid ? `ID: ${pid}` : '';
-            if (pid && hipocrateUrl) {
+            const patHipoUrl = (patientData.extension || []).find(e => e.url === 'hipocrateUrl')?.valueUri;
+            elements.patientId.innerHTML = '';
+            if (pid && patHipoUrl) {
                 const a = document.createElement('a');
-                a.href = `${hipocrateUrl}/Pacient/edit.asp?id=${pid}`;
+                a.href = patHipoUrl;
                 a.target = '_blank';
                 a.rel = 'noopener noreferrer';
                 a.textContent = `ID: ${pid}`;
-                elements.patientId.textContent = '';
                 elements.patientId.appendChild(a);
+            } else if (pid) {
+                elements.patientId.textContent = `ID: ${pid}`;
             }
         }
 
