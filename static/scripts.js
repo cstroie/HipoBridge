@@ -3625,6 +3625,7 @@ document.addEventListener('DOMContentLoaded', function() {
             el.appendChild(document.createTextNode(regionText));
         }
         if (indication) {
+            if (regionText) el.append(' · ');
             const em = document.createElement('em');
             em.className = 'timeline-indication';
             em.textContent = indication;

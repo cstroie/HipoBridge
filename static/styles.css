@@ -2529,10 +2529,8 @@ select {
 }
 
 .timeline-indication {
-    display: block;
-    font: 400 italic var(--font-size-xs) 'Inter', sans-serif;
+    font-style: italic;
     color: var(--ink-3);
-    margin-top: 2px;
 }
 
 .timeline-card-meta {
