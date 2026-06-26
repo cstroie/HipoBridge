@@ -3264,8 +3264,7 @@ dialog.report-modal[open]::backdrop {
 }
 .qr-cell canvas {
     display: block;
-    max-width: 140px;
-    height: auto;
+    image-rendering: pixelated;
     border-radius: var(--radius-sm);
 }
 .qr-label {

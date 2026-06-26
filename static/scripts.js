@@ -2096,30 +2096,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function renderQr(canvas, text) {
         if (!canvas || !text) return;
-        const qr = qrcode(0, 'M');
+        const qr = qrcode(0, 'L');
         qr.addData(text);
         qr.make();
         const modules = qr.getModuleCount();
-        const quiet   = 3;
-        const total   = modules + quiet * 2;
-        const size    = 160;
-        const cell    = size / total;
+        const quiet   = 4;
+        const cell    = 5;
+        const size    = (modules + quiet * 2) * cell;
         canvas.width  = size;
         canvas.height = size;
         const ctx = canvas.getContext('2d');
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, size, size);
         ctx.fillStyle = '#312e81';
-        const rad = cell * 0.28;
         for (let r = 0; r < modules; r++) {
             for (let c = 0; c < modules; c++) {
                 if (!qr.isDark(r, c)) continue;
-                const x = (c + quiet) * cell + 0.5;
-                const y = (r + quiet) * cell + 0.5;
-                const w = cell - 1;
-                ctx.beginPath();
-                ctx.roundRect(x, y, w, w, rad);
-                ctx.fill();
+                ctx.fillRect((c + quiet) * cell, (r + quiet) * cell, cell, cell);
             }
         }
     }
