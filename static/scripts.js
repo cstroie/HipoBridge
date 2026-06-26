@@ -488,7 +488,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!pendingAnalysesData || elements.imagingGrid?.dataset.loaded) return;
         elements.imagingGrid.dataset.loaded = '1';
         const { patientData } = pendingAnalysesData;
-        const patientLabel = patientData.name?.[0]?.text || pendingAnalysesData.patientCode;
+        const patientLabel = formatPatientName(patientData.name);
         showLoading(`Loading imaging studies for ${patientLabel}…`);
         try {
             setLoadingStep('Querying Hipocrate for imaging requests…');
@@ -515,7 +515,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!pendingAnalysesData || elements.labGrid?.dataset.loaded) return;
         elements.labGrid.dataset.loaded = '1';
         const { patientData } = pendingAnalysesData;
-        const patientLabel = patientData.name?.[0]?.text || pendingAnalysesData.patientCode;
+        const patientLabel = formatPatientName(patientData.name);
         showLoading(`Loading lab results for ${patientLabel}…`);
         try {
             setLoadingStep('Querying Hipocrate for lab requests…');
