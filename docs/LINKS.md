@@ -53,8 +53,8 @@ Type codes: `radio`, `eco`, `ct`, `irm`, `rads`, `lab`, `rads`, `apa`.
 
 | HippoBridge endpoint | Hipocrate URL |
 |---|---|
-| `GET /api/study/{id}` | `/PARA/Printabile/BuletinAnalize.asp?id={id}&type=2&IdP=1` |
-| `GET /fhir/ImagingStudy/{id}` | `/PARA/Printabile/BuletinAnalize.asp?id={id}&type=2&IdP=1` |
+| `GET /api/study/{id}` | `/PARA/Printabile/BuletinAnalize.asp?id={id}&type=3&IdP=1` |
+| `GET /fhir/ImagingStudy/{id}` | `/PARA/Printabile/BuletinAnalize.asp?id={id}&type=3&IdP=1` |
 
 Result text is in `studies[].result` (raw API) or `note[].text` (FHIR).  
 Validator doctor is in `studies[].validator` (raw API) or `performer[].actor.display` (FHIR).
