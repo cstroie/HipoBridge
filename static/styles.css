@@ -1557,12 +1557,14 @@ select {
 .card-referrer-line i { font-size: 10px; color: var(--ink-3); }
 .card-referrer { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-indication {
-    margin: -8px 0 0;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-top: 4px;
     font: 400 12.5px/1.5 'Inter', sans-serif;
     color: var(--ink-2);
 }
-.card-indication[hidden] { display: none; }
-.card-indication-label { font-weight: 600; margin-right: 4px; }
+.card-indication i { font-size: 10px; color: var(--ink-3); flex-shrink: 0; }
 .card-indication-text { font-style: italic; }
 
 /* Urgent badge */
