@@ -1476,8 +1476,8 @@ select {
     justify-content: center;
 }
 .mod-circle svg {
-    width: 56px;
-    height: 56px;
+    width: 64px;
+    height: 64px;
     fill: currentColor;
 }
 .modal-mod-circle {
