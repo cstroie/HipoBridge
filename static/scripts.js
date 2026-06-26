@@ -3136,6 +3136,16 @@ document.addEventListener('DOMContentLoaded', function() {
         'unknown':        'Unknown',
     };
 
+    const PAYMENT_TYPE = {
+        'ambulator':            { label: 'Outpatient',  cls: 'pay-outpatient' },
+        'chitanta':             { label: 'Self-pay',    cls: 'pay-selfpay' },
+        'gratuitate':           { label: 'Exempt',      cls: 'pay-exempt' },
+        'personal-angajat':     { label: 'Staff',       cls: 'pay-staff' },
+        'spitalizare-continua': { label: 'Inpatient',   cls: 'pay-inpatient' },
+        'spitalizare-zi':       { label: 'Day case',    cls: 'pay-daycase' },
+        'urgenta':              { label: 'Emergency',   cls: 'pay-emergency' },
+    };
+
     let scheduleEntries = [];
 
     async function showRequestModal(requestId, requestCode, patientName, modality, triggerEl, requesterName) {
@@ -3441,7 +3451,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const section = r.note?.[0]?.text || '';
             const requestedBy = r.requester?.display || '';
             const laboratory = r.code?.text || '';
-            const modalitySlug = r.category?.[0]?.coding?.[0]?.code || '';
+            const modalitySlug  = r.category?.[0]?.coding?.[0]?.code || '';
+            const paymentSlug   = r.category?.[1]?.coding?.[0]?.code || '';
             const status = r.status || '';
             const statusClass = SCHEDULE_STATUS_CLASS[status] || '';
             const isUrgent = r.priority === 'urgent';
@@ -3486,6 +3497,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const urgBadge = row.querySelector('.urgent-badge');
             if (isUrgent) { urgBadge.hidden = false; } else { urgBadge.remove(); }
+
+            const payInfo = PAYMENT_TYPE[paymentSlug];
+            const payBadge = row.querySelector('.timeline-pay-badge');
+            const paySep   = row.querySelector('.timeline-pay-sep');
+            if (payInfo) {
+                payBadge.textContent = payInfo.label;
+                payBadge.classList.add(payInfo.cls);
+                payBadge.hidden = false;
+            } else {
+                payBadge.remove();
+                paySep?.remove();
+            }
 
             const regionLine = row.querySelector('.timeline-card-region');
             regionLine.textContent = laboratory;

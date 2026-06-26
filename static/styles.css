@@ -1570,6 +1570,17 @@ select {
     border-radius: var(--radius-full);
 }
 
+.timeline-pay-badge {
+    font-weight: var(--font-weight-medium);
+}
+.pay-outpatient  { color: #1d4ed8; }
+.pay-selfpay     { color: #b45309; }
+.pay-exempt      { color: #15803d; }
+.pay-staff       { color: #7c3aed; }
+.pay-inpatient   { color: #1e40af; }
+.pay-daycase     { color: #0369a1; }
+.pay-emergency   { color: #dc2626; }
+
 /* ── Report tab ───────────────────────────────────────────────────────── */
 .report-header {
     display: flex;

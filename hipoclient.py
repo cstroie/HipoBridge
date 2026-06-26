@@ -4315,6 +4315,17 @@ class HipoClientSchedule(HipoClient):
             data.set_error(str(e))
             return data
 
+    # Maps Hipocrate "tip plata" display text → FHIR coding slug
+    _PAYMENT_SLUG = {
+        'ambulator':            'ambulator',
+        'chitanta':             'chitanta',
+        'gratuitate':           'gratuitate',
+        'personal angajat':     'personal-angajat',
+        'spitalizare continua': 'spitalizare-continua',
+        'spitalizare de zi':    'spitalizare-zi',
+        'urgenta':              'urgenta',
+    }
+
     # Maps Hipocrate status text → FHIR ServiceRequest.status
     _FHIR_STATUS = {
         'cerere netrimisa':                   'on-hold',
@@ -4368,13 +4379,17 @@ class HipoClientSchedule(HipoClient):
                     }] if req.get('request_code') else None,
                     subject=FHIRReference(display=req.get('patient_name')),
                     code=FHIRCodeableConcept(text=req.get('laboratory')),
-                    category=[FHIRCodeableConcept(coding=[{"code": modality}])] if (modality := req.get('modality')) else None,
+                    category=[c for c in [
+                        FHIRCodeableConcept(coding=[{"code": req.get('modality')}]) if req.get('modality') else None,
+                        FHIRCodeableConcept(
+                            coding=[{"system": f"{system_base}/fhir/NamingSystem/payment-type",
+                                     "code": self._PAYMENT_SLUG.get((req.get('payment_type') or '').lower(), 'other'),
+                                     "display": req.get('payment_type')}],
+                        ) if req.get('payment_type') else None,
+                    ] if c] or None,
                     authoredOn=req.get('date_time'),
                     requester=FHIRReference(display=req.get('requested_by')) if req.get('requested_by') else None,
-                    note=[n for n in [
-                        {"text": req.get('section')} if req.get('section') else None,
-                        {"text": req.get('payment_type')} if req.get('payment_type') else None,
-                    ] if n] or None,
+                    note=[{"text": req.get('section')}] if req.get('section') else None,
                 )
                 bundle.append_entry(resource=sr)
 
