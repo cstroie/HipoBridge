@@ -3571,8 +3571,8 @@ class HipoClientPresentation(HipoClient):
         'preluat upu':                    ('in-progress',  False),
         'alta unitate sanitara':          ('other-hcf',    True),
         'decedat (upu)':                  ('exp',          True),
-        'internare':                      ('oth',          True),   # → checkin
-        'internat la decizia medic upu':  ('oth',          True),   # → checkin
+        'internare':                      (None,           True),   # → inpatient encounter begins
+        'internat la decizia medic upu':  (None,           True),   # → inpatient encounter begins
         'plecat din upu la domiciliu':    ('home',         True),
         'plecat fara aviz':               ('aadvice',      True),
         'plecat fara consult':            ('aadvice',      True),
