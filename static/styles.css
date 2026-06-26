@@ -2664,7 +2664,8 @@ select {
     border-radius: var(--radius-sm);
     background: var(--card-bg);
     color: var(--text);
-    min-width: 160px;
+    min-width: 0;
+    width: 120px;
 }
 
 .schedule-date-input {
