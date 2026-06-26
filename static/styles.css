@@ -1468,16 +1468,16 @@ select {
 
 /* Modality circle */
 .mod-circle {
-    width: 56px;
-    height: 56px;
+    width: 64px;
+    height: 64px;
     flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
 }
 .mod-circle svg {
-    width: 48px;
-    height: 48px;
+    width: 56px;
+    height: 56px;
     fill: currentColor;
 }
 .modal-mod-circle {
