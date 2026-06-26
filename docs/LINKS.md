@@ -49,7 +49,7 @@ Type codes: `radio`, `eco`, `ct`, `irm`, `rads`, `lab`, `rads`, `apa`.
 
 ---
 
-## Imaging Study (type=2: radio, eco, ct, irm, rads)
+## Imaging Study (type=3: radio, eco, ct, irm, rads)
 
 | HippoBridge endpoint | Hipocrate URL |
 |---|---|
@@ -57,7 +57,9 @@ Type codes: `radio`, `eco`, `ct`, `irm`, `rads`, `lab`, `rads`, `apa`.
 | `GET /fhir/ImagingStudy/{id}` | `/PARA/Printabile/BuletinAnalize.asp?id={id}&type=3&IdP=1` |
 
 Result text is in `studies[].result` (raw API) or `note[].text` (FHIR).  
-Validator doctor is in `studies[].validator` (raw API) or `performer[].actor.display` (FHIR).
+Validator doctor is in `studies[].validator` (raw API) or `performer[].actor.display` (FHIR).  
+Patient ID (`COD PACIENT`) is present on this page and parsed into `subject.reference` in FHIR — source for patient navigation from schedule/analysis cards.  
+Clinical indication (`INFO SUPLIMENTAR`) is parsed as `note[category=clinical-indication]` in FHIR.
 
 ---
 
