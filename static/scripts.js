@@ -2948,13 +2948,17 @@ document.addEventListener('DOMContentLoaded', function() {
         } finally {
             if (loadingEl) loadingEl.hidden = true;
             if (bodyEl) bodyEl.hidden = false;
-            // Show write-report button now that canWriteReports is resolved from whoami
+            // Show write-report button for imaging types only, once canWriteReports is known
             const IMAGING_TYPES = ['radio', 'ct', 'irm', 'eco', 'rads'];
-            if (canWriteReports && IMAGING_TYPES.includes(article.dataset.analysisType)) {
-                const writeBtn = article.querySelector('.btn-write-report');
-                if (writeBtn && writeBtn.hidden) {
-                    writeBtn.hidden = false;
-                    writeBtn.addEventListener('click', () => openReportEditor(article));
+            const writeBtn = article.querySelector('.btn-write-report');
+            if (writeBtn) {
+                if (canWriteReports && IMAGING_TYPES.includes(article.dataset.analysisType)) {
+                    if (writeBtn.hidden) {
+                        writeBtn.hidden = false;
+                        writeBtn.addEventListener('click', () => openReportEditor(article));
+                    }
+                } else {
+                    writeBtn.remove();
                 }
             }
         }
