@@ -260,7 +260,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!getCredentials()) {
             showLoginDialog();
         } else {
-            fetchWhoami().catch(() => {});
+            whoamiReady = fetchWhoami().catch(() => {});
         }
     }
     
@@ -995,6 +995,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let whoamiData = null;
     let hipocrateUrl = localStorage.getItem('hipocrateUrl') || null;
     let canWriteReports = false;
+    let whoamiReady = Promise.resolve();
 
     async function fetchWhoami() {
         if (whoamiData) return whoamiData;
@@ -2953,6 +2954,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (loadingEl) loadingEl.hidden = true;
             if (bodyEl) bodyEl.hidden = false;
             // Show write-report button for imaging types once canWriteReports is resolved
+            await whoamiReady;
             if (canWriteReports) {
                 const writeBtn = article.querySelector('.btn-write-report');
                 if (writeBtn && writeBtn.hidden) {
