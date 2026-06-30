@@ -2795,7 +2795,11 @@ document.addEventListener('DOMContentLoaded', function() {
             setCardIndication(article, indication);
         }
 
-        // Write-report button is shown lazily in fetchAndFillReport once canWriteReports is known
+        // Remove write-report button from non-imaging cards immediately (type is known now)
+        const IMAGING_TYPES_WRITE = ['radio', 'ct', 'irm', 'eco', 'rads'];
+        if (!IMAGING_TYPES_WRITE.includes(analysisType)) {
+            article.querySelector('.btn-write-report')?.remove();
+        }
 
         return article;
     }
@@ -2948,17 +2952,12 @@ document.addEventListener('DOMContentLoaded', function() {
         } finally {
             if (loadingEl) loadingEl.hidden = true;
             if (bodyEl) bodyEl.hidden = false;
-            // Show write-report button for imaging types only, once canWriteReports is known
-            const IMAGING_TYPES = ['radio', 'ct', 'irm', 'eco', 'rads'];
-            const writeBtn = article.querySelector('.btn-write-report');
-            if (writeBtn) {
-                if (canWriteReports && IMAGING_TYPES.includes(article.dataset.analysisType)) {
-                    if (writeBtn.hidden) {
-                        writeBtn.hidden = false;
-                        writeBtn.addEventListener('click', () => openReportEditor(article));
-                    }
-                } else {
-                    writeBtn.remove();
+            // Show write-report button for imaging types once canWriteReports is resolved
+            if (canWriteReports) {
+                const writeBtn = article.querySelector('.btn-write-report');
+                if (writeBtn && writeBtn.hidden) {
+                    writeBtn.hidden = false;
+                    writeBtn.addEventListener('click', () => openReportEditor(article));
                 }
             }
         }
