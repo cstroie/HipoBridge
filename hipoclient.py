@@ -4465,15 +4465,16 @@ class HipoClientReportWrite(HipoClient):
             data.store("message", err or "Empty response from cerere.asp")
             return data
 
+        # fn_EditRezultate('label', reqId, anlId, bi) — bi=1 means editable
         m = re.search(
-            r'fn_EditRezultate\s*\(\s*\d+\s*,\s*(\d+)\s*,\s*1\s*(?:,\s*[\'"]?([0-9a-fA-F-]{36})[\'"]?)?\s*[,)]',
+            r"fn_EditRezultate\s*\(['\"][^'\"]*['\"]\s*,\s*\d+\s*,\s*(\d+)\s*,\s*1\s*\)",
             cerere_html)
         if not m:
             data.store("message", "No radiology analysis found in this request")
             return data
         anl_id = m.group(1)
-        guid = m.group(2) or str(uuid.uuid4())
-        logger.info(f"ReportWrite: cerere={cerere_id} anl={anl_id} guid={guid} (from_page={bool(m.group(2))})")
+        guid = str(uuid.uuid4())
+        logger.info(f"ReportWrite: cerere={cerere_id} anl={anl_id} guid={guid}")
 
         # Step 2 — GET Rezultate.asp to discover the form field code
         rez_qs = f"from=Popup&req={cerere_id}&anl={anl_id}&Tip=1&guid={guid}"
