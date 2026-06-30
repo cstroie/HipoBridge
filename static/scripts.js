@@ -236,6 +236,8 @@ document.addEventListener('DOMContentLoaded', function() {
         return results;
     }
 
+    let whoamiReady = Promise.resolve();
+
     // Initialize application
     initApp();
     
@@ -995,7 +997,6 @@ document.addEventListener('DOMContentLoaded', function() {
     let whoamiData = null;
     let hipocrateUrl = localStorage.getItem('hipocrateUrl') || null;
     let canWriteReports = false;
-    let whoamiReady = Promise.resolve();
 
     async function fetchWhoami() {
         if (whoamiData) return whoamiData;
