@@ -91,6 +91,7 @@ document.addEventListener('DOMContentLoaded', function() {
         scheduleLoading: document.getElementById('scheduleLoading'),
         noSchedule: document.getElementById('noSchedule'),
         scheduleTimeline: document.getElementById('scheduleTimeline'),
+        scheduleStatusChips: document.getElementById('scheduleStatusChips'),
         scheduleHero: document.getElementById('scheduleHero'),
         scheduleDayMetrics: document.getElementById('scheduleDayMetrics'),
         scheduleModBars: document.getElementById('scheduleModBars')
@@ -410,6 +411,16 @@ document.addEventListener('DOMContentLoaded', function() {
             document.querySelectorAll('#labChips .chip').forEach(c => c.classList.remove('chip-active'));
             chip.classList.add('chip-active');
             filterLabGrid(chip.dataset.filter || 'all');
+        });
+
+        // Schedule status chips
+        elements.scheduleStatusChips?.addEventListener('click', e => {
+            const chip = e.target.closest('.chip');
+            if (!chip) return;
+            elements.scheduleStatusChips.querySelectorAll('.chip').forEach(c => c.classList.remove('chip-active'));
+            chip.classList.add('chip-active');
+            activeScheduleStatusFilter = chip.dataset.status;
+            renderSchedule();
         });
     }
     
@@ -3180,6 +3191,7 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     let scheduleEntries = [];
+    let activeScheduleStatusFilter = '';
 
     async function showRequestModal(requestId, requestCode, patientName, modality, triggerEl, requesterName) {
         const tmpl = document.getElementById('schedule-request-modal-template');
@@ -3456,8 +3468,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
         container.innerHTML = '';
 
+        const visibleEntries = activeScheduleStatusFilter
+            ? scheduleEntries.filter(r => r.status === activeScheduleStatusFilter)
+            : scheduleEntries;
+
         if (scheduleEntries.length === 0) {
             if (elements.scheduleTable) elements.scheduleTable.hidden = true;
+            if (elements.scheduleTimeline) elements.scheduleTimeline.hidden = true;
+            if (elements.noSchedule) elements.noSchedule.style.display = '';
+            if (elements.scheduleModBars) elements.scheduleModBars.hidden = true;
+            return;
+        }
+
+        if (visibleEntries.length === 0) {
             if (elements.scheduleTimeline) elements.scheduleTimeline.hidden = true;
             if (elements.noSchedule) elements.noSchedule.style.display = '';
             if (elements.scheduleModBars) elements.scheduleModBars.hidden = true;
@@ -3473,7 +3496,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const isMultiDay = (elements.scheduleStartDate?.value || '') !== (elements.scheduleEndDate?.value || '');
         let currentDay = null;
 
-        scheduleEntries.forEach((r, idx) => {
+        visibleEntries.forEach((r, idx) => {
             const authoredOn = r.authoredOn || '';
             const hasTime = authoredOn.includes(' ');
             const day = hasTime ? authoredOn.split(' ')[0] : authoredOn;
@@ -3490,7 +3513,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const statusClass = SCHEDULE_STATUS_CLASS[status] || '';
             const isUrgent = r.priority === 'urgent';
             const avatar = MODALITY_AVATAR[modalitySlug] || { icon: 'fa-question', cls: '' };
-            const isLast = idx === scheduleEntries.length - 1;
+            const isLast = idx === visibleEntries.length - 1;
 
             // Day group heading
             if (isMultiDay && day && day !== currentDay) {

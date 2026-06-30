@@ -420,6 +420,17 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                     <!-- Filters row -->
                     <div class="schedule-filters">
 
+                        <!-- Status chips -->
+                        <div class="schedule-status-chips" id="scheduleStatusChips" role="group" aria-label="Filter by status">
+                            <button type="button" class="chip chip-active" data-status="">All</button>
+                            <button type="button" class="chip" data-status="on-hold">Not sent</button>
+                            <button type="button" class="chip" data-status="draft">In lab</button>
+                            <button type="button" class="chip" data-status="active">In progress</button>
+                            <button type="button" class="chip" data-status="completed">Completed</button>
+                            <button type="button" class="chip" data-status="ended">Finished</button>
+                            <button type="button" class="chip" data-status="revoked">Cancelled</button>
+                        </div>
+
                         <div class="schedule-filters-spacer"></div>
 
                         <!-- Ward pill wrapping the native select -->

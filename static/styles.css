@@ -2645,6 +2645,8 @@ select {
 
 .schedule-filters-spacer { flex: 1; }
 
+.schedule-status-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+
 /* Ward pill — wraps the native select for styling */
 .schedule-ward-pill {
     display: flex;
