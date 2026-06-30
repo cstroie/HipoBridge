@@ -3480,12 +3480,21 @@ class HipoClientCerere(HipoClient):
                     'editable': False,
                     'text': '',
                 }
-            editable_ids = set(re.findall(
-                r"fn_EditRezultate\s*\(['\"][^'\"]*['\"]\s*,\s*\d+\s*,\s*['\"]?(\d+)['\"]?\s*,\s*1\s*\)",
-                html_content))
-            for anl_id in editable_ids:
+            for m in re.finditer(
+                r"fn_EditRezultate\s*\(['\"]([^'\"]*)['\"],\s*\d+\s*,\s*['\"]?(\d+)['\"]?\s*,\s*1\s*\)",
+                html_content):
+                anl_id = m.group(2)
                 if anl_id in validate_entries:
                     validate_entries[anl_id]['editable'] = True
+                else:
+                    validate_entries[anl_id] = {
+                        'anl_id': anl_id,
+                        'label': m.group(1),
+                        'validated': False,
+                        'id_grup': '0',
+                        'editable': True,
+                        'text': '',
+                    }
 
             # Associate result text: walk rows in order, track current anl_id by header proximity
             current_anl_id = None
