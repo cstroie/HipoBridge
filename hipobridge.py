@@ -35,7 +35,7 @@ import base64
 from fhir import OperationOutcome, Resource
 
 from hipoclient import ANALYSIS_TYPES
-from hipoclient import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientImagingStudy, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientServiceRequestSearch, HipoClientCheckout, HipoClientCheckin, HipoClientCheckup, HipoClientSchedule, HipoClientCerere, HipoClientPresentation, HipoClientObservationBundle, HipoClientWhoami, HipoClientReportWrite
+from hipoclient import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientImagingStudy, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientServiceRequestSearch, HipoClientCheckout, HipoClientCheckin, HipoClientCheckup, HipoClientSchedule, HipoClientCerere, HipoClientPresentation, HipoClientObservationBundle, HipoClientWhoami, HipoClientReportWrite, HipoClientReportValidate
 from hipoclient import user_session_manager, url_cache
 from urlcache import FilesystemCache
 from hipodata import HipoData
@@ -469,6 +469,22 @@ async def post_study_report(request):
     return web_json_response(result)
 
 @require_auth
+async def post_report_validate(request):
+    """Validate or devalidate a radiology report result."""
+    cerere_id = request.match_info['id']
+    username, _ = request['auth_credentials']
+    if username not in _ALLOWED_RADIOLOGISTS:
+        return web.Response(status=403, text='Not authorised to validate reports')
+    try:
+        body = await request.json()
+        validated = bool(body.get('validated'))
+    except Exception:
+        return web.Response(status=400, text='Invalid JSON body')
+    client = HipoClientReportValidate(SERVICE_URL, request)
+    result = await client.validate(cerere_id, validated)
+    return web_json_response(result)
+
+@require_auth
 async def post_logout(request):
     """Close the user's Hipocrate session held by the bridge."""
     username, _ = request['auth_credentials']
@@ -866,6 +882,7 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     app.router.add_get('/api/presentation/{id}', get_presentation)
     app.router.add_get('/api/request/{id}/patient', get_request_patient)
     app.router.add_post('/api/request/{id}/report', post_study_report)
+    app.router.add_post('/api/request/{id}/validate', post_report_validate)
     app.router.add_get('/api/schedule', get_schedule)
     app.router.add_get('/fhir/Schedule', get_fhir_schedule)
     app.router.add_get('/api/whoami', get_whoami)

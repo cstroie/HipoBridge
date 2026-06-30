@@ -3371,3 +3371,37 @@ dialog.report-editor-modal article > section {
     background: var(--primary);
     color: #fff;
 }
+
+.btn-validate-report, .btn-devalidate-report {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    margin-top: var(--spacing-sm);
+    padding: var(--spacing-xs) var(--spacing-md);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.btn-validate-report {
+    border: 1px solid var(--success, #28a745);
+    background: none;
+    color: var(--success, #28a745);
+}
+
+.btn-validate-report:hover {
+    background: var(--success, #28a745);
+    color: #fff;
+}
+
+.btn-devalidate-report {
+    border: 1px solid var(--warning, #e67e22);
+    background: none;
+    color: var(--warning, #e67e22);
+}
+
+.btn-devalidate-report:hover {
+    background: var(--warning, #e67e22);
+    color: #fff;
+}

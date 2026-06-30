@@ -3463,6 +3463,23 @@ class HipoClientCerere(HipoClient):
             if exams:
                 data.store_list("exams", exams)
 
+            # Report text and validation state — only present for radiology (Tip=1)
+            vm = re.search(
+                r"fn_validate_cerere\s*\(['\"][^'\"]*['\"]\s*,\s*\d+\s*,\s*(\d+)\s*,\s*([01])\s*,\s*1\s*\)",
+                html_content)
+            if vm:
+                data.store("report.anl_id", vm.group(1))
+                data.store("report.validated", vm.group(2) == '1')
+                # Result text is in the second <td> of a <tr class="tre_class_generic_1">
+                # whose first cell contains "Rezultat"
+                for row in soup.find_all('tr', class_='tre_class_generic_1'):
+                    cells = row.find_all('td', class_='tdh')
+                    if len(cells) >= 2 and 'Rezultat' in cells[0].get_text():
+                        text = cells[1].get_text(strip=True)
+                        if text:
+                            data.store("report.text", text)
+                        break
+
             return data
         except Exception as e:
             logger.error(f"Error parsing cerere data: {e}")
@@ -4521,4 +4538,50 @@ class HipoClientReportWrite(HipoClient):
 
         data.set_success()
         return data
-        return self.fhir_response(parsed, **kwargs)
+
+
+class HipoClientReportValidate(HipoClient):
+    """Validate or devalidate a radiology report result via Ajax_Cerere.asp."""
+
+    async def validate(self, cerere_id: str, validated: bool) -> HipoData:
+        data = HipoData()
+
+        if not self.session:
+            self.session = self.get_user_session(self.username)
+
+        cerere_path = f"/PARA/NOM/Listare/cerere.asp?id={cerere_id}"
+        cerere_url = self.get_full_url(cerere_path)
+        cerere_html, err = await self.make_authenticated_request(
+            cerere_url, "GET", None, self.username, self.password)
+        if err or not cerere_html:
+            data.store("message", err or "Empty response from cerere.asp")
+            return data
+
+        m = re.search(
+            r"fn_validate_cerere\s*\(['\"][^'\"]*['\"]\s*,\s*\d+\s*,\s*(\d+)\s*,\s*([01])\s*,\s*1\s*\)",
+            cerere_html)
+        if not m:
+            data.store("message", "No radiology analysis found in this request")
+            return data
+        anl_id, current_state = m.group(1), m.group(2)
+        logger.info(f"ReportValidate: cerere={cerere_id} anl={anl_id} validated={validated} current_state={current_state}")
+
+        qs = (f"action=VDV&IdRequest={cerere_id}&IdText={anl_id}"
+              f"&IdGrup={current_state}&Tip=1&Validare={'1' if validated else '0'}&guid={uuid.uuid4()}")
+        resp, err = await self.make_authenticated_request(
+            self.get_full_url(f"/PARA/NOM/LISTARE/Ajax_Cerere.asp?{qs}"),
+            "GET", None, self.username, self.password)
+        if err:
+            data.store("message", err)
+            return data
+        if resp and resp.strip():
+            data.store("message", resp.strip())
+            return data
+
+        for suffix in ["&type=3&IdP=1", "&type=1&IdP=1"]:
+            self.cache_remove(
+                self.get_full_url(f"/PARA/Printabile/BuletinAnalize.asp?id={cerere_id}{suffix}"))
+        self.cache_remove(cerere_url)
+
+        data.set_success()
+        return data

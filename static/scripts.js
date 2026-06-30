@@ -2797,10 +2797,12 @@ document.addEventListener('DOMContentLoaded', function() {
             setCardIndication(article, indication);
         }
 
-        // Remove write-report button from non-imaging cards immediately (type is known now)
+        // Remove write/validate buttons from non-imaging cards immediately (type is known now)
         const IMAGING_TYPES_WRITE = ['radio', 'ct', 'irm', 'eco', 'rads'];
         if (!IMAGING_TYPES_WRITE.includes(analysisType)) {
             article.querySelector('.btn-write-report')?.remove();
+            article.querySelector('.btn-validate-report')?.remove();
+            article.querySelector('.btn-devalidate-report')?.remove();
         }
 
         return article;
@@ -2954,7 +2956,7 @@ document.addEventListener('DOMContentLoaded', function() {
         } finally {
             if (loadingEl) loadingEl.hidden = true;
             if (bodyEl) bodyEl.hidden = false;
-            // Show write-report button for imaging types once canWriteReports is resolved
+            // Show write/validate buttons for imaging types once canWriteReports is resolved
             await whoamiReady;
             if (canWriteReports) {
                 const writeBtn = article.querySelector('.btn-write-report');
@@ -2962,8 +2964,48 @@ document.addEventListener('DOMContentLoaded', function() {
                     writeBtn.hidden = false;
                     writeBtn.addEventListener('click', () => openReportEditor(article));
                 }
+                // Fetch cerere.asp state: report text (may be unvalidated) + validation state
+                const cerereId = article.dataset.serviceRequestId;
+                try {
+                    const r = await fetch(`/api/request/${cerereId}/patient`, { headers: authHeader() });
+                    const d = await r.json();
+                    const report = d.report || {};
+                    if (report.text) {
+                        // Show unvalidated report text if BuletinAnalize had nothing
+                        const notesEl = article.querySelector('.report-notes');
+                        if (notesEl && !notesEl.textContent.trim()) {
+                            notesEl.textContent = report.text;
+                        }
+                        article.dataset.reportText = report.text;
+                        article.classList.remove('no-report');
+                    }
+                    if (report.anl_id) {
+                        const validateBtn = article.querySelector('.btn-validate-report');
+                        const devalidateBtn = article.querySelector('.btn-devalidate-report');
+                        if (!report.validated && validateBtn) {
+                            validateBtn.hidden = false;
+                            validateBtn.addEventListener('click', () => setValidated(article, cerereId, true));
+                        } else if (report.validated && devalidateBtn) {
+                            devalidateBtn.hidden = false;
+                            devalidateBtn.addEventListener('click', () => setValidated(article, cerereId, false));
+                        }
+                    }
+                } catch (_) {}
             }
         }
+    }
+
+    async function setValidated(article, cerereId, validated) {
+        const resp = await fetch(`/api/request/${cerereId}/validate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeader() },
+            body: JSON.stringify({ validated })
+        });
+        if (!resp.ok) {
+            showToast(await resp.text(), 'error');
+            return;
+        }
+        fetchAndFillReport(article);
     }
     
     function openReportEditor(article) {
