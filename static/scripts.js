@@ -1,5 +1,10 @@
 marked.use({ breaks: true });
 
+const APP_TITLE = 'HippoBridge';
+function setPageTitle(prefix) {
+    document.title = prefix ? `${prefix} — ${APP_TITLE}` : APP_TITLE;
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // DOM Elements - Cache selectors for better performance
     const elements = {
@@ -456,6 +461,12 @@ document.addEventListener('DOMContentLoaded', function() {
         // Reflect the tab in the URL fragment (no scroll, no history entry)
         history.replaceState(null, '', `#${tabId}`);
 
+        if (tabId === 'schedule') {
+            setPageTitle('Schedule');
+        } else if (tabId === 'search' || !elements.patientName?.textContent) {
+            setPageTitle(null);
+        }
+
         if (tabId === 'schedule' && !elements.scheduleTable?.dataset.loaded && getCredentials()) {
             fetchScheduleFromInputs();
         }
@@ -900,6 +911,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function clearResults() {
+        setPageTitle(null);
         // Clear patient data with null checks
         if (elements.patientId) elements.patientId.innerHTML = '';
         if (elements.patientName) elements.patientName.textContent = '';
@@ -1892,7 +1904,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function displayPatientData(patientData) {
         log('Displaying patient data:', patientData);
-        
+
+        const name = formatPatientName(patientData.name);
+        if (name) setPageTitle(name);
+
         // Enhanced patient information display with better formatting
         displayPatientBasicInfo(patientData);
         
