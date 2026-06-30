@@ -2982,7 +2982,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (texts.length) {
                             const div = document.createElement('div');
                             div.className = 'report-note';
-                            div.textContent = texts.join('\n\n');
+                            div.innerHTML = marked.parse(texts.join('\n\n').replace(/\n{2,}/g, '\n'));
                             previewEl.appendChild(div);
                             article.classList.remove('no-report');
                         }
