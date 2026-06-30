@@ -35,7 +35,7 @@ import base64
 from fhir import OperationOutcome, Resource
 
 from hipoclient import ANALYSIS_TYPES
-from hipoclient import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientImagingStudy, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientServiceRequestSearch, HipoClientCheckout, HipoClientCheckin, HipoClientCheckup, HipoClientSchedule, HipoClientCerere, HipoClientPresentation, HipoClientObservationBundle, HipoClientWhoami, HipoClientReportWrite, HipoClientReportValidate
+from hipoclient import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientImagingStudy, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientServiceRequestSearch, HipoClientCheckout, HipoClientCheckin, HipoClientCheckup, HipoClientSchedule, HipoClientCerere, HipoClientPresentation, HipoClientObservationBundle, HipoClientWhoami, HipoClientReportWrite, HipoClientReportValidate, HipoClientCererePerform
 from hipoclient import user_session_manager, url_cache
 from urlcache import FilesystemCache
 from hipodata import HipoData
@@ -490,6 +490,22 @@ async def post_report_validate(request):
     return web_json_response(result)
 
 @require_auth
+async def post_study_perform(request):
+    """Mark a radiology exam as performed by setting DataEfectuarii on cerere.asp."""
+    cerere_id = request.match_info['id']
+    username, _ = request['auth_credentials']
+    if username not in _ALLOWED_RADIOLOGISTS:
+        return web.Response(status=403, text='Not authorised to perform exams')
+    try:
+        body = await request.json()
+        performed_at = (body.get('performed_at') or '').strip() or None
+    except Exception:
+        performed_at = None
+    client = HipoClientCererePerform(SERVICE_URL, request)
+    result = await client.perform(cerere_id, performed_at)
+    return web_json_response(result)
+
+@require_auth
 async def post_logout(request):
     """Close the user's Hipocrate session held by the bridge."""
     username, _ = request['auth_credentials']
@@ -888,6 +904,7 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     app.router.add_get('/api/request/{id}/patient', get_request_patient)
     app.router.add_post('/api/request/{id}/report', post_study_report)
     app.router.add_post('/api/request/{id}/validate', post_report_validate)
+    app.router.add_post('/api/request/{id}/perform', post_study_perform)
     app.router.add_get('/api/schedule', get_schedule)
     app.router.add_get('/fhir/Schedule', get_fhir_schedule)
     app.router.add_get('/api/whoami', get_whoami)

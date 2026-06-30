@@ -2959,6 +2959,7 @@ document.addEventListener('DOMContentLoaded', function() {
             await whoamiReady;
             if (canWriteReports) {
                 const writeBtn = article.querySelector('.btn-write-report');
+                const performBtn = article.querySelector('.btn-perform-exam');
                 // write button is shown after cerere fetch confirms editable analyses exist
                 // Fetch cerere.asp state: report text (may be unvalidated) + per-analysis validate toggles
                 const cerereId = article.dataset.serviceRequestId;
@@ -2970,14 +2971,27 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Store for editor
                     article.dataset.reportAnalyses = JSON.stringify(analyses);
 
-                    // Show unvalidated report text if BuletinAnalize had nothing
-                    const notesEl = article.querySelector('.report-notes');
-                    if (notesEl && !notesEl.textContent.trim()) {
+                    // Show unvalidated report text if BuletinAnalize had nothing yet
+                    const previewEl = article.querySelector('.report-preview');
+                    if (previewEl && !previewEl.textContent.trim()) {
                         const texts = analyses.map(a => a.text).filter(Boolean);
                         if (texts.length) {
-                            notesEl.textContent = texts.join('\n\n');
+                            const div = document.createElement('div');
+                            div.className = 'report-note';
+                            div.textContent = texts.join('\n\n');
+                            previewEl.appendChild(div);
                             article.classList.remove('no-report');
                         }
+                    }
+
+                    const performed = Boolean(d.performed_at);
+
+                    // Show perform button only when the exam has not been performed yet
+                    if (performBtn && !performed) {
+                        performBtn.hidden = false;
+                        performBtn.replaceWith(performBtn.cloneNode(true));
+                        article.querySelector('.btn-perform-exam')
+                            .addEventListener('click', () => markExamPerformed(article, cerereId));
                     }
 
                     // Show write button only if at least one analysis is editable
@@ -3031,6 +3045,23 @@ document.addEventListener('DOMContentLoaded', function() {
             showToast(await resp.text(), 'error');
             return;
         }
+        fetchAndFillReport(article);
+    }
+
+    async function markExamPerformed(article, cerereId) {
+        const btn = article.querySelector('.btn-perform-exam');
+        if (btn) btn.disabled = true;
+        const resp = await fetch(`/api/request/${cerereId}/perform`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeader() },
+            body: JSON.stringify({}),
+        });
+        if (!resp.ok) {
+            if (btn) btn.disabled = false;
+            showToast(await resp.text().catch(() => `HTTP ${resp.status}`), 'error');
+            return;
+        }
+        showToast('Exam marked as performed', 'success');
         fetchAndFillReport(article);
     }
     

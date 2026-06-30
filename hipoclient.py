@@ -3397,6 +3397,11 @@ class HipoClientCerere(HipoClient):
             # Justification (text input named "Justificare")
             data.store("request.justification", extract_value_from_input(soup, name='Justificare'))
 
+            # Exam performed date (empty until marked as performed)
+            performed_at = extract_value_from_input(soup, name='DataEfectuarii')
+            if performed_at:
+                data.store("performed_at", performed_at)
+
             # Supplementary info / clinical indication (textarea "strObs", labelled "Info suplimentare")
             ta = soup.find('textarea', {'name': 'strObs'})
             if ta:
@@ -4588,6 +4593,104 @@ class HipoClientReportValidate(HipoClient):
             self.cache_remove(
                 self.get_full_url(f"/PARA/Printabile/BuletinAnalize.asp?id={cerere_id}{suffix}"))
         self.cache_remove(self.get_full_url(cerere_path))
+
+        data.set_success()
+        return data
+
+
+class HipoClientCererePerform(HipoClient):
+    """Mark a radiology exam as performed by replaying the cerere.asp form with DataEfectuarii set.
+
+    Flow:
+      1. GET cerere.asp to extract all current form field values.
+      2. Override DataEfectuarii with the provided (or current) date/time.
+      3. POST to cerere.asp with hdnAction=S.
+      4. Evict cerere and BuletinAnalize caches.
+    """
+
+    @staticmethod
+    def _extract_form_fields(soup) -> dict:
+        """Return a dict of all submittable fields from the first form containing hdnAction."""
+        form = None
+        for f in soup.find_all('form'):
+            if f.find('input', {'name': 'hdnAction'}):
+                form = f
+                break
+        if not form:
+            form = soup.find('form')
+        if not form:
+            return {}
+
+        fields = {}
+        for inp in form.find_all('input'):
+            name = inp.get('name')
+            if not name:
+                continue
+            inp_type = (inp.get('type') or 'text').lower()
+            if inp_type in ('submit', 'button', 'image', 'reset'):
+                continue
+            if inp_type == 'checkbox':
+                if inp.get('checked') is not None:
+                    fields[name] = inp.get('value', 'on')
+            elif inp_type == 'radio':
+                if inp.get('checked') is not None:
+                    fields[name] = inp.get('value', 'on')
+            else:
+                fields[name] = inp.get('value', '')
+
+        for sel in form.find_all('select'):
+            name = sel.get('name')
+            if not name:
+                continue
+            opt = sel.find('option', selected=True) or sel.find('option')
+            fields[name] = opt.get('value', '') if opt else ''
+
+        for ta in form.find_all('textarea'):
+            name = ta.get('name')
+            if not name:
+                continue
+            fields[name] = ta.get_text()
+
+        return fields
+
+    async def perform(self, cerere_id: str, performed_at: str = None) -> HipoData:
+        data = HipoData()
+
+        if not self.session:
+            self.session = self.get_user_session(self.username)
+
+        cerere_path = f"/PARA/NOM/Listare/cerere.asp?id={cerere_id}"
+        cerere_url = self.get_full_url(cerere_path)
+
+        html, err = await self.make_authenticated_request(
+            cerere_url, "GET", None, self.username, self.password)
+        if err or not html:
+            data.store("message", err or "Empty response from cerere.asp")
+            return data
+
+        soup = BeautifulSoup(html, 'html.parser')
+        form_data = self._extract_form_fields(soup)
+        if not form_data:
+            data.store("message", "No form found in cerere.asp")
+            return data
+
+        if performed_at is None:
+            performed_at = datetime.now().strftime('%Y-%m-%d %H:%M')
+        form_data['DataEfectuarii'] = performed_at
+        form_data['hdnAction'] = 'S'
+
+        logger.info(f"CererePerform: cerere={cerere_id} DataEfectuarii={performed_at}")
+        post_resp, err = await self.make_authenticated_request(
+            cerere_url, "POST", form_data, self.username, self.password)
+        logger.info(f"CererePerform POST result: err={err!r} resp_len={len(post_resp) if post_resp else 0}")
+        if err:
+            data.store("message", err)
+            return data
+
+        self.cache_remove(cerere_url)
+        for suffix in ["&type=3&IdP=1", "&type=1&IdP=1"]:
+            self.cache_remove(
+                self.get_full_url(f"/PARA/Printabile/BuletinAnalize.asp?id={cerere_id}{suffix}"))
 
         data.set_success()
         return data

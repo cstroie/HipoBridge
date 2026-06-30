@@ -3371,7 +3371,8 @@ dialog.report-editor-modal article > section {
     margin-top: var(--spacing-sm);
 }
 
-.btn-write-report:not([hidden]) {
+.btn-write-report:not([hidden]),
+.btn-perform-exam:not([hidden]) {
     display: inline-flex;
     align-items: center;
     gap: var(--spacing-xs);
@@ -3385,9 +3386,15 @@ dialog.report-editor-modal article > section {
     transition: background 0.15s, color 0.15s;
 }
 
-.btn-write-report:hover {
+.btn-write-report:hover,
+.btn-perform-exam:hover {
     background: var(--primary);
     color: #fff;
+}
+
+.btn-perform-exam:disabled {
+    opacity: 0.5;
+    cursor: default;
 }
 
 .validate-toggles {
