@@ -3463,25 +3463,48 @@ class HipoClientCerere(HipoClient):
             if exams:
                 data.store_list("exams", exams)
 
-            # Report text and validation state — only present for radiology (Tip=1)
-            # fn_validate_cerere('label', value, IdText, IdGrup, Tip)
-            #   value=1 → button validates (not yet validated)
-            #   value=0 → button devalidates (already validated)
-            vm = re.search(
-                r"fn_validate_cerere\s*\(['\"][^'\"]*['\"]\s*,\s*([01])\s*,\s*(\d+)\s*,\s*\d+\s*,\s*1\s*\)",
-                html_content)
-            if vm:
-                data.store("report.anl_id", vm.group(2))
-                data.store("report.validated", vm.group(1) == '0')
-                # Result text is in the second <td> of a <tr class="tre_class_generic_1">
-                # whose first cell contains "Rezultat"
-                for row in soup.find_all('tr', class_='tre_class_generic_1'):
+            # Radiology analyses — collect all Tip=1 validate calls and bi=1 edit calls
+            # fn_validate_cerere('label', value, anl_id, id_grup, Tip=1)
+            #   value=1 → not yet validated; value=0 → already validated
+            # fn_EditRezultate('label', req, anl_id, bi=1) → manually editable
+            validate_entries = {}  # anl_id -> info dict
+            for m in re.finditer(
+                r"fn_validate_cerere\s*\(['\"]([^'\"]+)['\"]\s*,\s*([01])\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*1\s*\)",
+                html_content):
+                anl_id = m.group(3)
+                validate_entries[anl_id] = {
+                    'label': m.group(1),
+                    'validated': m.group(2) == '0',
+                    'id_grup': m.group(4),
+                    'editable': False,
+                    'text': '',
+                }
+            editable_ids = set(re.findall(
+                r"fn_EditRezultate\s*\(['\"][^'\"]*['\"]\s*,\s*\d+\s*,\s*['\"]?(\d+)['\"]?\s*,\s*1\s*\)",
+                html_content))
+            for anl_id in editable_ids:
+                if anl_id in validate_entries:
+                    validate_entries[anl_id]['editable'] = True
+
+            # Associate result text: walk rows in order, track current anl_id by header proximity
+            current_anl_id = None
+            for row in soup.find_all('tr', class_=re.compile(r'tr[e]?_class_generic_1')):
+                classes = row.get('class', [])
+                if 'tr_class_generic_1' in classes:
+                    row_html = str(row)
+                    for anl_id in validate_entries:
+                        if anl_id in row_html:
+                            current_anl_id = anl_id
+                            break
+                elif 'tre_class_generic_1' in classes and current_anl_id:
                     cells = row.find_all('td', class_='tdh')
                     if len(cells) >= 2 and 'Rezultat' in cells[0].get_text():
                         text = cells[1].get_text(strip=True)
                         if text:
-                            data.store("report.text", text)
-                        break
+                            validate_entries[current_anl_id]['text'] = text
+
+            if validate_entries:
+                data.store_list("report", list(validate_entries.values()))
 
             return data
         except Exception as e:
@@ -4470,29 +4493,12 @@ class HipoClientReportWrite(HipoClient):
 
     request_url = "/PARA/NOM/Listare/cerere.asp?id={id}"
 
-    async def write(self, cerere_id: str, text: str) -> HipoData:
+    async def write(self, cerere_id: str, anl_id: str, text: str) -> HipoData:
         data = HipoData()
 
         if not self.session:
             self.session = self.get_user_session(self.username)
 
-        # Step 1 — GET cerere.asp to find anlId for Tip=1 (radiology)
-        cerere_path = f"/PARA/NOM/Listare/cerere.asp?id={cerere_id}"
-        cerere_url = self.get_full_url(cerere_path)
-        cerere_html, err = await self.make_authenticated_request(
-            cerere_url, "GET", None, self.username, self.password)
-        if err or not cerere_html:
-            data.store("message", err or "Empty response from cerere.asp")
-            return data
-
-        # fn_EditRezultate('label', reqId, anlId, bi) — bi=1 means editable
-        m = re.search(
-            r"fn_EditRezultate\s*\(['\"][^'\"]*['\"]\s*,\s*\d+\s*,\s*(\d+)\s*,\s*1\s*\)",
-            cerere_html)
-        if not m:
-            data.store("message", "No radiology analysis found in this request")
-            return data
-        anl_id = m.group(1)
         guid = str(uuid.uuid4())
         logger.info(f"ReportWrite: cerere={cerere_id} anl={anl_id} guid={guid}")
 
@@ -4533,11 +4539,12 @@ class HipoClientReportWrite(HipoClient):
             data.store("message", err)
             return data
 
-        # Step 4 — evict caches so next read reflects the new text
+        # Step 3 — evict caches so next read reflects the new text
+        cerere_path = f"/PARA/NOM/Listare/cerere.asp?id={cerere_id}"
         for suffix in ["&type=3&IdP=1", "&type=1&IdP=1"]:
             self.cache_remove(
                 self.get_full_url(f"/PARA/Printabile/BuletinAnalize.asp?id={cerere_id}{suffix}"))
-        self.cache_remove(cerere_url)
+        self.cache_remove(self.get_full_url(cerere_path))
 
         data.set_success()
         return data
@@ -4546,31 +4553,16 @@ class HipoClientReportWrite(HipoClient):
 class HipoClientReportValidate(HipoClient):
     """Validate or devalidate a radiology report result via Ajax_Cerere.asp."""
 
-    async def validate(self, cerere_id: str, validated: bool) -> HipoData:
+    async def validate(self, cerere_id: str, anl_id: str, id_grup: str, validated: bool) -> HipoData:
         data = HipoData()
 
         if not self.session:
             self.session = self.get_user_session(self.username)
 
-        cerere_path = f"/PARA/NOM/Listare/cerere.asp?id={cerere_id}"
-        cerere_url = self.get_full_url(cerere_path)
-        cerere_html, err = await self.make_authenticated_request(
-            cerere_url, "GET", None, self.username, self.password)
-        if err or not cerere_html:
-            data.store("message", err or "Empty response from cerere.asp")
-            return data
-
-        m = re.search(
-            r"fn_validate_cerere\s*\(['\"][^'\"]*['\"]\s*,\s*\d+\s*,\s*(\d+)\s*,\s*([01])\s*,\s*1\s*\)",
-            cerere_html)
-        if not m:
-            data.store("message", "No radiology analysis found in this request")
-            return data
-        anl_id, current_state = m.group(1), m.group(2)
-        logger.info(f"ReportValidate: cerere={cerere_id} anl={anl_id} validated={validated} current_state={current_state}")
+        logger.info(f"ReportValidate: cerere={cerere_id} anl={anl_id} validated={validated} id_grup={id_grup}")
 
         qs = (f"action=VDV&IdRequest={cerere_id}&IdText={anl_id}"
-              f"&IdGrup={current_state}&Tip=1&Validare={'1' if validated else '0'}&guid={uuid.uuid4()}")
+              f"&IdGrup={id_grup}&Tip=1&Validare={'1' if validated else '0'}&guid={uuid.uuid4()}")
         resp, err = await self.make_authenticated_request(
             self.get_full_url(f"/PARA/NOM/LISTARE/Ajax_Cerere.asp?{qs}"),
             "GET", None, self.username, self.password)
@@ -4581,10 +4573,11 @@ class HipoClientReportValidate(HipoClient):
             data.store("message", resp.strip())
             return data
 
+        cerere_path = f"/PARA/NOM/Listare/cerere.asp?id={cerere_id}"
         for suffix in ["&type=3&IdP=1", "&type=1&IdP=1"]:
             self.cache_remove(
                 self.get_full_url(f"/PARA/Printabile/BuletinAnalize.asp?id={cerere_id}{suffix}"))
-        self.cache_remove(cerere_url)
+        self.cache_remove(self.get_full_url(cerere_path))
 
         data.set_success()
         return data

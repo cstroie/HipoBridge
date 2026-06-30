@@ -505,13 +505,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             <button class="btn-write-report" hidden aria-label="Edit report">
                                 <i class="fas fa-pen" aria-hidden="true"></i> Edit report
                             </button>
-                            <section class="report-section validate-section" hidden>
-                                <label class="switch">
-                                    <input type="checkbox" class="validate-toggle" aria-label="Validated">
-                                    <span class="switch-slider"></span>
-                                </label>
-                                <span class="switch-label">Validated</span>
-                            </section>
+                            <div class="validate-toggles"></div>
                         </div>
                     </div>
                 </section>
@@ -754,9 +748,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                         <h2>Imaging report <span class="editor-report-id"></span></h2>
                         <p class="editor-report-date"></p>
                     </header>
-                    <section>
-                        <textarea class="editor-textarea" rows="14" placeholder="Description and conclusion..."></textarea>
-                    </section>
+                    <section class="editor-analyses"></section>
                     <footer>
                         <button class="btn-secondary" data-close-modal>Cancel</button>
                         <button class="btn-primary editor-save">Save</button>

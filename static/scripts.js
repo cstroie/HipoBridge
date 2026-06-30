@@ -1001,17 +1001,17 @@ document.addEventListener('DOMContentLoaded', function() {
     async function fetchWhoami() {
         if (whoamiData) return whoamiData;
         const resp = await apiFetch('/api/whoami');
-        if (!resp.ok) throw new Error(`Whoami request failed (${resp.status})`);
-        const data = await resp.json();
+        const data = await resp.json().catch(() => ({}));
+        // Extract these fields regardless of HTTP status — server always sets them
         if (data.hipocrate_url) {
             hipocrateUrl = data.hipocrate_url.replace(/\/$/, '');
             localStorage.setItem('hipocrateUrl', hipocrateUrl);
         }
-        if (data.status !== 'success' || !data.user) {
-            throw new Error(data.message || 'User data not available');
+        canWriteReports = data.can_write_reports === true;
+        if (!resp.ok || data.status !== 'success' || !data.user) {
+            throw new Error(data.message || `Whoami failed (${resp.status})`);
         }
         whoamiData = data.user;
-        canWriteReports = data.can_write_reports === true;
         return whoamiData;
     }
 
@@ -2801,7 +2801,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const IMAGING_TYPES_WRITE = ['radio', 'ct', 'irm', 'eco', 'rads'];
         if (!IMAGING_TYPES_WRITE.includes(analysisType)) {
             article.querySelector('.btn-write-report')?.remove();
-            article.querySelector('.validate-section')?.remove();
+            article.querySelector('.validate-toggles')?.remove();
         }
 
         return article;
@@ -2959,34 +2959,61 @@ document.addEventListener('DOMContentLoaded', function() {
             await whoamiReady;
             if (canWriteReports) {
                 const writeBtn = article.querySelector('.btn-write-report');
-                if (writeBtn && writeBtn.hidden) {
-                    writeBtn.hidden = false;
-                    writeBtn.addEventListener('click', () => openReportEditor(article));
-                }
-                // Fetch cerere.asp state: report text (may be unvalidated) + validation state
+                // write button is shown after cerere fetch confirms editable analyses exist
+                // Fetch cerere.asp state: report text (may be unvalidated) + per-analysis validate toggles
                 const cerereId = article.dataset.serviceRequestId;
                 try {
                     const r = await fetch(`/api/request/${cerereId}/patient`, { headers: authHeader() });
                     const d = await r.json();
-                    const report = d.report || {};
-                    if (report.text) {
-                        // Show unvalidated report text if BuletinAnalize had nothing
-                        const notesEl = article.querySelector('.report-notes');
-                        if (notesEl && !notesEl.textContent.trim()) {
-                            notesEl.textContent = report.text;
+                    const analyses = Array.isArray(d.report) ? d.report
+                        : (d.report && typeof d.report === 'object' ? [d.report] : []);
+                    // Store for editor
+                    article.dataset.reportAnalyses = JSON.stringify(analyses);
+
+                    // Show unvalidated report text if BuletinAnalize had nothing
+                    const notesEl = article.querySelector('.report-notes');
+                    if (notesEl && !notesEl.textContent.trim()) {
+                        const texts = analyses.map(a => a.text).filter(Boolean);
+                        if (texts.length) {
+                            notesEl.textContent = texts.join('\n\n');
+                            article.classList.remove('no-report');
                         }
-                        article.dataset.reportText = report.text;
-                        article.classList.remove('no-report');
                     }
-                    if (report.anl_id) {
-                        const section = article.querySelector('.validate-section');
-                        if (section) {
-                            section.hidden = false;
-                            const toggle = section.querySelector('.validate-toggle');
-                            toggle.checked = report.validated;
-                            toggle.replaceWith(toggle.cloneNode(true));
-                            const t = section.querySelector('.validate-toggle');
-                            t.addEventListener('change', () => setValidated(article, cerereId, t.checked));
+
+                    // Show write button only if at least one analysis is editable
+                    if (writeBtn && analyses.some(a => a.editable)) {
+                        writeBtn.hidden = false;
+                        writeBtn.replaceWith(writeBtn.cloneNode(true));
+                        article.querySelector('.btn-write-report')
+                            .addEventListener('click', () => openReportEditor(article));
+                    }
+
+                    // Build per-analysis validate toggles
+                    const togglesEl = article.querySelector('.validate-toggles');
+                    if (togglesEl && analyses.length) {
+                        togglesEl.replaceChildren();
+                        for (const analysis of analyses) {
+                            const row = document.createElement('div');
+                            row.className = 'validate-row';
+
+                            const lbl = document.createElement('label');
+                            lbl.className = 'switch';
+                            const inp = document.createElement('input');
+                            inp.type = 'checkbox';
+                            inp.checked = analysis.validated;
+                            inp.setAttribute('aria-label', `Validated: ${analysis.label}`);
+                            inp.addEventListener('change', () =>
+                                setValidated(article, cerereId, analysis.anl_id, analysis.id_grup, inp.checked));
+                            const slider = document.createElement('span');
+                            slider.className = 'switch-slider';
+                            lbl.append(inp, slider);
+
+                            const labelText = document.createElement('span');
+                            labelText.className = 'switch-label';
+                            labelText.textContent = analyses.length > 1 ? analysis.label : 'Validated';
+
+                            row.append(lbl, labelText);
+                            togglesEl.appendChild(row);
                         }
                     }
                 } catch (_) {}
@@ -2994,11 +3021,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    async function setValidated(article, cerereId, validated) {
+    async function setValidated(article, cerereId, anlId, idGrup, validated) {
         const resp = await fetch(`/api/request/${cerereId}/validate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ...authHeader() },
-            body: JSON.stringify({ validated })
+            body: JSON.stringify({ anl_id: anlId, id_grup: idGrup, validated })
         });
         if (!resp.ok) {
             showToast(await resp.text(), 'error');
@@ -3024,11 +3051,30 @@ document.addEventListener('DOMContentLoaded', function() {
         if (dateEl) dateEl.textContent =
             `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-        const ta = modal.querySelector('.editor-textarea');
-        if (ta) {
-            ta.value = article.dataset.reportText || '';
-            ta.focus();
+        // Build one textarea per editable analysis
+        const analyses = JSON.parse(article.dataset.reportAnalyses || '[]');
+        const editable = analyses.filter(a => a.editable);
+        const section = modal.querySelector('.editor-analyses');
+        const textareas = [];
+        for (const analysis of editable) {
+            const wrap = document.createElement('div');
+            wrap.className = 'editor-analysis';
+            if (editable.length > 1) {
+                const lbl = document.createElement('label');
+                lbl.className = 'editor-analysis-label';
+                lbl.textContent = analysis.label;
+                wrap.appendChild(lbl);
+            }
+            const ta = document.createElement('textarea');
+            ta.className = 'editor-textarea';
+            ta.rows = editable.length > 1 ? 6 : 14;
+            ta.placeholder = 'Description and conclusion...';
+            ta.value = analysis.text || '';
+            wrap.appendChild(ta);
+            section.appendChild(wrap);
+            textareas.push({ ta, anl_id: analysis.anl_id });
         }
+        if (textareas.length) textareas[0].ta.focus();
 
         const closeModal = () => { modal.close(); modal.remove(); };
         modal.querySelectorAll('[data-close-modal], .close').forEach(b => b.addEventListener('click', closeModal));
@@ -3036,38 +3082,39 @@ document.addEventListener('DOMContentLoaded', function() {
         modal.addEventListener('cancel', () => modal.remove());
 
         modal.querySelector('.editor-save').addEventListener('click', async () => {
-            const text = ta.value.trim();
-            if (!text) return;
             const saveBtn = modal.querySelector('.editor-save');
             saveBtn.disabled = true;
             let errEl = modal.querySelector('.editor-error');
 
             try {
-                const resp = await apiFetch(`/api/request/${cerereId}/report`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text }),
-                });
-                if (!resp.ok) {
-                    const msg = await resp.text().catch(() => `HTTP ${resp.status}`);
-                    throw new Error(msg);
+                for (const { ta, anl_id } of textareas) {
+                    const text = ta.value.trim();
+                    if (!text) continue;
+                    const resp = await apiFetch(`/api/request/${cerereId}/report`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ anl_id, text }),
+                    });
+                    if (!resp.ok) {
+                        const msg = await resp.text().catch(() => `HTTP ${resp.status}`);
+                        throw new Error(msg);
+                    }
                 }
                 closeModal();
-                // Re-fetch to show updated report
                 const reportBody = article.querySelector('.report-body');
                 const reportPreview = article.querySelector('.report-preview');
                 if (reportBody) reportBody.hidden = true;
                 if (reportPreview) reportPreview.replaceChildren();
                 article.classList.remove('no-report');
                 fetchAndFillReport(article);
-                showToast('Raport salvat.', 'success');
+                showToast('Report saved.', 'success');
             } catch (err) {
                 if (!errEl) {
                     errEl = document.createElement('p');
                     errEl.className = 'editor-error';
-                    modal.querySelector('section').appendChild(errEl);
+                    section.appendChild(errEl);
                 }
-                errEl.textContent = err.message || 'Eroare la salvare';
+                errEl.textContent = err.message || 'Error saving report';
                 saveBtn.disabled = false;
             }
         });

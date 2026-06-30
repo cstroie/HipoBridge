@@ -459,13 +459,14 @@ async def post_study_report(request):
         return web.Response(status=403, text='Not authorised to write reports')
     try:
         body = await request.json()
+        anl_id = (body.get('anl_id') or '').strip()
         text = (body.get('text') or '').strip()
     except Exception:
         return web.Response(status=400, text='Invalid JSON body')
-    if not text:
-        return web.Response(status=400, text='text is required')
+    if not anl_id or not text:
+        return web.Response(status=400, text='anl_id and text are required')
     client = HipoClientReportWrite(SERVICE_URL, request)
-    result = await client.write(cerere_id, text)
+    result = await client.write(cerere_id, anl_id, text)
     return web_json_response(result)
 
 @require_auth
@@ -477,11 +478,15 @@ async def post_report_validate(request):
         return web.Response(status=403, text='Not authorised to validate reports')
     try:
         body = await request.json()
+        anl_id = (body.get('anl_id') or '').strip()
+        id_grup = str(body.get('id_grup', '0'))
         validated = bool(body.get('validated'))
     except Exception:
         return web.Response(status=400, text='Invalid JSON body')
+    if not anl_id:
+        return web.Response(status=400, text='anl_id is required')
     client = HipoClientReportValidate(SERVICE_URL, request)
-    result = await client.validate(cerere_id, validated)
+    result = await client.validate(cerere_id, anl_id, id_grup, validated)
     return web_json_response(result)
 
 @require_auth
