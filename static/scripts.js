@@ -2824,6 +2824,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const loadingEl = article.querySelector('.report-loading');
         const bodyEl    = article.querySelector('.report-body');
 
+        // Reset report content before re-fetching so stale injected text doesn't duplicate
+        article.querySelector('.report-preview')?.replaceChildren();
+        article.classList.remove('no-report');
+
         try {
             const resp = await apiFetch(endpoint);
             if (!resp.ok) throw new Error(resp.status);
