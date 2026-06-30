@@ -3718,8 +3718,8 @@ class HipoClientPresentation(HipoClient):
         try:
             if parsed_data.get("status") == "error":
                 return FHIROperationOutcome.from_error(
-                    message=parsed_data.get("message", "Error in parsed presentation data"),
-                    code="processing",
+                    message=parsed_data.get("message", "Presentation not found"),
+                    code="not-found",
                     severity="error"
                 )
 
