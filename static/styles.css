@@ -3352,11 +3352,17 @@ dialog.report-editor-modal article > section {
     font-size: var(--font-size-sm);
 }
 
+.report-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: var(--spacing-sm);
+}
+
 .btn-write-report:not([hidden]) {
     display: inline-flex;
     align-items: center;
     gap: var(--spacing-xs);
-    margin-top: var(--spacing-sm);
     padding: var(--spacing-xs) var(--spacing-md);
     border: 1px solid var(--primary);
     border-radius: var(--radius-md);
@@ -3376,7 +3382,6 @@ dialog.report-editor-modal article > section {
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
-    margin-top: var(--spacing-sm);
 }
 
 .switch {
