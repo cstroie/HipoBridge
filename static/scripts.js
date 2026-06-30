@@ -3125,10 +3125,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 for (const { ta, anl_id } of textareas) {
                     const text = ta.value.trim();
                     if (!text) continue;
+                    const html = marked.parse(text);
                     const resp = await apiFetch(`/api/request/${cerereId}/report`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ anl_id, text }),
+                        body: JSON.stringify({ anl_id, text: html }),
                     });
                     if (!resp.ok) {
                         const msg = await resp.text().catch(() => `HTTP ${resp.status}`);
