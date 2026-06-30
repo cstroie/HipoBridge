@@ -2797,12 +2797,11 @@ document.addEventListener('DOMContentLoaded', function() {
             setCardIndication(article, indication);
         }
 
-        // Remove write/validate buttons from non-imaging cards immediately (type is known now)
+        // Remove write/validate controls from non-imaging cards immediately (type is known now)
         const IMAGING_TYPES_WRITE = ['radio', 'ct', 'irm', 'eco', 'rads'];
         if (!IMAGING_TYPES_WRITE.includes(analysisType)) {
             article.querySelector('.btn-write-report')?.remove();
-            article.querySelector('.btn-validate-report')?.remove();
-            article.querySelector('.btn-devalidate-report')?.remove();
+            article.querySelector('.validate-section')?.remove();
         }
 
         return article;
@@ -2980,19 +2979,14 @@ document.addEventListener('DOMContentLoaded', function() {
                         article.classList.remove('no-report');
                     }
                     if (report.anl_id) {
-                        const validateBtn = article.querySelector('.btn-validate-report');
-                        const devalidateBtn = article.querySelector('.btn-devalidate-report');
-                        if (validateBtn) {
-                            validateBtn.hidden = report.validated;
-                            validateBtn.replaceWith(validateBtn.cloneNode(true));
-                            const vb = article.querySelector('.btn-validate-report');
-                            vb.addEventListener('click', () => setValidated(article, cerereId, true));
-                        }
-                        if (devalidateBtn) {
-                            devalidateBtn.hidden = !report.validated;
-                            devalidateBtn.replaceWith(devalidateBtn.cloneNode(true));
-                            const db = article.querySelector('.btn-devalidate-report');
-                            db.addEventListener('click', () => setValidated(article, cerereId, false));
+                        const section = article.querySelector('.validate-section');
+                        if (section) {
+                            section.hidden = false;
+                            const toggle = section.querySelector('.validate-toggle');
+                            toggle.checked = report.validated;
+                            toggle.replaceWith(toggle.cloneNode(true));
+                            const t = section.querySelector('.validate-toggle');
+                            t.addEventListener('change', () => setValidated(article, cerereId, t.checked));
                         }
                     }
                 } catch (_) {}

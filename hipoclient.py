@@ -3464,12 +3464,15 @@ class HipoClientCerere(HipoClient):
                 data.store_list("exams", exams)
 
             # Report text and validation state — only present for radiology (Tip=1)
+            # fn_validate_cerere('label', value, IdText, IdGrup, Tip)
+            #   value=1 → button validates (not yet validated)
+            #   value=0 → button devalidates (already validated)
             vm = re.search(
-                r"fn_validate_cerere\s*\(['\"][^'\"]*['\"]\s*,\s*\d+\s*,\s*(\d+)\s*,\s*([01])\s*,\s*1\s*\)",
+                r"fn_validate_cerere\s*\(['\"][^'\"]*['\"]\s*,\s*([01])\s*,\s*(\d+)\s*,\s*\d+\s*,\s*1\s*\)",
                 html_content)
             if vm:
-                data.store("report.anl_id", vm.group(1))
-                data.store("report.validated", vm.group(2) == '1')
+                data.store("report.anl_id", vm.group(2))
+                data.store("report.validated", vm.group(1) == '0')
                 # Result text is in the second <td> of a <tr class="tre_class_generic_1">
                 # whose first cell contains "Rezultat"
                 for row in soup.find_all('tr', class_='tre_class_generic_1'):

@@ -3352,7 +3352,7 @@ dialog.report-editor-modal article > section {
     font-size: var(--font-size-sm);
 }
 
-.btn-write-report {
+.btn-write-report:not([hidden]) {
     display: inline-flex;
     align-items: center;
     gap: var(--spacing-xs);
@@ -3372,36 +3372,57 @@ dialog.report-editor-modal article > section {
     color: #fff;
 }
 
-.btn-validate-report, .btn-devalidate-report {
-    display: inline-flex;
+.validate-section:not([hidden]) {
+    display: flex;
     align-items: center;
-    gap: var(--spacing-xs);
+    gap: var(--spacing-sm);
     margin-top: var(--spacing-sm);
-    padding: var(--spacing-xs) var(--spacing-md);
-    border-radius: var(--radius-md);
-    font-size: var(--font-size-sm);
+}
+
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.switch-slider {
+    position: absolute;
+    inset: 0;
+    background: var(--muted, #ccc);
+    border-radius: var(--radius-full);
     cursor: pointer;
-    transition: background 0.15s, color 0.15s;
+    transition: background 0.2s;
 }
 
-.btn-validate-report {
-    border: 1px solid var(--success, #28a745);
-    background: none;
-    color: var(--success, #28a745);
+.switch-slider::before {
+    content: '';
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    left: 3px;
+    top: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.2s;
 }
 
-.btn-validate-report:hover {
-    background: var(--success, #28a745);
-    color: #fff;
+.switch input:checked + .switch-slider {
+    background: var(--success);
 }
 
-.btn-devalidate-report {
-    border: 1px solid var(--warning, #e67e22);
-    background: none;
-    color: var(--warning, #e67e22);
+.switch input:checked + .switch-slider::before {
+    transform: translateX(16px);
 }
 
-.btn-devalidate-report:hover {
-    background: var(--warning, #e67e22);
-    color: #fff;
+.switch-label {
+    font-size: var(--font-size-sm);
+    color: var(--text-muted, var(--muted));
 }

@@ -504,12 +504,13 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                         <button class="btn-write-report" hidden aria-label="Edit report">
                             <i class="fas fa-pen" aria-hidden="true"></i> Edit report
                         </button>
-                        <button class="btn-validate-report" hidden aria-label="Validate report">
-                            <i class="fas fa-check" aria-hidden="true"></i> Validate
-                        </button>
-                        <button class="btn-devalidate-report" hidden aria-label="Devalidate report">
-                            <i class="fas fa-times" aria-hidden="true"></i> Devalidate
-                        </button>
+                        <section class="report-section validate-section" hidden>
+                            <label class="switch">
+                                <input type="checkbox" class="validate-toggle" aria-label="Validated">
+                                <span class="switch-slider"></span>
+                            </label>
+                            <span class="switch-label">Validated</span>
+                        </section>
                     </div>
                 </section>
             </article>
