@@ -2982,12 +2982,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (report.anl_id) {
                         const validateBtn = article.querySelector('.btn-validate-report');
                         const devalidateBtn = article.querySelector('.btn-devalidate-report');
-                        if (!report.validated && validateBtn) {
-                            validateBtn.hidden = false;
-                            validateBtn.addEventListener('click', () => setValidated(article, cerereId, true));
-                        } else if (report.validated && devalidateBtn) {
-                            devalidateBtn.hidden = false;
-                            devalidateBtn.addEventListener('click', () => setValidated(article, cerereId, false));
+                        if (validateBtn) {
+                            validateBtn.hidden = report.validated;
+                            validateBtn.replaceWith(validateBtn.cloneNode(true));
+                            const vb = article.querySelector('.btn-validate-report');
+                            vb.addEventListener('click', () => setValidated(article, cerereId, true));
+                        }
+                        if (devalidateBtn) {
+                            devalidateBtn.hidden = !report.validated;
+                            devalidateBtn.replaceWith(devalidateBtn.cloneNode(true));
+                            const db = article.querySelector('.btn-devalidate-report');
+                            db.addEventListener('click', () => setValidated(article, cerereId, false));
                         }
                     }
                 } catch (_) {}
@@ -3011,9 +3016,9 @@ document.addEventListener('DOMContentLoaded', function() {
     function openReportEditor(article) {
         const cerereId = article.dataset.serviceRequestId;
         const tmpl = document.getElementById('report-editor-modal-template');
-        if (!tmpl) { showToast('Eroare: template modal lipsă', 'error'); return; }
+        if (!tmpl) { showToast('Error: report editor template missing', 'error'); return; }
         const modal = tmpl.content.cloneNode(true).querySelector('dialog');
-        if (!modal) { showToast('Eroare: dialog lipsă în template', 'error'); return; }
+        if (!modal) { showToast('Error: dialog missing in template', 'error'); return; }
 
         document.body.appendChild(modal);
         modal.showModal();
