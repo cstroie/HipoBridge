@@ -2960,9 +2960,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function openReportEditor(article) {
+        try {
         const cerereId = article.dataset.serviceRequestId;
         const tmpl = document.getElementById('report-editor-modal-template');
+        if (!tmpl) { console.error('report-editor-modal-template not found'); return; }
         const modal = tmpl.content.cloneNode(true).querySelector('dialog');
+        if (!modal) { console.error('dialog not found in template'); return; }
 
         modal.querySelector('.editor-report-id').textContent = `#${cerereId}`;
         const now = new Date();
@@ -3017,6 +3020,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 saveBtn.disabled = false;
             }
         });
+        } catch (err) {
+            console.error('openReportEditor failed:', err);
+        }
     }
 
     // Enhanced date formatting function

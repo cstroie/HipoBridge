@@ -3844,7 +3844,8 @@ class HipoClientPresentation(HipoClient):
 
             return fhir_encounter
         except Exception as e:
-            logger.error(f"Error converting presentation data to FHIR: {e}")
+            import traceback
+            logger.error(f"Error converting presentation data to FHIR: {e}\n{traceback.format_exc()}")
             return FHIROperationOutcome.from_exception(e, code="exception")
 
     async def fetch_respond_fhir(self, **kwargs) -> Union[FHIREncounter, FHIROperationOutcome]:
@@ -4434,6 +4435,7 @@ class HipoClientSchedule(HipoClient):
                 code="processing",
                 severity="error"
             )
+        return self.fhir_response(parsed, **kwargs)
 
 
 class HipoClientReportWrite(HipoClient):
