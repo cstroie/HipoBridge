@@ -35,7 +35,7 @@ import base64
 from fhir import OperationOutcome, Resource
 
 from hipoclient import ANALYSIS_TYPES
-from hipoclient import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientImagingStudy, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientServiceRequestSearch, HipoClientCheckout, HipoClientCheckin, HipoClientCheckup, HipoClientSchedule, HipoClientCerere, HipoClientPresentation, HipoClientObservationBundle, HipoClientWhoami
+from hipoclient import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientImagingStudy, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientServiceRequestSearch, HipoClientCheckout, HipoClientCheckin, HipoClientCheckup, HipoClientSchedule, HipoClientCerere, HipoClientPresentation, HipoClientObservationBundle, HipoClientWhoami, HipoClientReportWrite
 from hipoclient import user_session_manager, url_cache
 from urlcache import FilesystemCache
 from hipodata import HipoData
@@ -62,6 +62,9 @@ DEFAULT_CONFIG = {
         'dir': '',
         'ttl': '604800',
         'max_age_days': '30',
+    },
+    'radiology': {
+        'allowed_radiologists': '',
     },
 }
 
@@ -443,7 +446,27 @@ async def get_whoami(request):
         return debug_resp
     parsed_data = await client.fetch_and_parse()
     parsed_data.store("hipocrate_url", SERVICE_URL)
+    username, _ = request['auth_credentials']
+    parsed_data.store("can_write_reports", username in _ALLOWED_RADIOLOGISTS)
     return web_json_response(parsed_data)
+
+@require_auth
+async def post_study_report(request):
+    """Write a radiology report text for a request (cerere) via Hipocrate Rezultate.asp."""
+    cerere_id = request.match_info['id']
+    username, _ = request['auth_credentials']
+    if username not in _ALLOWED_RADIOLOGISTS:
+        return web.Response(status=403, text='Not authorised to write reports')
+    try:
+        body = await request.json()
+        text = (body.get('text') or '').strip()
+    except Exception:
+        return web.Response(status=400, text='Invalid JSON body')
+    if not text:
+        return web.Response(status=400, text='text is required')
+    client = HipoClientReportWrite(SERVICE_URL, request)
+    result = await client.write(cerere_id, text)
+    return web_json_response(result)
 
 @require_auth
 async def post_logout(request):
@@ -808,11 +831,14 @@ async def on_cleanup(app):
 async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
                    port: int = None, host: str = None, service_url: str = None):
     """Load config, wire up routes and lifecycle handlers, return the configured app."""
-    global SERVICE_URL, _PORT, _HOST
+    global SERVICE_URL, _PORT, _HOST, _ALLOWED_RADIOLOGISTS
     config = load_config()
     SERVICE_URL = service_url or config.get('hipocrate', 'service_url')
     _PORT = port or config.getint('server', 'port')
     _HOST = host or config.get('server', 'host')
+    _ALLOWED_RADIOLOGISTS = {
+        u.strip() for u in config.get('radiology', 'allowed_radiologists').split(',') if u.strip()
+    }
     logger.info(f"Service URL: {SERVICE_URL}")
 
     cache_dir = config.get('cache', 'dir').strip()
@@ -839,6 +865,7 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     app.router.add_get('/api/checkup/{id}', get_checkup)
     app.router.add_get('/api/presentation/{id}', get_presentation)
     app.router.add_get('/api/request/{id}/patient', get_request_patient)
+    app.router.add_post('/api/request/{id}/report', post_study_report)
     app.router.add_get('/api/schedule', get_schedule)
     app.router.add_get('/fhir/Schedule', get_fhir_schedule)
     app.router.add_get('/api/whoami', get_whoami)
@@ -876,6 +903,7 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
 SERVICE_URL: str = DEFAULT_CONFIG['hipocrate']['service_url']
 _PORT: int = int(DEFAULT_CONFIG['server']['port'])
 _HOST: str = DEFAULT_CONFIG['server']['host']
+_ALLOWED_RADIOLOGISTS: set = set()
 
 if __name__ == "__main__":
     import argparse

@@ -994,6 +994,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let whoamiData = null;
     let hipocrateUrl = localStorage.getItem('hipocrateUrl') || null;
+    let canWriteReports = false;
 
     async function fetchWhoami() {
         if (whoamiData) return whoamiData;
@@ -1008,6 +1009,7 @@ document.addEventListener('DOMContentLoaded', function() {
             throw new Error(data.message || 'User data not available');
         }
         whoamiData = data.user;
+        canWriteReports = data.can_write_reports === true;
         return whoamiData;
     }
 
@@ -2793,6 +2795,16 @@ document.addEventListener('DOMContentLoaded', function() {
             setCardIndication(article, indication);
         }
 
+        // Write-report button — only for imaging types if the user is an allowed radiologist
+        const IMAGING_TYPES = ['radio', 'ct', 'irm', 'eco', 'rads'];
+        if (canWriteReports && IMAGING_TYPES.includes(analysisType)) {
+            const writeBtn = article.querySelector('.btn-write-report');
+            if (writeBtn) {
+                writeBtn.hidden = false;
+                writeBtn.addEventListener('click', () => openReportEditor(article));
+            }
+        }
+
         return article;
     }
 
@@ -2840,6 +2852,15 @@ document.addEventListener('DOMContentLoaded', function() {
             const hasReport = forms.length > 0
                 || resultNotes.some(n => n.text)
                 || Boolean(data.conclusion);
+
+            // Store raw text so the editor modal can pre-populate
+            if (canWriteReports) {
+                const rawParts = forms.length > 0
+                    ? forms.filter(f => f.data && !f.reference).map(f => f.data)
+                    : resultNotes.filter(n => n.text).map(n => n.text);
+                if (rawParts.length === 0 && data.conclusion) rawParts.push(data.conclusion);
+                article.dataset.reportText = rawParts.join('\n\n');
+            }
 
             // Signature footer only when a report actually exists — without one,
             // performer falls back to the requesting physician server-side and
@@ -2938,6 +2959,66 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    function openReportEditor(article) {
+        const cerereId = article.dataset.serviceRequestId;
+        const tmpl = document.getElementById('report-editor-modal-template');
+        const modal = tmpl.content.cloneNode(true).querySelector('dialog');
+
+        modal.querySelector('.editor-report-id').textContent = `#${cerereId}`;
+        const now = new Date();
+        modal.querySelector('.editor-report-date').textContent =
+            `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+        const ta = modal.querySelector('.editor-textarea');
+        ta.value = article.dataset.reportText || '';
+
+        document.body.appendChild(modal);
+        modal.showModal();
+        ta.focus();
+
+        const closeModal = () => { modal.close(); modal.remove(); };
+        modal.querySelectorAll('[data-close-modal], .close').forEach(b => b.addEventListener('click', closeModal));
+        modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+        modal.addEventListener('cancel', () => modal.remove());
+
+        modal.querySelector('.editor-save').addEventListener('click', async () => {
+            const text = ta.value.trim();
+            if (!text) return;
+            const saveBtn = modal.querySelector('.editor-save');
+            saveBtn.disabled = true;
+            let errEl = modal.querySelector('.editor-error');
+
+            try {
+                const resp = await apiFetch(`/api/request/${cerereId}/report`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text }),
+                });
+                if (!resp.ok) {
+                    const msg = await resp.text().catch(() => `HTTP ${resp.status}`);
+                    throw new Error(msg);
+                }
+                closeModal();
+                // Re-fetch to show updated report
+                const reportBody = article.querySelector('.report-body');
+                const reportPreview = article.querySelector('.report-preview');
+                if (reportBody) reportBody.hidden = true;
+                if (reportPreview) reportPreview.replaceChildren();
+                article.classList.remove('no-report');
+                fetchAndFillReport(article);
+                showToast('Raport salvat.', 'success');
+            } catch (err) {
+                if (!errEl) {
+                    errEl = document.createElement('p');
+                    errEl.className = 'editor-error';
+                    modal.querySelector('section').appendChild(errEl);
+                }
+                errEl.textContent = err.message || 'Eroare la salvare';
+                saveBtn.disabled = false;
+            }
+        });
+    }
+
     // Enhanced date formatting function
     // Parse an ISO-ish date string and return YYYY-MM-DD (or YYYY-MM if no day)
     function formatDate(dateString) {

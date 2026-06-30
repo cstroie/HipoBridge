@@ -501,6 +501,9 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             <span class="card-medic" aria-label="Reporting physician"></span>
                         </footer>
                         <div class="imaging-study-link" aria-label="Imaging study link"></div>
+                        <button class="btn-write-report" hidden aria-label="Edit report">
+                            <i class="fas fa-pen" aria-hidden="true"></i> Editează raport
+                        </button>
                     </div>
                 </section>
             </article>
@@ -732,6 +735,25 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                     <div class="schedule-mod-bar-fill"></div>
                 </div>
             </div>
+        </template>
+
+        <template id="report-editor-modal-template">
+            <dialog class="modal report-editor-modal" aria-modal="true">
+                <article>
+                    <header>
+                        <button class="close" aria-label="Închide">×</button>
+                        <h2>Raport imagistică <span class="editor-report-id"></span></h2>
+                        <p class="editor-report-date"></p>
+                    </header>
+                    <section>
+                        <textarea class="editor-textarea" rows="14" placeholder="Descriere și concluzie..."></textarea>
+                    </section>
+                    <footer>
+                        <button class="btn-secondary" data-close-modal>Anulează</button>
+                        <button class="btn-primary editor-save">Salvează</button>
+                    </footer>
+                </article>
+            </dialog>
         </template>
 
         <!-- Login Dialog -->

@@ -48,6 +48,7 @@ from aiohttp import web
 from yarl import URL
 import logging
 import re
+import uuid
 from bs4 import BeautifulSoup, Comment
 import html
 import json
@@ -4433,4 +4434,85 @@ class HipoClientSchedule(HipoClient):
                 code="processing",
                 severity="error"
             )
+
+
+class HipoClientReportWrite(HipoClient):
+    """Write a radiology report result via Hipocrate Rezultate.asp.
+
+    Flow:
+      1. GET cerere.asp to find the anlId embedded in fn_EditRezultate() calls (Tip=1).
+      2. GET Rezultate.asp to discover the dynamic form field code (e.g. v3760).
+      3. POST to Rezultate.asp with the report text.
+      4. Evict BuletinAnalize and cerere caches so the next read is fresh.
+    """
+
+    request_url = "/PARA/NOM/Listare/cerere.asp?id={id}"
+
+    async def write(self, cerere_id: str, text: str) -> HipoData:
+        data = HipoData()
+
+        if not self.session:
+            self.session = self.get_user_session(self.username)
+
+        # Step 1 — GET cerere.asp to find anlId for Tip=1 (radiology)
+        cerere_path = f"/PARA/NOM/Listare/cerere.asp?id={cerere_id}"
+        cerere_url = self.get_full_url(cerere_path)
+        cerere_html, err = await self.make_authenticated_request(
+            cerere_url, "GET", None, self.username, self.password)
+        if err or not cerere_html:
+            data.store("message", err or "Empty response from cerere.asp")
+            return data
+
+        m = re.search(
+            r'fn_EditRezultate\s*\(\s*\d+\s*,\s*(\d+)\s*,\s*1\s*[,)]',
+            cerere_html)
+        if not m:
+            data.store("message", "No radiology analysis found in this request")
+            return data
+        anl_id = m.group(1)
+
+        # Step 2 — GET Rezultate.asp to discover the form field code
+        guid = str(uuid.uuid4())
+        rez_qs = f"from=Popup&req={cerere_id}&anl={anl_id}&Tip=1&guid={guid}"
+        rez_path = f"/PARA/NOM/Listare/Rezultate.asp?{rez_qs}"
+        rez_url = self.get_full_url(rez_path)
+        rez_html, err = await self.make_authenticated_request(
+            rez_url, "GET", None, self.username, self.password)
+        if err or not rez_html:
+            data.store("message", err or "Empty response from Rezultate.asp")
+            return data
+
+        soup = BeautifulSoup(rez_html, "html.parser")
+        field_el = soup.find(["textarea", "input"],
+                             attrs={"name": re.compile(r"^v\d+$")})
+        if not field_el:
+            data.store("message", "Could not locate result field in Rezultate form")
+            return data
+        field_code = field_el["name"][1:]  # strip leading 'v'
+
+        # Step 3 — POST the report text
+        post_data = {
+            f"v{field_code}": text,
+            f"v{field_code}HtmlArea": text,
+            "intCodeIDJ": anl_id,
+            f"h{field_code}": "",
+            "hdnAction": "S",
+            "hdnDebug": "",
+            "strAnalyseID": anl_id,
+            "strRequestID": cerere_id,
+        }
+        _, err = await self.make_authenticated_request(
+            rez_url, "POST", post_data, self.username, self.password)
+        if err:
+            data.store("message", err)
+            return data
+
+        # Step 4 — evict caches so next read reflects the new text
+        for suffix in ["&type=3&IdP=1", "&type=1&IdP=1"]:
+            self.cache_remove(
+                self.get_full_url(f"/PARA/Printabile/BuletinAnalize.asp?id={cerere_id}{suffix}"))
+        self.cache_remove(cerere_url)
+
+        data.set_success()
+        return data
         return self.fhir_response(parsed, **kwargs)
