@@ -4466,15 +4466,16 @@ class HipoClientReportWrite(HipoClient):
             return data
 
         m = re.search(
-            r'fn_EditRezultate\s*\(\s*\d+\s*,\s*(\d+)\s*,\s*1\s*[,)]',
+            r'fn_EditRezultate\s*\(\s*\d+\s*,\s*(\d+)\s*,\s*1\s*,\s*[\'"]?([0-9a-fA-F-]{36})[\'"]?\s*\)',
             cerere_html)
         if not m:
             data.store("message", "No radiology analysis found in this request")
             return data
         anl_id = m.group(1)
+        guid = m.group(2)
+        logger.info(f"ReportWrite: cerere={cerere_id} anl={anl_id} guid={guid}")
 
         # Step 2 — GET Rezultate.asp to discover the form field code
-        guid = str(uuid.uuid4())
         rez_qs = f"from=Popup&req={cerere_id}&anl={anl_id}&Tip=1&guid={guid}"
         rez_path = f"/PARA/NOM/Listare/Rezultate.asp?{rez_qs}"
         rez_url = self.get_full_url(rez_path)
@@ -4491,6 +4492,7 @@ class HipoClientReportWrite(HipoClient):
             data.store("message", "Could not locate result field in Rezultate form")
             return data
         field_code = field_el["name"][1:]  # strip leading 'v'
+        logger.info(f"ReportWrite: field_code={field_code} url={rez_url}")
 
         # Step 3 — POST the report text
         post_data = {
@@ -4503,8 +4505,9 @@ class HipoClientReportWrite(HipoClient):
             "strAnalyseID": anl_id,
             "strRequestID": cerere_id,
         }
-        _, err = await self.make_authenticated_request(
+        post_resp, err = await self.make_authenticated_request(
             rez_url, "POST", post_data, self.username, self.password)
+        logger.info(f"ReportWrite POST result: err={err!r} resp_len={len(post_resp) if post_resp else 0} resp={post_resp!r:.200}")
         if err:
             data.store("message", err)
             return data
