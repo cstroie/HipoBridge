@@ -3473,6 +3473,7 @@ class HipoClientCerere(HipoClient):
                 html_content):
                 anl_id = m.group(3)
                 validate_entries[anl_id] = {
+                    'anl_id': anl_id,
                     'label': m.group(1),
                     'validated': m.group(2) == '0',
                     'id_grup': m.group(4),
