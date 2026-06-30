@@ -2795,15 +2795,7 @@ document.addEventListener('DOMContentLoaded', function() {
             setCardIndication(article, indication);
         }
 
-        // Write-report button — only for imaging types if the user is an allowed radiologist
-        const IMAGING_TYPES = ['radio', 'ct', 'irm', 'eco', 'rads'];
-        if (canWriteReports && IMAGING_TYPES.includes(analysisType)) {
-            const writeBtn = article.querySelector('.btn-write-report');
-            if (writeBtn) {
-                writeBtn.hidden = false;
-                writeBtn.addEventListener('click', () => openReportEditor(article));
-            }
-        }
+        // Write-report button is shown lazily in fetchAndFillReport once canWriteReports is known
 
         return article;
     }
@@ -2956,28 +2948,40 @@ document.addEventListener('DOMContentLoaded', function() {
         } finally {
             if (loadingEl) loadingEl.hidden = true;
             if (bodyEl) bodyEl.hidden = false;
+            // Show write-report button now that canWriteReports is resolved from whoami
+            const IMAGING_TYPES = ['radio', 'ct', 'irm', 'eco', 'rads'];
+            if (canWriteReports && IMAGING_TYPES.includes(article.dataset.analysisType)) {
+                const writeBtn = article.querySelector('.btn-write-report');
+                if (writeBtn && writeBtn.hidden) {
+                    writeBtn.hidden = false;
+                    writeBtn.addEventListener('click', () => openReportEditor(article));
+                }
+            }
         }
     }
     
     function openReportEditor(article) {
-        try {
         const cerereId = article.dataset.serviceRequestId;
         const tmpl = document.getElementById('report-editor-modal-template');
-        if (!tmpl) { console.error('report-editor-modal-template not found'); return; }
+        if (!tmpl) { showToast('Eroare: template modal lipsă', 'error'); return; }
         const modal = tmpl.content.cloneNode(true).querySelector('dialog');
-        if (!modal) { console.error('dialog not found in template'); return; }
-
-        modal.querySelector('.editor-report-id').textContent = `#${cerereId}`;
-        const now = new Date();
-        modal.querySelector('.editor-report-date').textContent =
-            `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-
-        const ta = modal.querySelector('.editor-textarea');
-        ta.value = article.dataset.reportText || '';
+        if (!modal) { showToast('Eroare: dialog lipsă în template', 'error'); return; }
 
         document.body.appendChild(modal);
         modal.showModal();
-        ta.focus();
+
+        const now = new Date();
+        const idEl = modal.querySelector('.editor-report-id');
+        if (idEl) idEl.textContent = `#${cerereId}`;
+        const dateEl = modal.querySelector('.editor-report-date');
+        if (dateEl) dateEl.textContent =
+            `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+        const ta = modal.querySelector('.editor-textarea');
+        if (ta) {
+            ta.value = article.dataset.reportText || '';
+            ta.focus();
+        }
 
         const closeModal = () => { modal.close(); modal.remove(); };
         modal.querySelectorAll('[data-close-modal], .close').forEach(b => b.addEventListener('click', closeModal));
@@ -3020,9 +3024,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 saveBtn.disabled = false;
             }
         });
-        } catch (err) {
-            console.error('openReportEditor failed:', err);
-        }
     }
 
     // Enhanced date formatting function
