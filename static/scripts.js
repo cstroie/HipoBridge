@@ -204,6 +204,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Any non-401 response means Hipocrate accepted the credentials
             setCredentials(username, password);
             whoamiData = null; // reset cached whoami so it re-fetches with new creds
+            whoamiReady = fetchWhoami().catch(() => {});
             loginDialog.close();
             // Trigger the initial schedule load now that we have credentials
             fetchScheduleFromInputs();
