@@ -2988,9 +2988,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                     }
 
-                    const performed = Boolean(d.performed_at);
+                    const performed    = Boolean(d.performed_at);
+                    const hasReport    = analyses.some(a => a.text);
+                    const isEditable   = analyses.some(a => a.editable);
+                    const allValidated = analyses.length > 0 && analyses.every(a => a.validated);
 
-                    // Show perform button only when the exam has not been performed yet
+                    // State 1: not performed → perform button only
                     if (performBtn && !performed) {
                         performBtn.hidden = false;
                         performBtn.replaceWith(performBtn.cloneNode(true));
@@ -2998,17 +3001,17 @@ document.addEventListener('DOMContentLoaded', function() {
                             .addEventListener('click', () => markExamPerformed(article, cerereId));
                     }
 
-                    // Show write button only if at least one analysis is editable
-                    if (writeBtn && analyses.some(a => a.editable)) {
+                    // States 2 & 3: performed + editable + not fully validated → write button
+                    if (writeBtn && performed && isEditable && !allValidated) {
                         writeBtn.hidden = false;
                         writeBtn.replaceWith(writeBtn.cloneNode(true));
                         article.querySelector('.btn-write-report')
                             .addEventListener('click', () => openReportEditor(article));
                     }
 
-                    // Build per-analysis validate toggles
+                    // States 3 & 4: performed + report exists → validate toggles
                     const togglesEl = article.querySelector('.validate-toggles');
-                    if (togglesEl && analyses.length) {
+                    if (togglesEl && performed && hasReport && analyses.length) {
                         togglesEl.replaceChildren();
                         for (const analysis of analyses) {
                             const row = document.createElement('div');
