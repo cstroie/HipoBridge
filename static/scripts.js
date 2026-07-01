@@ -3017,7 +3017,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 }
                                 const div = document.createElement('div');
                                 div.className = 'report-note';
-                                div.innerHTML = a.text;
+                                div.innerHTML = marked.parse(a.text);
                                 previewEl.appendChild(div);
                             }
                             article.classList.remove('no-report');
