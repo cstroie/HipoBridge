@@ -3062,6 +3062,9 @@ document.addEventListener('DOMContentLoaded', function() {
                             labelText.textContent = fmtLabel(analysis.validated);
                             inp.addEventListener('change', () => {
                                 labelText.textContent = fmtLabel(inp.checked);
+                                const allChecked = [...togglesEl.querySelectorAll('input[type="checkbox"]')].every(cb => cb.checked);
+                                const wb = article.querySelector('.btn-write-report');
+                                if (wb) wb.hidden = allChecked;
                                 setValidated(article, cerereId, analysis.anl_id, analysis.id_grup, inp.checked);
                             });
 
