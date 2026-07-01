@@ -3013,6 +3013,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     const isEditable   = analyses.some(a => a.editable);
                     const allValidated = analyses.length > 0 && analyses.every(a => a.validated);
 
+                    if (performed) article.classList.remove('no-report');
+
                     // State 1: not performed → perform button only
                     if (performBtn && !performed) {
                         performBtn.hidden = false;
@@ -3043,15 +3045,21 @@ document.addEventListener('DOMContentLoaded', function() {
                             inp.type = 'checkbox';
                             inp.checked = analysis.validated;
                             inp.setAttribute('aria-label', `Validated: ${analysis.label}`);
-                            inp.addEventListener('change', () =>
-                                setValidated(article, cerereId, analysis.anl_id, analysis.id_grup, inp.checked));
                             const slider = document.createElement('span');
                             slider.className = 'switch-slider';
                             lbl.append(inp, slider);
 
                             const labelText = document.createElement('span');
                             labelText.className = 'switch-label';
-                            labelText.textContent = analyses.length > 1 ? analysis.label : 'Validated';
+                            const fmtLabel = (checked) => {
+                                const status = checked ? 'Valid' : 'Invalid';
+                                return analyses.length > 1 ? `${analysis.label}: ${status}` : status;
+                            };
+                            labelText.textContent = fmtLabel(analysis.validated);
+                            inp.addEventListener('change', () => {
+                                labelText.textContent = fmtLabel(inp.checked);
+                                setValidated(article, cerereId, analysis.anl_id, analysis.id_grup, inp.checked);
+                            });
 
                             row.append(lbl, labelText);
                             togglesEl.appendChild(row);
