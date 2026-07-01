@@ -2937,7 +2937,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 } else if (notes.length > 0) {
                     const series = data.series || [];
-                    const showTitles = notes.length > 1 && series.length >= notes.length;
+                    const showTitles = series.length >= notes.length;
                     notes.forEach((note, i) => {
                         if (!note.text) return;
                         if (showTitles && series[i]?.description) {
