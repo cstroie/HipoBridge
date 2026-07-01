@@ -2987,6 +2987,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 const performBtn = article.querySelector('.btn-perform-exam');
                 if (writeBtn) writeBtn.hidden = true;
                 if (performBtn) performBtn.hidden = true;
+                const togglesElReset = article.querySelector('.validate-toggles');
+                if (togglesElReset) { togglesElReset.hidden = true; togglesElReset.replaceChildren(); }
                 // write button is shown after cerere fetch confirms editable analyses exist
                 // Fetch cerere.asp state: report text (may be unvalidated) + per-analysis validate toggles
                 const cerereId = article.dataset.serviceRequestId;
@@ -3038,7 +3040,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     // States 3 & 4: performed + report exists → validate toggles
                     const togglesEl = article.querySelector('.validate-toggles');
                     if (togglesEl && performed && hasReport && analyses.length) {
-                        togglesEl.replaceChildren();
+                        togglesEl.hidden = false;
                         for (const analysis of analyses) {
                             const row = document.createElement('div');
                             row.className = 'validate-row';

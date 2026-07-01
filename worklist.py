@@ -733,6 +733,16 @@ class WorklistRefresher:
             logger.warning("Empty schedule for lab_id=%s — keeping previous cache", lab_id)
             return
 
+        # Deduplicate by request_id (keep first occurrence) then sort numerically.
+        seen: set = set()
+        deduped = []
+        for e in entries:
+            rid = e.get('request_id')
+            if rid and rid not in seen:
+                seen.add(rid)
+                deduped.append(e)
+        entries = sorted(deduped, key=lambda e: int(e['request_id']) if str(e.get('request_id', '')).isdigit() else 0)
+
         # Evict patient cache entries that left this modality's schedule.
         current_ids = {e['request_id'] for e in entries if e.get('request_id')}
         for stale in [k for k in self._patient_cache if k not in current_ids]:
