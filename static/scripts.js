@@ -1071,6 +1071,7 @@ document.addEventListener('DOMContentLoaded', function() {
             nameEl.textContent = displayName || 'Unknown user';
             modal.querySelector('.user-detail-username').textContent = user.username || '—';
             modal.querySelector('.user-detail-id').textContent = user.id || '—';
+            modal.querySelector('.user-detail-reports').textContent = canWriteReports ? 'Can write reports' : '—';
         } catch (err) {
             nameEl.textContent = 'Unavailable';
             showToast(`Could not load user info: ${err.message}`, 'error');

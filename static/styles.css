@@ -3379,16 +3379,28 @@ dialog.report-editor-modal article > section {
     padding: var(--spacing-xs) var(--spacing-md);
     border: 1px solid var(--primary);
     border-radius: var(--radius-md);
-    background: var(--primary);
-    color: #fff;
     font-size: var(--font-size-sm);
     cursor: pointer;
     transition: background 0.15s, color 0.15s;
 }
 
-.btn-write-report:hover,
+.btn-write-report:not([hidden]) {
+    background: var(--primary);
+    color: #fff;
+}
+
+.btn-write-report:hover {
+    background: var(--primary-dark);
+    color: #fff;
+}
+
+.btn-perform-exam:not([hidden]) {
+    background: none;
+    color: var(--primary);
+}
+
 .btn-perform-exam:hover {
-    background: var(--primary-dark, color-mix(in srgb, var(--primary) 80%, #000));
+    background: var(--primary);
     color: #fff;
 }
 
@@ -3402,6 +3414,7 @@ dialog.report-editor-modal article > section {
     flex-direction: column;
     align-items: flex-end;
     gap: var(--spacing-xs);
+    margin-left: auto;
 }
 
 .validate-row {
