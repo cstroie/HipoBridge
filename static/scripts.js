@@ -3008,10 +3008,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                     }
 
-                    const performed    = Boolean(d.performed_at);
                     const hasReport    = analyses.some(a => a.text);
                     const isEditable   = analyses.some(a => a.editable);
                     const allValidated = analyses.length > 0 && analyses.every(a => a.validated);
+                    // Treat a validated report as implicitly performed even if DataEfectuarii is blank
+                    const performed    = Boolean(d.performed_at) || allValidated;
 
                     if (performed) article.classList.remove('no-report');
 
