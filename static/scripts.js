@@ -3017,7 +3017,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 }
                                 const div = document.createElement('div');
                                 div.className = 'report-note';
-                                div.innerHTML = marked.parse(a.text);
+                                div.innerHTML = a.text;
                                 previewEl.appendChild(div);
                             }
                             article.classList.remove('no-report');
@@ -3189,14 +3189,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 for (const { ta, anl_id } of textareas) {
                     const text = ta.value.trim();
                     if (!text) continue;
-                    // Post plain text — Hipocrate stores it as-is and returns it in note.text.
-                    // We do NOT convert to HTML here: the render path already runs marked.parse()
-                    // on the retrieved text, so converting first causes double-wrapping (<p> tags
-                    // appear literally in the output).
+                    const html = marked.parse(text);
                     const resp = await apiFetch(`/api/request/${cerereId}/report`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ anl_id, text }),
+                        body: JSON.stringify({ anl_id, text: html }),
                     });
                     if (!resp.ok) {
                         const msg = await resp.text().catch(() => `HTTP ${resp.status}`);
