@@ -1787,6 +1787,9 @@ select {
 }
 
 .series-result-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-bold);
     color: var(--ink-1);
@@ -1813,7 +1816,7 @@ select {
     align-items: center;
     justify-content: flex-end;
     gap: 6px;
-    margin-top: 8px;
+    margin-top: var(--spacing-xs);
     font: 500 12px 'Inter', sans-serif;
     color: var(--ink-3);
 }
@@ -3367,8 +3370,10 @@ dialog.report-editor-modal article > section {
 .report-actions {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: var(--spacing-sm);
     margin-top: var(--spacing-sm);
+    padding-top: var(--spacing-sm);
+    border-top: 1px solid var(--border);
 }
 
 .btn-write-report:not([hidden]),

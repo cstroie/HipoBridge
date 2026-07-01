@@ -3003,12 +3003,21 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Show unvalidated report text if BuletinAnalize had nothing yet
                     const previewEl = article.querySelector('.report-preview');
                     if (previewEl && !previewEl.textContent.trim()) {
-                        const texts = analyses.map(a => a.text).filter(Boolean);
-                        if (texts.length) {
-                            const div = document.createElement('div');
-                            div.className = 'report-note';
-                            div.textContent = texts.join('\n\n');
-                            previewEl.appendChild(div);
+                        const withText = analyses.filter(a => a.text);
+                        if (withText.length) {
+                            const showTitles = withText.length > 1 || withText[0]?.label;
+                            for (const a of withText) {
+                                if (showTitles && a.label) {
+                                    const titleEl = document.createElement('p');
+                                    titleEl.className = 'series-result-title';
+                                    titleEl.textContent = a.label;
+                                    previewEl.appendChild(titleEl);
+                                }
+                                const div = document.createElement('div');
+                                div.className = 'report-note';
+                                div.innerHTML = a.text;
+                                previewEl.appendChild(div);
+                            }
                             article.classList.remove('no-report');
                         }
                     }
@@ -3040,38 +3049,49 @@ document.addEventListener('DOMContentLoaded', function() {
                     // States 3 & 4: performed + report exists → validate toggles
                     const togglesEl = article.querySelector('.validate-toggles');
                     if (togglesEl && performed && hasReport && analyses.length) {
-                        togglesEl.hidden = false;
-                        for (const analysis of analyses) {
-                            const row = document.createElement('div');
-                            row.className = 'validate-row';
+                        const previewTitles = [...(previewEl?.querySelectorAll('.series-result-title') || [])];
+                        const allCbs = () => [...article.querySelectorAll('input[type="checkbox"][aria-label^="Validated"]')];
 
-                            const lbl = document.createElement('label');
-                            lbl.className = 'switch';
+                        for (let i = 0; i < analyses.length; i++) {
+                            const analysis = analyses[i];
+
                             const inp = document.createElement('input');
                             inp.type = 'checkbox';
                             inp.checked = analysis.validated;
                             inp.setAttribute('aria-label', `Validated: ${analysis.label}`);
                             const slider = document.createElement('span');
                             slider.className = 'switch-slider';
+                            const lbl = document.createElement('label');
+                            lbl.className = 'switch';
                             lbl.append(inp, slider);
 
-                            const labelText = document.createElement('span');
-                            labelText.className = 'switch-label';
-                            const fmtLabel = (checked) => {
-                                const status = checked ? 'Valid' : 'Invalid';
-                                return analyses.length > 1 ? `${analysis.label}: ${status}` : status;
-                            };
-                            labelText.textContent = fmtLabel(analysis.validated);
                             inp.addEventListener('change', () => {
-                                labelText.textContent = fmtLabel(inp.checked);
-                                const allChecked = [...togglesEl.querySelectorAll('input[type="checkbox"]')].every(cb => cb.checked);
+                                const allChecked = allCbs().every(cb => cb.checked);
                                 const wb = article.querySelector('.btn-write-report');
                                 if (wb) wb.hidden = allChecked;
                                 setValidated(article, cerereId, analysis.anl_id, analysis.id_grup, inp.checked);
                             });
 
-                            row.append(lbl, labelText);
-                            togglesEl.appendChild(row);
+                            // Inject into matching series-result-title, fall back to validate-toggles row
+                            const titleEl = previewTitles.find(t => t.firstChild?.textContent?.trim() === analysis.label?.trim())
+                                ?? previewTitles[i];
+                            if (titleEl) {
+                                titleEl.appendChild(lbl);
+                            } else {
+                                const fmtLabel = (checked) => {
+                                    const status = checked ? 'Valid' : 'Invalid';
+                                    return analyses.length > 1 ? `${analysis.label}: ${status}` : status;
+                                };
+                                const labelText = document.createElement('span');
+                                labelText.className = 'switch-label';
+                                labelText.textContent = fmtLabel(analysis.validated);
+                                inp.addEventListener('change', () => { labelText.textContent = fmtLabel(inp.checked); });
+                                const row = document.createElement('div');
+                                row.className = 'validate-row';
+                                row.append(lbl, labelText);
+                                togglesEl.appendChild(row);
+                                togglesEl.hidden = false;
+                            }
                         }
                     }
                 } catch (_) {}
