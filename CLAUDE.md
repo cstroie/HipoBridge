@@ -54,6 +54,9 @@ HTTP client → hipobridge.py (@require_auth) → HipoClient* (cache + semaphore
 | `HipoClientCheckup` | `/api/checkup/{id}`, `/fhir/Encounter/{id}?type=checkup` | `/files/checkup.asp?cuid={id}` |
 | `HipoClientPresentation` | `/api/presentation/{id}`, `/fhir/Encounter/{id}?type=presentation` | `/gen_printabile/FisaPrezentare.asp?relname=PR&id={id}` |
 | `HipoClientCerere` | `/api/request/{id}/patient`, `/fhir/ServiceRequest/{id}?type=cerere` | `/PARA/NOM/Listare/cerere.asp?id={id}` |
+| `HipoClientReportWrite` | `POST /api/request/{id}/report` | `/PARA/NOM/Listare/cerere.asp` (POST) |
+| `HipoClientReportValidate` | `POST /api/request/{id}/validate` | `/PARA/NOM/Listare/cerere.asp` (POST action=VDV) |
+| `HipoClientCererePerform` | `POST /api/request/{id}/perform` | `/PARA/NOM/Listare/cerere.asp` (form replay, sets DataEfectuarii) |
 | `HipoClientSchedule` | `/api/schedule`, `/fhir/Schedule` | `/PARA/NOM/Listare/?id=44&NrPePag=100` |
 | `HipoClientObservationBundle` | `/fhir/Observation?patient=` | `/Pacient/analysesEpisod.asp` (parallel per domain) |
 | `HipoClientWhoami` | `/api/whoami` | `Template/menu.asp` |
@@ -118,6 +121,15 @@ HTTP client → hipobridge.py (@require_auth) → HipoClient* (cache + semaphore
 
 **Encounter route**: `?type=checkout|checkin|presentation` skips to right scraper. Without hint: tries all three in sequence (noisy logs). Frontend always passes `?type=`.
 
+**Radiology report workflow** (cerere.asp write path):
+- Access controlled by `_ALLOWED_RADIOLOGISTS` — a set of usernames from `[radiology] allowed_radiologists` in config. All three write endpoints (perform/report/validate) return 403 for non-members. `GET /api/whoami` returns `can_write_reports: true` when the authenticated user is in this set.
+- **Perform**: `HipoClientCererePerform` GETs cerere.asp, extracts all form fields (skipping submit/button/image/reset; only checked checkboxes/radios), then POSTs back with `DataEfectuarii` overridden and `hdnAction=S`. JS validation in the browser blocks empty `DataEfectuarii`, but the server accepts it without `strSituatieNeincadrabila`/`Justificare`. Evicts cerere.asp and BuletinAnalize caches after POST.
+- **Write**: POSTs report HTML to cerere.asp. Frontend converts textarea markdown to HTML via `marked.parse()` before posting.
+- **Validate**: POSTs `action=VDV` to cerere.asp. Evicts both BuletinAnalize and cerere.asp caches.
+- `performed_at` comes from `DataEfectuarii` input on cerere.asp. If blank (old exam done via Hipocrate UI), frontend also treats `allValidated` as implicit performed to suppress the Perform button.
+
+**worklist.py** dedup/sort: After `_fetch_schedule`, entries are deduplicated by `request_id` (first occurrence wins) and sorted numerically by `request_id` before enrichment.
+
 ### Frontend (`static/`)
 
 SPA: `main.html` + `scripts.js` + `styles.css` + `marked.js`. All assets self-hosted — no external requests.
@@ -136,6 +148,10 @@ SPA: `main.html` + `scripts.js` + `styles.css` + `marked.js`. All assets self-ho
 - `.fas` rules need both `font-family` and `font-weight: 900` or icons are invisible.
 - Nav uses `aria-current="page"` on `<li>`, not `role="tablist"` / `role="tab"` / `aria-selected`.
 - All DOM elements cached at startup in `elements` — never query inside repeated functions.
+- `whoamiReady` is a Promise that resolves after `fetchWhoami()` completes. Gate any UI that needs `canWriteReports` on `await whoamiReady`. After login, reassign `whoamiReady = fetchWhoami().catch(() => {})` so the flag is re-evaluated with the new credentials.
+- `localDateStr(d?)` returns a `YYYY-MM-DD` string using local date methods — never `toISOString()` for date-only values (UTC lag).
+- Report action buttons follow a 4-state machine per card: (1) not performed → Perform button only; (2) performed, no report → Edit Report; (3) performed + report → Edit Report + validate toggle; (4) performed + all validated → validate toggle only. Reset both buttons to `hidden` at the top of each `fetchAndFillReport` pass before re-evaluating state.
+- New icon glyphs must be added to `static/fontawesome.css` — the file is a curated subset, not the full FA bundle. Check before using any `fa-*` class.
 
 ### CSS design system
 

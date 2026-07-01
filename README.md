@@ -89,11 +89,21 @@ Raw-JSON-only endpoints (no FHIR equivalent yet):
 
 ```
 GET  /api/schedule[?start_date=&end_date=&lab_id=&section_name=&patient_text=&refresh=1]
-GET  /api/request/{id}/patient  — full request details from cerere.asp (patient name, CNP, priority, clinical indication, physician, section, etc.)
+GET  /api/request/{id}/patient  — full request details from cerere.asp (patient name, CNP, priority, clinical indication, physician, section, report text, performed date, validate toggles)
 GET  /api/checkin/{id}          — admission record (checkin.asp)
 GET  /api/checkup/{id}          — emergency consultation (checkup.asp)
 GET  /api/debug?path=...        — raw Hipocrate HTML passthrough for any path
+GET  /api/whoami                — logged-in user info; includes can_write_reports flag
+POST /api/request/{id}/perform  — mark exam as performed (sets DataEfectuarii to now); radiologists only
+POST /api/request/{id}/report   — write/update report HTML for an analysis; radiologists only
+POST /api/request/{id}/validate — toggle validation state for a report; radiologists only
 ```
+
+### Radiology report workflow
+
+The three write endpoints are restricted to usernames listed under `[radiology] allowed_radiologists` in `hipobridge.cfg`. The `/api/whoami` response includes `can_write_reports: true` when the user is in this list — the web interface uses this to gate the action buttons.
+
+Workflow: **Perform → Write → Validate**. Each step replays the `cerere.asp` form with the appropriate field override; caches for `cerere.asp` and `BuletinAnalize` are evicted after every write.
 
 `/fhir/Schedule` returns a `searchset` Bundle of `ServiceRequest` resources. Modality filter uses Hipocrate's native `PARA_ID_Laborator` param; patient text uses `PARA_TextCautare`; ward is filtered server-side by name. Pass `?refresh=1` to bypass the 30-minute LRU cache.
 
