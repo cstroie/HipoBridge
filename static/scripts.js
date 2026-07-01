@@ -2985,6 +2985,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (canWriteReports) {
                 const writeBtn = article.querySelector('.btn-write-report');
                 const performBtn = article.querySelector('.btn-perform-exam');
+                if (writeBtn) writeBtn.hidden = true;
+                if (performBtn) performBtn.hidden = true;
                 // write button is shown after cerere fetch confirms editable analyses exist
                 // Fetch cerere.asp state: report text (may be unvalidated) + per-analysis validate toggles
                 const cerereId = article.dataset.serviceRequestId;
