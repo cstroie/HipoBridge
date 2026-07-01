@@ -2849,6 +2849,7 @@ document.addEventListener('DOMContentLoaded', function() {
         article.querySelector('.report-preview')?.replaceChildren();
         article.classList.remove('no-report');
 
+        let hasReportFromStudy = false;
         try {
             const resp = await apiFetch(endpoint);
             if (!resp.ok) throw new Error(resp.status);
@@ -2876,6 +2877,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const hasReport = forms.length > 0
                 || resultNotes.some(n => n.text)
                 || Boolean(data.conclusion);
+            hasReportFromStudy = hasReport;
 
             // Store raw text so the editor modal can pre-populate
             if (canWriteReports) {
@@ -3025,8 +3027,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     const hasReport    = analyses.some(a => a.text);
                     const isEditable   = analyses.some(a => a.editable);
                     const allValidated = analyses.length > 0 && analyses.every(a => a.validated);
-                    // Treat a validated report as implicitly performed even if DataEfectuarii is blank
-                    const performed    = Boolean(d.performed_at) || allValidated;
+                    // Treat as performed if: DataEfectuarii set, all cerere analyses validated,
+                    // or BuletinAnalize already has a published report (cerere.asp may not render
+                    // fn_validate_cerere calls once the exam is fully finalised in Hipocrate)
+                    const performed    = Boolean(d.performed_at) || allValidated || hasReportFromStudy;
 
                     if (performed) article.classList.remove('no-report');
 
@@ -3185,11 +3189,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 for (const { ta, anl_id } of textareas) {
                     const text = ta.value.trim();
                     if (!text) continue;
-                    const html = marked.parse(text);
+                    // Post plain text — Hipocrate stores it as-is and returns it in note.text.
+                    // We do NOT convert to HTML here: the render path already runs marked.parse()
+                    // on the retrieved text, so converting first causes double-wrapping (<p> tags
+                    // appear literally in the output).
                     const resp = await apiFetch(`/api/request/${cerereId}/report`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ anl_id, text: html }),
+                        body: JSON.stringify({ anl_id, text }),
                     });
                     if (!resp.ok) {
                         const msg = await resp.text().catch(() => `HTTP ${resp.status}`);
