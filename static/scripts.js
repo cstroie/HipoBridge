@@ -258,6 +258,16 @@ document.addEventListener('DOMContentLoaded', function() {
         // Initialize tabs
         initializeTabs();
 
+        // Browser session/bfcache restore can reapply stale date values after
+        // load — force the schedule range back to its default on restore.
+        window.addEventListener('pageshow', e => {
+            if (!e.persisted) return;
+            const today = localDateStr();
+            const yesterday = localDateStr(new Date(Date.now() - 86400000));
+            if (elements.scheduleStartDate) elements.scheduleStartDate.value = yesterday;
+            if (elements.scheduleEndDate)   elements.scheduleEndDate.value   = today;
+        });
+
         // Initialize event listeners
         initEventListeners();
 
