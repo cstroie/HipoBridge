@@ -820,7 +820,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 btn.appendChild(nameEl);
                 if (meta) {
                     const metaEl = document.createElement('span');
-                    metaEl.style.cssText = 'display:block;font-size:var(--font-size-xs);color:var(--text-muted);margin-top:2px';
+                    metaEl.style.cssText = 'display:block;font-size:var(--font-size-xs);color:var(--muted);margin-top:2px';
                     metaEl.textContent = meta;
                     btn.appendChild(metaEl);
                 }
@@ -1043,7 +1043,6 @@ document.addEventListener('DOMContentLoaded', function() {
         modal.querySelectorAll('[data-close-modal], .close').forEach(btn => {
             btn.addEventListener('click', closeModal);
         });
-        modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
         modal.addEventListener('cancel', () => modal.remove());
 
         modal.querySelector('.user-logout-btn').addEventListener('click', async () => {
@@ -1477,6 +1476,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const activeAdm    = encounters.find(e => e.enc.status === 'in-progress');
             const lastDischarge = encounters.find(e => e.enc.status !== 'in-progress' && isSubstantiveText(extractEpicrisisText(e.enc)));
 
+            const secAdmission = document.getElementById('reportSectionAdmission');
+            const secLastAdmission = document.getElementById('reportSectionLastAdmission');
+            if (secAdmission) secAdmission.hidden = true;
+            if (secLastAdmission) secLastAdmission.hidden = true;
+
             if (activeAdm) {
                 fillAdmissionBlock('reportSectionAdmission', 'reportAdmissionPeriod', 'reportAdmissionText', activeAdm.enc, true);
                 // Also show last discharge if checkin text is sparse
@@ -1492,6 +1496,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // §3 Recent imaging — up to 5 most recent entries from analysesData
             const secImaging = document.getElementById('reportSectionImaging');
             const imagingList = document.getElementById('reportImagingList');
+            if (secImaging) secImaging.hidden = true;
             const MOD_SHORT = { radio: 'XR', ct: 'CT', irm: 'MR', eco: 'US', rads: 'FL' };
             const MOD_VAR   = { radio: '--mod-xr', ct: '--mod-ct', irm: '--mod-mr', eco: '--mod-us', rads: '--mod-fl' };
             // Hoisted so the markdown builder below can reference them
@@ -1582,6 +1587,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // §4 Hospitalisation timeline
             const secTimeline = document.getElementById('reportSectionTimeline');
             const timelineEl  = document.getElementById('reportTimeline');
+            if (secTimeline) secTimeline.hidden = true;
             if (timelineEl && encounters.length) {
                 timelineEl.innerHTML = '';
                 encounters.forEach((item, idx) => {
@@ -3177,7 +3183,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const closeModal = () => { modal.close(); modal.remove(); };
         modal.querySelectorAll('[data-close-modal], .close').forEach(b => b.addEventListener('click', closeModal));
-        modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
         modal.addEventListener('cancel', () => modal.remove());
 
         modal.querySelector('.editor-save').addEventListener('click', async () => {
@@ -3562,7 +3567,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Wire up close / load buttons before showing
         modal.querySelector('.report-modal-close').addEventListener('click', () => modal.close());
         modal.querySelector('[data-close-modal]').addEventListener('click', () => modal.close());
-        modal.addEventListener('click', e => { if (e.target === modal) modal.close(); });
         modal.addEventListener('close', () => document.body.removeChild(modal));
         modal.querySelector('.modal-load-patient-btn').addEventListener('click', () => {
             modal.close();
