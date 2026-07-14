@@ -262,7 +262,7 @@
     --pay-exempt: #15803d;
     --pay-staff: #7c3aed;
     --pay-inpatient: #1e40af;
-    --pay-daycase: #0369a1;
+    --pay-daycase: #059669;
 
     color-scheme: light dark;
 }
@@ -308,7 +308,7 @@
     --pay-exempt: #34d399;
     --pay-staff: #a78bfa;
     --pay-inpatient: #60a5fa;
-    --pay-daycase: #38bdf8;
+    --pay-daycase: #34d399;
 }
 
 /* Base Styles */
