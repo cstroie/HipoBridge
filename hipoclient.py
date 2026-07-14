@@ -2215,11 +2215,11 @@ class HipoClientImagingStudy(HipoClient):
                     }
                 ]
 
-            # Add notes: clinical comments (category=clinical-indication) + per-study results
+            # Add notes: clinical justification (category=clinical-indication) + per-study results
             notes = []
-            if parsed_data.get("request.clinical_comments"):
+            if parsed_data.get("request.justification"):
                 notes.append({
-                    "text": parsed_data.get("request.clinical_comments"),
+                    "text": parsed_data.get("request.justification"),
                     "category": [{"text": "clinical-indication"}]
                 })
             for study in (studies or []):
@@ -3604,7 +3604,7 @@ class HipoClientCerere(HipoClient):
                 notes.append({"text": clinical})
             justification = parsed_data.get("request.justification")
             if justification:
-                notes.append({"text": justification})
+                notes.append({"text": justification, "category": [{"text": "clinical-indication"}]})
             if notes:
                 fhir_sr["note"] = notes
 

@@ -261,7 +261,16 @@ async def get_fhir_imaging_study(request):
     logger.info(f"Retrieving imaging study with ID: {id}")
 
     client = HipoClientImagingStudy(SERVICE_URL, request)
-    response = await client.fetch_respond_fhir(id=id)
+    parsed_data = await client.fetch_and_parse(id=id)
+
+    if parsed_data.get("status") != "error":
+        cerere_client = HipoClientCerere(SERVICE_URL, request)
+        cerere_data = await cerere_client.fetch_and_parse(id=id)
+        justification = cerere_data.get("request.justification")
+        if justification:
+            parsed_data.store("request.justification", justification)
+
+    response = client.fhir_response(parsed_data, id=id, http_request=request)
     return web_fhir_response(response)
 
 

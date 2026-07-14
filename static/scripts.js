@@ -1924,6 +1924,15 @@ document.addEventListener('DOMContentLoaded', function() {
     // Markdown to HTML conversion now uses marked.js library
     // marked.parse(markdownText) converts markdown to HTML
 
+    // Hipocrate's Rezultate.asp save strips HTML tags entirely unless they're
+    // wrapped in a block element, and its pre-validation cerere.asp preview
+    // shows any surviving <p> literally. Sending plain text with a blank line
+    // between sentences avoids both: no tags to strip or leak, and Hipocrate's
+    // own storage/preview appears to turn real newlines into visible breaks.
+    function textToReportHtml(text) {
+        return text.trim().split('\n').filter(Boolean).join('\n \n');
+    }
+
     function displayPatientData(patientData) {
         log('Displaying patient data:', patientData);
 
@@ -2426,8 +2435,13 @@ document.addEventListener('DOMContentLoaded', function() {
             addStudyInfoRow(studyInfo, 'fa-user-check', 'Referrer', studyData.referrer.display || 'N/A');
         if (studyData.reason?.length > 0)
             addStudyInfoRow(studyInfo, 'fa-question-circle', 'Reason', studyData.reason[0].text || 'N/A');
-        if (studyData.note?.length > 0)
-            addStudyInfoRow(studyInfo, 'fa-sticky-note', 'Note', studyData.note[0].text || 'N/A');
+        const notes = studyData.note || [];
+        const indication = notes.find(n => n.category?.[0]?.text === 'clinical-indication');
+        if (indication?.text)
+            addStudyInfoRow(studyInfo, 'fa-notes-medical', 'Justificare', indication.text);
+        const otherNote = notes.find(n => n !== indication);
+        if (otherNote?.text)
+            addStudyInfoRow(studyInfo, 'fa-sticky-note', 'Note', otherNote.text);
     }
     
     function populateSeriesList(seriesList, studyData) {
@@ -3204,7 +3218,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 for (const { ta, anl_id } of textareas) {
                     const text = ta.value.trim();
                     if (!text) continue;
-                    const html = marked.parse(text);
+                    const html = textToReportHtml(text);
                     const resp = await apiFetch(`/api/request/${cerereId}/report`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -3932,14 +3946,17 @@ document.addEventListener('DOMContentLoaded', function() {
                         _applyExamLabel(el, _examCache[id]);
                         return;
                     }
-                    // Study not yet reported — fall back to ServiceRequest for ordered procedure regions
-                    return apiFetch(`/fhir/ServiceRequest/${id}`)
-                        .then(r => r.ok ? r.json() : null)
-                        .then(d => {
-                            const cached = { regions: _extractRegions(d), indication: '' };
-                            _examCache[id] = cached;
-                            _applyExamLabel(el, cached);
-                        });
+                    // Study not yet reported — fall back to ServiceRequest for ordered procedure
+                    // regions, plus the cerere.asp variant (only source of Justificare text)
+                    return Promise.all([
+                        apiFetch(`/fhir/ServiceRequest/${id}`).then(r => r.ok ? r.json() : null),
+                        apiFetch(`/fhir/ServiceRequest/${id}?type=cerere`).then(r => r.ok ? r.json() : null)
+                    ]).then(([d, cerere]) => {
+                        const srIndication = (cerere?.note || []).find(n => n.category?.[0]?.text === 'clinical-indication')?.text || '';
+                        const cached = { regions: _extractRegions(d), indication: srIndication };
+                        _examCache[id] = cached;
+                        _applyExamLabel(el, cached);
+                    });
                 })
                 .catch(() => {});
         });

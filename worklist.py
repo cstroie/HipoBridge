@@ -310,6 +310,20 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
     study_uid    = f'1.2.840.99999999.1.{request_id}' if request_id else generate_uid()
     accession    = f"{accession_prefix}{request_id}" if request_id else request_code
 
+    justification = (patient_info or {}).get('justification') or ''
+    section       = (patient_info or {}).get('section') or ''
+    phone         = (patient_info or {}).get('phone') or ''
+    address       = (patient_info or {}).get('address') or ''
+    hipo_id       = (patient_info or {}).get('id') or ''
+    priority      = 'STAT' if (entry.get('priority') or '').lower() not in ('normala', 'normal', '') else 'ROUTINE'
+
+    other_ids = None
+    if hipo_id:
+        other_id = Dataset()
+        other_id.PatientID = hipo_id
+        other_id.IssuerOfPatientID = 'Hipocrate'
+        other_ids = Sequence([other_id])
+
     # One entry per exam; fall back to lab_display when no exams were scraped.
     exam_list = exams if exams else [lab_display]
     multi = len(exam_list) > 1
@@ -322,12 +336,19 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
         ds.PatientID        = patient_id
         ds.PatientBirthDate = birth_date
         ds.PatientSex       = sex
+        ds.PatientAddress            = address
+        ds.PatientTelephoneNumbers   = phone
+        if other_ids is not None:
+            ds.OtherPatientIDsSequence = other_ids
 
         ds.AccessionNumber               = accession
         ds.ReferringPhysicianName        = referrer
         ds.RequestedProcedureDescription = exam_name
         ds.RequestedProcedureID          = f'{request_id}-{idx}' if multi else request_id
         ds.StudyInstanceUID              = study_uid
+        ds.RequestedProcedurePriority    = priority
+        ds.ReasonForTheRequestedProcedure = justification
+        ds.InstitutionalDepartmentName   = section
 
         sps = Dataset()
         sps.ScheduledProcedureStepStartDate  = _date_to_dicom(dt_str.split(' ')[0] if dt_str else '')
@@ -337,6 +358,7 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
         sps.ScheduledProcedureStepID          = f'{request_id}-{idx}' if multi else request_id
         sps.ScheduledStationAETitle           = ''
         sps.ScheduledPerformingPhysicianName  = referrer
+        sps.ScheduledProcedureStepStatus      = 'SCHEDULED'
         ds.ScheduledProcedureStepSequence = Sequence([sps])
         datasets.append(ds)
 
@@ -682,12 +704,16 @@ class WorklistRefresher:
                 return None
 
             info = {
-                'id':         patient_id,
-                'cnp':        patient_data.get('patient.cnp'),
-                'name':       patient_data.get('patient.name'),
-                'birth_date': patient_data.get('patient.birth_date'),
-                'sex':        patient_data.get('patient.sex'),
-                'exams':      cerere_data.get('exams') or [],
+                'id':            patient_id,
+                'cnp':           patient_data.get('patient.cnp'),
+                'name':          patient_data.get('patient.name'),
+                'birth_date':    patient_data.get('patient.birth_date'),
+                'sex':           patient_data.get('patient.sex'),
+                'exams':         cerere_data.get('exams') or [],
+                'justification': cerere_data.get('request.justification'),
+                'section':       cerere_data.get('request.section'),
+                'phone':         patient_data.get('patient.phone'),
+                'address':       patient_data.get('patient.address'),
             }
             self._patient_cache[request_id] = info
             return info
