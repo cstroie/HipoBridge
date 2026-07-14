@@ -3207,7 +3207,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    async function setValidated(article, cerereId, anlId, idGrup, validated) {
+    async function setValidatedCore(cerereId, anlId, idGrup, validated, { onDone }) {
         const resp = await fetch(`/api/request/${cerereId}/validate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ...authHeader() },
@@ -3217,24 +3217,37 @@ document.addEventListener('DOMContentLoaded', function() {
             showToast(await resp.text(), 'error');
             return;
         }
-        fetchAndFillReport(article);
+        onDone();
     }
 
-    async function markExamPerformed(article, cerereId) {
-        const btn = article.querySelector('.btn-perform-exam');
-        if (btn) btn.disabled = true;
+    async function setValidated(article, cerereId, anlId, idGrup, validated) {
+        await setValidatedCore(cerereId, anlId, idGrup, validated, {
+            onDone: () => fetchAndFillReport(article)
+        });
+    }
+
+    async function markExamPerformedCore(cerereId, { setDisabled, onDone }) {
+        setDisabled(true);
         const resp = await fetch(`/api/request/${cerereId}/perform`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ...authHeader() },
             body: JSON.stringify({}),
         });
         if (!resp.ok) {
-            if (btn) btn.disabled = false;
+            setDisabled(false);
             showToast(await resp.text().catch(() => `HTTP ${resp.status}`), 'error');
             return;
         }
         showToast('Exam marked as performed', 'success');
-        fetchAndFillReport(article);
+        onDone();
+    }
+
+    async function markExamPerformed(article, cerereId) {
+        const btn = article.querySelector('.btn-perform-exam');
+        await markExamPerformedCore(cerereId, {
+            setDisabled: (v) => { if (btn) btn.disabled = v; },
+            onDone: () => fetchAndFillReport(article)
+        });
     }
     
     // Core textarea-editor + save logic, decoupled from any specific card's
@@ -3747,26 +3760,18 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        try {
-            await loadAndRenderReport();
-        } catch (err) {
-            bodyDiv.classList.add('report-empty');
-            bodyDiv.textContent = err.message;
-        } finally {
-            triggerEl.textContent = originalText;
-            triggerEl.disabled = false;
-        }
-
-        // Report editing: only for users allowed to write reports, and only
-        // when the exam is performed, has an editable analysis, and isn't
-        // fully validated yet — same gating rule as the Imaging tab's cards.
-        try {
-            await whoamiReady;
-            if (canWriteReports) {
+        // Report editing/perform/validate: only for users allowed to write
+        // reports. Mirrors the Imaging tab's 4-state button logic
+        // (fetchAndFillReport), rebuilt here against this modal's own
+        // elements instead of an imaging-card article.
+        async function refreshActionState() {
+            if (!canWriteReports) return;
+            try {
                 const r = await fetch(`/api/request/${requestId}/patient`, { headers: authHeader() });
                 const d = await r.json();
                 const analyses = Array.isArray(d.report) ? d.report
                     : (d.report && typeof d.report === 'object' ? [d.report] : []);
+                const hasReport    = analyses.some(a => a.text);
                 const isEditable   = analyses.some(a => a.editable);
                 const allValidated = analyses.length > 0 && analyses.every(a => a.validated);
                 const performed    = Boolean(d.performed_at) || allValidated;
@@ -3796,17 +3801,94 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
 
-                const editBtn = modal.querySelector('.btn-edit-report');
-                if (editBtn && performed && isEditable && !allValidated) {
-                    editBtn.hidden = false;
-                    editBtn.addEventListener('click', () => {
-                        openReportEditorCore(requestId, analyses, {
-                            onSaved: () => { editBtn.hidden = true; loadAndRenderReport(); }
+                // Perform button — clone-and-replace to drop stale listeners
+                // from a previous refresh (same trick fetchAndFillReport uses).
+                let performBtn = modal.querySelector('.btn-perform-exam');
+                if (performBtn) {
+                    performBtn.replaceWith(performBtn.cloneNode(true));
+                    performBtn = modal.querySelector('.btn-perform-exam');
+                    performBtn.hidden = performed;
+                    if (!performed) {
+                        performBtn.addEventListener('click', () => {
+                            markExamPerformedCore(requestId, {
+                                setDisabled: v => { performBtn.disabled = v; },
+                                onDone: refreshAll
+                            });
                         });
-                    });
+                    }
                 }
+
+                // Edit Report button
+                let editBtn = modal.querySelector('.btn-edit-report');
+                if (editBtn) {
+                    editBtn.replaceWith(editBtn.cloneNode(true));
+                    editBtn = modal.querySelector('.btn-edit-report');
+                    const showEdit = performed && isEditable && !allValidated;
+                    editBtn.hidden = !showEdit;
+                    if (showEdit) {
+                        editBtn.addEventListener('click', () => {
+                            openReportEditorCore(requestId, analyses, { onSaved: refreshAll });
+                        });
+                    }
+                }
+
+                // Validate toggles — one switch per analysis
+                const togglesEl = modal.querySelector('.report-modal-validate-toggles');
+                if (togglesEl) {
+                    togglesEl.replaceChildren();
+                    const showToggles = performed && hasReport && analyses.length > 0;
+                    togglesEl.hidden = !showToggles;
+                    if (showToggles) {
+                        for (const analysis of analyses) {
+                            const inp = document.createElement('input');
+                            inp.type = 'checkbox';
+                            inp.checked = analysis.validated;
+                            inp.setAttribute('aria-label', `Validated: ${analysis.label}`);
+                            const slider = document.createElement('span');
+                            slider.className = 'switch-slider';
+                            const lbl = document.createElement('label');
+                            lbl.className = 'switch';
+                            lbl.append(inp, slider);
+
+                            const fmtLabel = (checked) => {
+                                const status = checked ? 'Valid' : 'Invalid';
+                                return analyses.length > 1 ? `${analysis.label}: ${status}` : status;
+                            };
+                            const labelText = document.createElement('span');
+                            labelText.className = 'switch-label';
+                            labelText.textContent = fmtLabel(analysis.validated);
+
+                            inp.addEventListener('change', () => {
+                                labelText.textContent = fmtLabel(inp.checked);
+                                setValidatedCore(requestId, analysis.anl_id, analysis.id_grup, inp.checked, {
+                                    onDone: refreshAll
+                                });
+                            });
+
+                            const row = document.createElement('div');
+                            row.className = 'validate-row';
+                            row.append(lbl, labelText);
+                            togglesEl.appendChild(row);
+                        }
+                    }
+                }
+            } catch (_) { /* silent — same defensive pattern as fetchAndFillReport's cerere fetch */ }
+        }
+
+        async function refreshAll() {
+            try {
+                await loadAndRenderReport();
+            } catch (err) {
+                bodyDiv.classList.add('report-empty');
+                bodyDiv.textContent = err.message;
             }
-        } catch (_) { /* silent — same defensive pattern as fetchAndFillReport's cerere fetch */ }
+            await refreshActionState();
+        }
+
+        await whoamiReady;
+        await refreshAll();
+        triggerEl.textContent = originalText;
+        triggerEl.disabled = false;
     }
 
     async function loadPatientFromRequest(requestId, patientName, triggerEl) {
