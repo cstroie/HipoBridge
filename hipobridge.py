@@ -23,6 +23,7 @@ Config: hipobridge.cfg (defaults) overridden by local.cfg (not tracked by git).
 """
 import asyncio
 import os
+import re
 from aiohttp import web
 from typing import Dict, Any
 import json
@@ -197,6 +198,14 @@ async def search_fhir_service_request(request):
     return web_fhir_response(response)
 
 
+_MEANINGFUL_TEXT_RE = re.compile(r'[A-Za-z0-9À-ɏ]')
+
+
+def _is_meaningful_text(text):
+    """True if text has at least one letter/digit — filters placeholder junk like ". .. .". """
+    return bool(text) and bool(_MEANINGFUL_TEXT_RE.search(text))
+
+
 @require_auth
 async def get_request(request):
     """Retrieve service request by ID. Returns raw HipoData JSON."""
@@ -270,13 +279,13 @@ async def get_fhir_imaging_study(request):
         sr_client = HipoClientServiceRequest(SERVICE_URL, request)
         sr_data = await sr_client.fetch_and_parse(id=id)
         comment = sr_data.get("request.comment")
-        if comment:
+        if _is_meaningful_text(comment):
             parsed_data.store("request.justification", comment)
         else:
             cerere_client = HipoClientCerere(SERVICE_URL, request)
             cerere_data = await cerere_client.fetch_and_parse(id=id)
             justification = cerere_data.get("request.justification")
-            if justification:
+            if _is_meaningful_text(justification):
                 parsed_data.store("request.justification", justification)
             else:
                 diagnosis = cerere_data.get("request.diagnosis") or sr_data.get("request.diagnosis")
