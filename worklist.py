@@ -357,7 +357,6 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
         sps.ScheduledProcedureStepDescription = exam_name
         sps.ScheduledProcedureStepID          = f'{request_id}-{idx}' if multi else request_id
         sps.ScheduledStationAETitle           = ''
-        sps.ScheduledPerformingPhysicianName  = referrer
         sps.ScheduledProcedureStepStatus      = 'SCHEDULED'
         ds.ScheduledProcedureStepSequence = Sequence([sps])
         datasets.append(ds)
