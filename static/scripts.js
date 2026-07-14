@@ -3735,13 +3735,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     modal.querySelector('.report-modal-indication').hidden = false;
                 }
 
-                // Examiner (reporting physician) appended below content
-                const examiner = reportData.performer?.[0]?.actor?.display
-                    || reportData.resultsInterpreter?.[0]?.display;
+                // Examiner (reporting physician) appended below content — only
+                // when a report actually exists. Without one, performer falls
+                // back to the requesting physician server-side, so showing it
+                // here would misattribute a report that doesn't exist yet
+                // (same guard the Imaging tab cards use, scripts.js:2995-3006).
+                const examiner = reportData.resultsInterpreter?.[0]?.display
+                    || reportData.performer?.[0]?.actor?.display;
 
                 renderReportContent(reportData, isImaging);
+                const hasReport = !bodyDiv.classList.contains('report-empty');
 
-                if (examiner) {
+                if (examiner && hasReport) {
                     const signed = document.createElement('p');
                     signed.className = 'report-modal-signed';
                     const signedIcon = document.createElement('i');
