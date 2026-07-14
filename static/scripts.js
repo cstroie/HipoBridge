@@ -4169,7 +4169,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(r => r.ok ? r.json() : null)
                 .then(data => {
                     const regions = _extractRegions(data);
-                    const indication = (data?.note || []).find(n => n.category?.[0]?.text === 'clinical-indication')?.text || '';
+                    // Backend already applies comment > justification priority; reason
+                    // carries the diagnosis fallback when neither comment nor justification exist.
+                    const indication = (data?.note || []).find(n => n.category?.[0]?.text === 'clinical-indication')?.text
+                        || data?.reason?.[0]?.text || '';
                     if (regions.length || indication) {
                         _examCache[id] = { regions, indication };
                         _applyExamLabel(el, _examCache[id]);
@@ -4181,9 +4184,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         apiFetch(`/fhir/ServiceRequest/${id}`).then(r => r.ok ? r.json() : null),
                         apiFetch(`/fhir/ServiceRequest/${id}?type=cerere`).then(r => r.ok ? r.json() : null)
                     ]).then(([d, cerere]) => {
-                        const cerereIndication = (cerere?.note || []).find(n => n.category?.[0]?.text === 'clinical-indication')?.text || '';
+                        // Priority: doctor's comment (buletinRecoltari) > justification (cerere) > diagnosis
                         const commentIndication = (d?.note || []).find(n => n.category?.[0]?.text === 'clinical-indication')?.text || '';
-                        const cached = { regions: _extractRegions(d), indication: cerereIndication || commentIndication };
+                        const cerereIndication = (cerere?.note || []).find(n => n.category?.[0]?.text === 'clinical-indication')?.text || '';
+                        const diagnosis = cerere?.reason?.[0]?.display || d?.reason?.[0]?.display || '';
+                        const cached = { regions: _extractRegions(d), indication: commentIndication || cerereIndication || diagnosis };
                         _examCache[id] = cached;
                         _applyExamLabel(el, cached);
                     });

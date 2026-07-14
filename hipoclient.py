@@ -1426,7 +1426,7 @@ class HipoClientServiceRequest(HipoClient):
                 )
 
             # Add reason code if diagnosis is available
-            diagnosis = parsed_data.get("checkin.diagnosis")
+            diagnosis = parsed_data.get("request.diagnosis")
             if diagnosis:
                 # Try to extract ICD-10 code from the diagnosis text
                 # Format is usually "CODE Description"

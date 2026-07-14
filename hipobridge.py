@@ -264,21 +264,24 @@ async def get_fhir_imaging_study(request):
     parsed_data = await client.fetch_and_parse(id=id)
 
     if parsed_data.get("status") != "error":
-        cerere_client = HipoClientCerere(SERVICE_URL, request)
-        cerere_data = await cerere_client.fetch_and_parse(id=id)
-        justification = cerere_data.get("request.justification")
-        if justification:
-            parsed_data.store("request.justification", justification)
+        # Priority: buletinRecoltari.asp's "Comentariile medicului" first, then
+        # cerere.asp's Justificare, then cerere.asp's clinical-situation diagnosis
+        # (falling back to buletinRecoltari.asp's DIAGNOSTIC field) as a last resort.
+        sr_client = HipoClientServiceRequest(SERVICE_URL, request)
+        sr_data = await sr_client.fetch_and_parse(id=id)
+        comment = sr_data.get("request.comment")
+        if comment:
+            parsed_data.store("request.justification", comment)
         else:
-            # Fallback: cerere.asp's Justificare can be empty, or the request
-            # can be blocked by lab-level permissions — buletinRecoltari.asp's
-            # "Comentariile medicului" is a separate field that sometimes has
-            # the only usable clinical context on the record.
-            sr_client = HipoClientServiceRequest(SERVICE_URL, request)
-            sr_data = await sr_client.fetch_and_parse(id=id)
-            comment = sr_data.get("request.comment")
-            if comment:
-                parsed_data.store("request.justification", comment)
+            cerere_client = HipoClientCerere(SERVICE_URL, request)
+            cerere_data = await cerere_client.fetch_and_parse(id=id)
+            justification = cerere_data.get("request.justification")
+            if justification:
+                parsed_data.store("request.justification", justification)
+            else:
+                diagnosis = cerere_data.get("request.diagnosis") or sr_data.get("request.diagnosis")
+                if diagnosis:
+                    parsed_data.store("checkin.diagnosis", diagnosis)
 
     response = client.fhir_response(parsed_data, id=id, http_request=request)
     return web_fhir_response(response)
