@@ -3237,8 +3237,12 @@ document.addEventListener('DOMContentLoaded', function() {
         fetchAndFillReport(article);
     }
     
-    function openReportEditor(article) {
-        const cerereId = article.dataset.serviceRequestId;
+    // Core textarea-editor + save logic, decoupled from any specific card's
+    // DOM. Callers pass in the analyses to edit and an onSaved() callback
+    // invoked after a successful save (instead of assuming a fixed refresh
+    // path), so this can be reused from both the Imaging tab and the
+    // Schedule exam modal.
+    function openReportEditorCore(cerereId, analyses, { onSaved }) {
         const tmpl = document.getElementById('report-editor-modal-template');
         if (!tmpl) { showToast('Error: report editor template missing', 'error'); return; }
         const modal = tmpl.content.cloneNode(true).querySelector('dialog');
@@ -3255,7 +3259,6 @@ document.addEventListener('DOMContentLoaded', function() {
             `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
         // Build one textarea per editable analysis
-        const analyses = JSON.parse(article.dataset.reportAnalyses || '[]');
         const editable = analyses.filter(a => a.editable);
         const section = modal.querySelector('.editor-analyses');
         const textareas = [];
@@ -3304,12 +3307,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
                 closeModal();
-                const reportBody = article.querySelector('.report-body');
-                const reportPreview = article.querySelector('.report-preview');
-                if (reportBody) reportBody.hidden = true;
-                if (reportPreview) reportPreview.replaceChildren();
-                article.classList.remove('no-report');
-                fetchAndFillReport(article);
+                onSaved();
                 showToast('Report saved.', 'success');
             } catch (err) {
                 if (!errEl) {
@@ -3319,6 +3317,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 errEl.textContent = err.message || 'Error saving report';
                 saveBtn.disabled = false;
+            }
+        });
+    }
+
+    function openReportEditor(article) {
+        const cerereId = article.dataset.serviceRequestId;
+        const analyses = JSON.parse(article.dataset.reportAnalyses || '[]');
+        openReportEditorCore(cerereId, analyses, {
+            onSaved: () => {
+                const reportBody = article.querySelector('.report-body');
+                const reportPreview = article.querySelector('.report-preview');
+                if (reportBody) reportBody.hidden = true;
+                if (reportPreview) reportPreview.replaceChildren();
+                article.classList.remove('no-report');
+                fetchAndFillReport(article);
             }
         });
     }
@@ -3676,9 +3689,10 @@ document.addEventListener('DOMContentLoaded', function() {
         document.body.appendChild(modal);
         modal.showModal();
 
-        try {
-            const imagingTypes = ['radio', 'ct', 'irm', 'eco', 'rads', 'fluoro'];
-            const isImaging = imagingTypes.includes(modality);
+        const imagingTypes = ['radio', 'ct', 'irm', 'eco', 'rads', 'fluoro'];
+        const isImaging = imagingTypes.includes(modality);
+
+        async function loadAndRenderReport() {
             const endpoint = isImaging
                 ? `/fhir/ImagingStudy/${requestId}`
                 : `/fhir/DiagnosticReport/${requestId}`;
@@ -3731,6 +3745,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 bodyDiv.classList.add('report-empty');
                 bodyDiv.textContent = `Could not load report (HTTP ${repResp.status}).`;
             }
+        }
+
+        try {
+            await loadAndRenderReport();
         } catch (err) {
             bodyDiv.classList.add('report-empty');
             bodyDiv.textContent = err.message;
@@ -3739,6 +3757,56 @@ document.addEventListener('DOMContentLoaded', function() {
             triggerEl.disabled = false;
         }
 
+        // Report editing: only for users allowed to write reports, and only
+        // when the exam is performed, has an editable analysis, and isn't
+        // fully validated yet — same gating rule as the Imaging tab's cards.
+        try {
+            await whoamiReady;
+            if (canWriteReports) {
+                const r = await fetch(`/api/request/${requestId}/patient`, { headers: authHeader() });
+                const d = await r.json();
+                const analyses = Array.isArray(d.report) ? d.report
+                    : (d.report && typeof d.report === 'object' ? [d.report] : []);
+                const isEditable   = analyses.some(a => a.editable);
+                const allValidated = analyses.length > 0 && analyses.every(a => a.validated);
+                const performed    = Boolean(d.performed_at) || allValidated;
+
+                // If nothing rendered yet (report not validated/published), show
+                // the freshly-entered cerere text directly — same fallback the
+                // Imaging tab cards use, so a just-saved report doesn't read as
+                // "not yet available".
+                if (bodyDiv.classList.contains('report-empty')) {
+                    const withText = analyses.filter(a => a.text);
+                    if (withText.length) {
+                        bodyDiv.innerHTML = '';
+                        bodyDiv.classList.remove('report-empty');
+                        const showTitles = withText.length > 1 || withText[0]?.label;
+                        for (const a of withText) {
+                            if (showTitles && a.label) {
+                                const titleEl = document.createElement('p');
+                                titleEl.className = 'series-result-title';
+                                titleEl.textContent = a.label;
+                                bodyDiv.appendChild(titleEl);
+                            }
+                            const div = document.createElement('div');
+                            div.className = 'report-note';
+                            div.innerHTML = a.text;
+                            bodyDiv.appendChild(div);
+                        }
+                    }
+                }
+
+                const editBtn = modal.querySelector('.btn-edit-report');
+                if (editBtn && performed && isEditable && !allValidated) {
+                    editBtn.hidden = false;
+                    editBtn.addEventListener('click', () => {
+                        openReportEditorCore(requestId, analyses, {
+                            onSaved: () => { editBtn.hidden = true; loadAndRenderReport(); }
+                        });
+                    });
+                }
+            }
+        } catch (_) { /* silent — same defensive pattern as fetchAndFillReport's cerere fetch */ }
     }
 
     async function loadPatientFromRequest(requestId, patientName, triggerEl) {
