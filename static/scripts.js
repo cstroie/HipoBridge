@@ -508,11 +508,81 @@ document.addEventListener('DOMContentLoaded', function() {
     let pendingAnalysesData = null;
     let cachedServiceRequests = null;
 
+    // Bumped on every new patient load (clearResults) so background prefetch
+    // work scheduled for a previous patient becomes a no-op once stale.
+    let dataGeneration = 0;
+    let prefetchTimers = [];
+
     async function fetchServiceBundle() {
         if (cachedServiceRequests !== null) return cachedServiceRequests;
         const result = await fetchAnalysesData(pendingAnalysesData.patientCode);
         cachedServiceRequests = result;
         return result;
+    }
+
+    // Quietly warm Imaging / Laboratory / Epicrisis data in the background
+    // after a patient loads, so the first tab click is instant. Delayed and
+    // staggered so it doesn't compete with the initial render or fire a
+    // burst of simultaneous requests; fully silent (no loading UI) — on
+    // failure the user just gets a normal fetch when they click the tab.
+    function schedulePrefetch(patientCode, patientData) {
+        const myGeneration = dataGeneration;
+        const BASE_DELAY = 2500;    // let the patient tab render/settle first
+        const JITTER_SPREAD = 4000; // spread targets over this window, no burst
+        const targets = [
+            () => prefetchImaging(patientCode, myGeneration),
+            () => prefetchLaboratory(patientData, myGeneration),
+            () => prefetchEpicrisis(patientData, myGeneration),
+        ];
+        targets.forEach((task, i) => {
+            const delay = BASE_DELAY
+                + (i * JITTER_SPREAD / targets.length)
+                + Math.random() * (JITTER_SPREAD / targets.length);
+            prefetchTimers.push(setTimeout(() => {
+                if (myGeneration !== dataGeneration) return;
+                task();
+            }, delay));
+        });
+    }
+
+    async function prefetchImaging(patientCode, gen) {
+        if (gen !== dataGeneration) return;
+        try {
+            const result = await fetchServiceBundle(); // memoized; also warms Laboratory
+            if (gen !== dataGeneration) return;
+            if (pendingReportData) {
+                pendingReportData.analysesData = result.data || { resourceType: 'Bundle', entry: [] };
+            }
+        } catch (err) {
+            log('Prefetch imaging failed (silent):', err);
+        }
+    }
+
+    async function prefetchLaboratory(patientData, gen) {
+        if (gen !== dataGeneration) return;
+        try {
+            await fetchServiceBundle(); // shares cachedServiceRequests with imaging
+            if (gen !== dataGeneration) return;
+            const sd = new Date(); sd.setDate(sd.getDate() - 90);
+            await apiFetch(`/fhir/Observation?patient=${encodeURIComponent(patientData.id)}&start_date=${localDateStr(sd)}`);
+        } catch (err) {
+            log('Prefetch laboratory failed (silent):', err);
+        }
+    }
+
+    async function prefetchEpicrisis(patientData, gen) {
+        if (gen !== dataGeneration) return;
+        try {
+            const checkoutIds = extractCheckoutIds(patientData);
+            if (!checkoutIds.length) return;
+            await limitedMap(checkoutIds, MAX_CONCURRENT_REQUESTS, async id => {
+                if (gen !== dataGeneration) return null;
+                try { return await fetchEncounterDataForCheckout(id); }
+                catch { return null; }
+            });
+        } catch (err) {
+            log('Prefetch epicrisis failed (silent):', err);
+        }
     }
 
     async function loadImagingLazily() {
@@ -689,6 +759,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             log('Switching to patient tab...');
             switchToPatientTab();
+            schedulePrefetch(patientCode, patientData);
 
             log('All data loading complete');
             hideLoading();
@@ -926,6 +997,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function clearResults() {
+        dataGeneration++;
+        prefetchTimers.forEach(clearTimeout);
+        prefetchTimers = [];
         setPageTitle(null);
         // Clear patient data with null checks
         if (elements.patientId) elements.patientId.innerHTML = '';
