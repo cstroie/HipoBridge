@@ -4216,6 +4216,16 @@ class HipoClientWhoami(HipoClient):
         self.request_url = "Template/menu.asp"
 
     async def fetch_and_parse(self, *args, **kwargs):
+        # menu.asp's logged-out rendering is HTTP 200 with a normal "HIPOCRATE - MENU"
+        # title (just a blank CONTUL MEU name) — it doesn't match is_login_page(), so
+        # make_authenticated_request's reactive re-login never fires here the way it
+        # does for other pages. If this is the first request ever made for this
+        # username, log in proactively instead of relying on that reactive check.
+        if not self.session:
+            self.session = self.get_user_session(self.username)
+        if not user_session_manager.is_authenticated(self.username):
+            await self.login_if_needed(self.session, self.username, self.password)
+
         # The menu page is the same URL for every user but its content is
         # user-specific — it must never be served from or left in the shared URL cache.
         menu_url = self.get_full_url(self.request_url)
