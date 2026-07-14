@@ -2828,14 +2828,13 @@ class HipoClientCheckout(HipoClient):
                 if parsed_data.get("patient.phone"):
                     fhir_encounter["extension"].append({"url": "patientPhone", "valueString": parsed_data.get("patient.phone")})
 
-            # Notes: epicrisis + recommended treatment
+            # Notes: epicrisis text only. Recommended treatment is addressed to
+            # the patient directly (dosing instructions, etc.) and is noise in
+            # the Epicrisis/Report tabs, which are for clinician reference.
             notes = []
             epicrisis = parsed_data.get("checkout.epicrisis")
             if epicrisis:
                 notes.append({"text": epicrisis})
-            treatment = parsed_data.get("checkout.treatment")
-            if treatment and treatment.strip('-– \t'):
-                notes.append({"text": f"#### Treatment\n\n{treatment}"})
             if notes:
                 fhir_encounter["note"] = notes
 
