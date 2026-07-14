@@ -3952,8 +3952,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         apiFetch(`/fhir/ServiceRequest/${id}`).then(r => r.ok ? r.json() : null),
                         apiFetch(`/fhir/ServiceRequest/${id}?type=cerere`).then(r => r.ok ? r.json() : null)
                     ]).then(([d, cerere]) => {
-                        const srIndication = (cerere?.note || []).find(n => n.category?.[0]?.text === 'clinical-indication')?.text || '';
-                        const cached = { regions: _extractRegions(d), indication: srIndication };
+                        const cerereIndication = (cerere?.note || []).find(n => n.category?.[0]?.text === 'clinical-indication')?.text || '';
+                        const commentIndication = (d?.note || []).find(n => n.category?.[0]?.text === 'clinical-indication')?.text || '';
+                        const cached = { regions: _extractRegions(d), indication: cerereIndication || commentIndication };
                         _examCache[id] = cached;
                         _applyExamLabel(el, cached);
                     });

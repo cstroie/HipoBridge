@@ -1448,10 +1448,12 @@ class HipoClientServiceRequest(HipoClient):
                     "display": clinical_comments
                 }]
 
-            # Physician comment (Comentariile medicului)
+            # Physician comment (Comentariile medicului) — tagged clinical-indication
+            # so it doubles as a fallback source when cerere.asp's Justificare is
+            # empty or unreachable (e.g. lab-level permission restrictions).
             comment = parsed_data.get("request.comment")
             if comment:
-                fhir_service_request["note"] = [{"text": comment}]
+                fhir_service_request["note"] = [{"text": comment, "category": [{"text": "clinical-indication"}]}]
 
             # Add order details for imaging studies
             studies = parsed_data.get("studies")

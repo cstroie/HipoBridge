@@ -269,6 +269,16 @@ async def get_fhir_imaging_study(request):
         justification = cerere_data.get("request.justification")
         if justification:
             parsed_data.store("request.justification", justification)
+        else:
+            # Fallback: cerere.asp's Justificare can be empty, or the request
+            # can be blocked by lab-level permissions — buletinRecoltari.asp's
+            # "Comentariile medicului" is a separate field that sometimes has
+            # the only usable clinical context on the record.
+            sr_client = HipoClientServiceRequest(SERVICE_URL, request)
+            sr_data = await sr_client.fetch_and_parse(id=id)
+            comment = sr_data.get("request.comment")
+            if comment:
+                parsed_data.store("request.justification", comment)
 
     response = client.fhir_response(parsed_data, id=id, http_request=request)
     return web_fhir_response(response)
