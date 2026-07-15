@@ -16,6 +16,7 @@ from pydantic import BaseModel, ValidationError
 from llm import audit
 from llm.prompts import extract_clinical_note, extract_imaging, extract_intervention
 from llm.prompts.compare_qualitative import build as build_compare_prompt
+from llm.prompts.pre_exam_brief import build as build_pre_exam_brief_prompt
 from llm.schemas import ClinicalNoteRecord, ImagingRecord, SCHEMAS, model_extraction_schema
 from llm.segment import Block, segment
 
@@ -244,3 +245,16 @@ async def narrate_brief(records: list[BaseModel], router, max_sentences: int = 5
         {"role": "user", "content": str(summary_input)},
     ]
     return await router.chat(narration_tier, messages, max_tokens=max_sentences * 40, temperature=0.2)
+
+
+async def summarize_document(text: str, router, tier: str = "instruct", max_tokens: int = 220) -> str:
+    """Rapid orientation brief over the WHOLE raw source text — deliberately
+    the opposite of narrate_brief()'s contract. No JSON schema/grammar (free
+    prose, no rigid shape to constrain) and therefore no per-field
+    validation of the result the way extract_block() gets — this trades the
+    schema-validated/echo-checked trust guarantee for the ability to read
+    the full document in one pass. Callers must present this as an
+    unverified AI aid, not a validated result, distinct from the
+    schema-checked extraction records."""
+    messages = build_pre_exam_brief_prompt(text)
+    return await router.chat(tier, messages, max_tokens=max_tokens, temperature=0.2)

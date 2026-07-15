@@ -78,6 +78,10 @@ document.addEventListener('DOMContentLoaded', function() {
         aiRecordsList: document.getElementById('aiRecordsList'),
         aiTimelineSection: document.getElementById('aiTimelineSection'),
         aiTimeline: document.getElementById('aiTimeline'),
+        aiSummaryBtn: document.getElementById('aiSummaryBtn'),
+        aiSummaryCard: document.getElementById('aiSummaryCard'),
+        aiSummaryText: document.getElementById('aiSummaryText'),
+        aiSummaryError: document.getElementById('aiSummaryError'),
         // Header elements
         quickSearch: document.getElementById('quickSearch'),
         quickSearchBtn: document.getElementById('quickSearchBtn'),
@@ -391,9 +395,12 @@ document.addEventListener('DOMContentLoaded', function() {
             elements.copyReportBtn.addEventListener('click', copyReportMarkdown);
         }
 
-        // AI tab button
+        // AI tab buttons
         if (elements.aiExtractBtn) {
             elements.aiExtractBtn.addEventListener('click', runAiExtraction);
+        }
+        if (elements.aiSummaryBtn) {
+            elements.aiSummaryBtn.addEventListener('click', runAiQuickSummary);
         }
 
         // Schedule tab
@@ -1326,6 +1333,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.aiResults) elements.aiResults.hidden = true;
         if (elements.aiErrorState) { elements.aiErrorState.hidden = true; elements.aiErrorState.textContent = ''; }
         if (elements.aiEmptyState) elements.aiEmptyState.hidden = false;
+        if (elements.aiSummaryCard) elements.aiSummaryCard.hidden = true;
+        if (elements.aiSummaryText) elements.aiSummaryText.textContent = '';
+        if (elements.aiSummaryError) { elements.aiSummaryError.hidden = true; elements.aiSummaryError.textContent = ''; }
     }
 
     // Structured payload built alongside the Report tab's markdown (see
@@ -1345,10 +1355,61 @@ document.addEventListener('DOMContentLoaded', function() {
         return text ? { text } : null;
     }
 
+    // Clinical-only text for Quick Summary — deliberately excludes patient
+    // demographics (name/DOB/CNP), which the model tends to fabricate or
+    // garble when asked to restate them; the summary card is paired with
+    // the already-rendered, deterministic patient identity on the Report
+    // tab instead. Falls back to the full markdown if the clinical-only
+    // stash isn't populated (e.g. an older cached load).
+    function getPatientClinicalText() {
+        const clinical = elements.patientReportBlocks?.dataset.clinicalMarkdown;
+        if (clinical && clinical.trim()) return clinical;
+        return elements.patientReportMarkdown?.dataset.markdown || null;
+    }
+
     function updateAiEmptyState() {
         const hasContent = !!getPatientReportPayload();
         if (elements.aiEmptyState) elements.aiEmptyState.hidden = hasContent;
         if (elements.aiExtractBtn) elements.aiExtractBtn.disabled = !hasContent;
+        if (elements.aiSummaryBtn) elements.aiSummaryBtn.disabled = !getPatientClinicalText();
+    }
+
+    async function runAiQuickSummary() {
+        const text = getPatientClinicalText();
+        if (!text) {
+            showToast('Load a patient report first', 'warning');
+            return;
+        }
+
+        const btn = elements.aiSummaryBtn;
+        const origHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Summarizing…</span>';
+        if (elements.aiSummaryError) { elements.aiSummaryError.hidden = true; elements.aiSummaryError.textContent = ''; }
+        if (elements.aiSummaryCard) elements.aiSummaryCard.hidden = true;
+
+        try {
+            const resp = await apiFetch('/api/ai/summarize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text }),
+            });
+            const data = await resp.json();
+            if (!resp.ok || data.status === 'error') {
+                throw new Error(data.message || `Summary failed (HTTP ${resp.status})`);
+            }
+            if (elements.aiSummaryText) elements.aiSummaryText.textContent = data.summary;
+            if (elements.aiSummaryCard) elements.aiSummaryCard.hidden = false;
+        } catch (err) {
+            console.error('AI summary failed:', err);
+            if (elements.aiSummaryError) {
+                elements.aiSummaryError.textContent = `Summary failed: ${err.message}`;
+                elements.aiSummaryError.hidden = false;
+            }
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = origHtml;
+        }
     }
 
     async function runAiExtraction() {
@@ -1993,6 +2054,11 @@ document.addEventListener('DOMContentLoaded', function() {
             // API endpoint) — send them as-is, no re-guessing. The admission
             // narrative(s) are HippoBridge's one remaining free-text blob with
             // no further structure, sent separately for server-side segmentation.
+            // clinicalMarkdown deliberately excludes patientMarkdown (name/DOB/
+            // CNP) — the Quick Summary feature reads real patient identity from
+            // already-rendered DOM fields instead of asking the model to guess
+            // it from raw text (confirmed live: an ungrounded small model will
+            // confidently fabricate age/sex rather than omit them).
             if (elements.patientReportBlocks) {
                 const typedBlocks = entries.map((entry, idx) => ({
                     hint_type: 'imaging',
@@ -2002,6 +2068,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     typed_blocks: typedBlocks,
                     narrative: narrativeParts.join('\n\n'),
                 });
+                elements.patientReportBlocks.dataset.clinicalMarkdown = admissionsMd + imagingMd;
             }
 
             if (reportCard) reportCard.hidden = false;

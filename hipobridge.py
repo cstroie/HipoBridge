@@ -51,6 +51,7 @@ from llm.config import init_llm
 from llm.router import build_router
 from llm.pipeline import PROMPTS as LLM_PROMPTS
 from llm.pipeline import extract_typed_blocks as llm_extract_typed_blocks
+from llm.pipeline import summarize_document as llm_summarize_document
 from llm.segment import Block as LLMBlock, segment as llm_segment
 
 logging.basicConfig(
@@ -822,6 +823,32 @@ async def post_ai_extract(request):
     return web_json_response({"status": "success", **_ai_result_to_json(result)})
 
 
+@require_auth
+async def post_ai_summarize(request):
+    """Rapid free-text orientation brief over a whole report — the counterpart
+    to post_ai_extract's schema-validated per-record extraction, with
+    deliberately weaker guarantees: no JSON schema, no per-field validation,
+    no echo-detection. The frontend must present this as an unverified AI
+    aid, not a validated result (see llm/pipeline.py::summarize_document)."""
+    if _ai_router is None:
+        return web_error_response("AI extraction is not configured", 503)
+    try:
+        data = await request.json()
+    except json.JSONDecodeError:
+        return web_error_response("Invalid JSON data")
+    text = data.get('text', '')
+    if not isinstance(text, str) or not text.strip():
+        return web_error_response("'text' field must be a non-empty string")
+
+    try:
+        summary = await llm_summarize_document(text, _ai_router)
+    except Exception as exc:
+        logger.warning(f"AI summarization failed: {exc}")
+        return web_error_response("AI extraction service is unreachable", 503)
+
+    return web_json_response({"status": "success", "summary": summary.strip()})
+
+
 async def serve_md2html(request):
     """Convert markdown text to HTML. Accepts JSON body with 'text' field."""
     try:
@@ -1066,6 +1093,7 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     app.router.add_get('/fhir/ValueSet/cnp', serve_validate_cnp)
     app.router.add_post('/fhir/md2html', serve_md2html)
     app.router.add_post('/api/ai/extract', post_ai_extract)
+    app.router.add_post('/api/ai/summarize', post_ai_summarize)
     app.router.add_get('/fhir/CodeSystem/analysis-types', serve_fhir_analysis_types)
     app.router.add_get('/fhir/spec', serve_spec)
     app.router.add_get('/fhir/Metadata', serve_fhir_metadata)

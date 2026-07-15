@@ -390,11 +390,32 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             <h1 id="ai-tab-heading" class="report-hero-title">Structured Extraction</h1>
                             <p class="report-hero-sub">Runs the patient's report text through the on-device LLM pipeline — imaging, interventions and clinical notes as structured records</p>
                         </div>
-                        <button class="btn-primary" id="aiExtractBtn">
-                            <i class="fas fa-wand-magic-sparkles"></i>
-                            <span>Extract with AI</span>
-                        </button>
+                        <div class="ai-header-actions">
+                            <button class="btn-secondary" id="aiSummaryBtn">
+                                <i class="fas fa-bolt"></i>
+                                <span>Quick Summary</span>
+                            </button>
+                            <button class="btn-primary" id="aiExtractBtn">
+                                <i class="fas fa-wand-magic-sparkles"></i>
+                                <span>Extract with AI</span>
+                            </button>
+                        </div>
                     </header>
+
+                    <!-- Quick Summary card — free-text AI brief, NOT schema-validated
+                         (see llm/pipeline.py::summarize_document). Always shown with an
+                         explicit "unverified" label; never conflate with the validated
+                         record cards below. -->
+                    <div id="aiSummaryCard" class="ai-summary-card" hidden>
+                        <div class="ai-summary-header">
+                            <span class="ai-summary-badge">
+                                <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+                                AI-generated — verify against source
+                            </span>
+                        </div>
+                        <p id="aiSummaryText" class="ai-summary-text"></p>
+                    </div>
+                    <div id="aiSummaryError" class="ai-error-state" hidden></div>
 
                     <div id="aiEmptyState" class="ai-empty-state">
                         <i class="fas fa-notes-medical" aria-hidden="true"></i>
