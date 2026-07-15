@@ -374,6 +374,12 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
 
                     <!-- Hidden markdown store for Copy button -->
                     <div id="patientReportMarkdown" hidden></div>
+                    <!-- Hidden structured-blocks store for the AI tab: pre-typed
+                         pieces (imaging reports, already known from their own
+                         API source — no guessing) + one narrative blob (the
+                         admission/epicrisis free text, still needs segmentation
+                         server-side). JSON in dataset.blocks, not text content. -->
+                    <div id="patientReportBlocks" hidden></div>
                 </section>
 
                 <!-- ─── AI tab ─── -->

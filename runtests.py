@@ -27,7 +27,7 @@ from tests.markdown import TestMarkdownConversion
 from tests.llm_grammar import TestGrammarConversion
 from tests.llm_schemas import TestExtractedRecordValidation
 from tests.llm_segment import TestSegmentation
-from tests.llm_pipeline import TestPipelineRetryAndNeedsReview, TestAssembleTimeline, TestExampleEchoDetection
+from tests.llm_pipeline import TestPipelineRetryAndNeedsReview, TestAssembleTimeline, TestExampleEchoDetection, TestExtractTypedBlocks
 from tests.llm_backend import TestServerBackend
 from tests.llm_eval import TestFixtureEvalHarness
 
@@ -69,6 +69,7 @@ TEST_GROUPS = {
         TestPipelineRetryAndNeedsReview,
         TestAssembleTimeline,
         TestExampleEchoDetection,
+        TestExtractTypedBlocks,
         TestServerBackend,
     ],
     "root": [test_root_endpoint],
@@ -118,6 +119,7 @@ TEST_GROUPS = {
         TestPipelineRetryAndNeedsReview,
         TestAssembleTimeline,
         TestExampleEchoDetection,
+        TestExtractTypedBlocks,
         TestServerBackend,
         TestFixtureEvalHarness,
     ],

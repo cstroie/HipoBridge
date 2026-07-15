@@ -216,11 +216,20 @@ async def compare_qualitative(earlier: BaseModel, later: BaseModel, router,
     return result.strip().lower()
 
 
-async def extract_document(document: str, router) -> ExtractionResult:
-    blocks = segment(document)
+async def extract_typed_blocks(blocks: list[Block], router) -> ExtractionResult:
+    """Extract from blocks whose hint_type is already known (e.g. an
+    imaging study report fetched from its own API endpoint) — no
+    segmentation heuristics involved, since there's nothing to guess."""
     records = list(await asyncio.gather(*(extract_block(b, router) for b in blocks)))
     timeline = assemble_timeline(records)
     return ExtractionResult(records=records, timeline=timeline)
+
+
+async def extract_document(document: str, router) -> ExtractionResult:
+    """Segment a raw document (structural cues + fallback splitting) and
+    extract from it — for callers with no independent source of block
+    types, e.g. the CLI working on a plain text file."""
+    return await extract_typed_blocks(segment(document), router)
 
 
 async def narrate_brief(records: list[BaseModel], router, max_sentences: int = 5,

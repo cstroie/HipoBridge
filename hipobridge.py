@@ -49,7 +49,9 @@ from worklist import start_worklist
 
 from llm.config import init_llm
 from llm.router import build_router
-from llm.pipeline import extract_document as llm_extract_document
+from llm.pipeline import PROMPTS as LLM_PROMPTS
+from llm.pipeline import extract_typed_blocks as llm_extract_typed_blocks
+from llm.segment import Block as LLMBlock, segment as llm_segment
 
 logging.basicConfig(
     level=getattr(logging, os.getenv('LOG_LEVEL', 'INFO').upper(), logging.INFO),
@@ -761,23 +763,58 @@ def _ai_result_to_json(result) -> Dict[str, Any]:
 async def post_ai_extract(request):
     """Run structured extraction in-process against the configured LLM
     server (llm.cfg) — no separate process, same auth gate as every other
-    /api/* route."""
+    /api/* route.
+
+    Two request shapes:
+    - {"typed_blocks": [{"hint_type": "imaging", "text": "..."}, ...],
+       "narrative": "<free text, e.g. an epicrisis>"}
+      Preferred: typed_blocks are already known to be one imaging study /
+      encounter field / etc. from their own API source — no segmentation
+      guessing. narrative (if present) is the one piece HippoBridge has no
+      further structure for (e.g. checkout.epicrisis) and still gets
+      segmented server-side.
+    - {"text": "..."} (legacy): the whole blob gets segmented, kept for
+      backward compatibility during rollout.
+    """
     if _ai_router is None:
         return web_error_response("AI extraction is not configured", 503)
     try:
         data = await request.json()
     except json.JSONDecodeError:
         return web_error_response("Invalid JSON data")
-    text = data.get('text', '')
-    if not isinstance(text, str) or not text.strip():
-        return web_error_response("'text' field must be a non-empty string")
+
+    blocks = []
+    typed_blocks = data.get('typed_blocks')
+    narrative = data.get('narrative', '')
+    legacy_text = data.get('text', '')
+
+    if typed_blocks is not None:
+        if not isinstance(typed_blocks, list):
+            return web_error_response("'typed_blocks' must be a list")
+        for item in typed_blocks:
+            if not isinstance(item, dict):
+                continue
+            text = item.get('text', '')
+            hint_type = item.get('hint_type', 'unknown')
+            if not isinstance(text, str) or not text.strip():
+                continue
+            if hint_type not in LLM_PROMPTS:
+                hint_type = 'unknown'
+            blocks.append(LLMBlock(text=text, hint_type=hint_type, source_offset=(0, len(text))))
+        if isinstance(narrative, str) and narrative.strip():
+            blocks.extend(llm_segment(narrative))
+    elif isinstance(legacy_text, str) and legacy_text.strip():
+        blocks.extend(llm_segment(legacy_text))
+
+    if not blocks:
+        return web_error_response("no extractable text provided ('typed_blocks', 'narrative', or 'text')")
 
     # extract_block() already catches per-block backend/transport errors and
     # flags needs_review rather than raising — this is a last-resort net for
     # anything unexpected (e.g. a router/config problem), not the normal
     # per-block failure path.
     try:
-        result = await llm_extract_document(text, _ai_router)
+        result = await llm_extract_typed_blocks(blocks, _ai_router)
     except Exception as exc:
         logger.warning(f"AI extraction failed: {exc}")
         return web_error_response("AI extraction service is unreachable", 503)

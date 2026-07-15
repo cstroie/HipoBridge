@@ -68,6 +68,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Report tab elements
         reportCard: document.getElementById('reportCard'),
         patientReportMarkdown: document.getElementById('patientReportMarkdown'),
+        patientReportBlocks: document.getElementById('patientReportBlocks'),
         copyReportBtn: document.getElementById('copyReportBtn'),
         // AI tab elements
         aiExtractBtn: document.getElementById('aiExtractBtn'),
@@ -1139,6 +1140,7 @@ document.addEventListener('DOMContentLoaded', function() {
             delete elements.patientReportMarkdown.dataset.markdown;
             delete elements.patientReportMarkdown.dataset.loaded;
         }
+        if (elements.patientReportBlocks) delete elements.patientReportBlocks.dataset.blocks;
         const reportCard = elements.reportCard;
         if (reportCard) reportCard.hidden = true;
 
@@ -1326,15 +1328,32 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.aiEmptyState) elements.aiEmptyState.hidden = false;
     }
 
+    // Structured payload built alongside the Report tab's markdown (see
+    // displayPatientReport): {typed_blocks: [{hint_type, text}, ...], narrative}.
+    // Falls back to the flat markdown ({text: ...}) if the structured store
+    // isn't populated yet, so the AI tab still works before a full Report
+    // tab load, or against an older cached load.
+    function getPatientReportPayload() {
+        const raw = elements.patientReportBlocks?.dataset.blocks;
+        if (raw) {
+            try {
+                const parsed = JSON.parse(raw);
+                if ((parsed.typed_blocks?.length || 0) > 0 || parsed.narrative) return parsed;
+            } catch (_) { /* fall through to markdown */ }
+        }
+        const text = elements.patientReportMarkdown?.dataset.markdown;
+        return text ? { text } : null;
+    }
+
     function updateAiEmptyState() {
-        const hasText = !!elements.patientReportMarkdown?.dataset.markdown;
-        if (elements.aiEmptyState) elements.aiEmptyState.hidden = hasText;
-        if (elements.aiExtractBtn) elements.aiExtractBtn.disabled = !hasText;
+        const hasContent = !!getPatientReportPayload();
+        if (elements.aiEmptyState) elements.aiEmptyState.hidden = hasContent;
+        if (elements.aiExtractBtn) elements.aiExtractBtn.disabled = !hasContent;
     }
 
     async function runAiExtraction() {
-        const text = elements.patientReportMarkdown?.dataset.markdown;
-        if (!text) {
+        const payload = getPatientReportPayload();
+        if (!payload) {
             showToast('Load a patient report first', 'warning');
             return;
         }
@@ -1349,7 +1368,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const resp = await apiFetch('/api/ai/extract', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text }),
+                body: JSON.stringify(payload),
             });
             const data = await resp.json();
             if (!resp.ok || data.status === 'error') {
@@ -1919,6 +1938,14 @@ document.addEventListener('DOMContentLoaded', function() {
             // not the full epicrisis history (that belongs to the Epicrisis tab).
             const patientMarkdown = await generatePatientMarkdown(patientData);
 
+            // Raw admission narrative bodies (no markdown header wrapping) —
+            // fed to the AI tab's "narrative" field as-is. This is the one
+            // piece HippoBridge has no further structure for (a single
+            // free-text epicrisis/checkin field), so it still needs
+            // server-side segmentation; everything else below (imaging) is
+            // already known-typed and skips that guessing entirely.
+            const narrativeParts = [];
+
             function admissionMarkdown(label, enc, isActive) {
                 const start = enc.period?.start ? formatDate(enc.period.start) : '';
                 const end   = enc.period?.end   ? formatDate(enc.period.end)   : '';
@@ -1931,6 +1958,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const body = isActive
                     ? buildCheckinText(enc)
                     : extractEpicrisisText(enc).trim();
+                if (body) narrativeParts.push(body);
                 return `## ${label}\n\n_${period}_\n\n${body}\n\n`;
             }
 
@@ -1959,6 +1987,22 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const combined = patientMarkdown + admissionsMd + imagingMd;
             if (markdownStore) markdownStore.dataset.markdown = combined;
+
+            // Structured payload for the AI tab: imaging reports are already
+            // known-typed here (reports[idx], fetched per-study from their own
+            // API endpoint) — send them as-is, no re-guessing. The admission
+            // narrative(s) are HippoBridge's one remaining free-text blob with
+            // no further structure, sent separately for server-side segmentation.
+            if (elements.patientReportBlocks) {
+                const typedBlocks = entries.map((entry, idx) => ({
+                    hint_type: 'imaging',
+                    text: reports[idx],
+                }));
+                elements.patientReportBlocks.dataset.blocks = JSON.stringify({
+                    typed_blocks: typedBlocks,
+                    narrative: narrativeParts.join('\n\n'),
+                });
+            }
 
             if (reportCard) reportCard.hidden = false;
             log('Patient report displayed successfully');

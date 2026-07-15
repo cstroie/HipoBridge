@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from llm.pipeline import _is_example_echo, assemble_timeline, extract_block, extract_document
+from llm.pipeline import _is_example_echo, assemble_timeline, extract_block, extract_document, extract_typed_blocks
 from llm.prompts import extract_imaging, extract_intervention
 from llm.router import TierRouter
 from llm.schemas import ImagingRecord, InterventionRecord
@@ -77,6 +77,35 @@ class TestPipelineRetryAndNeedsReview(unittest.TestCase):
                       hint_type="intervention", source_offset=(0, 10))
         record = run_async(extract_block(block, router))
         self.assertTrue(record.needs_review)
+
+
+class TestExtractTypedBlocks(unittest.TestCase):
+    def test_pre_typed_blocks_skip_segmentation(self):
+        # A block whose hint_type is already known (e.g. an imaging study
+        # fetched from its own API endpoint) must be extracted with that
+        # exact type — no re-guessing from segment.py.
+        payload = json.dumps({"type": "imaging", "date": "2026-01-01", "modality": "MRI",
+                               "body_region": "spine", "findings": [], "impression": None})
+        router = TierRouter(_FakeBackend([payload]), {"instruct": "instruct-model"})
+        blocks = [Block(text="some ambiguous text with no header at all",
+                         hint_type="imaging", source_offset=(0, 10))]
+        result = run_async(extract_typed_blocks(blocks, router))
+        self.assertEqual(len(result.records), 1)
+        self.assertEqual(result.records[0].type, "imaging")
+
+    def test_mixes_typed_and_segmented_blocks(self):
+        imaging_payload = json.dumps({"type": "imaging", "date": "2026-01-01", "modality": "CT",
+                                       "body_region": "head", "findings": [], "impression": None})
+        note_payload = json.dumps({"type": "clinical_note", "date": None, "summary": "ok"})
+        router = TierRouter(_FakeBackend([imaging_payload, note_payload]),
+                             {"instruct": "instruct-model"})
+        typed = [Block(text="pre-typed imaging report text here", hint_type="imaging",
+                        source_offset=(0, 10))]
+        from llm.segment import segment
+        narrative_blocks = segment("Patient presented with fever and was discharged after treatment.")
+        result = run_async(extract_typed_blocks(typed + narrative_blocks, router))
+        types = {r.type for r in result.records}
+        self.assertIn("imaging", types)
 
 
 class TestExampleEchoDetection(unittest.TestCase):
