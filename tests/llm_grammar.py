@@ -41,6 +41,20 @@ class TestGrammarConversion(unittest.TestCase):
         self.assertNotIn("needs_review", schema["properties"])
         self.assertNotIn("raw_source", schema["properties"])
 
+    def test_to_gbnf_rule_names_never_contain_underscore(self):
+        # Confirmed against a real llama-server build: a GBNF rule
+        # *identifier* containing '_' makes that rule silently fail to
+        # apply, degrading the whole grammar to unconstrained generation
+        # with no error surfaced. Field names like `body_region` are
+        # common in our schemas, so this must stay sanitized in generated
+        # rule names — the JSON key/value *content* is unaffected and
+        # still allowed to contain underscores freely.
+        grammar = to_gbnf(model_extraction_schema(ImagingRecord))
+        for line in grammar.splitlines():
+            rule_name = line.split("::=", 1)[0].strip()
+            self.assertNotIn("_", rule_name)
+        self.assertIn('"\\"body_region\\""', grammar)
+
 
 if __name__ == "__main__":
     unittest.main()

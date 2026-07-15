@@ -41,6 +41,14 @@ class _GrammarBuilder:
             self._rules[name] = body
 
     def _add_rule(self, name: str, body: str) -> str:
+        # Sanitize the rule *identifier* only — never the JSON content it
+        # matches. Confirmed empirically against a real llama-server build:
+        # a GBNF rule name containing '_' makes that rule silently fail to
+        # apply, degrading the whole grammar to unconstrained generation
+        # with no error surfaced (the server still echoes the grammar back
+        # as "accepted"). Field names like `body_region` are common in our
+        # schemas, so this isn't a hypothetical edge case.
+        name = name.replace("_", "-")
         candidate = name
         i = 0
         while candidate in self._rules and self._rules[candidate] != body:
