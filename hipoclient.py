@@ -48,6 +48,7 @@ from aiohttp import web
 from yarl import URL
 import logging
 import re
+import time
 import uuid
 from bs4 import BeautifulSoup, Comment
 import html
@@ -56,6 +57,7 @@ from datetime import date, datetime, timedelta
 import configparser
 
 from typing import Any, Dict, List, Optional, Tuple, Union
+from collections import OrderedDict
 
 from extractors import extract_id_from_link, extract_ids_from_links, extract_selected_from_dropdown, extract_text_after_label, extract_text_from_element, extract_value_from_input
 from extractors import parse_cnp, parse_date_time
@@ -297,6 +299,7 @@ class UserSessionManager:
             logger.info(f"Closing session for user {username}")
             await session.close()
         self._authenticated.pop(username, None)
+        HipoClientWhoami.invalidate_cache(username)
 
     async def close_all_sessions(self):
         """Close all user sessions and free associated resources."""
@@ -4013,8 +4016,35 @@ class HipoClientObservationBundle(HipoClient):
 
     MAX_CONCURRENT = 5
 
+    # The assembled bundle costs 15+N upstream fetches to rebuild, so it gets
+    # its own small, dedicated LRU rather than sharing the 500-entry url_cache
+    # — otherwise an unrelated ServiceRequestSearch/ObservationBundle fan-out
+    # for a different patient can evict it before it's ever reused.
+    _BUNDLE_CACHE_MAX = 100
+    _BUNDLE_CACHE_TTL = 1800.0
+    _bundle_cache: "OrderedDict[str, Tuple[str, float]]" = OrderedDict()
+
     def __init__(self, service_url=None, request=None):
         super().__init__(service_url=service_url, request=request)
+
+    @classmethod
+    def _bundle_cache_get(cls, key: str) -> Optional[str]:
+        entry = cls._bundle_cache.get(key)
+        if entry is None:
+            return None
+        value, ts = entry
+        if (time.monotonic() - ts) >= cls._BUNDLE_CACHE_TTL:
+            cls._bundle_cache.pop(key, None)
+            return None
+        cls._bundle_cache.move_to_end(key)
+        return value
+
+    @classmethod
+    def _bundle_cache_put(cls, key: str, value: str) -> None:
+        cls._bundle_cache[key] = (value, time.monotonic())
+        cls._bundle_cache.move_to_end(key)
+        while len(cls._bundle_cache) > cls._BUNDLE_CACHE_MAX:
+            cls._bundle_cache.popitem(last=False)
 
     async def fetch_and_parse(self, patient_id=None, start_date=None, end_date=None, **kwargs) -> HipoData:
         data = HipoData(status="success", message="")
@@ -4025,7 +4055,7 @@ class HipoClientObservationBundle(HipoClient):
         bundle_key = f"__obs_bundle__:{patient_id}"
 
         # Serve from cache if available (date filters applied below after lookup)
-        cached_json = self.url_cache.get(bundle_key)
+        cached_json = self._bundle_cache_get(bundle_key)
         if cached_json is not None:
             observations = json.loads(cached_json)
             observations = _filter_observations_by_date(observations, start_date, end_date)
@@ -4036,7 +4066,7 @@ class HipoClientObservationBundle(HipoClient):
         # In-flight deduplication
         if self.url_cache.is_inflight(bundle_key):
             await self.url_cache.wait_inflight(bundle_key)
-            cached_json = self.url_cache.get(bundle_key)
+            cached_json = self._bundle_cache_get(bundle_key)
             if cached_json is not None:
                 observations = json.loads(cached_json)
                 observations = _filter_observations_by_date(observations, start_date, end_date)
@@ -4139,8 +4169,8 @@ class HipoClientObservationBundle(HipoClient):
                         "section":     study.get("section", ""),
                     })
 
-            # Cache the assembled bundle (L1-only, 30-min TTL)
-            self.url_cache.put(bundle_key, json.dumps(observations), persist=False)
+            # Cache the assembled bundle in its own dedicated LRU (see class docstring).
+            self._bundle_cache_put(bundle_key, json.dumps(observations))
             self.url_cache.resolve_inflight(bundle_key)
 
         except Exception as e:
@@ -4212,11 +4242,28 @@ class HipoClientWhoami(HipoClient):
     """Extracts the logged-in user identity from the sidebar menu iframe
     (Template/menu.asp), CONTUL MEU / Informatii personale section."""
 
+    # Keyed by username (not URL, since menu.asp's URL is shared across users).
+    # Short TTL: identity/display-name data changes rarely, but this must not
+    # mask a logout/re-login, so it's invalidated explicitly on session close
+    # rather than relying on a long TTL alone.
+    _CACHE_TTL = 60.0
+    _cache: Dict[str, Tuple[HipoData, float]] = {}
+
     def __init__(self, service_url=None, request=None):
         super().__init__(service_url=service_url, request=request)
         self.request_url = "Template/menu.asp"
 
+    @classmethod
+    def invalidate_cache(cls, username: str) -> None:
+        cls._cache.pop(username, None)
+
     async def fetch_and_parse(self, *args, **kwargs):
+        cached = self._cache.get(self.username)
+        if cached is not None:
+            parsed_data, ts = cached
+            if (time.monotonic() - ts) < self._CACHE_TTL:
+                return parsed_data
+
         # menu.asp's logged-out rendering is HTTP 200 with a normal "HIPOCRATE - MENU"
         # title (just a blank CONTUL MEU name) — it doesn't match is_login_page(), so
         # make_authenticated_request's reactive re-login never fires here the way it
@@ -4233,6 +4280,9 @@ class HipoClientWhoami(HipoClient):
         self.cache_remove(menu_url)
         parsed_data = await super().fetch_and_parse(*args, **kwargs)
         self.cache_remove(menu_url)
+
+        if parsed_data.get("status") != "error":
+            self._cache[self.username] = (parsed_data, time.monotonic())
         return parsed_data
 
     def parse_data(self, html_content: str, **kwargs) -> HipoData:

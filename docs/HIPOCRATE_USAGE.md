@@ -20,8 +20,8 @@ that cost was redundant. See also the "Concurrency and caching" and
 | `HipoClientCheckup` | `checkup.asp` | `/api/checkup/{id}` (explicit `?type=` only, not in auto-detect chain) | 1 |
 | `HipoClientCerere` | `cerere.asp?id=` | `/api/request/{id}/patient`, `/fhir/ServiceRequest/{id}?type=cerere`, worklist enrichment | 1 |
 | `HipoClientPresentation` | `FisaPrezentare.asp` | `/api/presentation/{id}`, Encounter auto-detect (final fallback) | 1 |
-| `HipoClientObservationBundle` | 15× `analysesEpisod.asp` (lab domains) + N× `BuletinAnalize.asp` | `/fhir/Observation`, `/api/observation` | **15 + N** (N = lab requests inside the 90-day window), report fetches capped at 5 concurrent |
-| `HipoClientWhoami` | `Template/menu.asp` | `/api/whoami` | 1 (2 if login needed); **never cached by design** — shared URL, per-user content |
+| `HipoClientObservationBundle` | 15× `analysesEpisod.asp` (lab domains) + N× `BuletinAnalize.asp` | `/fhir/Observation`, `/api/observation` | **15 + N** on a cold miss (N = lab requests inside the 90-day window), report fetches capped at 5 concurrent; 0 on a hit against its own dedicated bundle cache |
+| `HipoClientWhoami` | `Template/menu.asp` | `/api/whoami` | 1 (2 if login needed) on a cold miss; 0 on a hit against the per-username identity cache. The `menu.asp` page itself is still never cached by URL — shared URL, per-user content |
 | `HipoClientSchedule` | `PARA/NOM/Listare/?id=44` | `/api/schedule`, `/fhir/Schedule`, worklist refresh | 1 |
 | `HipoClientReportWrite` | `Rezultate.asp` (GET then POST) | `POST /api/request/{id}/report` | 2 |
 | `HipoClientReportValidate` | `Ajax_Cerere.asp?action=VDV` | `POST /api/request/{id}/validate` | 1 |
@@ -50,6 +50,19 @@ success.
 - `ImagingStudy`, `DiagnosticReport`, and `Checkout` evict their own cache
   entry if the parsed result is empty (report not filled in yet), so an
   unfilled report is never cached and blocks a later, filled fetch.
+- Two results get their own dedicated caches outside the shared
+  `url_cache`, because they're either too expensive to rebuild or too
+  cheap to key by URL:
+  - `HipoClientObservationBundle`'s assembled bundle (15+N upstream
+    calls to rebuild) lives in its own 100-entry LRU with a 30-min TTL,
+    keyed by patient ID, so unrelated traffic against the shared
+    500-entry cache can't evict it.
+  - `HipoClientWhoami`'s parsed identity is cached per username (not by
+    URL, since `menu.asp`'s URL is shared across all users) with a 60s
+    TTL, explicitly invalidated on logout
+    (`UserSessionManager.close_user_session` calls
+    `HipoClientWhoami.invalidate_cache`). The underlying `menu.asp` page
+    itself is still never left in the shared URL cache.
 
 ## N+1 / redundant-fetch patterns found and fixed
 
@@ -93,11 +106,14 @@ success.
   (`on_demand_refresh_seconds`, default 60s) — Hipocrate load from the
   worklist subsystem scales with actual device queries, not wall clock.
 
-## Remaining opportunities (not implemented)
-
-- A dedicated, longer-lived cache slot for `ObservationBundle`'s
-  aggregate result (15+N upstream calls to rebuild) so it isn't evicted
-  by unrelated LRU pressure from the shared 500-entry cache.
-- A per-username in-memory cache for `whoami` (keyed by session, not
-  URL) to avoid a guaranteed live fetch on every call — worth it only if
-  `/api/whoami` turns out to be called on every frontend page load.
+6. **`ObservationBundle` aggregate evicted by unrelated traffic** — its
+   result was cached in the shared 500-entry `url_cache`, so a large
+   `ServiceRequestSearch`/`ObservationBundle` fan-out for a different
+   patient could evict it before reuse, forcing a full 15+N rebuild.
+   **Fixed**: moved to its own dedicated 100-entry LRU (see caching
+   model above).
+7. **`whoami` never cacheable** — every `/api/whoami` call was a full
+   live Hipocrate fetch, worst-case with a login probe too; likely
+   called on every frontend page load. **Fixed**: added a per-username
+   in-memory cache (60s TTL, invalidated on logout) sitting in front of
+   the still-uncached `menu.asp` fetch.
