@@ -15,12 +15,26 @@ _HEADER_RE = re.compile(r'^#{1,4}\s*(.+)$', re.MULTILINE)
 
 _HINT_KEYWORDS: dict[HintType, tuple[str, ...]] = {
     "imaging": ("ct scan", "ct ", "mri", "rmn", "x-ray", "radiograf", "ecograf",
-                "ultrasound", "imagist", "computer tomograf"),
+                "ultrasound", "imaging", "imagist", "computer tomograf"),
     "intervention": ("interventie", "intervention", "procedur", "operatie",
                       "surgery", "biopsi"),
-    "clinical_note": ("consult", "nota clinica", "clinical note", "prezentare",
-                       "admission", "internare", "externare", "discharge"),
+    "clinical_note": ("consult", "nota clinica", "clinical note", "clinical history",
+                       "prezentare", "admission", "internare", "externare", "discharge"),
 }
+
+# Section headers that are pure demographics/identifiers, never clinical
+# narrative — must never reach an extraction prompt. Confirmed against
+# HippoBridge's real assembled report markdown ("## Patient" holds name,
+# age, sex, DOB, CNP): sending this to the clinical_note extractor leaks
+# patient identifiers into the prompt for no benefit, and a small model
+# with nothing genuinely clinical to extract tends to regurgitate the
+# extraction prompt's own few-shot example almost verbatim instead.
+_SKIP_SECTION_TITLES = {"patient"}
+
+# A header line with no real body beneath it (e.g. a lone top-level title
+# immediately followed by the next header) is pure noise — never worth an
+# LLM call, and guarantees a needs_review false positive.
+_MIN_BODY_WORDS = 5
 
 _SENTENCE_WINDOW_SIZE = 4       # sentences per block, fallback path
 _SENTENCE_WINDOW_OVERLAP = 1    # sentences shared between consecutive blocks
@@ -53,6 +67,15 @@ def _segment_by_headers(document: str) -> list[Block] | None:
         text = document[start:end].strip()
         if not text:
             continue
+
+        header_title = match.group(1).strip().lower()
+        if header_title in _SKIP_SECTION_TITLES:
+            continue
+
+        body = text[match.end() - start:].strip()
+        if len(body.split()) < _MIN_BODY_WORDS:
+            continue
+
         blocks.append(Block(text=text, hint_type=_classify_header(match.group(1)), source_offset=(start, end)))
     return blocks or None
 
