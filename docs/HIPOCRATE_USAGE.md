@@ -56,7 +56,11 @@ success.
   - `HipoClientObservationBundle`'s assembled bundle (15+N upstream
     calls to rebuild) lives in its own 100-entry LRU with a 30-min TTL,
     keyed by patient ID, so unrelated traffic against the shared
-    500-entry cache can't evict it.
+    500-entry cache can't evict it. `HipoClientReportWrite`,
+    `HipoClientReportValidate`, and `HipoClientCererePerform` explicitly
+    invalidate a patient's entry on a successful write/validate/perform
+    (see N+1 item 8 below) so this cache can't mask a just-written
+    report.
   - `HipoClientWhoami`'s parsed identity is cached per username (not by
     URL, since `menu.asp`'s URL is shared across all users) with a 60s
     TTL, explicitly invalidated on logout
@@ -117,3 +121,18 @@ success.
    called on every frontend page load. **Fixed**: added a per-username
    in-memory cache (60s TTL, invalidated on logout) sitting in front of
    the still-uncached `menu.asp` fetch.
+8. **`ObservationBundle` cache left stale after a report write** —
+   `HipoClientReportWrite`, `HipoClientReportValidate`, and
+   `HipoClientCererePerform` evict `BuletinAnalize.asp`/`cerere.asp` by
+   request ID on success, but never knew the *patient* ID, so they
+   couldn't invalidate that patient's `ObservationBundle` entry. This
+   predates the dedicated bundle cache above but got worse once that
+   cache became protected from LRU eviction — a written/validated
+   report could now be masked by stale `/fhir/Observation` data for the
+   full 30-minute TTL instead of being evicted early by chance under
+   load. **Fixed**: `ReportWrite`/`ReportValidate` do a cache-only (no
+   extra Hipocrate call) lookup of the already-cached `cerere.asp` page
+   to recover the patient ID and invalidate their bundle entry;
+   `CererePerform` already holds the live `cerere.asp` form fields
+   (including `strPacientId`) from its own GET step, so it invalidates
+   unconditionally with no lookup needed.

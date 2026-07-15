@@ -4046,6 +4046,11 @@ class HipoClientObservationBundle(HipoClient):
         while len(cls._bundle_cache) > cls._BUNDLE_CACHE_MAX:
             cls._bundle_cache.popitem(last=False)
 
+    @classmethod
+    def invalidate_cache(cls, patient_id: str) -> None:
+        """Drop a patient's cached bundle, e.g. after a report write/validate/perform."""
+        cls._bundle_cache.pop(f"__obs_bundle__:{patient_id}", None)
+
     async def fetch_and_parse(self, patient_id=None, start_date=None, end_date=None, **kwargs) -> HipoData:
         data = HipoData(status="success", message="")
         if not patient_id:
@@ -4559,6 +4564,22 @@ class HipoClientSchedule(HipoClient):
         return self.fhir_response(parsed, **kwargs)
 
 
+def _invalidate_observation_bundle_from_cerere_cache(client: 'HipoClient', cerere_id: str) -> None:
+    """Best-effort: if cerere.asp for this request is already cached, use it to
+    find the patient ID and drop their ObservationBundle cache entry, so
+    /fhir/Observation doesn't keep serving pre-write data after a report is
+    written/validated. Cache-only lookup — never issues a live Hipocrate call,
+    so a cache miss here just means the bundle keeps its normal TTL."""
+    cerere_url = client.get_full_url(f"/PARA/NOM/Listare/cerere.asp?id={cerere_id}")
+    cached_html = client.url_cache.get(cerere_url)
+    if not cached_html:
+        return
+    parsed = HipoClientCerere().parse_data(cached_html, id=cerere_id)
+    patient_id = parsed.get("patient.id")
+    if patient_id:
+        HipoClientObservationBundle.invalidate_cache(patient_id)
+
+
 class HipoClientReportWrite(HipoClient):
     """Write a radiology report result via Hipocrate Rezultate.asp.
 
@@ -4619,6 +4640,7 @@ class HipoClientReportWrite(HipoClient):
 
         # Step 3 — evict caches so next read reflects the new text
         cerere_path = f"/PARA/NOM/Listare/cerere.asp?id={cerere_id}"
+        _invalidate_observation_bundle_from_cerere_cache(self, cerere_id)
         for suffix in ["&type=3&IdP=1", "&type=1&IdP=1"]:
             self.cache_remove(
                 self.get_full_url(f"/PARA/Printabile/BuletinAnalize.asp?id={cerere_id}{suffix}"))
@@ -4652,6 +4674,7 @@ class HipoClientReportValidate(HipoClient):
             return data
 
         cerere_path = f"/PARA/NOM/Listare/cerere.asp?id={cerere_id}"
+        _invalidate_observation_bundle_from_cerere_cache(self, cerere_id)
         for suffix in ["&type=3&IdP=1", "&type=1&IdP=1"]:
             self.cache_remove(
                 self.get_full_url(f"/PARA/Printabile/BuletinAnalize.asp?id={cerere_id}{suffix}"))
@@ -4749,6 +4772,10 @@ class HipoClientCererePerform(HipoClient):
         if err:
             data.store("message", err)
             return data
+
+        patient_id = form_data.get('strPacientId')
+        if patient_id:
+            HipoClientObservationBundle.invalidate_cache(patient_id)
 
         self.cache_remove(cerere_url)
         for suffix in ["&type=3&IdP=1", "&type=1&IdP=1"]:
