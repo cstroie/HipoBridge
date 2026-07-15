@@ -734,9 +734,11 @@ class WorklistRefresher:
         days_ahead = _LAB_ID_FETCH_DAYS.get(lab_id, _DEFAULT_FETCH_DAYS) if lab_id else _DEFAULT_FETCH_DAYS
         end   = (datetime.now() + timedelta(days=days_ahead)).strftime('%Y-%m-%d')
 
+        # refresh_if_stale already throttles how often this runs, so the
+        # schedule's own cache TTL doesn't need to be force-evicted here too.
         client = self._client(HipoClientSchedule)
         data = await client.fetch_and_parse(
-            start_date=start, end_date=end, lab_id=lab_id, force=True
+            start_date=start, end_date=end, lab_id=lab_id
         )
 
         if data.get('status') == 'error':

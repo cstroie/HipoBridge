@@ -65,9 +65,9 @@ import asyncio
 # URLs whose content is user-specific or too volatile for long-term persistence.
 # cache_put() sets persist=False for any URL that contains one of these substrings.
 _NO_PERSIST_PATTERNS = (
-    '/Template/menu.asp',   # whoami — user-specific content on a shared URL
-    '/files/search.asp',    # patient search — ephemeral query results
-    '/PARA/NOM/Listare/',   # schedule — refreshed on demand
+    '/Template/menu.asp',      # whoami — user-specific content on a shared URL
+    '/files/search.asp',       # patient search — ephemeral query results
+    '/PARA/NOM/Listare/?id=',  # schedule listing — refreshed on demand
 )
 
 from markdown import html_to_markdown
@@ -4046,12 +4046,14 @@ class HipoClientObservationBundle(HipoClient):
 
         self.url_cache.mark_inflight(bundle_key)
         try:
-            # 1. Fetch historical lab results per domain (NrPePag=50 to cover multiple episodes)
+            # 1. Fetch historical lab results per domain. NrPePag=100 matches
+            # HipoClientServiceRequestSearch's unfiltered fan-out so both paths
+            # hit the same cache key and don't double-scrape the same domains.
             sr_client = HipoClientServiceRequestSearch(self.service_url, self.request)
             episode_url = sr_client.request_url_episode  # "/Pacient/analysesEpisod.asp?pacid={pacid}"
             lab_fetch_tasks = []
             for domain_id in LAB_DOMAINS:
-                url = (episode_url + f"&strDomeniu={domain_id}&NrPePag=50").format(pacid=patient_id)
+                url = (episode_url + f"&strDomeniu={domain_id}&NrPePag=100").format(pacid=patient_id)
                 lab_fetch_tasks.append(self.get_page(url))
             domain_results = await asyncio.gather(*lab_fetch_tasks)
 
