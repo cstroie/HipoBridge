@@ -24,6 +24,12 @@ from tests.worklist import (TestNameToDicom, TestBuildDatasets,
 from tests.extractors import test_extract_text_after_label_basic, test_extract_text_after_label_with_element_tag, test_extract_text_after_label_with_stop_at, test_extract_text_after_label_not_found, test_extract_text_after_label_case_insensitive, test_extract_text_with_bold_tag, test_extract_text_with_bold_and_underline_tags, test_extract_text_with_whitespace, test_extract_id_from_link_basic, test_extract_id_from_link_with_custom_pattern, test_extract_id_from_link_no_href, test_extract_id_from_link_no_match, test_extract_ids_from_links_basic, test_extract_ids_from_links_with_custom_pattern, test_extract_ids_from_links_no_matches
 from tests.hipo_data import TestHipoData
 from tests.markdown import TestMarkdownConversion
+from tests.llm_grammar import TestGrammarConversion
+from tests.llm_schemas import TestExtractedRecordValidation
+from tests.llm_segment import TestSegmentation
+from tests.llm_pipeline import TestPipelineRetryAndNeedsReview, TestAssembleTimeline
+from tests.llm_backend import TestServerBackend
+from tests.llm_eval import TestFixtureEvalHarness
 
 # Configuration
 BASE_URL = "http://localhost:44660"
@@ -56,7 +62,13 @@ TEST_GROUPS = {
         test_extract_text_after_label_not_found,
         test_extract_text_after_label_case_insensitive,
         TestHipoData,
-        TestMarkdownConversion
+        TestMarkdownConversion,
+        TestGrammarConversion,
+        TestExtractedRecordValidation,
+        TestSegmentation,
+        TestPipelineRetryAndNeedsReview,
+        TestAssembleTimeline,
+        TestServerBackend,
     ],
     "root": [test_root_endpoint],
     "auth": [
@@ -98,6 +110,15 @@ TEST_GROUPS = {
     "hipodata": [TestHipoData],
     "markdown": [TestMarkdownConversion],
     "worklist": [TestNameToDicom, TestBuildDatasets, TestWorklistCache, TestWorklistSCP],
+    "llm": [
+        TestGrammarConversion,
+        TestExtractedRecordValidation,
+        TestSegmentation,
+        TestPipelineRetryAndNeedsReview,
+        TestAssembleTimeline,
+        TestServerBackend,
+        TestFixtureEvalHarness,
+    ],
 }
 
 async def run_tests(test_list) -> None:

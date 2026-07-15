@@ -8,3 +8,10 @@ beautifulsoup4>=4.9.0
 # DICOM Modality Worklist server (optional — MWL SCP disabled if not installed)
 pynetdicom>=2.0.0
 pydicom>=2.3.0
+
+# Structured LLM extraction (schema validation, grammar-constrained generation)
+pydantic>=2
+
+# Self-hosted GGUF inference fallback for tiers not covered by an external
+# llama.cpp server (optional — InProcessBackend tiers only)
+llama-cpp-python>=0.3
