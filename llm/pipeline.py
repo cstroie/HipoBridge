@@ -4,10 +4,12 @@ Sorting, timeline assembly, and numeric comparison are pure Python — the
 model's job stays narrow: structured extraction from one block at a time.
 """
 import asyncio
+import json
 import logging
 import re
 import time
 from dataclasses import dataclass, field
+from difflib import SequenceMatcher
 
 from pydantic import BaseModel, ValidationError
 
@@ -29,6 +31,73 @@ PROMPTS = {
 
 _EXTRACTION_TIER = "instruct"
 _MM_RE = re.compile(r'(\d+(?:\.\d+)?)\s*mm')
+
+# Below this length a phrase is too generic (e.g. "no", "simpla") to be a
+# reliable echo signal — only check distinctive multi-word example content.
+_ECHO_MIN_PHRASE_LEN = 10
+
+
+class _ExampleEcho(Exception):
+    """Raised when extraction returned the prompt's own few-shot example
+    content instead of something derived from the real input — small models
+    faced with unfamiliar input (confirmed live: non-English source text)
+    can fall back to echoing the example almost verbatim rather than
+    generalizing. Treated the same as a validation failure: retry once,
+    then flag needs_review rather than silently shipping fabricated data."""
+
+
+def _example_field_values(prompt_module) -> dict:
+    try:
+        return json.loads(prompt_module.EXAMPLE_ASSISTANT)
+    except (json.JSONDecodeError, AttributeError):
+        return {}
+
+
+def _field_strings(value) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        return [v for v in value if isinstance(v, str)]
+    return []
+
+
+def _is_example_echo(record: BaseModel, prompt_module, block_text: str) -> bool:
+    """True if a field's value is essentially the example's value for that
+    SAME field, verbatim or near-verbatim — i.e. it can only have come from
+    copying the example, not from genuinely reading the input. Compared
+    per-field (not any-field-to-any-field) and with a high similarity bar,
+    since short generic medical phrasing ("fara complicatii" / "without
+    complications") legitimately recurs across unrelated real extractions
+    and must not be flagged."""
+    example_data = _example_field_values(prompt_module)
+    if not example_data:
+        return False
+    block_lower = block_text.lower()
+    record_data = record.model_dump()
+
+    for field_name, example_value in example_data.items():
+        if field_name in ("type", "needs_review", "raw_source"):
+            continue  # fixed/pipeline-only fields — always match by design, not by echoing
+        example_strings = _field_strings(example_value)
+        record_strings = _field_strings(record_data.get(field_name))
+        for ex, rv in zip(sorted(example_strings), sorted(record_strings)):
+            if len(ex) < _ECHO_MIN_PHRASE_LEN:
+                continue
+            if ex.lower() in block_lower:
+                continue  # coincidentally also present in the real input — not an echo
+            similarity = SequenceMatcher(None, ex.lower(), rv.lower()).ratio()
+            if similarity >= 0.9:
+                return True
+    return False
+
+
+def _validate_record(raw: str, schema_cls, prompt_module, block_text: str) -> BaseModel:
+    """Raises ValidationError or _ExampleEcho on failure, matching
+    extract_block's existing retry-then-needs_review handling for both."""
+    record = schema_cls.model_validate_json(raw)
+    if _is_example_echo(record, prompt_module, block_text):
+        raise _ExampleEcho()
+    return record
 
 
 @dataclass
@@ -73,11 +142,13 @@ async def extract_block(block: Block, router, max_tokens: int = 300) -> BaseMode
         return schema_cls.model_construct(needs_review=True, raw_source=block.text)
 
     try:
-        record = schema_cls.model_validate_json(raw)
+        record = _validate_record(raw, schema_cls, prompt_module, block.text)
         audit.log_extraction(block.text, _EXTRACTION_TIER, model_used, "ok",
                               (time.monotonic() - started) * 1000)
         return record
-    except ValidationError:
+    except (ValidationError, _ExampleEcho) as exc:
+        if isinstance(exc, _ExampleEcho):
+            logger.warning("extraction echoed the prompt's few-shot example, retrying")
         try:
             raw_retry = await router.chat(
                 _EXTRACTION_TIER,
@@ -91,11 +162,11 @@ async def extract_block(block: Block, router, max_tokens: int = 300) -> BaseMode
                                   (time.monotonic() - started) * 1000)
             return schema_cls.model_construct(needs_review=True, raw_source=block.text)
         try:
-            record = schema_cls.model_validate_json(raw_retry)
+            record = _validate_record(raw_retry, schema_cls, prompt_module, block.text)
             audit.log_extraction(block.text, _EXTRACTION_TIER, model_used, "retried",
                                   (time.monotonic() - started) * 1000)
             return record
-        except ValidationError:
+        except (ValidationError, _ExampleEcho):
             audit.log_extraction(block.text, _EXTRACTION_TIER, model_used, "needs_review",
                                   (time.monotonic() - started) * 1000)
             return schema_cls.model_construct(needs_review=True, raw_source=block.text)

@@ -1,9 +1,10 @@
 import json
 import unittest
 
-from llm.pipeline import assemble_timeline, extract_block, extract_document
+from llm.pipeline import _is_example_echo, assemble_timeline, extract_block, extract_document
+from llm.prompts import extract_imaging, extract_intervention
 from llm.router import TierRouter
-from llm.schemas import ImagingRecord
+from llm.schemas import ImagingRecord, InterventionRecord
 from llm.segment import Block
 from tests.llm_async_helper import run_async
 
@@ -62,6 +63,60 @@ class TestPipelineRetryAndNeedsReview(unittest.TestCase):
         block = Block(text="unstructured text", hint_type="unknown", source_offset=(0, 10))
         record = run_async(extract_block(block, router))
         self.assertEqual(record.type, "clinical_note")
+
+    def test_example_echo_flags_needs_review_instead_of_shipping_fabricated_data(self):
+        # Confirmed live: faced with unfamiliar (non-English) input, a small
+        # model can fall back to echoing the prompt's own few-shot example
+        # almost verbatim rather than extracting real content. Both the
+        # first attempt and the retry return the example's exact wording —
+        # extract_block must never ship that as a successful extraction.
+        echoed_payload = extract_intervention.EXAMPLE_ASSISTANT
+        router = TierRouter(_FakeBackend([echoed_payload, echoed_payload]),
+                             {"instruct": "instruct-model"})
+        block = Block(text="INTERVENTIE CHIRURGICALA in data de 01.01.2026. Text complet diferit.",
+                      hint_type="intervention", source_offset=(0, 10))
+        record = run_async(extract_block(block, router))
+        self.assertTrue(record.needs_review)
+
+
+class TestExampleEchoDetection(unittest.TestCase):
+    def test_verbatim_echo_detected(self):
+        echoed = InterventionRecord.model_validate_json(extract_intervention.EXAMPLE_ASSISTANT)
+        block_text = "INTERVENTIE CHIRURGICALA 1 in data de 30.06.2026. Ablatie cateter peritoneal."
+        self.assertTrue(_is_example_echo(echoed, extract_intervention, block_text))
+
+    def test_genuine_extraction_not_flagged(self):
+        real = InterventionRecord.model_validate_json(
+            '{"type":"intervention","date":"2026-06-30",'
+            '"procedure":"ablatie cateter peritoneal si neuroendoscopie",'
+            '"outcome":"evolutie simpla"}'
+        )
+        block_text = "INTERVENTIE CHIRURGICALA 1 in data de 30.06.2026. Ablatie cateter peritoneal si neuroendoscopie."
+        self.assertFalse(_is_example_echo(real, extract_intervention, block_text))
+
+    def test_shared_type_field_never_flagged(self):
+        # Every ImagingRecord shares type="imaging" with the example by
+        # design — that must never itself count as an echo.
+        real = ImagingRecord.model_validate_json(
+            '{"type":"imaging","date":"2026-01-01","modality":"MRI",'
+            '"body_region":"spine","findings":["disc herniation L4-L5"],"impression":null}'
+        )
+        self.assertFalse(_is_example_echo(real, extract_imaging, "MRI spine showing disc herniation L4-L5"))
+
+    def test_phrase_also_present_in_source_not_flagged(self):
+        # If the example's phrase genuinely also appears in the real input,
+        # it's not an echo — it's a coincidental (or copied-from-source)
+        # real match. Only the "findings" field coincides with the example
+        # here; every other field is grounded in block_text so they don't
+        # also look like echoes for unrelated reasons.
+        example_data = json.loads(extract_imaging.EXAMPLE_ASSISTANT)
+        matching_finding = example_data["findings"][0]
+        record = ImagingRecord.model_validate_json(json.dumps({
+            "type": "imaging", "date": "2026-05-01", "modality": "MRI",
+            "body_region": "spine", "findings": [matching_finding], "impression": None,
+        }))
+        block_text = f"MRI spine 2026-05-01. Findings: {matching_finding}."
+        self.assertFalse(_is_example_echo(record, extract_imaging, block_text))
 
 
 class TestAssembleTimeline(unittest.TestCase):
