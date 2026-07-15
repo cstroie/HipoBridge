@@ -917,6 +917,7 @@ small {
     color: var(--on-accent);
 }
 .btn-primary:hover { box-shadow: var(--shadow-lg); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
 
 /* ── Patient Profile ────────────────────────────── */
 
@@ -2358,6 +2359,139 @@ select {
         opacity: 0.6;
     }
 }
+
+/* ── AI tab ──────────────────────────────────────────────────────────── */
+.ai-empty-state, .ai-error-state {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: var(--space-24) var(--space-32);
+    border-radius: var(--radius-lg);
+    text-align: center;
+    font: 500 14px/1.6 'Inter', sans-serif;
+}
+.ai-empty-state {
+    background: var(--card-bg);
+    border: 1px dashed var(--border);
+    color: var(--text-light);
+}
+.ai-empty-state i {
+    display: block;
+    font-size: 28px;
+    color: var(--muted);
+    margin-bottom: var(--space-12);
+}
+.ai-error-state {
+    background: color-mix(in srgb, var(--urgent) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--urgent) 24%, transparent);
+    color: var(--urgent);
+}
+.ai-error-state[hidden] { display: none; }
+
+.ai-results {
+    max-width: 780px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xl);
+}
+.ai-results[hidden] { display: none; }
+
+.ai-records-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+}
+
+.ai-record-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-16) var(--space-20);
+}
+.ai-record-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-10);
+    margin-bottom: var(--space-12);
+}
+.ai-record-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-6);
+    font: 700 12px 'Space Grotesk', 'Inter', sans-serif;
+    color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 12%, transparent);
+    padding: var(--space-4) var(--space-10);
+    border-radius: var(--radius-sm);
+}
+.ai-record-date {
+    font: 500 12px 'JetBrains Mono', monospace;
+    color: var(--muted);
+}
+.ai-needs-review-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-4);
+    margin-left: auto;
+    font: 600 11px 'Inter', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--urgent);
+    background: color-mix(in srgb, var(--urgent) 12%, transparent);
+    padding: var(--space-4) var(--space-10);
+    border-radius: var(--radius-full);
+}
+.ai-needs-review-badge[hidden] { display: none; }
+
+.ai-record-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-12);
+    margin: 0;
+}
+.ai-record-field dt {
+    font: 600 11px 'Inter', sans-serif;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    text-transform: uppercase;
+}
+.ai-record-field dd {
+    font: 500 13.5px 'Inter', sans-serif;
+    color: var(--text);
+    margin: var(--space-4) 0 0;
+}
+
+/* Extracted timeline (rows placed inside the shared .report-timeline layout) */
+.ai-timeline-row {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-12);
+    font: 500 13.5px 'Inter', sans-serif;
+    color: var(--text-light);
+}
+.ai-timeline-date {
+    font: 500 12px 'JetBrains Mono', monospace;
+    color: var(--muted);
+    flex-shrink: 0;
+}
+.ai-timeline-body {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-8);
+    flex-wrap: wrap;
+}
+.ai-timeline-type-badge {
+    font: 600 11px 'Inter', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--primary);
+}
+.ai-timeline-summary { color: var(--text); }
+.ai-timeline-delta {
+    font: 600 12px 'JetBrains Mono', monospace;
+    color: var(--muted);
+}
+.ai-timeline-delta[hidden] { display: none; }
 
 /* ── Accessibility helpers ──────────────────────────────────────────────── */
 

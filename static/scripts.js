@@ -69,6 +69,14 @@ document.addEventListener('DOMContentLoaded', function() {
         reportCard: document.getElementById('reportCard'),
         patientReportMarkdown: document.getElementById('patientReportMarkdown'),
         copyReportBtn: document.getElementById('copyReportBtn'),
+        // AI tab elements
+        aiExtractBtn: document.getElementById('aiExtractBtn'),
+        aiEmptyState: document.getElementById('aiEmptyState'),
+        aiErrorState: document.getElementById('aiErrorState'),
+        aiResults: document.getElementById('aiResults'),
+        aiRecordsList: document.getElementById('aiRecordsList'),
+        aiTimelineSection: document.getElementById('aiTimelineSection'),
+        aiTimeline: document.getElementById('aiTimeline'),
         // Header elements
         quickSearch: document.getElementById('quickSearch'),
         quickSearchBtn: document.getElementById('quickSearchBtn'),
@@ -382,6 +390,11 @@ document.addEventListener('DOMContentLoaded', function() {
             elements.copyReportBtn.addEventListener('click', copyReportMarkdown);
         }
 
+        // AI tab button
+        if (elements.aiExtractBtn) {
+            elements.aiExtractBtn.addEventListener('click', runAiExtraction);
+        }
+
         // Schedule tab
         {
             if (elements.scheduleStartDate) {
@@ -504,6 +517,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (tabId === 'report') {
             loadReportLazily();
+        }
+
+        if (tabId === 'ai') {
+            updateAiEmptyState();
+            loadReportLazily().then(updateAiEmptyState);
         }
     }
 
@@ -1123,7 +1141,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         const reportCard = elements.reportCard;
         if (reportCard) reportCard.hidden = true;
-        
+
+        // Clear AI extraction tab
+        resetAiTab();
+
         // Hide the patient nav group (keep always-visible tabs)
         if (elements.navPatientGroup) elements.navPatientGroup.hidden = true;
 
@@ -1283,7 +1304,137 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function copyEpicrisisMarkdown() { return copyMarkdown(elements.epicrisisContent, elements.copyEpicrisisBtn); }
     function copyReportMarkdown()    { return copyMarkdown(elements.patientReportMarkdown, elements.copyReportBtn); }
-    
+
+    // ── AI extraction tab ─────────────────────────────────────────────
+    const RECORD_TYPE_META = {
+        imaging:      { icon: 'fa-x-ray',        label: 'Imaging' },
+        intervention: { icon: 'fa-notes-medical', label: 'Intervention' },
+        clinical_note:{ icon: 'fa-sticky-note',   label: 'Clinical Note' },
+    };
+    const RECORD_FIELD_LABELS = {
+        modality: 'Modality', body_region: 'Body Region', findings: 'Findings',
+        impression: 'Impression', procedure: 'Procedure', outcome: 'Outcome',
+        summary: 'Summary',
+    };
+
+    function resetAiTab() {
+        if (elements.aiRecordsList) elements.aiRecordsList.innerHTML = '';
+        if (elements.aiTimeline) elements.aiTimeline.innerHTML = '';
+        if (elements.aiTimelineSection) elements.aiTimelineSection.hidden = true;
+        if (elements.aiResults) elements.aiResults.hidden = true;
+        if (elements.aiErrorState) { elements.aiErrorState.hidden = true; elements.aiErrorState.textContent = ''; }
+        if (elements.aiEmptyState) elements.aiEmptyState.hidden = false;
+    }
+
+    function updateAiEmptyState() {
+        const hasText = !!elements.patientReportMarkdown?.dataset.markdown;
+        if (elements.aiEmptyState) elements.aiEmptyState.hidden = hasText;
+        if (elements.aiExtractBtn) elements.aiExtractBtn.disabled = !hasText;
+    }
+
+    async function runAiExtraction() {
+        const text = elements.patientReportMarkdown?.dataset.markdown;
+        if (!text) {
+            showToast('Load a patient report first', 'warning');
+            return;
+        }
+
+        const btn = elements.aiExtractBtn;
+        const origHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Extracting…</span>';
+        if (elements.aiErrorState) { elements.aiErrorState.hidden = true; elements.aiErrorState.textContent = ''; }
+
+        try {
+            const resp = await apiFetch('/api/ai/extract', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text }),
+            });
+            const data = await resp.json();
+            if (!resp.ok || data.status === 'error') {
+                throw new Error(data.message || `Extraction failed (HTTP ${resp.status})`);
+            }
+            renderAiResults(data);
+        } catch (err) {
+            console.error('AI extraction failed:', err);
+            if (elements.aiErrorState) {
+                elements.aiErrorState.textContent = `Extraction failed: ${err.message}`;
+                elements.aiErrorState.hidden = false;
+            }
+            if (elements.aiResults) elements.aiResults.hidden = true;
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = origHtml;
+        }
+    }
+
+    function renderAiResults(data) {
+        const records = data.records || [];
+        const timeline = data.timeline || [];
+
+        if (elements.aiRecordsList) {
+            elements.aiRecordsList.innerHTML = '';
+            const template = document.getElementById('ai-record-card-template');
+            const fieldTemplate = document.getElementById('ai-record-field-template');
+            for (const record of records) {
+                const card = template.content.cloneNode(true);
+                const meta = RECORD_TYPE_META[record.type] || { icon: 'fa-file', label: record.type };
+                card.querySelector('.ai-record-type-badge i').classList.add(meta.icon);
+                card.querySelector('.ai-record-type-label').textContent = meta.label;
+                card.querySelector('.ai-record-date').textContent = record.date || '—';
+                const reviewBadge = card.querySelector('.ai-needs-review-badge');
+                if (record.needs_review) reviewBadge.hidden = false;
+
+                const dl = card.querySelector('.ai-record-fields');
+                for (const [key, label] of Object.entries(RECORD_FIELD_LABELS)) {
+                    if (!(key in record) || record[key] == null || record[key] === '') continue;
+                    const field = fieldTemplate.content.cloneNode(true);
+                    field.querySelector('dt').textContent = label;
+                    const value = Array.isArray(record[key]) ? record[key].join(', ') : String(record[key]);
+                    field.querySelector('dd').textContent = value;
+                    dl.appendChild(field);
+                }
+                if (record.needs_review && record.raw_source) {
+                    const field = fieldTemplate.content.cloneNode(true);
+                    field.querySelector('dt').textContent = 'Raw Source';
+                    field.querySelector('dd').textContent = record.raw_source;
+                    dl.appendChild(field);
+                }
+                elements.aiRecordsList.appendChild(card);
+            }
+        }
+
+        if (elements.aiTimeline) {
+            elements.aiTimeline.innerHTML = '';
+            const rowTemplate = document.getElementById('ai-timeline-row-template');
+            const orderedEntries = timeline.filter(e => e.ordered);
+            for (const entry of orderedEntries) {
+                const row = rowTemplate.content.cloneNode(true);
+                row.querySelector('.ai-timeline-date').textContent = entry.date || '—';
+                const meta = RECORD_TYPE_META[entry.record?.type] || { label: entry.record?.type || '' };
+                row.querySelector('.ai-timeline-type-badge').textContent = meta.label;
+                const summary = entry.record?.summary || entry.record?.impression
+                    || (entry.record?.findings || []).join(', ') || entry.record?.procedure || '';
+                row.querySelector('.ai-timeline-summary').textContent = summary;
+                if (entry.delta_note) {
+                    const deltaEl = row.querySelector('.ai-timeline-delta');
+                    deltaEl.textContent = entry.delta_note;
+                    deltaEl.hidden = false;
+                }
+                elements.aiTimeline.appendChild(row);
+            }
+            if (elements.aiTimelineSection) elements.aiTimelineSection.hidden = orderedEntries.length === 0;
+        }
+
+        if (elements.aiEmptyState) elements.aiEmptyState.hidden = true;
+        if (elements.aiResults) elements.aiResults.hidden = records.length === 0;
+        if (records.length === 0 && elements.aiErrorState) {
+            elements.aiErrorState.textContent = 'No records extracted from this report.';
+            elements.aiErrorState.hidden = false;
+        }
+    }
+
     async function loadAndDisplayReport(patientData, analysesData) {
         log('Loading and displaying report data');
         

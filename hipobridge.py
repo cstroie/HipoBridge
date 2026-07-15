@@ -24,6 +24,7 @@ Config: hipobridge.cfg (defaults) overridden by local.cfg (not tracked by git).
 import asyncio
 import os
 import re
+import aiohttp
 from aiohttp import web
 from typing import Dict, Any
 import json
@@ -67,6 +68,12 @@ DEFAULT_CONFIG = {
     },
     'radiology': {
         'allowed_radiologists': '',
+    },
+    'ai': {
+        # Base URL of the llm_cli.py `serve` process (separate process/port —
+        # see llm_cli.py header comment). Empty disables the /api/ai/extract
+        # route's upstream call with a clear error rather than a crash.
+        'service_url': 'http://127.0.0.1:44661',
     },
 }
 
@@ -735,6 +742,49 @@ async def serve_fhir_metadata(request):
     return web_fhir_response(capability_statement)
 
 
+_ai_session: 'aiohttp.ClientSession | None' = None
+
+def _get_ai_session():
+    """Lazily-created aiohttp session for calling the LLM extraction service
+    (llm_cli.py serve, a separate process — see AI_SERVICE_URL). Closed in
+    on_cleanup, mirroring how UserSessionManager owns Hipocrate sessions."""
+    global _ai_session
+    if _ai_session is None or _ai_session.closed:
+        _ai_session = aiohttp.ClientSession()
+    return _ai_session
+
+
+@require_auth
+async def post_ai_extract(request):
+    """Proxy structured-extraction requests to the LLM subsystem's `serve`
+    process. Kept server-side (not called directly from the browser) to
+    avoid a second-origin/CORS surface and to reuse the same auth gate as
+    every other /api/* route."""
+    if not AI_SERVICE_URL:
+        return web_error_response("AI extraction service is not configured", 503)
+    try:
+        data = await request.json()
+    except json.JSONDecodeError:
+        return web_error_response("Invalid JSON data")
+    text = data.get('text', '')
+    if not isinstance(text, str) or not text.strip():
+        return web_error_response("'text' field must be a non-empty string")
+
+    try:
+        session = _get_ai_session()
+        async with session.post(f"{AI_SERVICE_URL}/extract", json={"text": text},
+                                 timeout=aiohttp.ClientTimeout(total=60)) as resp:
+            if resp.status != 200:
+                body = await resp.text()
+                return web_error_response("AI extraction service returned an error", 502, {"upstream": body[:500]})
+            result = await resp.json()
+    except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+        logger.warning(f"AI extraction service unreachable: {exc}")
+        return web_error_response("AI extraction service is unreachable", 503)
+
+    return web_json_response({"status": "success", **result})
+
+
 async def serve_md2html(request):
     """Convert markdown text to HTML. Accepts JSON body with 'text' field."""
     try:
@@ -908,16 +958,18 @@ async def _periodic_cache_cleanup():
         await asyncio.sleep(86400)
 
 async def on_cleanup(app):
-    """Graceful shutdown: stop DICOM SCP then close Hipocrate HTTP sessions."""
+    """Graceful shutdown: stop DICOM SCP then close Hipocrate/AI HTTP sessions."""
     logger.info("Application cleanup")
     if _wl_server is not None:
         await asyncio.get_event_loop().run_in_executor(None, _wl_server.shutdown)
     await user_session_manager.close_all_sessions()
+    if _ai_session is not None and not _ai_session.closed:
+        await _ai_session.close()
 
 async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
                    port: int = None, host: str = None, service_url: str = None):
     """Load config, wire up routes and lifecycle handlers, return the configured app."""
-    global SERVICE_URL, _PORT, _HOST, _ALLOWED_RADIOLOGISTS
+    global SERVICE_URL, _PORT, _HOST, _ALLOWED_RADIOLOGISTS, AI_SERVICE_URL
     config = load_config()
     SERVICE_URL = service_url or config.get('hipocrate', 'service_url')
     _PORT = port or config.getint('server', 'port')
@@ -925,6 +977,7 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     _ALLOWED_RADIOLOGISTS = {
         u.strip() for u in config.get('radiology', 'allowed_radiologists').split(',') if u.strip()
     }
+    AI_SERVICE_URL = config.get('ai', 'service_url').strip()
     logger.info(f"Service URL: {SERVICE_URL}")
 
     cache_dir = config.get('cache', 'dir').strip()
@@ -972,6 +1025,7 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     app.router.add_get('/fhir/Observation', get_fhir_observation)
     app.router.add_get('/fhir/ValueSet/cnp', serve_validate_cnp)
     app.router.add_post('/fhir/md2html', serve_md2html)
+    app.router.add_post('/api/ai/extract', post_ai_extract)
     app.router.add_get('/fhir/CodeSystem/analysis-types', serve_fhir_analysis_types)
     app.router.add_get('/fhir/spec', serve_spec)
     app.router.add_get('/fhir/Metadata', serve_fhir_metadata)
@@ -992,6 +1046,7 @@ SERVICE_URL: str = DEFAULT_CONFIG['hipocrate']['service_url']
 _PORT: int = int(DEFAULT_CONFIG['server']['port'])
 _HOST: str = DEFAULT_CONFIG['server']['host']
 _ALLOWED_RADIOLOGISTS: set = set()
+AI_SERVICE_URL: str = DEFAULT_CONFIG['ai']['service_url']
 
 if __name__ == "__main__":
     import argparse

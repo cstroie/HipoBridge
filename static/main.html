@@ -63,6 +63,9 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                 <button class="nav-btn nav-item" data-tab="report">
                     <i class="fas fa-notes-medical" aria-hidden="true"></i><span>Report</span>
                 </button>
+                <button class="nav-btn nav-item" data-tab="ai">
+                    <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>AI</span>
+                </button>
             </nav>
 
             <!-- Spacer -->
@@ -371,6 +374,37 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
 
                     <!-- Hidden markdown store for Copy button -->
                     <div id="patientReportMarkdown" hidden></div>
+                </section>
+
+                <!-- ─── AI tab ─── -->
+                <section id="ai-tab" class="tab-content" role="tabpanel" aria-labelledby="ai-tab-heading" hidden style="display:none">
+                    <header class="report-header">
+                        <div>
+                            <p class="report-eyebrow">AI Extraction</p>
+                            <h1 id="ai-tab-heading" class="report-hero-title">Structured Extraction</h1>
+                            <p class="report-hero-sub">Runs the patient's report text through the on-device LLM pipeline — imaging, interventions and clinical notes as structured records</p>
+                        </div>
+                        <button class="btn-primary" id="aiExtractBtn">
+                            <i class="fas fa-wand-magic-sparkles"></i>
+                            <span>Extract with AI</span>
+                        </button>
+                    </header>
+
+                    <div id="aiEmptyState" class="ai-empty-state">
+                        <i class="fas fa-notes-medical" aria-hidden="true"></i>
+                        <p>Open the <strong>Report</strong> tab first to assemble the patient's clinical text, then come back here and run extraction.</p>
+                    </div>
+
+                    <div id="aiErrorState" class="ai-error-state" hidden></div>
+
+                    <div id="aiResults" class="ai-results" hidden>
+                        <div id="aiRecordsList" class="ai-records-list"></div>
+
+                        <section id="aiTimelineSection" class="report-section" hidden>
+                            <h3 class="report-section-title"><i class="fas fa-timeline"></i> Extracted Timeline</h3>
+                            <div class="report-timeline" id="aiTimeline"></div>
+                        </section>
+                    </div>
                 </section>
 
                 <!-- ─── Schedule tab ─── -->
@@ -728,6 +762,41 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                         </footer>
                     </div>
                     <span class="timeline-status-badge"></span>
+                </div>
+            </div>
+        </template>
+
+        <template id="ai-record-card-template">
+            <article class="ai-record-card">
+                <header class="ai-record-header">
+                    <div class="ai-record-type-badge">
+                        <i class="fas" aria-hidden="true"></i>
+                        <span class="ai-record-type-label"></span>
+                    </div>
+                    <span class="ai-record-date"></span>
+                    <span class="ai-needs-review-badge" hidden>
+                        <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+                        <span>Needs review</span>
+                    </span>
+                </header>
+                <dl class="ai-record-fields"></dl>
+            </article>
+        </template>
+
+        <template id="ai-record-field-template">
+            <div class="ai-record-field">
+                <dt></dt>
+                <dd></dd>
+            </div>
+        </template>
+
+        <template id="ai-timeline-row-template">
+            <div class="ai-timeline-row">
+                <time class="ai-timeline-date"></time>
+                <div class="ai-timeline-body">
+                    <span class="ai-timeline-type-badge"></span>
+                    <span class="ai-timeline-summary"></span>
+                    <span class="ai-timeline-delta" hidden></span>
                 </div>
             </div>
         </template>
