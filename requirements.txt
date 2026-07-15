@@ -9,9 +9,6 @@ beautifulsoup4>=4.9.0
 pynetdicom>=2.0.0
 pydicom>=2.3.0
 
-# Structured LLM extraction (schema validation, grammar-constrained generation)
+# Structured LLM extraction (schema validation, grammar-constrained generation
+# against an external OpenAI-compatible server — see llm.cfg)
 pydantic>=2
-
-# Self-hosted GGUF inference fallback for tiers not covered by an external
-# llama.cpp server (optional — InProcessBackend tiers only)
-llama-cpp-python>=0.3

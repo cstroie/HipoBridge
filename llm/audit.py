@@ -11,11 +11,11 @@ import logging
 logger = logging.getLogger("llm.audit")
 
 
-def log_extraction(block_text: str, tier_used: str, backend_used: str,
+def log_extraction(block_text: str, tier_used: str, model_used: str,
                     validation_result: str, latency_ms: float) -> None:
     """validation_result: 'ok' | 'retried' | 'needs_review'"""
     block_hash = hashlib.sha256(block_text.encode("utf-8")).hexdigest()[:16]
     logger.info(
-        "extraction block_hash=%s tier=%s backend=%s result=%s latency_ms=%.1f",
-        block_hash, tier_used, backend_used, validation_result, latency_ms,
+        "extraction block_hash=%s tier=%s model=%s result=%s latency_ms=%.1f",
+        block_hash, tier_used, model_used, validation_result, latency_ms,
     )

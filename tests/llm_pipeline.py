@@ -22,7 +22,7 @@ class _FakeBackend:
 class TestPipelineRetryAndNeedsReview(unittest.TestCase):
     def test_successful_extraction_no_retry(self):
         payload = json.dumps({"type": "clinical_note", "date": None, "summary": "ok"})
-        router = TierRouter({"instruct": _FakeBackend([payload])})
+        router = TierRouter(_FakeBackend([payload]), {"instruct": "instruct-model"})
         block = Block(text="some note", hint_type="clinical_note", source_offset=(0, 9))
         record = run_async(extract_block(block, router))
         self.assertFalse(record.needs_review)
@@ -30,13 +30,13 @@ class TestPipelineRetryAndNeedsReview(unittest.TestCase):
 
     def test_retry_then_success(self):
         good = json.dumps({"type": "clinical_note", "date": None, "summary": "ok"})
-        router = TierRouter({"instruct": _FakeBackend(["not json", good])})
+        router = TierRouter(_FakeBackend(["not json", good]), {"instruct": "instruct-model"})
         block = Block(text="some note", hint_type="clinical_note", source_offset=(0, 9))
         record = run_async(extract_block(block, router))
         self.assertFalse(record.needs_review)
 
     def test_double_failure_flags_needs_review(self):
-        router = TierRouter({"instruct": _FakeBackend(["not json", "still not json"])})
+        router = TierRouter(_FakeBackend(["not json", "still not json"]), {"instruct": "instruct-model"})
         block = Block(text="some note", hint_type="clinical_note", source_offset=(0, 9))
         record = run_async(extract_block(block, router))
         self.assertTrue(record.needs_review)
@@ -50,7 +50,7 @@ class TestPipelineRetryAndNeedsReview(unittest.TestCase):
             async def chat(self, *a, **kw):
                 raise ConnectionError("server unreachable")
 
-        router = TierRouter({"instruct": _ExplodingBackend()})
+        router = TierRouter(_ExplodingBackend(), {"instruct": "instruct-model"})
         block = Block(text="some note", hint_type="clinical_note", source_offset=(0, 9))
         record = run_async(extract_block(block, router))
         self.assertTrue(record.needs_review)
@@ -58,7 +58,7 @@ class TestPipelineRetryAndNeedsReview(unittest.TestCase):
 
     def test_unknown_hint_uses_clinical_note_schema(self):
         payload = json.dumps({"type": "clinical_note", "date": None, "summary": "generic"})
-        router = TierRouter({"instruct": _FakeBackend([payload])})
+        router = TierRouter(_FakeBackend([payload]), {"instruct": "instruct-model"})
         block = Block(text="unstructured text", hint_type="unknown", source_offset=(0, 10))
         record = run_async(extract_block(block, router))
         self.assertEqual(record.type, "clinical_note")

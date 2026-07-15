@@ -1,4 +1,5 @@
-"""Tier config for the LLM subsystem: backend choice, paths, URLs, context sizes.
+"""Config for the LLM subsystem: one external OpenAI-compatible server, one
+model name per tier.
 
 Mirrors hipobridge.py's load_config() layering exactly: defaults -> llm.cfg
 -> local.cfg (later wins). Deliberately a separate file/section namespace
@@ -14,50 +15,24 @@ TIERS = ("nano", "micro", "instruct", "thinking")
 
 LLM_DEFAULTS = {
     "pipeline": {
-        "default_extraction_tier": "instruct",
         "comparison_tier": "thinking",
         "narration_max_sentences": "5",
-        "retry_on_validation_failure": "true",
     },
     "server": {
-        "host": "0.0.0.0",
-        "port": "44661",
+        # The existing OpenAI-compatible llama-server (a swap-router: loads
+        # the model named in each request's "model" field on demand).
+        "url": "http://127.0.0.1:8080",
+        "grammar_mode": "grammar_field",
+        "timeout": "30",
     },
-    "tier:nano": {
-        "backend": "inprocess",
-        "server_url": "",
-        "server_model_name": "",
-        "server_grammar_mode": "grammar_field",
-        "local_path": "",
-        "n_ctx": "4096",
-        "n_threads": "4",
-    },
-    "tier:micro": {
-        "backend": "inprocess",
-        "server_url": "",
-        "server_model_name": "",
-        "server_grammar_mode": "grammar_field",
-        "local_path": "",
-        "n_ctx": "4096",
-        "n_threads": "4",
-    },
-    "tier:instruct": {
-        "backend": "auto",
-        "server_url": "http://127.0.0.1:8080",
-        "server_model_name": "",
-        "server_grammar_mode": "grammar_field",
-        "local_path": "",
-        "n_ctx": "8192",
-        "n_threads": "8",
-    },
-    "tier:thinking": {
-        "backend": "inprocess",
-        "server_url": "",
-        "server_model_name": "",
-        "server_grammar_mode": "grammar_field",
-        "local_path": "",
-        "n_ctx": "8192",
-        "n_threads": "8",
+    "models": {
+        # Model names as registered on that server — must match its own
+        # aliases/presets exactly (check with `llm_cli.py doctor` or
+        # GET /v1/models on the server) — these are illustrative defaults.
+        "nano": "LFM2.5-230M",
+        "micro": "LFM2.5-350M",
+        "instruct": "LFM2.5-1.2b-Instruct",
+        "thinking": "LFM2.5-1.2b-Thinking",
     },
 }
 
@@ -78,10 +53,3 @@ def init_llm(config_path: str = "llm.cfg", local_path: str = "local.cfg") -> con
         config.read(local_path)
 
     return config
-
-
-def tier_section(config: configparser.ConfigParser, tier: str) -> configparser.SectionProxy:
-    section = f"tier:{tier}"
-    if section not in config:
-        raise ValueError(f"unknown tier: {tier}")
-    return config[section]

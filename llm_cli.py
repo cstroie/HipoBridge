@@ -1,24 +1,19 @@
 #!/usr/bin/env python3
-"""HippoBridge LLM subsystem entrypoint: extract / doctor / serve.
+"""HippoBridge LLM subsystem CLI: extract / doctor.
 
-Standalone script, independent of hipobridge.py's own scraping-proxy
-entrypoint — same "flat module, argparse, asyncio.run" shape, different
-process.
+One-shot calls against the external OpenAI-compatible server configured in
+llm.cfg — no process to keep alive. hipobridge.py's AI tab talks to that
+same server directly and in-process; this script exists purely for
+testing/debugging the pipeline without going through the web UI.
 """
 import argparse
 import asyncio
 import json
-import logging
 import sys
-
-from aiohttp import web
 
 from llm.config import TIERS, init_llm
 from llm.pipeline import ExtractionResult, extract_document
 from llm.router import build_router
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
-logger = logging.getLogger("llm_cli")
 
 
 def _result_to_json(result: ExtractionResult) -> dict:
@@ -38,7 +33,7 @@ def _result_to_json(result: ExtractionResult) -> dict:
 
 async def cmd_extract(args) -> int:
     config = init_llm(args.config)
-    router = await build_router(config)
+    router = build_router(config)
     try:
         document = sys.stdin.read() if args.path == "-" else open(args.path, encoding="utf-8").read()
         result = await extract_document(document, router)
@@ -56,15 +51,16 @@ async def cmd_extract(args) -> int:
 
 
 async def _check_grammar_constrained(router, tier: str) -> str:
-    """Tiny real grammar-constrained call: does this backend actually honor
-    `json_schema`, or does it silently fall back to unconstrained text?
+    """Tiny real grammar-constrained call: does this server actually honor
+    `json_schema` for this tier's model, or does it silently fall back to
+    unconstrained text?
 
     Empirically, a server can echo the grammar back in its own
     generation_settings as "accepted" while still not applying it to
-    sampling (confirmed against a real llama-server build on this
-    machine — see llm/grammar.py's _gbnf_literal docstring for the related
-    literal-escaping bug this uncovered). The only reliable check is
-    driving one real call and inspecting the output shape.
+    sampling (confirmed against a real llama-server build — see
+    llm/grammar.py's _gbnf_literal docstring for the related literal-
+    escaping bug this uncovered). The only reliable check is driving one
+    real call and inspecting the output shape.
     """
     from llm.schemas import ClinicalNoteRecord, model_extraction_schema
 
@@ -90,50 +86,18 @@ async def _check_grammar_constrained(router, tier: str) -> str:
 
 async def cmd_doctor(args) -> int:
     config = init_llm(args.config)
-    router = await build_router(config)
+    router = build_router(config)
     try:
-        status = await router.status()
+        server_healthy = await router.health()
+        print(f"server: url={router.base_url} healthy={server_healthy}")
         for tier in TIERS:
-            info = status.get(tier, {})
-            print(f"{tier}: backend={info.get('backend')} healthy={info.get('healthy')}")
-            if info.get("healthy"):
+            model = router.model_for(tier)
+            print(f"{tier}: model={model}")
+            if model:
                 grammar_result = await _check_grammar_constrained(router, tier)
                 print(f"  grammar-constrained call: {grammar_result}")
     finally:
         await router.close()
-    return 0
-
-
-async def cmd_serve(args) -> int:
-    config = init_llm(args.config)
-    router = await build_router(config)
-
-    async def handle_extract(request: web.Request) -> web.Response:
-        body = await request.json()
-        text = body.get("text", "")
-        result = await extract_document(text, router)
-        return web.json_response(_result_to_json(result))
-
-    async def on_cleanup(app):
-        await router.close()
-
-    app = web.Application()
-    app.router.add_post("/extract", handle_extract)
-    app.on_cleanup.append(on_cleanup)
-
-    server_cfg = config["server"]
-    host = args.host or server_cfg.get("host", "0.0.0.0")
-    port = args.port or server_cfg.getint("port", 44661)
-
-    logger.info(f"Starting LLM extraction server on {host}:{port} (internal use only — no auth)")
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, host, port)
-    await site.start()
-    try:
-        await asyncio.Event().wait()
-    finally:
-        await runner.cleanup()
     return 0
 
 
@@ -146,16 +110,11 @@ def main():
     extract_parser.add_argument("--format", choices=["json", "markdown"], default="json")
     extract_parser.add_argument("--config", default="llm.cfg")
 
-    doctor_parser = subparsers.add_parser("doctor", help="report resolved backend/health per tier")
+    doctor_parser = subparsers.add_parser("doctor", help="check the server + each tier's model/grammar")
     doctor_parser.add_argument("--config", default="llm.cfg")
 
-    serve_parser = subparsers.add_parser("serve", help="run the long-lived extraction server")
-    serve_parser.add_argument("--host", default=None)
-    serve_parser.add_argument("--port", type=int, default=None)
-    serve_parser.add_argument("--config", default="llm.cfg")
-
     args = parser.parse_args()
-    handlers = {"extract": cmd_extract, "doctor": cmd_doctor, "serve": cmd_serve}
+    handlers = {"extract": cmd_extract, "doctor": cmd_doctor}
 
     try:
         exit_code = asyncio.run(handlers[args.command](args))

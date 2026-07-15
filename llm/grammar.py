@@ -1,8 +1,7 @@
 """JSON-schema -> GBNF grammar conversion.
 
-Backend-agnostic on purpose: `InProcessBackend` wraps the returned string in
-`LlamaGrammar.from_string()`, `ServerBackend` sends it as-is in the request
-payload (`grammar` field or `response_format`, per `server_grammar_mode`).
+`ServerBackend` sends the result as-is in the request payload (`grammar`
+field or `response_format`, per config's `grammar_mode`).
 
 Grammar guarantees *shape*, not *semantic correctness* — pydantic validation
 after generation still catches malformed content (bad date format,

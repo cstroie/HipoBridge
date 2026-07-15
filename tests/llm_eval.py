@@ -1,22 +1,15 @@
 """Fixture-based extraction pass-rate harness.
 
-Self-skips unless llama-cpp-python and configured GGUFs are actually
-available — this is the one test group meant to run against real models
-(both a server-forced and inprocess-forced router), not stub backends.
-Not wired into "all" by default for that reason; run explicitly via
-`python3 runtests.py llm` once models are present.
+Self-skips unless the configured external LLM server is actually
+reachable — this is the one test group meant to run against a real model,
+not a stub backend. Not wired into "all" by default for that reason; run
+explicitly via `python3 runtests.py llm` once the server is up.
 """
-import os
 import unittest
 
-try:
-    import llama_cpp  # noqa: F401
-    LLAMA_CPP_AVAILABLE = True
-except ImportError:
-    LLAMA_CPP_AVAILABLE = False
-
-from llm.config import init_llm, tier_section
+from llm.config import init_llm
 from llm.pipeline import extract_block
+from llm.router import build_router
 from llm.segment import Block
 from tests.llm_async_helper import run_async
 
@@ -31,24 +24,18 @@ FIXTURES = [
 PASS_RATE_THRESHOLD = 0.95
 
 
-def _gguf_configured() -> bool:
-    config = init_llm()
-    tier_cfg = tier_section(config, "instruct")
-    path = tier_cfg.get("local_path", "")
-    return bool(path) and os.path.exists(path)
+def _server_reachable() -> bool:
+    router = build_router(init_llm())
+    try:
+        return run_async(router.health())
+    finally:
+        run_async(router.close())
 
 
-@unittest.skipUnless(LLAMA_CPP_AVAILABLE and _gguf_configured(),
-                      "llama-cpp-python and/or a configured GGUF not available")
+@unittest.skipUnless(_server_reachable(), "configured LLM server (llm.cfg) is not reachable")
 class TestFixtureEvalHarness(unittest.TestCase):
-    def test_inprocess_pass_rate(self):
-        from llm.backend import InProcessBackend
-        from llm.router import TierRouter
-
-        config = init_llm()
-        tier_cfg = dict(tier_section(config, "instruct"))
-        backend = InProcessBackend({"instruct": tier_cfg})
-        router = TierRouter({"instruct": backend})
+    def test_pass_rate(self):
+        router = build_router(init_llm())
 
         passed = 0
         for fixture in FIXTURES:
@@ -57,6 +44,7 @@ class TestFixtureEvalHarness(unittest.TestCase):
             if not record.needs_review and record.model_dump(mode="json", include=set(fixture["expected"])) == fixture["expected"]:
                 passed += 1
 
+        run_async(router.close())
         rate = passed / len(FIXTURES)
         self.assertGreaterEqual(rate, PASS_RATE_THRESHOLD)
 

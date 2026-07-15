@@ -52,7 +52,7 @@ async def extract_block(block: Block, router, max_tokens: int = 300) -> BaseMode
     json_schema = model_extraction_schema(schema_cls)
 
     started = time.monotonic()
-    backend_name = router.backend_name(_EXTRACTION_TIER)
+    model_used = router.model_for(_EXTRACTION_TIER) or "unknown"
 
     # Backend/transport failures (server down, malformed grammar, bad
     # response shape) must flag needs_review the same as a validation
@@ -68,13 +68,13 @@ async def extract_block(block: Block, router, max_tokens: int = 300) -> BaseMode
         )
     except Exception as exc:
         logger.warning(f"backend call failed for block, flagging needs_review: {exc}")
-        audit.log_extraction(block.text, _EXTRACTION_TIER, backend_name, "needs_review",
+        audit.log_extraction(block.text, _EXTRACTION_TIER, model_used, "needs_review",
                               (time.monotonic() - started) * 1000)
         return schema_cls.model_construct(needs_review=True, raw_source=block.text)
 
     try:
         record = schema_cls.model_validate_json(raw)
-        audit.log_extraction(block.text, _EXTRACTION_TIER, backend_name, "ok",
+        audit.log_extraction(block.text, _EXTRACTION_TIER, model_used, "ok",
                               (time.monotonic() - started) * 1000)
         return record
     except ValidationError:
@@ -87,16 +87,16 @@ async def extract_block(block: Block, router, max_tokens: int = 300) -> BaseMode
             )
         except Exception as exc:
             logger.warning(f"backend call failed on retry, flagging needs_review: {exc}")
-            audit.log_extraction(block.text, _EXTRACTION_TIER, backend_name, "needs_review",
+            audit.log_extraction(block.text, _EXTRACTION_TIER, model_used, "needs_review",
                                   (time.monotonic() - started) * 1000)
             return schema_cls.model_construct(needs_review=True, raw_source=block.text)
         try:
             record = schema_cls.model_validate_json(raw_retry)
-            audit.log_extraction(block.text, _EXTRACTION_TIER, backend_name, "retried",
+            audit.log_extraction(block.text, _EXTRACTION_TIER, model_used, "retried",
                                   (time.monotonic() - started) * 1000)
             return record
         except ValidationError:
-            audit.log_extraction(block.text, _EXTRACTION_TIER, backend_name, "needs_review",
+            audit.log_extraction(block.text, _EXTRACTION_TIER, model_used, "needs_review",
                                   (time.monotonic() - started) * 1000)
             return schema_cls.model_construct(needs_review=True, raw_source=block.text)
 

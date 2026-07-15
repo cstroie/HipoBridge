@@ -47,6 +47,10 @@ from extractors import parse_cnp
 from markdown import markdown_to_html
 from worklist import start_worklist
 
+from llm.config import init_llm
+from llm.router import build_router
+from llm.pipeline import extract_document as llm_extract_document
+
 logging.basicConfig(
     level=getattr(logging, os.getenv('LOG_LEVEL', 'INFO').upper(), logging.INFO),
     format='%(asctime)s | %(levelname)8s | %(message)s'
@@ -68,12 +72,6 @@ DEFAULT_CONFIG = {
     },
     'radiology': {
         'allowed_radiologists': '',
-    },
-    'ai': {
-        # Base URL of the llm_cli.py `serve` process (separate process/port —
-        # see llm_cli.py header comment). Empty disables the /api/ai/extract
-        # route's upstream call with a clear error rather than a crash.
-        'service_url': 'http://127.0.0.1:44661',
     },
 }
 
@@ -742,26 +740,30 @@ async def serve_fhir_metadata(request):
     return web_fhir_response(capability_statement)
 
 
-_ai_session: 'aiohttp.ClientSession | None' = None
+_ai_router = None  # llm.router.TierRouter, built once in init_app()
 
-def _get_ai_session():
-    """Lazily-created aiohttp session for calling the LLM extraction service
-    (llm_cli.py serve, a separate process — see AI_SERVICE_URL). Closed in
-    on_cleanup, mirroring how UserSessionManager owns Hipocrate sessions."""
-    global _ai_session
-    if _ai_session is None or _ai_session.closed:
-        _ai_session = aiohttp.ClientSession()
-    return _ai_session
+def _ai_result_to_json(result) -> Dict[str, Any]:
+    return {
+        "records": [r.model_dump(mode="json") for r in result.records],
+        "timeline": [
+            {
+                "date": e.date.isoformat() if e.date else None,
+                "ordered": e.ordered,
+                "delta_note": e.delta_note,
+                "record": e.record.model_dump(mode="json"),
+            }
+            for e in result.timeline
+        ],
+    }
 
 
 @require_auth
 async def post_ai_extract(request):
-    """Proxy structured-extraction requests to the LLM subsystem's `serve`
-    process. Kept server-side (not called directly from the browser) to
-    avoid a second-origin/CORS surface and to reuse the same auth gate as
-    every other /api/* route."""
-    if not AI_SERVICE_URL:
-        return web_error_response("AI extraction service is not configured", 503)
+    """Run structured extraction in-process against the configured LLM
+    server (llm.cfg) — no separate process, same auth gate as every other
+    /api/* route."""
+    if _ai_router is None:
+        return web_error_response("AI extraction is not configured", 503)
     try:
         data = await request.json()
     except json.JSONDecodeError:
@@ -770,19 +772,17 @@ async def post_ai_extract(request):
     if not isinstance(text, str) or not text.strip():
         return web_error_response("'text' field must be a non-empty string")
 
+    # extract_block() already catches per-block backend/transport errors and
+    # flags needs_review rather than raising — this is a last-resort net for
+    # anything unexpected (e.g. a router/config problem), not the normal
+    # per-block failure path.
     try:
-        session = _get_ai_session()
-        async with session.post(f"{AI_SERVICE_URL}/extract", json={"text": text},
-                                 timeout=aiohttp.ClientTimeout(total=60)) as resp:
-            if resp.status != 200:
-                body = await resp.text()
-                return web_error_response("AI extraction service returned an error", 502, {"upstream": body[:500]})
-            result = await resp.json()
-    except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
-        logger.warning(f"AI extraction service unreachable: {exc}")
+        result = await llm_extract_document(text, _ai_router)
+    except Exception as exc:
+        logger.warning(f"AI extraction failed: {exc}")
         return web_error_response("AI extraction service is unreachable", 503)
 
-    return web_json_response({"status": "success", **result})
+    return web_json_response({"status": "success", **_ai_result_to_json(result)})
 
 
 async def serve_md2html(request):
@@ -963,13 +963,13 @@ async def on_cleanup(app):
     if _wl_server is not None:
         await asyncio.get_event_loop().run_in_executor(None, _wl_server.shutdown)
     await user_session_manager.close_all_sessions()
-    if _ai_session is not None and not _ai_session.closed:
-        await _ai_session.close()
+    if _ai_router is not None:
+        await _ai_router.close()
 
 async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
                    port: int = None, host: str = None, service_url: str = None):
     """Load config, wire up routes and lifecycle handlers, return the configured app."""
-    global SERVICE_URL, _PORT, _HOST, _ALLOWED_RADIOLOGISTS, AI_SERVICE_URL
+    global SERVICE_URL, _PORT, _HOST, _ALLOWED_RADIOLOGISTS, _ai_router
     config = load_config()
     SERVICE_URL = service_url or config.get('hipocrate', 'service_url')
     _PORT = port or config.getint('server', 'port')
@@ -977,8 +977,11 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     _ALLOWED_RADIOLOGISTS = {
         u.strip() for u in config.get('radiology', 'allowed_radiologists').split(',') if u.strip()
     }
-    AI_SERVICE_URL = config.get('ai', 'service_url').strip()
     logger.info(f"Service URL: {SERVICE_URL}")
+
+    llm_config = init_llm()
+    _ai_router = build_router(llm_config)
+    logger.info(f"AI extraction server: {llm_config.get('server', 'url')}")
 
     cache_dir = config.get('cache', 'dir').strip()
     if cache_dir and not no_disk_cache:
@@ -1046,7 +1049,6 @@ SERVICE_URL: str = DEFAULT_CONFIG['hipocrate']['service_url']
 _PORT: int = int(DEFAULT_CONFIG['server']['port'])
 _HOST: str = DEFAULT_CONFIG['server']['host']
 _ALLOWED_RADIOLOGISTS: set = set()
-AI_SERVICE_URL: str = DEFAULT_CONFIG['ai']['service_url']
 
 if __name__ == "__main__":
     import argparse
