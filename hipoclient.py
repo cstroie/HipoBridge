@@ -147,6 +147,26 @@ ANALYSIS_TYPES = {
 LAB_DOMAINS = [1, 2, 3, 5, 8, 9, 15, 19, 21, 22, 23, 24, 27, 39, 41]
 
 
+def evict_patient_cache(client: 'HipoClient', patient_id: str) -> None:
+    """Force-refresh a patient's demographic, imaging/lab list, and Observation
+    data by evicting every cache entry keyed off patient_id.
+
+    Scope is deliberately limited to list-level data (patient record, the
+    per-domain request-search pages, the ObservationBundle aggregate) — it
+    does not touch individual imaging/lab report detail pages
+    (BuletinAnalize.asp / cerere.asp), since those are cheap to reopen
+    individually and are already evicted correctly on report writes.
+    """
+    client.cache_remove(client.get_full_url(f"/Pacient/edit.asp?id={patient_id}"))
+
+    episode_url = f"/Pacient/analysesEpisod.asp?pacid={patient_id}"
+    imaging_domains = [v['domain'] for v in ANALYSIS_TYPES.values() if v['domain'] != 0]
+    for domain_id in imaging_domains + LAB_DOMAINS:
+        client.cache_remove(client.get_full_url(f"{episode_url}&strDomeniu={domain_id}&NrPePag=100"))
+
+    HipoClientObservationBundle.invalidate_cache(patient_id)
+
+
 
 
 # Load region identification rules from config file

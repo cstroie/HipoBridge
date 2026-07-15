@@ -47,6 +47,20 @@ success.
   narrowed so it now gets normal L1+L2 persistence.
 - In-flight de-duplication (`is_inflight`/`wait_inflight`) collapses
   concurrent requests for the same URL to a single upstream fetch.
+- Manual per-patient refresh: `GET /api/patient/{id}`, `/fhir/Patient/{id}`,
+  `/api/request`, `/fhir/ServiceRequest`, `/api/observation`, and
+  `/fhir/Observation` all accept `?refresh=1`, which calls
+  `hipoclient.evict_patient_cache()` before fetching — it evicts the
+  patient's `edit.asp` entry, all 24 imaging/lab domain search URLs, and
+  the `ObservationBundle` dedicated cache entry, then lets the normal
+  fetch path repopulate them live. Scope is intentionally limited to
+  list-level data; individual `BuletinAnalize.asp`/`cerere.asp` report
+  detail pages aren't touched (cheap to reopen, and already evicted
+  correctly on report writes — see N+1 item 8). The frontend's patient
+  header **Refresh** button drives this via a single
+  `/fhir/Patient/{id}?refresh=1` call, then clears its own lazy-load
+  flags so the currently active tab (imaging/lab/epicrisis/report)
+  re-fetches against the now-purged cache.
 - `ImagingStudy`, `DiagnosticReport`, and `Checkout` evict their own cache
   entry if the parsed result is empty (report not filled in yet), so an
   unfilled report is never cached and blocks a later, filled fetch.

@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', function() {
         patientCnp: document.getElementById('patientCnp'),
         patientGender: document.getElementById('patientGender'),
         patientDiagnosis: document.getElementById('patientDiagnosis'),
+        refreshPatientBtn: document.getElementById('refreshPatientBtn'),
         patientBirthDate: document.getElementById('patientBirthDate'),
         patientPhone: document.getElementById('patientPhone'),
         patientEmail: document.getElementById('patientEmail'),
@@ -396,6 +397,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.refreshScheduleBtn) {
             elements.refreshScheduleBtn.addEventListener('click', () => fetchScheduleFromInputs(true));
         }
+        if (elements.refreshPatientBtn) {
+            elements.refreshPatientBtn.addEventListener('click', refreshCurrentPatient);
+        }
         if (elements.schedulePatientFilter) {
             elements.schedulePatientFilter.addEventListener('keydown', e => {
                 if (e.key === 'Enter') fetchScheduleFromInputs();
@@ -767,6 +771,58 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (err) {
             console.error('Error in handleFormSubmit:', err);
             showOverlayError('An unexpected error occurred. Please try again.');
+        }
+    }
+
+    // Force-reload the currently displayed patient's demographic, imaging,
+    // lab, and Observation data from Hipocrate, bypassing the server-side
+    // cache once (?refresh=1). Individual imaging/lab report detail pages
+    // are left alone — those are cheap to reopen and refresh correctly on
+    // their own when a report is written.
+    async function refreshCurrentPatient() {
+        if (!pendingAnalysesData?.patientCode) return;
+        const { patientCode } = pendingAnalysesData;
+        const btn = elements.refreshPatientBtn;
+        const originalHTML = btn ? btn.innerHTML : null;
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-sync-alt fa-spin" aria-hidden="true"></i><span>Refreshing…</span>';
+        }
+        try {
+            const r = await apiFetch(`/fhir/Patient/${patientCode}?refresh=1`);
+            if (!r.ok) throw new Error(`Server error: ${r.status}`);
+            const patientData = await r.json();
+
+            displayPatientData(patientData);
+
+            pendingAnalysesData = { patientCode, patientData };
+            cachedServiceRequests = null;
+            if (elements.imagingGrid) delete elements.imagingGrid.dataset.loaded;
+            if (elements.labGrid) delete elements.labGrid.dataset.loaded;
+
+            pendingEpicrisisData = patientData;
+            if (elements.epicrisisContent) delete elements.epicrisisContent.dataset.loaded;
+
+            pendingReportData = { patientData, analysesData: { resourceType: 'Bundle', entry: [] } };
+            if (elements.patientReportMarkdown) delete elements.patientReportMarkdown.dataset.loaded;
+
+            // Re-run whichever tab is currently active so its content reloads
+            // against the now-purged server-side caches.
+            const activeTabId = document.querySelector('.tab-content.active')?.id?.replace('-tab', '') || 'patient';
+            switchTab(activeTabId);
+
+            dataGeneration++;
+            prefetchTimers.forEach(clearTimeout);
+            prefetchTimers = [];
+            schedulePrefetch(patientCode, patientData);
+        } catch (err) {
+            console.error('Error refreshing patient:', err);
+            showOverlayError('Failed to refresh patient data');
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalHTML;
+            }
         }
     }
     

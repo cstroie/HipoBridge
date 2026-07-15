@@ -38,6 +38,7 @@ from fhir import OperationOutcome, Resource
 from hipoclient import ANALYSIS_TYPES
 from hipoclient import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientImagingStudy, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientServiceRequestSearch, HipoClientCheckout, HipoClientCheckin, HipoClientCheckup, HipoClientSchedule, HipoClientCerere, HipoClientPresentation, HipoClientObservationBundle, HipoClientWhoami, HipoClientReportWrite, HipoClientReportValidate, HipoClientCererePerform
 from hipoclient import user_session_manager, url_cache
+from hipoclient import evict_patient_cache
 from urlcache import FilesystemCache
 from hipodata import HipoData
 
@@ -136,13 +137,16 @@ async def search_fhir_patient(request):
 
 @require_auth
 async def get_patient(request):
-    """Retrieve patient by ID. Returns raw HipoData JSON."""
+    """Retrieve patient by ID. Returns raw HipoData JSON. ?refresh=1 forces a
+    live reload of demographic, imaging/lab list, and Observation data."""
     id = request.match_info.get('id')
     if not id:
         return web_error_response("Patient ID is required")
     logger.info(f"Retrieving patient with ID: {id}")
 
     client = HipoClientPatient(SERVICE_URL, request)
+    if request.rel_url.query.get('refresh') == '1':
+        evict_patient_cache(client, id)
 
     debug_resp = await web_debug_response(client, request, id=id)
     if debug_resp is not None:
@@ -153,20 +157,24 @@ async def get_patient(request):
 
 @require_auth
 async def get_fhir_patient(request):
-    """Retrieve patient by ID. Returns FHIR Patient resource."""
+    """Retrieve patient by ID. Returns FHIR Patient resource. ?refresh=1 forces
+    a live reload of demographic, imaging/lab list, and Observation data."""
     id = request.match_info.get('id')
     if not id:
         return web_fhir_response("Patient ID is required")
     logger.info(f"Retrieving patient with ID: {id}")
 
     client = HipoClientPatient(SERVICE_URL, request)
+    if request.rel_url.query.get('refresh') == '1':
+        evict_patient_cache(client, id)
     response = await client.fetch_respond_fhir(id=id)
     return web_fhir_response(response)
 
 
 @require_auth
 async def search_request(request):
-    """Search service requests for a patient. Returns raw HipoData JSON."""
+    """Search service requests for a patient. Returns raw HipoData JSON.
+    ?refresh=1 forces a live reload of the patient's imaging/lab lists."""
     patient_id = request.query.get('patient', '')
     if not patient_id:
         return web_error_response("Patient ID is required")
@@ -177,12 +185,15 @@ async def search_request(request):
     exam_datetime = request.query.get('dt')
 
     client = HipoClientServiceRequestSearch(SERVICE_URL, request)
+    if request.rel_url.query.get('refresh') == '1':
+        evict_patient_cache(client, patient_id)
     parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime)
     return web_json_response(parsed_data)
 
 @require_auth
 async def search_fhir_service_request(request):
-    """Search service requests for a patient. Returns FHIR ServiceRequest Bundle."""
+    """Search service requests for a patient. Returns FHIR ServiceRequest Bundle.
+    ?refresh=1 forces a live reload of the patient's imaging/lab lists."""
     patient_id = request.query.get('patient', '')
     if not patient_id:
         return web_fhir_response("Patient ID is required")
@@ -193,6 +204,8 @@ async def search_fhir_service_request(request):
     exam_datetime = request.query.get('dt')
 
     client = HipoClientServiceRequestSearch(SERVICE_URL, request)
+    if request.rel_url.query.get('refresh') == '1':
+        evict_patient_cache(client, patient_id)
     parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime)
     response = client.fhir_bundle_response(parsed_data, http_request=request, patient_id=patient_id)
     return web_fhir_response(response)
@@ -445,6 +458,8 @@ async def get_fhir_observation(request):
     start_date = request.rel_url.query.get('start_date')
     end_date   = request.rel_url.query.get('end_date')
     client = HipoClientObservationBundle(SERVICE_URL, request)
+    if request.rel_url.query.get('refresh') == '1':
+        evict_patient_cache(client, patient_id)
     response = await client.fetch_respond_fhir(
         patient_id=patient_id,
         start_date=start_date,
@@ -454,13 +469,16 @@ async def get_fhir_observation(request):
 
 @require_auth
 async def get_observation(request):
-    """Raw HipoData aggregation of lab Observations for a patient. ?patient={id}&start_date=YYYY-MM-DD&end_date=YYYY-MM-DD"""
+    """Raw HipoData aggregation of lab Observations for a patient.
+    ?patient={id}&start_date=YYYY-MM-DD&end_date=YYYY-MM-DD&refresh=1"""
     patient_id = request.rel_url.query.get('patient')
     if not patient_id:
         return web_error_response("patient parameter is required")
     start_date = request.rel_url.query.get('start_date')
     end_date   = request.rel_url.query.get('end_date')
     client = HipoClientObservationBundle(SERVICE_URL, request)
+    if request.rel_url.query.get('refresh') == '1':
+        evict_patient_cache(client, patient_id)
     parsed = await client.fetch_and_parse(
         patient_id=patient_id,
         start_date=start_date,
