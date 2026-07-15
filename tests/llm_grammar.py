@@ -21,8 +21,12 @@ class TestGrammarConversion(unittest.TestCase):
             validate_gbnf(grammar)  # raises ValueError on structural defects
 
     def test_to_gbnf_const_field(self):
+        # The GBNF literal must match the JSON-quoted text `"imaging"`, not
+        # the bare word `imaging` — json.dumps() alone isn't a GBNF literal,
+        # its quotes get consumed as GBNF's own delimiters (see
+        # llm/grammar.py's _gbnf_literal docstring for why this matters).
         grammar = to_gbnf(model_extraction_schema(ImagingRecord))
-        self.assertIn('root-type ::= "imaging"', grammar)
+        self.assertIn('root-type ::= "\\"imaging\\""', grammar)
 
     def test_to_gbnf_nullable_field(self):
         grammar = to_gbnf(model_extraction_schema(ImagingRecord))

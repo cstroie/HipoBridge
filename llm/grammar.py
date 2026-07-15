@@ -16,8 +16,6 @@ required, string/integer/number/boolean, array + items, enum, anyOf
 import json
 import re
 
-_SPACE_RULE = r'ws ::= [ \t\n]*'
-
 _PRIMITIVE_RULES = {
     "boolean": r'"true" | "false"',
     "null": r'"null"',
@@ -32,7 +30,13 @@ class _GrammarBuilder:
         self._root_schema = schema
         self._defs = schema.get("$defs", schema.get("definitions", {}))
         self._rules: dict[str, str] = {}
-        self._rules["ws"] = r'[ \t\n]*'
+        # Bounded to 0-or-1 whitespace char, not [ \t\n]* — an unbounded
+        # repeat gives small/undertrained models an escape hatch to loop on
+        # whitespace forever instead of committing to content, since "more
+        # whitespace" stays grammatically valid at every ws expansion point.
+        # Confirmed empirically against a real LFM2.5-230M llama-server: `*`
+        # ran the model out of its token budget emitting spaces after `:`.
+        self._rules["ws"] = r'[ \t\n]?'
         for name, body in _PRIMITIVE_RULES.items():
             self._rules[name] = body
 
@@ -56,10 +60,10 @@ class _GrammarBuilder:
             return self.visit(self._resolve_ref(schema["$ref"]), name)
 
         if "const" in schema:
-            return self._add_rule(name, json.dumps(schema["const"]))
+            return self._add_rule(name, _gbnf_literal(json.dumps(schema["const"])))
 
         if "enum" in schema:
-            alts = " | ".join(json.dumps(v) for v in schema["enum"])
+            alts = " | ".join(_gbnf_literal(json.dumps(v)) for v in schema["enum"])
             return self._add_rule(name, alts)
 
         if "anyOf" in schema or "oneOf" in schema:
@@ -104,7 +108,7 @@ class _GrammarBuilder:
         parts = []
         for prop_name, prop_schema in properties.items():
             value_rule = self.visit(prop_schema, f"{name}-{prop_name}")
-            key_literal = json.dumps(prop_name)
+            key_literal = _gbnf_literal(json.dumps(prop_name))
             parts.append(f'{key_literal} ws ":" ws {value_rule}')
 
         body = '"{" ws ' + ' ws "," ws '.join(parts) + ' ws "}"'
@@ -129,6 +133,22 @@ _RULE_DEF_RE = re.compile(r'^([A-Za-z_][A-Za-z0-9_-]*)\s*::=', re.MULTILINE)
 _RULE_REF_RE = re.compile(r'(?<![:"])\b[A-Za-z_][A-Za-z0-9_-]*\b(?!\s*::=)')
 _STRING_LITERAL_RE = re.compile(r'"(?:[^"\\]|\\.)*"')
 _CHAR_CLASS_RE = re.compile(r'\[(?:[^\]\\]|\\.)*\]')
+
+
+def _gbnf_literal(text: str) -> str:
+    """Escape arbitrary text into a GBNF string literal matching it exactly.
+
+    `json.dumps(x)` alone is NOT a GBNF literal for `x` — its surrounding
+    quotes get consumed as GBNF's own literal delimiters, so embedding
+    `json.dumps("type")` (-> `"type"`) directly into a rule body produces a
+    grammar matching the *bare* word `type`, not the JSON-quoted key
+    `"type"`. Confirmed empirically: this bug made a real llama-server
+    grammar-constrained call demand unquoted keys/values, which the model
+    couldn't satisfy naturally and produced garbled/unconstrained-looking
+    output despite the grammar "compiling" fine.
+    """
+    escaped = text.replace('\\', '\\\\').replace('"', '\\"')
+    return f'"{escaped}"'
 
 # GBNF keywords/character-class fragments that look like bare identifiers
 # but aren't rule references.

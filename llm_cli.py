@@ -13,7 +13,7 @@ import sys
 
 from aiohttp import web
 
-from llm.config import TIERS, init_llm, tier_section
+from llm.config import TIERS, init_llm
 from llm.pipeline import ExtractionResult, extract_document
 from llm.router import build_router
 
@@ -55,6 +55,39 @@ async def cmd_extract(args) -> int:
     return 1 if any(getattr(r, "needs_review", False) for r in result.records) else 0
 
 
+async def _check_grammar_constrained(router, tier: str) -> str:
+    """Tiny real grammar-constrained call: does this backend actually honor
+    `json_schema`, or does it silently fall back to unconstrained text?
+
+    Empirically, a server can echo the grammar back in its own
+    generation_settings as "accepted" while still not applying it to
+    sampling (confirmed against a real llama-server build on this
+    machine — see llm/grammar.py's _gbnf_literal docstring for the related
+    literal-escaping bug this uncovered). The only reliable check is
+    driving one real call and inspecting the output shape.
+    """
+    from llm.schemas import ClinicalNoteRecord, model_extraction_schema
+
+    schema = model_extraction_schema(ClinicalNoteRecord)
+    messages = [
+        {"role": "system", "content": "Return only a JSON object matching the given shape."},
+        {"role": "user", "content": "Patient seen for routine follow-up, no new complaints."},
+    ]
+    try:
+        raw = await router.chat(tier, messages, json_schema=schema, max_tokens=80, temperature=0.1)
+    except Exception as exc:
+        return f"FAIL (call raised: {exc})"
+
+    stripped = raw.strip()
+    if not stripped.startswith("{"):
+        return f"FAIL (grammar not enforced — output didn't start with '{{': {stripped[:60]!r})"
+    try:
+        ClinicalNoteRecord.model_validate_json(stripped)
+    except Exception as exc:
+        return f"FAIL (grammar-shaped but invalid: {exc})"
+    return "OK"
+
+
 async def cmd_doctor(args) -> int:
     config = init_llm(args.config)
     router = await build_router(config)
@@ -63,12 +96,9 @@ async def cmd_doctor(args) -> int:
         for tier in TIERS:
             info = status.get(tier, {})
             print(f"{tier}: backend={info.get('backend')} healthy={info.get('healthy')}")
-
-        tier_cfg = tier_section(config, "instruct")
-        if tier_cfg.get("backend") in ("server", "auto") and status.get("instruct", {}).get("healthy"):
-            print(f"instruct: server_grammar_mode configured as "
-                  f"'{tier_cfg.get('server_grammar_mode')}' (verify against a real grammar-constrained "
-                  f"call once the actual target model is loaded on that server)")
+            if info.get("healthy"):
+                grammar_result = await _check_grammar_constrained(router, tier)
+                print(f"  grammar-constrained call: {grammar_result}")
     finally:
         await router.close()
     return 0
