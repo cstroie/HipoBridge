@@ -14,7 +14,10 @@ from difflib import SequenceMatcher
 from pydantic import BaseModel, ValidationError
 
 from llm import audit
-from llm.prompts import extract_clinical_note, extract_imaging, extract_intervention
+from llm.prompts import (
+    extract_clinical_note, extract_discharge, extract_imaging,
+    extract_intervention, extract_lab_panel, extract_radiology_impression,
+)
 from llm.prompts.compare_qualitative import build as build_compare_prompt
 from llm.prompts.pre_exam_brief import build as build_pre_exam_brief_prompt
 from llm.schemas import ClinicalNoteRecord, ImagingRecord, SCHEMAS, model_extraction_schema
@@ -26,6 +29,9 @@ PROMPTS = {
     "imaging": extract_imaging,
     "intervention": extract_intervention,
     "clinical_note": extract_clinical_note,
+    "radiology_impression": extract_radiology_impression,
+    "discharge": extract_discharge,
+    "lab_panel": extract_lab_panel,
     # unstructured/unrecognized blocks get a generic clinical-note pass
     "unknown": extract_clinical_note,
 }

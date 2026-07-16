@@ -54,14 +54,13 @@ class ServerBackend:
             "temperature": temperature,
         }
         if json_schema:
-            grammar = to_gbnf(json_schema)
             if self.grammar_mode == "response_format":
                 payload["response_format"] = {
                     "type": "json_schema",
-                    "json_schema": {"name": "extraction", "schema": json_schema},
+                    "json_schema": {"name": "extraction", "schema": _all_properties_required(json_schema)},
                 }
             else:
-                payload["grammar"] = grammar
+                payload["grammar"] = to_gbnf(json_schema)
 
         async with _llm_semaphore:
             async with self._client().post(f"{self.base_url}/v1/chat/completions", json=payload) as resp:
@@ -69,6 +68,33 @@ class ServerBackend:
                 data = await resp.json()
                 content = data["choices"][0]["message"]["content"]
                 return strip_think_block(content)
+
+
+def _all_properties_required(schema: dict) -> dict:
+    """Force every object's properties to be listed as "required", at every
+    nesting level ($defs included) — mirrors llm/grammar.py's GBNF path,
+    which structurally forces every key to appear (with null if unstated)
+    rather than letting the model omit it.
+
+    Pydantic's model_json_schema() only lists fields *without* a default in
+    "required" — every field in our extraction schemas has a null-friendly
+    default, so the emitted "required" list is empty. An OpenAI-compatible
+    server enforcing that schema literally (confirmed live against LM
+    Studio + medgemma-4b-it) will then let the model skip inconvenient
+    fields outright — including the primary content field (e.g.
+    "impression") — rather than emitting them as null, silently dropping
+    real extracted content. Does not mutate the input schema."""
+    if not isinstance(schema, dict):
+        return schema
+    result = dict(schema)
+    if "properties" in result:
+        result["properties"] = {k: _all_properties_required(v) for k, v in result["properties"].items()}
+        result["required"] = list(result["properties"].keys())
+    if "items" in result:
+        result["items"] = _all_properties_required(result["items"])
+    if "$defs" in result:
+        result["$defs"] = {k: _all_properties_required(v) for k, v in result["$defs"].items()}
+    return result
 
 
 def strip_think_block(text: str) -> str:

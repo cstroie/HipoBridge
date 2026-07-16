@@ -39,12 +39,61 @@ class ClinicalNoteRecord(BaseModel):
     raw_source: str = ""
 
 
-ExtractedRecord = Union[ImagingRecord, InterventionRecord, ClinicalNoteRecord]
+class RadiologyImpressionRecord(BaseModel):
+    type: Literal["radiology_impression"] = "radiology_impression"
+    date: datetime.date | None = None
+    modality: str | None = None
+    body_region: str | None = None
+    impression: str | None = None
+    significant_findings: bool | None = None
+    needs_review: bool = False
+    raw_source: str = ""
+
+
+class HomeMedication(BaseModel):
+    drug_name: str | None = None
+    dosage: str | None = None
+    frequency: str | None = None
+
+
+class DischargeRecord(BaseModel):
+    type: Literal["discharge"] = "discharge"
+    date: datetime.date | None = None
+    executive_summary: str | None = None
+    discharge_diagnoses: list[str] = []
+    home_medications: list[HomeMedication] = []
+    follow_up_instructions: str | None = None
+    needs_review: bool = False
+    raw_source: str = ""
+
+
+class AbnormalLabValue(BaseModel):
+    test_name: str | None = None
+    value: str | None = None
+    status: Literal["HIGH", "LOW", "CRITICAL"] | None = None
+
+
+class LabPanelRecord(BaseModel):
+    type: Literal["lab_panel"] = "lab_panel"
+    date: datetime.date | None = None
+    overall_summary: str | None = None
+    abnormal_findings: list[AbnormalLabValue] = []
+    needs_review: bool = False
+    raw_source: str = ""
+
+
+ExtractedRecord = Union[
+    ImagingRecord, InterventionRecord, ClinicalNoteRecord,
+    RadiologyImpressionRecord, DischargeRecord, LabPanelRecord,
+]
 
 SCHEMAS: dict[str, type[BaseModel]] = {
     "imaging": ImagingRecord,
     "intervention": InterventionRecord,
     "clinical_note": ClinicalNoteRecord,
+    "radiology_impression": RadiologyImpressionRecord,
+    "discharge": DischargeRecord,
+    "lab_panel": LabPanelRecord,
 }
 
 

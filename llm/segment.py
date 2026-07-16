@@ -10,7 +10,7 @@ import unicodedata
 from dataclasses import dataclass
 from typing import Literal
 
-HintType = Literal["imaging", "intervention", "clinical_note", "unknown"]
+HintType = Literal["imaging", "intervention", "clinical_note", "discharge", "unknown"]
 
 # Matches headers like "### CT Scan · 2026-03-02 · id 123" or "## Interventie chirurgicala"
 _HEADER_RE = re.compile(r'^#{1,4}\s*(.+)$', re.MULTILINE)
@@ -35,8 +35,14 @@ _HINT_KEYWORDS: dict[HintType, tuple[str, ...]] = {
                 "imagistic", "computer tomograf"),
     "intervention": ("interventie", "intervention", "procedur", "operatie",
                       "surgery", "biopsi", "chirurgical"),
+    # Checked before the generic clinical_note bucket below — a discharge
+    # letter's own keywords ("externare", "discharge") would otherwise be
+    # swallowed by clinical_note's broader admission/consult vocabulary,
+    # since _classify_text returns the first matching hint in dict order.
+    "discharge": ("externare", "scrisoare medicala", "epicriza",
+                   "bilet de iesire", "discharge letter", "discharge summary"),
     "clinical_note": ("consult", "nota clinica", "clinical note", "clinical history",
-                       "prezentare", "admission", "internare", "externare", "discharge"),
+                       "prezentare", "admission", "internare"),
 }
 
 # Section headers that are pure demographics/identifiers, never clinical
