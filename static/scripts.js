@@ -112,7 +112,6 @@ document.addEventListener('DOMContentLoaded', function() {
         scheduleLimitSelect:   document.getElementById('scheduleLimitSelect'),
         scheduleTable: document.getElementById('scheduleTable'),
         scheduleBody: document.getElementById('scheduleBody'),
-        scheduleLoading: document.getElementById('scheduleLoading'),
         noSchedule: document.getElementById('noSchedule'),
         scheduleTimeline: document.getElementById('scheduleTimeline'),
         scheduleStatusChips: document.getElementById('scheduleStatusChips'),
@@ -4327,8 +4326,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (sectionName) params.set('section_name', sectionName);
         if (limit)       params.set('limit', limit);
         const url = `/fhir/Schedule${params.toString() ? '?' + params.toString() : ''}`;
-        if (elements.scheduleLoading) elements.scheduleLoading.hidden = false;
         if (elements.noSchedule) elements.noSchedule.style.display = 'none';
+        showLoading('Loading schedule…');
         try {
             const resp = await apiFetch(url);
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -4341,7 +4340,7 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (err) {
             showToast(`Failed to load schedule: ${err.message}`, 'error');
         } finally {
-            if (elements.scheduleLoading) elements.scheduleLoading.hidden = true;
+            hideLoading();
         }
     }
 
