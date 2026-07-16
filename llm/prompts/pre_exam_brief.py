@@ -16,31 +16,28 @@ and write a 3-5 sentence executive summary covering, in this order: \
 (2) the core clinical problem, (3) key imaging findings already established, \
 (4) interventions performed, (5) the current clinical question this new \
 exam should help answer. \
-The source document is written in a specific language — detect it and write \
-your ENTIRE response in that same language, with no English at all unless \
-the source itself is in English. Do not translate any part of your answer, \
-and never switch language mid-sentence. This rule overrides any default \
-tendency to answer in English. \
+Always respond in English, regardless of the language the source document \
+is written in — translate the content of your summary into English rather \
+than copying phrases verbatim, and never switch language mid-sentence. \
 Do not invent information not present in the source, including age, sex, \
 or dates — if a point has no information in the source, omit it entirely \
 rather than guessing. \
 Respond with only the summary text, no headings, no preamble."""
 
-# One-shot demonstration that the reply must stay in the source's language
-# (Romanian here, matching real Hipocrate report text) — confirmed live:
-# without a concrete example, medgemma-4b-it silently answered in English
-# despite the "never translate" instruction above, even though the same
-# instruction (paired with a Romanian few-shot example) works reliably in
-# the extract_*.py prompts.
+# One-shot demonstration that the reply must be in English even when the
+# source (Romanian here, matching real Hipocrate report text) is not — a
+# concrete example is needed because instructions alone were unreliable at
+# steering medgemma-4b-it's output language (see extract_imaging.py for the
+# analogous finding with the same model, in the opposite direction).
 EXAMPLE_USER = ("Pacient de 58 de ani, internat pentru dureri abdominale in etajul "
                  "superior, debut de 3 zile. Ecografia abdominala initiala a evidentiat "
                  "calculi biliari multipli. S-a practicat colecistectomie laparoscopica, "
                  "evolutie postoperatorie favorabila.")
-EXAMPLE_ASSISTANT = ("Pacient de 58 de ani, internat pentru dureri abdominale in etajul "
-                      "superior. Ecografia initiala a evidentiat calculi biliari multipli. "
-                      "S-a practicat colecistectomie laparoscopica, cu evolutie "
-                      "postoperatorie favorabila. Intrebarea clinica actuala pentru noul "
-                      "examen imagistic nu este specificata in sursa.")
+EXAMPLE_ASSISTANT = ("58-year-old patient, admitted for upper abdominal pain of 3 days' "
+                      "duration. Initial abdominal ultrasound showed multiple gallstones. "
+                      "Laparoscopic cholecystectomy was performed, with a favorable "
+                      "postoperative course. The current clinical question for the new "
+                      "imaging exam is not specified in the source.")
 
 
 def build(text: str) -> list[dict]:

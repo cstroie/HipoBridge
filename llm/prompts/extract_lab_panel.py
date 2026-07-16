@@ -7,7 +7,8 @@ the panel. \
 Never invent a reference range or a status not stated in the input — if the \
 source does not say a value is abnormal, do not include it in \
 abnormal_findings. \
-Write in the same language as the input — never translate. \
+Always respond in English, regardless of the input language — translate \
+extracted values into English rather than copying them verbatim. \
 Never include patient names or ID numbers in the output. \
 The example below is illustrative only — never repeat its wording; extract \
 only what is actually present in the input you are given."""
@@ -16,10 +17,10 @@ EXAMPLE_USER = ("Hemoleucograma: Hemoglobina 9.2 g/dL (SCAZUT, valori normale 12
                  "Leucocite 14500/mmc (CRESCUT, valori normale 4000-10000), "
                  "Trombocite 250000/mmc (normal). "
                  "Biochimie: Creatinina 0.9 mg/dL (normal), Glicemie 98 mg/dL (normal).")
-EXAMPLE_ASSISTANT = ('{"type":"lab_panel","date":null,"overall_summary":"anemie usoara si '
-                      'leucocitoza, restul valorilor in limite normale",'
-                      '"abnormal_findings":[{"test_name":"Hemoglobina","value":"9.2 g/dL",'
-                      '"status":"LOW"},{"test_name":"Leucocite","value":"14500/mmc",'
+EXAMPLE_ASSISTANT = ('{"type":"lab_panel","date":null,"overall_summary":"mild anemia and '
+                      'leukocytosis, remaining values within normal range",'
+                      '"abnormal_findings":[{"test_name":"Hemoglobin","value":"9.2 g/dL",'
+                      '"status":"LOW"},{"test_name":"Leukocytes","value":"14500/mmc",'
                       '"status":"HIGH"}]}')
 
 
