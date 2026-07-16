@@ -289,6 +289,22 @@ def _sex_to_dicom(sex: str) -> str:
     return {'male': 'M', 'female': 'F'}.get(s, 'O')
 
 
+def _height_to_meters(height: str) -> str:
+    """Convert a Hipocrate height value (recorded in cm) to DICOM PatientSize (m)."""
+    try:
+        return f'{float(str(height).replace(",", ".")) / 100:.2f}'
+    except (TypeError, ValueError):
+        return ''
+
+
+def _weight_to_kg(weight: str) -> str:
+    """Normalize a Hipocrate weight value (recorded in kg) for DICOM PatientWeight."""
+    try:
+        return f'{float(str(weight).replace(",", ".")):g}'
+    except (TypeError, ValueError):
+        return ''
+
+
 def _build_datasets(entry: dict, patient_info: Optional[dict],
                     accession_prefix: str = '') -> List['Dataset']:
     """Build one pydicom Dataset per exam in the request.
@@ -336,6 +352,13 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
     address       = (patient_info or {}).get('address') or ''
     hipo_id       = (patient_info or {}).get('id') or ''
     priority      = 'STAT' if (entry.get('priority') or '').lower() not in ('normala', 'normal', '') else 'ROUTINE'
+    size          = _height_to_meters((patient_info or {}).get('height') or '')
+    weight        = _weight_to_kg((patient_info or {}).get('weight') or '')
+    email         = (patient_info or {}).get('email') or ''
+    comments      = (patient_info or {}).get('comment') or ''
+    if email:
+        comments = f'Email: {email}' + (f'\n{comments}' if comments else '')
+    admission_id  = hipo_id or request_id
 
     other_ids = None
     if hipo_id:
@@ -358,6 +381,12 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
         ds.PatientSex       = sex
         ds.PatientAddress            = address
         ds.PatientTelephoneNumbers   = phone
+        if size:
+            ds.PatientSize = size
+        if weight:
+            ds.PatientWeight = weight
+        ds.PatientComments = comments
+        ds.AdmissionID = admission_id
         if other_ids is not None:
             ds.OtherPatientIDsSequence = other_ids
 
@@ -778,6 +807,10 @@ class WorklistRefresher:
                 'section':       cerere_data.get('request.section'),
                 'phone':         patient_data.get('patient.phone'),
                 'address':       patient_data.get('patient.address'),
+                'email':         patient_data.get('patient.email'),
+                'weight':        patient_data.get('patient.weight'),
+                'height':        patient_data.get('patient.height'),
+                'comment':       cerere_data.get('request.clinical_indication') or cerere_data.get('request.diagnosis'),
             }
             self._patient_cache[request_id] = info
             return info
