@@ -654,13 +654,25 @@ class WorklistServer:
 
         lab_ids = self._lab_ids_for_profile(profile)
 
-        # Honour the device's own requested date range, if any, so we don't
-        # silently truncate results to our default cache window.
+        # Honour the device's own requested date range and modality, if any,
+        # so we don't silently truncate results to our default cache window
+        # or skip refreshing a modality the device explicitly asked for.
         min_start = max_end = None
         sps_seq = getattr(identifier, 'ScheduledProcedureStepSequence', None)
         if sps_seq and len(sps_seq) > 0:
-            req_date = str(getattr(sps_seq[0], 'ScheduledProcedureStepStartDate', '') or '')
+            req_sps  = sps_seq[0]
+            req_date = str(getattr(req_sps, 'ScheduledProcedureStepStartDate', '') or '')
             min_start, max_end = _parse_requested_date_range(req_date)
+
+            req_mod = str(getattr(req_sps, 'Modality', '') or '').strip()
+            if req_mod and req_mod not in ('*', ''):
+                req_lab_ids = _DICOM_CODE_TO_LAB_IDS.get(req_mod, [])
+                if req_lab_ids:
+                    lab_ids = sorted(set(lab_ids) | set(req_lab_ids))
+                    logger.debug(
+                        "C-FIND from '%s' requested modality '%s' — refreshing lab_ids %s",
+                        calling_ae, req_mod, lab_ids,
+                    )
 
         self._on_demand_refresh(lab_ids, min_start=min_start, max_end=max_end)
 
