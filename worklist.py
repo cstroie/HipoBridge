@@ -35,7 +35,7 @@ try:
 except ImportError:
     DICOM_AVAILABLE = False
 
-from hipoclient import HipoClientSchedule, HipoClientCerere, HipoClientPatient
+from hipoclient import HipoClientSchedule, HipoClientCerere, HipoClientPatient, HipoClientCheckin
 from extractors import parse_cnp
 
 logger = logging.getLogger('Worklist')
@@ -358,7 +358,7 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
     comments      = (patient_info or {}).get('comment') or ''
     if email:
         comments = f'Email: {email}' + (f'\n{comments}' if comments else '')
-    admission_id  = hipo_id or request_id
+    admission_id  = (patient_info or {}).get('admission_id') or hipo_id or request_id
 
     other_ids = None
     if hipo_id:
@@ -796,6 +796,18 @@ class WorklistRefresher:
             if patient_data.get('status') == 'error':
                 return None
 
+            # Use the patient's most recent admission (highest checkin id) as
+            # AdmissionID when one exists; falls back to the Hipocrate patient
+            # id in _build_datasets otherwise.
+            admission_id = None
+            checkin_ids = patient_data.get('checkin') or []
+            if checkin_ids:
+                latest_checkin_id = max(checkin_ids, key=lambda cid: int(cid))
+                checkin_client = self._client(HipoClientCheckin)
+                checkin_data = await checkin_client.fetch_and_parse(id=latest_checkin_id)
+                if checkin_data.get('status') != 'error':
+                    admission_id = checkin_data.get('checkin.id') or latest_checkin_id
+
             info = {
                 'id':            patient_id,
                 'cnp':           patient_data.get('patient.cnp'),
@@ -811,6 +823,7 @@ class WorklistRefresher:
                 'weight':        patient_data.get('patient.weight'),
                 'height':        patient_data.get('patient.height'),
                 'comment':       cerere_data.get('request.clinical_indication') or cerere_data.get('request.diagnosis'),
+                'admission_id':  admission_id,
             }
             self._patient_cache[request_id] = info
             return info
