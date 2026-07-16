@@ -2365,6 +2365,7 @@ select {
     display: flex;
     gap: var(--spacing-sm);
     flex-shrink: 0;
+    flex-wrap: wrap;
 }
 
 /* Quick Summary card — deliberately styled distinct from the validated

@@ -79,6 +79,7 @@ document.addEventListener('DOMContentLoaded', function() {
         aiTimelineSection: document.getElementById('aiTimelineSection'),
         aiTimeline: document.getElementById('aiTimeline'),
         aiSummaryBtn: document.getElementById('aiSummaryBtn'),
+        aiImpressionBtn: document.getElementById('aiImpressionBtn'),
         aiSummaryCard: document.getElementById('aiSummaryCard'),
         aiSummaryText: document.getElementById('aiSummaryText'),
         aiSummaryError: document.getElementById('aiSummaryError'),
@@ -401,6 +402,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         if (elements.aiSummaryBtn) {
             elements.aiSummaryBtn.addEventListener('click', runAiQuickSummary);
+        }
+        if (elements.aiImpressionBtn) {
+            elements.aiImpressionBtn.addEventListener('click', runAiImpressionExtraction);
         }
 
         // Schedule tab
@@ -1316,14 +1320,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ── AI extraction tab ─────────────────────────────────────────────
     const RECORD_TYPE_META = {
-        imaging:      { icon: 'fa-x-ray',        label: 'Imaging' },
-        intervention: { icon: 'fa-notes-medical', label: 'Intervention' },
-        clinical_note:{ icon: 'fa-sticky-note',   label: 'Clinical Note' },
+        imaging:              { icon: 'fa-x-ray',         label: 'Imaging' },
+        intervention:         { icon: 'fa-notes-medical', label: 'Intervention' },
+        clinical_note:        { icon: 'fa-sticky-note',   label: 'Clinical Note' },
+        radiology_impression: { icon: 'fa-file-medical',  label: 'Impression' },
     };
     const RECORD_FIELD_LABELS = {
         modality: 'Modality', body_region: 'Body Region', findings: 'Findings',
         impression: 'Impression', procedure: 'Procedure', outcome: 'Outcome',
-        summary: 'Summary',
+        summary: 'Summary', significant_findings: 'Significant Findings',
     };
 
     function resetAiTab() {
@@ -1367,11 +1372,21 @@ document.addEventListener('DOMContentLoaded', function() {
         return elements.patientReportMarkdown?.dataset.markdown || null;
     }
 
+    // Imaging blocks only — the source material for the opt-in Radiology
+    // Impressions extraction (hint_type: 'radiology_impression'), which
+    // targets only radiologist-authored reports, not the admission
+    // narrative or other block types.
+    function getImagingTypedBlocks() {
+        const payload = getPatientReportPayload();
+        return (payload?.typed_blocks || []).filter(b => b.hint_type === 'imaging');
+    }
+
     function updateAiEmptyState() {
         const hasContent = !!getPatientReportPayload();
         if (elements.aiEmptyState) elements.aiEmptyState.hidden = hasContent;
         if (elements.aiExtractBtn) elements.aiExtractBtn.disabled = !hasContent;
         if (elements.aiSummaryBtn) elements.aiSummaryBtn.disabled = !getPatientClinicalText();
+        if (elements.aiImpressionBtn) elements.aiImpressionBtn.disabled = getImagingTypedBlocks().length === 0;
     }
 
     async function runAiQuickSummary() {
@@ -1438,6 +1453,50 @@ document.addEventListener('DOMContentLoaded', function() {
             renderAiResults(data);
         } catch (err) {
             console.error('AI extraction failed:', err);
+            if (elements.aiErrorState) {
+                elements.aiErrorState.textContent = `Extraction failed: ${err.message}`;
+                elements.aiErrorState.hidden = false;
+            }
+            if (elements.aiResults) elements.aiResults.hidden = true;
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = origHtml;
+        }
+    }
+
+    // Opt-in alternative to the full "Extract with AI" pass: re-runs only
+    // the imaging blocks through the radiology_impression schema (a single
+    // sentence impression instead of the full findings/impression record —
+    // see llm/prompts/extract_radiology_impression.py). Shares the same
+    // results area/renderer as runAiExtraction — clicking this replaces
+    // whatever extraction results are currently shown.
+    async function runAiImpressionExtraction() {
+        const imagingBlocks = getImagingTypedBlocks();
+        if (imagingBlocks.length === 0) {
+            showToast('No imaging reports loaded for this patient', 'warning');
+            return;
+        }
+
+        const btn = elements.aiImpressionBtn;
+        const origHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Summarizing…</span>';
+        if (elements.aiErrorState) { elements.aiErrorState.hidden = true; elements.aiErrorState.textContent = ''; }
+
+        try {
+            const typed_blocks = imagingBlocks.map(b => ({ hint_type: 'radiology_impression', text: b.text }));
+            const resp = await apiFetch('/api/ai/extract', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ typed_blocks }),
+            });
+            const data = await resp.json();
+            if (!resp.ok || data.status === 'error') {
+                throw new Error(data.message || `Extraction failed (HTTP ${resp.status})`);
+            }
+            renderAiResults(data);
+        } catch (err) {
+            console.error('AI impression extraction failed:', err);
             if (elements.aiErrorState) {
                 elements.aiErrorState.textContent = `Extraction failed: ${err.message}`;
                 elements.aiErrorState.hidden = false;
