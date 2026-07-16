@@ -384,6 +384,22 @@ class WorklistCache:
         with self._lock:
             self._slots[lab_id] = (list(entries), list(raw), datetime.now())
 
+    @staticmethod
+    def _dedup(all_ds: List[Dataset], all_raw: List[dict]) -> Tuple[List[Dataset], List[dict]]:
+        """Drop entries whose request_id repeats across merged slots (keep first occurrence)."""
+        seen: set = set()
+        ds_out:  List[Dataset] = []
+        raw_out: List[dict]    = []
+        for ds, r in zip(all_ds, all_raw):
+            rid = r.get('request_id')
+            if rid and rid in seen:
+                continue
+            if rid:
+                seen.add(rid)
+            ds_out.append(ds)
+            raw_out.append(r)
+        return ds_out, raw_out
+
     def snapshot(self, lab_id: Optional[str] = None) -> Tuple[List[Dataset], List[dict]]:
         """Return entries for one modality, or all modalities merged if lab_id is None."""
         with self._lock:
@@ -397,7 +413,7 @@ class WorklistCache:
             for ds_list, raw_list, _ in self._slots.values():
                 all_ds.extend(ds_list)
                 all_raw.extend(raw_list)
-            return all_ds, all_raw
+            return self._dedup(all_ds, all_raw)
 
     def snapshot_multi(self, lab_ids: List[str]) -> Tuple[List[Dataset], List[dict]]:
         """Merge entries from a specific set of lab_id slots (e.g. RF = fluoro + rads)."""
@@ -409,7 +425,7 @@ class WorklistCache:
                 if slot:
                     all_ds.extend(slot[0])
                     all_raw.extend(slot[1])
-            return all_ds, all_raw
+            return self._dedup(all_ds, all_raw)
 
     def updated_at(self, lab_id: str) -> Optional[datetime]:
         with self._lock:
