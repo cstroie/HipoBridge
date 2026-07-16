@@ -256,6 +256,26 @@ def _date_to_dicom(date_str: str) -> str:
     return date_str.replace('-', '')[:8] if date_str else ''
 
 
+def _dicom_date_to_iso(dicom_date: str) -> Optional[str]:
+    """Convert DICOM DA 'YYYYMMDD' to 'YYYY-MM-DD'. Returns None if malformed."""
+    if not dicom_date or len(dicom_date) != 8 or not dicom_date.isdigit():
+        return None
+    return f"{dicom_date[0:4]}-{dicom_date[4:6]}-{dicom_date[6:8]}"
+
+
+def _parse_requested_date_range(req_date: str) -> Tuple[Optional[str], Optional[str]]:
+    """Parse a DICOM DA query value ('YYYYMMDD' or 'YYYYMMDD-YYYYMMDD') into
+    ('YYYY-MM-DD', 'YYYY-MM-DD') bounds. Either bound may be None (open-ended
+    range) or both may be None if the value can't be parsed."""
+    if not req_date:
+        return None, None
+    if '-' in req_date:
+        lo, hi = req_date.split('-', 1)
+        return _dicom_date_to_iso(lo), _dicom_date_to_iso(hi)
+    d = _dicom_date_to_iso(req_date)
+    return d, d
+
+
 def _time_to_dicom(dt_str: str) -> str:
     """Extract HH:MM from 'YYYY-MM-DD HH:MM' and return DICOM TM 'HHMM00'."""
     if not dt_str or ' ' not in dt_str:
@@ -593,17 +613,22 @@ class WorklistServer:
         code = profile.get('modality') if profile else None
         return _DICOM_CODE_TO_LAB_IDS.get(code, []) if code else []
 
-    def _on_demand_refresh(self, lab_ids: List[str]) -> None:
+    def _on_demand_refresh(self, lab_ids: List[str],
+                            min_start: Optional[str] = None,
+                            max_end: Optional[str] = None) -> None:
         """Trigger modality-specific refreshes from a pynetdicom thread and wait.
 
         Skipped when lab_ids is empty (unknown device — no modality to refresh).
+        min_start/max_end (ISO dates) come from the device's own C-FIND date
+        query — if it asks for a wider range than we normally cache, honour it.
         """
         if not self._refresher or not self._loop or not lab_ids:
             return
         for lab_id in lab_ids:
             future = asyncio.run_coroutine_threadsafe(
                 self._refresher.refresh_if_stale(
-                    lab_id=lab_id, max_age_seconds=self._on_demand_sec
+                    lab_id=lab_id, max_age_seconds=self._on_demand_sec,
+                    min_start=min_start, max_end=max_end,
                 ),
                 self._loop,
             )
@@ -628,7 +653,16 @@ class WorklistServer:
             return
 
         lab_ids = self._lab_ids_for_profile(profile)
-        self._on_demand_refresh(lab_ids)
+
+        # Honour the device's own requested date range, if any, so we don't
+        # silently truncate results to our default cache window.
+        min_start = max_end = None
+        sps_seq = getattr(identifier, 'ScheduledProcedureStepSequence', None)
+        if sps_seq and len(sps_seq) > 0:
+            req_date = str(getattr(sps_seq[0], 'ScheduledProcedureStepStartDate', '') or '')
+            min_start, max_end = _parse_requested_date_range(req_date)
+
+        self._on_demand_refresh(lab_ids, min_start=min_start, max_end=max_end)
 
         entries, raw = self._cache.snapshot_multi(lab_ids) if lab_ids else self._cache.snapshot()
         candidates = self._filter(entries, raw, profile, calling_ae)
@@ -694,6 +728,9 @@ class WorklistRefresher:
         # Throttle: track last on-demand refresh time per lab_id key ('*' = full)
         self._throttle_lock  = threading.Lock()
         self._last_refresh:   Dict[str, datetime] = {}
+        # Widest date range actually fetched per lab_id, so we can detect when
+        # a device asks for a range wider than what's currently cached.
+        self._last_range:     Dict[str, Tuple[str, str]] = {}
 
     def _client(self, cls):
         """Return a HipoClient subclass instance authenticated with the service account."""
@@ -737,7 +774,9 @@ class WorklistRefresher:
             logger.warning("Patient enrichment failed for request %s: %s", request_id, exc)
             return None
 
-    async def _fetch_schedule(self, lab_id: Optional[str] = None) -> List[dict]:
+    async def _fetch_schedule(self, lab_id: Optional[str] = None,
+                               min_start: Optional[str] = None,
+                               max_end: Optional[str] = None) -> Tuple[List[dict], str, str]:
         """Pull the schedule from Hipocrate.
 
         Lookback is always 1 day.  Lookahead depends on modality:
@@ -745,10 +784,19 @@ class WorklistRefresher:
           - CT / MRI: 7 days (slots booked well in advance)
           - No modality (full refresh): 2 days (_DEFAULT_FETCH_DAYS)
         Pass lab_id to restrict to one modality (Hipocrate PARA_ID_Laborator).
+
+        min_start/max_end (ISO 'YYYY-MM-DD') widen the default window when a
+        querying device asks for a broader date range than we normally cache —
+        we honour the device's requested range rather than silently truncating it.
         """
         start = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
         days_ahead = _LAB_ID_FETCH_DAYS.get(lab_id, _DEFAULT_FETCH_DAYS) if lab_id else _DEFAULT_FETCH_DAYS
         end   = (datetime.now() + timedelta(days=days_ahead)).strftime('%Y-%m-%d')
+
+        if min_start and min_start < start:
+            start = min_start
+        if max_end and max_end > end:
+            end = max_end
 
         # refresh_if_stale throttles how often this runs (default 60s), but
         # HipoClientSchedule's own URLCache TTL is 30 minutes — without force=True
@@ -761,19 +809,21 @@ class WorklistRefresher:
 
         if data.get('status') == 'error':
             logger.error("Schedule fetch failed: %s", data.get('message'))
-            return []
+            return [], start, end
 
         entries = data.get('requests') or []
         for r in entries:
             status_key = (r.get('status') or '').lower()
             r['_fhir_status'] = _HIPOCRATE_TO_FHIR.get(status_key, 'unknown')
 
-        return entries
+        return entries, start, end
 
-    async def refresh(self, lab_id: str) -> None:
+    async def refresh(self, lab_id: str,
+                       min_start: Optional[str] = None,
+                       max_end: Optional[str] = None) -> None:
         """One refresh cycle for a single modality: fetch → enrich → update cache slot."""
         logger.debug("Worklist refresh starting (lab_id=%s)", lab_id)
-        entries = await self._fetch_schedule(lab_id=lab_id)
+        entries, start, end = await self._fetch_schedule(lab_id=lab_id, min_start=min_start, max_end=max_end)
         if not entries:
             logger.warning("Empty schedule for lab_id=%s — keeping previous cache", lab_id)
             return
@@ -826,15 +876,21 @@ class WorklistRefresher:
                 logger.warning("Dataset build failed for request %s: %s", rid, exc)
 
         self._cache.update(lab_id, datasets, raw_out)
+        self._last_range[lab_id] = (start, end)
 
         logger.info(
-            "Worklist refreshed (lab_id=%s): %d entries, %d active",
-            lab_id, len(datasets), len(active),
+            "Worklist refreshed (lab_id=%s): %d entries, %d active, range=%s..%s",
+            lab_id, len(datasets), len(active), start, end,
         )
 
     async def refresh_if_stale(self, lab_id: str,
-                               max_age_seconds: float = 60.0) -> None:
-        """Refresh a modality's cache slot only if older than max_age_seconds.
+                               max_age_seconds: float = 60.0,
+                               min_start: Optional[str] = None,
+                               max_end: Optional[str] = None) -> None:
+        """Refresh a modality's cache slot only if older than max_age_seconds,
+        or if min_start/max_end asks for a date range not already covered by
+        the last fetch — a querying device's requested range always wins even
+        if the cache is otherwise fresh.
 
         Safe to call from a non-async thread via asyncio.run_coroutine_threadsafe().
         The throttle check-and-set is protected by a threading.Lock so concurrent
@@ -843,14 +899,19 @@ class WorklistRefresher:
         now = datetime.now()
         with self._throttle_lock:
             last = self._last_refresh.get(lab_id)
-            if last and (now - last).total_seconds() < max_age_seconds:
+            cached_start, cached_end = self._last_range.get(lab_id, (None, None))
+            range_covered = (
+                (not min_start or (cached_start and min_start >= cached_start)) and
+                (not max_end   or (cached_end   and max_end   <= cached_end))
+            )
+            if last and range_covered and (now - last).total_seconds() < max_age_seconds:
                 logger.debug(
                     "On-demand refresh skipped (lab_id=%s, %.0fs old < %.0fs threshold)",
                     lab_id, (now - last).total_seconds(), max_age_seconds,
                 )
                 return
             self._last_refresh[lab_id] = now   # claim the slot before releasing the lock
-        await self.refresh(lab_id)
+        await self.refresh(lab_id, min_start=min_start, max_end=max_end)
 
 
 # ---------------------------------------------------------------------------
