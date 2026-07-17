@@ -162,35 +162,30 @@
     --ink-3:  var(--muted);
 
     /* Spacing */
-    --spacing-xs: 0.25rem;
-    --spacing-sm: 0.5rem;
-    --spacing-md: 1rem;
-    --spacing-lg: 1.5rem;
-    --spacing-xl: 2rem;
-    --spacing-2xl: 3rem;
 
     /* Fine-grained spacing scale (2px steps) for card/list-level padding,
        margins and gaps that fall between the t-shirt sizes above.
        Ties round up; --space-4/8/16/24/32 alias the t-shirt sizes so
        there's one source of truth. */
     --space-2: 2px;
-    --space-4: var(--spacing-xs);
+    --space-4: var(--space-4);
     --space-6: 6px;
-    --space-8: var(--spacing-sm);
+    --space-8: var(--space-8);
     --space-10: 10px;
     --space-12: 12px;
     --space-14: 14px;
-    --space-16: var(--spacing-md);
+    --space-16: var(--space-16);
     --space-18: 18px;
     --space-20: 20px;
     --space-22: 22px;
-    --space-24: var(--spacing-lg);
+    --space-24: var(--space-24);
     --space-26: 26px;
     --space-28: 28px;
-    --space-32: var(--spacing-xl);
+    --space-32: var(--space-32);
     --space-36: 36px;
     --space-40: 40px;
     --space-44: 44px;
+    --space-48: 48px;
     --space-64: 64px;
     --space-80: 80px;
 
@@ -359,7 +354,7 @@ h5 { font-size: var(--font-size-xl); }
 h6 { font-size: var(--font-size-lg); }
 
 p {
-    margin-bottom: var(--spacing-md);
+    margin-bottom: var(--space-16);
     color: var(--text);
 }
 
@@ -386,7 +381,7 @@ small {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: var(--spacing-sm) var(--spacing-md);
+    padding: var(--space-8) var(--space-16);
     font-size: var(--font-size-base);
     font-weight: var(--font-weight-medium);
     border-radius: var(--radius-md);
@@ -478,7 +473,7 @@ small {
     gap: var(--space-10);
     padding-right: 16px;
     border-right: 1px solid var(--border);
-    margin-right: var(--spacing-xs);
+    margin-right: var(--space-4);
     flex-shrink: 0;
 }
 
@@ -584,7 +579,7 @@ small {
     justify-content: center;
     width: 36px;
     height: 36px;
-    margin: auto var(--spacing-xs);
+    margin: auto var(--space-4);
     border-radius: var(--radius-md);
     background: var(--surface-2);
     border: 1px solid var(--border);
@@ -601,7 +596,7 @@ small {
     justify-content: center;
     width: 36px;
     height: 36px;
-    margin: auto 0 auto var(--spacing-xs);
+    margin: auto 0 auto var(--space-4);
     border-radius: 50%;
     background: var(--surface-2);
     color: var(--ink-2);
@@ -617,7 +612,7 @@ small {
     .app-bar {
         height: auto;
         flex-wrap: wrap;
-        padding: 0 var(--spacing-md);
+        padding: 0 var(--space-16);
         align-items: center;
     }
 
@@ -668,7 +663,7 @@ small {
     max-width: 1200px;
     margin-left: auto;
     margin-right: auto;
-    padding: var(--spacing-xl) var(--spacing-lg) 4rem;
+    padding: var(--space-32) var(--space-24) 4rem;
 }
 
 /* Tab eyebrow (small uppercase label above heading) */
@@ -691,7 +686,7 @@ small {
     font: 700 46px/1 'Space Grotesk', 'Inter', sans-serif;
     letter-spacing: -0.032em;
     color: var(--text);
-    margin: 0 0 var(--spacing-xl);
+    margin: 0 0 var(--space-32);
 }
 
 /* Chip buttons (filter pills) */
@@ -727,12 +722,12 @@ small {
 
 .hero-content h1 {
     font-size: var(--font-size-3xl);
-    margin: 0 0 var(--spacing-sm) 0;
+    margin: 0 0 var(--space-8) 0;
     font-weight: var(--font-weight-bold);
 }
 
 .hero-content h1 i {
-    margin-right: var(--spacing-sm);
+    margin-right: var(--space-8);
     color: var(--primary);
 }
 
@@ -797,7 +792,7 @@ small {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: var(--spacing-sm);
+    gap: var(--space-8);
     margin-bottom: var(--space-14);
 }
 
@@ -824,7 +819,7 @@ small {
 .recent-list {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-sm);
+    gap: var(--space-8);
     list-style: none;
     margin: 0;
     padding: 0;
@@ -901,8 +896,8 @@ small {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-sm) var(--spacing-md);
+    gap: var(--space-8);
+    padding: var(--space-8) var(--space-16);
     font-size: var(--font-size-base);
     font-weight: var(--font-weight-semibold);
     border-radius: var(--radius-md);
@@ -929,7 +924,7 @@ small {
 
 .patient-hero-block {
     padding-bottom: 0;
-    margin-bottom: var(--spacing-xl);
+    margin-bottom: var(--space-32);
 }
 
 .patient-header {
@@ -953,7 +948,7 @@ small {
 .patient-meta {
     display: flex;
     align-items: center;
-    gap: var(--spacing-sm);
+    gap: var(--space-8);
     flex-wrap: wrap;
 }
 
@@ -1011,7 +1006,7 @@ small {
     letter-spacing: 0.08em;
     color: var(--ink-3);
     text-transform: uppercase;
-    margin-top: var(--spacing-sm);
+    margin-top: var(--space-8);
     display: block;
 }
 .stat-pill-label.accent { color: var(--primary); }
@@ -1081,7 +1076,7 @@ small {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: var(--spacing-lg);
+    padding: var(--space-24);
     color: var(--ink-3);
 }
 .history-loading[hidden] { display: none; }
@@ -1103,7 +1098,7 @@ small {
     display: grid;
     grid-template-columns: 14px minmax(0, 1fr);
     gap: var(--space-14);
-    margin-bottom: var(--spacing-xs);
+    margin-bottom: var(--space-4);
 }
 
 .history-rail-dot {
@@ -1139,7 +1134,7 @@ small {
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     padding: var(--space-12) var(--space-14);
-    margin-bottom: var(--spacing-sm);
+    margin-bottom: var(--space-8);
     cursor: pointer;
     color: inherit;
     transition: border-color var(--transition-fast);
@@ -1238,8 +1233,8 @@ button.stat-pill {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-sm) var(--spacing-md);
+    gap: var(--space-8);
+    padding: var(--space-8) var(--space-16);
     font-size: var(--font-size-base);
     font-weight: var(--font-weight-medium);
     border-radius: var(--radius-md);
@@ -1265,8 +1260,8 @@ button.stat-pill {
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
-    gap: var(--spacing-lg);
-    margin-bottom: var(--spacing-xl);
+    gap: var(--space-24);
+    margin-bottom: var(--space-32);
     flex-wrap: wrap;
 }
 
@@ -1285,7 +1280,7 @@ button.stat-pill {
     font: 700 38px/1 'Space Grotesk', 'Inter', sans-serif;
     letter-spacing: -0.025em;
     color: var(--text);
-    margin: 0 0 var(--spacing-sm);
+    margin: 0 0 var(--space-8);
 }
 
 .tab-sub {
@@ -1304,7 +1299,7 @@ select {
     background: var(--card-bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    padding: var(--spacing-sm);
+    padding: var(--space-8);
     color: var(--text);
     cursor: pointer;
 }
@@ -1312,13 +1307,13 @@ select {
 /* Analyses grid — masonry via CSS columns */
 .analyses-grid {
     columns: 2 420px;
-    column-gap: var(--spacing-md);
-    margin-bottom: calc(-1 * var(--spacing-md));
+    column-gap: var(--space-16);
+    margin-bottom: calc(-1 * var(--space-16));
 }
 
 .analyses-grid > * {
     break-inside: avoid;
-    margin-bottom: var(--spacing-md);
+    margin-bottom: var(--space-16);
 }
 
 @media (max-width: 600px) {
@@ -1336,7 +1331,7 @@ select {
     color: var(--ink-3);
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    margin: var(--spacing-sm) 0 var(--space-4);
+    margin: var(--space-8) 0 var(--space-4);
 }
 .lab-section-heading:first-child { margin-top: 0; }
 
@@ -1345,10 +1340,10 @@ select {
     border-collapse: collapse;
     table-layout: fixed;
     font-size: var(--font-size-xs);
-    margin-bottom: var(--spacing-sm);
+    margin-bottom: var(--space-8);
 }
 .lab-result-table td {
-    padding: var(--space-4) var(--spacing-xs);
+    padding: var(--space-4) var(--space-4);
     border-bottom: 1px solid var(--border);
     vertical-align: middle;
 }
@@ -1381,23 +1376,23 @@ select {
     font: var(--font-weight-bold) 9px 'Inter', sans-serif;
     padding: var(--space-2) var(--space-4);
     border-radius: var(--radius-xs);
-    margin-left: var(--spacing-xs);
+    margin-left: var(--space-4);
     vertical-align: middle;
 }
 .lab-flag-h { background: color-mix(in srgb, var(--danger, #dc2626) 15%, transparent); color: var(--danger, #dc2626); }
 .lab-flag-l { background: color-mix(in srgb, var(--primary) 15%, transparent); color: var(--primary); }
 
 #trendsSection {
-    margin-top: var(--spacing-xl);
-    padding-top: var(--spacing-xl);
+    margin-top: var(--space-32);
+    padding-top: var(--space-32);
     border-top: 1px solid var(--border);
 }
 
 .trends-header {
     display: flex;
     align-items: baseline;
-    gap: var(--spacing-md);
-    margin-bottom: var(--spacing-md);
+    gap: var(--space-16);
+    margin-bottom: var(--space-16);
 }
 
 .trends-header h2 {
@@ -1428,7 +1423,7 @@ select {
 
 .trends-table th,
 .trends-table td {
-    padding: var(--spacing-xs) var(--spacing-sm);
+    padding: var(--space-4) var(--space-8);
     text-align: left;
     border-bottom: 1px solid var(--border);
     white-space: nowrap;
@@ -1632,7 +1627,7 @@ select {
     color: var(--ink-3);
     display: flex;
     align-items: center;
-    gap: var(--spacing-xs);
+    gap: var(--space-4);
     white-space: nowrap;
     overflow: hidden;
 }
@@ -1645,7 +1640,7 @@ select {
     display: flex;
     align-items: center;
     gap: var(--space-6);
-    margin-top: var(--spacing-xs);
+    margin-top: var(--space-4);
     font: 500 12.5px 'Inter', sans-serif;
     color: var(--ink-2);
 }
@@ -1686,8 +1681,8 @@ select {
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
-    gap: var(--spacing-lg);
-    margin-bottom: var(--spacing-xl);
+    gap: var(--space-24);
+    margin-bottom: var(--space-32);
     flex-wrap: wrap;
     max-width: 780px;
     margin-left: auto;
@@ -1706,7 +1701,7 @@ select {
     margin-right: auto;
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-xl);
+    gap: var(--space-32);
 }
 .report-card[hidden] { display: none; }
 
@@ -1883,8 +1878,8 @@ select {
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-bold);
     color: var(--ink-1);
-    margin: var(--spacing-md) 0 var(--spacing-xs);
-    padding-bottom: var(--spacing-xs);
+    margin: var(--space-16) 0 var(--space-4);
+    padding-bottom: var(--space-4);
     border-bottom: 1px solid var(--border);
 }
 .series-result-title:first-child {
@@ -1895,7 +1890,7 @@ select {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: var(--spacing-sm);
+    padding: var(--space-8);
     color: var(--ink-3);
 }
 .report-loading[hidden] { display: none; }
@@ -1906,7 +1901,7 @@ select {
     align-items: center;
     justify-content: flex-end;
     gap: var(--space-6);
-    margin-top: var(--spacing-xs);
+    margin-top: var(--space-4);
     font: 500 12px 'Inter', sans-serif;
     color: var(--ink-3);
 }
@@ -1929,19 +1924,19 @@ select {
     font-weight: var(--font-weight-semibold);
     color: var(--primary);
     border-bottom: 1px solid var(--border);
-    padding-bottom: var(--spacing-xs);
-    margin: 0.75rem 0 var(--spacing-sm);
+    padding-bottom: var(--space-4);
+    margin: 0.75rem 0 var(--space-8);
 }
 .study-title:first-child { margin-top: 0; }
 
 .imaging-study-link {
-    margin-top: var(--spacing-sm);
+    margin-top: var(--space-8);
 }
 
 .imaging-study-link a {
     display: inline-flex;
     align-items: center;
-    gap: var(--spacing-sm);
+    gap: var(--space-8);
     color: var(--primary);
     text-decoration: none;
     font-weight: var(--font-weight-medium);
@@ -1955,25 +1950,25 @@ select {
 /* Inline error message (search tab) */
 .error {
     display: none;
-    padding: var(--spacing-sm) var(--spacing-md);
+    padding: var(--space-8) var(--space-16);
     background: color-mix(in srgb, var(--danger) 10%, transparent);
     border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
     border-radius: var(--radius-md);
     color: var(--danger);
-    margin-top: var(--spacing-md);
+    margin-top: var(--space-16);
 }
 
 /* No-data placeholder */
 .no-data {
     display: none;
-    padding: var(--spacing-2xl) var(--spacing-md);
+    padding: var(--space-48) var(--space-16);
     color: var(--text-light);
     text-align: center;
 }
 
 .no-data i {
     display: block;
-    margin-bottom: var(--spacing-md);
+    margin-bottom: var(--space-16);
     opacity: 0.4;
 }
 
@@ -1986,7 +1981,7 @@ select {
 .markdown-content {
     background: var(--card-bg);
     border-radius: var(--radius-lg);
-    padding: var(--spacing-xl);
+    padding: var(--space-32);
     line-height: 1.75;
     color: var(--text);
 }
@@ -1996,8 +1991,8 @@ select {
     font-weight: var(--font-weight-bold);
     color: var(--primary);
     border-bottom: 2px solid var(--border);
-    padding-bottom: var(--spacing-sm);
-    margin-bottom: var(--spacing-lg);
+    padding-bottom: var(--space-8);
+    margin-bottom: var(--space-24);
     margin-top: 0;
 }
 
@@ -2007,16 +2002,16 @@ select {
     color: var(--text);
     border-left: 3px solid var(--primary);
     padding-left: 0.75rem;
-    margin-top: var(--spacing-xl);
-    margin-bottom: var(--spacing-md);
+    margin-top: var(--space-32);
+    margin-bottom: var(--space-16);
 }
 
 .markdown-content h3 {
     font-size: var(--font-size-lg);
     font-weight: var(--font-weight-semibold);
     color: var(--text-light);
-    margin-top: var(--spacing-lg);
-    margin-bottom: var(--spacing-sm);
+    margin-top: var(--space-24);
+    margin-bottom: var(--space-8);
 }
 
 .markdown-content p {
@@ -2034,23 +2029,23 @@ select {
 
 .markdown-content ul,
 .markdown-content ol {
-    margin: var(--spacing-sm) 0 var(--spacing-md) var(--spacing-lg);
+    margin: var(--space-8) 0 var(--space-16) var(--space-24);
 }
 
 .markdown-content li {
-    margin-bottom: var(--spacing-xs);
+    margin-bottom: var(--space-4);
 }
 
 .markdown-content hr {
     border: none;
     border-top: 1px solid var(--border);
-    margin: var(--spacing-lg) 0;
+    margin: var(--space-24) 0;
 }
 
 .markdown-content blockquote {
     border-left: 4px solid var(--primary-light);
-    padding: var(--spacing-sm) var(--spacing-md);
-    margin: var(--spacing-md) 0;
+    padding: var(--space-8) var(--space-16);
+    margin: var(--space-16) 0;
     background: var(--bg);
     border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
     color: var(--text-light);
@@ -2068,9 +2063,9 @@ select {
     background: var(--bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    padding: var(--spacing-md);
+    padding: var(--space-16);
     overflow-x: auto;
-    margin: var(--spacing-md) 0;
+    margin: var(--space-16) 0;
 }
 
 .markdown-content pre code {
@@ -2082,7 +2077,7 @@ select {
 .markdown-content table {
     width: 100%;
     border-collapse: collapse;
-    margin: var(--spacing-md) 0;
+    margin: var(--space-16) 0;
     font-size: var(--font-size-sm);
 }
 
@@ -2090,12 +2085,12 @@ select {
     background: var(--bg);
     font-weight: var(--font-weight-semibold);
     text-align: left;
-    padding: var(--spacing-sm) 0.75rem;
+    padding: var(--space-8) 0.75rem;
     border: 1px solid var(--border);
 }
 
 .markdown-content td {
-    padding: var(--spacing-sm) 0.75rem;
+    padding: var(--space-8) 0.75rem;
     border: 1px solid var(--border);
 }
 
@@ -2107,7 +2102,7 @@ select {
 .footer {
     background: var(--card-bg);
     border-top: 1px solid var(--border);
-    padding: var(--spacing-md) 0;
+    padding: var(--space-16) 0;
     margin-top: auto;
 }
 
@@ -2115,17 +2110,17 @@ select {
 .toast-container {
     position: fixed;
     /* sit below the sticky header so toasts never overlap the brand/nav */
-    top: calc(var(--header-height) + var(--spacing-sm));
-    right: var(--spacing-lg);
+    top: calc(var(--header-height) + var(--space-8));
+    right: var(--space-24);
     z-index: var(--z-toast);
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-sm);
+    gap: var(--space-8);
     max-width: 350px;
 }
 
 .toast {
-    padding: var(--spacing-sm) var(--spacing-md);
+    padding: var(--space-8) var(--space-16);
     border-radius: var(--radius-md);
     color: var(--on-solid);
     box-shadow: var(--shadow-lg);
@@ -2138,7 +2133,7 @@ select {
 }
 
 .toast i {
-    margin-right: var(--spacing-sm);
+    margin-right: var(--space-8);
     font-size: var(--font-size-base);
 }
 
@@ -2179,7 +2174,7 @@ select {
     background: var(--card-bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    padding: var(--spacing-xl);
+    padding: var(--space-32);
     text-align: center;
     box-shadow: var(--shadow-lg);
 }
@@ -2191,7 +2186,7 @@ select {
     border-top-color: var(--primary);
     border-radius: var(--radius-full);
     animation: spin 1s linear infinite;
-    margin: 0 auto var(--spacing-md);
+    margin: 0 auto var(--space-16);
 }
 
 @keyframes spin {
@@ -2218,12 +2213,12 @@ select {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--spacing-md);
+    gap: var(--space-16);
     text-align: center;
     max-width: 360px;
     background: var(--card-bg);
     border-radius: var(--radius-lg);
-    padding: var(--spacing-xl);
+    padding: var(--space-32);
     box-shadow: var(--shadow-modal);
 }
 .loading-error i {
@@ -2238,8 +2233,8 @@ select {
 }
 
 .report-modal-error {
-    margin: 0 var(--spacing-lg) var(--spacing-md);
-    padding: var(--spacing-sm) var(--spacing-md);
+    margin: 0 var(--space-24) var(--space-16);
+    padding: var(--space-8) var(--space-16);
     background: color-mix(in srgb, var(--urgent) 8%, transparent);
     border-left: 3px solid var(--urgent);
     border-radius: var(--radius-sm);
@@ -2250,7 +2245,7 @@ select {
 /* Responsive Design */
 @media (max-width: 1024px) {
     .patient-stats-strip {
-        gap: var(--spacing-md);
+        gap: var(--space-16);
     }
 }
 
@@ -2276,9 +2271,9 @@ select {
        looking wrong on a full-width container */
     .toast-container {
         top: auto;
-        bottom: var(--spacing-lg);
-        right: var(--spacing-sm);
-        left: var(--spacing-sm);
+        bottom: var(--space-24);
+        right: var(--space-8);
+        left: var(--space-8);
         max-width: none;
     }
 
@@ -2314,7 +2309,7 @@ select {
     .patient-stats-strip {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
-        gap: var(--spacing-md);
+        gap: var(--space-16);
     }
 
     .stat-pill-value {
@@ -2347,7 +2342,7 @@ select {
     }
 
     .btn-secondary {
-        padding: var(--spacing-md) var(--spacing-lg);
+        padding: var(--space-16) var(--space-24);
     }
 
     /* Schedule header: hide dash separator between dates when stacked */
@@ -2363,7 +2358,7 @@ select {
     }
 
     .schedule-filters {
-        gap: var(--spacing-xs);
+        gap: var(--space-4);
         flex-wrap: wrap;
     }
     .schedule-filters-spacer { display: none; }
@@ -2391,7 +2386,7 @@ select {
 /* ── AI tab ──────────────────────────────────────────────────────────── */
 .ai-header-actions {
     display: flex;
-    gap: var(--spacing-sm);
+    gap: var(--space-8);
     flex-shrink: 0;
     flex-wrap: wrap;
 }
@@ -2401,7 +2396,7 @@ select {
    be mistaken for schema-checked output. */
 .ai-summary-card {
     max-width: 780px;
-    margin: 0 auto var(--spacing-xl);
+    margin: 0 auto var(--space-32);
     padding: var(--space-20) var(--space-24);
     background: var(--card-bg);
     border: 1px solid color-mix(in srgb, var(--warning, #d97706) 35%, var(--border));
@@ -2461,7 +2456,7 @@ select {
     margin: 0 auto;
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-xl);
+    gap: var(--space-32);
 }
 .ai-results[hidden] { display: none; }
 
@@ -2586,7 +2581,7 @@ select {
     justify-content: space-between;
     gap: var(--space-20);
     flex-wrap: wrap;
-    margin-bottom: var(--spacing-xl);
+    margin-bottom: var(--space-32);
 }
 /* schedule eyebrow now uses shared .tab-eyebrow */
 
@@ -2600,7 +2595,7 @@ select {
 .schedule-hero-sub {
     font: 500 14px/1.5 'Inter', sans-serif;
     color: var(--ink-2);
-    margin-top: var(--spacing-sm);
+    margin-top: var(--space-8);
     margin-bottom: 0;
 }
 
@@ -2628,7 +2623,7 @@ select {
     letter-spacing: 0.08em;
     color: var(--ink-3);
     text-transform: uppercase;
-    margin-top: var(--spacing-sm);
+    margin-top: var(--space-8);
 }
 
 /* Modality progress bars */
@@ -2685,9 +2680,9 @@ select {
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--text-light);
-    padding: var(--spacing-sm) 0 var(--spacing-xs);
+    padding: var(--space-8) 0 var(--space-4);
     border-bottom: 1px solid var(--border);
-    margin-bottom: var(--spacing-md);
+    margin-bottom: var(--space-16);
 }
 
 .timeline-row {
@@ -2735,7 +2730,7 @@ select {
     margin-bottom: var(--space-12);
     display: flex;
     align-items: center;
-    gap: var(--spacing-md);
+    gap: var(--space-16);
     background: var(--card-bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-xl);
@@ -2808,7 +2803,7 @@ select {
     margin-top: var(--space-6);
     display: flex;
     align-items: center;
-    gap: var(--spacing-sm);
+    gap: var(--space-8);
     white-space: nowrap;
     overflow: hidden;
 }
@@ -2870,12 +2865,12 @@ select {
 @media (max-width: 600px) {
     .timeline-row {
         grid-template-columns: 1fr;
-        gap: var(--spacing-xs);
+        gap: var(--space-4);
     }
     .timeline-time-col {
         flex-direction: row;
         align-items: center;
-        gap: var(--spacing-sm);
+        gap: var(--space-8);
         padding-top: 8px;
     }
     .timeline-time { padding-top: 0; font-size: 13px; }
@@ -2889,13 +2884,13 @@ select {
 .schedule-actions {
     display: flex;
     align-items: center;
-    gap: var(--spacing-sm);
+    gap: var(--space-8);
     flex-wrap: wrap;
-    padding: var(--spacing-sm) var(--spacing-md);
+    padding: var(--space-8) var(--space-16);
     background: var(--card-bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    margin-bottom: var(--spacing-sm);
+    margin-bottom: var(--space-8);
 }
 
 /* Keep the refresh button compact — never let it go full-width */
@@ -2908,7 +2903,7 @@ select {
 .schedule-filters {
     display: flex;
     align-items: center;
-    gap: var(--spacing-sm);
+    gap: var(--space-8);
     flex-wrap: wrap;
     margin-bottom: var(--space-28);
 }
@@ -2921,7 +2916,7 @@ select {
 .schedule-ward-pill {
     display: flex;
     align-items: center;
-    gap: var(--spacing-sm);
+    gap: var(--space-8);
     background: var(--card-bg);
     border: 1px solid var(--line-2);
     border-radius: var(--radius-md);
@@ -2944,7 +2939,7 @@ select {
 
 .schedule-filter-select {
     font-size: var(--font-size-sm);
-    padding: var(--spacing-xs) var(--spacing-sm);
+    padding: var(--space-4) var(--space-8);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     background: var(--card-bg);
@@ -2955,7 +2950,7 @@ select {
 
 .schedule-date-input {
     font-size: var(--font-size-sm);
-    padding: var(--spacing-xs) var(--spacing-sm);
+    padding: var(--space-4) var(--space-8);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     background: var(--card-bg);
@@ -2975,7 +2970,7 @@ select {
 
 .schedule-filter-input {
     font-size: var(--font-size-sm);
-    padding: var(--spacing-xs) var(--spacing-sm);
+    padding: var(--space-4) var(--space-8);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     background: var(--card-bg);
@@ -2999,8 +2994,8 @@ select {
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
-    gap: var(--spacing-lg);
-    margin-bottom: var(--spacing-xl);
+    gap: var(--space-24);
+    margin-bottom: var(--space-32);
     flex-wrap: wrap;
 }
 
@@ -3025,7 +3020,7 @@ select {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--spacing-md);
+    gap: var(--space-16);
     width: 100%;
     background: none;
     border: none;
@@ -3095,7 +3090,7 @@ select {
 .epi-copy-btn[hidden] { display: none; }
 
 .epi-card-inner {
-    padding: 0 var(--spacing-lg) var(--spacing-lg);
+    padding: 0 var(--space-24) var(--space-24);
     border-top: 1px solid var(--border);
 }
 
@@ -3113,7 +3108,7 @@ select {
 .epi-card-toolbar {
     display: flex;
     justify-content: flex-end;
-    padding: var(--spacing-sm) 0 0;
+    padding: var(--space-8) 0 0;
 }
 .epi-prose--empty {
     border-left: none;
@@ -3129,7 +3124,7 @@ select {
 /* ── Report modal (schedule request detail) ───────────────────────────── */
 
 dialog.patient-select-dialog {
-    padding: var(--spacing-lg);
+    padding: var(--space-24);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     background: var(--card-bg);
@@ -3190,8 +3185,8 @@ dialog.modal article > header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--spacing-md);
-    padding: var(--spacing-md) var(--spacing-lg);
+    gap: var(--space-16);
+    padding: var(--space-16) var(--space-24);
     border-bottom: 1px solid var(--border);
     background: linear-gradient(180deg,
         color-mix(in srgb, var(--primary) 6%, var(--card-bg)),
@@ -3205,7 +3200,7 @@ dialog.modal article > header h2 {
     font-weight: var(--font-weight-semibold);
     display: flex;
     align-items: center;
-    gap: var(--spacing-sm);
+    gap: var(--space-8);
 }
 
 dialog.modal article > header h2 i { color: var(--primary); }
@@ -3216,7 +3211,7 @@ dialog.modal .close {
     cursor: pointer;
     color: var(--text-light);
     font-size: var(--font-size-lg);
-    padding: var(--spacing-xs);
+    padding: var(--space-4);
     border-radius: var(--radius-sm);
     line-height: 1;
     transition: color var(--transition-fast), background var(--transition-fast);
@@ -3228,7 +3223,7 @@ dialog.modal .close:hover { color: var(--text); background: var(--hover-bg); }
 dialog.modal article > div {
     flex: 1;
     overflow-y: auto;
-    padding: var(--spacing-lg);
+    padding: var(--space-24);
     font-size: var(--font-size-sm);
     line-height: 1.65;
 }
@@ -3236,8 +3231,8 @@ dialog.modal article > div {
 dialog.modal article > footer {
     display: flex;
     justify-content: flex-end;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-md) var(--spacing-lg);
+    gap: var(--space-8);
+    padding: var(--space-16) var(--space-24);
     border-top: 1px solid var(--border);
     background: var(--bg);
     flex-shrink: 0;
@@ -3248,8 +3243,8 @@ dialog.modal article > footer {
 .user-modal-identity {
     display: flex;
     align-items: center;
-    gap: var(--spacing-md);
-    margin-bottom: var(--spacing-lg);
+    gap: var(--space-16);
+    margin-bottom: var(--space-24);
 }
 
 .user-modal-avatar {
@@ -3275,7 +3270,7 @@ dialog.modal article > footer {
 .user-modal-details {
     display: grid;
     grid-template-columns: auto 1fr;
-    gap: var(--spacing-xs) var(--spacing-md);
+    gap: var(--space-4) var(--space-16);
     margin: 0;
 }
 
@@ -3295,7 +3290,7 @@ dialog.modal article > footer {
 }
 
 .report-modal-header {
-    padding: var(--spacing-lg) var(--spacing-lg) var(--spacing-md);
+    padding: var(--space-24) var(--space-24) var(--space-16);
     border-bottom: 1px solid var(--border);
     background: linear-gradient(180deg,
         color-mix(in srgb, var(--primary) 6%, var(--card-bg)),
@@ -3307,14 +3302,14 @@ dialog.modal article > footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--spacing-md);
-    margin-bottom: var(--spacing-sm);
+    gap: var(--space-16);
+    margin-bottom: var(--space-8);
 }
 
 .report-modal-identity {
     display: flex;
     align-items: center;
-    gap: var(--spacing-md);
+    gap: var(--space-16);
     flex: 1;
     min-width: 0;
 }
@@ -3342,7 +3337,7 @@ dialog.modal article > footer {
     cursor: pointer;
     color: var(--text-light);
     font-size: var(--font-size-lg);
-    padding: var(--spacing-xs);
+    padding: var(--space-4);
     border-radius: var(--radius-sm);
     line-height: 1;
     transition: color var(--transition-fast), background var(--transition-fast);
@@ -3354,7 +3349,7 @@ dialog.modal article > footer {
 .report-modal-referrer {
     display: flex;
     align-items: center;
-    gap: var(--spacing-xs);
+    gap: var(--space-4);
     font-size: var(--font-size-xs);
     color: var(--ink-3);
     margin: var(--space-2) 0 0;
@@ -3363,12 +3358,12 @@ dialog.modal article > footer {
 .report-modal-indication {
     font-size: var(--font-size-sm);
     color: var(--ink-2);
-    margin: var(--spacing-xs) 0 0;
+    margin: var(--space-4) 0 0;
 }
 
 .report-modal-indication .modal-indication-label {
     font-weight: var(--font-weight-semibold);
-    margin-right: var(--spacing-xs);
+    margin-right: var(--space-4);
 }
 
 .report-modal-indication em { font-style: italic; }
@@ -3376,7 +3371,7 @@ dialog.modal article > footer {
 .report-modal-body {
     flex: 1;
     overflow-y: auto;
-    padding: var(--spacing-md) var(--spacing-lg);
+    padding: var(--space-16) var(--space-24);
     font-size: var(--font-size-sm);
     line-height: 1.7;
     color: var(--text);
@@ -3394,19 +3389,19 @@ dialog.modal article > footer {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: var(--spacing-xs);
-    margin: var(--spacing-xs) 0 0;
+    gap: var(--space-4);
+    margin: var(--space-4) 0 0;
     font-size: var(--font-size-xs);
     color: var(--ink-3);
 }
 
 .report-modal-footer {
-    padding: var(--spacing-md) var(--spacing-lg);
+    padding: var(--space-16) var(--space-24);
     border-top: 1px solid var(--border);
     background: var(--bg);
     display: flex;
     justify-content: flex-end;
-    gap: var(--spacing-sm);
+    gap: var(--space-8);
     flex-shrink: 0;
 }
 
@@ -3430,7 +3425,7 @@ dialog.modal article > footer {
     }
 
     .report-modal-body {
-        padding: var(--spacing-sm) var(--spacing-md);
+        padding: var(--space-8) var(--space-16);
     }
 }
 
@@ -3475,7 +3470,7 @@ dialog.report-modal[open]::backdrop {
     backdrop-filter: blur(4px);
 }
 .login-dialog-header {
-    padding: var(--spacing-lg) var(--spacing-lg) var(--spacing-sm);
+    padding: var(--space-24) var(--space-24) var(--space-8);
     border-bottom: 1px solid var(--border);
 }
 .login-dialog-header h2 {
@@ -3484,13 +3479,13 @@ dialog.report-modal[open]::backdrop {
     font-weight: var(--font-weight-semibold);
     display: flex;
     align-items: center;
-    gap: var(--spacing-sm);
+    gap: var(--space-8);
 }
 .login-dialog-body {
-    padding: var(--spacing-lg);
+    padding: var(--space-24);
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-md);
+    gap: var(--space-16);
 }
 .login-msg {
     margin: 0;
@@ -3501,7 +3496,7 @@ dialog.report-modal[open]::backdrop {
 .form-field {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-xs);
+    gap: var(--space-4);
 }
 .form-field label {
     font-size: var(--font-size-sm);
@@ -3509,7 +3504,7 @@ dialog.report-modal[open]::backdrop {
     color: var(--muted);
 }
 .form-field input {
-    padding: var(--spacing-sm) var(--spacing-md);
+    padding: var(--space-8) var(--space-16);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     background: var(--surface-2);
@@ -3526,7 +3521,7 @@ dialog.report-modal[open]::backdrop {
     font-weight: var(--font-weight-medium);
 }
 .login-dialog-footer {
-    padding: var(--spacing-sm) var(--spacing-lg) var(--spacing-lg);
+    padding: var(--space-8) var(--space-24) var(--space-24);
     display: flex;
     justify-content: flex-end;
 }
@@ -3535,16 +3530,16 @@ dialog.report-modal[open]::backdrop {
 .qr-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: var(--spacing-md);
+    gap: var(--space-16);
 }
 .qr-cell {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--spacing-xs);
+    gap: var(--space-4);
     background: var(--card-bg);
     border-radius: var(--radius-lg);
-    padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-md);
+    padding: var(--space-8) var(--space-8) var(--space-16);
     box-shadow: var(--shadow-qr);
     min-width: 0;
 }
@@ -3575,7 +3570,7 @@ dialog.report-editor-modal article > header p.editor-report-date {
 }
 
 dialog.report-editor-modal article > section {
-    padding: var(--spacing-md) var(--spacing-lg);
+    padding: var(--space-16) var(--space-24);
     overflow-y: auto;
     flex: 1;
 }
@@ -3587,7 +3582,7 @@ dialog.report-editor-modal article > section {
     font-family: inherit;
     font-size: var(--font-size-sm);
     line-height: 1.6;
-    padding: var(--spacing-sm) var(--spacing-md);
+    padding: var(--space-8) var(--space-16);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     background: var(--bg);
@@ -3602,29 +3597,29 @@ dialog.report-editor-modal article > section {
 }
 
 .editor-error {
-    margin: var(--spacing-sm) 0 0;
+    margin: var(--space-8) 0 0;
     color: var(--danger, #c0392b);
     font-size: var(--font-size-sm);
 }
 
 .editor-analysis + .editor-analysis {
-    margin-top: var(--spacing-md);
+    margin-top: var(--space-16);
 }
 
 .editor-analysis-label {
     display: block;
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-semibold);
-    margin-bottom: var(--spacing-xs);
+    margin-bottom: var(--space-4);
     color: var(--text-light);
 }
 
 .report-actions {
     display: flex;
     align-items: center;
-    gap: var(--spacing-sm);
-    margin-top: var(--spacing-sm);
-    padding-top: var(--spacing-sm);
+    gap: var(--space-8);
+    margin-top: var(--space-8);
+    padding-top: var(--space-8);
     border-top: 1px solid var(--border);
 }
 
@@ -3632,8 +3627,8 @@ dialog.report-editor-modal article > section {
 .btn-perform-exam:not([hidden]) {
     display: inline-flex;
     align-items: center;
-    gap: var(--spacing-xs);
-    padding: var(--spacing-xs) var(--spacing-md);
+    gap: var(--space-4);
+    padding: var(--space-4) var(--space-16);
     border: 1px solid var(--primary);
     border-radius: var(--radius-md);
     font-size: var(--font-size-sm);
@@ -3670,14 +3665,14 @@ dialog.report-editor-modal article > section {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: var(--spacing-xs);
+    gap: var(--space-4);
     margin-left: auto;
 }
 
 .validate-row {
     display: flex;
     align-items: center;
-    gap: var(--spacing-sm);
+    gap: var(--space-8);
 }
 
 .switch {

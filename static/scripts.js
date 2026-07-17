@@ -979,7 +979,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const meta = [cnp, dob, gender].filter(Boolean).join(' · ');
                 const btn = document.createElement('button');
                 btn.className = 'btn-secondary';
-                btn.style.cssText = 'display:block;width:100%;margin-top:var(--spacing-sm);text-align:left';
+                btn.style.cssText = 'display:block;width:100%;margin-top:var(--space-8);text-align:left';
                 const nameEl = document.createElement('span');
                 nameEl.style.cssText = 'display:block;font-weight:var(--font-weight-semibold)';
                 nameEl.textContent = name;
@@ -996,7 +996,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const cancel = document.createElement('button');
             cancel.className = 'btn-secondary';
-            cancel.style.cssText = 'display:block;width:100%;margin-top:var(--spacing-md)';
+            cancel.style.cssText = 'display:block;width:100%;margin-top:var(--space-16)';
             cancel.textContent = 'Cancel';
             cancel.addEventListener('click', () => dismiss(null));
             dlg.appendChild(cancel);
