@@ -573,7 +573,7 @@ small {
     font: 600 var(--font-size-xs) 'Inter', sans-serif;
     color: var(--primary);
     background: color-mix(in srgb, var(--primary) 10%, transparent);
-    padding: 0 var(--space-12);
+    padding: var(--space-6) var(--space-12);
     border-radius: var(--radius-full);
     border: none;
     cursor: pointer;
