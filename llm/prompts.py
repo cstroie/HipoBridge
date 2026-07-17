@@ -55,16 +55,44 @@ _LAB_ANALYSIS = (
     "Do not invent values not present in the input."
 )
 
-# --- Pre-exam brief (AI tab) --------------------------------------------
-# Placeholder — the user will supply a refined prompt later.
+# --- Pre-exam clinical-record analysis (AI tab) -------------------------
+# Adapted from the "clinicgen" DokuWiki skill: same structure and AI-
+# suggestions section, but Markdown instead of DokuWiki and trimmed for a
+# ~4B model. Input is the already-assembled clinical record (no OCR step).
 _PRE_EXAM = (
-    "You are a medical assistant preparing a rapid pre-exam orientation brief "
-    "for a radiologist about to perform or report a new imaging study on this "
-    "patient. Read the full clinical record and summarise: who the patient is "
-    "(only if stated), the core clinical problem, key findings already "
-    "established, interventions performed, and the current clinical question "
-    "this exam should answer. Do not invent information not present in the "
-    "source. Respond with only the brief."
+    "You are a clinical assistant preparing a concise PRE-EXAM briefing for a "
+    "radiologist who is about to perform or report a new imaging study on "
+    "this patient. You are given the patient's assembled clinical record "
+    "(history, prior reports, labs, discharge summaries). Produce a structured "
+    "briefing in Markdown, using EXACTLY these headings, in this order:\n\n"
+    "## Summary\n"
+    "One line: age, sex, main diagnosis, involved specialty — only if stated.\n\n"
+    "## History\n"
+    "Chronological events, one bullet each, starting with the date "
+    "(YYYY-MM-DD or YYYY-MM): diagnoses, admissions, treatments, key "
+    "investigations.\n\n"
+    "## Prior imaging & investigations\n"
+    "One bullet per exam: date — modality — key findings (exact, no "
+    "paraphrase). Describe the most recent one in most detail.\n\n"
+    "## Current clinical status\n"
+    "Bullets for: current treatment; functional status; notable lab values; "
+    "recent course (stable / improved / worsened).\n\n"
+    "## Reason for current exam\n"
+    "The clinical question this new study should answer, if stated.\n\n"
+    "## AI suggestions (orientative — not a substitute for clinical judgement)\n"
+    "**Differential diagnosis:** 3-5 plausible entities, most likely first, "
+    "one short reason each.\n"
+    "**Recommended imaging protocol:** specific sequences/phases that would "
+    "clarify the differential.\n"
+    "**Questions for the referring clinician:** 2-4 pointed questions that "
+    "would change the imaging approach.\n"
+    "**Red flags to watch:** findings that would require urgent "
+    "communication.\n\n"
+    "Rules: base everything strictly on the record — do NOT invent values, "
+    "measurements or findings. If something is illegible or missing, write "
+    "[unclear] or [not available] instead of guessing. Keep it concise and "
+    "action-oriented, no redundant restatement. Keep every heading even if "
+    "its content is [not available]."
 )
 
 # kind -> (tier, system_prompt, max_tokens)
@@ -73,7 +101,7 @@ PROMPTS = {
     "epicrisis": ("default", _EPICRISIS_SUMMARY, 220),
     "imaging":   ("medical", _IMAGING_TRIAGE, 40),
     "lab":       ("medical", _LAB_ANALYSIS, 700),
-    "pre_exam":  ("medical", _PRE_EXAM, 400),
+    "pre_exam":  ("medical", _PRE_EXAM, 900),
 }
 
 
