@@ -600,7 +600,7 @@ small {
     border-radius: 50%;
     background: var(--surface-2);
     color: var(--ink-2);
-    font-size: 16px;
+    font-size: var(--font-size-base);
     flex-shrink: 0;
     cursor: pointer;
 }
@@ -651,7 +651,7 @@ small {
 @media (max-width: 680px) {
     .brand-wordmark { display: none; }
     #navPatientGroup .nav-btn span { display: none; }
-    #navPatientGroup .nav-btn i { font-size: 14px; }
+    #navPatientGroup .nav-btn i { font-size: var(--font-size-sm); }
 }
 
 
@@ -757,7 +757,7 @@ small {
     flex: 1;
     border: none;
     outline: none;
-    font: 500 16px 'Inter', sans-serif;
+    font: 500 var(--font-size-base) 'Inter', sans-serif;
     color: var(--text);
     background: none;
     min-width: 0;
@@ -766,7 +766,7 @@ small {
 
 .search-submit-btn {
     flex-shrink: 0;
-    font: 600 14px 'Inter', sans-serif;
+    font: 600 var(--font-size-sm) 'Inter', sans-serif;
     color: var(--on-accent);
     background: var(--primary);
     border: none;
@@ -869,7 +869,7 @@ small {
 }
 
 .recent-primary {
-    font: 600 14px 'Inter', sans-serif;
+    font: 600 var(--font-size-sm) 'Inter', sans-serif;
     color: var(--text);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -887,7 +887,7 @@ small {
 
 .recent-arrow {
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--font-size-xs);
     flex-shrink: 0;
 }
 
@@ -1284,13 +1284,13 @@ button.stat-pill {
 }
 
 .tab-sub {
-    font: 500 14px/1.5 'Inter', sans-serif;
+    font: 500 var(--font-size-sm)/1.5 'Inter', sans-serif;
     color: var(--text-light);
     margin: 0;
 }
 
 .analyses-meta {
-    font: 500 14px 'Inter', sans-serif;
+    font: 500 var(--font-size-sm) 'Inter', sans-serif;
     color: var(--text-light);
     margin: 0;
 }
@@ -1623,7 +1623,7 @@ select {
 /* Date + ID in mono below title */
 .card-subtitle {
     margin: var(--space-4) 0 0;
-    font: 500 12px 'JetBrains Mono', monospace;
+    font: 500 var(--font-size-xs) 'JetBrains Mono', monospace;
     color: var(--ink-3);
     display: flex;
     align-items: center;
@@ -1727,29 +1727,29 @@ select {
     display: block;
 }
 .report-field-mono {
-    font: 500 14px 'JetBrains Mono', monospace;
+    font: 500 var(--font-size-sm) 'JetBrains Mono', monospace;
     color: var(--text);
     margin-top: var(--space-4);
 }
 .report-field-value {
-    font: 500 14px 'Inter', sans-serif;
+    font: 500 var(--font-size-sm) 'Inter', sans-serif;
     color: var(--text);
     margin-top: var(--space-4);
 }
 
 /* §2 Current admission */
 .report-section-title {
-    font: 700 16px 'Space Grotesk', 'Inter', sans-serif;
+    font: 700 var(--font-size-base) 'Space Grotesk', 'Inter', sans-serif;
     color: var(--text);
     margin: 0 0 var(--space-14);
 }
 .report-section-title i {
     color: var(--primary);
-    font-size: 14px;
+    font-size: var(--font-size-sm);
     margin-right: var(--space-8);
 }
 .report-admission-period {
-    font: 600 12px 'JetBrains Mono', monospace;
+    font: 600 var(--font-size-xs) 'JetBrains Mono', monospace;
     color: var(--muted);
     margin-bottom: var(--space-10);
 }
@@ -1778,7 +1778,7 @@ select {
     margin-bottom: var(--space-6);
 }
 .report-mod-badge {
-    font: 700 12px 'Space Grotesk', 'Inter', sans-serif;
+    font: 700 var(--font-size-xs) 'Space Grotesk', 'Inter', sans-serif;
     color: var(--mod-color, var(--primary));
     background: color-mix(in srgb, var(--mod-color, var(--primary)) 12%, transparent);
     padding: var(--space-4) var(--space-10);
@@ -1825,7 +1825,7 @@ select {
 .report-imaging-text p:last-child { margin: 0; }
 .report-imaging-text strong { font-weight: 600; color: var(--text); }
 .report-imaging-sig {
-    font: 500 12px 'Inter', sans-serif;
+    font: 500 var(--font-size-xs) 'Inter', sans-serif;
     color: var(--muted);
 }
 .report-imaging-sig i { font-size: 10px; }
@@ -1848,7 +1848,7 @@ select {
 }
 .report-tl-dot.report-tl-dot-accent { background: var(--primary); }
 .report-tl-range {
-    font: 500 12px 'JetBrains Mono', monospace;
+    font: 500 var(--font-size-xs) 'JetBrains Mono', monospace;
     color: var(--muted);
     flex-shrink: 0;
 }
@@ -1902,7 +1902,7 @@ select {
     justify-content: flex-end;
     gap: var(--space-6);
     margin-top: var(--space-4);
-    font: 500 12px 'Inter', sans-serif;
+    font: 500 var(--font-size-xs) 'Inter', sans-serif;
     color: var(--ink-3);
 }
 .report-signed[hidden] { display: none; }
@@ -2431,7 +2431,7 @@ select {
     padding: var(--space-24) var(--space-32);
     border-radius: var(--radius-lg);
     text-align: center;
-    font: 500 14px/1.6 'Inter', sans-serif;
+    font: 500 var(--font-size-sm)/1.6 'Inter', sans-serif;
 }
 .ai-empty-state {
     background: var(--card-bg);
@@ -2482,14 +2482,14 @@ select {
     display: inline-flex;
     align-items: center;
     gap: var(--space-6);
-    font: 700 12px 'Space Grotesk', 'Inter', sans-serif;
+    font: 700 var(--font-size-xs) 'Space Grotesk', 'Inter', sans-serif;
     color: var(--primary);
     background: color-mix(in srgb, var(--primary) 12%, transparent);
     padding: var(--space-4) var(--space-10);
     border-radius: var(--radius-sm);
 }
 .ai-record-date {
-    font: 500 12px 'JetBrains Mono', monospace;
+    font: 500 var(--font-size-xs) 'JetBrains Mono', monospace;
     color: var(--muted);
 }
 .ai-needs-review-badge {
@@ -2534,7 +2534,7 @@ select {
     color: var(--text-light);
 }
 .ai-timeline-date {
-    font: 500 12px 'JetBrains Mono', monospace;
+    font: 500 var(--font-size-xs) 'JetBrains Mono', monospace;
     color: var(--muted);
     flex-shrink: 0;
 }
@@ -2552,7 +2552,7 @@ select {
 }
 .ai-timeline-summary { color: var(--text); }
 .ai-timeline-delta {
-    font: 600 12px 'JetBrains Mono', monospace;
+    font: 600 var(--font-size-xs) 'JetBrains Mono', monospace;
     color: var(--muted);
 }
 .ai-timeline-delta[hidden] { display: none; }
@@ -2593,7 +2593,7 @@ select {
 }
 
 .schedule-hero-sub {
-    font: 500 14px/1.5 'Inter', sans-serif;
+    font: 500 var(--font-size-sm)/1.5 'Inter', sans-serif;
     color: var(--ink-2);
     margin-top: var(--space-8);
     margin-bottom: 0;
@@ -2612,7 +2612,7 @@ select {
 
 .schedule-metric-value {
     display: block;
-    font: 700 48px/0.9 'Space Grotesk', 'Inter', sans-serif;
+    font: 700 var(--font-size-5xl)/0.9 'Space Grotesk', 'Inter', sans-serif;
     letter-spacing: -0.03em;
     font-variant-numeric: tabular-nums;
 }
@@ -2650,7 +2650,7 @@ select {
 }
 
 .schedule-mod-bar-name {
-    font: 600 12px 'Inter', sans-serif;
+    font: 600 var(--font-size-xs) 'Inter', sans-serif;
     color: var(--text);
 }
 
@@ -2798,7 +2798,7 @@ select {
 }
 
 .timeline-card-meta {
-    font: 500 12px 'Inter', sans-serif;
+    font: 500 var(--font-size-xs) 'Inter', sans-serif;
     color: color-mix(in srgb, var(--ink-3) 70%, transparent);
     margin-top: var(--space-6);
     display: flex;
@@ -2837,7 +2837,7 @@ select {
     display: inline-flex;
     align-items: center;
     gap: var(--space-6);
-    font: 600 12px 'Inter', sans-serif;
+    font: 600 var(--font-size-xs) 'Inter', sans-serif;
     padding: var(--space-6) var(--space-14);
     border-radius: var(--radius-full);
     white-space: nowrap;
@@ -2877,7 +2877,7 @@ select {
     .timeline-dot { margin-top: 0; }
     .timeline-line { display: none; }
     .timeline-card { gap: var(--space-12); }
-    .timeline-mod-avatar { width: 40px; height: 40px; font-size: 12px; }
+    .timeline-mod-avatar { width: 40px; height: 40px; font-size: var(--font-size-xs); }
 }
 
 /* Date range + limit + refresh */
@@ -3002,7 +3002,7 @@ select {
 /* epicrisis eyebrow/title now use shared .tab-eyebrow/.tab-title */
 
 .epicrisis-meta {
-    font: 500 14px 'Inter', sans-serif;
+    font: 500 var(--font-size-sm) 'Inter', sans-serif;
     color: var(--text-light);
     margin: 0;
 }
@@ -3049,7 +3049,7 @@ select {
 }
 
 .epi-date-range {
-    font: 600 16px 'Space Grotesk', 'Inter', sans-serif;
+    font: 600 var(--font-size-base) 'Space Grotesk', 'Inter', sans-serif;
     color: var(--text);
 }
 
@@ -3067,7 +3067,7 @@ select {
 }
 
 .epi-icd-badge {
-    font: 600 12px 'Inter', sans-serif;
+    font: 600 var(--font-size-xs) 'Inter', sans-serif;
     color: var(--primary);
     background: color-mix(in srgb, var(--primary) 10%, transparent);
     padding: var(--space-4) var(--space-12);
@@ -3075,13 +3075,13 @@ select {
 }
 
 .epi-nights {
-    font: 500 12px 'Inter', sans-serif;
+    font: 500 var(--font-size-xs) 'Inter', sans-serif;
     color: var(--ink-3);
 }
 
 .epi-chevron {
     color: var(--ink-3);
-    font-size: 12px;
+    font-size: var(--font-size-xs);
 }
 
 /* Body — hidden until open */
