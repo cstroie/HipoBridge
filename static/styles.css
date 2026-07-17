@@ -514,7 +514,7 @@ small {
 /* Nav: all items sit directly in a flex row */
 .app-nav {
     display: flex;
-    align-items: stretch;
+    align-items: center;
     gap: 0;
     min-width: 0;
 }
@@ -526,9 +526,12 @@ small {
     gap: var(--space-8);
     font: 600 var(--font-size-13) 'Inter', sans-serif;
     padding: 0 var(--space-12);
-    height: 100%;
+    height: var(--space-40);
     background: none;
     border: none;
+    /* symmetric transparent top border keeps the label vertically centred
+       (matching the brand) while the bottom border draws the active underline */
+    border-top: 2.5px solid transparent;
     border-bottom: 2.5px solid transparent;
     cursor: pointer;
     color: var(--ink-2);
@@ -555,7 +558,7 @@ small {
 /* Patient context area */
 .patient-nav-area {
     display: flex;
-    align-items: stretch;
+    align-items: center;
     gap: 0;
 }
 .patient-nav-area[hidden] { display: none; }
