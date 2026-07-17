@@ -1721,6 +1721,43 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    // Fetch an ImagingStudy and split its notes into the clinical indication
+    // (the ordering justification) and the actual report body. Mirrors the
+    // separation done in the analyses-tab card so the indication never leaks
+    // into the report text.
+    async function getImagingReportParts(serviceRequestId) {
+        try {
+            const resp = await apiFetch(`/fhir/ImagingStudy/${serviceRequestId}`);
+            if (!resp.ok) return { indication: '', body: '' };
+            const data = await resp.json();
+            const notes = data.note || [];
+            const isIndication = n => n.category?.[0]?.text === 'clinical-indication';
+            const join = arr => arr.map(n => n.text).filter(Boolean).join('\n\n').trim();
+            const indication = join(notes.filter(isIndication));
+            // Report body: non-indication notes, then the same fallback chain
+            // getReportContent uses, so studies that carry findings via
+            // conclusion/presentedForm/result don't silently vanish.
+            let body = join(notes.filter(n => !isIndication(n)));
+            if (!body && data.conclusion) {
+                body = data.conclusion;
+            } else if (!body && data.presentedForm?.length) {
+                const forms = data.presentedForm;
+                const multi = forms.length > 1;
+                body = forms
+                    .filter(f => f.data)
+                    .map(f => multi && f.title ? `##### ${f.title}\n\n${f.data}` : f.data)
+                    .join('\n\n---\n\n')
+                    .trim();
+            } else if (!body && data.result?.length) {
+                body = data.result.filter(r => r.display).map(r => r.display).join('\n\n').trim();
+            }
+            return { indication, body };
+        } catch (error) {
+            console.error(`Error fetching imaging report parts for ${serviceRequestId}:`, error);
+            return { indication: '', body: '' };
+        }
+    }
+
     async function generateEpicrisisMarkdown(patientData) {
         log('Generating epicrisis markdown');
 
@@ -1929,7 +1966,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const MOD_SHORT = { radio: 'XR', ct: 'CT', irm: 'MR', eco: 'US', rads: 'FL' };
             const MOD_VAR   = { radio: '--mod-xr', ct: '--mod-ct', irm: '--mod-mr', eco: '--mod-us', rads: '--mod-fl' };
             // Hoisted so the markdown builder below can reference them
-            let entries = [], reports = [];
+            let entries = [], reports = [], indications = [];
             if (imagingList && analysesData?.entry?.length) {
                 const candidates = [...analysesData.entry]
                     .filter(e => MOD_SHORT[e.resource?.code?.coding?.[0]?.code])
@@ -1938,14 +1975,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 const candidateReports = await limitedMap(candidates, MAX_CONCURRENT_REQUESTS, e => {
                     const sr = e.resource;
-                    return getReportContent(sr.id, sr.code?.coding?.[0]?.code);
+                    return getImagingReportParts(sr.id);
                 });
 
-                // Keep only entries that have actual report text, up to 5
+                // Keep entries that have a report or a clinical indication, up to 5
                 for (let i = 0; i < candidates.length && entries.length < 5; i++) {
-                    if (candidateReports[i]) {
+                    const { body, indication } = candidateReports[i];
+                    if (body || indication) {
                         entries.push(candidates[i]);
-                        reports.push(candidateReports[i]);
+                        reports.push(body);
+                        indications.push(indication);
                     }
                 }
 
@@ -1957,8 +1996,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     const date = sr.authoredOn ? formatDate(sr.authoredOn) : '';
                     const code = sr.identifier?.[0]?.value || sr.id || '';
                     const isUrgent = sr.priority === 'urgent';
-                    const physician = sr.performer?.[0]?.display || '';
+                    const physician = sr.requester?.display || sr.performer?.[0]?.display || '';
                     const reportText = reports[idx] || '';
+                    const indication = indications[idx] || '';
+                    const regions = (sr.bodySite || []).map(b => b.text).filter(Boolean).join(', ');
 
                     const row = document.createElement('div');
                     row.className = 'report-imaging-row';
@@ -1971,15 +2012,36 @@ document.addEventListener('DOMContentLoaded', function() {
                     badge.style.setProperty('--mod-color', `var(${MOD_VAR[mod] || '--accent'})`);
                     badge.textContent = MOD_SHORT[mod] || mod.toUpperCase();
 
-                    const title = document.createElement('span');
-                    title.className = 'report-imaging-title';
-                    title.textContent = desc;
+                    // Title block mirrors the analyses card: name · regions · indication
+                    // on the heading line, exam date + id as the subtitle line.
+                    const titleBlock = document.createElement('hgroup');
+                    titleBlock.className = 'report-imaging-titleblock';
 
-                    const meta = document.createElement('span');
+                    const title = document.createElement('h4');
+                    title.className = 'report-imaging-title';
+                    const name = document.createElement('span');
+                    name.className = 'report-imaging-name';
+                    name.textContent = desc;
+                    title.appendChild(name);
+                    if (regions) {
+                        const reg = document.createElement('span');
+                        reg.className = 'report-imaging-regions';
+                        reg.textContent = ` · ${regions}`;
+                        title.appendChild(reg);
+                    }
+                    if (indication) {
+                        const ind = document.createElement('em');
+                        ind.className = 'report-imaging-indication';
+                        ind.textContent = ` · ${indication}`;
+                        title.appendChild(ind);
+                    }
+
+                    const meta = document.createElement('p');
                     meta.className = 'report-imaging-meta';
                     meta.textContent = [date, code ? '#' + code : ''].filter(Boolean).join(' · ');
 
-                    header.append(badge, title, meta);
+                    titleBlock.append(title, meta);
+                    header.append(badge, titleBlock);
 
                     if (isUrgent) {
                         const urg = document.createElement('span');
@@ -1998,10 +2060,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
 
                     if (physician) {
+                        // Ordering physician (requester) — a doctor glyph, not a
+                        // signature, since this is who ordered the exam, not who
+                        // authored/signed the report.
                         const sig = document.createElement('div');
                         sig.className = 'report-imaging-sig';
+                        sig.setAttribute('aria-label', 'Ordering physician');
                         const sigIcon = document.createElement('i');
-                        sigIcon.className = 'fas fa-signature';
+                        sigIcon.className = 'fas fa-user-doctor';
                         sigIcon.setAttribute('aria-hidden', 'true');
                         sig.appendChild(sigIcon);
                         sig.append(` ${physician}`);
@@ -2092,9 +2158,10 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             let imagingMd = '';
-            if (entries.length) {
+            if (reports.some(Boolean)) {
                 imagingMd = '## Recent Imaging\n\n';
                 entries.forEach((entry, idx) => {
+                    if (!reports[idx]) return; // indication-only, no report to summarise
                     const sr   = entry.resource;
                     const mod  = sr.code?.coding?.[0]?.code || '';
                     const desc = sr.code?.coding?.[0]?.display || MODALITY_INFO[mod]?.label || mod;
@@ -2118,10 +2185,9 @@ document.addEventListener('DOMContentLoaded', function() {
             // it from raw text (confirmed live: an ungrounded small model will
             // confidently fabricate age/sex rather than omit them).
             if (elements.patientReportBlocks) {
-                const typedBlocks = entries.map((entry, idx) => ({
-                    hint_type: 'imaging',
-                    text: reports[idx],
-                }));
+                const typedBlocks = entries
+                    .map((entry, idx) => ({ hint_type: 'imaging', text: reports[idx] }))
+                    .filter(b => b.text);
                 elements.patientReportBlocks.dataset.blocks = JSON.stringify({
                     typed_blocks: typedBlocks,
                     narrative: narrativeParts.join('\n\n'),

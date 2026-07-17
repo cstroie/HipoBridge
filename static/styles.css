@@ -1764,10 +1764,9 @@ select {
 }
 .report-imaging-header {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: var(--space-10);
     margin-bottom: var(--space-6);
-    flex-wrap: wrap;
 }
 .report-mod-badge {
     font: 700 12px 'Space Grotesk', 'Inter', sans-serif;
@@ -1775,15 +1774,30 @@ select {
     background: color-mix(in srgb, var(--mod-color, var(--primary)) 12%, transparent);
     padding: var(--space-4) var(--space-10);
     border-radius: var(--radius-sm);
+    flex-shrink: 0;
+}
+.report-imaging-titleblock {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-width: 0;
+    flex: 1;
 }
 .report-imaging-title {
     font: 600 13px 'Inter', sans-serif;
     color: var(--text);
+    margin: 0;
+}
+.report-imaging-regions { color: var(--text-light); font-weight: 500; }
+.report-imaging-indication {
+    color: var(--muted);
+    font-weight: 400;
+    font-style: italic;
 }
 .report-imaging-meta {
     font: 500 11.5px 'JetBrains Mono', monospace;
     color: var(--muted);
-    margin-left: auto;
+    margin: 0;
 }
 .report-urgent-tag {
     font: 700 9.5px 'Inter', sans-serif;
