@@ -392,9 +392,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Per-card buttons (epicrisis, imaging) are wired at render time.
         wireAiButton(elements.aiReportBtn, 'report',
             () => elements.reportCard, () => getPatientClinicalText());
-        wireAiButton(elements.aiLabBtn, 'lab',
-            () => elements.trendsContainer?.firstChild || null, () => labAiText,
-            { intoAnchorParent: () => elements.trendsContainer, inline: true });
+        if (elements.aiLabBtn) elements.aiLabBtn.addEventListener('click', runLabSummary);
         wireAiButton(elements.aiPreExamBtn, 'pre_exam',
             () => elements.aiPreExamAnchor, () => getPatientClinicalText());
 
@@ -1327,9 +1325,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Deliberately unverified — every card carries the amber "verify against
     // source" badge and is never conflated with scraped/validated data.
 
-    // Serialized lab-trend text for the Lab Trends AI button, rebuilt each
-    // time renderTrends() runs.
+    // Serialized lab-trend text for the Lab Trends AI button (pathological
+    // rows only), rebuilt each time renderTrends() runs; labHasAbnormal is
+    // false when every value is within range.
     let labAiText = '';
+    let labHasAbnormal = false;
 
     function resetAiTab() {
         if (elements.aiEmptyState) elements.aiEmptyState.hidden = false;
@@ -1343,6 +1343,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (btn) btn._aiCard = null;
         }
         labAiText = '';
+        labHasAbnormal = false;
     }
 
     // Clinical-only text used by the Report and Pre-Exam summaries —
@@ -1432,6 +1433,30 @@ document.addEventListener('DOMContentLoaded', function() {
     function wireAiButton(button, kind, getAnchor, getText, opts = {}) {
         if (!button) return;
         button.addEventListener('click', () => runAiSummary(button, kind, getAnchor, getText, opts));
+    }
+
+    // Lab Trends button — sends only the pathological rows to the model. When
+    // nothing is out of range, skip the call and render a direct "all normal"
+    // card (no amber "AI-generated" badge, since it's a deterministic check).
+    async function runLabSummary() {
+        const button = elements.aiLabBtn;
+        if (labHasAbnormal) {
+            return runAiSummary(button, 'lab',
+                () => elements.trendsContainer?.firstChild || null, () => labAiText,
+                { intoAnchorParent: () => elements.trendsContainer, inline: true });
+        }
+        let card = button._aiCard;
+        if (!card || !card.isConnected) {
+            card = makeAiCard(true);
+            button._aiCard = card;
+        }
+        placeAiCard(card, elements.trendsContainer?.firstChild || null, elements.trendsContainer);
+        card.classList.remove('ai-card-error');
+        const badge = card.querySelector('.ai-summary-badge');
+        if (badge) badge.hidden = true;
+        const body = card.querySelector('.ai-summary-body');
+        body.classList.remove('ai-summary-loading');
+        body.innerHTML = marked.parse('**All lab values are within their reference intervals.**');
     }
 
     async function loadAndDisplayReport(patientData, analysesData) {
@@ -3130,10 +3155,19 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         elements.trendsSection.hidden = false;
 
-        // Serialize the trend table for the AI lab-analysis button: one row
-        // per analyte with its interval and the values at each column date.
+        // Serialize the trend table for the AI lab-analysis button — but only
+        // the analytes that carry at least one pathological value (flagged
+        // H/L, or numerically outside the reference interval). A normal panel
+        // is not worth a model call: labHasAbnormal drives a direct "all
+        // normal" card instead (see runLabSummary).
+        const isAbnormal = (m, a) => {
+            if (m.flag === 'H' || m.flag === 'L') return true;
+            if (m.v == null) return false;
+            return (a.low != null && m.v < a.low) || (a.high != null && m.v > a.high);
+        };
         const header = ['Analyte', 'Interval', ...colDates].join(' | ');
-        const rows = analytes.map(a => {
+        const abnormalAnalytes = analytes.filter(a => a.measurements.some(m => isAbnormal(m, a)));
+        const rows = abnormalAnalytes.map(a => {
             const byDate = {};
             for (const m of a.measurements) byDate[m.date?.slice(0, 10) || ''] = m;
             const interval = a.ref
@@ -3147,7 +3181,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const name = `${a.name}${a.unit ? ' [' + a.unit + ']' : ''}`;
             return [name, interval, ...cells].join(' | ');
         });
-        labAiText = [header, ...rows].join('\n');
+        labHasAbnormal = abnormalAnalytes.length > 0;
+        labAiText = labHasAbnormal ? [header, ...rows].join('\n') : '';
         if (elements.aiLabBtn) { elements.aiLabBtn.hidden = false; elements.aiLabBtn._aiCard = null; }
     }
 
