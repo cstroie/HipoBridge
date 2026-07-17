@@ -912,11 +912,11 @@ small {
     border-radius: var(--radius-md);
     border: none;
     cursor: pointer;
-    transition: transform var(--transition-base), box-shadow var(--transition-base);
-    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    transition: background var(--transition-base), box-shadow var(--transition-base);
+    background: var(--primary);
     color: var(--on-accent);
 }
-.btn-primary:hover { box-shadow: var(--shadow-lg); }
+.btn-primary:hover { background: var(--primary-dark); }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
 
 /* ── Patient Profile ────────────────────────────── */
