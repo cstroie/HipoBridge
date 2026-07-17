@@ -1581,6 +1581,32 @@ select {
     gap: var(--space-10);
 }
 
+/* Compact icon-only copy button in the lab card header */
+.lab-copy-btn {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: background var(--transition-base), color var(--transition-base);
+}
+.lab-copy-btn:hover {
+    color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+.lab-copy-btn:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+}
+.lab-copy-btn[hidden] { display: none; }
+
 .card-title {
     margin: 0;
     font: 600 17px 'Space Grotesk', 'Inter', sans-serif;

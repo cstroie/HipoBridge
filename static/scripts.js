@@ -1289,17 +1289,17 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    async function copyMarkdown(markdownEl, btn) {
+    async function copyMarkdown(markdownEl, btn, flashFn) {
         const markdown = markdownEl?.dataset.markdown;
         if (!markdown) {
             showToast('No content to copy', 'warning');
             return;
         }
-        const flash = () => {
+        const flash = flashFn || (() => {
             const orig = btn.innerHTML;
             btn.innerHTML = '<i class="fas fa-check"></i> <span>Copied!</span>';
             setTimeout(() => { btn.innerHTML = orig; }, 2000);
-        };
+        });
         if (navigator.clipboard?.writeText) {
             try { await navigator.clipboard.writeText(markdown); flash(); return; }
             catch (_) { /* fall through */ }
@@ -1312,6 +1312,16 @@ document.addEventListener('DOMContentLoaded', function() {
         const ok = document.execCommand('copy');
         document.body.removeChild(ta);
         ok ? flash() : showToast('Failed to copy to clipboard', 'error');
+    }
+
+    // Icon-only flash for compact copy buttons: swap the glyph to a check
+    // briefly, no text, so the button doesn't change width.
+    function flashIcon(btn) {
+        const icon = btn.querySelector('i');
+        if (!icon) return;
+        const orig = icon.className;
+        icon.className = 'fas fa-check';
+        setTimeout(() => { icon.className = orig; }, 1500);
     }
 
     function copyEpicrisisMarkdown() { return copyMarkdown(elements.epicrisisContent, elements.copyEpicrisisBtn); }
@@ -3097,6 +3107,29 @@ document.addEventListener('DOMContentLoaded', function() {
         return wrap;
     }
 
+    // Build a concise Markdown table (Test | Value | Reference) from the same
+    // presentedForm entries buildLabTable renders, grouped by section. The
+    // reference cell already carries the measurement unit.
+    function buildLabMarkdown(forms) {
+        const cell = s => (s || '').replace(/\s*\n+\s*/g, ' ').replace(/\|/g, '\\|').trim();
+        const sections = {};
+        for (const form of forms) {
+            const sec = form.section || '';
+            (sections[sec] ||= []).push(form);
+        }
+        const blocks = [];
+        for (const [sec, entries] of Object.entries(sections)) {
+            const lines = [];
+            if (sec) lines.push(`**${cell(sec)}**`, '');
+            lines.push('| Test | Value | Reference |', '| --- | --- | --- |');
+            for (const form of entries) {
+                lines.push(`| ${cell(form.title)} | ${cell(form.data)} | ${cell(form.reference)} |`);
+            }
+            blocks.push(lines.join('\n'));
+        }
+        return blocks.join('\n\n');
+    }
+
     // ── Lab Trends ──────────────────────────────────────────────────────────
 
     function sparkline(measurements, low, high, width, height) {
@@ -3454,6 +3487,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     const allLab = forms.every(f => f.type === 'lab' || f.reference !== undefined);
                     if (allLab) {
                         reportPreview.appendChild(buildLabTable(forms));
+                        // Reveal the header copy button and load it with the
+                        // concise Markdown table. onclick (not addEventListener)
+                        // stays idempotent if this card re-renders.
+                        const copyBtn = article.querySelector('.lab-copy-btn');
+                        if (copyBtn) {
+                            copyBtn.dataset.markdown = buildLabMarkdown(forms);
+                            copyBtn.hidden = false;
+                            copyBtn.onclick = () => copyMarkdown(copyBtn, copyBtn, () => flashIcon(copyBtn));
+                        }
                         // Tag card with lab sections for dynamic chip filtering
                         const sections = [...new Set(forms.map(f => f.section).filter(Boolean))];
                         if (sections.length) {
