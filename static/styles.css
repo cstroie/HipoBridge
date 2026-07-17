@@ -240,7 +240,7 @@
     --z-toast: 10000;
 
     /* App bar height */
-    --header-height: 60px;
+    --header-height: 52px;
 
     /* Focus rings — follow the theme's --primary instead of a fixed rgba */
     --focus-ring: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent);
