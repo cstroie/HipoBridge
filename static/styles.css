@@ -1598,6 +1598,13 @@ select {
     justify-content: space-between;
     gap: var(--space-10);
 }
+/* Grouped top-right actions (AI + copy) — kept adjacent as a small toolbar. */
+.card-toolbar {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-6);
+}
 
 /* Shared compact icon-only style for every "copy as Markdown" button */
 .copy-md-btn {
