@@ -292,8 +292,13 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
 
                     <section id="trendsSection" hidden aria-labelledby="trends-heading">
                         <header class="trends-header">
-                            <h2 id="trends-heading">Lab Trends</h2>
-                            <p id="trendsSubtitle" class="trends-subtitle"></p>
+                            <div>
+                                <h2 id="trends-heading">Lab Trends</h2>
+                                <p id="trendsSubtitle" class="trends-subtitle"></p>
+                            </div>
+                            <button class="btn-ai" id="aiLabBtn" hidden aria-label="AI lab analysis" title="AI lab analysis">
+                                <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>AI</span>
+                            </button>
                         </header>
                         <div id="trendsContainer" class="trends-container" aria-live="polite"></div>
                     </section>
@@ -327,6 +332,9 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             <h1 id="report-tab-heading" class="tab-title">Patient Report</h1>
                             <p class="tab-sub">Structured for LLM consumption — copy and paste into your AI assistant</p>
                         </div>
+                        <button class="btn-ai" id="aiReportBtn" hidden aria-label="AI executive summary" title="AI executive summary">
+                            <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>AI</span>
+                        </button>
                         <button class="copy-md-btn" id="copyReportBtn" aria-label="Copy report as Markdown" title="Copy report as Markdown">
                             <i class="fas fa-copy" aria-hidden="true"></i>
                         </button>
@@ -381,58 +389,23 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                 </section>
 
                 <!-- ─── AI tab ─── -->
-                <section id="ai-tab" class="tab-content" role="tabpanel" aria-labelledby="ai-tab-heading" hidden style="display:none">
+                <section id="ai-tab" class="tab-content" role="tabpanel" aria-labelledby="ai-tab-heading" hidden>
                     <header class="report-header">
                         <div>
-                            <p class="tab-eyebrow">AI Extraction</p>
-                            <h1 id="ai-tab-heading" class="tab-title">Structured Extraction</h1>
-                            <p class="tab-sub">Runs the patient's report text through the on-device LLM pipeline — imaging, interventions and clinical notes as structured records</p>
+                            <p class="tab-eyebrow">AI Assistant</p>
+                            <h1 id="ai-tab-heading" class="tab-title">Pre-Exam Analysis</h1>
+                            <p class="tab-sub">A rapid clinical-record brief for the radiologist before performing or reporting a new study</p>
                         </div>
-                        <div class="ai-header-actions">
-                            <button class="btn-secondary" id="aiSummaryBtn">
-                                <i class="fas fa-bolt"></i>
-                                <span>Quick Summary</span>
-                            </button>
-                            <button class="btn-secondary" id="aiImpressionBtn">
-                                <i class="fas fa-file-medical"></i>
-                                <span>Radiology Impressions</span>
-                            </button>
-                            <button class="btn-secondary" id="aiExtractBtn">
-                                <i class="fas fa-wand-magic-sparkles"></i>
-                                <span>Extract with AI</span>
-                            </button>
-                        </div>
+                        <button class="btn-ai" id="aiPreExamBtn" hidden aria-label="Generate pre-exam analysis" title="Generate pre-exam analysis">
+                            <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>Generate</span>
+                        </button>
                     </header>
 
-                    <!-- Quick Summary card — free-text AI brief, NOT schema-validated
-                         (see llm/pipeline.py::summarize_document). Always shown with an
-                         explicit "unverified" label; never conflate with the validated
-                         record cards below. -->
-                    <div id="aiSummaryCard" class="ai-summary-card" hidden>
-                        <div class="ai-summary-header">
-                            <span class="ai-summary-badge">
-                                <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
-                                AI-generated — verify against source
-                            </span>
-                        </div>
-                        <p id="aiSummaryText" class="ai-summary-text"></p>
-                    </div>
-                    <div id="aiSummaryError" class="ai-error-state" hidden></div>
+                    <div id="aiPreExamAnchor"></div>
 
                     <div id="aiEmptyState" class="ai-empty-state">
                         <i class="fas fa-notes-medical" aria-hidden="true"></i>
-                        <p>Open the <strong>Report</strong> tab first to assemble the patient's clinical text, then come back here and run extraction.</p>
-                    </div>
-
-                    <div id="aiErrorState" class="ai-error-state" hidden></div>
-
-                    <div id="aiResults" class="ai-results" hidden>
-                        <div id="aiRecordsList" class="ai-records-list"></div>
-
-                        <section id="aiTimelineSection" class="report-section" hidden>
-                            <h3 class="report-section-title"><i class="fas fa-timeline"></i> Extracted Timeline</h3>
-                            <div class="report-timeline" id="aiTimeline"></div>
-                        </section>
+                        <p>Open the <strong>Report</strong> tab first to assemble the patient's clinical text, then come back here and generate the pre-exam analysis.</p>
                     </div>
                 </section>
 
@@ -571,6 +544,9 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                     </div>
                 </section>
                 <footer class="report-actions">
+                    <button class="btn-ai card-ai-btn" hidden aria-label="AI triage summary" title="AI triage summary">
+                        <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>AI</span>
+                    </button>
                     <button class="btn-perform-exam" hidden aria-label="Mark as performed">
                         <i class="fas fa-check-circle" aria-hidden="true"></i> Perform
                     </button>
@@ -754,6 +730,9 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                 <div class="epi-card-body" hidden>
                     <div class="epi-card-inner">
                         <div class="epi-card-toolbar" role="toolbar">
+                            <button type="button" class="btn-ai epi-ai-btn" aria-label="AI executive summary" title="AI executive summary">
+                                <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>AI</span>
+                            </button>
                             <button type="button" class="copy-md-btn epi-copy-btn" aria-label="Copy this epicrisis as Markdown" title="Copy this epicrisis as Markdown">
                                 <i class="fas fa-copy" aria-hidden="true"></i>
                             </button>
@@ -795,38 +774,17 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
             </div>
         </template>
 
-        <template id="ai-record-card-template">
-            <article class="ai-record-card">
-                <header class="ai-record-header">
-                    <div class="ai-record-type-badge">
-                        <i class="fas" aria-hidden="true"></i>
-                        <span class="ai-record-type-label"></span>
-                    </div>
-                    <span class="ai-record-date"></span>
-                    <span class="ai-needs-review-badge" hidden>
+        <!-- Reusable free-text AI summary card. Cloned per item (report,
+             epicrisis, imaging, lab, pre-exam) — class-based, no ids. -->
+        <template id="ai-card-template">
+            <div class="ai-summary-card">
+                <div class="ai-summary-header">
+                    <span class="ai-summary-badge">
                         <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
-                        <span>Needs review</span>
+                        AI-generated — verify against source
                     </span>
-                </header>
-                <dl class="ai-record-fields"></dl>
-            </article>
-        </template>
-
-        <template id="ai-record-field-template">
-            <div class="ai-record-field">
-                <dt></dt>
-                <dd></dd>
-            </div>
-        </template>
-
-        <template id="ai-timeline-row-template">
-            <div class="ai-timeline-row">
-                <time class="ai-timeline-date"></time>
-                <div class="ai-timeline-body">
-                    <span class="ai-timeline-type-badge"></span>
-                    <span class="ai-timeline-summary"></span>
-                    <span class="ai-timeline-delta" hidden></span>
                 </div>
+                <div class="ai-summary-body ai-summary-text"></div>
             </div>
         </template>
 

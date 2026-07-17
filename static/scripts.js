@@ -70,19 +70,12 @@ document.addEventListener('DOMContentLoaded', function() {
         patientReportMarkdown: document.getElementById('patientReportMarkdown'),
         patientReportBlocks: document.getElementById('patientReportBlocks'),
         copyReportBtn: document.getElementById('copyReportBtn'),
+        aiReportBtn: document.getElementById('aiReportBtn'),
+        aiLabBtn: document.getElementById('aiLabBtn'),
         // AI tab elements
-        aiExtractBtn: document.getElementById('aiExtractBtn'),
+        aiPreExamBtn: document.getElementById('aiPreExamBtn'),
+        aiPreExamAnchor: document.getElementById('aiPreExamAnchor'),
         aiEmptyState: document.getElementById('aiEmptyState'),
-        aiErrorState: document.getElementById('aiErrorState'),
-        aiResults: document.getElementById('aiResults'),
-        aiRecordsList: document.getElementById('aiRecordsList'),
-        aiTimelineSection: document.getElementById('aiTimelineSection'),
-        aiTimeline: document.getElementById('aiTimeline'),
-        aiSummaryBtn: document.getElementById('aiSummaryBtn'),
-        aiImpressionBtn: document.getElementById('aiImpressionBtn'),
-        aiSummaryCard: document.getElementById('aiSummaryCard'),
-        aiSummaryText: document.getElementById('aiSummaryText'),
-        aiSummaryError: document.getElementById('aiSummaryError'),
         // Header elements
         quickSearch: document.getElementById('quickSearch'),
         quickSearchBtn: document.getElementById('quickSearchBtn'),
@@ -395,16 +388,15 @@ document.addEventListener('DOMContentLoaded', function() {
             elements.copyReportBtn.addEventListener('click', copyReportMarkdown);
         }
 
-        // AI tab buttons
-        if (elements.aiExtractBtn) {
-            elements.aiExtractBtn.addEventListener('click', runAiExtraction);
-        }
-        if (elements.aiSummaryBtn) {
-            elements.aiSummaryBtn.addEventListener('click', runAiQuickSummary);
-        }
-        if (elements.aiImpressionBtn) {
-            elements.aiImpressionBtn.addEventListener('click', runAiImpressionExtraction);
-        }
+        // AI summary buttons (report header, lab trends, pre-exam tab).
+        // Per-card buttons (epicrisis, imaging) are wired at render time.
+        wireAiButton(elements.aiReportBtn, 'report',
+            () => elements.reportCard, () => getPatientClinicalText());
+        wireAiButton(elements.aiLabBtn, 'lab',
+            () => elements.trendsContainer?.firstChild || null, () => labAiText,
+            { intoAnchorParent: () => elements.trendsContainer, inline: true });
+        wireAiButton(elements.aiPreExamBtn, 'pre_exam',
+            () => elements.aiPreExamAnchor, () => getPatientClinicalText());
 
         // Schedule tab
         {
@@ -527,7 +519,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         if (tabId === 'report') {
-            loadReportLazily();
+            updateAiEmptyState();
+            loadReportLazily().then(updateAiEmptyState);
         }
 
         if (tabId === 'ai') {
@@ -1327,260 +1320,118 @@ document.addEventListener('DOMContentLoaded', function() {
     function copyEpicrisisMarkdown() { return copyMarkdown(elements.epicrisisContent, elements.copyEpicrisisBtn, () => flashIcon(elements.copyEpicrisisBtn)); }
     function copyReportMarkdown()    { return copyMarkdown(elements.patientReportMarkdown, elements.copyReportBtn, () => flashIcon(elements.copyReportBtn)); }
 
-    // ── AI extraction tab ─────────────────────────────────────────────
-    const RECORD_TYPE_META = {
-        imaging:              { icon: 'fa-x-ray',         label: 'Imaging' },
-        intervention:         { icon: 'fa-notes-medical', label: 'Intervention' },
-        clinical_note:        { icon: 'fa-sticky-note',   label: 'Clinical Note' },
-        radiology_impression: { icon: 'fa-file-medical',  label: 'Impression' },
-    };
-    const RECORD_FIELD_LABELS = {
-        modality: 'Modality', body_region: 'Body Region', findings: 'Findings',
-        impression: 'Impression', procedure: 'Procedure', outcome: 'Outcome',
-        summary: 'Summary', significant_findings: 'Significant Findings',
-    };
+    // ── AI summaries ──────────────────────────────────────────────────
+    // Free-text AI aids wired into each tab as a per-item "AI" button. All
+    // go through one endpoint (POST /api/ai/summarize {kind, text}); the
+    // server picks the model tier and prompt per kind (see llm/prompts.py).
+    // Deliberately unverified — every card carries the amber "verify against
+    // source" badge and is never conflated with scraped/validated data.
+
+    // Serialized lab-trend text for the Lab Trends AI button, rebuilt each
+    // time renderTrends() runs.
+    let labAiText = '';
 
     function resetAiTab() {
-        if (elements.aiRecordsList) elements.aiRecordsList.innerHTML = '';
-        if (elements.aiTimeline) elements.aiTimeline.innerHTML = '';
-        if (elements.aiTimelineSection) elements.aiTimelineSection.hidden = true;
-        if (elements.aiResults) elements.aiResults.hidden = true;
-        if (elements.aiErrorState) { elements.aiErrorState.hidden = true; elements.aiErrorState.textContent = ''; }
         if (elements.aiEmptyState) elements.aiEmptyState.hidden = false;
-        if (elements.aiSummaryCard) elements.aiSummaryCard.hidden = true;
-        if (elements.aiSummaryText) elements.aiSummaryText.textContent = '';
-        if (elements.aiSummaryError) { elements.aiSummaryError.hidden = true; elements.aiSummaryError.textContent = ''; }
-    }
-
-    // Structured payload built alongside the Report tab's markdown (see
-    // displayPatientReport): {typed_blocks: [{hint_type, text}, ...], narrative}.
-    // Falls back to the flat markdown ({text: ...}) if the structured store
-    // isn't populated yet, so the AI tab still works before a full Report
-    // tab load, or against an older cached load.
-    function getPatientReportPayload() {
-        const raw = elements.patientReportBlocks?.dataset.blocks;
-        if (raw) {
-            try {
-                const parsed = JSON.parse(raw);
-                if ((parsed.typed_blocks?.length || 0) > 0 || parsed.narrative) return parsed;
-            } catch (_) { /* fall through to markdown */ }
+        if (elements.aiReportBtn) elements.aiReportBtn.hidden = true;
+        if (elements.aiPreExamBtn) elements.aiPreExamBtn.hidden = true;
+        if (elements.aiLabBtn) elements.aiLabBtn.hidden = true;
+        // Drop any rendered AI cards from a previous patient. querySelectorAll
+        // does not descend into <template> content, so the template card is safe.
+        document.querySelectorAll('.ai-summary-card').forEach(card => card.remove());
+        for (const btn of [elements.aiReportBtn, elements.aiPreExamBtn, elements.aiLabBtn]) {
+            if (btn) btn._aiCard = null;
         }
-        const text = elements.patientReportMarkdown?.dataset.markdown;
-        return text ? { text } : null;
+        labAiText = '';
     }
 
-    // Clinical-only text for Quick Summary — deliberately excludes patient
-    // demographics (name/DOB/CNP), which the model tends to fabricate or
-    // garble when asked to restate them; the summary card is paired with
-    // the already-rendered, deterministic patient identity on the Report
-    // tab instead. Falls back to the full markdown if the clinical-only
-    // stash isn't populated (e.g. an older cached load).
+    // Clinical-only text used by the Report and Pre-Exam summaries —
+    // deliberately excludes patient demographics (name/DOB/CNP), which the
+    // model tends to fabricate or garble when asked to restate them; the
+    // card is paired with the already-rendered, deterministic patient
+    // identity on the Report tab instead. Falls back to the full markdown
+    // if the clinical-only stash isn't populated (e.g. an older cached load).
     function getPatientClinicalText() {
         const clinical = elements.patientReportBlocks?.dataset.clinicalMarkdown;
         if (clinical && clinical.trim()) return clinical;
         return elements.patientReportMarkdown?.dataset.markdown || null;
     }
 
-    // Imaging blocks only — the source material for the opt-in Radiology
-    // Impressions extraction (hint_type: 'radiology_impression'), which
-    // targets only radiologist-authored reports, not the admission
-    // narrative or other block types.
-    function getImagingTypedBlocks() {
-        const payload = getPatientReportPayload();
-        return (payload?.typed_blocks || []).filter(b => b.hint_type === 'imaging');
-    }
-
+    // Toggle the availability of the singleton AI buttons when patient
+    // clinical text becomes (un)available.
     function updateAiEmptyState() {
-        const hasContent = !!getPatientReportPayload();
+        const hasContent = !!getPatientClinicalText();
         if (elements.aiEmptyState) elements.aiEmptyState.hidden = hasContent;
-        if (elements.aiExtractBtn) elements.aiExtractBtn.disabled = !hasContent;
-        if (elements.aiSummaryBtn) elements.aiSummaryBtn.disabled = !getPatientClinicalText();
-        if (elements.aiImpressionBtn) elements.aiImpressionBtn.disabled = getImagingTypedBlocks().length === 0;
+        if (elements.aiReportBtn) elements.aiReportBtn.hidden = !hasContent;
+        if (elements.aiPreExamBtn) elements.aiPreExamBtn.hidden = !hasContent;
     }
 
-    async function runAiQuickSummary() {
-        const text = getPatientClinicalText();
-        if (!text) {
-            showToast('Load a patient report first', 'warning');
-            return;
+    async function aiSummarize(kind, text) {
+        const resp = await apiFetch('/api/ai/summarize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ kind, text }),
+        });
+        let data = {};
+        try { data = await resp.json(); } catch (_) { /* non-JSON error */ }
+        if (!resp.ok || data.status === 'error') {
+            throw new Error(data.message || `AI summary failed (HTTP ${resp.status})`);
         }
+        return data.summary || '';
+    }
 
-        const btn = elements.aiSummaryBtn;
-        const origHtml = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Summarizing…</span>';
-        if (elements.aiSummaryError) { elements.aiSummaryError.hidden = true; elements.aiSummaryError.textContent = ''; }
-        if (elements.aiSummaryCard) elements.aiSummaryCard.hidden = true;
+    function makeAiCard(inline) {
+        const card = document.getElementById('ai-card-template').content
+            .firstElementChild.cloneNode(true);
+        if (inline) card.classList.add('ai-card--inline');
+        return card;
+    }
 
+    // Place `card` immediately before `anchor`; if the anchor is missing but
+    // an `intoParent` container is given, prepend into it instead.
+    function placeAiCard(card, anchor, intoParent) {
+        if (anchor && anchor.parentNode) {
+            anchor.parentNode.insertBefore(card, anchor);
+        } else if (intoParent) {
+            intoParent.insertBefore(card, intoParent.firstChild);
+        }
+    }
+
+    // Generic click handler: (re)insert the button's card in loading state,
+    // fetch the summary, render it as markdown, or show an error in-card.
+    async function runAiSummary(button, kind, getAnchor, getText, opts = {}) {
+        const text = (getText() || '').trim();
+        if (!text) { showToast('No content available for AI summary', 'warning'); return; }
+
+        let card = button._aiCard;
+        if (!card || !card.isConnected) {
+            card = makeAiCard(opts.inline);
+            button._aiCard = card;
+        }
+        placeAiCard(card, getAnchor(), opts.intoAnchorParent?.());
+
+        const body = card.querySelector('.ai-summary-body');
+        card.classList.remove('ai-card-error');
+        body.classList.add('ai-summary-loading');
+        body.textContent = 'Generating…';
+        button.disabled = true;
         try {
-            const resp = await apiFetch('/api/ai/summarize', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text }),
-            });
-            const data = await resp.json();
-            if (!resp.ok || data.status === 'error') {
-                throw new Error(data.message || `Summary failed (HTTP ${resp.status})`);
-            }
-            if (elements.aiSummaryText) elements.aiSummaryText.textContent = data.summary;
-            if (elements.aiSummaryCard) elements.aiSummaryCard.hidden = false;
+            const summary = await aiSummarize(kind, text);
+            body.classList.remove('ai-summary-loading');
+            body.innerHTML = marked.parse(summary || '_(empty response)_');
         } catch (err) {
-            console.error('AI summary failed:', err);
-            if (elements.aiSummaryError) {
-                elements.aiSummaryError.textContent = `Summary failed: ${err.message}`;
-                elements.aiSummaryError.hidden = false;
-            }
+            console.error(`AI summary failed (${kind}):`, err);
+            body.classList.remove('ai-summary-loading');
+            card.classList.add('ai-card-error');
+            body.textContent = `AI summary failed: ${err.message}`;
         } finally {
-            btn.disabled = false;
-            btn.innerHTML = origHtml;
+            button.disabled = false;
         }
     }
 
-    async function runAiExtraction() {
-        const payload = getPatientReportPayload();
-        if (!payload) {
-            showToast('Load a patient report first', 'warning');
-            return;
-        }
-
-        const btn = elements.aiExtractBtn;
-        const origHtml = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Extracting…</span>';
-        if (elements.aiErrorState) { elements.aiErrorState.hidden = true; elements.aiErrorState.textContent = ''; }
-
-        try {
-            const resp = await apiFetch('/api/ai/extract', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
-            const data = await resp.json();
-            if (!resp.ok || data.status === 'error') {
-                throw new Error(data.message || `Extraction failed (HTTP ${resp.status})`);
-            }
-            renderAiResults(data);
-        } catch (err) {
-            console.error('AI extraction failed:', err);
-            if (elements.aiErrorState) {
-                elements.aiErrorState.textContent = `Extraction failed: ${err.message}`;
-                elements.aiErrorState.hidden = false;
-            }
-            if (elements.aiResults) elements.aiResults.hidden = true;
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = origHtml;
-        }
-    }
-
-    // Opt-in alternative to the full "Extract with AI" pass: re-runs only
-    // the imaging blocks through the radiology_impression schema (a single
-    // sentence impression instead of the full findings/impression record —
-    // see llm/prompts/extract_radiology_impression.py). Shares the same
-    // results area/renderer as runAiExtraction — clicking this replaces
-    // whatever extraction results are currently shown.
-    async function runAiImpressionExtraction() {
-        const imagingBlocks = getImagingTypedBlocks();
-        if (imagingBlocks.length === 0) {
-            showToast('No imaging reports loaded for this patient', 'warning');
-            return;
-        }
-
-        const btn = elements.aiImpressionBtn;
-        const origHtml = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Summarizing…</span>';
-        if (elements.aiErrorState) { elements.aiErrorState.hidden = true; elements.aiErrorState.textContent = ''; }
-
-        try {
-            const typed_blocks = imagingBlocks.map(b => ({ hint_type: 'radiology_impression', text: b.text }));
-            const resp = await apiFetch('/api/ai/extract', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ typed_blocks }),
-            });
-            const data = await resp.json();
-            if (!resp.ok || data.status === 'error') {
-                throw new Error(data.message || `Extraction failed (HTTP ${resp.status})`);
-            }
-            renderAiResults(data);
-        } catch (err) {
-            console.error('AI impression extraction failed:', err);
-            if (elements.aiErrorState) {
-                elements.aiErrorState.textContent = `Extraction failed: ${err.message}`;
-                elements.aiErrorState.hidden = false;
-            }
-            if (elements.aiResults) elements.aiResults.hidden = true;
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = origHtml;
-        }
-    }
-
-    function renderAiResults(data) {
-        const records = data.records || [];
-        const timeline = data.timeline || [];
-
-        if (elements.aiRecordsList) {
-            elements.aiRecordsList.innerHTML = '';
-            const template = document.getElementById('ai-record-card-template');
-            const fieldTemplate = document.getElementById('ai-record-field-template');
-            for (const record of records) {
-                const card = template.content.cloneNode(true);
-                const meta = RECORD_TYPE_META[record.type] || { icon: 'fa-file', label: record.type };
-                card.querySelector('.ai-record-type-badge i').classList.add(meta.icon);
-                card.querySelector('.ai-record-type-label').textContent = meta.label;
-                card.querySelector('.ai-record-date').textContent = record.date || '—';
-                const reviewBadge = card.querySelector('.ai-needs-review-badge');
-                if (record.needs_review) reviewBadge.hidden = false;
-
-                const dl = card.querySelector('.ai-record-fields');
-                for (const [key, label] of Object.entries(RECORD_FIELD_LABELS)) {
-                    if (!(key in record) || record[key] == null || record[key] === '') continue;
-                    const field = fieldTemplate.content.cloneNode(true);
-                    field.querySelector('dt').textContent = label;
-                    const value = Array.isArray(record[key]) ? record[key].join(', ') : String(record[key]);
-                    field.querySelector('dd').textContent = value;
-                    dl.appendChild(field);
-                }
-                if (record.needs_review && record.raw_source) {
-                    const field = fieldTemplate.content.cloneNode(true);
-                    field.querySelector('dt').textContent = 'Raw Source';
-                    field.querySelector('dd').textContent = record.raw_source;
-                    dl.appendChild(field);
-                }
-                elements.aiRecordsList.appendChild(card);
-            }
-        }
-
-        if (elements.aiTimeline) {
-            elements.aiTimeline.innerHTML = '';
-            const rowTemplate = document.getElementById('ai-timeline-row-template');
-            const orderedEntries = timeline.filter(e => e.ordered);
-            for (const entry of orderedEntries) {
-                const row = rowTemplate.content.cloneNode(true);
-                row.querySelector('.ai-timeline-date').textContent = entry.date || '—';
-                const meta = RECORD_TYPE_META[entry.record?.type] || { label: entry.record?.type || '' };
-                row.querySelector('.ai-timeline-type-badge').textContent = meta.label;
-                const summary = entry.record?.summary || entry.record?.impression
-                    || (entry.record?.findings || []).join(', ') || entry.record?.procedure || '';
-                row.querySelector('.ai-timeline-summary').textContent = summary;
-                if (entry.delta_note) {
-                    const deltaEl = row.querySelector('.ai-timeline-delta');
-                    deltaEl.textContent = entry.delta_note;
-                    deltaEl.hidden = false;
-                }
-                elements.aiTimeline.appendChild(row);
-            }
-            if (elements.aiTimelineSection) elements.aiTimelineSection.hidden = orderedEntries.length === 0;
-        }
-
-        if (elements.aiEmptyState) elements.aiEmptyState.hidden = true;
-        if (elements.aiResults) elements.aiResults.hidden = records.length === 0;
-        if (records.length === 0 && elements.aiErrorState) {
-            elements.aiErrorState.textContent = 'No records extracted from this report.';
-            elements.aiErrorState.hidden = false;
-        }
+    function wireAiButton(button, kind, getAnchor, getText, opts = {}) {
+        if (!button) return;
+        button.addEventListener('click', () => runAiSummary(button, kind, getAnchor, getText, opts));
     }
 
     async function loadAndDisplayReport(patientData, analysesData) {
@@ -3278,6 +3129,26 @@ document.addEventListener('DOMContentLoaded', function() {
             elements.trendsSubtitle.textContent = `${analytes.length} analytes · ${colDates.length} most recent dates`;
         }
         elements.trendsSection.hidden = false;
+
+        // Serialize the trend table for the AI lab-analysis button: one row
+        // per analyte with its interval and the values at each column date.
+        const header = ['Analyte', 'Interval', ...colDates].join(' | ');
+        const rows = analytes.map(a => {
+            const byDate = {};
+            for (const m of a.measurements) byDate[m.date?.slice(0, 10) || ''] = m;
+            const interval = a.ref
+                || (a.low != null && a.high != null ? `${a.low}-${a.high}` : (a.low != null ? `>${a.low}` : (a.high != null ? `<${a.high}` : '')));
+            const cells = colDates.map(d => {
+                const m = byDate[d];
+                if (!m) return '';
+                const val = m.v !== null ? (Number.isInteger(m.v) ? m.v : parseFloat(m.v.toPrecision(4))) : (m.text || '');
+                return `${val}${m.flag ? ' (' + m.flag + ')' : ''}`;
+            });
+            const name = `${a.name}${a.unit ? ' [' + a.unit + ']' : ''}`;
+            return [name, interval, ...cells].join(' | ');
+        });
+        labAiText = [header, ...rows].join('\n');
+        if (elements.aiLabBtn) { elements.aiLabBtn.hidden = false; elements.aiLabBtn._aiCard = null; }
     }
 
     async function loadTrends(patientId) {
@@ -3430,6 +3301,12 @@ document.addEventListener('DOMContentLoaded', function() {
         // Reset the copy button; re-revealed below only when a report exists
         const cardCopyBtn = article.querySelector('.card-copy-btn');
         if (cardCopyBtn) { cardCopyBtn.hidden = true; cardCopyBtn.onclick = null; }
+        // Reset the AI triage button; re-revealed only for imaging reports.
+        // Also drop any card left over from a prior render of this article
+        // (fetchAndFillReport can re-run via the perform/write refresh path).
+        const cardAiBtn = article.querySelector('.card-ai-btn');
+        if (cardAiBtn) { cardAiBtn.hidden = true; cardAiBtn._aiCard = null; }
+        article.querySelector('.report-section .ai-summary-card')?.remove();
 
         let hasReportFromStudy = false;
         try {
@@ -3578,6 +3455,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 cardCopyBtn.setAttribute('aria-label', label);
                 cardCopyBtn.hidden = false;
                 cardCopyBtn.onclick = () => copyMarkdown(cardCopyBtn, cardCopyBtn, () => flashIcon(cardCopyBtn));
+            }
+
+            // AI triage summary — imaging reports only (not lab value tables).
+            // Uses the report markdown; card renders above the report body.
+            if (cardAiBtn && copyMd && !copyIsLab) {
+                cardAiBtn.dataset.aiText = copyMd;
+                cardAiBtn.hidden = false;
+                cardAiBtn.onclick = () => runAiSummary(
+                    cardAiBtn, 'imaging',
+                    () => article.querySelector('.report-body'),
+                    () => cardAiBtn.dataset.aiText || '',
+                    { inline: true });
             }
 
             // ImagingStudy link
@@ -4050,9 +3939,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
             body.hidden = !isOpen;
             const copyBtn = card.querySelector('.epi-copy-btn');
+            const aiBtn = card.querySelector('.epi-ai-btn');
             if (isSubstantiveText(epicrisisText)) {
                 card.querySelector('.epi-prose').innerHTML = marked.parse(epicrisisText.trim());
                 copyBtn.addEventListener('click', () => copyMarkdown(card, copyBtn, () => flashIcon(copyBtn)));
+                // AI executive summary — inserted inside the collapsible body,
+                // above the prose, so it hides/shows with the accordion. Uses
+                // the epicrisis text (not the demographics-heavy full markdown).
+                wireAiButton(aiBtn, 'epicrisis', () => card.querySelector('.epi-prose'),
+                    () => extractEpicrisisText(enc).trim(), { inline: true });
             } else {
                 const prose = card.querySelector('.epi-prose');
                 prose.innerHTML = '<p class="epi-empty">— no content —</p>';

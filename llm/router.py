@@ -1,12 +1,12 @@
-"""TierRouter: one ServerBackend shared by every tier, dispatched by model name.
+"""LLMClient: one ServerBackend for the active provider, dispatched by tier.
 
-`chat()` on the router is the only entry point the rest of the codebase
-touches — llm/pipeline.py never imports ServerBackend directly.
+`chat()` is the only entry point the rest of the codebase touches — callers
+never import ServerBackend directly.
 """
 import logging
 
 from llm.backend import ServerBackend
-from llm.config import TIERS
+from llm.config import TIERS, select_provider
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +15,7 @@ class ConfigError(Exception):
     pass
 
 
-class TierRouter:
+class LLMClient:
     def __init__(self, backend: ServerBackend, models: dict[str, str]):
         self._backend = backend
         self._models = models
@@ -44,16 +44,11 @@ class TierRouter:
         await self._backend.close()
 
 
-def build_router(config) -> TierRouter:
-    """Build the single ServerBackend + tier->model_name map from config.
-    No health check here — a swap-router server can be "down" for a model
-    that hasn't been loaded yet, that's what `doctor`'s real grammar-
-    constrained call is for, not a bare reachability probe at startup."""
-    server_cfg = config["server"]
-    backend = ServerBackend(
-        base_url=server_cfg["url"],
-        grammar_mode=server_cfg.get("grammar_mode", "grammar_field"),
-        timeout=server_cfg.getfloat("timeout", 30.0),
-    )
-    models = dict(config["models"])
-    return TierRouter(backend, models)
+def build_client(config) -> LLMClient:
+    """Build the ServerBackend + tier->model map for the active provider.
+    No startup health check — a swap-router server can be "down" for a model
+    that hasn't been loaded yet."""
+    url, key, models = select_provider(config)
+    timeout = config["llm"].getfloat("timeout", 60.0) if config.has_section("llm") else 60.0
+    backend = ServerBackend(base_url=url, key=key, timeout=timeout)
+    return LLMClient(backend, models)

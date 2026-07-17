@@ -48,11 +48,9 @@ from markdown import markdown_to_html
 from worklist import start_worklist
 
 from llm.config import init_llm
-from llm.router import build_router
-from llm.pipeline import PROMPTS as LLM_PROMPTS
-from llm.pipeline import extract_typed_blocks as llm_extract_typed_blocks
-from llm.pipeline import summarize_document as llm_summarize_document
-from llm.segment import Block as LLMBlock, segment as llm_segment
+from llm.router import build_client
+from llm.prompts import PROMPTS as LLM_PROMPTS
+from llm.prompts import summarize as llm_summarize
 
 logging.basicConfig(
     level=getattr(logging, os.getenv('LOG_LEVEL', 'INFO').upper(), logging.INFO),
@@ -743,110 +741,40 @@ async def serve_fhir_metadata(request):
     return web_fhir_response(capability_statement)
 
 
-_ai_router = None  # llm.router.TierRouter, built once in init_app()
-
-def _ai_result_to_json(result) -> Dict[str, Any]:
-    return {
-        "records": [r.model_dump(mode="json") for r in result.records],
-        "timeline": [
-            {
-                "date": e.date.isoformat() if e.date else None,
-                "ordered": e.ordered,
-                "delta_note": e.delta_note,
-                "record": e.record.model_dump(mode="json"),
-            }
-            for e in result.timeline
-        ],
-    }
-
-
-@require_auth
-async def post_ai_extract(request):
-    """Run structured extraction in-process against the configured LLM
-    server (llm.cfg) — no separate process, same auth gate as every other
-    /api/* route.
-
-    Two request shapes:
-    - {"typed_blocks": [{"hint_type": "imaging", "text": "..."}, ...],
-       "narrative": "<free text, e.g. an epicrisis>"}
-      Preferred: typed_blocks are already known to be one imaging study /
-      encounter field / etc. from their own API source — no segmentation
-      guessing. narrative (if present) is the one piece HippoBridge has no
-      further structure for (e.g. checkout.epicrisis) and still gets
-      segmented server-side.
-    - {"text": "..."} (legacy): the whole blob gets segmented, kept for
-      backward compatibility during rollout.
-    """
-    if _ai_router is None:
-        return web_error_response("AI extraction is not configured", 503)
-    try:
-        data = await request.json()
-    except json.JSONDecodeError:
-        return web_error_response("Invalid JSON data")
-
-    blocks = []
-    typed_blocks = data.get('typed_blocks')
-    narrative = data.get('narrative', '')
-    legacy_text = data.get('text', '')
-
-    if typed_blocks is not None:
-        if not isinstance(typed_blocks, list):
-            return web_error_response("'typed_blocks' must be a list")
-        for item in typed_blocks:
-            if not isinstance(item, dict):
-                continue
-            text = item.get('text', '')
-            hint_type = item.get('hint_type', 'unknown')
-            if not isinstance(text, str) or not text.strip():
-                continue
-            if hint_type not in LLM_PROMPTS:
-                hint_type = 'unknown'
-            blocks.append(LLMBlock(text=text, hint_type=hint_type, source_offset=(0, len(text))))
-        if isinstance(narrative, str) and narrative.strip():
-            blocks.extend(llm_segment(narrative))
-    elif isinstance(legacy_text, str) and legacy_text.strip():
-        blocks.extend(llm_segment(legacy_text))
-
-    if not blocks:
-        return web_error_response("no extractable text provided ('typed_blocks', 'narrative', or 'text')")
-
-    # extract_block() already catches per-block backend/transport errors and
-    # flags needs_review rather than raising — this is a last-resort net for
-    # anything unexpected (e.g. a router/config problem), not the normal
-    # per-block failure path.
-    try:
-        result = await llm_extract_typed_blocks(blocks, _ai_router)
-    except Exception as exc:
-        logger.warning(f"AI extraction failed: {exc}")
-        return web_error_response("AI extraction service is unreachable", 503)
-
-    return web_json_response({"status": "success", **_ai_result_to_json(result)})
+_ai_client = None  # llm.router.LLMClient, built once in init_app()
 
 
 @require_auth
 async def post_ai_summarize(request):
-    """Rapid free-text orientation brief over a whole report — the counterpart
-    to post_ai_extract's schema-validated per-record extraction, with
-    deliberately weaker guarantees: no JSON schema, no per-field validation,
-    no echo-detection. The frontend must present this as an unverified AI
-    aid, not a validated result (see llm/pipeline.py::summarize_document)."""
-    if _ai_router is None:
-        return web_error_response("AI extraction is not configured", 503)
+    """Generate a free-text AI summary for one item, in-process against the
+    configured LLM provider (llm.cfg) — same auth gate as every other /api/*
+    route.
+
+    Body: {"kind": "report|epicrisis|imaging|lab|pre_exam", "text": "..."}.
+    Each kind maps to a (model tier, prompt) in llm/prompts.py. These are
+    deliberately weak-guarantee aids: no schema, no validation — the frontend
+    presents them as unverified ("AI-generated — verify against source")."""
+    if _ai_client is None:
+        return web_error_response("AI summaries are not configured", 503)
     try:
         data = await request.json()
     except json.JSONDecodeError:
         return web_error_response("Invalid JSON data")
+
+    kind = data.get('kind', '')
     text = data.get('text', '')
+    if kind not in LLM_PROMPTS:
+        return web_error_response(f"unknown summary kind: {kind!r}")
     if not isinstance(text, str) or not text.strip():
         return web_error_response("'text' field must be a non-empty string")
 
     try:
-        summary = await llm_summarize_document(text, _ai_router)
+        summary = await llm_summarize(_ai_client, kind, text)
     except Exception as exc:
-        logger.warning(f"AI summarization failed: {exc}")
-        return web_error_response("AI extraction service is unreachable", 503)
+        logger.warning(f"AI summarization failed ({kind}): {exc}")
+        return web_error_response("AI summary service is unreachable", 503)
 
-    return web_json_response({"status": "success", "summary": summary.strip()})
+    return web_json_response({"status": "success", "summary": summary})
 
 
 async def serve_md2html(request):
@@ -1027,13 +955,13 @@ async def on_cleanup(app):
     if _wl_server is not None:
         await asyncio.get_event_loop().run_in_executor(None, _wl_server.shutdown)
     await user_session_manager.close_all_sessions()
-    if _ai_router is not None:
-        await _ai_router.close()
+    if _ai_client is not None:
+        await _ai_client.close()
 
 async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
                    port: int = None, host: str = None, service_url: str = None):
     """Load config, wire up routes and lifecycle handlers, return the configured app."""
-    global SERVICE_URL, _PORT, _HOST, _ALLOWED_RADIOLOGISTS, _ai_router
+    global SERVICE_URL, _PORT, _HOST, _ALLOWED_RADIOLOGISTS, _ai_client
     config = load_config()
     SERVICE_URL = service_url or config.get('hipocrate', 'service_url')
     _PORT = port or config.getint('server', 'port')
@@ -1044,8 +972,8 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     logger.info(f"Service URL: {SERVICE_URL}")
 
     llm_config = init_llm()
-    _ai_router = build_router(llm_config)
-    logger.info(f"AI extraction server: {llm_config.get('server', 'url')}")
+    _ai_client = build_client(llm_config)
+    logger.info(f"AI summary provider: {_ai_client.base_url}")
 
     cache_dir = config.get('cache', 'dir').strip()
     if cache_dir and not no_disk_cache:
@@ -1092,7 +1020,6 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     app.router.add_get('/fhir/Observation', get_fhir_observation)
     app.router.add_get('/fhir/ValueSet/cnp', serve_validate_cnp)
     app.router.add_post('/fhir/md2html', serve_md2html)
-    app.router.add_post('/api/ai/extract', post_ai_extract)
     app.router.add_post('/api/ai/summarize', post_ai_summarize)
     app.router.add_get('/fhir/CodeSystem/analysis-types', serve_fhir_analysis_types)
     app.router.add_get('/fhir/spec', serve_spec)

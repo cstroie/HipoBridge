@@ -1408,6 +1408,7 @@ select {
 .trends-header {
     display: flex;
     align-items: baseline;
+    justify-content: space-between;
     gap: var(--space-16);
     margin-bottom: var(--space-16);
 }
@@ -2441,6 +2442,52 @@ select {
     margin: 0;
     white-space: pre-line;
 }
+/* Body holds marked-rendered HTML (or plain loading/error text) — block
+   children manage their own spacing, so no pre-line here. */
+.ai-summary-body { white-space: normal; }
+.ai-summary-body > :first-child { margin-top: 0; }
+.ai-summary-body > :last-child { margin-bottom: 0; }
+.ai-summary-body.ai-summary-loading { color: var(--text-light); font-style: italic; }
+.ai-summary-body table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: var(--space-8) 0;
+    font-size: var(--font-size-13);
+}
+.ai-summary-body th, .ai-summary-body td {
+    border: 1px solid var(--border);
+    padding: var(--space-4) var(--space-8);
+    text-align: left;
+}
+.ai-summary-body th { background: color-mix(in srgb, var(--muted) 12%, transparent); }
+
+/* Inline variant for cards embedded inside another card (epicrisis,
+   imaging, lab) — drops the centered max-width of the standalone version. */
+.ai-summary-card.ai-card--inline {
+    max-width: none;
+    margin: 0 0 var(--space-16);
+}
+.ai-summary-card.ai-card-error {
+    border-color: color-mix(in srgb, var(--urgent) 40%, var(--border));
+}
+
+/* Compact AI action button — matches the copy-md-btn family. */
+.btn-ai {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-6);
+    padding: var(--space-6) var(--space-12);
+    font: 600 var(--font-size-13) 'Inter', sans-serif;
+    color: var(--warning, #d97706);
+    background: color-mix(in srgb, var(--warning, #d97706) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--warning, #d97706) 30%, var(--border));
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: background 0.15s ease, opacity 0.15s ease;
+}
+.btn-ai:hover { background: color-mix(in srgb, var(--warning, #d97706) 18%, transparent); }
+.btn-ai:disabled { opacity: 0.5; cursor: default; }
+.btn-ai[hidden] { display: none; }
 
 .ai-empty-state, .ai-error-state {
     max-width: 780px;
