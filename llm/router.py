@@ -16,9 +16,10 @@ class ConfigError(Exception):
 
 
 class LLMClient:
-    def __init__(self, backend: ServerBackend, models: dict[str, str]):
+    def __init__(self, backend: ServerBackend, models: dict[str, str], language: str = "English"):
         self._backend = backend
         self._models = models
+        self.language = language
 
     async def chat(self, tier: str, messages: list[dict], **kw) -> str:
         model = self._models.get(tier)
@@ -49,6 +50,8 @@ def build_client(config) -> LLMClient:
     No startup health check — a swap-router server can be "down" for a model
     that hasn't been loaded yet."""
     url, key, models = select_provider(config)
-    timeout = config["llm"].getfloat("timeout", 60.0) if config.has_section("llm") else 60.0
+    llm_section = config["llm"] if config.has_section("llm") else {}
+    timeout = llm_section.getfloat("timeout", 60.0) if config.has_section("llm") else 60.0
+    language = (llm_section.get("language", "English") or "English").strip()
     backend = ServerBackend(base_url=url, key=key, timeout=timeout)
-    return LLMClient(backend, models)
+    return LLMClient(backend, models, language=language)

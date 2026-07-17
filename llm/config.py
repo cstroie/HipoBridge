@@ -28,6 +28,9 @@ LLM_DEFAULTS = {
     "llm": {
         "provider": "default",
         "timeout": "60",
+        # Language every AI summary must be written in, regardless of the
+        # source document's language.
+        "language": "English",
     },
     "provider:default": {
         # Local OpenAI-compatible server (llama-server, LM Studio, ...).
