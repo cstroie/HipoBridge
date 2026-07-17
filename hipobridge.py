@@ -770,8 +770,16 @@ async def post_ai_summarize(request):
 
     try:
         summary = await llm_summarize(_ai_client, kind, text)
+    except asyncio.TimeoutError:
+        logger.warning(
+            f"AI summarization timed out ({kind}, ~{len(text)} chars) — the model "
+            f"is slower than the [llm] timeout; raise it or shorten the input")
+        return web_error_response(
+            "AI summary timed out (the model took too long) — try again or raise "
+            "the [llm] timeout", 504)
     except Exception as exc:
-        logger.warning(f"AI summarization failed ({kind}): {exc}")
+        # str(exc) is empty for several aiohttp errors — log the type too.
+        logger.warning(f"AI summarization failed ({kind}): {type(exc).__name__}: {exc}")
         return web_error_response("AI summary service is unreachable", 503)
 
     return web_json_response({"status": "success", "summary": summary})

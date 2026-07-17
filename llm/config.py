@@ -27,7 +27,7 @@ _PROVIDER_PREFIX = "provider:"
 LLM_DEFAULTS = {
     "llm": {
         "provider": "default",
-        "timeout": "60",
+        "timeout": "300",
         # Language every AI summary must be written in, regardless of the
         # source document's language.
         "language": "English",
