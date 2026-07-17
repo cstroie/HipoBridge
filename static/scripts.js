@@ -4514,7 +4514,7 @@ document.addEventListener('DOMContentLoaded', function() {
             timeEl.textContent = isMultiDay ? (time || day) : (time || authoredOn);
 
             const dot = row.querySelector('.timeline-dot');
-            dot.classList.add(avatar.cls);
+            if (avatar.cls) dot.classList.add(avatar.cls);
             if (isLast) row.querySelector('.timeline-line').remove();
 
             // Card
@@ -4522,7 +4522,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (isUrgent) card.classList.add('urgent-ring');
 
             const avatarEl = row.querySelector('.timeline-mod-avatar');
-            avatarEl.classList.add(avatar.cls);
+            if (avatar.cls) avatarEl.classList.add(avatar.cls);
             avatarEl.innerHTML = modAvatarHTML(modalitySlug);
             avatarEl.title = MODALITY_INFO[modalitySlug]?.label || laboratory || modalitySlug;
 
@@ -4539,7 +4539,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const paySep   = row.querySelector('.timeline-pay-sep');
             if (payInfo) {
                 payBadge.textContent = payInfo.label;
-                payBadge.classList.add(payInfo.cls);
+                if (payInfo.cls) payBadge.classList.add(payInfo.cls);
                 payBadge.hidden = false;
             } else {
                 payBadge.remove();
@@ -4585,7 +4585,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             const statusBadge = row.querySelector('.timeline-status-badge');
-            statusBadge.classList.add(statusClass);
+            if (statusClass) statusBadge.classList.add(statusClass);
             statusBadge.textContent = SCHEDULE_STATUS_LABEL[status] || status;
             statusBadge.title = status;
 
