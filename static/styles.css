@@ -1581,8 +1581,8 @@ select {
     gap: var(--space-10);
 }
 
-/* Compact icon-only copy button in the lab card header */
-.lab-copy-btn {
+/* Shared compact icon-only style for every "copy as Markdown" button */
+.copy-md-btn {
     flex-shrink: 0;
     width: 28px;
     height: 28px;
@@ -1597,15 +1597,15 @@ select {
     cursor: pointer;
     transition: background var(--transition-base), color var(--transition-base);
 }
-.lab-copy-btn:hover {
+.copy-md-btn:hover {
     color: var(--primary);
     background: color-mix(in srgb, var(--primary) 8%, transparent);
 }
-.lab-copy-btn:focus-visible {
+.copy-md-btn:focus-visible {
     outline: none;
     box-shadow: var(--focus-ring);
 }
-.lab-copy-btn[hidden] { display: none; }
+.copy-md-btn[hidden] { display: none; }
 
 .card-title {
     margin: 0;
@@ -3145,9 +3145,6 @@ select {
     display: flex;
     justify-content: flex-end;
     padding: var(--spacing-sm) 0 0;
-}
-.epi-copy-btn {
-    font-size: var(--font-size-xs);
 }
 .epi-prose--empty {
     border-left: none;

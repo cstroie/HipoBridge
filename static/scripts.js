@@ -1324,8 +1324,8 @@ document.addEventListener('DOMContentLoaded', function() {
         setTimeout(() => { icon.className = orig; }, 1500);
     }
 
-    function copyEpicrisisMarkdown() { return copyMarkdown(elements.epicrisisContent, elements.copyEpicrisisBtn); }
-    function copyReportMarkdown()    { return copyMarkdown(elements.patientReportMarkdown, elements.copyReportBtn); }
+    function copyEpicrisisMarkdown() { return copyMarkdown(elements.epicrisisContent, elements.copyEpicrisisBtn, () => flashIcon(elements.copyEpicrisisBtn)); }
+    function copyReportMarkdown()    { return copyMarkdown(elements.patientReportMarkdown, elements.copyReportBtn, () => flashIcon(elements.copyReportBtn)); }
 
     // ── AI extraction tab ─────────────────────────────────────────────
     const RECORD_TYPE_META = {
@@ -3427,6 +3427,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Reset report content before re-fetching so stale injected text doesn't duplicate
         article.querySelector('.report-preview')?.replaceChildren();
         article.classList.remove('no-report');
+        // Reset the copy button; re-revealed below only when a report exists
+        const cardCopyBtn = article.querySelector('.card-copy-btn');
+        if (cardCopyBtn) { cardCopyBtn.hidden = true; cardCopyBtn.onclick = null; }
 
         let hasReportFromStudy = false;
         try {
@@ -3480,6 +3483,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (signedEl) signedEl.hidden = !physician;
             }
 
+            // Markdown for the header copy button, accumulated per branch below.
+            // Lab cards copy a concise value table; imaging/other cards copy the
+            // report text. Empty → button stays hidden.
+            let copyMd = '', copyIsLab = false;
+
             const reportPreview = article.querySelector('.report-preview');
             if (reportPreview) {
                 const notes = resultNotes;
@@ -3487,15 +3495,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     const allLab = forms.every(f => f.type === 'lab' || f.reference !== undefined);
                     if (allLab) {
                         reportPreview.appendChild(buildLabTable(forms));
-                        // Reveal the header copy button and load it with the
-                        // concise Markdown table. onclick (not addEventListener)
-                        // stays idempotent if this card re-renders.
-                        const copyBtn = article.querySelector('.lab-copy-btn');
-                        if (copyBtn) {
-                            copyBtn.dataset.markdown = buildLabMarkdown(forms);
-                            copyBtn.hidden = false;
-                            copyBtn.onclick = () => copyMarkdown(copyBtn, copyBtn, () => flashIcon(copyBtn));
-                        }
+                        copyMd = buildLabMarkdown(forms);
+                        copyIsLab = true;
                         // Tag card with lab sections for dynamic chip filtering
                         const sections = [...new Set(forms.map(f => f.section).filter(Boolean))];
                         if (sections.length) {
@@ -3524,6 +3525,11 @@ document.addEventListener('DOMContentLoaded', function() {
                                 reportPreview.appendChild(pre);
                             }
                         }
+                        copyMd = forms
+                            .map(f => (forms.length > 1 && f.title) ? `##### ${f.title}\n\n${f.data || ''}` : (f.data || ''))
+                            .filter(s => s.trim())
+                            .join('\n\n---\n\n')
+                            .trim();
                     }
                 } else if (notes.length > 0) {
                     const series = data.series || [];
@@ -3544,13 +3550,34 @@ document.addEventListener('DOMContentLoaded', function() {
                         div.innerHTML = marked.parse(normalised).trim();
                         reportPreview.appendChild(div);
                     });
+                    copyMd = notes
+                        .map((note, i) => {
+                            if (!note.text) return '';
+                            const t = (showTitles && series[i]?.description) ? `##### ${series[i].description}\n\n` : '';
+                            return t + note.text.trim();
+                        })
+                        .filter(Boolean)
+                        .join('\n\n');
                 } else if (data.conclusion) {
                     const div = document.createElement('div');
                     div.innerHTML = marked.parse(data.conclusion);
                     reportPreview.appendChild(div);
+                    copyMd = data.conclusion.trim();
                 } else {
                     article.classList.add('no-report');
                 }
+            }
+
+            // Reveal the header copy button once report content is known.
+            // Same icon-only control for lab and imaging; only the label differs.
+            // onclick (not addEventListener) stays idempotent across re-renders.
+            if (cardCopyBtn && copyMd) {
+                const label = copyIsLab ? 'Copy lab values as Markdown' : 'Copy report as Markdown';
+                cardCopyBtn.dataset.markdown = copyMd;
+                cardCopyBtn.title = label;
+                cardCopyBtn.setAttribute('aria-label', label);
+                cardCopyBtn.hidden = false;
+                cardCopyBtn.onclick = () => copyMarkdown(cardCopyBtn, cardCopyBtn, () => flashIcon(cardCopyBtn));
             }
 
             // ImagingStudy link
@@ -4025,7 +4052,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const copyBtn = card.querySelector('.epi-copy-btn');
             if (isSubstantiveText(epicrisisText)) {
                 card.querySelector('.epi-prose').innerHTML = marked.parse(epicrisisText.trim());
-                copyBtn.addEventListener('click', () => copyMarkdown(card, copyBtn));
+                copyBtn.addEventListener('click', () => copyMarkdown(card, copyBtn, () => flashIcon(copyBtn)));
             } else {
                 const prose = card.querySelector('.epi-prose');
                 prose.innerHTML = '<p class="epi-empty">— no content —</p>';

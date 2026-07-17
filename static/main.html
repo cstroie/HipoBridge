@@ -307,9 +307,8 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             <h1 id="epicrisis-tab-heading" class="epicrisis-hero-title">Discharge Summaries</h1>
                             <p class="epicrisis-meta" id="epicrisisMeta">Discharge summaries</p>
                         </div>
-                        <button class="btn-secondary" id="copyEpicrisisBtn" aria-label="Copy epicrisis as Markdown">
-                            <i class="fas fa-copy"></i>
-                            <span>Copy Markdown</span>
+                        <button class="copy-md-btn" id="copyEpicrisisBtn" aria-label="Copy epicrisis as Markdown" title="Copy epicrisis as Markdown">
+                            <i class="fas fa-copy" aria-hidden="true"></i>
                         </button>
                     </header>
 
@@ -328,9 +327,8 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             <h1 id="report-tab-heading" class="report-hero-title">Patient Report</h1>
                             <p class="report-hero-sub">Structured for LLM consumption — copy and paste into your AI assistant</p>
                         </div>
-                        <button class="btn-secondary" id="copyReportBtn" aria-label="Copy report as Markdown">
-                            <i class="fas fa-copy"></i>
-                            <span>Copy Markdown</span>
+                        <button class="copy-md-btn" id="copyReportBtn" aria-label="Copy report as Markdown" title="Copy report as Markdown">
+                            <i class="fas fa-copy" aria-hidden="true"></i>
                         </button>
                     </header>
 
@@ -551,7 +549,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                                 </p>
                             </hgroup>
                             <strong class="urgent-badge" hidden>Urgent</strong>
-                            <button type="button" class="lab-copy-btn" hidden aria-label="Copy lab values as Markdown" title="Copy lab values as Markdown">
+                            <button type="button" class="copy-md-btn card-copy-btn" hidden aria-label="Copy as Markdown" title="Copy as Markdown">
                                 <i class="fas fa-copy" aria-hidden="true"></i>
                             </button>
                         </div>
@@ -756,8 +754,8 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                 <div class="epi-card-body" hidden>
                     <div class="epi-card-inner">
                         <div class="epi-card-toolbar" role="toolbar">
-                            <button type="button" class="btn-secondary epi-copy-btn" aria-label="Copy this epicrisis as Markdown">
-                                <i class="fas fa-copy" aria-hidden="true"></i> <span>Copy</span>
+                            <button type="button" class="copy-md-btn epi-copy-btn" aria-label="Copy this epicrisis as Markdown" title="Copy this epicrisis as Markdown">
+                                <i class="fas fa-copy" aria-hidden="true"></i>
                             </button>
                         </div>
                         <div class="epi-prose"></div>
