@@ -526,7 +526,9 @@ small {
     gap: var(--space-8);
     font: 600 var(--font-size-13) 'Inter', sans-serif;
     padding: 0 var(--space-12);
-    height: var(--space-40);
+    /* Stretch to the full app-bar height so the active underline lands on the
+       bar's bottom edge; the label stays centred via inline-flex. */
+    align-self: stretch;
     background: none;
     border: none;
     /* symmetric transparent top border keeps the label vertically centred
