@@ -39,11 +39,11 @@ class TestNameToDicom(unittest.TestCase):
 
     def test_dr_prefix_separate(self):
         result = _name_to_dicom('DR. IONESCU MARIA')
-        self.assertEqual(result, 'IONESCU^MARIA^^DR.')
+        self.assertEqual(result, 'IONESCU^MARIA ^^DR.')
 
     def test_glued_prefix(self):
         result = _name_to_dicom('DR.POPESCU ION')
-        self.assertEqual(result, 'POPESCU^ION^^DR.')
+        self.assertEqual(result, 'POPESCU^ION ^^DR.')
 
     def test_prof_dr(self):
         result = _name_to_dicom('PROF. DR. STANESCU ANA')

@@ -219,11 +219,18 @@ def _name_to_dicom(name: str) -> str:
     'Family^Given^Middle' as 'Family Middle, Given', which reorders the name
     on screen. Keeping the Middle component empty avoids that.
 
+    When a title/prefix is present, the Middle component sits empty between
+    Given and Prefix. Some modality displays (e.g. referring physician on
+    the worklist) render PN components with no separator of their own, so an
+    empty Middle causes Given and Prefix to run together with no whitespace
+    (e.g. 'MIHAICONF. UNIV. DR.'). A trailing space is embedded directly in
+    Given (or Family, if there is no given name) to guard against this.
+
     Handles:
-    - Standalone titles:      'DR. OSSEBI GUY BLANCHARD'   → 'OSSEBI^GUY BLANCHARD^^DR.'
-    - Multiple titles:        'CONF. UNIV. DR. STAN MIHAI'  → 'STAN^MIHAI^^CONF. UNIV. DR.'
-    - Glued to family name:   'DR.STEFAN ELENA ELIS'        → 'STEFAN^ELENA ELIS^^DR.'
-    - Internal-dot title:     'S.L. POPA ION'               → 'POPA^ION^^S.L.'
+    - Standalone titles:      'DR. OSSEBI GUY BLANCHARD'   → 'OSSEBI^GUY BLANCHARD ^^DR.'
+    - Multiple titles:        'CONF. UNIV. DR. STAN MIHAI'  → 'STAN^MIHAI ^^CONF. UNIV. DR.'
+    - Glued to family name:   'DR.STEFAN ELENA ELIS'        → 'STEFAN^ELENA ELIS ^^DR.'
+    - Internal-dot title:     'S.L. POPA ION'               → 'POPA^ION ^^S.L.'
     - No title:               'IONESCU MARIA'               → 'IONESCU^MARIA'
     """
     if not name:
@@ -253,6 +260,10 @@ def _name_to_dicom(name: str) -> str:
     if prefix:
         family = parts[0]
         given  = ' '.join(parts[1:]) if len(parts) > 1 else ''
+        if given:
+            given += ' '
+        else:
+            family += ' '
         return f'{family}^{given}^^{prefix}'
 
     family = parts[0]
