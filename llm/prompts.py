@@ -93,6 +93,6 @@ async def summarize(client, kind: str, text: str) -> str:
             {"role": "user", "content": text},
         ],
         max_tokens=max_tokens,
-        temperature=0.2,
+        temperature=0.1,
     )
     return reply.strip()

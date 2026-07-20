@@ -52,7 +52,7 @@ class ServerBackend:
             return False
 
     async def chat(self, model: str, messages: list[dict], *,
-                    max_tokens: int = 512, temperature: float = 0.2) -> str:
+                    max_tokens: int = 512, temperature: float = 0.1) -> str:
         payload = {
             "model": model,
             "messages": messages,
