@@ -33,6 +33,7 @@ import functools
 from datetime import datetime, timezone
 import configparser
 import base64
+from hashlib import sha256
 
 from fhir import OperationOutcome, Resource
 
@@ -40,7 +41,7 @@ from hipoclient import ANALYSIS_TYPES
 from hipoclient import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientImagingStudy, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientServiceRequestSearch, HipoClientCheckout, HipoClientCheckin, HipoClientCheckup, HipoClientSchedule, HipoClientCerere, HipoClientPresentation, HipoClientObservationBundle, HipoClientWhoami, HipoClientReportWrite, HipoClientReportValidate, HipoClientCererePerform
 from hipoclient import user_session_manager, url_cache
 from hipoclient import evict_patient_cache
-from urlcache import FilesystemCache
+from urlcache import FilesystemCache, URLCache
 from hipodata import HipoData
 
 from extractors import parse_cnp
@@ -744,6 +745,18 @@ async def serve_fhir_metadata(request):
 
 _ai_client = None  # llm.router.LLMClient, built once in init_app()
 
+# AI summaries are keyed by (kind, sha256(text)) — same input always regenerates
+# the same key, so a page reload can redisplay a prior summary without calling
+# the LLM again. No TTL-driven staleness here: the only way to get a fresh
+# summary for the same text is the explicit "regenerate" (force=True) request.
+# in_app() attaches a FilesystemCache (separate subdirectory from url_cache's)
+# so summaries also survive a restart, unless --no-disk-cache is set.
+ai_cache = URLCache(max_size=1000, timeout=365 * 86400)
+
+
+def _ai_cache_key(kind: str, text: str) -> str:
+    return f"{kind}:{sha256(text.encode('utf-8')).hexdigest()}"
+
 
 @require_auth
 async def post_ai_summarize(request):
@@ -751,10 +764,16 @@ async def post_ai_summarize(request):
     configured LLM provider (llm.cfg) — same auth gate as every other /api/*
     route.
 
-    Body: {"kind": "report|epicrisis|imaging|lab|pre_exam", "text": "..."}.
-    Each kind maps to a (model tier, prompt) in llm/prompts.py. These are
-    deliberately weak-guarantee aids: no schema, no validation — the frontend
-    presents them as unverified ("AI-generated — verify against source")."""
+    Body: {"kind": "report|epicrisis|imaging|lab|pre_exam", "text": "...",
+    "force": bool, "check_only": bool}. Each kind maps to a (model tier,
+    prompt) in llm/prompts.py. These are deliberately weak-guarantee aids: no
+    schema, no validation — the frontend presents them as unverified
+    ("AI-generated — verify against source").
+
+    Results are cached (in-memory + disk) keyed by (kind, sha256(text)), so
+    the same input never re-hits the LLM unless force=True. check_only=True
+    skips generation entirely and just reports whether a cached summary
+    exists — used on page load to silently redisplay a prior summary."""
     if _ai_client is None:
         return web_error_response("AI summaries are not configured", 503)
     try:
@@ -764,10 +783,21 @@ async def post_ai_summarize(request):
 
     kind = data.get('kind', '')
     text = data.get('text', '')
+    force = bool(data.get('force'))
+    check_only = bool(data.get('check_only'))
     if kind not in LLM_PROMPTS:
         return web_error_response(f"unknown summary kind: {kind!r}")
     if not isinstance(text, str) or not text.strip():
         return web_error_response("'text' field must be a non-empty string")
+
+    cache_key = _ai_cache_key(kind, text)
+    if not force:
+        cached = ai_cache.get(cache_key)
+        if cached is not None:
+            return web_json_response({"status": "success", "summary": cached, "cached": True})
+    if check_only:
+        return web_json_response({"status": "not_cached"})
+
     if not has_meaningful_content(text):
         # Don't hand the model an effectively-empty record — small models
         # fabricate a full scenario (including demographics) rather than
@@ -790,7 +820,8 @@ async def post_ai_summarize(request):
         logger.warning(f"AI summarization failed ({kind}): {type(exc).__name__}: {exc}")
         return web_error_response("AI summary service is unreachable", 503)
 
-    return web_json_response({"status": "success", "summary": summary})
+    ai_cache.put(cache_key, summary)
+    return web_json_response({"status": "success", "summary": summary, "cached": False})
 
 
 async def serve_md2html(request):
@@ -1007,6 +1038,8 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
         cache_ttl = config.getint('cache', 'ttl')
         cache_max_age = config.getint('cache', 'max_age_days')
         url_cache.fs_cache = FilesystemCache(cache_dir, ttl=cache_ttl, max_age_days=cache_max_age)
+        ai_cache.fs_cache = FilesystemCache(
+            os.path.join(cache_dir, 'ai'), ttl=ai_cache.timeout, max_age_days=0)
         asyncio.get_event_loop().create_task(_periodic_cache_cleanup())
     elif no_disk_cache and cache_dir:
         logger.info("Persistent filesystem cache disabled (--no-disk-cache)")
