@@ -1,9 +1,10 @@
 """LLMClient: one ServerBackend for the active provider, dispatched by tier.
 
-`chat()` is the only entry point the rest of the codebase touches — callers
-never import ServerBackend directly.
+`chat()`/`chat_stream()` are the only entry points the rest of the codebase
+touches — callers never import ServerBackend directly.
 """
 import logging
+from typing import AsyncIterator
 
 from llm.backend import ServerBackend
 from llm.config import TIERS, select_provider
@@ -26,6 +27,13 @@ class LLMClient:
         if not model:
             raise ConfigError(f"no model configured for tier: {tier}")
         return await self._backend.chat(model, messages, **kw)
+
+    async def chat_stream(self, tier: str, messages: list[dict], **kw) -> AsyncIterator[str]:
+        model = self._models.get(tier)
+        if not model:
+            raise ConfigError(f"no model configured for tier: {tier}")
+        async for piece in self._backend.chat_stream(model, messages, **kw):
+            yield piece
 
     def model_for(self, tier: str) -> str | None:
         return self._models.get(tier)

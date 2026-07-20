@@ -100,22 +100,52 @@ def _date_directive(today: str | None = None) -> str:
     )
 
 
-async def summarize(client, kind: str, text: str) -> str:
-    """Run the prompt for `kind` over `text` and return the reply. The output
-    language comes from client.language (configured in llm.cfg). Raises
-    KeyError for an unknown kind (callers validate first)."""
-    tier, system, max_tokens = PROMPTS[kind]
+# Kinds served by the streaming endpoint (POST /api/ai/summarize/stream).
+# Separate from DATE_AWARE_KINDS even though currently the same set — one is
+# about date context, the other about transport; independently editable.
+# imaging (40 tokens) and lab (already fast, table-free prose) don't benefit
+# enough from streaming to justify a second code path for them.
+STREAMING_KINDS = frozenset({"report", "epicrisis", "pre_exam"})
+
+
+def _build_messages(client, kind: str, text: str) -> list[dict]:
+    """Assemble the (system, user) messages for `kind` — shared by
+    summarize() and summarize_stream() so the two never drift apart."""
+    _tier, system, _max_tokens = PROMPTS[kind]
     language = getattr(client, "language", "English") or "English"
     system_content = system + _language_directive(language)
     if kind in DATE_AWARE_KINDS:
         system_content += _date_directive()
+    return [
+        {"role": "system", "content": system_content},
+        {"role": "user", "content": text},
+    ]
+
+
+async def summarize(client, kind: str, text: str) -> str:
+    """Run the prompt for `kind` over `text` and return the reply. The output
+    language comes from client.language (configured in llm.cfg). Raises
+    KeyError for an unknown kind (callers validate first)."""
+    tier, _system, max_tokens = PROMPTS[kind]
     reply = await client.chat(
         tier,
-        [
-            {"role": "system", "content": system_content},
-            {"role": "user", "content": text},
-        ],
+        _build_messages(client, kind, text),
         max_tokens=max_tokens,
         temperature=0.1,
     )
     return reply.strip()
+
+
+async def summarize_stream(client, kind: str, text: str):
+    """Streaming counterpart to summarize() — yields text pieces as they
+    arrive instead of returning one final string. Only meaningful for
+    `kind in STREAMING_KINDS`; callers validate that before calling (mirrors
+    summarize(), which likewise assumes a valid, known kind)."""
+    tier, _system, max_tokens = PROMPTS[kind]
+    async for piece in client.chat_stream(
+        tier,
+        _build_messages(client, kind, text),
+        max_tokens=max_tokens,
+        temperature=0.1,
+    ):
+        yield piece

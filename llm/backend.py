@@ -5,7 +5,9 @@ model name to request. Free-text completions only; no grammar/JSON-schema
 constraint (the extraction pipeline that needed those is gone).
 """
 import asyncio
+import json
 import logging
+from typing import AsyncIterator
 
 import aiohttp
 
@@ -67,6 +69,58 @@ class ServerBackend:
                 data = await resp.json()
                 content = data["choices"][0]["message"]["content"]
                 return strip_think_block(content)
+
+    async def chat_stream(self, model: str, messages: list[dict], *,
+                           max_tokens: int = 512,
+                           temperature: float = 0.1) -> AsyncIterator[str]:
+        """Stream a completion, yielding text pieces as they arrive.
+
+        Only forwards `delta.content` — never `delta.reasoning_content`,
+        which some models (gpt-oss/qwen-reasoning style) use for a separate
+        chain-of-thought channel. A model that leaks its reasoning this way
+        simply produces no visible stream instead of streaming garbage to
+        the caller; callers still see it fail via an empty/short result.
+        `strip_think_block()` is not applied per-chunk — callers should run
+        it once over the fully accumulated text (inline `<think>` tags, if
+        any slipped into `content` itself, would already have been yielded
+        raw chunk-by-chunk before that point)."""
+        payload = {
+            "model": model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "stream": True,
+        }
+        async with _llm_semaphore:
+            async with self._client().post(
+                f"{self.base_url}/chat/completions",
+                json=payload, headers=self._headers()) as resp:
+                resp.raise_for_status()
+                async for raw in resp.content:
+                    line = raw.decode("utf-8", "ignore").strip()
+                    if not line or not line.startswith("data:"):
+                        continue
+                    data = line[len("data:"):].strip()
+                    if data == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(data)
+                    except json.JSONDecodeError:
+                        continue
+                    if chunk.get("error"):
+                        # e.g. LM Studio's "event: error" line (context-length
+                        # overflow and similar) — has no "choices" key, so
+                        # without this check it would silently fall through
+                        # the `if not choices: continue` below and vanish.
+                        err = chunk["error"]
+                        message = err.get("message") if isinstance(err, dict) else str(err)
+                        raise RuntimeError(message or "LLM server returned an error")
+                    choices = chunk.get("choices") or []
+                    if not choices:
+                        continue
+                    piece = (choices[0].get("delta") or {}).get("content")
+                    if piece:
+                        yield piece
 
 
 def strip_think_block(text: str) -> str:

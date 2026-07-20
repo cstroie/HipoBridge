@@ -2783,6 +2783,9 @@ select {
 }
 .ai-summary-body strong { color: var(--text); }
 .ai-summary-body.ai-summary-loading { color: var(--text-light); font-style: italic; }
+/* Plain-text incremental phase (before the final Markdown pass on stream
+   completion) — preserve the raw newlines in the growing text node. */
+.ai-summary-body.ai-summary-streaming { white-space: pre-wrap; }
 .ai-summary-body table {
     border-collapse: collapse;
     width: 100%;
