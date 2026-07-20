@@ -3166,7 +3166,12 @@ document.addEventListener('DOMContentLoaded', function() {
             return (a.low != null && m.v < a.low) || (a.high != null && m.v > a.high);
         };
         const header = ['Analyte', 'Interval', ...colDates].join(' | ');
-        const abnormalAnalytes = analytes.filter(a => a.measurements.some(m => isAbnormal(m, a)));
+        // Only flag an analyte abnormal if it is out of range within the same
+        // 5-most-recent-dates window that is actually sent (colDates), not
+        // anywhere in its full history.
+        const colSet = new Set(colDates);
+        const abnormalAnalytes = analytes.filter(a => a.measurements.some(
+            m => colSet.has(m.date?.slice(0, 10)) && isAbnormal(m, a)));
         const rows = abnormalAnalytes.map(a => {
             const byDate = {};
             for (const m of a.measurements) byDate[m.date?.slice(0, 10) || ''] = m;
