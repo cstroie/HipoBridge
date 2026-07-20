@@ -9,7 +9,7 @@ import configparser
 import unittest
 
 from llm.config import LLM_DEFAULTS, TIERS, select_provider
-from llm.prompts import PROMPTS
+from llm.prompts import PROMPTS, DATE_AWARE_KINDS, _date_directive
 
 
 def _config(overlay: dict | None = None) -> configparser.ConfigParser:
@@ -69,6 +69,18 @@ class TestPromptRegistry(unittest.TestCase):
         self.assertEqual(PROMPTS["imaging"][0], "medical")
         self.assertEqual(PROMPTS["lab"][0], "medical")
         self.assertEqual(PROMPTS["pre_exam"][0], "medical")
+
+    def test_date_aware_kinds(self):
+        # Timeline/narrative kinds get a "today" anchor; a single point-in-time
+        # report (imaging) and an already-per-row-timestamped one (lab) don't.
+        self.assertEqual(DATE_AWARE_KINDS, {"report", "epicrisis", "pre_exam"})
+        self.assertNotIn("imaging", DATE_AWARE_KINDS)
+        self.assertNotIn("lab", DATE_AWARE_KINDS)
+
+    def test_date_directive_forbids_inference(self):
+        directive = _date_directive(today="2026-07-21")
+        self.assertIn("2026-07-21", directive)
+        self.assertIn("Never use it to compute, infer, or invent", directive)
 
 
 if __name__ == "__main__":

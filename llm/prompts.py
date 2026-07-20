@@ -14,6 +14,7 @@ results.
 import logging
 import os
 import re
+from datetime import date
 
 logger = logging.getLogger(__name__)
 
@@ -80,16 +81,38 @@ def _language_directive(language: str) -> str:
     )
 
 
+# Kinds that aggregate or narrate events across time, where knowing "today"
+# helps the model judge recency/ongoing-ness (e.g. pre_exam's "recent course").
+# Excludes imaging (single point-in-time report, no timeline) and lab (each
+# row is already explicitly timestamped) — those have no use for it and it
+# would just be unused prompt weight on already-lean, short-output kinds.
+DATE_AWARE_KINDS = frozenset({"report", "epicrisis", "pre_exam"})
+
+
+def _date_directive(today: str | None = None) -> str:
+    today = today or date.today().isoformat()
+    return (
+        f" Today's date is {today}. Use this only to judge how recent an "
+        f"event is, whether a course is still ongoing, or to resolve an "
+        f"explicit relative date in the source (e.g. 'yesterday'). Never use "
+        f"it to compute, infer, or invent any fact — such as an age — that "
+        f"is not explicitly stated in the source."
+    )
+
+
 async def summarize(client, kind: str, text: str) -> str:
     """Run the prompt for `kind` over `text` and return the reply. The output
     language comes from client.language (configured in llm.cfg). Raises
     KeyError for an unknown kind (callers validate first)."""
     tier, system, max_tokens = PROMPTS[kind]
     language = getattr(client, "language", "English") or "English"
+    system_content = system + _language_directive(language)
+    if kind in DATE_AWARE_KINDS:
+        system_content += _date_directive()
     reply = await client.chat(
         tier,
         [
-            {"role": "system", "content": system + _language_directive(language)},
+            {"role": "system", "content": system_content},
             {"role": "user", "content": text},
         ],
         max_tokens=max_tokens,
