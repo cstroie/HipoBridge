@@ -325,6 +325,27 @@ def _weight_to_kg(weight: str) -> str:
         return ''
 
 
+def _age_to_dicom(birth_date_iso: str) -> str:
+    """Convert 'YYYY-MM-DD' to DICOM AS 'nnnY' (age in years as of today).
+
+    Some worklist displays (e.g. the age column on Canon/Toshiba US
+    scanners) read PatientAge (0010,1010) directly rather than computing
+    it from PatientBirthDate — leave PatientBirthDate authoritative but
+    also populate this Type 3 attribute so those displays aren't blank.
+    """
+    if not birth_date_iso:
+        return ''
+    try:
+        born = datetime.strptime(birth_date_iso[:10], '%Y-%m-%d').date()
+    except ValueError:
+        return ''
+    today = datetime.now().date()
+    years = today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+    if years < 0:
+        return ''
+    return f'{years:03d}Y'
+
+
 def _build_datasets(entry: dict, patient_info: Optional[dict],
                     accession_prefix: str = '') -> List['Dataset']:
     """Build one pydicom Dataset per exam in the request.
@@ -337,24 +358,26 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
     """
     # Patient demographics
     if patient_info:
-        patient_name = _name_to_dicom(patient_info.get('name') or entry.get('patient_name', ''))
-        cnp          = patient_info.get('cnp', '')
-        patient_id   = cnp or patient_info.get('id', '')
-        birth_date   = _date_to_dicom(patient_info.get('birth_date', ''))
-        sex          = _sex_to_dicom(patient_info.get('sex', ''))
+        patient_name  = _name_to_dicom(patient_info.get('name') or entry.get('patient_name', ''))
+        cnp           = patient_info.get('cnp', '')
+        patient_id    = cnp or patient_info.get('id', '')
+        birth_date_iso = patient_info.get('birth_date', '')
+        sex           = _sex_to_dicom(patient_info.get('sex', ''))
         # Derive birth date and sex from CNP when the patient record lacks them
-        if (not birth_date or sex == 'O') and cnp:
+        if (not birth_date_iso or sex == 'O') and cnp:
             parsed = parse_cnp(cnp)
             if parsed.get('valid'):
-                if not birth_date:
-                    birth_date = _date_to_dicom(parsed.get('birth_date', ''))
+                if not birth_date_iso:
+                    birth_date_iso = parsed.get('birth_date', '')
                 if sex == 'O':
                     sex = _sex_to_dicom(parsed.get('gender', ''))
     else:
-        patient_name = _name_to_dicom(entry.get('patient_name', ''))
-        patient_id   = entry.get('request_id', '')
-        birth_date   = ''
-        sex          = 'O'
+        patient_name   = _name_to_dicom(entry.get('patient_name', ''))
+        patient_id     = entry.get('request_id', '')
+        birth_date_iso = ''
+        sex            = 'O'
+
+    birth_date = _date_to_dicom(birth_date_iso)
 
     request_id   = entry.get('request_id', '')
     request_code = entry.get('request_code', '')
@@ -399,6 +422,7 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
         ds.PatientID        = patient_id
         ds.PatientBirthDate = birth_date
         ds.PatientSex       = sex
+        ds.PatientAge       = _age_to_dicom(birth_date_iso)
         ds.PatientAddress            = address
         ds.PatientTelephoneNumbers   = phone
         if size:
@@ -415,6 +439,7 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
         ds.RequestedProcedureDescription = exam_name
         ds.RequestedProcedureID          = f'{request_id}-{idx}' if multi else request_id
         ds.StudyInstanceUID              = study_uid
+        ds.StudyDescription              = exam_name
         ds.RequestedProcedurePriority    = priority
         ds.ReasonForTheRequestedProcedure = justification
         ds.InstitutionalDepartmentName   = section
@@ -427,6 +452,7 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
         sps.ScheduledProcedureStepID          = f'{request_id}-{idx}' if multi else request_id
         sps.ScheduledStationAETitle           = ''
         sps.ScheduledProcedureStepStatus      = 'SCHEDULED'
+        sps.CommentsOnTheScheduledProcedureStep = comments or justification
         ds.ScheduledProcedureStepSequence = Sequence([sps])
         datasets.append(ds)
 

@@ -626,11 +626,11 @@ class HipoClient:
                     if self.is_login_page(response_text):
                         if method == "GET":
                             self.url_cache.resolve_inflight(url)
-                        return None, "Authentication failed after retry"
+                        return None, "Authentication failed: login succeeded but session is still invalid"
                 else:
                     if method == "GET":
                         self.url_cache.resolve_inflight(url)
-                    return None, "Re-authentication failed"
+                    return None, "Authentication failed: invalid Hipocrate username or password"
 
             # Cache the response for GET requests and wake up any waiters
             if method == "GET":

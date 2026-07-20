@@ -850,14 +850,19 @@ def web_error_response(message: str, status_code: int = 400, details: Dict[str, 
 
 
 def web_json_response(data: Dict[str, Any]) -> web.Response:
-    """Return 200 for successful HipoData, 404 for not-found, 500 for errors."""
+    """Return 200 for successful HipoData, 401 for auth failures, 404 for not-found, 500 for other errors."""
     s = data.get("status")
     if s == "success":
         status = 200
     elif s == "error":
-        msg = data.get("message", "")
-        # Distinguish parse/upstream failures (500) from not-found (404)
-        status = 404 if "not found" in msg.lower() else 500
+        msg = data.get("message", "").lower()
+        # Distinguish auth failures (401) and not-found (404) from generic upstream failures (500)
+        if "authentication failed" in msg:
+            status = 401
+        elif "not found" in msg:
+            status = 404
+        else:
+            status = 500
     else:
         status = 200
     return web.json_response(data, status=status)
@@ -894,8 +899,14 @@ def web_fhir_response(data) -> web.Response:
     status_code = 200
     if isinstance(response_data, dict) and response_data.get('resourceType') == 'OperationOutcome':
         issues = response_data.get('issue', [])
+
+        def _text(issue):
+            return (issue.get('details', {}) or {}).get('text', '').lower()
+
         if any(i.get('code') == 'not-found' for i in issues):
             status_code = 404
+        elif any('authentication failed' in _text(i) for i in issues):
+            status_code = 401
         elif any(i.get('severity') in ['error', 'fatal'] for i in issues):
             status_code = 500
         elif any(i.get('severity') == 'warning' for i in issues):
