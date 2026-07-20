@@ -414,3 +414,69 @@ No new winner. Shortlist stands: **medgemma-4b-it, gemma-3n-e4b,
 ministral-3-3b, qwen3-4b (`/no_think`)**. qwen3-1.7b is a possible **fast
 imaging-triage-only** fallback. LFM2.5 needs a runtime update before it can even
 be evaluated.
+
+---
+
+# Round 6 — consolidated numeric fidelity scores (2026-07-20)
+
+Every model/kind pair actually tested, scored 0–10 (faithfulness + completeness,
+hallucination-penalized) against the hand-written reference and source for
+that kind. Same rubric as the original Round-1 epicrisis scoring, now applied
+uniformly. "—" = not runnable (load/timeout error) or CoT leak with no usable
+final answer (scored 0 where a partial/garbled answer did appear).
+
+| Model | imaging | lab | report | pre_exam |
+|---|---|---|---|---|
+| **medgemma-4b-it** | 10 | 9 | 7 | 7 |
+| **google/gemma-3n-e4b** | 10 | 9 | 9 | 9 |
+| **mistralai/ministral-3-3b** | 10 | 9 | 8 | 8 |
+| **qwen/qwen3-4b (`/no_think`)** | 10 | 8 | 9 | 5 |
+| google/gemma-3n-e2b | 8 | 8 | 8 | 8 |
+| lfm2-8b-a1b (2.0) | 10 | 7 | 2 | 3 |
+| google/gemma-3-4b | 8 | 8 | — | — |
+| qwen/qwen3-1.7b (`/no_think`) | 10 | 8 | 3 | — |
+| lfm2.5-1.2b-instruct | 5 | 7 | 2 | 1 |
+| lfm2-2.6b-transcript | 4 | 3 | 4 | 2 |
+| liquid/lfm2-1.2b | 1 | 5 | 2 | 1 |
+| google/gemma-3-1b | 5 | 2 | 0 | 1 |
+| lfm2.5-230m | 0 | 4 | 1 | 0 |
+| qwen/qwen3.5-9b (`/no_think`) | 0 | 0 | — | 0 |
+| google/gemma-4-e4b | 0 | 1 | 1 | 0 |
+| lfm2.5-8b-a1b (2.5) | — | — | — | — |
+
+(qwen3-4b's lab cell was filled in after a follow-up `/no_think` run: terse,
+correct terms, correct `Impression: Cholestasis with renal impairment and
+systemic inflammation` — matches the reference exactly. One minor slip:
+mislabels a borderline sodium value as "hyponatremia".)
+
+## Reading the table
+
+- **Four models are consistently strong (≥7 everywhere they ran)**:
+  medgemma-4b-it, gemma-3n-e4b, ministral-3-3b, and qwen3-4b (`/no_think`).
+  This matches the shortlist from Rounds 2-4.
+- **gemma-3n-e4b has the best and most even profile** — 9s and a 10, no weak
+  kind. **ministral-3-3b** is close behind and is the fastest of the four
+  (see Round 4/"fastest" answer above).
+- **qwen3-4b's pre_exam score (5) confirms the Round-4 addendum finding**: great
+  structure/accuracy, but reverts to Romanian in the long History/Prior-imaging
+  sections — a language failure, not a content failure.
+- **lfm2-8b-a1b (2.0)**: strong on the short tasks (imaging 10, lab 7) where
+  its MoE speed is a real asset, but **collapses on long output** — report (2)
+  is garbled mixed-language nonsense ("varțe", "hydo cel"), pre_exam (3) has
+  heavy untranslated Romanian throughout. Confirms it's not safe for the
+  longer kinds yet.
+- **All ≤2B models cap around 1-5** even on their best kind, with severe,
+  specific hallucinations newly documented here: gemma-3-1b invented "19890
+  years old" (misreading an internal section code as age) and fabricated labs
+  (ALT/AST, hypocalcemia) never in the source; lfm2.5-1.2b-instruct invented
+  an age of "1989" and entirely fictitious lab values (AST 62, PCT 0.9, LDH
+  92); liquid/lfm2-1.2b invented "58 years" and duplicated/malformed sections.
+  lfm2.5-230m outright echoed the prompt template back as its pre_exam
+  "answer" (0). These are more severe than the general "hallucinates" note
+  from earlier rounds — worth having as documented, concrete failure examples.
+- **Reasoning leakers are floored regardless of task**: gemma-4-e4b and
+  qwen3.5-9b (even with `/no_think`) score 0-1 almost everywhere — the CoT
+  leak makes the output structurally unusable even when the underlying
+  analysis (visible in the leaked reasoning) is often accurate.
+- **lfm2.5-8b-a1b (the 2.5 release)**: still untestable — fails to load on
+  this LM Studio runtime.
