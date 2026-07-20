@@ -121,7 +121,7 @@ def _load_config(config_path: str) -> Tuple[dict, List[dict]]:
 
     server_cfg keys: ae_title, port, on_demand_refresh_seconds, username, password.
     device_profiles: list of dicts with keys name, ae_title, modality,
-                     wards (list), time_window_hours.
+                     wards (list), time_window_hours, day_care ('yes'/'no'/'any').
     """
     config = configparser.ConfigParser()
     config.read(config_path)
@@ -152,12 +152,15 @@ def _load_config(config_path: str) -> Tuple[dict, List[dict]]:
         wards_raw = config.get(section, 'wards', fallback='').strip()
         wards = [w.strip() for w in wards_raw.split(',') if w.strip()]
         time_window = config.getfloat(section, 'time_window_hours', fallback=0.0)
+        day_care_raw = config.get(section, 'day_care', fallback='any').strip().lower()
+        day_care = day_care_raw if day_care_raw in ('yes', 'no', 'any') else 'any'
         profiles.append({
             'name':              section,
             'ae_title':          ae.upper(),
             'modality':          modality,
             'wards':             wards,
             'time_window_hours': time_window,
+            'day_care':          day_care,
         })
 
     return server, profiles
@@ -211,10 +214,15 @@ def _split_glued_prefix(tok: str) -> tuple:
 def _name_to_dicom(name: str) -> str:
     """Convert a name string to DICOM PN 'Family^Given^Middle^Prefix'.
 
+    Middle name tokens are folded into the Given component (space-separated)
+    rather than the Middle component: some modality worklist displays render
+    'Family^Given^Middle' as 'Family Middle, Given', which reorders the name
+    on screen. Keeping the Middle component empty avoids that.
+
     Handles:
-    - Standalone titles:      'DR. OSSEBI GUY BLANCHARD'   → 'OSSEBI^GUY^BLANCHARD^DR.'
+    - Standalone titles:      'DR. OSSEBI GUY BLANCHARD'   → 'OSSEBI^GUY BLANCHARD^^DR.'
     - Multiple titles:        'CONF. UNIV. DR. STAN MIHAI'  → 'STAN^MIHAI^^CONF. UNIV. DR.'
-    - Glued to family name:   'DR.STEFAN ELENA ELIS'        → 'STEFAN^ELENA^ELIS^DR.'
+    - Glued to family name:   'DR.STEFAN ELENA ELIS'        → 'STEFAN^ELENA ELIS^^DR.'
     - Internal-dot title:     'S.L. POPA ION'               → 'POPA^ION^^S.L.'
     - No title:               'IONESCU MARIA'               → 'IONESCU^MARIA'
     """
@@ -244,11 +252,12 @@ def _name_to_dicom(name: str) -> str:
 
     if prefix:
         family = parts[0]
-        given  = parts[1] if len(parts) > 1 else ''
-        middle = '^'.join(parts[2:]) if len(parts) > 2 else ''
-        return f'{family}^{given}^{middle}^{prefix}'
+        given  = ' '.join(parts[1:]) if len(parts) > 1 else ''
+        return f'{family}^{given}^^{prefix}'
 
-    return '^'.join(parts)
+    family = parts[0]
+    given  = ' '.join(parts[1:]) if len(parts) > 1 else ''
+    return f'{family}^{given}' if given else family
 
 
 def _date_to_dicom(date_str: str) -> str:
@@ -610,6 +619,15 @@ class WorklistServer:
                 section = r.get('section', '').upper()
                 if target_wards and not any(w.upper() in section for w in target_wards):
                     continue
+
+                # Day care filter: 'yes' = spitalizare de zi only, 'no' = exclude it, 'any' = no filter
+                day_care = profile.get('day_care', 'any')
+                if day_care != 'any':
+                    is_day_care = 'spitalizare de zi' in (r.get('payment_type') or '').lower()
+                    if day_care == 'yes' and not is_day_care:
+                        continue
+                    if day_care == 'no' and is_day_care:
+                        continue
 
                 # Time window: exclude entries too far in the future
                 time_window = profile.get('time_window_hours', 0.0)
