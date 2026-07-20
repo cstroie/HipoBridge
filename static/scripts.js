@@ -1393,6 +1393,45 @@ document.addEventListener('DOMContentLoaded', function() {
         return data.summary || '';
     }
 
+    // ── Leisure-pace background AI warming ──────────────────────────────
+    // Imaging reports lazy-load per card as they scroll into view
+    // (IntersectionObserver in renderAnalysesCards). While the radiologist
+    // is still reading, quietly pre-generate each one's AI triage summary
+    // in the background so it's already cached by the time they click the
+    // card's AI button — same /api/ai/summarize cache, this just warms it
+    // early. One job at a time with a gap between each, so it never bursts
+    // the LLM provider or competes with a real user-triggered request; a
+    // stale patient's queued jobs are dropped via the dataGeneration check.
+    let aiWarmQueue = [];
+    let aiWarmRunning = false;
+    const AI_WARM_GAP_MS = 4000;
+
+    function enqueueAiWarm(kind, text, gen) {
+        if (!text) return;
+        aiWarmQueue.push({ kind, text, gen });
+        if (!aiWarmRunning) processAiWarmQueue();
+    }
+
+    async function processAiWarmQueue() {
+        aiWarmRunning = true;
+        while (aiWarmQueue.length) {
+            const job = aiWarmQueue.shift();
+            if (job.gen === dataGeneration) {
+                try {
+                    await aiSummarize(job.kind, job.text);
+                } catch (err) {
+                    // Likely misconfigured/unreachable — stop trying for this session
+                    // rather than burning through the rest of the queue on failures.
+                    log('Background AI warm failed, pausing warm queue (silent):', err);
+                    aiWarmQueue = [];
+                    break;
+                }
+            }
+            if (aiWarmQueue.length) await new Promise(r => setTimeout(r, AI_WARM_GAP_MS));
+        }
+        aiWarmRunning = false;
+    }
+
     function makeAiCard(inline) {
         const card = document.getElementById('ai-card-template').content
             .firstElementChild.cloneNode(true);
@@ -1672,10 +1711,18 @@ document.addEventListener('DOMContentLoaded', function() {
             } else if (!body && data.result?.length) {
                 body = data.result.filter(r => r.display).map(r => r.display).join('\n\n').trim();
             }
-            return { indication, body };
+            // Signing/reporting physician — same fields the analyses-tab card
+            // uses (resultsInterpreter, falling back to performer.actor).
+            // Only meaningful once a report actually exists: without one,
+            // performer falls back server-side to the requesting physician,
+            // which would misattribute the (nonexistent) report.
+            const physician = body
+                ? (data.resultsInterpreter?.[0]?.display || data.performer?.[0]?.actor?.display || '')
+                : '';
+            return { indication, body, physician };
         } catch (error) {
             console.error(`Error fetching imaging report parts for ${serviceRequestId}:`, error);
-            return { indication: '', body: '' };
+            return { indication: '', body: '', physician: '' };
         }
     }
 
@@ -1900,12 +1947,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
 
                 // Keep entries that have a report or a clinical indication, up to 5
+                const physicians = [];
                 for (let i = 0; i < candidates.length && entries.length < 5; i++) {
-                    const { body, indication } = candidateReports[i];
+                    const { body, indication, physician } = candidateReports[i];
                     if (body || indication) {
                         entries.push(candidates[i]);
                         reports.push(body);
                         indications.push(indication);
+                        physicians.push(physician);
                     }
                 }
 
@@ -1917,7 +1966,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     const date = sr.authoredOn ? formatDate(sr.authoredOn) : '';
                     const code = sr.identifier?.[0]?.value || sr.id || '';
                     const isUrgent = sr.priority === 'urgent';
-                    const physician = sr.requester?.display || sr.performer?.[0]?.display || '';
+                    const physician = physicians[idx] || '';
                     const reportText = reports[idx] || '';
                     const indication = indications[idx] || '';
                     const regions = (sr.bodySite || []).map(b => b.text).filter(Boolean).join(', ');
@@ -1981,14 +2030,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
 
                     if (physician) {
-                        // Ordering physician (requester) — a doctor glyph, not a
-                        // signature, since this is who ordered the exam, not who
-                        // authored/signed the report.
+                        // Reporting/signing physician (resultsInterpreter, falling
+                        // back to performer) — who authored the report text above,
+                        // not who ordered the exam.
                         const sig = document.createElement('div');
                         sig.className = 'report-imaging-sig';
-                        sig.setAttribute('aria-label', 'Ordering physician');
+                        sig.setAttribute('aria-label', 'Reporting physician');
                         const sigIcon = document.createElement('i');
-                        sigIcon.className = 'fas fa-user-doctor';
+                        sigIcon.className = 'fas fa-signature';
                         sigIcon.setAttribute('aria-hidden', 'true');
                         sig.appendChild(sigIcon);
                         sig.append(` ${physician}`);
@@ -3597,6 +3646,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     () => article.querySelector('.report-body'),
                     () => cardAiBtn.dataset.aiText || '',
                     { inline: true });
+                enqueueAiWarm('imaging', copyMd, dataGeneration);
             }
 
             // ImagingStudy link
@@ -4112,7 +4162,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const prose = card.querySelector('.epi-prose');
                 prose.innerHTML = '<p class="epi-empty">— no content —</p>';
                 prose.classList.add('epi-prose--empty');
-                card.querySelector('.epi-card-toolbar').hidden = true;
+                card.querySelector('.card-toolbar').hidden = true;
             }
 
             btn.addEventListener('click', () => {
@@ -4661,7 +4711,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const payInfo = PAYMENT_TYPE[paymentSlug];
             const payBadge = row.querySelector('.timeline-pay-badge');
-            const paySep   = row.querySelector('.timeline-pay-sep');
+            // Two separators now carry .timeline-pay-sep (one just spaces the
+            // code from the numeric id; the other gates the pay badge) — grab
+            // the one actually adjacent to the badge, not the first match.
+            const paySep   = payBadge?.previousElementSibling;
             if (payInfo) {
                 payBadge.textContent = payInfo.label;
                 if (payInfo.cls) payBadge.classList.add(payInfo.cls);

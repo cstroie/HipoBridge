@@ -643,6 +643,18 @@ small {
         margin-right: 0;
     }
 
+    /* .app-bar switches from align-items:stretch to :center above (so
+       row 1's mixed-height items — the 60px brand, everything else auto
+       — don't get force-stretched oddly), which left #appNav sized to
+       its own content and vertically centered instead of reaching the
+       row's bottom edge — the active underline stopped ~20px short of
+       it. Match the brand's explicit height so the stretch chain works
+       again down to .nav-btn (already align-self: stretch). */
+    #appNav {
+        height: 60px;
+        align-self: auto;
+    }
+
     /* Row 2: patient sub-nav, full width, pushed last via order */
     #navPatientGroup {
         order: 10;
@@ -795,6 +807,7 @@ small {
     transition: opacity var(--transition-fast);
     display: flex;
     align-items: center;
+    gap: var(--space-8);
 }
 .search-submit-btn:hover { opacity: 0.88; }
 
@@ -956,6 +969,25 @@ small {
     border-bottom: 1px solid var(--border);
 }
 .patient-header-left { min-width: 0; flex: 1 1 auto; }
+
+/* Name + refresh button share a row so Refresh always lines up with the
+   patient's name — separate from .patient-meta below, so a long
+   diagnosis badge wrapping there never competes with Refresh for space. */
+.patient-name-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-16);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-14);
+}
+.patient-name-row .patient-hero-name {
+    margin-bottom: 0;
+    min-width: 0;
+}
+.patient-name-row .schedule-refresh-btn {
+    flex-shrink: 0;
+}
 
 .patient-hero-name {
     font: 700 var(--font-size-40)/1.05 'Space Grotesk', 'Inter', sans-serif;
@@ -1599,11 +1631,18 @@ select {
     align-items: flex-start;
     justify-content: space-between;
     gap: var(--space-10);
+    flex-wrap: wrap;
+}
+/* hgroup has no default min-width:0, so a long title would otherwise force
+   the row wider than the card and push .card-toolbar past its right edge */
+.card-title-row hgroup {
+    min-width: 0;
+    flex: 1 1 auto;
 }
 /* Grouped top-right actions (AI + copy) — a single pill-shaped toolbar with
-   a thin border and a separator between the two buttons. Applies to both
-   .card-toolbar (report tab / imaging card) and .epi-card-toolbar
-   (epicrisis card) — see the shared rules further below. */
+   a thin border and a separator between the two buttons. Shared by the
+   report header, imaging/lab analysis cards, and the epicrisis accordion
+   (.epi-card-inner .card-toolbar) — see the shared rules further below. */
 .card-toolbar {
     flex-shrink: 0;
     display: inline-flex;
@@ -1612,6 +1651,75 @@ select {
     border: 1px solid var(--border);
     border-radius: var(--radius-full);
     overflow: hidden;
+}
+/* aiPreExamBtn is the toolbar's only child (no copy button next to it) —
+   don't render an empty pill outline when JS hides the button */
+.card-toolbar:has(> :only-child[hidden]) {
+    display: none;
+}
+/* Now a sibling of <header> rather than nested inside the title row — on
+   the analysis card specifically (a column flex layout), keep it a
+   compact pill hugging the right edge instead of stretching to the
+   column's full cross-axis width like a block child normally would. */
+.analysis-card > .card-toolbar {
+    align-self: flex-end;
+}
+.report-header > .card-toolbar {
+    align-self: flex-end;
+}
+
+/* Both buttons lose their standalone border/background/radius when grouped
+   inside a pill toolbar — the toolbar itself supplies the border, and a
+   1px separator divides the two buttons. */
+.card-toolbar .btn-ai,
+.card-toolbar .copy-md-btn {
+    border: none;
+    border-radius: 0;
+    background: transparent;
+}
+.card-toolbar .btn-ai:not([hidden]) ~ .copy-md-btn:not([hidden]) {
+    border-left: 1px solid var(--border);
+}
+/* Unlike its bare 28px icon-only form elsewhere, the copy button always
+   carries a "Copy" label when grouped in a toolbar — on desktop too, not
+   just the mobile-stretched layouts below. */
+.card-toolbar .copy-md-btn {
+    width: auto;
+    height: auto;
+    padding: var(--space-6) var(--space-12);
+    gap: var(--space-6);
+}
+.card-toolbar .copy-md-btn::after {
+    content: "Copy";
+    font: 600 var(--font-size-13) 'Inter', sans-serif;
+}
+/* "AI" is shorter than "Copy" — without a shared, capped width the two
+   segments each size to their own content and the pill reads lopsided
+   (worse still if either button is an inline-flex item free to grow).
+   flex: 0 0 <width> locks both to the same fixed width outright instead
+   of just a floor, so neither can grow past the other. Placed before the
+   700px media query below (not after) so the mobile override there
+   still wins the cascade at narrow widths. */
+.card-toolbar .btn-ai,
+.card-toolbar .copy-md-btn {
+    flex: 0 0 84px;
+    justify-content: center;
+}
+
+/* The pre-exam "Generate" button is the AI tab's sole call to action (no
+   copy button next to it, nothing else on the page competes for
+   attention) — invert it to a solid filled pill instead of the quiet
+   transparent-in-toolbar look every other AI/copy button gets, so it
+   reads as the primary action rather than a secondary icon button. */
+#aiPreExamBtn {
+    background: var(--warning, #d97706);
+    color: var(--on-accent);
+    flex-basis: auto;
+    min-width: 84px;
+    padding: var(--space-8) var(--space-16);
+}
+#aiPreExamBtn:hover {
+    background: color-mix(in srgb, var(--warning, #d97706) 85%, black);
 }
 
 /* Shared compact icon-only style for every "copy as Markdown" button */
@@ -1646,6 +1754,7 @@ select {
     color: var(--text);
     letter-spacing: -0.01em;
     line-height: 1.2;
+    overflow-wrap: anywhere;
 }
 
 .card-regions {
@@ -1720,6 +1829,14 @@ select {
     max-width: 860px;
     margin-left: auto;
     margin-right: auto;
+}
+/* Targets the title-block wrapper div specifically — :not() keeps this
+   off .card-toolbar, which is also a plain <div> child of .report-header
+   and would otherwise inherit flex-grow:1 from this and stretch to fill
+   the row's leftover width instead of staying pill-sized. */
+.report-header > div:not(.card-toolbar) {
+    min-width: 0;
+    flex: 1 1 auto;
 }
 /* report/AI tab header sub-elements now use shared .tab-eyebrow/.tab-title/.tab-sub */
 
@@ -2319,6 +2436,63 @@ select {
 
 @media (max-width: 480px) {
 
+    /* Reclaim the wasted gutters on phones — content max-width and card
+       padding were tuned for desktop and left large empty margins. */
+    .main-content {
+        padding-left: var(--space-12);
+        padding-right: var(--space-12);
+    }
+
+    .patient-info-panel {
+        padding: var(--space-16) var(--space-16);
+    }
+
+    .analysis-card {
+        padding: var(--space-16);
+    }
+
+    /* Search box + submit button: the button carries a text label
+       ("Search Patient") that doesn't fit next to the input on a phone —
+       stack them instead of clipping/overflowing horizontally */
+    .search-input-row {
+        flex-direction: column;
+    }
+
+    .search-input-box {
+        padding: var(--space-10) var(--space-12);
+    }
+
+    .search-submit-btn {
+        justify-content: center;
+        padding: var(--space-12) var(--space-14);
+    }
+
+    .ai-summary-card {
+        margin-bottom: var(--space-16);
+    }
+
+    .ai-summary-header {
+        padding: var(--space-8) var(--space-12);
+    }
+
+    .ai-summary-text {
+        padding: var(--space-12) var(--space-14);
+    }
+
+    /* Diagnosis badge can be a full sentence — never force it to
+       stay on one line, or it overflows the viewport horizontally */
+    .patient-badge {
+        white-space: normal;
+    }
+
+    /* Refresh sits inline with the name on wider screens; on phones there's
+       no room for both, so drop it to its own full-width row instead */
+    .patient-name-row .schedule-refresh-btn {
+        flex-basis: 100%;
+        justify-content: center;
+        padding: var(--space-8) var(--space-16);
+    }
+
     .hero-content h1 {
         font-size: var(--font-size-xl);
     }
@@ -2331,14 +2505,58 @@ select {
         font-size: var(--font-size-28);
     }
 
+    .tab-title {
+        font-size: var(--font-size-28);
+    }
+
+    .analyses-chips {
+        gap: var(--space-6);
+    }
+
+    .chip {
+        padding: var(--space-6) var(--space-10);
+        font-size: var(--font-size-xs);
+    }
+
     .patient-stats-strip {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: var(--space-16);
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: var(--space-16) var(--space-8);
+    }
+
+    .patient-stats-strip .stat-pill {
+        flex: 0 1 28%;
     }
 
     .stat-pill-value {
-        font-size: var(--font-size-32);
+        font-size: var(--font-size-2xl);
+    }
+
+    /* Report/AI tab: reclaim the desktop-tuned padding and gaps so the
+       card content uses the available phone width instead of floating
+       in a sea of margin */
+    .report-header {
+        margin-bottom: var(--space-16);
+    }
+
+    .report-card {
+        padding: var(--space-16);
+        gap: var(--space-16);
+    }
+
+    .report-identity-grid {
+        gap: var(--space-10);
+    }
+
+    /* When the header wraps, keep the AI/copy pill pinned to the right
+       instead of it landing flush against the left edge on its own line */
+    .report-header .card-toolbar {
+        margin-left: auto;
+    }
+
+    .stat-pill-label {
+        white-space: nowrap;
     }
 
     .info-grid {
@@ -2387,7 +2605,57 @@ select {
         flex-wrap: wrap;
     }
     .schedule-filters-spacer { display: none; }
-    .schedule-ward-pill { margin-left: auto; }
+    .schedule-ward-pill {
+        margin-left: 0;
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    /* Schedule tab's refresh button (not the patient-header one, which is
+       already handled above): stretch full-width but keep it compact
+       rather than inheriting the generic larger mobile touch padding */
+    #refreshScheduleBtn {
+        margin-left: 0;
+        width: 100%;
+        justify-content: center;
+        padding: var(--space-8) var(--space-16);
+    }
+}
+
+/* Wider than the 480px phone breakpoint above, but still narrow enough
+   that the card-title-row wraps and drops the AI/copy toolbar onto its
+   own line below the title — same treatment, just a taller ceiling so it
+   isn't left as a narrow fit-content pill floating short of the card's
+   full width (which the report/lab table below it does use). */
+@media (max-width: 700px) {
+    .card-toolbar {
+        display: flex;
+        width: 100%;
+    }
+    .card-toolbar .btn-ai,
+    .card-toolbar .copy-md-btn {
+        flex: 1;
+        padding: var(--space-10) var(--space-12);
+    }
+    .card-toolbar .btn-ai,
+    .card-toolbar .copy-md-btn {
+        justify-content: center;
+    }
+
+    /* Standalone copy buttons (not grouped in a toolbar) — turn the bare
+       icon into a proper full-width bordered button with a label */
+    #copyEpicrisisBtn {
+        width: 100%;
+        gap: var(--space-6);
+        padding: var(--space-10) var(--space-14);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+    }
+    #copyEpicrisisBtn::after {
+        content: "Copy as Markdown";
+        font: 600 var(--font-size-13) 'Inter', sans-serif;
+    }
+
 }
 
 /* Honour the OS reduced-motion preference */
@@ -2422,35 +2690,42 @@ select {
 .ai-summary-card {
     max-width: 860px;
     margin: 0 auto var(--space-32);
-    padding: var(--space-20) var(--space-24);
     background: var(--card-bg);
     border: 1px solid color-mix(in srgb, var(--warning, #d97706) 35%, var(--border));
     border-radius: var(--radius-lg);
+    overflow: hidden;
 }
 .ai-summary-card[hidden] { display: none; }
+/* Disclaimer sticks to the card's top edge as a full-width header bar —
+   rounded to match the card on top, square where it meets the body. */
 .ai-summary-header {
-    margin-bottom: var(--space-12);
+    margin: 0;
+    background: color-mix(in srgb, var(--warning, #d97706) 12%, transparent);
+    padding: var(--space-8) var(--space-16);
 }
 .ai-summary-badge {
-    display: inline-flex;
+    display: flex;
     align-items: center;
     gap: var(--space-6);
     font: 700 var(--font-size-11) 'Inter', sans-serif;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--warning, #d97706);
-    background: color-mix(in srgb, var(--warning, #d97706) 12%, transparent);
-    padding: var(--space-4) var(--space-10);
-    border-radius: var(--radius-full);
+    white-space: nowrap;
 }
 .ai-summary-text {
-    font: 500 var(--font-size-15)/1.7 'Inter', sans-serif;
-    color: var(--text);
+    font: 500 var(--font-size-sm)/1.7 'Inter', sans-serif;
+    color: color-mix(in srgb, var(--text) 82%, var(--text-light));
     margin: 0;
+    padding: var(--space-16) var(--space-20);
     white-space: pre-line;
 }
 /* Body holds marked-rendered HTML (or plain loading/error text) — block
    children manage their own spacing, so no pre-line here. */
+/* Editorial/magazine treatment: section heads read as a kicker with a
+   colored rule (not a generic bold-uppercase label), body copy gets a
+   touch more breathing room, and list markers pick up the accent color
+   instead of the browser's default disc. */
 .ai-summary-body { white-space: normal; }
 .ai-summary-body > :first-child { margin-top: 0; }
 .ai-summary-body > :last-child { margin-bottom: 0; }
@@ -2460,14 +2735,53 @@ select {
 .ai-summary-body h4,
 .ai-summary-body h5,
 .ai-summary-body h6 {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
+    font: 700 var(--font-size-base) 'Space Grotesk', 'Inter', sans-serif;
     color: var(--text);
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    margin-top: var(--space-16);
-    margin-bottom: var(--space-8);
+    letter-spacing: -0.01em;
+    text-transform: none;
+    border-left: 3px solid var(--primary);
+    padding-left: var(--space-10);
+    margin-top: var(--space-24);
+    margin-bottom: var(--space-10);
 }
+.ai-summary-body p {
+    margin: 0 0 var(--space-14);
+}
+.ai-summary-body ul,
+.ai-summary-body ol {
+    margin: 0 0 var(--space-14);
+    padding-left: var(--space-20);
+}
+.ai-summary-body li {
+    margin-bottom: var(--space-6);
+    line-height: 1.65;
+}
+.ai-summary-body ul {
+    list-style: none;
+    padding-left: var(--space-4);
+}
+.ai-summary-body ul li {
+    position: relative;
+    padding-left: var(--space-16);
+}
+.ai-summary-body ul li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.62em;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--primary);
+}
+.ai-summary-body ol {
+    list-style: decimal;
+}
+.ai-summary-body ol li::marker {
+    color: var(--primary);
+    font-weight: var(--font-weight-semibold);
+}
+.ai-summary-body strong { color: var(--text); }
 .ai-summary-body.ai-summary-loading { color: var(--text-light); font-style: italic; }
 .ai-summary-body table {
     border-collapse: collapse;
@@ -2959,10 +3273,67 @@ select {
         padding-top: 8px;
     }
     .timeline-time { padding-top: 0; font-size: var(--font-size-13); }
-    .timeline-dot { margin-top: 0; }
+    /* Drop the desktop halo ring — at this size it just reads as a smudge
+       next to the time, and reset to size against the actual dot pixel,
+       not the padded time label above it */
+    .timeline-dot {
+        margin-top: 0;
+        box-shadow: none !important;
+    }
     .timeline-line { display: none; }
-    .timeline-card { gap: var(--space-12); }
-    .timeline-mod-avatar { width: var(--space-40); height: var(--space-40); font-size: var(--font-size-xs); }
+    /* Grid instead of flex: avatar in its own column, name+region stacked
+       in the middle column (between the icon and the status pill), badge
+       pinned top-right, meta spanning the full width below. Flex-wrap
+       couldn't express "stack these two, but only in the middle column"
+       without an extra wrapper element — grid-template-areas does it
+       directly. .timeline-card-body only exists to group these in the
+       markup — unwrap it so its children can join the grid directly. */
+    .timeline-card {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        grid-template-areas:
+            "avatar name   badge"
+            "avatar region .";
+        column-gap: var(--space-12);
+        row-gap: 2px;
+        min-width: 0;
+    }
+    .timeline-mod-avatar { grid-area: avatar; width: var(--space-40); height: var(--space-40); font-size: var(--font-size-xs); }
+    .timeline-card-body { display: contents; }
+    .timeline-patient-row { grid-area: name; min-width: 0; }
+    .timeline-card-patient { flex: 1; min-width: 0; }
+    .timeline-status-badge { grid-area: badge; align-self: start; }
+    .timeline-card-region { grid-area: region; margin-top: 0; }
+    /* Not part of the template above, so it auto-places into an implicit
+       3rd row — just needs to span every column to read full-width */
+    .timeline-card-meta { grid-column: 1 / -1; }
+
+    /* Switch from flex to normal inline text flow — flex-wrap's line
+       packing is decided from each item's hypothetical (max-content)
+       width, which doesn't match its actual post-wrap size once the
+       physician name wraps to multiple lines, so a flex-basis:100%
+       "breaker" ends up sharing a line with it instead of starting
+       below it. Plain inline flow wraps predictably like a paragraph. */
+    .timeline-card-meta {
+        display: block;
+        white-space: normal;
+        overflow: visible;
+    }
+    .timeline-card-meta > * {
+        display: inline;
+    }
+    .timeline-card-meta i {
+        margin-right: 3px;
+    }
+    .timeline-meta-sep {
+        margin: 0 var(--space-4);
+    }
+    /* Forces a real line break before the code/id/pay-badge group */
+    .timeline-meta-requester + .timeline-meta-sep {
+        display: block;
+        height: var(--space-4);
+        visibility: hidden;
+    }
 }
 
 /* Date range + limit + refresh */
@@ -3083,6 +3454,10 @@ select {
     margin-bottom: var(--space-32);
     flex-wrap: wrap;
 }
+.epicrisis-header > div {
+    min-width: 0;
+    flex: 1 1 auto;
+}
 
 /* epicrisis eyebrow/title now use shared .tab-eyebrow/.tab-title */
 
@@ -3125,6 +3500,7 @@ select {
     cursor: pointer;
     text-align: left;
     transition: background var(--transition-fast);
+    flex-wrap: wrap;
 }
 .epi-card-btn:hover { background: color-mix(in srgb, var(--primary) 4%, transparent); }
 
@@ -3160,7 +3536,8 @@ select {
     display: flex;
     align-items: center;
     gap: var(--space-10);
-    flex-shrink: 0;
+    flex-wrap: wrap;
+    min-width: 0;
 }
 
 .epi-icd-badge {
@@ -3169,6 +3546,8 @@ select {
     background: color-mix(in srgb, var(--primary) 10%, transparent);
     padding: var(--space-4) var(--space-12);
     border-radius: var(--radius-sm);
+    white-space: normal;
+    overflow-wrap: anywhere;
 }
 
 .epi-nights {
@@ -3181,9 +3560,35 @@ select {
     font-size: var(--font-size-xs);
 }
 
+/* Below ~700px there isn't room for the date/service block, the ICD
+   badge and the Ongoing/chevron group to all share one row — the long
+   badge text was shrinking the date block down to slivers (breaking
+   "2025-02-12 → Present" into one word per line) instead of just
+   wrapping itself. Switch to a small grid: date+service and
+   Ongoing/chevron keep sharing the top row (the badge is a sibling in
+   the markup, not nested inside the Ongoing/chevron group, so this
+   doesn't need a flex line-packing decision at all), and the badge —
+   often a full sentence — gets its own full-width row below where it
+   can wrap freely. Placed after the base rules above so it wins the
+   cascade despite matching specificity. */
+@media (max-width: 700px) {
+    .epi-card-btn {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        grid-template-areas:
+            "left  right"
+            "badge badge";
+        column-gap: var(--space-16);
+        row-gap: var(--space-8);
+    }
+    .epi-btn-left { grid-area: left; }
+    .epi-icd-badge { grid-area: badge; }
+    .epi-btn-right { grid-area: right; }
+}
+
 /* Body — hidden until open */
 .epi-card-body[hidden] { display: none; }
-.epi-card-toolbar[hidden] { display: none; }
+.card-toolbar[hidden] { display: none; }
 .epi-copy-btn[hidden] { display: none; }
 
 .epi-card-inner {
@@ -3200,32 +3605,20 @@ select {
 .epi-prose p { margin: 0 0 0.4em; }
 .epi-prose p:last-child { margin-bottom: 0; }
 
-.epi-card-toolbar {
-    display: flex;
-    align-items: stretch;
-    gap: 0;
-    width: fit-content;
-    margin: var(--space-8) 0 0 auto;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-full);
-    overflow: hidden;
+/* Epicrisis toolbar reuses .card-toolbar for its base pill look (see that
+   rule up top) — just needs positioning within the accordion body, plus a
+   bit of extra breathing room above/below that only this spot asked for. */
+.epi-card-inner .card-toolbar {
+    width: 100%;
+    margin: var(--space-16) 0 var(--space-12);
+}
+.epi-card-inner .card-toolbar .btn-ai,
+.epi-card-inner .card-toolbar .copy-md-btn {
+    flex: 1;
+    justify-content: center;
+    padding: var(--space-10) var(--space-12);
 }
 
-/* Both buttons lose their standalone border/background/radius when grouped
-   inside a pill toolbar — the toolbar itself supplies the border, and a
-   1px separator divides the two buttons. */
-.card-toolbar .btn-ai,
-.card-toolbar .copy-md-btn,
-.epi-card-toolbar .btn-ai,
-.epi-card-toolbar .copy-md-btn {
-    border: none;
-    border-radius: 0;
-    background: transparent;
-}
-.card-toolbar .btn-ai:not([hidden]) ~ .copy-md-btn:not([hidden]),
-.epi-card-toolbar .btn-ai:not([hidden]) ~ .copy-md-btn:not([hidden]) {
-    border-left: 1px solid var(--border);
-}
 .epi-prose--empty {
     text-align: center;
 }
@@ -3414,7 +3807,7 @@ dialog.modal article > footer {
 
 .report-modal-title-row {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     gap: var(--space-16);
     margin-bottom: var(--space-8);
@@ -3422,7 +3815,7 @@ dialog.modal article > footer {
 
 .report-modal-identity {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: var(--space-16);
     flex: 1;
     min-width: 0;
@@ -3521,10 +3914,9 @@ dialog.modal article > footer {
 
 @media (max-width: 480px) {
     dialog.report-modal {
-        width: 100%;
-        max-height: 96vh;
-        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-        margin: auto auto 0;
+        width: 96vw;
+        max-height: 82vh;
+        margin: auto;
     }
 
     .report-modal-footer {
@@ -3540,6 +3932,17 @@ dialog.modal article > footer {
 
     .report-modal-body {
         padding: var(--space-8) var(--space-16);
+    }
+
+    /* Same treatment as the analysis-card identity block: smaller avatar,
+       tighter header padding to reclaim margin on a phone-width sheet */
+    .report-modal-header {
+        padding: var(--space-16) var(--space-16) var(--space-12);
+    }
+    .modal-mod-circle,
+    .modal-mod-circle svg {
+        width: var(--space-40);
+        height: var(--space-40);
     }
 }
 
@@ -3735,6 +4138,12 @@ dialog.report-editor-modal article > section {
     margin-top: var(--space-8);
     padding-top: var(--space-8);
     border-top: 1px solid var(--border);
+}
+/* No action available for this report (not performed yet with write
+   access off, or already fully validated with nothing to toggle) — don't
+   render an empty bar with just a top border */
+.report-actions:has(> .btn-perform-exam[hidden]):has(> .btn-write-report[hidden]):has(> .validate-toggles:empty) {
+    display: none;
 }
 
 .btn-write-report:not([hidden]),
