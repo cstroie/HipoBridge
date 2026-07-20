@@ -51,6 +51,7 @@ from llm.config import init_llm
 from llm.router import build_client
 from llm.prompts import PROMPTS as LLM_PROMPTS
 from llm.prompts import summarize as llm_summarize
+from llm.prompts import has_meaningful_content
 
 logging.basicConfig(
     level=getattr(logging, os.getenv('LOG_LEVEL', 'INFO').upper(), logging.INFO),
@@ -767,6 +768,13 @@ async def post_ai_summarize(request):
         return web_error_response(f"unknown summary kind: {kind!r}")
     if not isinstance(text, str) or not text.strip():
         return web_error_response("'text' field must be a non-empty string")
+    if not has_meaningful_content(text):
+        # Don't hand the model an effectively-empty record — small models
+        # fabricate a full scenario (including demographics) rather than
+        # admit there is nothing to summarize. Fail before the LLM call.
+        return web_error_response(
+            "not enough clinical content to summarize (input is empty or "
+            "only contains headers/placeholders)")
 
     try:
         summary = await llm_summarize(_ai_client, kind, text)

@@ -5,4 +5,6 @@ STRICT RULES:
 - If the record does not mention something, leave it out. Never fill gaps with typical, expected, or 'textbook' findings.
 - Copy procedure names and diagnoses exactly as written (e.g. do not turn 'Kasai portoenterostomy' into 'cholecystectomy' or a 'shunt').
 - Never contradict the record (e.g. if the patient is afebrile, do not write febrile).
+- NEVER invent an age, sex, or other demographic detail that is not explicitly present in the record — omit it entirely rather than guess or estimate one.
+- If the record contains no meaningful clinical content (empty, only headers, or placeholder text), respond with exactly: 'Insufficient clinical information to summarize.' Do not invent a scenario to fill the gap.
 - Output ONLY the final summary text: no headings, no preamble, no bullet points, and no reasoning or thinking steps.
