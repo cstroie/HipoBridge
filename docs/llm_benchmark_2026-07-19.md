@@ -480,3 +480,53 @@ mislabels a borderline sodium value as "hyponatremia".)
   analysis (visible in the leaked reasoning) is often accurate.
 - **lfm2.5-8b-a1b (the 2.5 release)**: still untestable — fails to load on
   this LM Studio runtime.
+
+---
+
+# Round 7 — ministral-3-3b quantization comparison (2026-07-21)
+
+Tested whether a smaller quantization of ministral-3-3b (the fast, low-friction
+all-rounder from Round 4) would speed it up further. Downloaded IQ4_XS
+(91% of Q4_K_M's size) and Q3_K_M (84%) from the unsloth GGUF repo and ran the
+full 4-kind survey against the currently-loaded Q4_K_M.
+
+## Speed — smaller quant is *slower*, not faster (counter-intuitive, verified)
+
+| Quant | imaging tok/s | lab tok/s | report tok/s | pre_exam tok/s | pre_exam total |
+|---|---|---|---|---|---|
+| **Q4_K_M (current)** | 28.8 | error* | **12.4** | **11.5** | **79.0s** |
+| IQ4_XS (91% size) | 33.5 | 14.4 | 10.4 | 9.9 | 91.3s |
+| Q3_K_M (84% size) | 22.6 | 9.4 | 8.3 | 8.1 | 112.4s |
+
+\* Q4_K_M's lab run hit a transient "Model unloaded" error (server load-slot
+contention from concurrent testing, not a quant issue) and wasn't retried;
+the other three kinds are clean and tell the same story.
+
+**Generation throughput degrades monotonically as the quant gets smaller** —
+the opposite of the naive "smaller = less memory bandwidth = faster"
+assumption. On a small 3B model, the more complex quantization schemes
+(IQ4_XS, Q3_K_M use non-uniform, importance-weighted bit allocation) cost
+more *dequantization compute per token* than they save in bytes moved, and at
+batch-size-1 that compute cost dominates over memory bandwidth. Cold-load
+time did improve slightly with the smaller files (~12-23s vs ~24-31s), but
+that's dwarfed by the throughput loss across a whole generation.
+
+## Quality — no compensating win either
+
+Reading full outputs side by side: broadly comparable, with a slight edge to
+Q4_K_M/IQ4_XS. Q3_K_M's lab output over-speculated **specific infectious
+etiologies** ("likely cholestatic hepatitis or severe viral infection (e.g.,
+hepatitis B/C, sepsis)") not supported by the abnormal labs alone — a mild
+violation of the lab prompt's "describe patterns, not certainties" rule; the
+other two quants stayed appropriately hedged. All three quants show the same
+pre-existing source-data artifact (a stray internal section code "19890"
+misread as a history entry) — Q3_K_M flagged it as "[not available]: No
+meaningful data" slightly better than IQ4_XS's garbled inclusion, but this is
+noise in the source data, not something the quantization level fixes or
+causes.
+
+## Verdict
+
+**Stay on Q4_K_M.** There is no speed argument for a smaller quant on this
+model — the opposite is true — and no quality upside either. The original
+"maybe a smaller quant is faster" hypothesis is answered empirically: no.
