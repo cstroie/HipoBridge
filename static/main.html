@@ -28,7 +28,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
             </div>
 
             <!-- Global nav: always visible -->
-            <nav class="app-nav" aria-label="Main navigation">
+            <nav id="appNav" class="app-nav" aria-label="Main navigation">
                 <button class="nav-btn nav-item" data-tab="search">
                     <i class="fas fa-magnifying-glass" aria-hidden="true"></i><span>Search</span>
                 </button>
@@ -130,15 +130,17 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                         <p class="patient-eyebrow">Patient Profile</p>
                         <div class="patient-header">
                             <div class="patient-header-left">
-                                <h1 id="patient-tab-heading" class="patient-hero-name"><span id="patientName">Patient Name</span></h1>
-                                <div class="patient-meta">
-                                    <span class="patient-badge" id="patientId"></span>
-                                    <span class="patient-badge" id="patientGender"></span>
-                                    <span class="patient-badge accent" id="patientDiagnosis" hidden></span>
+                                <div class="patient-name-row">
+                                    <h1 id="patient-tab-heading" class="patient-hero-name"><span id="patientName">Patient Name</span></h1>
                                     <button type="button" class="btn-secondary schedule-refresh-btn" id="refreshPatientBtn" aria-label="Reload patient data from Hipocrate">
                                         <i class="fas fa-sync-alt" aria-hidden="true"></i>
                                         <span>Refresh</span>
                                     </button>
+                                </div>
+                                <div class="patient-meta">
+                                    <span class="patient-badge" id="patientId"></span>
+                                    <span class="patient-badge" id="patientGender"></span>
+                                    <span class="patient-badge accent" id="patientDiagnosis" hidden></span>
                                 </div>
                             </div>
 
@@ -398,9 +400,11 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             <h1 id="ai-tab-heading" class="tab-title">Pre-Exam Analysis</h1>
                             <p class="tab-sub">A rapid clinical-record brief for the radiologist before performing or reporting a new study</p>
                         </div>
-                        <button class="btn-ai" id="aiPreExamBtn" hidden aria-label="Generate pre-exam analysis" title="Generate pre-exam analysis">
-                            <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>Generate</span>
-                        </button>
+                        <div class="card-toolbar">
+                            <button class="btn-ai" id="aiPreExamBtn" hidden aria-label="Generate pre-exam analysis" title="Generate pre-exam analysis">
+                                <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>Generate</span>
+                            </button>
+                        </div>
                     </header>
 
                     <div id="aiPreExamAnchor"></div>
@@ -524,17 +528,18 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                                 </p>
                             </hgroup>
                             <strong class="urgent-badge" hidden>Urgent</strong>
-                            <div class="card-toolbar">
-                                <button type="button" class="btn-ai card-ai-btn" hidden aria-label="AI triage summary" title="AI triage summary">
-                                    <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>AI</span>
-                                </button>
-                                <button type="button" class="copy-md-btn card-copy-btn" hidden aria-label="Copy as Markdown" title="Copy as Markdown">
-                                    <i class="fas fa-copy" aria-hidden="true"></i>
-                                </button>
-                            </div>
                         </div>
                     </div>
                 </header>
+
+                <div class="card-toolbar">
+                    <button type="button" class="btn-ai card-ai-btn" hidden aria-label="AI triage summary" title="AI triage summary">
+                        <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>AI</span>
+                    </button>
+                    <button type="button" class="copy-md-btn card-copy-btn" hidden aria-label="Copy as Markdown" title="Copy as Markdown">
+                        <i class="fas fa-copy" aria-hidden="true"></i>
+                    </button>
+                </div>
 
                 <!-- Report body (lazy-loaded) -->
                 <section class="card-report-section">
@@ -725,15 +730,15 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             <div class="epi-service"></div>
                         </div>
                     </div>
+                    <span class="epi-icd-badge"></span>
                     <div class="epi-btn-right">
-                        <span class="epi-icd-badge"></span>
                         <span class="epi-nights"></span>
                         <i class="fas fa-chevron-down epi-chevron" aria-hidden="true"></i>
                     </div>
                 </button>
                 <div class="epi-card-body" hidden>
                     <div class="epi-card-inner">
-                        <div class="epi-card-toolbar" role="toolbar">
+                        <div class="card-toolbar" role="toolbar">
                             <button type="button" class="btn-ai epi-ai-btn" aria-label="AI executive summary" title="AI executive summary">
                                 <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>AI</span>
                             </button>
@@ -768,6 +773,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             <span class="timeline-meta-requester"><i class="fas fa-user-doctor" aria-hidden="true"></i> <span></span></span>
                             <span class="timeline-meta-sep" aria-hidden="true">·</span>
                             <button class="timeline-code"></button>
+                            <span class="timeline-meta-sep timeline-pay-sep" aria-hidden="true">·</span>
                             <span class="timeline-numeric-id"></span>
                             <span class="timeline-meta-sep timeline-pay-sep" aria-hidden="true">·</span>
                             <span class="timeline-pay-badge" hidden></span>
