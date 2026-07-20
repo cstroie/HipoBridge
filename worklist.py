@@ -271,6 +271,21 @@ def _name_to_dicom(name: str) -> str:
     return f'{family}^{given}' if given else family
 
 
+def _name_parts_to_dicom(family_name: str, given_name: str) -> str:
+    """Build DICOM PN 'Family^Given' from Hipocrate's own separate strNume/
+    strPrenume fields, with no whitespace-splitting heuristics.
+
+    Unlike _name_to_dicom, the family name is never re-split on spaces, so
+    compound last names ('POPESCU IONESCU') stay intact as a single Family
+    component instead of bleeding into Given.
+    """
+    family_name = (family_name or '').strip()
+    given_name = (given_name or '').strip()
+    if not family_name:
+        return ''
+    return f'{family_name}^{given_name}' if given_name else family_name
+
+
 def _date_to_dicom(date_str: str) -> str:
     """Convert 'YYYY-MM-DD' to DICOM DA 'YYYYMMDD'."""
     return date_str.replace('-', '')[:8] if date_str else ''
@@ -358,7 +373,10 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
     """
     # Patient demographics
     if patient_info:
-        patient_name  = _name_to_dicom(patient_info.get('name') or entry.get('patient_name', ''))
+        if patient_info.get('family_name') and patient_info.get('given_name'):
+            patient_name = _name_parts_to_dicom(patient_info.get('family_name'), patient_info.get('given_name'))
+        else:
+            patient_name  = _name_to_dicom(patient_info.get('name') or entry.get('patient_name', ''))
         cnp           = patient_info.get('cnp', '')
         patient_id    = cnp or patient_info.get('id', '')
         birth_date_iso = patient_info.get('birth_date', '')
@@ -867,6 +885,8 @@ class WorklistRefresher:
                 'id':            patient_id,
                 'cnp':           patient_data.get('patient.cnp'),
                 'name':          patient_data.get('patient.name'),
+                'family_name':   patient_data.get('patient.family_name'),
+                'given_name':    patient_data.get('patient.given_name'),
                 'birth_date':    patient_data.get('patient.birth_date'),
                 'sex':           patient_data.get('patient.sex'),
                 'exams':         cerere_data.get('exams') or [],

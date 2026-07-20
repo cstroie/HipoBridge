@@ -23,7 +23,7 @@ except ImportError:
     DICOM_AVAILABLE = False
 
 from worklist import (
-    _name_to_dicom, _build_datasets, _MODALITY_CODE,
+    _name_to_dicom, _name_parts_to_dicom, _build_datasets, _MODALITY_CODE,
     WorklistCache, WorklistServer, _HIPOCRATE_TO_FHIR,
 )
 
@@ -56,6 +56,29 @@ class TestNameToDicom(unittest.TestCase):
     def test_no_trailing_caret_without_suffix(self):
         result = _name_to_dicom('DR. POPA ION')
         self.assertFalse(result.endswith('^'))
+
+    def test_compound_last_name_splits_wrong_via_combined_string(self):
+        # Documents why _name_parts_to_dicom exists: once family/given are
+        # joined into a single string, the whitespace heuristic can't
+        # recover a multi-word family name.
+        result = _name_to_dicom('POPESCU IONESCU ION GHEORGHE')
+        self.assertEqual(result, 'POPESCU^IONESCU ION GHEORGHE')
+
+
+class TestNamePartsToDicom(unittest.TestCase):
+
+    def test_compound_last_name_preserved(self):
+        result = _name_parts_to_dicom('POPESCU IONESCU', 'ION GHEORGHE')
+        self.assertEqual(result, 'POPESCU IONESCU^ION GHEORGHE')
+
+    def test_plain_name(self):
+        self.assertEqual(_name_parts_to_dicom('POPESCU', 'ION'), 'POPESCU^ION')
+
+    def test_missing_given(self):
+        self.assertEqual(_name_parts_to_dicom('POPESCU', ''), 'POPESCU')
+
+    def test_missing_family(self):
+        self.assertEqual(_name_parts_to_dicom('', 'ION'), '')
 
 
 # ---------------------------------------------------------------------------
@@ -152,6 +175,11 @@ class TestBuildDatasets(unittest.TestCase):
         ds_list = _build_datasets(self._entry(), None)
         self.assertEqual(len(ds_list), 1)
         self.assertEqual(str(ds_list[0].PatientID), '1721991')
+
+    def test_compound_last_name_uses_separate_fields(self):
+        info = self._info(family_name='POPESCU IONESCU', given_name='ION GHEORGHE')
+        ds_list = _build_datasets(self._entry(), info)
+        self.assertEqual(str(ds_list[0].PatientName), 'POPESCU IONESCU^ION GHEORGHE')
 
 
 # ---------------------------------------------------------------------------
