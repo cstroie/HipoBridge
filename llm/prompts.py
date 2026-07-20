@@ -13,8 +13,29 @@ results.
 """
 import logging
 import os
+import re
 
 logger = logging.getLogger(__name__)
+
+# Matches markdown scaffolding (headers, list/emphasis markers, table pipes)
+# so has_meaningful_content() can tell "no real content" apart from a
+# populated document that merely happens to be short.
+_MARKDOWN_SCAFFOLD_RE = re.compile(r'[#*_>`|\-]+')
+MIN_MEANINGFUL_CHARS = 15
+
+
+def has_meaningful_content(text: str, min_chars: int = MIN_MEANINGFUL_CHARS) -> bool:
+    """True if `text` has at least `min_chars` of real content once markdown
+    scaffolding and whitespace are stripped.
+
+    Guards against calling the model on an effectively empty record (e.g. just
+    a "## Report" header with no body) — confirmed live that an ungrounded
+    small model will confidently fabricate an entire clinical scenario,
+    including demographics, rather than report there is nothing to
+    summarize."""
+    stripped = _MARKDOWN_SCAFFOLD_RE.sub('', text)
+    stripped = re.sub(r'\s+', '', stripped)
+    return len(stripped) >= min_chars
 
 # Prompt templates live next to this module so the path is independent of the
 # process working directory (mirrors the os.path.dirname(__file__) convention).

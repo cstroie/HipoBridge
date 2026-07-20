@@ -2029,7 +2029,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 const body = isActive
                     ? buildCheckinText(enc)
                     : extractEpicrisisText(enc).trim();
-                if (body) narrativeParts.push(body);
+                if (!body) return ''; // no real content — omit the section entirely
+                // rather than emit a header+date shell with nothing behind it:
+                // a bare heading still reads as "populated" to callers that
+                // just check for a non-empty string (e.g. getPatientClinicalText),
+                // and a model handed only a header/date will confidently
+                // fabricate a whole clinical scenario to fill the gap.
+                narrativeParts.push(body);
                 return `## ${label}\n\n_${period}_\n\n${body}\n\n`;
             }
 

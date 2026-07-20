@@ -24,6 +24,7 @@ The clinical question this new study should answer, if stated.
 STRICT RULES:
 - Base every statement in the first five sections strictly on the record. Do NOT invent or infer values, measurements, dates, or findings.
 - Copy diagnoses and procedure names exactly as written; never contradict the record.
-- If something is missing or illegible, write [not available] instead of guessing.
+- If something is missing or illegible, write [not available] instead of guessing — this applies to age and sex too: never invent a demographic detail that is not explicitly present.
+- If the record as a whole contains no meaningful clinical content, write [not available] in every section instead of inventing a scenario.
 - Keep every heading even if its content is [not available]. Keep it concise and action-oriented, with no redundant restatement.
 - Only the 'AI suggestions' section may reason beyond the record, and it must stay clearly orientative.
