@@ -2456,6 +2456,20 @@ select {
 .ai-summary-body { white-space: normal; }
 .ai-summary-body > :first-child { margin-top: 0; }
 .ai-summary-body > :last-child { margin-bottom: 0; }
+.ai-summary-body h1,
+.ai-summary-body h2,
+.ai-summary-body h3,
+.ai-summary-body h4,
+.ai-summary-body h5,
+.ai-summary-body h6 {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-top: var(--space-16);
+    margin-bottom: var(--space-8);
+}
 .ai-summary-body.ai-summary-loading { color: var(--text-light); font-style: italic; }
 .ai-summary-body table {
     border-collapse: collapse;
