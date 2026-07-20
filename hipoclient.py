@@ -55,6 +55,7 @@ import html
 import json
 from datetime import date, datetime, timedelta
 import configparser
+from urllib.parse import unquote
 
 from typing import Any, Dict, List, Optional, Tuple, Union
 from collections import OrderedDict
@@ -3062,6 +3063,14 @@ class HipoClientCheckin(HipoClient):
                 elif nc == 2 and cells[0] == 'Examen local:':
                     data.store("checkin.exam_local", cells[1].strip())
 
+            # Epicrisis: hidden input holding percent-encoded HTML (editable rich-text widget).
+            epicrisis_raw = extract_value_from_input(soup, element_id='sEpicrisys')
+            if epicrisis_raw:
+                epicrisis_html = unquote(epicrisis_raw)
+                epicrisis_md = html_to_markdown(epicrisis_html).strip()
+                if epicrisis_md:
+                    data.store("checkin.epicrisis", epicrisis_md)
+
             if 'id' in kwargs:
                 data.store("checkin.id", kwargs["id"])
 
@@ -3162,8 +3171,10 @@ class HipoClientCheckin(HipoClient):
                     }]
                 }
 
-            # Physical exam notes
+            # Notes: epicrisis text (narrative admission summary) first, then physical exam.
             notes = []
+            if parsed_data.get("checkin.epicrisis"):
+                notes.append({"text": parsed_data.get("checkin.epicrisis")})
             if parsed_data.get("checkin.exam_general"):
                 notes.append({"text": f"[Exam general] {parsed_data.get('checkin.exam_general')}"})
             if parsed_data.get("checkin.exam_local"):

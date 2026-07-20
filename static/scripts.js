@@ -1365,19 +1365,31 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.aiEmptyState) elements.aiEmptyState.hidden = hasContent;
         if (elements.aiReportBtn) elements.aiReportBtn.hidden = !hasContent;
         if (elements.aiPreExamBtn) elements.aiPreExamBtn.hidden = !hasContent;
+        if (hasContent) {
+            // Silently redisplay a previously generated summary for this patient, if any.
+            runAiSummary(elements.aiReportBtn, 'report',
+                () => elements.reportCard, getPatientClinicalText, { auto: true });
+            runAiSummary(elements.aiPreExamBtn, 'pre_exam',
+                () => elements.aiPreExamAnchor, getPatientClinicalText, { auto: true });
+        }
     }
 
-    async function aiSummarize(kind, text) {
+    // opts.force bypasses the server cache and regenerates. opts.checkOnly
+    // skips generation entirely — returns null if nothing is cached yet,
+    // instead of calling the LLM. Server caches by (kind, sha256(text)), so
+    // the same text always redisplays the same summary until forced.
+    async function aiSummarize(kind, text, opts = {}) {
         const resp = await apiFetch('/api/ai/summarize', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ kind, text }),
+            body: JSON.stringify({ kind, text, force: !!opts.force, check_only: !!opts.checkOnly }),
         });
         let data = {};
         try { data = await resp.json(); } catch (_) { /* non-JSON error */ }
         if (!resp.ok || data.status === 'error') {
             throw new Error(data.message || `AI summary failed (HTTP ${resp.status})`);
         }
+        if (data.status === 'not_cached') return null;
         return data.summary || '';
     }
 
@@ -1400,15 +1412,38 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Generic click handler: (re)insert the button's card in loading state,
     // fetch the summary, render it as markdown, or show an error in-card.
+    // opts.auto: silent cache-only probe (used on page/tab load to redisplay
+    // a previously generated summary) — no spinner, no toast on miss, and it
+    // never calls the LLM. A real click always forces regeneration.
     async function runAiSummary(button, kind, getAnchor, getText, opts = {}) {
+        if (!button) return;
         const text = (getText() || '').trim();
-        if (!text) { showToast('No content available for AI summary', 'warning'); return; }
+        if (!text) {
+            if (!opts.auto) showToast('No content available for AI summary', 'warning');
+            return;
+        }
 
         let card = button._aiCard;
         if (!card || !card.isConnected) {
             card = makeAiCard(opts.inline);
             button._aiCard = card;
         }
+
+        if (opts.auto) {
+            try {
+                const cached = await aiSummarize(kind, text, { checkOnly: true });
+                if (cached === null) return; // nothing cached yet — leave the button untouched
+                placeAiCard(card, getAnchor(), opts.intoAnchorParent?.());
+                const body = card.querySelector('.ai-summary-body');
+                card.classList.remove('ai-card-error');
+                body.classList.remove('ai-summary-loading');
+                body.innerHTML = marked.parse(cached || '_(empty response)_');
+            } catch (_) {
+                // Silent — an auto-probe failure shouldn't surface to the user.
+            }
+            return;
+        }
+
         placeAiCard(card, getAnchor(), opts.intoAnchorParent?.());
 
         const body = card.querySelector('.ai-summary-body');
@@ -1417,7 +1452,7 @@ document.addEventListener('DOMContentLoaded', function() {
         body.textContent = 'Generating…';
         button.disabled = true;
         try {
-            const summary = await aiSummarize(kind, text);
+            const summary = await aiSummarize(kind, text, { force: true });
             body.classList.remove('ai-summary-loading');
             body.innerHTML = marked.parse(summary || '_(empty response)_');
         } catch (err) {
@@ -2145,7 +2180,28 @@ document.addEventListener('DOMContentLoaded', function() {
             return null;
         }
     }
-    
+
+    // Helper function to fetch encounter data for a checkin ID (active admission, not yet discharged)
+    async function fetchEncounterDataForCheckin(checkinId) {
+        if (cache.encounters[checkinId]) {
+            return cache.encounters[checkinId];
+        }
+        try {
+            const response = await apiFetch(`/fhir/Encounter/${checkinId}?type=checkin`);
+            if (!response.ok) {
+                console.error(`Error fetching encounter data for checkin ${checkinId}:`, response.status);
+                return null;
+            }
+            const encounterData = await response.json();
+            cachePut(cache.encounters, checkinId, encounterData);
+            log(`Encounter data fetched successfully for checkin ${checkinId}:`, encounterData);
+            return encounterData;
+        } catch (error) {
+            console.error(`Error fetching encounter data for checkin ${checkinId}:`, error);
+            return null;
+        }
+    }
+
     
     // ISO timestamp → short relative time ("just now", "2 h ago", "yesterday")
     function relativeTime(iso) {
@@ -2370,18 +2426,24 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.historyEmpty) elements.historyEmpty.hidden = true;
 
         const checkoutIds = extractCheckoutIds(patientData);
+        const checkoutIdSet = new Set(checkoutIds);
+        // Same id can appear in both lists once discharged — checkout wins, so only
+        // fetch as "checkin" the ids that are still active (not yet checked out).
+        const checkinIds = extractCheckinIds(patientData).filter(id => !checkoutIdSet.has(id));
         const presentationIds = extractPresentationIds(patientData);
 
-        if (checkoutIds.length === 0 && presentationIds.length === 0) {
+        if (checkoutIds.length === 0 && checkinIds.length === 0 && presentationIds.length === 0) {
             if (elements.historyEmpty) elements.historyEmpty.hidden = false;
             return;
         }
 
         if (elements.historyLoading) elements.historyLoading.hidden = false;
         try {
-            const [encounters, presentations] = await Promise.all([
+            const [encounters, activeEncounters, presentations] = await Promise.all([
                 limitedMap(checkoutIds, MAX_CONCURRENT_REQUESTS,
                     async id => { try { return await fetchEncounterDataForCheckout(id); } catch (_) { return null; } }),
+                limitedMap(checkinIds, MAX_CONCURRENT_REQUESTS,
+                    async id => { try { return await fetchEncounterDataForCheckin(id); } catch (_) { return null; } }),
                 limitedMap(presentationIds, MAX_CONCURRENT_REQUESTS,
                     async id => { try { return await fetchPresentation(id); } catch (_) { return null; } })
             ]);
@@ -2393,6 +2455,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 sortKey: enc.period?.end || enc.period?.start || '',
                 start: enc.period?.start || '',
                 end: enc.period?.end || '',
+                label: extractDiagnosisText(enc) || 'No diagnosis recorded',
+                section: enc.location?.[0]?.location?.display || '',
+                medic: enc.participant?.[0]?.individual?.display || '',
+                extra: '',
+            }));
+
+            // Active admissions (checked in, not yet discharged) — no end date yet.
+            const activeItems = activeEncounters.filter(Boolean).map(enc => ({
+                type: 'inpatient',
+                enc,
+                sortKey: enc.period?.start || '',
+                start: enc.period?.start || '',
+                end: '',
                 label: extractDiagnosisText(enc) || 'No diagnosis recorded',
                 section: enc.location?.[0]?.location?.display || '',
                 medic: enc.participant?.[0]?.individual?.display || '',
@@ -2420,7 +2495,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 };
             });
 
-            const items = [...encItems, ...presItems]
+            const items = [...encItems, ...activeItems, ...presItems]
                 .sort((a, b) => b.sortKey.localeCompare(a.sortKey));
 
             if (items.length === 0) {
@@ -3194,7 +3269,16 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         labHasAbnormal = abnormalAnalytes.length > 0;
         labAiText = labHasAbnormal ? [header, ...rows].join('\n') : '';
-        if (elements.aiLabBtn) { elements.aiLabBtn.hidden = false; elements.aiLabBtn._aiCard = null; }
+        if (elements.aiLabBtn) {
+            elements.aiLabBtn.hidden = false;
+            elements.aiLabBtn._aiCard = null;
+            if (labHasAbnormal) {
+                // Silently redisplay a previously generated summary for this lab-trend text, if any.
+                runAiSummary(elements.aiLabBtn, 'lab',
+                    () => elements.trendsContainer?.firstChild || null, () => labAiText,
+                    { intoAnchorParent: () => elements.trendsContainer, inline: true, auto: true });
+            }
+        }
     }
 
     async function loadTrends(patientId) {
@@ -3352,7 +3436,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // (fetchAndFillReport can re-run via the perform/write refresh path).
         const cardAiBtn = article.querySelector('.card-ai-btn');
         if (cardAiBtn) { cardAiBtn.hidden = true; cardAiBtn._aiCard = null; }
-        article.querySelector('.report-section .ai-summary-card')?.remove();
+        article.querySelector('.card-report-section .ai-summary-card')?.remove();
 
         let hasReportFromStudy = false;
         try {
@@ -3886,29 +3970,51 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function loadAndDisplayEpicrisis(patientData) {
         const checkoutIds = extractCheckoutIds(patientData);
-        if (checkoutIds.length === 0) {
+        const checkoutIdSet = new Set(checkoutIds);
+        // Same id can appear in both lists once discharged — checkout wins, so only
+        // treat as "active" the ids that are still an ongoing admission.
+        const activeCheckinIds = extractCheckinIds(patientData).filter(id => !checkoutIdSet.has(id));
+        if (checkoutIds.length === 0 && activeCheckinIds.length === 0) {
             if (elements.epicrisisNoData) elements.epicrisisNoData.style.display = 'block';
             return;
         }
 
-        const encounters = await limitedMap(
-            checkoutIds,
-            MAX_CONCURRENT_REQUESTS,
-            async id => {
-                try { return await fetchEncounterDataForCheckout(id); }
-                catch { return null; }
-            }
-        );
+        const [encounters, activeEncounters] = await Promise.all([
+            limitedMap(
+                checkoutIds,
+                MAX_CONCURRENT_REQUESTS,
+                async id => {
+                    try { return await fetchEncounterDataForCheckout(id); }
+                    catch { return null; }
+                }
+            ),
+            limitedMap(
+                activeCheckinIds,
+                MAX_CONCURRENT_REQUESTS,
+                async id => {
+                    try { return await fetchEncounterDataForCheckin(id); }
+                    catch { return null; }
+                }
+            )
+        ]);
 
         // Keep only encounters that have an epicrisis, sorted most-recent-discharge first
         const valid = encounters
-            .map((enc, i) => enc && extractEpicrisisText(enc) ? { enc, checkoutId: checkoutIds[i] } : null)
+            .map((enc, i) => enc && extractEpicrisisText(enc) ? { enc, checkoutId: checkoutIds[i], active: false } : null)
             .filter(Boolean)
             .sort((a, b) => {
                 const da = a.enc.period?.end || '';
                 const db = b.enc.period?.end || '';
                 return db > da ? 1 : -1;
             });
+
+        // Ongoing admissions (not yet discharged) always shown first, ahead of past discharges.
+        const activeValid = activeEncounters
+            .map((enc, i) => enc && extractEpicrisisText(enc) ? { enc, checkoutId: activeCheckinIds[i], active: true } : null)
+            .filter(Boolean)
+            .sort((a, b) => (b.enc.period?.start || '').localeCompare(a.enc.period?.start || ''));
+
+        valid.unshift(...activeValid);
 
         if (valid.length === 0) {
             if (elements.epicrisisNoData) elements.epicrisisNoData.style.display = 'block';
@@ -3939,9 +4045,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 p.type?.some(t => t.coding?.some(c => c.code === 'ATND'))
             )?.individual?.display || '';
 
-            // Night count
+            // Night count (only meaningful once discharged)
             let nights = '';
-            if (admission && discharge) {
+            if (!item.active && admission && discharge) {
                 const ms = new Date(discharge) - new Date(admission);
                 const n = Math.round(ms / 86400000);
                 nights = `${n} ${n === 1 ? 'night' : 'nights'}`;
@@ -3950,11 +4056,13 @@ document.addEventListener('DOMContentLoaded', function() {
             // Markdown
             const meta = [];
             if (admission) meta.push(`**Admission:** ${admission}`);
-            if (discharge) meta.push(`**Discharge:** ${discharge}`);
+            if (item.active) meta.push('**Status:** Ongoing');
+            else if (discharge) meta.push(`**Discharge:** ${discharge}`);
             if (ward)      meta.push(`**Ward:** ${ward}`);
             if (attender)  meta.push(`**Attending:** ${attender}`);
             if (service)   meta.push(`**Service:** ${service}`);
-            markdown += valid.length === 1 ? `# ${icd}\n\n` : `## ${index + 1}. ${icd}\n\n`;
+            const heading = item.active ? `${icd} (Ongoing)` : icd;
+            markdown += valid.length === 1 ? `# ${heading}\n\n` : `## ${index + 1}. ${heading}\n\n`;
             if (meta.length) markdown += `${meta.join(' · ')}  \n\n`;
             markdown += epicrisisText.trim() + '\n\n';
             if (index < valid.length - 1) markdown += '---\n\n';
@@ -3963,8 +4071,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const isOpen = index === 0;
             const card = document.importNode(document.getElementById('epi-card-template').content, true).firstElementChild;
             if (isOpen) card.classList.add('epi-card-open');
+            if (item.active) card.classList.add('epi-card--active');
             card.id = `epicrisis-${item.checkoutId}`;
-            card.dataset.markdown = `# ${icd}\n\n`
+            card.dataset.markdown = `# ${heading}\n\n`
                 + (meta.length ? `${meta.join(' · ')}  \n\n` : '')
                 + epicrisisText.trim() + '\n';
 
@@ -3973,14 +4082,16 @@ document.addEventListener('DOMContentLoaded', function() {
             const chevron = card.querySelector('.epi-chevron');
 
             btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-            card.querySelector('.epi-date-range').textContent = `${admission} → ${discharge}`;
+            card.querySelector('.epi-date-range').textContent = item.active ? `${admission} → Present` : `${admission} → ${discharge}`;
             const serviceParts = [ward, attender].filter(Boolean);
             card.querySelector('.epi-service').textContent = serviceParts.length ? serviceParts.join(' · ') : (service || 'Admission');
 
             const icdBadge = card.querySelector('.epi-icd-badge');
             if (icd) { icdBadge.textContent = icd; } else { icdBadge.remove(); }
             const nightsSpan = card.querySelector('.epi-nights');
-            if (nights) { nightsSpan.textContent = nights; } else { nightsSpan.remove(); }
+            if (item.active) { nightsSpan.textContent = 'Ongoing'; nightsSpan.classList.add('epi-nights--active'); }
+            else if (nights) { nightsSpan.textContent = nights; }
+            else { nightsSpan.remove(); }
             if (isOpen) chevron.className = 'fas fa-chevron-up epi-chevron';
 
             body.hidden = !isOpen;
@@ -3994,6 +4105,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 // the epicrisis text (not the demographics-heavy full markdown).
                 wireAiButton(aiBtn, 'epicrisis', () => card.querySelector('.epi-prose'),
                     () => extractEpicrisisText(enc).trim(), { inline: true });
+                // Silently redisplay a previously generated summary for this admission, if any.
+                runAiSummary(aiBtn, 'epicrisis', () => card.querySelector('.epi-prose'),
+                    () => extractEpicrisisText(enc).trim(), { inline: true, auto: true });
             } else {
                 const prose = card.querySelector('.epi-prose');
                 prose.innerHTML = '<p class="epi-empty">— no content —</p>';

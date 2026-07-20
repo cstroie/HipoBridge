@@ -1600,12 +1600,18 @@ select {
     justify-content: space-between;
     gap: var(--space-10);
 }
-/* Grouped top-right actions (AI + copy) — kept adjacent as a small toolbar. */
+/* Grouped top-right actions (AI + copy) — a single pill-shaped toolbar with
+   a thin border and a separator between the two buttons. Applies to both
+   .card-toolbar (report tab / imaging card) and .epi-card-toolbar
+   (epicrisis card) — see the shared rules further below. */
 .card-toolbar {
     flex-shrink: 0;
     display: inline-flex;
-    align-items: center;
-    gap: var(--space-6);
+    align-items: stretch;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    overflow: hidden;
 }
 
 /* Shared compact icon-only style for every "copy as Markdown" button */
@@ -1711,7 +1717,7 @@ select {
     gap: var(--space-24);
     margin-bottom: var(--space-32);
     flex-wrap: wrap;
-    max-width: 780px;
+    max-width: 860px;
     margin-left: auto;
     margin-right: auto;
 }
@@ -1722,13 +1728,13 @@ select {
     background: var(--card-bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-xl);
-    padding: var(--space-40) var(--space-44);
-    max-width: 780px;
+    padding: var(--space-24) var(--space-32);
+    max-width: 860px;
     margin-left: auto;
     margin-right: auto;
     display: flex;
     flex-direction: column;
-    gap: var(--space-32);
+    gap: var(--space-24);
 }
 .report-card[hidden] { display: none; }
 
@@ -1882,10 +1888,6 @@ select {
 
 /* Report blockquote (analysis cards, not the report tab) */
 
-.report-preview {
-    border-left: 3px solid color-mix(in srgb, var(--primary) 32%, transparent);
-    padding-left: 14px;
-}
 .report-preview p:not(.series-result-title),
 .report-preview pre,
 .report-note,
@@ -1937,10 +1939,6 @@ select {
 
 .analysis-card.no-report {
     opacity: 0.55;
-}
-.analysis-card.no-report .report-preview {
-    border-left-color: var(--border);
-    border-left-style: dashed;
 }
 
 /* Clinical indication / notes below report */
@@ -2422,7 +2420,7 @@ select {
    record cards below: a visible amber "unverified" badge, never let this
    be mistaken for schema-checked output. */
 .ai-summary-card {
-    max-width: 780px;
+    max-width: 860px;
     margin: 0 auto var(--space-32);
     padding: var(--space-20) var(--space-24);
     background: var(--card-bg);
@@ -2513,7 +2511,7 @@ select {
 .btn-ai[hidden] { display: none; }
 
 .ai-empty-state, .ai-error-state {
-    max-width: 780px;
+    max-width: 860px;
     margin: 0 auto;
     padding: var(--space-24) var(--space-32);
     border-radius: var(--radius-lg);
@@ -2539,7 +2537,7 @@ select {
 .ai-error-state[hidden] { display: none; }
 
 .ai-results {
-    max-width: 780px;
+    max-width: 860px;
     margin: 0 auto;
     display: flex;
     flex-direction: column;
@@ -3103,6 +3101,18 @@ select {
     overflow: hidden;
 }
 
+.epi-card--active {
+    border-color: color-mix(in srgb, var(--success) 40%, var(--border));
+    box-shadow: inset 3px 0 0 var(--success);
+}
+
+.epi-card--active .epi-dot { background: var(--success); }
+
+.epi-nights--active {
+    color: var(--success);
+    font-weight: var(--font-weight-semibold);
+}
+
 .epi-card-btn {
     display: flex;
     align-items: center;
@@ -3183,8 +3193,6 @@ select {
 
 .epi-prose {
     margin-top: var(--space-20);
-    padding-left: 24px;
-    border-left: 3px solid color-mix(in srgb, var(--primary) 30%, transparent);
     font: 400 var(--font-size-15)/1.7 'Inter', sans-serif;
     color: var(--text-light);
     text-wrap: pretty;
@@ -3194,13 +3202,31 @@ select {
 
 .epi-card-toolbar {
     display: flex;
-    justify-content: flex-end;
-    gap: var(--space-6);
-    padding: var(--space-8) 0 0;
+    align-items: stretch;
+    gap: 0;
+    width: fit-content;
+    margin: var(--space-8) 0 0 auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+}
+
+/* Both buttons lose their standalone border/background/radius when grouped
+   inside a pill toolbar — the toolbar itself supplies the border, and a
+   1px separator divides the two buttons. */
+.card-toolbar .btn-ai,
+.card-toolbar .copy-md-btn,
+.epi-card-toolbar .btn-ai,
+.epi-card-toolbar .copy-md-btn {
+    border: none;
+    border-radius: 0;
+    background: transparent;
+}
+.card-toolbar .btn-ai:not([hidden]) ~ .copy-md-btn:not([hidden]),
+.epi-card-toolbar .btn-ai:not([hidden]) ~ .copy-md-btn:not([hidden]) {
+    border-left: 1px solid var(--border);
 }
 .epi-prose--empty {
-    border-left: none;
-    padding-left: 0;
     text-align: center;
 }
 .epi-empty {
