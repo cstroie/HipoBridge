@@ -51,8 +51,11 @@ from worklist import start_worklist
 from llm.config import init_llm
 from llm.router import build_client
 from llm.prompts import PROMPTS as LLM_PROMPTS
+from llm.prompts import STREAMING_KINDS
 from llm.prompts import summarize as llm_summarize
+from llm.prompts import summarize_stream as llm_summarize_stream
 from llm.prompts import has_meaningful_content
+from llm.backend import strip_think_block
 
 logging.basicConfig(
     level=getattr(logging, os.getenv('LOG_LEVEL', 'INFO').upper(), logging.INFO),
@@ -824,6 +827,90 @@ async def post_ai_summarize(request):
     return web_json_response({"status": "success", "summary": summary, "cached": False})
 
 
+# Mid-stream failures can't change the HTTP status once response.prepare()
+# has been called — the client has already committed to a 200. Signal them
+# with a rare sentinel instead: the ASCII Unit Separator (never appears in
+# generated prose) delimiting an "ERROR" marker and message, in the same
+# spirit as markdown.py's STX/ETX sentinel convention for structured signals
+# inside a plain text stream.
+_STREAM_ERROR_SENTINEL = "\x1f"
+
+
+@require_auth
+async def post_ai_summarize_stream(request):
+    """Streaming counterpart to post_ai_summarize, for the kinds where
+    perceived latency matters most: report, epicrisis, pre_exam (up to ~900
+    tokens / ~100s on a 4B model). imaging (40 tokens) and lab stay on the
+    non-streaming endpoint — streaming buys them nothing.
+
+    Body: {"kind": "report|epicrisis|pre_exam", "text": "...", "force": bool}.
+    Same auth/cache/validation gates as post_ai_summarize, and the same
+    ai_cache keyed by (kind, sha256(text)) — a result cached by either
+    endpoint is visible to both. On a cache hit the full cached text is
+    written as a single chunk (no fake delay). On error, see
+    _STREAM_ERROR_SENTINEL above."""
+    if _ai_client is None:
+        return web_error_response("AI summaries are not configured", 503)
+    try:
+        data = await request.json()
+    except json.JSONDecodeError:
+        return web_error_response("Invalid JSON data")
+
+    kind = data.get('kind', '')
+    text = data.get('text', '')
+    force = bool(data.get('force'))
+    if kind not in STREAMING_KINDS:
+        return web_error_response(f"kind {kind!r} does not support streaming")
+    if not isinstance(text, str) or not text.strip():
+        return web_error_response("'text' field must be a non-empty string")
+    if not has_meaningful_content(text):
+        return web_error_response(
+            "not enough clinical content to summarize (input is empty or "
+            "only contains headers/placeholders)")
+
+    cache_key = _ai_cache_key(kind, text)
+    cached = None if force else ai_cache.get(cache_key)
+
+    response = web.StreamResponse(
+        status=200,
+        headers={'Content-Type': 'text/plain; charset=utf-8'},
+    )
+    await response.prepare(request)
+
+    if cached is not None:
+        await response.write(cached.encode('utf-8'))
+        await response.write_eof()
+        return response
+
+    parts = []
+    try:
+        async for piece in llm_summarize_stream(_ai_client, kind, text):
+            parts.append(piece)
+            await response.write(piece.encode('utf-8'))
+    except asyncio.TimeoutError:
+        logger.warning(
+            f"AI summarization (stream) timed out ({kind}, ~{len(text)} chars) — "
+            f"the model is slower than the [llm] timeout; raise it or shorten the input")
+        await response.write(
+            f"{_STREAM_ERROR_SENTINEL}ERROR{_STREAM_ERROR_SENTINEL}AI summary timed "
+            f"out (the model took too long) — try again or raise the [llm] "
+            f"timeout".encode('utf-8'))
+        await response.write_eof()
+        return response
+    except Exception as exc:
+        logger.warning(f"AI summarization (stream) failed ({kind}): {type(exc).__name__}: {exc}")
+        await response.write(
+            f"{_STREAM_ERROR_SENTINEL}ERROR{_STREAM_ERROR_SENTINEL}AI summary "
+            f"service is unreachable".encode('utf-8'))
+        await response.write_eof()
+        return response
+
+    summary = strip_think_block(''.join(parts)).strip()
+    ai_cache.put(cache_key, summary)
+    await response.write_eof()
+    return response
+
+
 async def serve_md2html(request):
     """Convert markdown text to HTML. Accepts JSON body with 'text' field."""
     try:
@@ -1081,6 +1168,7 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     app.router.add_get('/fhir/ValueSet/cnp', serve_validate_cnp)
     app.router.add_post('/fhir/md2html', serve_md2html)
     app.router.add_post('/api/ai/summarize', post_ai_summarize)
+    app.router.add_post('/api/ai/summarize/stream', post_ai_summarize_stream)
     app.router.add_get('/fhir/CodeSystem/analysis-types', serve_fhir_analysis_types)
     app.router.add_get('/fhir/spec', serve_spec)
     app.router.add_get('/fhir/Metadata', serve_fhir_metadata)

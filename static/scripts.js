@@ -1393,6 +1393,48 @@ document.addEventListener('DOMContentLoaded', function() {
         return data.summary || '';
     }
 
+    // Kinds served by /api/ai/summarize/stream (report/epicrisis/pre_exam —
+    // the ones long enough that perceived latency matters; imaging/lab stay
+    // on the plain aiSummarize() endpoint above).
+    const STREAMING_KINDS = new Set(['report', 'epicrisis', 'pre_exam']);
+
+    // Rare sentinel (ASCII Unit Separator) the server uses to signal a
+    // mid-stream failure it can no longer report via HTTP status, since the
+    // response has already committed to 200 once streaming starts. Must
+    // match hipobridge.py's _STREAM_ERROR_SENTINEL exactly.
+    const STREAM_ERROR_SENTINEL = '\x1f';
+
+    // Streaming counterpart to aiSummarize(): POSTs to /api/ai/summarize/stream
+    // and calls onChunk(piece) as text arrives. Always force:true (mirrors
+    // runAiSummary's manual-click path, the only caller) — the silent
+    // cache-probe path never streams. Throws on error, same contract as
+    // aiSummarize(), so callers need no special-casing.
+    async function aiSummarizeStream(kind, text, onChunk) {
+        const resp = await apiFetch('/api/ai/summarize/stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ kind, text, force: true }),
+        });
+        if (!resp.ok) {
+            let data = {};
+            try { data = await resp.json(); } catch (_) { /* non-JSON error */ }
+            throw new Error(data.message || `AI summary failed (HTTP ${resp.status})`);
+        }
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            if (buffer.includes(STREAM_ERROR_SENTINEL)) {
+                const [, , message] = buffer.split(STREAM_ERROR_SENTINEL);
+                throw new Error(message || 'AI summary failed');
+            }
+            if (buffer) { onChunk(buffer); buffer = ''; }
+        }
+    }
+
     // ── Leisure-pace background AI warming ──────────────────────────────
     // Imaging reports lazy-load per card as they scroll into view
     // (IntersectionObserver in renderAnalysesCards). While the radiologist
@@ -1491,12 +1533,35 @@ document.addEventListener('DOMContentLoaded', function() {
         body.textContent = 'Generating…';
         button.disabled = true;
         try {
-            const summary = await aiSummarize(kind, text, { force: true });
-            body.classList.remove('ai-summary-loading');
-            body.innerHTML = marked.parse(summary || '_(empty response)_');
+            if (STREAMING_KINDS.has(kind)) {
+                let full = '';
+                let first = true;
+                await aiSummarizeStream(kind, text, (piece) => {
+                    if (first) {
+                        // First chunk arrived — drop the "Generating…"
+                        // placeholder and render plain text incrementally.
+                        // No partial-Markdown parsing: a half-finished
+                        // "### heading" or "**bold" mid-stream renders broken,
+                        // so the full Markdown pass only happens once, below,
+                        // after the stream completes.
+                        body.classList.remove('ai-summary-loading');
+                        body.classList.add('ai-summary-streaming');
+                        body.textContent = '';
+                        first = false;
+                    }
+                    full += piece;
+                    body.textContent = full;
+                });
+                body.classList.remove('ai-summary-streaming');
+                body.innerHTML = marked.parse(full || '_(empty response)_');
+            } else {
+                const summary = await aiSummarize(kind, text, { force: true });
+                body.classList.remove('ai-summary-loading');
+                body.innerHTML = marked.parse(summary || '_(empty response)_');
+            }
         } catch (err) {
             console.error(`AI summary failed (${kind}):`, err);
-            body.classList.remove('ai-summary-loading');
+            body.classList.remove('ai-summary-loading', 'ai-summary-streaming');
             card.classList.add('ai-card-error');
             body.textContent = `AI summary failed: ${err.message}`;
         } finally {
