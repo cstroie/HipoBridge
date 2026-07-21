@@ -31,6 +31,11 @@ LLM_DEFAULTS = {
         # Language every AI summary must be written in, regardless of the
         # source document's language.
         "language": "English",
+        # Sampling temperature for every AI summary call. Low and fixed
+        # deliberately — these are factual-extraction tasks, not creative
+        # writing, and a small model drifts into fabrication faster at
+        # higher temperatures.
+        "temperature": "0.1",
     },
     "provider:default": {
         # Local OpenAI-compatible server (llama-server, LM Studio, ...).

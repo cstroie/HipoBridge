@@ -140,14 +140,16 @@ def _build_messages(client, kind: str, text: str) -> list[dict]:
 
 async def summarize(client, kind: str, text: str) -> str:
     """Run the prompt for `kind` over `text` and return the reply. The output
-    language comes from client.language (configured in llm.cfg). Raises
-    KeyError for an unknown kind (callers validate first)."""
+    language and sampling temperature come from client.language / .temperature
+    (configured in llm.cfg). Raises KeyError for an unknown kind (callers
+    validate first)."""
     tier, _system, max_tokens = PROMPTS[kind]
+    temperature = getattr(client, "temperature", 0.1)
     reply = await client.chat(
         tier,
         _build_messages(client, kind, text),
         max_tokens=max_tokens,
-        temperature=0.1,
+        temperature=temperature,
     )
     return reply.strip()
 
@@ -158,10 +160,11 @@ async def summarize_stream(client, kind: str, text: str):
     `kind in STREAMING_KINDS`; callers validate that before calling (mirrors
     summarize(), which likewise assumes a valid, known kind)."""
     tier, _system, max_tokens = PROMPTS[kind]
+    temperature = getattr(client, "temperature", 0.1)
     async for piece in client.chat_stream(
         tier,
         _build_messages(client, kind, text),
         max_tokens=max_tokens,
-        temperature=0.1,
+        temperature=temperature,
     ):
         yield piece
