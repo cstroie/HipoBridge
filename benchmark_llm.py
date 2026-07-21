@@ -34,7 +34,7 @@ import time
 import aiohttp
 
 from llm.config import init_llm, select_provider
-from llm.prompts import PROMPTS, _build_messages, _system_prompt, _date_directive, DATE_AWARE_KINDS
+from llm.prompts import PROMPTS, _build_messages, _date_directive, _language_directive, DATE_AWARE_KINDS
 from llm.backend import strip_think_block
 
 
@@ -313,9 +313,9 @@ async def async_main(args):
     # Build the exact production message for --kind, reusing _build_messages()
     # so this tool's assembly can never silently drift from what the app
     # actually sends. --system-file overrides just the kind's task-specific
-    # prompt (the shared system.md framing + date directive still apply) so
-    # a candidate task prompt can be A/B-tested before being promoted into
-    # llm/prompts/<kind>.md.
+    # prompt (the date + language directives still apply, in the same
+    # position) so a candidate task prompt can be A/B-tested before being
+    # promoted into llm/prompts/<kind>.md.
     tier, task_prompt, max_tokens = PROMPTS[args.kind]
     language = config["llm"].get("language", "English") or "English"
     shim = _ClientShim(language)
@@ -323,10 +323,10 @@ async def async_main(args):
         with open(args.system_file) as f:
             task_prompt = f.read().strip()
         print(f"System prompt: OVERRIDE from {args.system_file}")
-        system_content = _system_prompt(language)
+        system_content = task_prompt
         if args.kind in DATE_AWARE_KINDS:
             system_content += _date_directive()
-        system_content += "\n\n" + task_prompt
+        system_content += _language_directive(language)
         messages = [
             {"role": "system", "content": system_content},
             {"role": "user", "content": text},

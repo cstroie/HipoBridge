@@ -2,21 +2,25 @@
 """Benchmark PROMPT-FORMAT variants for one model — a companion to
 benchmark_llm.py, which measures MODEL differences. This tool holds the
 model fixed and varies how the same instructions are packaged into the chat
-messages, to diagnose format-sensitive regressions (e.g. medgemma-4b-it
-answering the `imaging` kind in Romanian after llm/prompts/ moved to a
-shared system.md + per-kind task prompt).
+messages, for diagnosing format-sensitive regressions.
 
-Two variants, both built from the exact production prompt content
-(llm.prompts) so neither can silently drift from what the app sends:
+Used once already to root-cause medgemma-4b-it answering the `imaging` kind
+in Romanian under an earlier shared-system.md prompt design: A/B testing
+here showed the shared preamble itself (not system-vs-user role, not
+instruction ordering) was diluting language-instruction-following on that
+short task. `llm/prompts.py` has since been rewritten to dedicated,
+self-contained per-kind prompts with no shared preamble (see its module
+docstring) — that is now the `current`/production baseline below.
 
-  current       — today's production shape: one system-role message (shared
-                  system.md + optional date directive + the kind's task
-                  prompt), one user-role message (the clinical text).
-  consolidated  — no system role at all: everything (framing + task prompt +
-                  clinical text) folded into a single user-role message,
-                  separated by a clear "---" marker. Tests the hypothesis
-                  that this model instruction-follows more reliably on
-                  user-role content than system-role content.
+  current       — today's production shape via _build_messages(): the
+                  kind's own self-contained task prompt as a system message,
+                  the clinical text as a user message. Can't silently drift
+                  from what the app sends since it calls the same function.
+  consolidated  — no system role at all: everything (task prompt + clinical
+                  text) folded into a single user-role message, separated by
+                  a clear "---" marker. Tests whether a given model
+                  instruction-follows more reliably on user-role content
+                  than system-role content.
 
 Retries transient "terminated" / engine-restart failures a bounded number of
 times with a short backoff — this LM Studio instance also serves another
@@ -36,7 +40,7 @@ import time
 
 from llm.config import init_llm, select_provider
 from llm.backend import ServerBackend
-from llm.prompts import PROMPTS, _system_prompt, _date_directive, DATE_AWARE_KINDS
+from llm.prompts import PROMPTS, _build_messages, _date_directive, _language_directive, DATE_AWARE_KINDS
 
 # Real inputs/references reused from the main benchmark rounds (see
 # docs/llm_benchmark_2026-07-19.md for provenance) — same document set every
@@ -55,89 +59,39 @@ MAX_RETRIES = 3
 RETRY_DELAY_S = 8
 
 
-def _task_prompt_block(kind: str, language: str) -> str:
-    _tier, task_prompt, _max_tokens = PROMPTS[kind]
-    block = _system_prompt(language)
-    if kind in DATE_AWARE_KINDS:
-        block += _date_directive()
-    block += "\n\n" + task_prompt
-    return block
+class _ClientShim:
+    """Minimal stand-in for llm.router.LLMClient — _build_messages() only
+    reads .language off its `client` argument."""
+    def __init__(self, language: str):
+        self.language = language
 
 
 def build_current(kind: str, text: str, language: str):
+    """Today's production shape, via the real _build_messages() — can't
+    silently drift from what the app actually sends."""
     _tier, _task_prompt, max_tokens = PROMPTS[kind]
-    messages = [
-        {"role": "system", "content": _task_prompt_block(kind, language)},
-        {"role": "user", "content": text},
-    ]
+    messages = _build_messages(_ClientShim(language), kind, text)
     return messages, max_tokens
 
 
 def build_consolidated(kind: str, text: str, language: str):
-    _tier, _task_prompt, max_tokens = PROMPTS[kind]
-    combined = (
-        f"{_task_prompt_block(kind, language)}\n\n---\n\n"
-        f"CLINICAL RECORD TO ANALYZE:\n\n{text}"
-    )
-    messages = [{"role": "user", "content": combined}]
-    return messages, max_tokens
-
-
-def build_language_last(kind: str, text: str, language: str):
-    """Mirrors the pre-restructuring prompt shape: the language instruction
-    is the LAST thing before the user turn, not stated once early in a
-    shared preamble. In the old design, _language_directive() was appended
-    AFTER the task prompt; in the current design, system.md's language rule
-    comes BEFORE the task prompt (whose own trailing format instructions —
-    e.g. imaging.md's "Respond with ONLY the phrase...— now come after it,
-    giving the language rule no recency advantage. Tests whether restoring
-    that position (independent of system-vs-user role) fixes the
-    regression."""
+    """No system role at all: the kind's task prompt + date/language
+    directives, folded together with the clinical text into one user-role
+    message. Tests whether a given model instruction-follows more reliably
+    on user-role content than system-role content."""
     _tier, task_prompt, max_tokens = PROMPTS[kind]
-    role_and_rules = _system_prompt(language).split("Output language:")[0].strip()
+    block = task_prompt
     if kind in DATE_AWARE_KINDS:
-        role_and_rules += "\n" + _date_directive().strip()
-    language_reminder = (
-        f" IMPORTANT: Write your entire response in {language}, regardless of "
-        f"the language of the source document — translate the content into "
-        f"{language} rather than copying phrases verbatim, and never switch "
-        f"language mid-response."
-    )
-    system_content = role_and_rules + "\n\n" + task_prompt + "\n\n" + language_reminder
-    messages = [
-        {"role": "system", "content": system_content},
-        {"role": "user", "content": text},
-    ]
-    return messages, max_tokens
-
-
-def build_legacy(kind: str, text: str, language: str):
-    """The pre-restructuring shape, verbatim: NO shared role-framing or
-    general-rules preamble at all — just the kind's own task prompt, with a
-    short language-directive suffix appended, exactly as
-    llm/prompts.py looked before the system.md extraction. Tests whether the
-    regression is caused by the *added preamble content* itself (crowding a
-    small model's limited instruction-following budget), independent of
-    where the language rule sits within it."""
-    _tier, task_prompt, max_tokens = PROMPTS[kind]
-    language_directive = (
-        f" IMPORTANT: Write your entire response in {language}, regardless of "
-        f"the language of the source document — translate the content into "
-        f"{language} rather than copying phrases verbatim, and never switch "
-        f"language mid-sentence."
-    )
-    messages = [
-        {"role": "system", "content": task_prompt + language_directive},
-        {"role": "user", "content": text},
-    ]
+        block += _date_directive()
+    block += _language_directive(language)
+    combined = f"{block}\n\n---\n\nCLINICAL RECORD TO ANALYZE:\n\n{text}"
+    messages = [{"role": "user", "content": combined}]
     return messages, max_tokens
 
 
 VARIANTS = {
     "current": build_current,
     "consolidated": build_consolidated,
-    "language_last": build_language_last,
-    "legacy": build_legacy,
 }
 
 

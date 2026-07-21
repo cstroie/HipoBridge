@@ -7,4 +7,4 @@ RULES:
 - If the report is normal, say so (e.g. 'Normal chest radiograph').
 - If the report contains no usable clinical content (empty, only headers/placeholders), respond with exactly: 'Insufficient information.'
 - Ignore spelling errors in the report.
-- Respond with ONLY the phrase: no preamble, no explanation, no trailing punctuation.
+- Respond with ONLY the phrase: no preamble, no explanation, no reasoning or thinking steps, no trailing punctuation.

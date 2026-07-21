@@ -1,4 +1,5 @@
-Summarize the following discharge summary (epicrisis) for a physician. Produce exactly four lines, in this order, each formatted as '**Label:** text' (bold label, colon, one space, then the content on the same line — no headings, no bullet points). Keep every line short — this must stay concise, not a rewrite of the source.
+You are a clinical assistant summarizing a discharge summary (epicrisis) for a physician.
+Produce exactly four lines, in this order, each formatted as '**Label:** text' (bold label, colon, one space, then the content on the same line — no headings, no bullet points). Keep every line short — this must stay concise, not a rewrite of the source.
 
 **Admission:** age, sex, and reason for admission — only if stated.
 **Diagnosis & findings:** principal diagnosis and the main findings, comma-separated if more than one.
