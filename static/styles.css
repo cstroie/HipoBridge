@@ -1664,7 +1664,8 @@ select {
 .analysis-card > .card-toolbar {
     align-self: flex-end;
 }
-.report-header > .card-toolbar {
+.report-header > .card-toolbar,
+.epicrisis-header > .card-toolbar {
     align-self: flex-end;
 }
 
@@ -2551,7 +2552,8 @@ select {
 
     /* When the header wraps, keep the AI/copy pill pinned to the right
        instead of it landing flush against the left edge on its own line */
-    .report-header .card-toolbar {
+    .report-header .card-toolbar,
+    .epicrisis-header .card-toolbar {
         margin-left: auto;
     }
 
@@ -2640,20 +2642,6 @@ select {
     .card-toolbar .btn-ai,
     .card-toolbar .copy-md-btn {
         justify-content: center;
-    }
-
-    /* Standalone copy buttons (not grouped in a toolbar) — turn the bare
-       icon into a proper full-width bordered button with a label */
-    #copyEpicrisisBtn {
-        width: 100%;
-        gap: var(--space-6);
-        padding: var(--space-10) var(--space-14);
-        border: 1px solid var(--border);
-        border-radius: var(--radius-md);
-    }
-    #copyEpicrisisBtn::after {
-        content: "Copy as Markdown";
-        font: 600 var(--font-size-13) 'Inter', sans-serif;
     }
 
 }
@@ -3466,7 +3454,11 @@ select {
     margin-bottom: var(--space-32);
     flex-wrap: wrap;
 }
-.epicrisis-header > div {
+/* :not() keeps this off .card-toolbar, which is also a plain <div> child
+   of .epicrisis-header and would otherwise inherit flex-grow:1 from this
+   and stretch to fill the row's leftover width instead of staying
+   pill-sized (mirrors .report-header's identical exclusion above). */
+.epicrisis-header > div:not(.card-toolbar) {
     min-width: 0;
     flex: 1 1 auto;
 }
