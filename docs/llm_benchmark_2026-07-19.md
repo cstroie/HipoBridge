@@ -663,3 +663,86 @@ either a glossary of untranslated Romanian radiology abbreviations in the
 `report`/`imaging` prompts, or the same "a finding is a finding, don't
 upgrade/relabel it" rule from the Round 8 pre_exam fix applied to `report`
 and `epicrisis` too.
+
+---
+
+# Round 10 — newly downloaded models, ≤5 GB (2026-07-21)
+
+Server inventory grew to 31 models; tested the 4 genuinely new, size-qualifying
+candidates picked with the user: `unsloth/lfm2.5-8b-a1b` (3.94 GB — a smaller
+build of the 2.5 A1B that failed to load in Round 5), `qwen3.5-4b` (3.92 GB —
+sibling of the CoT-leaking qwen3.5-9b), `llama-3.2-3b-instruct` (2.02 GB, new
+family), `llama-3.2-1b-instruct` (1.02 GB, new family).
+
+Also fixed `benchmark_llm.py`, which had been silently broken (ImportError) by
+the `llm/prompts` restructuring (shared `system.md` + `_build_messages()`) —
+now reuses `_build_messages()` directly instead of re-deriving prompt
+assembly, so it can't silently drift from production again.
+
+## Server instability encountered (not a benchmark-tool bug)
+`unsloth/lfm2.5-8b-a1b` **terminated the LM Studio process** on the `report`
+kind (220 tokens) and again pre-empted `pre_exam` — not merely a bad
+response, an actual crash that left the server returning 500s to every
+subsequent request until it recovered on its own after ~10s. This is the
+second time an 8B-A1B-family build has caused server-side instability under
+longer generation (Round 5 saw silent zero-byte failures from the same
+family). Recommend avoiding `unsloth/lfm2.5-8b-a1b` for `report`/`pre_exam`
+regardless of any other findings.
+
+`llama-3.2-3b-instruct` also **terminated** on `pre_exam` specifically (900
+tokens), triggering the same cascade for `llama-3.2-1b-instruct` right after
+it — third occurrence of this exact failure mode on `pre_exam`, the longest/
+most demanding kind. Retried at a lower model count each time; recovered
+cleanly on retry for the shorter kinds. `pre_exam` results for the llama pair
+are marked untested rather than scored, since a crash isn't a quality signal.
+
+## Results
+
+| Model | imaging | lab | report | pre_exam |
+|---|---|---|---|---|
+| **llama-3.2-3b-instruct** | 7 | **9** | 1 | — (server crash) |
+| llama-3.2-1b-instruct | 3 | 4 | 1 | — (server crash) |
+| qwen3.5-4b | 0 | 0 | 0 | 0 |
+| unsloth/lfm2.5-8b-a1b | 0 | 0 | — (server crash) | — (server crash) |
+
+### llama-3.2-3b-instruct — the one genuinely interesting new model, with a serious catch
+Excellent on `lab` (correct terms — lymphopenia, anaemia, conjugated
+hyperbilirubinaemia, azotaemia, elevated CRP, hyperglycaemia — and the exact
+right impression, "Cholestatic liver disease with renal impairment and
+systemic inflammation"). Reasonable on `imaging` ("Suspected biliary atresia
+with splenomegalie and ascita" — correct primary diagnosis, though it added
+secondary findings the 6-word/single-finding rule asks it not to). **But on
+`report` it answered entirely in Romanian** — a complete, hard failure of the
+explicit English-output requirement, despite nailing English on the other two
+kinds. Inconsistent language enforcement across kinds rules this out for
+production use without further investigation into why `report` specifically
+triggers it.
+
+### llama-3.2-1b-instruct — usable-ish but error-prone
+On `lab`, restates raw numbers (against the prompt's explicit instruction)
+and **misreads a lymphopenia value (5.6%, below the 40-70% normal range) as
+"elevated,"** inventing "lymphoma or autoimmune disease" as differentials not
+warranted by a single borderline value. On `imaging`, picks an incidental
+finding ("Suspected Splenomegaly") over the actual dominant diagnosis. On
+`report`, states **"Age: 6 years"** for a 6-month-old (a serious factual
+error) and **invents a "cirrhosis" diagnosis** not present anywhere in the
+source, on top of a partial Romanian leak ("Sex: Masculin").
+
+### qwen3.5-4b — unusable, same failure as qwen3.5-9b
+Leaks chain-of-thought on **every** kind, consuming the entire token budget
+without ever producing a final answer (confirmed on `pre_exam`'s 900-token
+budget: the whole response is "Thinking Process: ..." analysis, cut off
+mid-timeline, no structured briefing ever emitted). Unlike `qwen3-4b`,
+appending `/no_think` to the input does **not** suppress this — tested
+directly, still leaks. Confirms the CoT-leak problem is a `qwen3.5`
+architecture-family issue, not a 9B-specific quirk, and this family doesn't
+honor the `/no_think` convention that worked for plain `qwen3-4b`.
+
+## Verdict
+**None of the four displace the existing shortlist** (medgemma-4b-it,
+gemma-3n-e4b, ministral-3-3b, qwen3-4b `/no_think`). `llama-3.2-3b-instruct`
+is worth keeping an eye on — best lab-terminology output of any model tested
+to date — but its Romanian-only `report` output and the crash on `pre_exam`
+mean it isn't ready to adopt. `qwen3.5-4b` and `unsloth/lfm2.5-8b-a1b` are
+both disqualified outright (CoT leak with no workaround; server-crashing
+instability).
