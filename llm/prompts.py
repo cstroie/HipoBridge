@@ -135,7 +135,11 @@ def _build_messages(client, kind: str, text: str) -> list[dict]:
     no shared preamble ahead of it."""
     _tier, task_prompt, _max_tokens = PROMPTS[kind]
     language = getattr(client, "language", "English") or "English"
-    system_content = task_prompt
+    # Kind files may reference the concrete language name via a literal
+    # "{language}" placeholder (e.g. pre_exam.md's opening sentence) — a
+    # targeted replace, not str.format(), so a prompt with unrelated literal
+    # braces (none today, but not guaranteed forever) can't break this.
+    system_content = task_prompt.replace("{language}", language)
     if kind in DATE_AWARE_KINDS:
         system_content += _date_directive()
     system_content += _language_directive(language)

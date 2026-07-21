@@ -152,3 +152,62 @@ One of the `pre_exam` regression-test attempts hit `RuntimeError: terminated`
 discussed theory that this LM Studio instance's radiology project
 (xrayvision) can evict the model mid-generation under department load,
 independent of prompt correctness.
+
+---
+
+# pre_exam Romanian regression: not resolved by prompt engineering (2026-07-22)
+
+## What was tried
+After fixing `imaging` by removing the shared preamble, `pre_exam` turned out
+to have its **own**, separate regression for medgemma-4b-it: it was correctly
+English before today's changes (Round 11) but came back in Romanian after the
+preamble removal. Three progressively stronger fixes were tried and verified
+against the live model, each a real, isolated test — not guesses left
+unverified:
+
+1. An inline disambiguation note next to `pre_exam.md`'s "exact, no
+   paraphrase" instruction (hypothesis: the model was reading that as license
+   to preserve the source language verbatim) + a STRICT RULE stating the
+   language requirement overrides it.
+2. Reordering: moved that STRICT RULE to the *top* of the rules list (was
+   last of 9) and added an explicit translation clause into the opening role
+   sentence, so it's the first thing read, well before "no paraphrase"
+   appears.
+3. Concrete language naming: added lightweight, targeted `{language}`
+   placeholder substitution (`str.replace`, not `str.format`, so it can't
+   break on any future literal braces elsewhere) so the prompt states
+   "entirely in English" directly instead of a vague "the output language
+   specified below".
+
+**All three still produced Romanian output**, reproducibly, across multiple
+runs.
+
+## Likely cause
+`pre_exam`'s input is far larger than `imaging`'s and almost entirely Romanian
+source text (~7500 chars vs. ~950), with a 900-token output. This looks like
+**volume-driven language drift**: with that much non-English context, the
+model may drift toward the source language regardless of instruction wording
+or position — a different failure mode than `imaging`'s dilution problem,
+and one that doesn't appear fixable by prompt wording alone for this model.
+
+`google/gemma-3n-e4b` correctly handled this exact same long, Romanian-heavy
+`pre_exam` input in English in earlier rounds, so this reads as a
+**medgemma-4b-it-specific weakness on long, source-language-heavy input**,
+not a universal problem with the kind or the input.
+
+## Decision: stop prompt-wording escalation, route around it instead
+No more prompt-wording changes for this specific case. Recommendation:
+
+- **Do not rely on medgemma-4b-it for `pre_exam`.** Prefer `gemma-3n-e4b` or
+  `ministral-3-3b` for that kind specifically. medgemma-4b-it remains fine for
+  `imaging`/`lab`/`report` (all verified correct in English this round).
+- If medgemma-4b-it must be used for `pre_exam` in the future, the next thing
+  worth testing is **not** more wording — it's whether truncating the
+  Romanian source further, or a lower temperature, reduces the drift. Both
+  are untested hypotheses, not confirmed fixes.
+
+The prompt content changes made while chasing this (restored role framing,
+explicit no-reasoning rules, the "no paraphrase" disambiguation, and the
+`{language}` templating mechanism itself) are kept — they're net-neutral-to-
+positive and the templating mechanism is reusable for any future kind that
+needs a concrete language name in its own wording.
