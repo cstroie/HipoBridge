@@ -5,6 +5,21 @@ configured OpenAI-compatible server, using a **real** discharge summary as
 input and the app's exact production prompt. Goal: pick fast on-device models
 for the per-item "AI" buttons, accounting for cold-load (model-swap) delay.
 
+## Final decision (2026-07-21)
+
+**Production model: `mistralai/ministral-3-3b` at `Q4_K_M` quantization**
+(`local.cfg`, `[provider:lmstudio]`, `default`/`medical` tiers). Fastest
+warm-generation of the viable candidates, good fidelity across all four kinds
+(Round 6), fits a 4 GB card comfortably, no special handling required (unlike
+qwen3-4b's `/no_think` or the reasoning-leaking models). Smaller quantizations
+(IQ4_XS, Q3_K_M) were tested and are **slower**, not faster, with no quality
+upside (Round 7) — do not switch off Q4_K_M.
+
+Fallbacks if ministral-3-3b becomes unavailable: `medgemma-4b-it` (kept
+resident for xrayvision, so it pays zero cold-load) or `google/gemma-3n-e4b`
+(best structure on `pre_exam`). Everything below is the investigation history
+that led to this decision.
+
 ## Setup
 
 - **Server**: LM Studio, `http://192.168.3.238:1234/v1` (per `local.cfg`).
