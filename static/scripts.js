@@ -1877,7 +1877,8 @@ document.addEventListener('DOMContentLoaded', function() {
             setText('reportPatientName', name);
             setText('reportPatientId',   pid);
             setText('reportCNP',         cnp);
-            setText('reportDOB',         dob ? `${dob}${age ? ' (' + age + ')' : ''}` : '');
+            setText('reportDOB',         dob);
+            setText('reportAge',         dob ? age : '');
             setText('reportSex',         gender);
 
             const ext = patientData.extension || [];
@@ -1972,7 +1973,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 sec.hidden = false;
             }
 
-            const activeAdm    = encounters.find(e => e.enc.status === 'in-progress');
+            // A checkin encounter's "in-progress" status is a static artifact
+            // of the checkin.asp scrape — it never updates once the patient
+            // is discharged, so a checkin can still claim "in-progress" long
+            // after a checkout for that same stay exists (confirmed live: a
+            // patient checked in 2026-07-15 and discharged 2026-07-21 still
+            // showed "Current Admission: ...present (ongoing)" right next to
+            // its own separate, complete "Last Admission" section for the
+            // exact same dates). Treat a checkin as genuinely active only if
+            // it starts after every already-known checkout has concluded —
+            // i.e. it's a fresh admission, not one a checkout already closed.
+            const latestCheckoutEnd = encounters
+                .filter(e => e.enc.status !== 'in-progress')
+                .reduce((latest, e) => {
+                    const end = e.enc.period?.end || e.enc.period?.start || '';
+                    return end > latest ? end : latest;
+                }, '');
+            const activeAdm = encounters.find(e =>
+                e.enc.status === 'in-progress' &&
+                (!latestCheckoutEnd || (e.enc.period?.start || '') > latestCheckoutEnd));
             const lastDischarge = encounters.find(e => e.enc.status !== 'in-progress' && isSubstantiveText(extractEpicrisisText(e.enc)));
 
             const secAdmission = document.getElementById('reportSectionAdmission');
