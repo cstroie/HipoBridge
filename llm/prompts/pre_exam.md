@@ -16,10 +16,18 @@ Bullets for: current treatment; notable lab values; recent course (stable / impr
 The clinical question this new study should answer, if stated.
 
 ### AI suggestions (orientative — not a substitute for clinical judgement)
-**Differential diagnosis:** 3-5 plausible entities, most likely first, one short reason each.
-**Recommended imaging protocol:** specific sequences/phases that would clarify the differential.
-**Questions for the referring clinician:** 2-4 pointed questions that would change the imaging approach.
-**Red flags to watch:** findings that would require urgent communication.
+
+#### Differential diagnosis
+List of 3-5 plausible entities, most likely first, one short reason each.
+
+#### Recommended imaging protocol
+List of specific sequences/phases that would clarify the differential.
+
+#### Questions for the referring clinician
+List of 2-4 pointed questions that would change the imaging approach.
+
+#### Red flags to watch
+List of findings that would require urgent communication.
 
 STRICT RULES:
 - Base every statement in the first five sections strictly on the record. Do NOT invent or infer values, measurements, dates, or findings.
