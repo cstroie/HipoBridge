@@ -545,3 +545,78 @@ causes.
 **Stay on Q4_K_M.** There is no speed argument for a smaller quant on this
 model — the opposite is true — and no quality upside either. The original
 "maybe a smaller quant is faster" hypothesis is answered empirically: no.
+
+---
+
+# Round 8 — pre_exam fabricates a diagnosis from imaging-only input (2026-07-21)
+
+## Bug report
+Patient 421200000687161: `pre_exam`'s Summary line showed `Age: [not
+available], Sex: [not available], Main diagnosis: [not available],
+Involved specialty: [not available]` — reported as "should have all the
+data".
+
+## Investigation
+This patient's real Hipocrate record is genuinely sparse: 4 ER visits, all
+"left without medical advice" with **empty** reason/diagnostic/treatment
+fields (confirmed in the raw scraped HTML — not an extraction bug), plus 2
+negative rapid tests (flu A/B, COVID) and 2 chest X-rays. The clinical text
+actually assembled and sent to the model was **only the two X-ray reports**
+— no admission narrative exists (no checkin/checkout), and labs are never
+folded into `report`/`pre_exam`'s clinical text at all (a separate,
+narrower gap: the `pre_exam` prompt's own text claims to use "labs", but the
+frontend's `getPatientClinicalText()` only assembles admission narrative +
+imaging — labs are only ever sent to the dedicated `lab` kind). So
+`[not available]` for age/sex/diagnosis was **correct** given the input —
+the model wasn't given any of that information.
+
+**But reproducing it surfaced a real, more serious bug**: given only the two
+X-ray reports (interstitial/peribronchovascular markings, no consolidation —
+a nonspecific finding), **both ministral-3-3b and medgemma-4b-it fabricated
+an entire fictitious clinical course** for the `History` section — different
+invented dates on each run, all inventing a "pneumonia admission, treated
+with antibiotics" that appears nowhere in the source. medgemma additionally
+relabeled the finding itself as a named diagnosis ("Interstitial lung
+disease") in the Summary line. Confirmed reproducible across both models and
+across repeated runs (different fake dates each time — pure confabulation,
+not extraction of a hidden signal).
+
+## Root cause
+`pre_exam.md`'s `History` instruction told the model to list "diagnoses,
+admissions, treatments, key investigations" with no "only if present"
+qualifier (unlike the `Summary` line, which already said "only if stated").
+Combined with no explicit rule forbidding "upgrading" an imaging/lab finding
+into an invented diagnosis or admission episode, the model filled the
+expected structure with a plausible-sounding scenario instead of admitting
+there wasn't one — the same underlying failure mode as the earlier
+newborn/"65-year-old" hallucination (Round: hallucination fix), now caught in
+a different section of a different kind.
+
+## Fix
+`llm/prompt_templates/pre_exam.md`:
+- `History` instruction: added "only events explicitly documented in the
+  record. If the record contains no admission note, diagnosis, or treatment
+  record (e.g. it is only one or more imaging/lab reports with no
+  accompanying clinical narrative), write [not available] here rather than
+  constructing one."
+- New STRICT RULE: "NEVER infer a diagnosis, admission, or treatment episode
+  merely because imaging or lab findings would be consistent with one (e.g.
+  do not turn 'interstitial markings on a chest X-ray' into an invented
+  'pneumonia admission, treated with antibiotics', and do not relabel that
+  same finding as a named diagnosis like 'interstitial lung disease'). A
+  finding is a finding, not a diagnosis, and a report is not an admission —
+  unless the record explicitly states the diagnosis or admission itself."
+
+Verified on the exact failing input: both ministral-3-3b and medgemma-4b-it
+now correctly write `[not available]` for History/diagnosis instead of
+fabricating a clinical course, while still faithfully listing the real X-ray
+findings verbatim.
+
+## Follow-up not yet addressed
+Labs are never included in `report`/`epicrisis`/`pre_exam`'s clinical text —
+only the dedicated `lab` AI button sees them (and only abnormal ones). For
+patients like this one, where the only "recent status" signal is two
+negative rapid tests, `pre_exam`'s "Current clinical status: notable lab
+values" will always say `[not available]` even when relevant (if unremarkable)
+lab context exists. This is an architecture gap, not a prompt gap — worth a
+separate look at whether `pre_exam` should also receive a compact lab summary.
