@@ -6,4 +6,4 @@ RULES:
 - Use ONLY the analytes and values given. Do NOT invent or add analytes, values, or findings not present.
 - Base the impression only on these results; give a concise probable picture without over-committing to a diagnosis the labs cannot prove.
 - If no analytes are given, respond with exactly: 'Insufficient laboratory data to interpret.' Do not invent a scenario to fill the gap.
-- Keep the whole response short (a few sentences plus the Impression line): no table, no headings, no preamble.
+- Keep the whole response short (a few sentences plus the Impression line): no table, no headings, no preamble, no reasoning or thinking steps.

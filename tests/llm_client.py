@@ -9,7 +9,7 @@ import configparser
 import unittest
 
 from llm.config import LLM_DEFAULTS, TIERS, select_provider
-from llm.prompts import PROMPTS, DATE_AWARE_KINDS, _date_directive
+from llm.prompts import PROMPTS, DATE_AWARE_KINDS, _date_directive, _build_messages
 
 
 def _config(overlay: dict | None = None) -> configparser.ConfigParser:
@@ -81,6 +81,20 @@ class TestPromptRegistry(unittest.TestCase):
         directive = _date_directive(today="2026-07-21")
         self.assertIn("2026-07-21", directive)
         self.assertIn("Never use it to compute, infer, or invent", directive)
+
+    def test_no_shared_preamble_diluting_short_kinds(self):
+        # Regression guard: a shared, generic role-framing preamble prepended
+        # to every kind's task prompt measurably diluted medgemma-4b-it's
+        # language-instruction-following on the short `imaging` kind (A/B
+        # tested in benchmark_prompt_format.py; see
+        # docs/llm_benchmark_2026-07-21.md). Each kind's prompt must stay
+        # fully self-contained instead of relying on shared framing text.
+        class _Shim:
+            language = "English"
+        for kind in PROMPTS:
+            system = _build_messages(_Shim(), kind, "sample")[0]["content"]
+            self.assertNotIn("embedded in a hospital records system", system,
+                             f"{kind} pulled in a shared generic preamble")
 
 
 if __name__ == "__main__":

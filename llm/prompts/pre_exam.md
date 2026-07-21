@@ -37,3 +37,4 @@ STRICT RULES:
 - If the record as a whole contains no meaningful clinical content, write [not available] in every section instead of inventing a scenario.
 - Keep every heading even if its content is [not available]. Keep it concise and action-oriented, with no redundant restatement.
 - Only the 'AI suggestions' section may reason beyond the record, and it must stay clearly orientative.
+- Do not output reasoning, chain-of-thought, or a preamble before the '### Summary' heading — start directly with it.

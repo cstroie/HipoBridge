@@ -96,3 +96,59 @@ Romanian-on-imaging regression. Not recommended as a replacement.
    independent of any single model's behavior — consider testing `pre_exam`
    in isolation (one model, fresh server state) rather than back-to-back
    with other kinds/models, until this is better understood.
+
+---
+
+# Fix: removed the shared preamble that caused the imaging regression (2026-07-22)
+
+## Root cause, confirmed
+`benchmark_prompt_format.py`'s 4-way A/B (`current`/`consolidated`/
+`language_last`/`legacy`, see the section above) isolated the exact cause of
+medgemma-4b-it's `imaging` regression: **the shared `system.md` preamble
+itself** (generic role framing + general rules), independent of whether it
+sat in the system or user role, and independent of where within it the
+language instruction was positioned. The `legacy` variant — no shared
+preamble, just the kind's own task prompt + a language-directive suffix —
+was the only one that correctly answered "Suspected biliary atresia" in
+English. On `lab`/`report`/`pre_exam` the shared preamble's effect was mixed
+rather than clearly harmful (on `report` it actually *avoided* a
+"peritonitis" contradiction that the no-preamble variants introduced) — but
+`imaging`'s short (40-token) output left the least room for a large generic
+preamble to compete with the specific instruction that mattered.
+
+## Fix shipped
+`llm/prompts.py` was rewritten: there is no longer a shared preamble at all.
+Every kind's prompt (`llm/prompts/<kind>.md`) is now fully self-contained —
+its own role framing, its own restated anti-hallucination rule, its own
+explicit "no reasoning/chain-of-thought" instruction — with the date and
+language directives appended directly after the task prompt (the position
+already validated to work). `report.md` and `epicrisis.md` gained short,
+task-specific role framing (they previously had none of their own, relying
+entirely on the now-removed shared preamble); `imaging.md`, `lab.md`, and
+`pre_exam.md` each gained an explicit "no reasoning or thinking steps" line
+they didn't already state outright. `llm/prompts/system.md` was deleted.
+
+## Verified against the real production code path (not just the diagnostic tool)
+Re-ran `benchmark_llm.py` (which calls the actual, rewritten
+`_build_messages()`) against the live server:
+
+| Kind | Model | Result |
+|---|---|---|
+| imaging | medgemma-4b-it | ✅ "Suspected biliary atresia" (3/3), **and faster**: 4.34s total vs 6.9-7.9s with the old shared preamble |
+| lab | medgemma-4b-it | ✅ correct terms, correct impression, English |
+| report | medgemma-4b-it | ✅ faithful, English |
+| pre_exam | medgemma-4b-it | ✅ (after one xrayvision-contention retry — see below) |
+| imaging | ministral-3-3b | ✅ exact match to reference — unaffected, as expected |
+| imaging | gemma-3n-e4b | ✅ correct diagnosis (adds extra findings, a known pre-existing pattern, not a new regression) |
+
+Also added a regression-guard unit test
+(`test_no_shared_preamble_diluting_short_kinds` in `tests/llm_client.py`)
+asserting no kind's assembled system message contains the old shared
+preamble's language, so this specific regression can't silently return.
+
+## Aside: confirms the xrayvision-contention theory
+One of the `pre_exam` regression-test attempts hit `RuntimeError: terminated`
+— recovered cleanly on retry after a fresh health check. Consistent with the
+discussed theory that this LM Studio instance's radiology project
+(xrayvision) can evict the model mid-generation under department load,
+independent of prompt correctness.
