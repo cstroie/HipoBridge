@@ -3797,6 +3797,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     () => article.querySelector('.report-body'),
                     () => cardAiBtn.dataset.aiText || '',
                     { inline: true });
+                // Silently redisplay a previously generated summary for this
+                // report, if any (mirrors lab/epicrisis/report/pre_exam).
+                runAiSummary(
+                    cardAiBtn, 'imaging',
+                    () => article.querySelector('.report-body'),
+                    () => cardAiBtn.dataset.aiText || '',
+                    { inline: true, auto: true });
                 enqueueAiWarm('imaging', copyMd, dataGeneration);
             }
 
