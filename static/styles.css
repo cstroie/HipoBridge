@@ -2018,16 +2018,19 @@ select {
     text-wrap: pretty;
 }
 
+/* Same look as the AI report's h1-h3 (.ai-summary-body) — bold accent
+   border instead of a bottom rule, so a series title reads at the same
+   "section heading" level as an AI summary heading. */
 .series-result-title {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-bold);
-    color: var(--ink-1);
+    font: 700 var(--font-size-base) 'Space Grotesk', 'Inter', sans-serif;
+    color: var(--text);
+    letter-spacing: -0.01em;
+    border-left: 3px solid var(--primary);
+    padding-left: var(--space-10);
     margin: var(--space-16) 0 var(--space-4);
-    padding-bottom: var(--space-4);
-    border-bottom: 1px solid var(--border);
 }
 .series-result-title:first-child {
     margin-top: 0;
