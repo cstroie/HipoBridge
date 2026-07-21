@@ -2731,10 +2731,7 @@ select {
 .ai-summary-body > :last-child { margin-bottom: 0; }
 .ai-summary-body h1,
 .ai-summary-body h2,
-.ai-summary-body h3,
-.ai-summary-body h4,
-.ai-summary-body h5,
-.ai-summary-body h6 {
+.ai-summary-body h3 {
     font: 700 var(--font-size-base) 'Space Grotesk', 'Inter', sans-serif;
     color: var(--text);
     letter-spacing: -0.01em;
@@ -2743,6 +2740,18 @@ select {
     padding-left: var(--space-10);
     margin-top: var(--space-24);
     margin-bottom: var(--space-10);
+}
+.ai-summary-body h4,
+.ai-summary-body h5,
+.ai-summary-body h6 {
+    font: 600 var(--font-size-sm) 'Inter', sans-serif;
+    color: var(--text-light);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    border-left: 2px solid var(--border);
+    padding-left: var(--space-10);
+    margin-top: var(--space-16);
+    margin-bottom: var(--space-6);
 }
 .ai-summary-body p {
     margin: 0 0 var(--space-14);
