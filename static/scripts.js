@@ -2198,6 +2198,73 @@ document.addEventListener('DOMContentLoaded', function() {
                 admissionsMd += admissionMarkdown('Last Admission', lastDischarge.enc, false);
             }
 
+            // ── Labs (compact) ───────────────────────────────────────────
+            // Distinct from the dedicated Lab tab's fuller trend table: a
+            // short "## Recent Labs" section for the report/epicrisis/
+            // pre_exam clinical text, which previously never saw any lab
+            // data at all (pre_exam's own prompt already claims to use
+            // "labs" — this fulfils that). Covers two cases the trend table
+            // doesn't: (a) numeric analytes currently out of range, and (b)
+            // qualitative (valueString) results such as rapid antigen tests,
+            // which have no numeric range and are otherwise invisible to
+            // every AI kind (renderTrends only tracks numeric-valued
+            // analytes). Capped small on purpose — full history stays in
+            // the Lab tab; only the most recent value per analyte is used.
+            const MAX_LAB_LINES = 8;
+
+            function isAbnormalObservation(obs) {
+                const flag = obs.interpretation?.[0]?.text;
+                if (flag === 'H' || flag === 'L') return true;
+                const v = obs.valueQuantity?.value;
+                if (v == null) return false;
+                const low = obs.referenceRange?.[0]?.low?.value;
+                const high = obs.referenceRange?.[0]?.high?.value;
+                return (low != null && v < low) || (high != null && v > high);
+            }
+
+            function buildCompactLabsMarkdown(observations) {
+                const latestNumeric = new Map();
+                const latestQualitative = new Map();
+                for (const obs of observations) {
+                    const name = obs.code?.text;
+                    const date = obs.effectiveDateTime || '';
+                    if (!name || !date) continue;
+                    if (obs.valueQuantity?.value != null) {
+                        const prev = latestNumeric.get(name);
+                        if (!prev || date > prev.date) latestNumeric.set(name, { obs, date });
+                    } else if (obs.valueString) {
+                        const prev = latestQualitative.get(name);
+                        if (!prev || date > prev.date) latestQualitative.set(name, { obs, date });
+                    }
+                }
+                const lines = [];
+                for (const { obs, date } of latestNumeric.values()) {
+                    if (!isAbnormalObservation(obs)) continue;
+                    const v = obs.valueQuantity.value;
+                    const unit = obs.valueQuantity.unit || '';
+                    const ref = obs.referenceRange?.[0]?.text || '';
+                    lines.push(`- **${obs.code.text}** (${date}): ${v}${unit ? ' ' + unit : ''}${ref ? ` (normal: ${ref})` : ''} — out of range`);
+                }
+                for (const { obs, date } of latestQualitative.values()) {
+                    lines.push(`- **${obs.code.text}** (${date}): ${obs.valueString}`);
+                }
+                if (!lines.length) return '';
+                return '## Recent Labs\n\n' + lines.slice(0, MAX_LAB_LINES).join('\n') + '\n\n';
+            }
+
+            let labsMd = '';
+            try {
+                const sd = new Date(); sd.setDate(sd.getDate() - 90);
+                const labResp = await apiFetch(`/fhir/Observation?patient=${encodeURIComponent(pid)}&start_date=${localDateStr(sd)}`);
+                if (labResp.ok) {
+                    const labBundle = await labResp.json();
+                    labsMd = buildCompactLabsMarkdown((labBundle.entry || []).map(e => e.resource).filter(Boolean));
+                }
+            } catch (_) {
+                // Labs are supplementary here — don't fail the whole report
+                // over a lab-fetch error; the dedicated Lab tab still works.
+            }
+
             let imagingMd = '';
             if (reports.some(Boolean)) {
                 imagingMd = '## Recent Imaging\n\n';
@@ -2212,7 +2279,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             }
 
-            const combined = patientMarkdown + admissionsMd + imagingMd;
+            const combined = patientMarkdown + admissionsMd + labsMd + imagingMd;
             if (markdownStore) markdownStore.dataset.markdown = combined;
 
             // Structured payload for the AI tab: imaging reports are already
@@ -2233,7 +2300,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     typed_blocks: typedBlocks,
                     narrative: narrativeParts.join('\n\n'),
                 });
-                elements.patientReportBlocks.dataset.clinicalMarkdown = admissionsMd + imagingMd;
+                elements.patientReportBlocks.dataset.clinicalMarkdown = admissionsMd + labsMd + imagingMd;
             }
 
             if (reportCard) reportCard.hidden = false;
