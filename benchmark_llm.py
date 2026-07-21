@@ -34,8 +34,16 @@ import time
 import aiohttp
 
 from llm.config import init_llm, select_provider
-from llm.prompts import PROMPTS, _language_directive
+from llm.prompts import PROMPTS, _build_messages, _system_prompt, _date_directive, DATE_AWARE_KINDS
 from llm.backend import strip_think_block
+
+
+class _ClientShim:
+    """Minimal stand-in for llm.router.LLMClient — _build_messages() only
+    reads .language off its `client` argument, so a real LLMClient (with its
+    ServerBackend, tier map, etc.) would be needless ceremony here."""
+    def __init__(self, language: str):
+        self.language = language
 
 # Curated candidates: Gemma / MedGemma / LFM families, 1B-4B or smaller.
 # Any not present on the server are warned about and skipped at startup.
@@ -302,19 +310,29 @@ async def async_main(args):
         source = f"{args.endpoint.replace('{id}', str(args.report_id))}"
     print(f"Input: {source} ({len(text)} chars)")
 
-    # Build the exact production message for --kind. --system-file overrides
-    # the registry prompt so a candidate prompt can be A/B-tested before it is
-    # promoted into llm/prompts.py.
-    tier, system, max_tokens = PROMPTS[args.kind]
+    # Build the exact production message for --kind, reusing _build_messages()
+    # so this tool's assembly can never silently drift from what the app
+    # actually sends. --system-file overrides just the kind's task-specific
+    # prompt (the shared system.md framing + date directive still apply) so
+    # a candidate task prompt can be A/B-tested before being promoted into
+    # llm/prompts/<kind>.md.
+    tier, task_prompt, max_tokens = PROMPTS[args.kind]
+    language = config["llm"].get("language", "English") or "English"
+    shim = _ClientShim(language)
     if args.system_file:
         with open(args.system_file) as f:
-            system = f.read().strip()
+            task_prompt = f.read().strip()
         print(f"System prompt: OVERRIDE from {args.system_file}")
-    language = config["llm"].get("language", "English") or "English"
-    messages = [
-        {"role": "system", "content": system + _language_directive(language)},
-        {"role": "user", "content": text},
-    ]
+        system_content = _system_prompt(language)
+        if args.kind in DATE_AWARE_KINDS:
+            system_content += _date_directive()
+        system_content += "\n\n" + task_prompt
+        messages = [
+            {"role": "system", "content": system_content},
+            {"role": "user", "content": text},
+        ]
+    else:
+        messages = _build_messages(shim, args.kind, text)
     print(f"Kind: {args.kind} (tier={tier}, max_tokens={max_tokens}, lang={language})")
 
     models = ([m.strip() for m in args.models.split(",") if m.strip()]
