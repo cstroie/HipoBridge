@@ -620,3 +620,46 @@ negative rapid tests, `pre_exam`'s "Current clinical status: notable lab
 values" will always say `[not available]` even when relevant (if unremarkable)
 lab context exists. This is an architecture gap, not a prompt gap — worth a
 separate look at whether `pre_exam` should also receive a compact lab summary.
+
+---
+
+# Round 9 — feed labs into report/epicrisis/pre_exam clinical text (2026-07-21)
+
+Follow-up to Round 8's "labs never reach report/pre_exam" gap.
+
+## Change
+`static/scripts.js`'s `displayPatientReport()` now fetches a 90-day
+`/fhir/Observation` window (same bound as the Lab tab's `prefetchLaboratory`)
+and builds a compact `## Recent Labs` section, inserted between the
+admission narrative and imaging in both `clinicalMarkdown` (AI text) and the
+full report markdown. Covers two cases the existing Lab-tab trend logic
+doesn't:
+- **Numeric analytes currently out of range** (most recent value only).
+- **Qualitative (`valueString`) results** — e.g. rapid antigen/flu tests —
+  which have no numeric reference range and were previously invisible to
+  every AI kind (`renderTrends` only tracks numeric-valued analytes).
+
+Capped at 8 lines; a lab-fetch failure doesn't fail the report (labs are
+supplementary here — the dedicated Lab tab still has the full picture).
+
+## Verified on patient 421200000687161 (the Round 8 case)
+The two negative rapid tests (Influenza A/B, COVID) now appear in the
+clinical text sent to `report`/`pre_exam`. Re-ran both kinds on the real
+data: the model correctly incorporated the real result ("Negativ") verbatim
+into History/Prior-imaging sections with **no fabrication** — a genuine
+improvement, not just more text for the model to hallucinate around.
+
+## Separate, pre-existing bug surfaced along the way (not fixed here)
+Testing also reproduced a **different**, unrelated hallucination in the
+`report` kind, independent of the labs change (reproduces on imaging-only
+input too): the model sometimes mistranslates the Romanian radiology
+abbreviation **"SCD" (sinusuri costodiafragmatice / costophrenic
+sinuses/angles) — "SCD libere" = clear/no effusion — into an invented
+"free-flowing pleural effusion"**, turning a *normal* finding into a
+fabricated *abnormal* one. Also observed once inventing symptoms
+("presented with shortness of breath and cough") not stated anywhere in the
+source. Not addressed in this round — flagged as a follow-up: likely needs
+either a glossary of untranslated Romanian radiology abbreviations in the
+`report`/`imaging` prompts, or the same "a finding is a finding, don't
+upgrade/relabel it" rule from the Round 8 pre_exam fix applied to `report`
+and `epicrisis` too.
