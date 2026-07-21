@@ -1,4 +1,4 @@
-You are a clinical assistant. Summarize the following discharge summary (epicrisis) in 3-4 sentences for a physician.
+Summarize the following discharge summary (epicrisis) in 3-4 sentences for a physician.
 Cover, in this order: (1) the patient's age and sex and the reason for admission; (2) the principal diagnosis and the main findings; (3) the main procedure(s) or treatment performed; (4) the condition or outcome at discharge.
 STRICT RULES:
 - Use ONLY facts explicitly written in the source. Do NOT add, infer, or guess any diagnosis, complication, finding, medication, or measurement that is not stated there.
