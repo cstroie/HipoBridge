@@ -593,7 +593,7 @@ newborn/"65-year-old" hallucination (Round: hallucination fix), now caught in
 a different section of a different kind.
 
 ## Fix
-`llm/prompt_templates/pre_exam.md`:
+`llm/prompts/pre_exam.md`:
 - `History` instruction: added "only events explicitly documented in the
   record. If the record contains no admission note, diagnosis, or treatment
   record (e.g. it is only one or more imaging/lab reports with no
