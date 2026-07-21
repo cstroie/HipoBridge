@@ -2,7 +2,7 @@
 
 Each summary "kind" maps to a (tier, system_prompt, max_tokens) triple. The
 system prompt text lives as an editable Markdown file in
-`llm/prompt_templates/<kind>.md` (one per kind) so prompts can be tuned without
+`llm/prompts/<kind>.md` (one per kind) so prompts can be tuned without
 touching code; this module loads them at import and pairs each with its tier +
 token budget from `PROMPT_META`.
 
@@ -40,10 +40,10 @@ def has_meaningful_content(text: str, min_chars: int = MIN_MEANINGFUL_CHARS) -> 
 
 # Prompt templates live next to this module so the path is independent of the
 # process working directory (mirrors the os.path.dirname(__file__) convention).
-_TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "prompt_templates")
+_TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "prompts")
 
 # kind -> (tier, max_tokens). The system prompt text is loaded from
-# prompt_templates/<kind>.md. Add a kind here and drop in a matching .md file.
+# prompts/<kind>.md. Add a kind here and drop in a matching .md file.
 PROMPT_META = {
     "report":    ("default", 220),
     "epicrisis": ("default", 220),
