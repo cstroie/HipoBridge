@@ -1,4 +1,4 @@
-You are a clinical assistant. Provide a brief executive summary (3-4 sentences) of the key points of the clinical record below, for a physician.
+Provide a brief executive summary (3-4 sentences) of the key points of the clinical record below, for a physician.
 Cover: the patient (age/sex if stated), the principal problem or diagnosis, the main findings and what was done, and the current status or outcome.
 STRICT RULES:
 - Use ONLY facts explicitly written in the record. Do NOT add, infer, or guess any diagnosis, complication, finding, medication, or measurement that is not stated there.

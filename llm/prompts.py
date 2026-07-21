@@ -1,10 +1,16 @@
 """Prompt registry for the per-item AI buttons.
 
-Each summary "kind" maps to a (tier, system_prompt, max_tokens) triple. The
-system prompt text lives as an editable Markdown file in
-`llm/prompts/<kind>.md` (one per kind) so prompts can be tuned without
-touching code; this module loads them at import and pairs each with its tier +
-token budget from `PROMPT_META`.
+Each summary "kind" maps to a (tier, task_prompt, max_tokens) triple. The
+task prompt text lives as an editable Markdown file in `llm/prompts/<kind>.md`
+(one per kind) so prompts can be tuned without touching code; this module
+loads them at import and pairs each with its tier + token budget from
+`PROMPT_META`.
+
+`llm/prompts/system.md` holds the fixed, non-task-specific instructions
+shared by every kind (role framing, output language, anti-fabrication/
+no-preamble backstop). Every call's system message is this shared prompt,
+plus an optional date directive, plus the kind's task prompt — see
+`_build_messages()`.
 
 `summarize()` is the single convenience entry point the endpoint calls — no
 schema, no validation, no echo-detection: these are free-text aids the frontend
@@ -53,11 +59,11 @@ PROMPT_META = {
 }
 
 
-def _load_prompt(kind: str) -> str:
-    """Read the system prompt for `kind` from its template file. Fails loudly
-    (at import) if the file is missing or empty — a misconfigured prompt should
-    not silently degrade the AI output."""
-    path = os.path.join(_TEMPLATE_DIR, f"{kind}.md")
+def _load_template(name: str) -> str:
+    """Read a template file by name (without extension) from the prompts
+    dir. Fails loudly (at import) if the file is missing or empty — a
+    misconfigured prompt should not silently degrade the AI output."""
+    path = os.path.join(_TEMPLATE_DIR, f"{name}.md")
     with open(path, encoding="utf-8") as f:
         text = f.read().strip()
     if not text:
@@ -67,18 +73,21 @@ def _load_prompt(kind: str) -> str:
 
 # kind -> (tier, system_prompt, max_tokens)
 PROMPTS = {
-    kind: (tier, _load_prompt(kind), max_tokens)
+    kind: (tier, _load_template(kind), max_tokens)
     for kind, (tier, max_tokens) in PROMPT_META.items()
 }
 
+# Shared system prompt: fixed, non-task-specific instructions (role framing,
+# output language, anti-fabrication/no-preamble backstop) that apply to every
+# kind. Kept in its own file (prompts/system.md) rather than inlined per-kind
+# so the fixed rules are edited once instead of drifting across 5 files.
+# Contains a `{language}` placeholder filled in at call time from
+# client.language (configured in llm.cfg).
+_SYSTEM_TEMPLATE = _load_template("system")
 
-def _language_directive(language: str) -> str:
-    return (
-        f" IMPORTANT: Write your entire response in {language}, regardless of "
-        f"the language of the source document — translate the content into "
-        f"{language} rather than copying phrases verbatim, and never switch "
-        f"language mid-sentence."
-    )
+
+def _system_prompt(language: str) -> str:
+    return _SYSTEM_TEMPLATE.format(language=language)
 
 
 # Kinds that aggregate or narrate events across time, where knowing "today"
@@ -110,12 +119,19 @@ STREAMING_KINDS = frozenset({"report", "epicrisis", "pre_exam"})
 
 def _build_messages(client, kind: str, text: str) -> list[dict]:
     """Assemble the (system, user) messages for `kind` — shared by
-    summarize() and summarize_stream() so the two never drift apart."""
-    _tier, system, _max_tokens = PROMPTS[kind]
+    summarize() and summarize_stream() so the two never drift apart.
+
+    The system message is the shared, fixed prompt (role, output language)
+    from prompts/system.md, followed by the optional date directive, followed
+    by the kind-specific task template — kept as one message (rather than
+    separate system-role entries) since local chat templates commonly only
+    render a single system message."""
+    _tier, task_prompt, _max_tokens = PROMPTS[kind]
     language = getattr(client, "language", "English") or "English"
-    system_content = system + _language_directive(language)
+    system_content = _system_prompt(language)
     if kind in DATE_AWARE_KINDS:
         system_content += _date_directive()
+    system_content += "\n\n" + task_prompt
     return [
         {"role": "system", "content": system_content},
         {"role": "user", "content": text},
