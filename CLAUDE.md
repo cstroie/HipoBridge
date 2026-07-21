@@ -85,6 +85,14 @@ HTTP client → hipobridge.py (@require_auth) → HipoClient* (cache + semaphore
 
 **`markdown.py`**: `html_to_markdown` decomposes icon-only `<i>` tags; `markdown_to_html` uses STX/ETX sentinels for bold/italic ordering.
 
+**`llm/`** (AI summary buttons — report/epicrisis/imaging/lab/pre_exam):
+- Current production model: **`mistralai/ministral-3-3b` at Q4_K_M** (set in `local.cfg`'s `[provider:lmstudio]`, `default`/`medical` tiers). Chosen after an extensive benchmark survey — see `docs/llm_benchmark_2026-07-19.md` for the full methodology, per-kind fidelity scores, and model comparisons. Runner-up/fallback candidates: `medgemma-4b-it` (resident for xrayvision, so zero cold-load) and `google/gemma-3n-e4b`.
+- **Do not "optimize" by dropping to a smaller quantization** — IQ4_XS and Q3_K_M were benchmarked and are *slower* on this model (more complex quant schemes cost more per-token dequant compute than they save in memory bandwidth at batch-size-1), with no quality upside. Stay on Q4_K_M.
+- Prompts live in `llm/prompt_templates/<kind>.md`, not hardcoded in `prompts.py` — edit the `.md` file to tune a prompt, no code change needed.
+- `has_meaningful_content()` (`llm/prompts.py`) gates every call — never hand the model near-empty input; a small model will confidently fabricate an entire scenario (including demographics) rather than say there's nothing to summarize.
+- `DATE_AWARE_KINDS`/`STREAMING_KINDS` (`llm/prompts.py`) are deliberately separate constants even though currently identical sets — one is about date context, the other about transport.
+- The 4096-token context ceiling is real: an oversized input makes LM Studio return an SSE `event: error` line with no `choices` key, not a normal completion — `ServerBackend.chat_stream()`/`chat()` must check for `chunk.get("error")` explicitly or the failure is silently swallowed.
+
 ### Entry point conventions
 
 - Log level: `LOG_LEVEL` env var or `--log-level`. Never hardcode `DEBUG`.
