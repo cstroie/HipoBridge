@@ -1,0 +1,36 @@
+{
+  "patient": {
+    "name": "NEACSU FABIAN ALEXANDRU",
+    "cnp": "5181009410176",
+    "gender": "male",
+    "date": "2018-10-09",
+    "age": 7,
+    "insurance_house": "CJAS ILFOV",
+    "insurance_category": "copil<18 ani",
+    "insurance_number": "-",
+    "address": "Jud. ILFOV Loc. DOMNESTI Str.INTR GHIOCEILOR NR 19",
+    "phone": "0735748232"
+  },
+  "checkout": {
+    "date": "22/07/2026",
+    "ward": "PEDIATRIE 3",
+    "fo_number": "18311",
+    "is_urgent": true,
+    "date_time": "28/11/2024 12:00",
+    "discharge_status": "ameliorat",
+    "epicrisis": "Pacient de sex masculin, in varsta de 6 ani si 1 luna, se prezinta pentru: febra (maximum 38.6 grade C) si tuse productiva. Simptomatologia a debutat in urma cu 2 saptamani cu tuse productiva, pentru care a primit tratament simptomatic. In evolutie, asociaza obstructie nazala, cefalee frontala si otalgie. Pentru ca asociaza febra (maximum 38.6 grade C) si frison, se prezinta la UPU SCUC, unde se decide internarea.\n\n**Antecedente heredo-colaterale:** mama (34 ani), tatal (34 ani), frate (9 ani) - clinic sanatosi.\n\n**Antecedente personale fiziologice:** copil de rang II, provenit din sarcina dispensarizata, la risc de ruptura uterina, extras prin operatie cezariana la VG=39 saptamani, GN=3300g, scor Apgar=9, externat din maternitate dupa 3 zile, alimentat natural, diversificat la 6 luni, a primit profilaxia rahitismului pana la 2 ani, vaccinat doar in maternitate.\n\n**Antecedente personale patologice:** Hidrocel; Mai 2024 - varicela, scarlatina, rujeola. Octombrie 2024 - infectie Pneumococica, tratata cu Ospamox. \n\n**Examen clinic la internare:** G=21kg (scor Z = -0.31 DS). Talie=119cm (scor Z = - 0.08 DS). IMC= 14.8 kg/mp (scor Z = -0.48 DS). Subfebril (37.8 grade C). Stare generala mediocra. Tegumente palide, fara elemente eruptive. Cefalee frontala. Faringe hiperemic. Tuse productiva. Obstructie nazala. Fara sindrom functional respirator. Murmur vezicular prezent bilateral, simetric, fara raluri. Zgomote cardiace ritmice, regulate, fara sufluri. Apetit prezent. Nu varsa. A prezentat un episod de varsaturi postacces de tuse in urma cu 4 zile. Abdomen suplu, depresibil, nedureros spontan si la palpare. Scaun normal. Diureza prezenta. Fara semne de iritatie meningeana.\n\n**Analize de laborator:** hemograma cu neutrofilie; sindrom biologic inflamator prezent. Fara sindrom de hepato-citoliza. Ag pneumococic urinar - negativ. Sumar de urina - in limite normale. Urocultura - negative. Exsudate nazal+faringian - negative. Teste rapide Gripa+Covid - negative.\n\n**Radiografie toracica (25.11.2024, Dr. Popescu):** Condensare pulmonara proiectata infrahilar stang, retrocardiac. SCD libere bilateral. Cord, mediastin normale radiologic.\n\n**Radiografia sinusului paranazal (25.11.2024, Dr. Popescu):** SAF cu transparenta normala radiografic.\n\n**Consult ORL (25.11.2024 Dr. Ungureanu):** Otic normal bilateral. Faringe hiperemic. Reevaluare la nevoie.\n\nPe parcursul internarii, a primit regim igieno-dietetic corespunzator varstei si tratament cu: Cefort iv. ( 4 zile), bronhodilatator Ventolin 100mcg - 2 puffuri la 8 ore (4 zile) si simptomatice, cu evolutie favorabila clinico-paraclinica.\n\n**Examen clinic la externare:** Afebril. Stare generala satisfacatoare. Tegumente discret palide, fara elemente eruptive. Nu mai tuseste. Fara sindrom functional respirator. Murmur vezicular prezent bilateral, simetric, fara raluri. Zgomote cardiace ritmice, regulate, fara sufluri. Apetit prezent. Nu varsa. Abdomen suplu, depresibil, nedureros spontan si la palpare. Scaun normal. Diureza prezenta. Fara semne de iritatie meningeana.",
+    "treatment": "1. Regim igieno-dietetic conform recomandarilor.\n\n2. Tratament cu:\n\n- Forexo sirop 8mg/ml, Ds. po, 10 mLx2/zi, timp de 3 zile.\n\n- Koflet sirop, Ds. po, 5mLx3/zi.\n\n- Septilin cp, Ds. po., 1 cpx2/zi SAU Septilin sirop, Ds. po, 10mLx2/zi.\n\n3.Dispensarizare la medicul de familie",
+    "recommendations": "1. Regim igieno-dietetic conform recomandarilor.\n\n2. Tratament cu:\n\n- Forexo sirop 8mg/ml, Ds. po, 10 mLx2/zi, timp de 3 zile.\n\n- Koflet sirop, Ds. po, 5mLx3/zi.\n\n- Septilin cp, Ds. po., 1 cpx2/zi SAU Septilin sirop, Ds. po, 10mLx2/zi.\n\n3.Dispensarizare la medicul de familie",
+    "id": "260100000557589"
+  },
+  "checkin": {
+    "medic": "PROF.DR. PACURAR DANIELA",
+    "date_time": "25/11/2024 06:04",
+    "diagnosis": "A49.9 Infectia bacteriana, nespecificata",
+    "secondary_diagnoses": [
+      "J18.9 Pneumonie, nespecificata",
+      "R63.3 Dificultati si proasta administrare a alimentatiei",
+      "Z71.3 Consiliere si supraveghere a regimului alimentar"
+    ]
+  }
+}

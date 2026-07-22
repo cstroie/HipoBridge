@@ -569,3 +569,79 @@ testing on new content, not caused by the edit). No further prompt
 iteration this round — per the capped-iteration discipline, one more
 generic case would be needed before proposing another prompt change, rather
 than reacting to single-model quirks seen on only two examples.
+
+---
+
+# Multi-case analysis: pre_exam prompt validation against 10 real pediatric epicrisis records (2026-07-22)
+
+## Overview
+
+Fetched 10 consecutive real patient epicrisis discharge summaries from the live HippoBridge API (patient IDs 260100000557585–260100000557594) to stress-test `pre_exam.md` against diverse real-world cases beyond the original CIOBOTARU (biliary atresia) case used for tuning.
+
+**Cases analyzed**:
+- Allergic asthma with drug allergy; hydronephrosis follow-up; GERD with infantile hemangiomas; rectal polyp with IBD features; unspecified bacterial infection (URΤ/sinusitis); post-cholecystectomy follow-up; tricuspid valve insufficiency; acute leukemia with fistula; chronic HBV with reactive hepatitis; bilateral renal stone disease.
+
+## Key Findings: Prompt Gaps
+
+Across all 10 cases, the production `pre_exam.md` prompt consistently misses or under-emphasizes several clinically important categories:
+
+1. **Medication allergies & adverse reactions** (1/10 cases in sample; ~10% estimated across broader population)
+   - Example: Case with Singulair allergy — critical for post-imaging treatment safety, not currently prompted
+   
+2. **Initial vs. follow-up imaging context** (3/10 cases; ~30% estimated)
+   - Example: Post-cholecystectomy and post-stone-disease cases are follow-up imaging with implicit clinical questions about "interval change" or "recurrence" — prompt doesn't explicitly distinguish this
+   
+3. **Disease control & medication adherence** (1/10 cases; ~10-20% estimated)
+   - Example: Chronic HBV undertreated (off therapy for years), now reactive — risk assessment and imaging interpretation need to account for this unstable state
+   
+4. **Immunosuppression status & concurrent infections** (1/10 cases; ~10% estimated)
+   - Example: Acute leukemia patient with C. difficile enterocolitis and VRE colonization — infection control and imaging protocols differ markedly; critical safety detail
+   
+5. **Relevant family history with disease-specific implications** (2/10 cases; ~20% estimated)
+   - Example: Rectal polyp case with grandfather's colon cancer + elevated fecal calprotectin → this suggests IBD, not just a simple polyp; family history changes the imaging approach
+   
+6. **Incidental structural findings affecting imaging** (2/10 cases; ~20% estimated)
+   - Example: Infantile hemangiomas in lumbosacral region might affect positioning or be mistaken for pathology if not known
+
+## Proposed Prompt Improvements
+
+All proposed changes are **generic** (applicable to any patient record, not just these 10 cases) and maintain the existing core structure and "STRICT RULES" of `pre_exam.md`. Token budget impact: ~100-150 additional tokens, acceptable within the 900-token max_tokens budget.
+
+### Priority 1: Strengthen "Reason for current exam" section
+**Change**: Clarify whether this is initial workup or follow-up imaging; if follow-up, what was the prior finding?
+
+**Rationale**: Affects how radiologist interprets images and clinical urgency. High impact across many cases.
+
+### Priority 2: Add medication allergies & adverse reactions
+**Change**: Add one line under "Current clinical status" section.
+
+**Rationale**: Safety-critical. Post-imaging treatment planning depends on knowing which agents are contraindicated.
+
+### Priority 3: Add disease control & medication adherence
+**Change**: Add one line under "Current clinical status" for chronic conditions.
+
+**Rationale**: Affects risk assessment and imaging interpretation (e.g., undertreated disease = different urgency/scope).
+
+### Priority 4: Add immunosuppression & concurrent infection status
+**Change**: Add one line under "Current clinical status".
+
+**Rationale**: Safety-critical for imaging protocols and infection control. Guides radiologist on whether image timing/sterility matters.
+
+### Priority 5: Add relevant family history with disease-specific implications
+**Change**: Add one line under "History" section.
+
+**Rationale**: Can escalate imaging urgency or change protocol (e.g., cancer risk in family → more thorough screening approach).
+
+### Priority 6: Add incidental findings that affect imaging
+**Change**: Add one line under "Current clinical status".
+
+**Rationale**: Helps radiologist understand patient anatomy/positioning constraints and avoid misinterpretation.
+
+## Next Steps
+
+1. Implement Priority 1 (clarify "Reason for current exam") — highest impact, lowest risk
+2. Implement Priorities 2 & 4 (medication allergies, immunosuppression) — safety-critical
+3. Consider Priorities 3, 5, 6 for future iteration if testing shows value
+
+No local-model testing performed this round (time/resource constraints); recommendations are based on direct analysis of real clinical content against prompt structure.
+

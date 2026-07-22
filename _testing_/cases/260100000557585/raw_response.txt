@@ -1,0 +1,36 @@
+{
+  "status": "success",
+  "message": "",
+  "checkout": {
+    "date": "22/07/2026",
+    "ward": "PEDIATRIE 1",
+    "fo_number": "139093",
+    "is_urgent": false,
+    "date_time": "28/11/2024 12:31",
+    "discharge_status": "stationar",
+    "epicrisis": "Pacienta in varsta de 9 ani se prezinta pentru episoade repetate de bronhospasm in fiecare an, cu insuficienta respiratorie, incepand de la varsta de 5 ani. IgE total normal, fara eozinofilie.In antecedente reactie adversa la Singulair.\n\nLa ex.clinic: 32kg, 132cm, stare generala buna, echilibrata cardiorespirator si digestiv, fara degete hipocratice.\n\nSe recolteaza teste de alergii respiratorii (Avanta).\n\nSpirometrie valori bune : FVC=134%, FEV1=133% , Indice Tiffneau 85%. Dupa Ventolin fara crestere semnificativa, dar valoarea initiala a FEV1 foarte mare.",
+    "treatment": "Continua 1 luna Flixotide.\n\nRevine pe 6.12 2024 pentru rezultate t.alergie.",
+    "recommendations": "Continua 1 luna Flixotide.\n\nRevine pe 6.12 2024 pentru rezultate t.alergie.",
+    "id": "260100000557585"
+  },
+  "checkin": {
+    "medic": "DR. MOSESCU SIMONA",
+    "date_time": "28/11/2024 10:04",
+    "diagnosis": "J45.0 Astmul cu predominenta alergica",
+    "secondary_diagnoses": [
+      "EPICRIZA"
+    ]
+  },
+  "patient": {
+    "name": "STERIE MIRUNA ELENA",
+    "cnp": "6150515100158",
+    "gender": "female",
+    "date": "2015-05-15",
+    "age": 11,
+    "insurance_house": "CJAS BUZAU",
+    "insurance_category": "copil<18 ani",
+    "insurance_number": "-",
+    "address": "Jud. BUZAU Loc. BUZAU Str.PROSPERITATII 18",
+    "phone": "0762767808"
+  }
+}

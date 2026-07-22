@@ -1,0 +1,205 @@
+{
+  "status": "success",
+  "message": "",
+  "checkout": {
+    "date": "22/07/2026",
+    "ward": "PEDIATRIE 3",
+    "fo_number": "18311",
+    "is_urgent": true,
+    "date_time": "28/11/2024 12:00",
+    "discharge_status": "ameliorat",
+    "epicrisis": "Pacient de sex masculin, in varsta de 6 ani si 1 luna, se prezinta pentru: febra (maximum 38.6 grade C) si tuse productiva. Simptomatologia a debutat in urma cu 2 saptamani cu tuse productiva, pentru care a primit tratament simptomatic. In evolutie, asociaza obstructie nazala, cefalee frontala si otalgie. Pentru ca asociaza febra (maximum 38.6 grade C) si frison, se prezinta la UPU SCUC, unde se decide internarea.\n\n**Antecedente heredo-colaterale:** mama (34 ani), tatal (34 ani), frate (9 ani) - clinic sanatosi.\n\n**Antecedente personale fiziologice:** copil de rang II, provenit din sarcina dispensarizata, la risc de ruptura uterina, extras prin operatie cezariana la VG=39 saptamani, GN=3300g, scor Apgar=9, externat din maternitate dupa 3 zile, alimentat natural, diversificat la 6 luni, a primit profilaxia rahitismului pana la 2 ani, vaccinat doar in maternitate.\n\n**Antecedente personale patologice:** Hidrocel; Mai 2024 - varicela, scarlatina, rujeola. Octombrie 2024 - infectie Pneumococica, tratata cu Ospamox. \n\n**Examen clinic la internare:** G=21kg (scor Z = -0.31 DS). Talie=119cm (scor Z = - 0.08 DS). IMC= 14.8 kg/mp (scor Z = -0.48 DS). Subfebril (37.8 grade C). Stare generala mediocra. Tegumente palide, fara elemente eruptive. Cefalee frontala. Faringe hiperemic. Tuse productiva. Obstructie nazala. Fara sindrom functional respirator. Murmur vezicular prezent bilateral, simetric, fara raluri. Zgomote cardiace ritmice, regulate, fara sufluri. Apetit prezent. Nu varsa. A prezentat un episod de varsaturi postacces de tuse in urma cu 4 zile. Abdomen suplu, depresibil, nedureros spontan si la palpare. Scaun normal. Diureza prezenta. Fara semne de iritatie meningeana.\n\n**Analize de laborator:** hemograma cu neutrofilie; sindrom biologic inflamator prezent. Fara sindrom de hepato-citoliza. Ag pneumococic urinar - negativ. Sumar de urina - in limite normale. Urocultura - negative. Exsudate nazal+faringian - negative. Teste rapide Gripa+Covid - negative.\n\n**Radiografie toracica (25.11.2024, Dr. Popescu):** Condensare pulmonara proiectata infrahilar stang, retrocardiac. SCD libere bilateral. Cord, mediastin normale radiologic.\n\n**Radiografia sinusului paranazal (25.11.2024, Dr. Popescu):** SAF cu transparenta normala radiografic.\n\n**Consult ORL (25.11.2024 Dr. Ungureanu):** Otic normal bilateral. Faringe hiperemic. Reevaluare la nevoie.\n\nPe parcursul internarii, a primit regim igieno-dietetic corespunzator varstei si tratament cu: Cefort iv. ( 4 zile), bronhodilatator Ventolin 100mcg - 2 puffuri la 8 ore (4 zile) si simptomatice, cu evolutie favorabila clinico-paraclinica.\n\n**Examen clinic la externare:** Afebril. Stare generala satisfacatoare. Tegumente discret palide, fara elemente eruptive. Nu mai tuseste. Fara sindrom functional respirator. Murmur vezicular prezent bilateral, simetric, fara raluri. Zgomote cardiace ritmice, regulate, fara sufluri. Apetit prezent. Nu varsa. Abdomen suplu, depresibil, nedureros spontan si la palpare. Scaun normal. Diureza prezenta. Fara semne de iritatie meningeana.",
+    "treatment": "1. Regim igieno-dietetic conform recomandarilor.\n\n2. Tratament cu:\n\n- Forexo sirop 8mg/ml, Ds. po, 10 mLx2/zi, timp de 3 zile.\n\n- Koflet sirop, Ds. po, 5mLx3/zi.\n\n- Septilin cp, Ds. po., 1 cpx2/zi SAU Septilin sirop, Ds. po, 10mLx2/zi.\n\n3.Dispensarizare la medicul de familie",
+    "recommendations": "1. Regim igieno-dietetic conform recomandarilor.\n\n2. Tratament cu:\n\n- Forexo sirop 8mg/ml, Ds. po, 10 mLx2/zi, timp de 3 zile.\n\n- Koflet sirop, Ds. po, 5mLx3/zi.\n\n- Septilin cp, Ds. po., 1 cpx2/zi SAU Septilin sirop, Ds. po, 10mLx2/zi.\n\n3.Dispensarizare la medicul de familie",
+    "id": "260100000557589"
+  },
+  "checkin": {
+    "medic": "PROF.DR. PACURAR DANIELA",
+    "date_time": "25/11/2024 06:04",
+    "diagnosis": "A49.9 Infectia bacteriana, nespecificata",
+    "secondary_diagnoses": [
+      "J18.9 Pneumonie, nespecificata",
+      "R63.3 Dificultati si proasta administrare a alimentatiei",
+      "Z71.3 Consiliere si supraveghere a regimului alimentar"
+    ]
+  },
+  "patient": {
+    "name": "NEACSU FABIAN ALEXANDRU",
+    "cnp": "5181009410176",
+    "gender": "male",
+    "date": "2018-10-09",
+    "age": 7,
+    "insurance_house": "CJAS ILFOV",
+    "insurance_category": "copil<18 ani",
+    "insurance_number": "-",
+    "address": "Jud. ILFOV Loc. DOMNESTI Str.INTR GHIOCEILOR NR 19",
+    "phone": "0735748232"
+  },
+  "investigations": [
+    {
+      "section": "EXAMENE PARACLINICE EKG",
+      "code_date": "14139142024-11-25 07:35",
+      "detail": "HEMOLEUCOGRAMA: WBC13.51 103/ulNEUT#9.22 103/ulNEUT%68.2 %LYMPH#2.71 103/ulLYMPH%20.1 %MONO#1.35 103/ulMONO%10.0 %EO#0.18 103/ulEO%1.3 %BASO#0.05 103/ulBASO%0.4 %RBC3.96 106/uLHGB11.5 g/dLHCT32.0 %MCV80.8 fLMCH29.0 pgMCHC35.9 g/dLRDW-SD35.4 fLRDW-CV12.0 %NRBC#0.00 103/ulNRBC#0.00 103/ulNRBC%0.0 %PLT224 103/ulPDW9.7 fLIG#0.05 10^9/LIG%0.4 %P-LCR19.4 %PCT0.21 %MPV9.4 fLEXAMEN CITOLOGIC AL FROTIULUI SANGUIN: NESEGMENTATE5 %SEGMENTATE62 %SEGMENTATE62 %EOZINOFILE2 %LIMFOCITE22 %LIMFOCITE22 %MONOCITE9 %VSH0002 mm/hALT / TGP: ALT14 U/LAST / TGO: AST35 U/LCLOR103 mmoli/LCREATININA0.34 mg/dLPROTEINA C REACTIVA: CRP1.75 mg/dLGLICEMIE87 mg/dLPOTASIU4.52 mmol/LSODIU136 mmol/LUREE24 mg/dLEXSUDAT FARINGIAN - Cultura: REZULTATABSENTI: Streptococ Beta hemolitic - Grup A, Staphylococcus aureus, Streptococcus pneumoniae, Haemophilus influenzaeEXSUDAT NAZAL - Cultura: REZULTATABSENTI: Streptococ Beta hemolitic - Grup A, Staphylococcus aureus, Streptococcus pneumoniae, Haemophilus influenzaeUROCULTURA - CULTURA: REZULTAT< 1000 UFC/mlAntigen pneumococic urinar*: Antigen pneumococic urinarABSENTFibrinogen270 mg/dLSUMAR URINA + SEDIMENT: BilirubinanegUrobilinogennormCorpi cetonicinegAcid ascorbicnegGlucozanormProteinenegHematiinegpH5.5NitritinegLeucocitenegDensitate1.021Celule epiteliale plateRareLeucociteRare"
+    },
+    {
+      "section": "EXAMENE PARACLINICE RX",
+      "code_date": "14138532024-11-25 03:52",
+      "detail": "RADIOGRAFIA SINUSULUI PARANAZAL: RezultatSAF cu transparenta normala radiografic.RADIOGRAFIA TORACICA-PULMONARA: RezultatCondensare pulmonara proiectata infrahilar stang, retrocardiac.SCD libere bilateral.Cord, mediastin normale radiologic."
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "1. Cheltuieli aferente spitalizarii (exclusiv cele din art.3 din ordin)(Nr. zile de spitalizare * tarif / zi de spitalizare)",
+      "detail": "1854.00 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "2. Cheltuieli pentru hrana (alocatia de hrana * nr. zile spitalizare)",
+      "detail": "66.00 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "3. Cheltuieli pentru medicamente pe perioada spitalizarii (cf. art.3 din ordin)",
+      "detail": "34.66 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "3.1. Cheltuieli pentru medicamente din urgenta",
+      "detail": "0.00 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "3.1.1. Cheltuieli pentru medicamente din urgenta din gestiuni de pns",
+      "detail": "0.00 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "3.1.2. Cheltuieli pentru medicamente din urgenta din gestiuni de non-pns",
+      "detail": "0.00 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "3.2. Cheltuieli pentru medicamente in UPU inainte de internare",
+      "detail": "0.00 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "3.3. Cheltuieli pentru medicamente in UPU dupa internare",
+      "detail": "0.00 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "3.4. Cheltuieli pentru medicamente din gestiuni non-pns",
+      "detail": "34.66 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "3.5. Cheltuieli pentru medicamente din gestiuni de pns",
+      "detail": "0.00 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "3.6. Cheltuieli pentru medicamente din spital",
+      "detail": "0.00 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "3.6.1. Cheltuieli pentru medicamente din spital din gestiuni de pns",
+      "detail": "0.00 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "3.6.1. Cheltuieli pentru medicamente din spital din gestiuni de non-pns",
+      "detail": "0.00 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "4. Cheltuieli pentru materiale sanitare (cf. art.3 din ordin)",
+      "detail": "0.00 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "4.1.1. Cheltuieli pentru materiale din urgenta din gestiuni de pns",
+      "detail": "0.00 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "4.1.2. Cheltuieli pentru materiale din urgenta din gestiuni de non-pns",
+      "detail": "0.00 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "4.2. Cheltuieli pentru materiale in UPU inainte de internare",
+      "detail": "0.00 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "4.3. Cheltuieli pentru materiale in UPU dupa internare",
+      "detail": "0.00 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "4.4. Cheltuieli pentru materiale din gestiuni non-pns",
+      "detail": "0.00 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "4.5. Cheltuieli pentru materiale din gestiuni de pns",
+      "detail": "0.00 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "4.6. Cheltuieli pentru materiale din spital",
+      "detail": "0.00 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "4.6.1 Cheltuieli pentru materiale din spital din gestiuni de pns",
+      "detail": "0.00 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "4.6.2 Cheltuieli pentru materiale din spital din gestiuni de non-pns",
+      "detail": "0.00 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "5. Analize de laborator (cf. art.3 din ordin)",
+      "detail": "216.12 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "5.3. Analize laborator in UPU",
+      "detail": "0.00 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "5.4. Analize laborator in Spital",
+      "detail": "0.00 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "6. Alte investigatii (cf. art.3 din ordin)",
+      "detail": "120.00 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "6.3. Alte investigatii in UPU",
+      "detail": "0.00 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "6.4. Alte investigatii in Spital",
+      "detail": "0.00 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "TOTAL CHELTUIELI",
+      "detail": "2290.78 RON"
+    },
+    {
+      "section": "PROCEDURI DRG",
+      "code_date": "VENTOLIN INHALER CFC-FREE 100mcg/doza",
+      "detail": "1"
+    }
+  ]
+}

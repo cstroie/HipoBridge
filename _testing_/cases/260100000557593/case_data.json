@@ -1,0 +1,35 @@
+{
+  "patient": {
+    "name": "SULIMAN MERDAL-EL-DURAN",
+    "cnp": "5070821440041",
+    "gender": "male",
+    "date": "2007-08-21",
+    "age": 18,
+    "insurance_house": "CJAS BUCURESTI",
+    "insurance_category": "copil<18 ani",
+    "insurance_number": "-",
+    "address": "Jud. BUCURESTI Loc. BUCURESTI SECTORUL 1 Str.VERIGII Nr.1",
+    "phone": "0733130416"
+  },
+  "checkout": {
+    "date": "22/07/2026",
+    "ward": "PEDIATRIE 3",
+    "fo_number": "139102",
+    "is_urgent": false,
+    "date_time": "28/11/2024 12:16",
+    "discharge_status": "stationar",
+    "epicrisis": "Pacient in varsta de 17 ani si 3 luni, cunoscut cu infectie VHB cu transmitere materno-fetala, in prezent fara terapie (terapie recomandata de 1 an, dar neadministrata), se prezinta pentru reevaluare clinico-biologica.\n\nA primit 1 an si 6 luni terapie cu Entecavir - oprit de familie.\n\n10.2023 - VIREMIE VALOARE CRESCUTA. Avand in vedere valorile viremei se considera oportuna reluarea terapiei cu entecavir 0,5mg- 1tb/zi 12 luni cu reevaluare\n\n**Starea la internare**: G= 124kg (3.32DS); T=173cm (-0.97 DS); BMI: 41.4 (3.35DS). Afebril, stare generala buna. Tegumente normal colorate, fara eruptii. Tesut adipos reprezentat in exces global. Echilibrat cardio-vascular si respirator. Primeste bine alimentatia per os, nu varsa, abdomen suplu, depresibil, nedureros spontan sau la palpare. Scaun normal, diureza prezenta. Fara semne de iritatie meningeana.\n\n**Investigatii paraclinice**: viremia cu valoare crescuta\n\nEste necesara reluarea terapiei cu Entecavir fiind in discutie o forma moderata de hepatita cronica VHB",
+    "treatment": "1. Regim alimentar corespunzator varstei.\n\n2.Tratament cu Entecavir 0,5mg- 1tb/zi 12 luni cu reevaluare anuala\n\n3. Reevaluare peste 1 an sau la nevoie.",
+    "recommendations": "1. Regim alimentar corespunzator varstei.\n\n2.Tratament cu Entecavir 0,5mg- 1tb/zi 12 luni cu reevaluare anuala\n\n3. Reevaluare peste 1 an sau la nevoie.",
+    "id": "260100000557593"
+  },
+  "checkin": {
+    "medic": "PROF.DR. PACURAR DANIELA",
+    "date_time": "28/11/2024 10:11",
+    "diagnosis": "K75.2 Hepatita reactiva nespecifica",
+    "secondary_diagnoses": [
+      "E66.9 Obezitate, nespecificata",
+      "B18.1 Hepatita virala cronica B fara agent Delta"
+    ]
+  }
+}

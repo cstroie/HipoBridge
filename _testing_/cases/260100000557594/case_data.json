@@ -1,0 +1,34 @@
+{
+  "patient": {
+    "name": "ANDREIU ERIC ANDREI",
+    "cnp": "5181112100132",
+    "gender": "male",
+    "date": "2018-11-12",
+    "age": 7,
+    "insurance_house": "CJAS BUZAU",
+    "insurance_category": "copil<18 ani",
+    "insurance_number": "-",
+    "address": "Jud. BUZAU Loc. LUCIU Str.PRINCIPALA NR 14",
+    "phone": "0774022005"
+  },
+  "checkout": {
+    "date": "22/07/2026",
+    "ward": "CHIRURGIE II",
+    "fo_number": "139111",
+    "is_urgent": false,
+    "date_time": "28/11/2024 15:01",
+    "discharge_status": "vindecat",
+    "epicrisis": "Pacient de sex masculin, in varsta de 6 ani, cunoscut cu litiaza reno-ureterala bilaterala; se interneaza actual in vederea investigatiilor si tratamentului de specialitate. \n\n**Clinic la internare:** stare generala buna. Afebril. Nu varsa. Echilibrat respirator si hemodinamic. Abdomen suplu, depresibil, mobil cu respiratia, nedureros spontan si la palpare, fara semne de iritatie peritoneala. Tranzit inestinal si diureza prezente. \n\n*Istoric*\n\n**Rx renala simpla (10.07.2024): anexata.** \n\n**Ecografie abdominala (10.07.2024, Dr. Diaconu):** Ficat, pancreas, colecist, splina, RD, RS, VU cu aspect ecografic normal. Fara lichid liber intraperitoneal.\n\n*In prezent*\n\nEcografie abdominala (28.11.2024 - Dr. Georgescu): Ambii rinichi cu dimensiuni si pozitie normale; fara dilatatii pielocaliceale; parenchim cu grosime normala, diferentiere cortico-medulara prezenta, multiple microcalcificari la nivel cortical si medular mai proeminente pe partea stanga; calcul caliceal inferior drept 10 mm diametru maxim; calcul caliceal inferior stang 9 mm diametru maxim.\nFicat, colecist, cai biliare, pancreas, splina, vezica urinara cu aspect ecografic normal.\nFara lichid liber intraperitoneal.\n\nPe parcursul internarii evolutia pecientului a fost favorabila. \n\n**Se externeaza** cu stare generala buna. Afebril. Nu varsa. Echilibrat respirator si hemdoinamic. Abdomen suplu, depresibil, mobil cu respiratia, nedureros spontan si la palpare, fara semne de iritatie peritoneala. Tranzit inestinal si diureza prezente.",
+    "treatment": "- Regim alimentar conform varstei\n\n- Revine la control conform indicatiilor",
+    "recommendations": "- Regim alimentar conform varstei\n\n- Revine la control conform indicatiilor",
+    "id": "260100000557594"
+  },
+  "checkin": {
+    "medic": "DR. DATU CONSTANTIN",
+    "date_time": "28/11/2024 10:18",
+    "diagnosis": "Z51.88 Alte ingrijiri medicale specificate",
+    "secondary_diagnoses": [
+      "EPICRIZA"
+    ]
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "patient": {
+    "name": "MARINESCU TUDOR STEFAN",
+    "cnp": "5181025410037",
+    "gender": "male",
+    "date": "2018-10-25",
+    "age": 7,
+    "insurance_house": "CJAS BUCURESTI",
+    "insurance_category": "copil<18 ani",
+    "insurance_number": "-",
+    "address": "Jud. BUCURESTI Loc. BUCURESTI SECTORUL 3 Str.BARAJUL ROVINARI 12",
+    "phone": "0788129959"
+  },
+  "checkout": {
+    "date": "22/07/2026",
+    "ward": "CHIRURGIE I",
+    "fo_number": "139065",
+    "is_urgent": false,
+    "date_time": "28/11/2024 15:01",
+    "discharge_status": "vindecat",
+    "epicrisis": "Pacient in varsta de 6 ani si 1 luna cunoscut cu **hidronefroza bilaterala** se prezinta pentru reevaluare clinico-imagistica de specialitate.\n\nAnalize de laborator - anexate.\n\n*Istoric*\n\nEcografie abdominala (Dr. Dragulescu): Ficat, colecist, cai biliare, pancreas, splina, VU cu aspect ecografic normal. RD: dimensiuni:70 mm ax lung, IP:10mm cu diferentiere CM pastrata, bazinet dilatat: 8mm; RS dimensiuni:73mm ax lung, IP:11mm, bazinet: 7-8mm, uretere nevizualizabile.Cateva imagini limfoganglionare intramezenterice cu dimensiuni maxime de 14/6mm. Fara lichid liber intraperitoneal.\n\n**Ecografia abdominala (08.12.2022/ Dr. Coman ):** Ficat, colecist, pancreas, splina, VU normale ecografic. RD ax lung 70 mm, buna diferentiere CM, bazinet 5 mm, ureter nevizualizabil. RS ax lung 78 mm, buna diferentiere CM, bazinet 6,5 mm, ureter nevizualizabil. Recesuri peritoneale libere\n\n**Ecografia abdominala (05.10.2023 Dr. Coman ):** \n\nRD ax lung 76 mm, buna diferentiere CM, fara dilatatii de SPC, fara calculi. \n\nRS ax lung 78 mm, buna diferentiere CM, usoara hipotonie bazinetala, 4,5 mm. Calice nedilatate. \n\nFicat, colecist, pancreas, splina Vu- normale ecografic. \n\nRecesuri peritoneale libere. \n\n***I***N PREZENT***: \n\n**Starea la internare:** stare generala buna, afebril, echilibrat cardio-respirator, nu tuseste, nu varsa, echilibrat cardio-respirator, abdomen suplu, mobil cu respiratia, nedureros spontan si la palpare, tranzit intestinal prezent, diureza prezenta. \n\n**Ecografie abdominala (28.11.2024 - Dr. Georgescu):** Rinichi stang cu dimensiuni, pozitie si parenchim normale; bazinet 7 mm, calice nedilatate; fara calculi; ureter nedilatat.\nFicat, colecist, cai biliare, pancreas, splina, rinichi drept, vezica urinara cu aspect ecografic normal.\nFara lichid liber intraperitoneal.\n\n Pe parcursul internarii pacientul prezinta evolutie favorabila. \n Se externeaza cu stare generala buna, afebril, echilibrat respirator si hemodinamic. Abdomen suplu, depresibil, nedureros spontan si la palpare, fara semne de iritatie peritoneala. Tranzit intestinal si diureza prezenta",
+    "treatment": "Regim alimentar conform varstei\nRevine la control conform indicatiilor. \n\n**Dr Balanescu Laura \n0722 984 237**",
+    "recommendations": "Regim alimentar conform varstei\nRevine la control conform indicatiilor. \n\n**Dr Balanescu Laura \n0722 984 237**",
+    "id": "260100000557586"
+  },
+  "checkin": {
+    "medic": "DR. BALANESCU LAURA",
+    "date_time": "28/11/2024 09:12",
+    "diagnosis": "Z51.88 Alte ingrijiri medicale specificate",
+    "secondary_diagnoses": [
+      "EPICRIZA"
+    ]
+  }
+}
