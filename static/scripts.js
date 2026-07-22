@@ -72,6 +72,7 @@ document.addEventListener('DOMContentLoaded', function() {
         copyReportBtn: document.getElementById('copyReportBtn'),
         aiReportBtn: document.getElementById('aiReportBtn'),
         aiLabBtn: document.getElementById('aiLabBtn'),
+        copyLabBtn: document.getElementById('copyLabBtn'),
         // AI tab elements
         aiPreExamBtn: document.getElementById('aiPreExamBtn'),
         aiPreExamAnchor: document.getElementById('aiPreExamAnchor'),
@@ -386,6 +387,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Report tab buttons
         if (elements.copyReportBtn) {
             elements.copyReportBtn.addEventListener('click', copyReportMarkdown);
+        }
+        if (elements.copyLabBtn) {
+            elements.copyLabBtn.addEventListener('click', copyLabMarkdown);
         }
 
         // AI summary buttons (report header, lab trends, pre-exam tab).
@@ -1117,8 +1121,12 @@ document.addEventListener('DOMContentLoaded', function() {
         document.querySelector('#labChips .chip[data-filter="all"]')?.classList.add('chip-active');
         if (elements.labCount) elements.labCount.textContent = '?';
         if (elements.trendsSection) elements.trendsSection.hidden = true;
-        if (elements.trendsContainer) elements.trendsContainer.innerHTML = '';
-        
+        if (elements.trendsContainer) {
+            elements.trendsContainer.innerHTML = '';
+            delete elements.trendsContainer.dataset.markdown;
+        }
+        if (elements.copyLabBtn) elements.copyLabBtn.hidden = true;
+
         // Clear lazy-load state
         pendingAnalysesData = null;
         cachedServiceRequests = null;
@@ -1317,6 +1325,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function copyEpicrisisMarkdown() { return copyMarkdown(elements.epicrisisContent, elements.copyEpicrisisBtn, () => flashIcon(elements.copyEpicrisisBtn)); }
     function copyReportMarkdown()    { return copyMarkdown(elements.patientReportMarkdown, elements.copyReportBtn, () => flashIcon(elements.copyReportBtn)); }
+    function copyLabMarkdown()       { return copyMarkdown(elements.trendsContainer, elements.copyLabBtn, () => flashIcon(elements.copyLabBtn)); }
 
     // ── AI summaries ──────────────────────────────────────────────────
     // Free-text AI aids wired into each tab as a per-item "AI" button. All
@@ -3469,6 +3478,12 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         labHasAbnormal = abnormalAnalytes.length > 0;
         labAiText = labHasAbnormal ? [header, ...rows].join('\n') : '';
+        if (elements.copyLabBtn) {
+            elements.copyLabBtn.hidden = !labHasAbnormal;
+            elements.trendsContainer.dataset.markdown = labHasAbnormal
+                ? `# Lab Trends — Abnormal Analytes\n\n| ${header} |\n| ${header.split(' | ').map(() => '---').join(' | ')} |\n${rows.map(r => `| ${r} |`).join('\n')}`
+                : '';
+        }
         if (elements.aiLabBtn) {
             elements.aiLabBtn.hidden = false;
             elements.aiLabBtn._aiCard = null;
