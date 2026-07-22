@@ -687,7 +687,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!pendingEpicrisisData || elements.epicrisisContent?.dataset.loaded) return;
         elements.epicrisisContent.dataset.loaded = '1';
         const name = pendingEpicrisisData?.name?.[0]?.text || 'patient';
-        showLoading(`Loading discharge summaries for ${name}…`);
+        showLoading(`Loading hospitalization records for ${name}…`);
         try {
             setLoadingStep('Fetching hospitalisation episodes from Hipocrate…');
             await loadAndDisplayEpicrisis(pendingEpicrisisData);
@@ -695,7 +695,7 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (err) {
             console.error('Error loading epicrisis:', err);
             delete elements.epicrisisContent.dataset.loaded;
-            showOverlayError('Failed to load discharge summaries');
+            showOverlayError('Failed to load hospitalization records');
         }
     }
     
@@ -4191,6 +4191,20 @@ document.addEventListener('DOMContentLoaded', function() {
         return /[a-zA-ZÀ-žА-я0-9]/.test(text || '');
     }
 
+    // 72-hour (revised) diagnosis and secondary-diagnosis/comorbidity list from
+    // a checkin encounter's diagnosis[] array — populated by fhir_response()
+    // alongside the admission diagnosis (role codes 'working' and 'CC').
+    function extract72hDiagnosisText(enc) {
+        return (enc.diagnosis || []).find(d => d.use?.coding?.some(c => c.code === 'working'))
+            ?.condition?.display || null;
+    }
+    function extractSecondaryDiagnoses(enc) {
+        return (enc.diagnosis || [])
+            .filter(d => d.use?.coding?.some(c => c.code === 'CC'))
+            .map(d => d.condition?.display)
+            .filter(Boolean);
+    }
+
     // Diagnosis + exam-note text for a checkin encounter, used as the display
     // body when there is no epicrisis text yet (ongoing admission — epicrisis
     // is normally only filled in near/at discharge).
@@ -4198,6 +4212,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const parts = [];
         const dx = extractDiagnosisText(enc);
         if (dx) parts.push(dx);
+        const dx72h = extract72hDiagnosisText(enc);
+        if (dx72h) parts.push(`**72h diagnosis:** ${dx72h}`);
+        const secondary = extractSecondaryDiagnoses(enc);
+        if (secondary.length) parts.push(`**Secondary diagnoses:** ${secondary.join(', ')}`);
         (enc.note || []).forEach(n => {
             if (!n.text) return;
             const clean = n.text.replace(/^\[Exam general\]\s*/i, '').replace(/^\[Exam local\]\s*/i, '').trim();
