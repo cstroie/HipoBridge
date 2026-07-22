@@ -1263,15 +1263,19 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function filterLabGrid(section = 'all') {
-        if (!elements.labGrid) return;
-        let visible = 0;
-        elements.labGrid.querySelectorAll('.analysis-card').forEach(card => {
-            const secs = card.dataset.labSection ? card.dataset.labSection.split('\t') : [];
-            const show = section === 'all' || secs.includes(section);
-            card.style.display = show ? 'block' : 'none';
-            if (show) visible++;
+        if (elements.labGrid) {
+            let visible = 0;
+            elements.labGrid.querySelectorAll('.analysis-card').forEach(card => {
+                const secs = card.dataset.labSection ? card.dataset.labSection.split('\t') : [];
+                const show = section === 'all' || secs.includes(section);
+                card.style.display = show ? 'block' : 'none';
+                if (show) visible++;
+            });
+            if (elements.labNoData) elements.labNoData.style.display = visible === 0 ? 'block' : 'none';
+        }
+        elements.trendsContainer?.querySelectorAll('[data-trend-section]').forEach(wrap => {
+            wrap.style.display = (section === 'all' || wrap.dataset.trendSection === section) ? '' : 'none';
         });
-        if (elements.labNoData) elements.labNoData.style.display = visible === 0 ? 'block' : 'none';
     }
 
     function addLabChips(sections) {
@@ -3449,14 +3453,20 @@ document.addEventListener('DOMContentLoaded', function() {
     function renderTrends(observations) {
         if (!elements.trendsContainer || !elements.trendsSection) return;
 
-        // Group by analyte name, collect all measurements sorted by date
+        // Group by section+analyte name — the section prefix matters because the
+        // same analyte name can appear under different sections (e.g. "Glucoza"
+        // in blood chemistry vs. urine); keying by name alone would silently
+        // merge their measurements into one row.
         const byAnalyte = {};
         for (const obs of observations) {
             const name = obs.code?.text;
             if (!name) continue;
-            if (!byAnalyte[name]) {
-                byAnalyte[name] = {
+            const section = obs.category?.[0]?.text || '';
+            const key = `${section}::${name}`;
+            if (!byAnalyte[key]) {
+                byAnalyte[key] = {
                     name,
+                    section,
                     unit: obs.valueQuantity?.unit || '',
                     low:  obs.referenceRange?.[0]?.low?.value  ?? null,
                     high: obs.referenceRange?.[0]?.high?.value ?? null,
@@ -3464,7 +3474,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     measurements: [],
                 };
             }
-            byAnalyte[name].measurements.push({
+            byAnalyte[key].measurements.push({
                 date: obs.effectiveDateTime || '',
                 v:    obs.valueQuantity?.value ?? null,
                 text: obs.valueString || null,
@@ -3483,11 +3493,18 @@ document.addEventListener('DOMContentLoaded', function() {
             a.measurements.sort((x, y) => x.date.localeCompare(y.date));
         }
 
+        // Section, then analyte name within each section — mirrors the Recent
+        // Labs report section's grouping so the same disambiguation applies here.
+        analytes.sort((a, b) => a.section.localeCompare(b.section) || a.name.localeCompare(b.name));
+
         // All unique dates (oldest first) for column headers
         const allDates = [...new Set(observations.map(o => o.effectiveDateTime?.slice(0, 10)).filter(Boolean))].sort();
         const colDates = allDates.slice(-5);  // cap table at 5 most recent dates
 
-        // Build table
+        // Build one table per section — mirrors the Recent Labs report section's
+        // section-then-analyte grouping (same reason: disambiguates analytes that
+        // share a name across sections, e.g. "Glucoza" in blood vs. urine).
+        function buildTrendsTable(sectionAnalytes) {
         const table = document.createElement('table');
         table.className = 'trends-table';
 
@@ -3518,7 +3535,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Data rows
         const tbody = table.createTBody();
-        for (const a of analytes) {
+        for (const a of sectionAnalytes) {
             const row = tbody.insertRow();
 
             // Analyte name + unit + reference
@@ -3560,9 +3577,36 @@ document.addEventListener('DOMContentLoaded', function() {
             const colSet = new Set(colDates);
             tdSpark.innerHTML = sparkline(a.measurements.filter(m => colSet.has(m.date?.slice(0, 10))), a.low, a.high);
         }
+        return table;
+        }
 
         elements.trendsContainer.innerHTML = '';
-        elements.trendsContainer.appendChild(table);
+        let lastSection = null;
+        let sectionBucket = [];
+        let sectionWrap = null;
+        // Wrapped per-section so the lab filter chips can hide/show a whole
+        // section's trend table the same way they hide/show its lab cards.
+        const flushSection = () => {
+            if (!sectionBucket.length) return;
+            sectionWrap.appendChild(buildTrendsTable(sectionBucket));
+            sectionBucket = [];
+        };
+        for (const a of analytes) {
+            if (a.section !== lastSection) {
+                flushSection();
+                sectionWrap = document.createElement('div');
+                sectionWrap.dataset.trendSection = a.section || '';
+                const heading = document.createElement('h4');
+                heading.className = 'lab-section-heading';
+                heading.textContent = a.section || 'Other';
+                sectionWrap.appendChild(heading);
+                elements.trendsContainer.appendChild(sectionWrap);
+                lastSection = a.section;
+            }
+            sectionBucket.push(a);
+        }
+        flushSection();
+
         if (elements.trendsSubtitle) {
             elements.trendsSubtitle.textContent = `${analytes.length} analytes · ${colDates.length} most recent dates`;
         }
@@ -3596,7 +3640,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const val = m.v !== null ? (Number.isInteger(m.v) ? m.v : parseFloat(m.v.toPrecision(4))) : (m.text || '');
                 return `${val}${m.flag ? ' (' + m.flag + ')' : ''}`;
             });
-            const name = `${a.name}${a.unit ? ' [' + a.unit + ']' : ''}`;
+            const name = `${a.section ? a.section + ' — ' : ''}${a.name}${a.unit ? ' [' + a.unit + ']' : ''}`;
             return [name, interval, ...cells].join(' | ');
         });
         labHasAbnormal = abnormalAnalytes.length > 0;

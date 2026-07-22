@@ -1439,9 +1439,9 @@ select {
 .lab-flag-l { background: color-mix(in srgb, var(--primary) 15%, transparent); color: var(--primary); }
 
 #trendsSection {
-    margin-top: var(--space-32);
-    padding-top: var(--space-32);
-    border-top: 1px solid var(--border);
+    margin-bottom: var(--space-32);
+    padding-bottom: var(--space-32);
+    border-bottom: 1px solid var(--border);
 }
 
 .trends-header {
@@ -1476,6 +1476,7 @@ select {
     table-layout: fixed;
     font-size: var(--font-size-xs);
     color: var(--ink-1);
+    margin-bottom: var(--space-16);
 }
 
 .trends-table th,
