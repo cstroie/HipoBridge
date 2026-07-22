@@ -316,3 +316,86 @@ None of these six are viable replacements or additions to the shortlist.
 **No change to the standing recommendation**: `ministral-3-3b` (production)
 / `gemma-3n-e4b` (fallback) remain the only two candidates with a clean
 sheet across all four kinds in every round tested.
+
+---
+
+# redstone server benchmark (127.0.0.1:8080, llama.cpp) (2026-07-22)
+
+New local CPU/GPU inference server added as `[provider:redstone]` in
+`local.cfg` (not committed — untracked config, per project convention).
+Tested the 5 models this server hosts that match the existing shortlist
+(medgemma-4b-it, ministral-3b, gemma3n-4b-it, qwen3-4b, llama-3.2-3b)
+against the same real inputs/references, production prompts, 2 warm
+iterations each.
+
+## Timing
+
+| Model | imaging total | lab total | report total | pre_exam total | cold TTFT range |
+|---|---|---|---|---|---|
+| medgemma-4b-it | 1.58s | 11.46s | 37.55s | **timeout** | 30–219s |
+| ministral-3b | 0.83s | 21.46s | 18.93s | **timeout** | 19–174s |
+| gemma3n-4b-it | 1.15s | 17.64s | 25.71s | 116.41s | 57–166s |
+| qwen3-4b | 5.50s | 69.53s | 48.69s | **timeout** | 45–236s |
+| llama-3.2-3b | 0.90s | 14.76s | 31.49s | 119.94s | 23–183s |
+
+This server is markedly **slower and less consistent** than the LM Studio
+instance for these models — cold TTFT climbs as high as 236s (qwen3-4b
+report) because llama.cpp reloads the model fresh for essentially every
+distinct kind's context length/shape, unlike LM Studio's tighter model
+residency. `medgemma-4b-it`, `ministral-3b`, and `qwen3-4b` all **timed out**
+(300s timeout) on `pre_exam` specifically — the heaviest kind (900 tokens on
+~7500 chars of input) — consistent with the already-documented pattern of
+`pre_exam` being where server-side limits get hit hardest, but worse here
+than on LM Studio (where these three at least completed, if imperfectly).
+
+## Quality (assessed by direct reading, not an automated scorer)
+
+- **medgemma-4b-it**: imaging/lab correct and clean English. `report` is
+  accurate through about 3 sentences, then starts **repeating itself**
+  ("admitted to the surgical ward with a general condition of satisfactory,
+  afebrile, and with edema" appears near-verbatim twice for two different
+  dates) — a repetition/looping quality issue not seen on the LM Studio
+  instance running the same model, likely a sampler/quantization difference
+  between the two server setups rather than a prompt issue.
+- **ministral-3b**: `imaging` correct. `lab` is accurate and appropriately
+  terse. `report` is fluent and accurate, though drifts into more granular
+  detail (weight, exact CVC placement) than the terse reference expects —
+  not wrong, just more verbose than ideal for an "executive summary."
+- **gemma3n-4b-it**: correct and faithful on all four kinds, including
+  `pre_exam` (only one of the five to complete pre_exam without timing out
+  on this server), with clean section structure and no invented content.
+  Best quality-and-completeness combination on this server.
+- **qwen3-4b**: **unusable as configured** — leaks its full chain-of-thought
+  reasoning into every response ("Okay, let's tackle this...", "Let me
+  verify each part again...") and the entire `max_tokens` budget for
+  `imaging`/`lab`/`report` is consumed by this visible reasoning trace,
+  leaving little or no room for the actual answer (`report`'s 220-token
+  budget was almost entirely spent narrating the model's own reasoning
+  process, with the real answer cut off mid-sentence). This is a
+  well-established weakness for this model family (see the `/no_think`
+  discussion in earlier rounds) — this server doesn't appear to suppress it
+  by default, unlike whatever mechanism (or model variant) avoided it in
+  earlier `/no_think`-tagged tests.
+- **llama-3.2-3b**: `imaging`/`lab` correct, faithful English.
+  **`report` came back entirely in Romanian again** — reproducing the exact
+  same total-language-failure seen in the LM Studio round for this same
+  model, confirming it's a genuine, repeatable model weakness for this kind,
+  not a one-off. Per instruction, this is *noted, not disqualifying* on its
+  own, but combined with the earlier LM Studio result this is now two
+  independent reproductions of the same failure.
+
+## Takeaways
+- **gemma3n-4b-it** is the standout performer on this specific server: only
+  model to complete all four kinds, no quality issues, no language
+  failures.
+- The **redstone server itself is currently a weaker platform** than the LM
+  Studio instance for this workload — much higher cold-start latency and
+  three outright timeouts on `pre_exam` that didn't occur (or at least
+  didn't time out) on LM Studio for the same models. This may be a
+  configuration difference (context size, batch size, GPU vs CPU
+  offload) rather than a fundamentally slower machine; worth checking
+  redstone's llama-server launch flags (context size, `--parallel`, GPU
+  layers) if lower latency is wanted from this profile.
+- No change to the production recommendation — this was an infrastructure
+  evaluation, not a reason to move off `ministral-3-3b`/`gemma-3n-e4b` on
+  the existing LM Studio setup.
