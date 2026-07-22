@@ -237,3 +237,41 @@ document (headings, dates, and surrounding prose are all in English). Doesn't
 change the recommendation (still avoid medgemma-4b-it for `pre_exam`,
 ministral-3-3b/gemma-3n-e4b are clean), but is a more precise failure
 description than "regresses to Romanian" for anyone revisiting this later.
+
+---
+
+# Re-test: ministral imaging, qwen3-4b, medgemma-1.5-4b-it (2026-07-22)
+
+## ministral-3-3b-instruct-2512 on imaging
+✅ "Suspected biliary atresia" — exact match, correct English, fastest of all
+candidates tested so far on this kind (0.64s total, 16.3 tok/s).
+
+## qwen/qwen3-4b — still unusable
+Crashed with `RuntimeError: terminated` on **every** kind (imaging, lab,
+report, pre_exam), reproducing the state noted in the earlier round: the
+model needs a server-side reload before it can be evaluated at all. No
+`/no_think` token was injected in this run (`benchmark_llm.py` has no
+built-in support for it), so this result doesn't even reach the known
+CoT-leak question — it's failing before generation starts.
+
+## medgemma-1.5-4b-it — worse than medgemma-4b-it, not a viable alternative
+- **imaging**: correct content ("Suspected biliary atresia" paraphrase, en)
+  but wrapped the whole answer in a stray ` ```text ` code fence — a new
+  format violation not seen on medgemma-4b-it.
+- **lab**: correct, clean English, no format issues.
+- **report**: violates the "no headings, no preamble, no bullets" rule —
+  opens with a `---` separator and `**Executive Summary:**` heading, matching
+  the same violation already documented for this model in the 07-21 round.
+- **pre_exam**: substantially **worse** than medgemma-4b-it's term-level leak
+  — copy-pastes entire raw Romanian sentences verbatim into the History
+  section (full untranslated consult notes), not just a single leaked term.
+  Confirms this model should not be considered even as a medgemma-4b-it
+  substitute for pre_exam.
+
+## Updated recommendation
+No change to the standing picks (ministral-3-3b / gemma-3n-e4b as the
+production/fallback pair). medgemma-1.5-4b-it is now conclusively ruled out
+(strictly worse than medgemma-4b-it on every kind tested, no upside found in
+any round). qwen3-4b remains untested pending a server-side model reload —
+not evaluable through the app's own retry logic since it fails before
+producing any tokens.
