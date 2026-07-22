@@ -4286,6 +4286,7 @@ class HipoClientObservationBundle(HipoClient):
                     ref_range = [rr]
 
                 interp = [{"text": obs["flag"]}] if obs.get("flag") else None
+                category = [{"text": obs["section"]}] if obs.get("section") else None
 
                 observation = FHIRObservation(
                     id=obs_id,
@@ -4297,6 +4298,7 @@ class HipoClientObservationBundle(HipoClient):
                     valueString=value_string,
                     referenceRange=ref_range,
                     interpretation=interp,
+                    category=category,
                     basedOn=[{"reference": f"ServiceRequest/{obs['report_id']}"}] if obs.get("report_id") else None,
                 )
                 bundle.append_entry(resource=observation)
