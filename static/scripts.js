@@ -2251,6 +2251,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     tdVal.className = 'lab-value' + (item.flag === 'H' ? ' lab-high' : item.flag === 'L' ? ' lab-low' : '');
                     tdVal.textContent = item.value;
                     if (item.flag) {
+                        tdVal.appendChild(document.createTextNode(' '));
                         const badge = document.createElement('span');
                         badge.className = 'lab-flag lab-flag-' + item.flag.toLowerCase();
                         badge.textContent = item.flag;
@@ -3362,6 +3363,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 tdRef.className = 'lab-ref';
                 tdRef.textContent = form.reference || '';
                 if (form.flag && form.flag !== 'N') {
+                    tdVal.appendChild(document.createTextNode(' '));
                     const badge = document.createElement('span');
                     badge.className = 'lab-flag lab-flag-' + form.flag.toLowerCase();
                     badge.textContent = form.flag;
