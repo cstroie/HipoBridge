@@ -4191,18 +4191,34 @@ document.addEventListener('DOMContentLoaded', function() {
         return /[a-zA-ZÀ-žА-я0-9]/.test(text || '');
     }
 
+    // Diagnosis + exam-note text for a checkin encounter, used as the display
+    // body when there is no epicrisis text yet (ongoing admission — epicrisis
+    // is normally only filled in near/at discharge).
+    function buildCheckinBody(enc) {
+        const parts = [];
+        const dx = extractDiagnosisText(enc);
+        if (dx) parts.push(dx);
+        (enc.note || []).forEach(n => {
+            if (!n.text) return;
+            const clean = n.text.replace(/^\[Exam general\]\s*/i, '').replace(/^\[Exam local\]\s*/i, '').trim();
+            if (clean) parts.push(clean);
+        });
+        return parts.join('\n\n');
+    }
+
     async function loadAndDisplayEpicrisis(patientData) {
         const checkoutIds = extractCheckoutIds(patientData);
-        const checkoutIdSet = new Set(checkoutIds);
-        // Same id can appear in both lists once discharged — checkout wins, so only
-        // treat as "active" the ids that are still an ongoing admission.
-        const activeCheckinIds = extractCheckinIds(patientData).filter(id => !checkoutIdSet.has(id));
-        if (checkoutIds.length === 0 && activeCheckinIds.length === 0) {
+        // Fetch every checkin id, not just ones without a matching checkout id — a
+        // genuinely ongoing admission (e.g. ICU, no discharge summary yet) needs its
+        // "in-progress" status checked against actual checkout dates, not just id
+        // membership (a checkin's status never flips once the patient is discharged).
+        const checkinIds = extractCheckinIds(patientData);
+        if (checkoutIds.length === 0 && checkinIds.length === 0) {
             if (elements.epicrisisNoData) elements.epicrisisNoData.style.display = 'block';
             return;
         }
 
-        const [encounters, activeEncounters] = await Promise.all([
+        const [checkoutEncounters, checkinEncounters] = await Promise.all([
             limitedMap(
                 checkoutIds,
                 MAX_CONCURRENT_REQUESTS,
@@ -4212,7 +4228,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             ),
             limitedMap(
-                activeCheckinIds,
+                checkinIds,
                 MAX_CONCURRENT_REQUESTS,
                 async id => {
                     try { return await fetchEncounterDataForCheckin(id); }
@@ -4222,7 +4238,7 @@ document.addEventListener('DOMContentLoaded', function() {
         ]);
 
         // Keep only encounters that have an epicrisis, sorted most-recent-discharge first
-        const valid = encounters
+        const valid = checkoutEncounters
             .map((enc, i) => enc && extractEpicrisisText(enc) ? { enc, checkoutId: checkoutIds[i], active: false } : null)
             .filter(Boolean)
             .sort((a, b) => {
@@ -4231,13 +4247,27 @@ document.addEventListener('DOMContentLoaded', function() {
                 return db > da ? 1 : -1;
             });
 
-        // Ongoing admissions (not yet discharged) always shown first, ahead of past discharges.
-        const activeValid = activeEncounters
-            .map((enc, i) => enc && extractEpicrisisText(enc) ? { enc, checkoutId: activeCheckinIds[i], active: true } : null)
+        // A checkin's "in-progress" status is a scrape artifact that never updates
+        // once the patient is discharged, so treat it as genuinely active only if
+        // it starts after every known checkout has already concluded.
+        const latestCheckoutEnd = checkoutEncounters
             .filter(Boolean)
-            .sort((a, b) => (b.enc.period?.start || '').localeCompare(a.enc.period?.start || ''));
+            .reduce((latest, enc) => {
+                const end = enc.period?.end || enc.period?.start || '';
+                return end > latest ? end : latest;
+            }, '');
+        const activeEnc = checkinEncounters
+            .map((enc, i) => enc ? { enc, checkinId: checkinIds[i] } : null)
+            .filter(item => item && item.enc.status === 'in-progress' &&
+                (!latestCheckoutEnd || (item.enc.period?.start || '') > latestCheckoutEnd))
+            .sort((a, b) => (b.enc.period?.start || '').localeCompare(a.enc.period?.start || ''))[0];
 
-        valid.unshift(...activeValid);
+        // Ongoing admission always shown first, ahead of past discharges — with
+        // diagnosis/exam text as a fallback body when epicrisis hasn't been
+        // written yet (it's normally only filled in near/at discharge).
+        if (activeEnc) {
+            valid.unshift({ enc: activeEnc.enc, checkoutId: activeEnc.checkinId, active: true, fallbackBody: buildCheckinBody(activeEnc.enc) });
+        }
 
         if (valid.length === 0) {
             if (elements.epicrisisNoData) elements.epicrisisNoData.style.display = 'block';
@@ -4258,7 +4288,10 @@ document.addEventListener('DOMContentLoaded', function() {
         let markdown = '';
         valid.forEach((item, index) => {
             const enc = item.enc;
-            const epicrisisText = extractEpicrisisText(enc);
+            // Ongoing admissions rarely have epicrisis text yet (it's normally only
+            // written near/at discharge) — fall back to diagnosis + exam notes so the
+            // current admission still shows up instead of being silently dropped.
+            const epicrisisText = extractEpicrisisText(enc) || item.fallbackBody || '';
             const icd = extractDiagnosisText(enc) || '';
             const admission = enc.period?.start ? formatDate(enc.period.start) : '';
             const discharge = enc.period?.end ? formatDate(enc.period.end) : '';
