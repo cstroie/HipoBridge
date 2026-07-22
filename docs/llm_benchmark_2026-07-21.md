@@ -399,3 +399,49 @@ than on LM Studio (where these three at least completed, if imperfectly).
 - No change to the production recommendation — this was an infrastructure
   evaluation, not a reason to move off `ministral-3-3b`/`gemma-3n-e4b` on
   the existing LM Studio setup.
+
+---
+
+# qwen3-4b re-tested with `/no_think` on redstone (2026-07-22)
+
+qwen3-4b is a reasoning model; the earlier redstone round showed it leaking
+its full chain-of-thought into every response, consuming the entire
+`max_tokens` budget before reaching an answer. Re-ran all four kinds with
+the model's `/no_think` directive appended to the end of the input text
+(`llm/prompts.py`/`benchmark_llm.py` have no built-in support for this
+token, so it was added directly to the test input files for this run only —
+not a production code change).
+
+## `/no_think` fixes the reasoning leak entirely
+No visible "Okay, let's..." narration in any of the four outputs — a
+complete fix for the format-breaking issue from the prior round. Cold TTFT
+also dropped dramatically (1–2s vs. 45–236s previously), because the model
+was already resident from the earlier round; not attributable to `/no_think`
+itself.
+
+| Kind | Result |
+|---|---|
+| imaging | ✅ "Suspected biliary atresia" — correct, clean English |
+| lab | ✅ correct, clean English |
+| report | ✅ faithful, clean English, no repetition/looping |
+| pre_exam | ⚠️ correct headings and structure, but the **History section left most bullets entirely untranslated in raw Romanian** (dates, consult notes, ultrasound findings all copied verbatim from the source) |
+
+## pre_exam: same failure family as medgemma-4b-it, worse in degree
+This reproduces the already-documented "volume-driven language drift"
+hypothesis (see the 07-22 section above) on a **second model** — `pre_exam`'s
+long (~7500 char), heavily Romanian source text appears to pull reasoning
+models/smaller models toward the source language specifically on this kind,
+independent of the chain-of-thought issue `/no_think` fixes. Here it's more
+severe than medgemma-4b-it's single-term leak: nearly the entire History
+section is untranslated. This is a **content-language failure, not a
+reasoning-leak failure** — `/no_think` does not address it.
+
+## Updated verdict on qwen3-4b
+With `/no_think` applied, qwen3-4b is viable for `imaging`/`lab`/`report` —
+clean, correct, and fast once resident. It should **not** be used for
+`pre_exam` without further mitigation, joining medgemma-4b-it as a second
+model with a documented pre_exam-specific language-drift weakness. No
+production config change made — `/no_think` would need to be added to
+`llm/prompts.py`'s prompt-assembly path (not just a benchmark input hack)
+before qwen3-4b could be considered for real use, and pre_exam's drift issue
+remains unresolved for this model family regardless.
