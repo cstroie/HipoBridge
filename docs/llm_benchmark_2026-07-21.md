@@ -275,3 +275,44 @@ production/fallback pair). medgemma-1.5-4b-it is now conclusively ruled out
 any round). qwen3-4b remains untested pending a server-side model reload —
 not evaluable through the app's own retry logic since it fails before
 producing any tokens.
+
+---
+
+# New contestants: llama-3.2 (3b/1b), gemma-3-1b, gemma-3n-e2b, qwen3-1.7b, lfm2.5-1.2b (2026-07-22)
+
+Tested 6 smaller/alternate candidates across all 4 kinds, same real inputs.
+**None outperform the standing picks (ministral-3-3b / gemma-3n-e4b); several
+have serious failures.**
+
+| Model | imaging | lab | report | pre_exam |
+|---|---|---|---|---|
+| llama-3.2-3b-instruct | ✅ correct | ✅ correct, English | ❌ **entire response in Romanian** | plausible content, needs closer check |
+| llama-3.2-1b-instruct | ❌ wrong diagnosis ("Splenomegaly") | ⚠️ plausible but re-labels as "cholestasis", not the reference impression | ❌ format violation (`**Executive Summary:**` heading) | ⚠️ mixes Romanian word "Masculin" into English response; wrong diagnosis ("Splenomegalia") |
+| google/gemma-3-1b | ❌ wrong diagnosis ("cholangitis") | ✅ correct, fastest of all (34 tok/s, 1.63s) | ❌ **empty/broken**: "No response needed." | ❌ crashed: `RuntimeError: terminated` |
+| google/gemma-3n-e2b | ✅ correct | ✅ correct | ✅ faithful | ❌ crashed: `500 Internal Server Error` |
+| qwen3-1.7b | ❌ `400 Bad Request` on every single kind | — | — | — |
+| liquidai/lfm2.5-1.2b-instruct | ⚠️ correct diagnosis, over-verbose ("obstruction with splenomegaly and ascites" vs. the terser reference) | ✅ correct | ✅ faithful | ❌ crashed: `500 Internal Server Error` |
+
+## Notable failures
+- **llama-3.2-3b-instruct / report**: not a partial leak like medgemma's
+  pre_exam issue — the *entire* response came back in Romanian, the worst
+  language failure seen in any round so far.
+- **google/gemma-3-1b / report**: returned the literal string "No response
+  needed." — a broken/empty completion, not a language or format issue.
+- **qwen3-1.7b**: fails at the HTTP level (`400 Bad Request`) on every kind,
+  before any generation — likely an incompatible request shape for this
+  model on this server (e.g. an unsupported sampling param or chat-template
+  requirement), not a quality problem; not usable without further
+  investigation into what the server rejects.
+- **gemma-3-1b, gemma-3n-e2b, lfm2.5-1.2b-instruct** all crashed on
+  `pre_exam` specifically (`terminated` / `500`) — consistent with the
+  already-documented pattern of `pre_exam` (900 tokens, heaviest kind) being
+  where server-side instability/xrayvision contention surfaces most, though
+  this round didn't retry to distinguish transient contention from a
+  model-specific incompatibility with that token budget.
+
+## Verdict
+None of these six are viable replacements or additions to the shortlist.
+**No change to the standing recommendation**: `ministral-3-3b` (production)
+/ `gemma-3n-e4b` (fallback) remain the only two candidates with a clean
+sheet across all four kinds in every round tested.
