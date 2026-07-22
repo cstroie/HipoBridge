@@ -355,16 +355,16 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                     <div id="reportCard" class="report-card" hidden>
                         <!-- §1 Patient identity -->
                         <section class="report-section" id="reportSectionPatient">
-                            <h2 class="report-patient-name" id="reportPatientName"></h2>
+                            <h2 class="report-patient-name" id="reportPatientLine"></h2>
                             <div class="report-identity-grid">
-                                <div><span class="report-field-label">Patient ID</span><div class="report-field-mono" id="reportPatientId"></div></div>
                                 <div><span class="report-field-label">CNP</span><div class="report-field-mono" id="reportCNP"></div></div>
-                                <div><span class="report-field-label">Date of Birth</span><div class="report-field-value" id="reportDOB"></div></div>
-                                <div><span class="report-field-label">Age</span><div class="report-field-value" id="reportAge"></div></div>
-                                <div><span class="report-field-label">Sex</span><div class="report-field-value" id="reportSex"></div></div>
+                                <div><span class="report-field-label">Patient ID</span><div class="report-field-mono" id="reportPatientIdWrap"></div></div>
                                 <div id="reportWeightWrap" hidden><span class="report-field-label">Weight</span><div class="report-field-value" id="reportWeight"></div></div>
                                 <div id="reportHeightWrap" hidden><span class="report-field-label">Height</span><div class="report-field-value" id="reportHeight"></div></div>
-                                <div style="grid-column: 1 / -1"><span class="report-field-label">Primary Diagnosis</span><div class="report-field-value" id="reportDiagnosis"></div></div>
+                            </div>
+                            <div class="report-diagnosis-block">
+                                <span class="report-field-label">Primary Diagnosis</span>
+                                <div class="report-field-value report-diagnosis-value" id="reportDiagnosis"></div>
                             </div>
                         </section>
                         <!-- §2 Current admission -->
@@ -383,7 +383,12 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             <h3 class="report-section-title"><i class="fas fa-file-medical"></i> Recent Imaging</h3>
                             <div class="report-imaging-list" id="reportImagingList"></div>
                         </section>
-                        <!-- §4 Hospitalisation timeline -->
+                        <!-- §4 Recent labs -->
+                        <section class="report-section" id="reportSectionLabs" hidden>
+                            <h3 class="report-section-title"><i class="fas fa-flask"></i> Recent Labs</h3>
+                            <div class="report-labs-list" id="reportLabsList"></div>
+                        </section>
+                        <!-- §5 Hospitalisation timeline -->
                         <section class="report-section report-section-last" id="reportSectionTimeline" hidden>
                             <h3 class="report-section-title"><i class="fas fa-timeline"></i> Hospitalisation Timeline</h3>
                             <div class="report-timeline" id="reportTimeline"></div>

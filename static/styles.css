@@ -1865,6 +1865,10 @@ select {
     color: var(--text);
     margin: 0 0 var(--space-14);
 }
+.report-patient-meta {
+    font: 400 var(--font-size-base) 'Inter', sans-serif;
+    color: var(--muted);
+}
 .report-identity-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1885,6 +1889,17 @@ select {
 .report-field-value {
     font: 500 var(--font-size-sm) 'Inter', sans-serif;
     color: var(--text);
+    margin-top: var(--space-4);
+}
+.report-field-mono a {
+    color: inherit;
+    text-decoration: none;
+}
+.report-field-mono a:hover { text-decoration: underline; }
+
+.report-diagnosis-block { margin-top: var(--space-16); }
+.report-diagnosis-value {
+    font: 600 var(--font-size-base) 'Inter', sans-serif;
     margin-top: var(--space-4);
 }
 
@@ -1914,6 +1929,11 @@ select {
 .report-admission-text li { margin: 0 0 0.4em; }
 .report-admission-text p:last-child,
 .report-admission-text li:last-child { margin-bottom: 0; }
+
+/* §4 Recent labs — reuses the Lab tab's own .lab-result-table styling, minus
+   the reference-range column (name/value only, so widen both to fill it) */
+#reportLabsList .lab-name  { width: 65%; }
+#reportLabsList .lab-value { width: 35%; }
 
 /* §3 Imaging rows */
 .report-imaging-list { display: flex; flex-direction: column; gap: var(--space-10); }
