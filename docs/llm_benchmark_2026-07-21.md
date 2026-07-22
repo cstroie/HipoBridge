@@ -211,3 +211,29 @@ explicit no-reasoning rules, the "no paraphrase" disambiguation, and the
 `{language}` templating mechanism itself) are kept — they're net-neutral-to-
 positive and the templating mechanism is reusable for any future kind that
 needs a concrete language name in its own wording.
+
+---
+
+# Re-benchmark of top 3 candidates against final prompts (2026-07-22)
+
+Re-ran `benchmark_llm.py` for `imaging`/`lab`/`report`/`pre_exam` against
+`ministral-3-3b-instruct-2512` (server-side id drifted again, same staleness
+as documented in the 07-19 doc — `local.cfg` may need updating), `google/
+gemma-3n-e4b`, and `medgemma-4b-it`, using the now-committed self-contained
+prompts.
+
+| Kind | ministral-3-3b | gemma-3n-e4b | medgemma-4b-it |
+|---|---|---|---|
+| imaging | not re-tested this round | ✅ correct English | ✅ correct English, faster than the old shared-preamble baseline |
+| lab | ✅ correct English | ✅ correct English | ✅ correct English |
+| report | ✅ faithful English | ✅ faithful English | ✅ faithful English |
+| pre_exam | ✅ clean English | ✅ clean English | ⚠️ mostly English but repeats the Romanian term **"atresia bilis"** in place of "biliary atresia" throughout the document |
+
+## Refines the pre_exam finding
+medgemma-4b-it's `pre_exam` failure is **narrower** than first reported: not
+a full-response Romanian regression, but a **term-level leak** — one
+recurring source-language phrase embedded in an otherwise-correct English
+document (headings, dates, and surrounding prose are all in English). Doesn't
+change the recommendation (still avoid medgemma-4b-it for `pre_exam`,
+ministral-3-3b/gemma-3n-e4b are clean), but is a more precise failure
+description than "regresses to Romanian" for anyone revisiting this later.
