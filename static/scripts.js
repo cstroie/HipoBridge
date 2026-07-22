@@ -5053,7 +5053,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const completed = scheduleEntries.filter(r => ['completed', 'ended'].includes(r.status)).length;
 
         const metricDefs = [
-            { label: 'Exams',     value: total,     color: 'var(--text)' },
+            { label: 'Exams',     value: total,     color: 'var(--text, #0f172a)' },
             { label: 'Urgent',    value: urgent,    color: 'var(--urgent, #dc2626)' },
             { label: 'In lab',    value: inLab,     color: 'var(--st-inlab, #1d4ed8)' },
             { label: 'Completed', value: completed, color: 'var(--st-completed, #065f46)' },
