@@ -2189,33 +2189,46 @@ document.addEventListener('DOMContentLoaded', function() {
             // One row per modified (out-of-range) analyte, last value only,
             // grouped by date so a same-day panel doesn't repeat its date.
             function collectLabItems(observations) {
+                // Keyed by section+name — the same analyte name can appear under
+                // different sections (e.g. "Glucoza" in blood chemistry vs. urine),
+                // and without the section prefix a value from one would wrongly
+                // overwrite the other as "the latest" for that name.
                 const latestNumeric = new Map();
                 for (const obs of observations) {
                     const name = obs.code?.text;
                     const date = obs.effectiveDateTime || '';
+                    const section = obs.category?.[0]?.text || '';
                     if (!name || !date || obs.valueQuantity?.value == null) continue;
-                    const prev = latestNumeric.get(name);
-                    if (!prev || date > prev.date) latestNumeric.set(name, { obs, date });
+                    const key = `${section} ${name}`;
+                    const prev = latestNumeric.get(key);
+                    if (!prev || date > prev.date) latestNumeric.set(key, { obs, date, section });
                 }
                 const items = [];
-                for (const { obs, date } of latestNumeric.values()) {
+                for (const { obs, date, section } of latestNumeric.values()) {
                     if (!isAbnormalObservation(obs)) continue;
                     const v = obs.valueQuantity.value;
                     const unit = obs.valueQuantity.unit || '';
                     const flag = obs.interpretation?.[0]?.text
                         || (obs.referenceRange?.[0]?.low?.value != null && v < obs.referenceRange[0].low.value ? 'L'
                             : obs.referenceRange?.[0]?.high?.value != null && v > obs.referenceRange[0].high.value ? 'H' : '');
-                    items.push({ name: obs.code.text, date, value: `${v}${unit ? ' ' + unit : ''}`, flag });
+                    items.push({ name: obs.code.text, date, section, value: `${v}${unit ? ' ' + unit : ''}`, flag });
                 }
-                items.sort((a, b) => b.date.localeCompare(a.date));
+                // Section, then most-recent date first within each section.
+                items.sort((a, b) => a.section.localeCompare(b.section) || b.date.localeCompare(a.date));
                 return items;
             }
 
             function labItemsToMarkdown(items) {
                 if (!items.length) return '';
                 let md = '## Recent Labs\n\n';
-                let lastDate = null;
+                let lastSection = null, lastDate = null;
                 for (const item of items) {
+                    if (item.section !== lastSection) {
+                        if (lastSection !== null) md += '\n';
+                        md += `### ${item.section || 'Other'}\n\n`;
+                        lastSection = item.section;
+                        lastDate = null;
+                    }
                     if (item.date !== lastDate) {
                         if (lastDate !== null) md += '\n';
                         md += `**${formatDate(item.date)}**\n\n`;
@@ -2229,12 +2242,20 @@ document.addEventListener('DOMContentLoaded', function() {
             function renderLabsTable(items) {
                 const wrap = document.createElement('div');
                 wrap.className = 'lab-result-wrap';
-                let lastDate = null;
+                let lastSection = null, lastDate = null;
                 let tbody = null;
                 for (const item of items) {
+                    if (item.section !== lastSection) {
+                        const secHeading = document.createElement('h4');
+                        secHeading.className = 'lab-section-heading';
+                        secHeading.textContent = item.section || 'Other';
+                        wrap.appendChild(secHeading);
+                        lastSection = item.section;
+                        lastDate = null;
+                    }
                     if (item.date !== lastDate) {
                         const heading = document.createElement('p');
-                        heading.className = 'lab-section-heading';
+                        heading.className = 'lab-date-heading';
                         heading.textContent = formatDate(item.date);
                         wrap.appendChild(heading);
                         const table = document.createElement('table');
