@@ -2217,6 +2217,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 let lastDate = null;
                 for (const item of items) {
                     if (item.date !== lastDate) {
+                        if (lastDate !== null) md += '\n';
                         md += `**${formatDate(item.date)}**\n\n`;
                         lastDate = item.date;
                     }
