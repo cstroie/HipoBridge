@@ -280,18 +280,6 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             <button type="button" class="chip chip-active" data-filter="all">All</button>
                         </div>
                     </header>
-                    <select id="labFilter" aria-label="Filter lab results" style="display:none">
-                        <option value="all">All</option>
-                        <option value="lab">Lab</option>
-                    </select>
-                    <div class="analyses-container" aria-live="polite">
-                        <div class="no-data" id="labNoData" role="status" aria-label="No lab results available">
-                            <i class="fas fa-flask fa-3x" aria-hidden="true"></i>
-                            <p>No lab results found for this patient</p>
-                        </div>
-                        <div id="labGrid" class="analyses-grid" aria-label="Lab results grid"></div>
-                    </div>
-
                     <section id="trendsSection" hidden aria-labelledby="trends-heading">
                         <header class="trends-header">
                             <div>
@@ -309,6 +297,18 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                         </header>
                         <div id="trendsContainer" class="trends-container" aria-live="polite"></div>
                     </section>
+
+                    <select id="labFilter" aria-label="Filter lab results" style="display:none">
+                        <option value="all">All</option>
+                        <option value="lab">Lab</option>
+                    </select>
+                    <div class="analyses-container" aria-live="polite">
+                        <div class="no-data" id="labNoData" role="status" aria-label="No lab results available">
+                            <i class="fas fa-flask fa-3x" aria-hidden="true"></i>
+                            <p>No lab results found for this patient</p>
+                        </div>
+                        <div id="labGrid" class="analyses-grid" aria-label="Lab results grid"></div>
+                    </div>
                 </section>
 
                 <!-- ─── Epicrisis tab ─── -->
