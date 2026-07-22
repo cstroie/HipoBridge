@@ -2184,7 +2184,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Stash combined markdown for Copy button — mirrors what is rendered,
             // not the full epicrisis history (that belongs to the Epicrisis tab).
-            const patientMarkdown = await generatePatientMarkdown(patientData);
+            const patientMarkdown = await generatePatientMarkdown(patientData, latestDx);
 
             // Raw admission narrative bodies (no markdown header wrapping) —
             // fed to the AI tab's "narrative" field as-is. This is the one
@@ -2307,7 +2307,27 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             }
 
-            const combined = patientMarkdown + admissionsMd + labsMd + imagingMd;
+            // ── Hospitalisation timeline (mirrors the #reportTimeline rows above) ──
+            function buildTimelineMarkdown(encs) {
+                const lines = [];
+                encs.forEach(item => {
+                    const enc   = item.enc;
+                    const start = enc.period?.start ? formatDate(enc.period.start) : '';
+                    const end   = enc.period?.end   ? formatDate(enc.period.end)   : '';
+                    if (!start && !end) return;
+                    const rawDx = extractDiagnosisText(enc) || '';
+                    const dx    = rawDx === '-' ? '' : rawDx;
+                    const service = enc.serviceType?.display || enc.location?.slice(-1)[0]?.location?.display || '';
+                    const range = end ? `${start}→${end}` : start;
+                    const label = [service, dx].filter(Boolean).join(' — ');
+                    lines.push(`- **${range}**${label ? ' — ' + label : ''}`);
+                });
+                if (!lines.length) return '';
+                return '## Hospitalisation Timeline\n\n' + lines.join('\n') + '\n\n';
+            }
+            const timelineMd = buildTimelineMarkdown(encounters);
+
+            const combined = patientMarkdown + admissionsMd + timelineMd + labsMd + imagingMd;
             if (markdownStore) markdownStore.dataset.markdown = combined;
 
             // Structured payload for the AI tab: imaging reports are already
@@ -2339,7 +2359,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    async function generatePatientMarkdown(patientData) {
+    async function generatePatientMarkdown(patientData, primaryDiagnosis) {
         log('Generating patient report markdown');
 
         const name = formatPatientName(patientData.name);
@@ -2347,18 +2367,16 @@ document.addEventListener('DOMContentLoaded', function() {
         const gender = formatGender(patientData.gender);
         const dob = formatBirthDate(patientData.birthDate);
         const cnp = extractCNP(patientData.identifier) || 'N/A';
-        const stats = extractMedicalStats(patientData);
 
         let markdown = `# PATIENT CLINICAL REPORT\n\n`;
         markdown += `## Patient\n\n`;
         markdown += `**Name:** ${name}  \n`;
-        markdown += `**Age:** ${age} | **Sex:** ${gender} | **DOB:** ${dob}  \n`;
-        markdown += `**CNP:** ${cnp}  \n\n`;
-
-        markdown += `## Clinical History\n\n`;
-        markdown += `- **Total presentations:** ${stats.encounters}\n`;
-        markdown += `- **Admissions:** ${stats.admissions}\n`;
-        markdown += `- **Discharges:** ${stats.discharges}\n\n`;
+        markdown += `**Age:** ${age}  \n`;
+        markdown += `**Sex:** ${gender}  \n`;
+        markdown += `**DOB:** ${dob}  \n`;
+        markdown += `**CNP:** ${cnp}  \n`;
+        if (primaryDiagnosis) markdown += `**Primary Diagnosis:** ${primaryDiagnosis}  \n`;
+        markdown += `\n`;
 
         log('Patient report markdown generated successfully');
         return markdown;
