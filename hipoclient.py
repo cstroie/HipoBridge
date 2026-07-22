@@ -3161,6 +3161,42 @@ class HipoClientCheckin(HipoClient):
                     }
                 }]
 
+            # 72-hour diagnosis — revised from the admission diagnosis as the
+            # clinical picture clarifies; distinct diagnosis-role so the frontend
+            # can label it separately rather than conflating it with admission dx.
+            diagnosis_72h = parsed_data.get("checkin.diagnosis_72h")
+            if diagnosis_72h:
+                fhir_encounter.setdefault("diagnosis", []).append({
+                    "condition": {
+                        "reference": f"Condition/72h-{encounter_id}",
+                        "display": diagnosis_72h
+                    },
+                    "use": {
+                        "coding": [{
+                            "system": "http://terminology.hl7.org/CodeSystem/diagnosis-role",
+                            "code": "working",
+                            "display": "72-hour diagnosis"
+                        }]
+                    }
+                })
+
+            # Secondary diagnoses / comorbidities
+            secondary_dx = parsed_data.get("checkin.secondary_diagnoses") or []
+            for dx in secondary_dx:
+                fhir_encounter.setdefault("diagnosis", []).append({
+                    "condition": {
+                        "reference": f"Condition/secondary-{encounter_id}-{len(fhir_encounter['diagnosis'])}",
+                        "display": dx
+                    },
+                    "use": {
+                        "coding": [{
+                            "system": "http://terminology.hl7.org/CodeSystem/diagnosis-role",
+                            "code": "CC",
+                            "display": "Comorbidity diagnosis"
+                        }]
+                    }
+                })
+
             # Urgency
             if parsed_data.get("presentation.is_urgent"):
                 fhir_encounter["priority"] = {
