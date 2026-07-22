@@ -491,3 +491,81 @@ Two different models, two different histories for the same symptom family:
 
 No change to the standing recommendation (avoid medgemma-4b-it and
 qwen3-4b for `pre_exam`; prefer gemma-3n-e4b/ministral-3-3b there).
+
+---
+
+# pre_exam generality test: new unrelated case (aspiration pneumonia + GERD infant) (2026-07-22)
+
+## Why
+All `pre_exam` tuning so far used one real case (CIOBOTARU, biliary atresia).
+The user supplied a second, unrelated real case
+(`_testing_/22/_report.md` — a 4-month-old with recurrent aspiration
+pneumonia and GERD) specifically to check whether `pre_exam.md` generalizes
+or was implicitly tuned to the first case. Explicit constraint: **the
+prompt must stay generic** — any change must be justified as a general
+instruction-quality fix, never case-specific wording.
+
+## Method
+1. Read the new case directly (no prompt) and wrote down what a radiologist
+   needs to know before the next exam (`_testing_/22/01_radiologist_prebrief.md`).
+2. Applied the current production prompt by hand (as Claude) and compared
+   against that independent read (`02_claude_production_prompt_output.md`).
+3. Found one generic gap: the prompt had no place to surface an **ongoing
+   risk factor or non-compliance issue stated outside the dated timeline**
+   — here, the parents not switching to the advised anti-reflux formula
+   ("contrar avizului medical..."), a single clause buried in a long
+   narrative paragraph, easy for a small model to drop entirely.
+4. Added one generically-worded clause to `pre_exam.md`'s "Current clinical
+   status" section (not diagnosis-specific — "risk factor", "non-compliance",
+   "feeding/medication adherence" as examples, applicable to any record):
+   > "...any ongoing risk factor or non-compliance issue explicitly
+   > mentioned in the record (e.g. feeding/formula, medication adherence)
+   > even if it is stated outside the dated timeline."
+5. Benchmarked medgemma-4b-it, ministral-3-3b-instruct-2512, and
+   qwen/qwen3-4b (`/no_think`) on LM Studio against the new case with the
+   updated prompt.
+
+## Results
+
+| Model | Timing | Caught the new risk-factor bullet? | Quality notes |
+|---|---|---|---|
+| medgemma-4b-it | 102.03s total, 8.7 tok/s, 14.84s cold TTFT, 885 tok | ✅ yes, correctly placed under Current clinical status | Reproduces the known term/clause-level Romanian leak on a **second, unrelated case** — this time worse: an entire clause left untranslated ("Contrair avizului medical de a schimba treptat formula de la lapte") rather than a single term. Confirms this is a real, generalizable weakness, not a fluke of the first case. |
+| ministral-3-3b-instruct-2512 | 92.10s total, 9.7 tok/s, 29.66s cold TTFT, 894 tok | ❌ **inverted the fact** — wrote "Formula adherence per protocol; no other non-compliance noted," the exact opposite of what the record says (parents did *not* follow the advice to switch formulas) | Clean, fluent English throughout, well-structured. Also filled in "Reason for current exam" with a plausible but **not explicitly stated** clinical question — a mild violation of the "if stated" grounding rule for that section (reasonable content, wrong section-level license). |
+| qwen/qwen3-4b (`/no_think`) | — | untested | Crashed with `RuntimeError: terminated` on **three consecutive attempts** (including one retry after confirming the server was otherwise responsive) — consistent with the already-documented pattern of `pre_exam` being the heaviest kind and most prone to this failure for this model. |
+
+## Findings
+
+1. **The new generic clause works as intended structurally** — medgemma
+   correctly identified and placed the risk-factor content under the right
+   heading on a completely unrelated case, showing the instruction
+   generalizes rather than only matching case 1's phrasing.
+2. **A new, independent quality risk surfaced**: ministral, otherwise the
+   cleanest performer across every kind so far, **inverted a compliance
+   fact** here — a comprehension failure, not a language or formatting one.
+   This is a different failure class from anything previously documented
+   and is not obviously fixable by more prompt wording; worth flagging as a
+   known limitation rather than chasing with further instructions (same
+   discipline as the earlier pre_exam Romanian-drift decision).
+3. **medgemma's Romanian leak reproduces on unrelated content**, confirming
+   it's a general model weakness on this kind, not something specific to
+   the biliary-atresia case's phrasing or length.
+4. **CIOBOTARU regression check could not be run this session** — the
+   original test fixtures (`/tmp/ciobotaru_report_trim.txt`,
+   `/tmp/reference_pre_exam.txt`, etc.) no longer exist; `/tmp` was cleared
+   between sessions since they were only ever ephemeral scratch files, never
+   committed anywhere durable. The generality argument for the new clause
+   therefore rests on its wording alone (see step 4 above), not a rerun of
+   the original case. **Follow-up**: if pre_exam prompt tuning continues,
+   save real test fixtures somewhere durable (e.g. under `_testing_/` like
+   this session's case) instead of only `/tmp`, so future regression checks
+   don't depend on files that may not survive between sessions.
+
+## Decision
+Keep the new clause — it's generically worded, it worked correctly on an
+unrelated case, and reverting it wouldn't address either of the two issues
+found (the Romanian leak and the fact-inversion are unrelated to this
+specific change; both are pre-existing per-model weaknesses surfaced by
+testing on new content, not caused by the edit). No further prompt
+iteration this round — per the capped-iteration discipline, one more
+generic case would be needed before proposing another prompt change, rather
+than reacting to single-model quirks seen on only two examples.
