@@ -1883,12 +1883,35 @@ document.addEventListener('DOMContentLoaded', function() {
             const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
             const eyebrowEl = document.getElementById('reportEyebrow');
             if (eyebrowEl) eyebrowEl.textContent = `Clinical Report · ${name}`;
-            setText('reportPatientName', name);
-            setText('reportPatientId',   pid);
-            setText('reportCNP',         cnp);
-            setText('reportDOB',         dob);
-            setText('reportAge',         dob ? age : '');
-            setText('reportSex',         gender);
+            const patientLineEl = document.getElementById('reportPatientLine');
+            if (patientLineEl) {
+                patientLineEl.innerHTML = '';
+                patientLineEl.append(name);
+                const meta = [gender, dob ? age : ''].filter(Boolean).join(' · ');
+                if (meta) {
+                    const metaSpan = document.createElement('span');
+                    metaSpan.className = 'report-patient-meta';
+                    metaSpan.textContent = ` · ${meta}`;
+                    patientLineEl.appendChild(metaSpan);
+                }
+            }
+            setText('reportCNP', cnp);
+
+            const patHipoUrl = (patientData.extension || []).find(e => e.url === 'hipocrateUrl')?.valueUri;
+            const pidWrap = document.getElementById('reportPatientIdWrap');
+            if (pidWrap) {
+                pidWrap.innerHTML = '';
+                if (pid && patHipoUrl) {
+                    const a = document.createElement('a');
+                    a.href = patHipoUrl;
+                    a.target = '_blank';
+                    a.rel = 'noopener noreferrer';
+                    a.textContent = pid;
+                    pidWrap.appendChild(a);
+                } else {
+                    pidWrap.textContent = pid;
+                }
+            }
 
             const ext = patientData.extension || [];
             const weight = (ext.find(e => e.url?.endsWith('body-weight')) || {}).valueString || '';
@@ -2142,7 +2165,132 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (secImaging) secImaging.hidden = false;
             }
 
-            // §4 Hospitalisation timeline
+            // §4 Recent labs (compact) ───────────────────────────────────
+            // Distinct from the dedicated Lab tab's fuller trend table: a
+            // short "## Recent Labs" section for the report/epicrisis/
+            // pre_exam clinical text, which previously never saw any lab
+            // data at all (pre_exam's own prompt already claims to use
+            // "labs" — this fulfils that). Scoped to the current/last
+            // hospitalization period (not a fixed lookback window) — only
+            // modified (out-of-range) analytes, last value per analyte,
+            // grouped by date. Reference range is omitted here on purpose:
+            // the H/L flag + colour already say "abnormal"; the exact normal
+            // range is one tap away in the dedicated Lab tab.
+            function isAbnormalObservation(obs) {
+                const flag = obs.interpretation?.[0]?.text;
+                if (flag === 'H' || flag === 'L') return true;
+                const v = obs.valueQuantity?.value;
+                if (v == null) return false;
+                const low = obs.referenceRange?.[0]?.low?.value;
+                const high = obs.referenceRange?.[0]?.high?.value;
+                return (low != null && v < low) || (high != null && v > high);
+            }
+
+            // One row per modified (out-of-range) analyte, last value only,
+            // grouped by date so a same-day panel doesn't repeat its date.
+            function collectLabItems(observations) {
+                const latestNumeric = new Map();
+                for (const obs of observations) {
+                    const name = obs.code?.text;
+                    const date = obs.effectiveDateTime || '';
+                    if (!name || !date || obs.valueQuantity?.value == null) continue;
+                    const prev = latestNumeric.get(name);
+                    if (!prev || date > prev.date) latestNumeric.set(name, { obs, date });
+                }
+                const items = [];
+                for (const { obs, date } of latestNumeric.values()) {
+                    if (!isAbnormalObservation(obs)) continue;
+                    const v = obs.valueQuantity.value;
+                    const unit = obs.valueQuantity.unit || '';
+                    const flag = obs.interpretation?.[0]?.text
+                        || (obs.referenceRange?.[0]?.low?.value != null && v < obs.referenceRange[0].low.value ? 'L'
+                            : obs.referenceRange?.[0]?.high?.value != null && v > obs.referenceRange[0].high.value ? 'H' : '');
+                    items.push({ name: obs.code.text, date, value: `${v}${unit ? ' ' + unit : ''}`, flag });
+                }
+                items.sort((a, b) => b.date.localeCompare(a.date));
+                return items;
+            }
+
+            function labItemsToMarkdown(items) {
+                if (!items.length) return '';
+                let md = '## Recent Labs\n\n';
+                let lastDate = null;
+                for (const item of items) {
+                    if (item.date !== lastDate) {
+                        md += `**${formatDate(item.date)}**\n\n`;
+                        lastDate = item.date;
+                    }
+                    md += `- ${item.name}: ${item.value}${item.flag ? ` (${item.flag})` : ''}\n`;
+                }
+                return md + '\n';
+            }
+
+            function renderLabsTable(items) {
+                const wrap = document.createElement('div');
+                wrap.className = 'lab-result-wrap';
+                let lastDate = null;
+                let tbody = null;
+                for (const item of items) {
+                    if (item.date !== lastDate) {
+                        const heading = document.createElement('p');
+                        heading.className = 'lab-section-heading';
+                        heading.textContent = formatDate(item.date);
+                        wrap.appendChild(heading);
+                        const table = document.createElement('table');
+                        table.className = 'lab-result-table';
+                        tbody = table.createTBody();
+                        wrap.appendChild(table);
+                        lastDate = item.date;
+                    }
+                    const row = tbody.insertRow();
+                    const tdName = row.insertCell();
+                    tdName.className = 'lab-name';
+                    tdName.textContent = item.name;
+                    const tdVal = row.insertCell();
+                    tdVal.className = 'lab-value' + (item.flag === 'H' ? ' lab-high' : item.flag === 'L' ? ' lab-low' : '');
+                    tdVal.textContent = item.value;
+                    if (item.flag) {
+                        const badge = document.createElement('span');
+                        badge.className = 'lab-flag lab-flag-' + item.flag.toLowerCase();
+                        badge.textContent = item.flag;
+                        tdVal.appendChild(badge);
+                    }
+                }
+                return wrap;
+            }
+
+            let labsMd = '';
+            let labItems = [];
+            try {
+                // Scope to the current/last hospitalization period rather than a
+                // fixed lookback window — an ongoing admission has no end yet.
+                const periodStart = (activeAdm || lastDischarge)?.enc.period?.start;
+                const periodEnd = activeAdm ? undefined : lastDischarge?.enc.period?.end;
+                if (periodStart) {
+                    const params = new URLSearchParams({ patient: pid, start_date: localDateStr(new Date(periodStart)) });
+                    if (periodEnd) params.set('end_date', localDateStr(new Date(periodEnd)));
+                    const labResp = await apiFetch(`/fhir/Observation?${params}`);
+                    if (labResp.ok) {
+                        const labBundle = await labResp.json();
+                        labItems = collectLabItems((labBundle.entry || []).map(e => e.resource).filter(Boolean));
+                        labsMd = labItemsToMarkdown(labItems);
+                    }
+                }
+            } catch (_) {
+                // Labs are supplementary here — don't fail the whole report
+                // over a lab-fetch error; the dedicated Lab tab still works.
+            }
+
+            const secLabs = document.getElementById('reportSectionLabs');
+            const labsListEl = document.getElementById('reportLabsList');
+            if (secLabs) secLabs.hidden = true;
+            if (labsListEl && labItems.length) {
+                labsListEl.innerHTML = '';
+                labsListEl.appendChild(renderLabsTable(labItems));
+                if (secLabs) secLabs.hidden = false;
+            }
+
+            // §5 Hospitalisation timeline
             const secTimeline = document.getElementById('reportSectionTimeline');
             const timelineEl  = document.getElementById('reportTimeline');
             if (secTimeline) secTimeline.hidden = true;
@@ -2226,73 +2374,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 admissionsMd += admissionMarkdown('Last Admission', lastDischarge.enc, false);
             }
 
-            // ── Labs (compact) ───────────────────────────────────────────
-            // Distinct from the dedicated Lab tab's fuller trend table: a
-            // short "## Recent Labs" section for the report/epicrisis/
-            // pre_exam clinical text, which previously never saw any lab
-            // data at all (pre_exam's own prompt already claims to use
-            // "labs" — this fulfils that). Covers two cases the trend table
-            // doesn't: (a) numeric analytes currently out of range, and (b)
-            // qualitative (valueString) results such as rapid antigen tests,
-            // which have no numeric range and are otherwise invisible to
-            // every AI kind (renderTrends only tracks numeric-valued
-            // analytes). Capped small on purpose — full history stays in
-            // the Lab tab; only the most recent value per analyte is used.
-            const MAX_LAB_LINES = 8;
-
-            function isAbnormalObservation(obs) {
-                const flag = obs.interpretation?.[0]?.text;
-                if (flag === 'H' || flag === 'L') return true;
-                const v = obs.valueQuantity?.value;
-                if (v == null) return false;
-                const low = obs.referenceRange?.[0]?.low?.value;
-                const high = obs.referenceRange?.[0]?.high?.value;
-                return (low != null && v < low) || (high != null && v > high);
-            }
-
-            function buildCompactLabsMarkdown(observations) {
-                const latestNumeric = new Map();
-                const latestQualitative = new Map();
-                for (const obs of observations) {
-                    const name = obs.code?.text;
-                    const date = obs.effectiveDateTime || '';
-                    if (!name || !date) continue;
-                    if (obs.valueQuantity?.value != null) {
-                        const prev = latestNumeric.get(name);
-                        if (!prev || date > prev.date) latestNumeric.set(name, { obs, date });
-                    } else if (obs.valueString) {
-                        const prev = latestQualitative.get(name);
-                        if (!prev || date > prev.date) latestQualitative.set(name, { obs, date });
-                    }
-                }
-                const lines = [];
-                for (const { obs, date } of latestNumeric.values()) {
-                    if (!isAbnormalObservation(obs)) continue;
-                    const v = obs.valueQuantity.value;
-                    const unit = obs.valueQuantity.unit || '';
-                    const ref = obs.referenceRange?.[0]?.text || '';
-                    lines.push(`- **${obs.code.text}** (${date}): ${v}${unit ? ' ' + unit : ''}${ref ? ` (normal: ${ref})` : ''} — out of range`);
-                }
-                for (const { obs, date } of latestQualitative.values()) {
-                    lines.push(`- **${obs.code.text}** (${date}): ${obs.valueString}`);
-                }
-                if (!lines.length) return '';
-                return '## Recent Labs\n\n' + lines.slice(0, MAX_LAB_LINES).join('\n') + '\n\n';
-            }
-
-            let labsMd = '';
-            try {
-                const sd = new Date(); sd.setDate(sd.getDate() - 90);
-                const labResp = await apiFetch(`/fhir/Observation?patient=${encodeURIComponent(pid)}&start_date=${localDateStr(sd)}`);
-                if (labResp.ok) {
-                    const labBundle = await labResp.json();
-                    labsMd = buildCompactLabsMarkdown((labBundle.entry || []).map(e => e.resource).filter(Boolean));
-                }
-            } catch (_) {
-                // Labs are supplementary here — don't fail the whole report
-                // over a lab-fetch error; the dedicated Lab tab still works.
-            }
-
             let imagingMd = '';
             if (reports.some(Boolean)) {
                 imagingMd = '## Recent Imaging\n\n';
@@ -2327,7 +2408,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             const timelineMd = buildTimelineMarkdown(encounters);
 
-            const combined = patientMarkdown + admissionsMd + timelineMd + labsMd + imagingMd;
+            const combined = patientMarkdown + admissionsMd + labsMd + imagingMd + timelineMd;
             if (markdownStore) markdownStore.dataset.markdown = combined;
 
             // Structured payload for the AI tab: imaging reports are already
