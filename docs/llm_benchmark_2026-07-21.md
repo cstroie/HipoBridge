@@ -445,3 +445,49 @@ production config change made — `/no_think` would need to be added to
 `llm/prompts.py`'s prompt-assembly path (not just a benchmark input hack)
 before qwen3-4b could be considered for real use, and pre_exam's drift issue
 remains unresolved for this model family regardless.
+
+---
+
+# Checked: was pre_exam's verbatim-Romanian copy present from the start? (2026-07-22)
+
+Went back to the original `docs/llm_benchmark_2026-07-19.md` (Round 4
+addendum) to check whether the "long History/Prior-imaging sections copied
+verbatim in Romanian" failure mode is something we triggered via later
+prompt changes, or was always there for some models.
+
+## qwen3-4b: present from day one, with `/no_think` already applied
+The 07-19 doc's Round 4 addendum tested qwen3-4b's `pre_exam` with
+`/no_think` already in place and found: *"great structure, but fails the
+English requirement on long output... the History and Prior-imaging sections
+came back almost entirely in Romanian (verbatim copy, not translated)"* —
+the same failure mode confirmed again today. **lfm2-8b-a1b** showed the
+identical pattern in that same round. So qwen3-4b's pre_exam language-drift
+is a pre-existing, reproducible weakness independent of anything we changed
+since — not something we triggered, and not something `/no_think` was ever
+expected to fix (it only addresses reasoning-leak, a separate failure mode).
+
+## medgemma-4b-it: this one *is* a genuine regression
+By contrast, the 07-19 doc explicitly scored `pre_exam` language compliance
+as **✅ full English for medgemma-4b-it** at that time (alongside
+gemma-3n-e4b and ministral-3-3b with a minor mistranslation). Its later
+Romanian-term leak (documented in the "pre_exam Romanian regression" section
+above) is therefore a real regression introduced somewhere between 07-19 and
+07-21/22 — most plausibly by the shared-`system.md`-preamble restructuring
+and/or its subsequent removal, though the exact trigger within that window
+was never isolated (three targeted prompt-wording fixes to `pre_exam.md`
+itself did not resolve it, suggesting the cause sits elsewhere, e.g. in how
+the date/language directives ended up positioned relative to the old
+preamble at the time of the original regression).
+
+## Conclusion
+Two different models, two different histories for the same symptom family:
+- **qwen3-4b / lfm2-8b-a1b**: pre_exam Romanian-copy is an intrinsic model
+  limitation on long, source-language-heavy input — always present, `/no_think`
+  irrelevant to it.
+- **medgemma-4b-it**: pre_exam Romanian leak is a real regression from prompt
+  changes made after 07-19 — root cause still not pinned down precisely,
+  despite the fix for the (separate) `imaging` regression being fully
+  understood.
+
+No change to the standing recommendation (avoid medgemma-4b-it and
+qwen3-4b for `pre_exam`; prefer gemma-3n-e4b/ministral-3-3b there).
