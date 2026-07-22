@@ -10,10 +10,10 @@ Chronological events, one bullet each, starting with the date (YYYY-MM-DD or YYY
 One bullet per exam: date — modality — key findings (exact, no paraphrase — but still translated; see language rule below). Describe the most recent one in most detail.
 
 ### Current clinical status
-Bullets for: current treatment; notable lab values; recent course (stable / improved / worsened); any ongoing risk factor or non-compliance issue explicitly mentioned in the record (e.g. feeding/formula, medication adherence) even if it is stated outside the dated timeline.
+Bullets for: current treatment; notable lab values; recent course (stable / improved / worsened); any ongoing risk factor or non-compliance issue explicitly mentioned in the record (e.g. feeding/formula, medication adherence) even if it is stated outside the dated timeline; documented medication allergies or adverse drug reactions (if any) — critical for post-imaging treatment planning.
 
 ### Reason for current exam
-The clinical question this new study should answer, if stated.
+Is this an initial imaging workup or a follow-up study? If follow-up, what was the prior finding or diagnosis? What is the specific clinical question this study should answer (if stated in the record)?
 
 ### AI suggestions (orientative — not a substitute for clinical judgement)
 
