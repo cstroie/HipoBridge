@@ -1961,6 +1961,117 @@ def _parse_buletin_header(soup, data: HipoData) -> None:
         logger.warning(f"Error parsing buletin header: {e}")
 
 
+def _parse_narrative_studies(soup: BeautifulSoup) -> list:
+    """Parse the narrative/radiology BuletinAnalize layout (Rap_table_class_generic).
+
+    Used for free-text results (imaging, and narrative-style lab buletins) as opposed
+    to the tabular lab layout with DENUMIRE ANALIZA/REZULTAT/reference-range columns.
+    One Rap_table_class_generic per result group:
+      thead first Rap_tr_class_generic_2 row → section/modality label.
+      tbody Rap_tr_class_generic_1 rows → one study per row, 2 cells:
+        cell[0]: study name in <b> (strip nested <i>/<span>/<br>)
+        cell[1]: result text (apply markdown conversion)
+      tfoot Rap_tr_class_generic_3 row → validation info (shared per table)
+    """
+    studies = []
+    seen = set()
+
+    for table in soup.find_all('table', class_='Rap_table_class_generic'):
+        body_rows = table.find_all('tr', class_='Rap_tr_class_generic_1')
+        if not body_rows:
+            continue  # skip footer/metadata tables
+
+        # Section label from first thead row
+        section_name = ''
+        thead_row = table.find('tr', class_='Rap_tr_class_generic_2')
+        if thead_row:
+            b = thead_row.find('b')
+            if b:
+                section_name = b.get_text(strip=True)
+
+        # Validation shared across all studies in this table
+        validation_raw = ''
+        tfoot_row = table.find('tr', class_='Rap_tr_class_generic_3')
+        if tfoot_row:
+            validation_raw = tfoot_row.get_text(' ', strip=True)
+        date_m = re.search(r'(\d{2}\s+\w+\s+\d{4}(?:\s+\d{2}:\d{2})?|\d{2}/\d{2}/\d{4}(?:\s+\d{2}:\d{2})?)', validation_raw)
+        dt = parse_date_time(date_m.group(1)) if date_m else None
+        validator_m = re.search(r'Validat de:\s*(.*?)(?:\s+Parafa:|$)', validation_raw)
+        validator = validator_m.group(1).strip() if validator_m else None
+
+        for row in body_rows:
+            cells = row.find_all('td')
+            if len(cells) < 2:
+                continue
+
+            # Study name: first <b> in name cell; strip <i>, <span>, <br>
+            name_cell = cells[0]
+            b_tag = name_cell.find('b')
+            if b_tag:
+                for tag in b_tag.find_all(['i', 'em', 'span']):
+                    tag.decompose()
+                for br in b_tag.find_all('br'):
+                    br.replace_with('\n')
+                study_name = b_tag.get_text('\n').split('\n')[0].strip()
+                study_name = re.sub(r'\s*Rezultat.*$', '', study_name, flags=re.IGNORECASE).strip()
+            else:
+                study_name = name_cell.get_text(strip=True)
+
+            if not study_name or study_name in seen:
+                continue
+            seen.add(study_name)
+
+            # Result text: second cell with markdown conversion.
+            # IMPORTANT: process <br> first — html.parser nests following
+            # elements as children of unclosed <br>, so extract them out
+            # before replacing to avoid silently dropping content.
+            result_cell = cells[1]
+            for br in result_cell.find_all('br'):
+                for child in list(br.children):
+                    br.insert_before(child)
+                br.replace_with('\n')
+            for p in result_cell.find_all('p'):
+                p.insert_after('\n\n')
+                p.unwrap()
+            for div in result_cell.find_all('div'):
+                div.insert_after('\n\n')
+                div.unwrap()
+            for tag in result_cell.find_all(['b', 'strong']):
+                if tag.get_text(strip=True):
+                    tag.insert_before('**')
+                    tag.insert_after('**')
+                tag.unwrap()
+            for tag in result_cell.find_all(['i', 'em']):
+                if tag.get_text(strip=True):
+                    tag.insert_before('*')
+                    tag.insert_after('*')
+                tag.unwrap()
+            for tag in result_cell.find_all('u'):
+                if tag.get_text(strip=True):
+                    tag.insert_before('*')
+                    tag.insert_after('*')
+                tag.unwrap()
+            raw = result_cell.get_text()
+            raw = raw.replace('\xa0', ' ')
+            raw = re.sub(r'\*{4,}', '***', raw)
+            raw = re.sub(r'[ \t]+', ' ', raw)
+            raw = re.sub(r'\n{3,}', '\n\n', raw)
+            result_text = raw.strip()
+
+            study_type, region = identify_study_type_and_region(study_name)
+            studies.append({
+                "title": study_name,
+                "section": section_name,
+                "result": result_text,
+                "type": study_type,
+                "region": region,
+                "validation_date": dt.isoformat() if dt else None,
+                "validator": validator,
+            })
+
+    return studies
+
+
 class HipoClientImagingStudy(HipoClient):
     """Specialized client for imaging study related operations in the Hipocrate medical system.
 
@@ -1988,107 +2099,8 @@ class HipoClientImagingStudy(HipoClient):
             # Parse shared header (patient, request date, barcode, medic, section)
             _parse_buletin_header(soup, data)
 
-            # Type=3 layout: one Rap_table_class_generic per result group.
-            # thead first Rap_tr_class_generic_2 row → section/modality label.
-            # tbody Rap_tr_class_generic_1 rows → one study per row, 2 cells:
-            #   cell[0]: study name in <b> (strip nested <i>/<span>/<br>)
-            #   cell[1]: result text (apply markdown conversion)
-            # tfoot Rap_tr_class_generic_3 row → validation info (shared per table)
-            studies = []
-            seen = set()
-
-            for table in soup.find_all('table', class_='Rap_table_class_generic'):
-                body_rows = table.find_all('tr', class_='Rap_tr_class_generic_1')
-                if not body_rows:
-                    continue  # skip footer/metadata tables
-
-                # Section label from first thead row
-                section_name = ''
-                thead_row = table.find('tr', class_='Rap_tr_class_generic_2')
-                if thead_row:
-                    b = thead_row.find('b')
-                    if b:
-                        section_name = b.get_text(strip=True)
-
-                # Validation shared across all studies in this table
-                validation_raw = ''
-                tfoot_row = table.find('tr', class_='Rap_tr_class_generic_3')
-                if tfoot_row:
-                    validation_raw = tfoot_row.get_text(' ', strip=True)
-                date_m = re.search(r'(\d{2}\s+\w+\s+\d{4}(?:\s+\d{2}:\d{2})?|\d{2}/\d{2}/\d{4}(?:\s+\d{2}:\d{2})?)', validation_raw)
-                dt = parse_date_time(date_m.group(1)) if date_m else None
-                validator_m = re.search(r'Validat de:\s*(.*?)(?:\s+Parafa:|$)', validation_raw)
-                validator = validator_m.group(1).strip() if validator_m else None
-
-                for row in body_rows:
-                    cells = row.find_all('td')
-                    if len(cells) < 2:
-                        continue
-
-                    # Study name: first <b> in name cell; strip <i>, <span>, <br>
-                    name_cell = cells[0]
-                    b_tag = name_cell.find('b')
-                    if b_tag:
-                        for tag in b_tag.find_all(['i', 'em', 'span']):
-                            tag.decompose()
-                        for br in b_tag.find_all('br'):
-                            br.replace_with('\n')
-                        study_name = b_tag.get_text('\n').split('\n')[0].strip()
-                        study_name = re.sub(r'\s*Rezultat.*$', '', study_name, flags=re.IGNORECASE).strip()
-                    else:
-                        study_name = name_cell.get_text(strip=True)
-
-                    if not study_name or study_name in seen:
-                        continue
-                    seen.add(study_name)
-
-                    # Result text: second cell with markdown conversion.
-                    # IMPORTANT: process <br> first — html.parser nests following
-                    # elements as children of unclosed <br>, so extract them out
-                    # before replacing to avoid silently dropping content.
-                    result_cell = cells[1]
-                    for br in result_cell.find_all('br'):
-                        for child in list(br.children):
-                            br.insert_before(child)
-                        br.replace_with('\n')
-                    for p in result_cell.find_all('p'):
-                        p.insert_after('\n\n')
-                        p.unwrap()
-                    for div in result_cell.find_all('div'):
-                        div.insert_after('\n\n')
-                        div.unwrap()
-                    for tag in result_cell.find_all(['b', 'strong']):
-                        if tag.get_text(strip=True):
-                            tag.insert_before('**')
-                            tag.insert_after('**')
-                        tag.unwrap()
-                    for tag in result_cell.find_all(['i', 'em']):
-                        if tag.get_text(strip=True):
-                            tag.insert_before('*')
-                            tag.insert_after('*')
-                        tag.unwrap()
-                    for tag in result_cell.find_all('u'):
-                        if tag.get_text(strip=True):
-                            tag.insert_before('*')
-                            tag.insert_after('*')
-                        tag.unwrap()
-                    raw = result_cell.get_text()
-                    raw = raw.replace('\xa0', ' ')
-                    raw = re.sub(r'\*{4,}', '***', raw)
-                    raw = re.sub(r'[ \t]+', ' ', raw)
-                    raw = re.sub(r'\n{3,}', '\n\n', raw)
-                    result_text = raw.strip()
-
-                    study_type, region = identify_study_type_and_region(study_name)
-                    studies.append({
-                        "title": study_name,
-                        "section": section_name,
-                        "result": result_text,
-                        "type": study_type,
-                        "region": region,
-                        "validation_date": dt.isoformat() if dt else None,
-                        "validator": validator,
-                    })
+            # Type=3 layout: narrative/radiology Rap_table_class_generic tables.
+            studies = _parse_narrative_studies(soup)
 
             data.store_list("studies", studies)
 
@@ -2383,6 +2395,13 @@ class HipoClientDiagnosticReport(HipoClient):
                         "type": study_type,
                         "region": region
                     })
+
+            # type=1 buletins can also carry narrative/radiology-style results
+            # (e.g. an X-ray text report) instead of tabular lab rows — the lab-row
+            # loop above finds nothing for those, so fall back to the narrative parser.
+            if not studies:
+                studies = _parse_narrative_studies(soup)
+
             data.store_list("studies", studies)
 
             return data
@@ -2486,6 +2505,8 @@ class HipoClientDiagnosticReport(HipoClient):
                             "region":    study.get("region", ""),
                             "reference": study.get("reference", ""),
                             "section":   study.get("section", ""),
+                            "validator": study.get("validator", ""),
+                            "validation_date": study.get("validation_date", ""),
                         }
                         if flag:
                             entry["flag"] = flag

@@ -4392,6 +4392,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     async function loadAndDisplayEpicrisis(patientData) {
+        // Captured before any await: if a slower in-flight call for a previous
+        // patient resolves after clearResults() has already moved on to a new
+        // one, it must not repopulate epicrisisContent with stale cards (incl.
+        // any AI summary) — bail out silently instead of touching the DOM.
+        const myGeneration = dataGeneration;
         const checkoutIds = extractCheckoutIds(patientData);
         // Fetch every checkin id, not just ones without a matching checkout id — a
         // genuinely ongoing admission (e.g. ICU, no discharge summary yet) needs its
@@ -4399,6 +4404,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // membership (a checkin's status never flips once the patient is discharged).
         const checkinIds = extractCheckinIds(patientData);
         if (checkoutIds.length === 0 && checkinIds.length === 0) {
+            if (myGeneration !== dataGeneration) return;
+            elements.epicrisisContent.innerHTML = '';
             if (elements.epicrisisNoData) elements.epicrisisNoData.style.display = 'block';
             return;
         }
@@ -4454,7 +4461,10 @@ document.addEventListener('DOMContentLoaded', function() {
             valid.unshift({ enc: activeEnc.enc, checkoutId: activeEnc.checkinId, active: true, fallbackBody: buildCheckinBody(activeEnc.enc) });
         }
 
+        if (myGeneration !== dataGeneration) return;
+
         if (valid.length === 0) {
+            elements.epicrisisContent.innerHTML = '';
             if (elements.epicrisisNoData) elements.epicrisisNoData.style.display = 'block';
             return;
         }
