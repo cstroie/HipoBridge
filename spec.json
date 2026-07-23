@@ -726,6 +726,44 @@
                     },
                     "media": {
                       "type": "array"
+                    },
+                    "presentedForm": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "contentType": {
+                            "type": "string",
+                            "example": "text/markdown"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "data": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "region": {
+                            "type": "string"
+                          },
+                          "reference": {
+                            "type": "string"
+                          },
+                          "section": {
+                            "type": "string"
+                          },
+                          "validator": {
+                            "type": "string",
+                            "description": "Physician who validated this result, when present"
+                          },
+                          "validation_date": {
+                            "type": "string",
+                            "description": "ISO 8601 validation timestamp, when present"
+                          }
+                        }
+                      }
                     }
                   }
                 }
