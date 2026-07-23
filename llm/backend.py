@@ -89,6 +89,7 @@ class ServerBackend:
             "messages": messages,
             "max_tokens": max_tokens,
             "temperature": temperature,
+            "reasoning": {"effort": "none"},
             "stream": True,
         }
         async with _llm_semaphore:
