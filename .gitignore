@@ -3,3 +3,4 @@ local.cfg
 worklist.cfg
 samples/*
 __pycache__
+_testing_

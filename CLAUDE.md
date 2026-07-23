@@ -95,6 +95,20 @@ HTTP client → hipobridge.py (@require_auth) → HipoClient* (cache + semaphore
 - `DATE_AWARE_KINDS`/`STREAMING_KINDS` (`llm/prompts.py`) are deliberately separate constants even though currently identical sets — one is about date context, the other about transport.
 - The 4096-token context ceiling is real: an oversized input makes LM Studio return an SSE `event: error` line with no `choices` key, not a normal completion — `ServerBackend.chat_stream()`/`chat()` must check for `chunk.get("error")` explicitly or the failure is silently swallowed.
 - This LM Studio instance also serves another project (xrayvision radiology). A model can be evicted mid-generation under radiology load, surfacing as `RuntimeError: terminated` — not a prompt/quality bug. `benchmark_prompt_format.py` retries this a bounded number of times with backoff.
+- `ServerBackend.chat`/`chat_stream` request bodies set `"reasoning": {"effort": "none"}` — reasoning-capable models otherwise burn tokens on hidden thinking before the visible completion, eating into the 4096-token ceiling.
+
+### LM Studio Server & Model Selection (2026-07-22 findings)
+
+**Server info endpoint**: `http://192.168.3.238:1234/api/v1/models` — check `loaded_instances` to see which models are currently active.
+
+**medgemma-4b-it behavior**:
+- ✅ Reliable for pre_exam (lead with clinical question, surface seizure-like events, safety flags) — produces concise, grounded output with correct age, full translation, no fabrication on rich cases
+- ❌ Struggles with report.md (executive summary from discharge record) — does not compress to 3-5 sentences; either outputs raw source text (untranslated Romanian) or produces verbose clinical detail instead of radiologist-focused summary
+- **Root issue**: medgemma's language instruction-following (documented weakness in benchmark_2026-07-21.md) makes it unreliable for high-compression tasks (discharge summary). It can do detail-preserving translation (pre_exam) but cannot reliably abstract/summarize.
+
+**Recommendation**: Route `report.md` to `gemma-3n-e4b` or `ministral-3-3b` (both handle compression/abstraction better). Keep medgemma-4b-it for pre_exam (it works well there). Update `local.cfg` `[provider:lmstudio]` tier assignments accordingly, or wire report specifically to a better model.
+
+**Validation methodology**: Empirically tested both pre_exam and report.md prompts on 50 real pediatric discharge records. pre_exam validated clean (no fabrication, correct demographics, proper translation, safety flags surfaced). report.md validation showed medgemma cannot meet the "3-5 sentence executive summary" requirement — produces either raw input or 900+ char verbose output instead.
 
 ### Entry point conventions
 
