@@ -7,4 +7,8 @@
 
 - [X] Add a Copy button to the AI tab summary card, similar to the Copy button on the report tab.
 
-- [ ] Fix the card toolbar appearance inside epicrisis cards
+- [X] Fix the card toolbar appearance inside epicrisis cards
+
+- [ ] After log in, check whoami to get the user's name and permissions.
+
+- [ ] Do not automatically generate the AI content after patient load.
