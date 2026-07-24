@@ -6,3 +6,5 @@
   `.report-card`). Bigger refactor — normalize once all four are stable.
 
 - [X] Add a Copy button to the AI tab summary card, similar to the Copy button on the report tab.
+
+- [ ] Fix the card toolbar appearance inside epicrisis cards
