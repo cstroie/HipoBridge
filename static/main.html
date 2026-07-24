@@ -540,19 +540,18 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                                     <span class="card-referrer" aria-label="Ordering physician"></span>
                                 </p>
                             </hgroup>
+                            <div class="card-toolbar">
+                                <button type="button" class="btn-ai card-ai-btn" hidden aria-label="AI triage summary" title="AI triage summary">
+                                    <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>AI</span>
+                                </button>
+                                <button type="button" class="copy-md-btn card-copy-btn" hidden aria-label="Copy as Markdown" title="Copy as Markdown">
+                                    <i class="fas fa-copy" aria-hidden="true"></i>
+                                </button>
+                            </div>
                             <strong class="urgent-badge" hidden>Urgent</strong>
                         </div>
                     </div>
                 </header>
-
-                <div class="card-toolbar">
-                    <button type="button" class="btn-ai card-ai-btn" hidden aria-label="AI triage summary" title="AI triage summary">
-                        <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>AI</span>
-                    </button>
-                    <button type="button" class="copy-md-btn card-copy-btn" hidden aria-label="Copy as Markdown" title="Copy as Markdown">
-                        <i class="fas fa-copy" aria-hidden="true"></i>
-                    </button>
-                </div>
 
                 <!-- Report body (lazy-loaded) -->
                 <section class="card-report-section">
@@ -750,15 +749,15 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                     </div>
                 </button>
                 <div class="epi-card-body" hidden>
+                    <div class="card-toolbar" role="toolbar">
+                        <button type="button" class="btn-ai epi-ai-btn" aria-label="AI executive summary" title="AI executive summary">
+                            <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>AI</span>
+                        </button>
+                        <button type="button" class="copy-md-btn epi-copy-btn" aria-label="Copy this epicrisis as Markdown" title="Copy this epicrisis as Markdown">
+                            <i class="fas fa-copy" aria-hidden="true"></i>
+                        </button>
+                    </div>
                     <div class="epi-card-inner">
-                        <div class="card-toolbar" role="toolbar">
-                            <button type="button" class="btn-ai epi-ai-btn" aria-label="AI executive summary" title="AI executive summary">
-                                <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>AI</span>
-                            </button>
-                            <button type="button" class="copy-md-btn epi-copy-btn" aria-label="Copy this epicrisis as Markdown" title="Copy this epicrisis as Markdown">
-                                <i class="fas fa-copy" aria-hidden="true"></i>
-                            </button>
-                        </div>
                         <div class="epi-prose"></div>
                     </div>
                 </div>

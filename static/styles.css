@@ -624,68 +624,6 @@ small {
     cursor: pointer;
 }
 
-/* Two-row nav on screens narrower than 1024px */
-@media (max-width: 1023px) {
-    :root { --header-height: 110px; }
-
-    .app-bar {
-        height: auto;
-        flex-wrap: wrap;
-        padding: 0 var(--space-16);
-        align-items: center;
-    }
-
-    /* Row 1: brand | search+schedule (app-nav) | spacer | end controls */
-    .app-bar-brand {
-        height: 60px;
-        border-right: none;
-        padding-right: 0;
-        margin-right: 0;
-    }
-
-    /* .app-bar switches from align-items:stretch to :center above (so
-       row 1's mixed-height items — the 60px brand, everything else auto
-       — don't get force-stretched oddly), which left #appNav sized to
-       its own content and vertically centered instead of reaching the
-       row's bottom edge — the active underline stopped ~20px short of
-       it. Match the brand's explicit height so the stretch chain works
-       again down to .nav-btn (already align-self: stretch). */
-    #appNav {
-        height: 60px;
-        align-self: auto;
-    }
-
-    /* Row 2: patient sub-nav, full width, pushed last via order */
-    #navPatientGroup {
-        order: 10;
-        width: 100%;
-        height: 50px;
-        border-top: 1px solid var(--border);
-        justify-content: space-around;
-        align-items: stretch;
-    }
-
-    /* Patient tab buttons: spread evenly */
-    #navPatientGroup .nav-btn {
-        flex: 1;
-        justify-content: center;
-        padding: 0;
-        height: 100%;
-    }
-
-    /* Separator and patient pill not needed in the flat icon row */
-    .nav-sep { display: none; }
-    .patient-ctx-pill { display: none; }
-}
-
-/* Very narrow: hide wordmark and collapse patient nav to icon-only */
-@media (max-width: 680px) {
-    .brand-wordmark { display: none; }
-    #navPatientGroup .nav-btn span { display: none; }
-    #navPatientGroup .nav-btn i { font-size: var(--font-size-sm); }
-}
-
-
 
 /* Main Content */
 .main-content {
@@ -1367,7 +1305,7 @@ select {
     margin-bottom: var(--space-16);
 }
 
-@media (max-width: 600px) {
+@media (max-width: 800px) {
     .analyses-grid { columns: 1; }
 }
 
@@ -1637,7 +1575,10 @@ select {
     align-items: flex-start;
     justify-content: space-between;
     gap: var(--space-10);
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+}
+@media (max-width: 480px) {
+    .card-title-row { flex-wrap: wrap; }
 }
 /* hgroup has no default min-width:0, so a long title would otherwise force
    the row wider than the card and push .card-toolbar past its right edge */
@@ -1648,7 +1589,7 @@ select {
 /* Grouped top-right actions (AI + copy) — a single pill-shaped toolbar with
    a thin border and a separator between the two buttons. Shared by the
    report header, imaging/lab analysis cards, and the epicrisis accordion
-   (.epi-card-inner .card-toolbar) — see the shared rules further below. */
+   (.epi-card-body .card-toolbar) — see the shared rules further below. */
 .card-toolbar {
     flex-shrink: 0;
     display: inline-flex;
@@ -1668,11 +1609,11 @@ select {
    compact pill hugging the right edge instead of stretching to the
    column's full cross-axis width like a block child normally would. */
 .analysis-card > .card-toolbar {
-    align-self: flex-end;
+    align-self: center;
 }
 .report-header > .card-toolbar,
 .epicrisis-header > .card-toolbar {
-    align-self: flex-end;
+    align-self: center;
 }
 
 /* Both buttons lose their standalone border/background/radius when grouped
@@ -1832,7 +1773,7 @@ select {
     align-items: flex-end;
     gap: var(--space-24);
     margin-bottom: var(--space-32);
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     max-width: 860px;
     margin-left: auto;
     margin-right: auto;
@@ -2412,267 +2353,6 @@ select {
     border-radius: var(--radius-sm);
     color: var(--urgent);
     font-size: var(--font-size-sm);
-}
-
-/* Responsive Design */
-@media (max-width: 1024px) {
-    .patient-stats-strip {
-        gap: var(--space-16);
-    }
-}
-
-@media (max-width: 768px) {
-    /* Header stays a single row (search-quick is hidden, so brand + 2 icon
-       buttons fit in ~72px) — no need to make it static or re-pin the nav. */
-
-    /* Hide tagline in compact single-row header */
-    .brand-info > p { display: none; }
-    
-    
-    
-    .hero-content h1 {
-        font-size: var(--font-size-2xl);
-    }
-    
-    
-
-    
-
-    /* On mobile toasts live at the bottom — away from the sticky header,
-       matches iOS/Android conventions, and avoids the right-slide animation
-       looking wrong on a full-width container */
-    .toast-container {
-        top: auto;
-        bottom: var(--space-24);
-        right: var(--space-8);
-        left: var(--space-8);
-        max-width: none;
-    }
-
-    .toast {
-        animation-name: slideUp;
-    }
-
-    /* Tab header: let action controls wrap onto their own full-width row */
-    
-
-    /* Analyses search box: fill available space instead of fixed min-width */
-    
-    
-
-    /* Schedule date inputs: grow equally to share the row */
-    .schedule-date-input { flex: 1; min-width: 100px; }
-}
-
-@media (max-width: 480px) {
-
-    /* Reclaim the wasted gutters on phones — content max-width and card
-       padding were tuned for desktop and left large empty margins. */
-    .main-content {
-        padding-left: var(--space-12);
-        padding-right: var(--space-12);
-    }
-
-    .patient-info-panel {
-        padding: var(--space-16) var(--space-16);
-    }
-
-    .analysis-card {
-        padding: var(--space-16);
-    }
-
-    /* Search box + submit button: the button carries a text label
-       ("Search Patient") that doesn't fit next to the input on a phone —
-       stack them instead of clipping/overflowing horizontally */
-    .search-input-row {
-        flex-direction: column;
-    }
-
-    .search-input-box {
-        padding: var(--space-10) var(--space-12);
-    }
-
-    .search-submit-btn {
-        justify-content: center;
-        padding: var(--space-12) var(--space-14);
-    }
-
-    .ai-summary-card {
-        margin-bottom: var(--space-16);
-    }
-
-    .ai-summary-header {
-        padding: var(--space-8) var(--space-12);
-    }
-
-    .ai-summary-text {
-        padding: var(--space-12) var(--space-14);
-    }
-
-    /* Diagnosis badge can be a full sentence — never force it to
-       stay on one line, or it overflows the viewport horizontally */
-    .patient-badge {
-        white-space: normal;
-    }
-
-    /* Refresh sits inline with the name on wider screens; on phones there's
-       no room for both, so drop it to its own full-width row instead */
-    .patient-name-row .schedule-refresh-btn {
-        flex-basis: 100%;
-        justify-content: center;
-        padding: var(--space-8) var(--space-16);
-    }
-
-    .hero-content h1 {
-        font-size: var(--font-size-xl);
-    }
-
-    .patient-main-info h1 {
-        font-size: var(--font-size-xl);
-    }
-
-    .patient-hero-name {
-        font-size: var(--font-size-28);
-    }
-
-    .tab-title {
-        font-size: var(--font-size-28);
-    }
-
-    .analyses-chips {
-        gap: var(--space-6);
-    }
-
-    .chip {
-        padding: var(--space-6) var(--space-10);
-        font-size: var(--font-size-xs);
-    }
-
-    .patient-stats-strip {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: var(--space-16) var(--space-8);
-    }
-
-    .patient-stats-strip .stat-pill {
-        flex: 0 1 28%;
-    }
-
-    .stat-pill-value {
-        font-size: var(--font-size-2xl);
-    }
-
-    /* Report/AI tab: reclaim the desktop-tuned padding and gaps so the
-       card content uses the available phone width instead of floating
-       in a sea of margin */
-    .report-header {
-        margin-bottom: var(--space-16);
-    }
-
-    .report-card {
-        padding: var(--space-16);
-        gap: var(--space-16);
-    }
-
-    .report-identity-grid {
-        gap: var(--space-10);
-    }
-
-    /* When the header wraps, keep the AI/copy pill pinned to the right
-       instead of it landing flush against the left edge on its own line */
-    .report-header .card-toolbar,
-    .epicrisis-header .card-toolbar {
-        margin-left: auto;
-    }
-
-    .stat-pill-label {
-        white-space: nowrap;
-    }
-
-    .info-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .search-hero-title {
-        font-size: clamp(var(--font-size-28), 8vw, var(--font-size-46));
-    }
-
-    /* Tab header actions: stack vertically and stretch to full width */
-    
-
-    /* Full-width buttons in main content — scoped so modal footers and
-       toolbar buttons (schedule-refresh-btn) are unaffected */
-    .main-content .btn-primary:not(.schedule-refresh-btn),
-    .main-content .btn-secondary:not(.schedule-refresh-btn) {
-        width: 100%;
-        justify-content: center;
-    }
-
-    /* Larger touch targets on mobile */
-    .btn-icon {
-        width: 44px;
-        height: 44px;
-    }
-
-    .btn-secondary {
-        padding: var(--space-16) var(--space-24);
-    }
-
-    /* Schedule header: hide dash separator between dates when stacked */
-    .schedule-date-sep { display: none; }
-
-    /* Schedule filters: full-width on mobile */
-    .schedule-filter-input,
-    .schedule-filter-select,
-    .schedule-date-input {
-        min-width: 0;
-        flex: 1 1 100%;
-        width: 100%;
-    }
-
-    .schedule-filters {
-        gap: var(--space-4);
-        flex-wrap: wrap;
-    }
-    .schedule-filters-spacer { display: none; }
-    .schedule-ward-pill {
-        margin-left: 0;
-        width: 100%;
-        justify-content: space-between;
-    }
-
-    /* Schedule tab's refresh button (not the patient-header one, which is
-       already handled above): stretch full-width but keep it compact
-       rather than inheriting the generic larger mobile touch padding */
-    #refreshScheduleBtn {
-        margin-left: 0;
-        width: 100%;
-        justify-content: center;
-        padding: var(--space-8) var(--space-16);
-    }
-}
-
-/* Wider than the 480px phone breakpoint above, but still narrow enough
-   that the card-title-row wraps and drops the AI/copy toolbar onto its
-   own line below the title — same treatment, just a taller ceiling so it
-   isn't left as a narrow fit-content pill floating short of the card's
-   full width (which the report/lab table below it does use). */
-@media (max-width: 700px) {
-    .card-toolbar {
-        display: flex;
-        width: 100%;
-    }
-    .card-toolbar .btn-ai,
-    .card-toolbar .copy-md-btn {
-        flex: 1;
-        padding: var(--space-10) var(--space-12);
-    }
-    .card-toolbar .btn-ai,
-    .card-toolbar .copy-md-btn {
-        justify-content: center;
-    }
-
 }
 
 /* Honour the OS reduced-motion preference */
@@ -3292,82 +2972,6 @@ select {
 .timeline-status-badge.status-revoked  { color: var(--muted);       background: color-mix(in srgb,var(--muted)       12%,transparent); }
 .timeline-status-badge.status-error    { color: var(--urgent);      background: color-mix(in srgb,var(--urgent)      12%,transparent); }
 
-/* Mobile timeline — stack time above card */
-@media (max-width: 600px) {
-    .timeline-row {
-        grid-template-columns: 1fr;
-        gap: var(--space-4);
-    }
-    .timeline-time-col {
-        flex-direction: row;
-        align-items: center;
-        gap: var(--space-8);
-        padding-top: 8px;
-    }
-    .timeline-time { padding-top: 0; font-size: var(--font-size-13); }
-    /* Drop the desktop halo ring — at this size it just reads as a smudge
-       next to the time, and reset to size against the actual dot pixel,
-       not the padded time label above it */
-    .timeline-dot {
-        margin-top: 0;
-        box-shadow: none !important;
-    }
-    .timeline-line { display: none; }
-    /* Grid instead of flex: avatar in its own column, name+region stacked
-       in the middle column (between the icon and the status pill), badge
-       pinned top-right, meta spanning the full width below. Flex-wrap
-       couldn't express "stack these two, but only in the middle column"
-       without an extra wrapper element — grid-template-areas does it
-       directly. .timeline-card-body only exists to group these in the
-       markup — unwrap it so its children can join the grid directly. */
-    .timeline-card {
-        display: grid;
-        grid-template-columns: auto 1fr auto;
-        grid-template-areas:
-            "avatar name   badge"
-            "avatar region .";
-        column-gap: var(--space-12);
-        row-gap: 2px;
-        min-width: 0;
-    }
-    .timeline-mod-avatar { grid-area: avatar; width: var(--space-40); height: var(--space-40); font-size: var(--font-size-xs); }
-    .timeline-card-body { display: contents; }
-    .timeline-patient-row { grid-area: name; min-width: 0; }
-    .timeline-card-patient { flex: 1; min-width: 0; }
-    .timeline-status-badge { grid-area: badge; align-self: start; }
-    .timeline-card-region { grid-area: region; margin-top: 0; }
-    /* Not part of the template above, so it auto-places into an implicit
-       3rd row — just needs to span every column to read full-width */
-    .timeline-card-meta { grid-column: 1 / -1; }
-
-    /* Switch from flex to normal inline text flow — flex-wrap's line
-       packing is decided from each item's hypothetical (max-content)
-       width, which doesn't match its actual post-wrap size once the
-       physician name wraps to multiple lines, so a flex-basis:100%
-       "breaker" ends up sharing a line with it instead of starting
-       below it. Plain inline flow wraps predictably like a paragraph. */
-    .timeline-card-meta {
-        display: block;
-        white-space: normal;
-        overflow: visible;
-    }
-    .timeline-card-meta > * {
-        display: inline;
-    }
-    .timeline-card-meta i {
-        margin-right: 3px;
-    }
-    .timeline-meta-sep {
-        margin: 0 var(--space-4);
-    }
-    /* Forces a real line break before the code/id/pay-badge group */
-    .timeline-meta-requester + .timeline-meta-sep {
-        display: block;
-        height: var(--space-4);
-        visibility: hidden;
-    }
-}
-
 /* Date range + limit + refresh */
 .schedule-actions {
     display: flex;
@@ -3484,7 +3088,7 @@ select {
     align-items: flex-end;
     gap: var(--space-24);
     margin-bottom: var(--space-32);
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
 }
 /* :not() keeps this off .card-toolbar, which is also a plain <div> child
    of .epicrisis-header and would otherwise inherit flex-grow:1 from this
@@ -3628,12 +3232,11 @@ select {
 .epi-copy-btn[hidden] { display: none; }
 
 .epi-card-inner {
-    padding: 0 var(--space-24) var(--space-24);
+    padding: var(--space-24);
     border-top: 1px solid var(--border);
 }
 
 .epi-prose {
-    margin-top: var(--space-20);
     font: 400 var(--font-size-15)/1.7 'Inter', sans-serif;
     color: var(--text-light);
     text-wrap: pretty;
@@ -3644,12 +3247,12 @@ select {
 /* Epicrisis toolbar reuses .card-toolbar for its base pill look (see that
    rule up top) — just needs positioning within the accordion body, plus a
    bit of extra breathing room above/below that only this spot asked for. */
-.epi-card-inner .card-toolbar {
+.epi-card-body>.card-toolbar {
     width: 100%;
     margin: var(--space-16) 0 var(--space-12);
 }
-.epi-card-inner .card-toolbar .btn-ai,
-.epi-card-inner .card-toolbar .copy-md-btn {
+.epi-card-body>.card-toolbar .btn-ai,
+.epi-card-body>.card-toolbar .copy-md-btn {
     flex: 1;
     justify-content: center;
     padding: var(--space-10) var(--space-12);
@@ -3946,40 +3549,6 @@ dialog.modal article > footer {
     justify-content: flex-end;
     gap: var(--space-8);
     flex-shrink: 0;
-}
-
-@media (max-width: 480px) {
-    dialog.report-modal {
-        width: 96vw;
-        max-height: 82vh;
-        margin: auto;
-    }
-
-    .report-modal-footer {
-        flex-direction: column-reverse;
-        align-items: stretch;
-    }
-
-    .report-modal-footer .btn-primary,
-    .report-modal-footer .btn-secondary {
-        width: 100%;
-        justify-content: center;
-    }
-
-    .report-modal-body {
-        padding: var(--space-8) var(--space-16);
-    }
-
-    /* Same treatment as the analysis-card identity block: smaller avatar,
-       tighter header padding to reclaim margin on a phone-width sheet */
-    .report-modal-header {
-        padding: var(--space-16) var(--space-16) var(--space-12);
-    }
-    .modal-mod-circle,
-    .modal-mod-circle svg {
-        width: var(--space-40);
-        height: var(--space-40);
-    }
 }
 
 @keyframes modal-pop {
@@ -4280,4 +3849,420 @@ dialog.report-editor-modal article > section {
 .switch-label {
     font-size: var(--font-size-sm);
     color: var(--muted);
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+    :root { --header-height: 110px; }
+    
+    .patient-stats-strip {
+        gap: var(--space-16);
+    }
+
+    .app-bar {
+        height: auto;
+        flex-wrap: wrap;
+        padding: 0 var(--space-16);
+        align-items: center;
+    }
+
+    /* Row 1: brand | search+schedule (app-nav) | spacer | end controls */
+    .app-bar-brand {
+        height: 60px;
+        border-right: none;
+        padding-right: 0;
+        margin-right: 0;
+    }
+
+    /* .app-bar switches from align-items:stretch to :center above (so
+       row 1's mixed-height items — the 60px brand, everything else auto
+       — don't get force-stretched oddly), which left #appNav sized to
+       its own content and vertically centered instead of reaching the
+       row's bottom edge — the active underline stopped ~20px short of
+       it. Match the brand's explicit height so the stretch chain works
+       again down to .nav-btn (already align-self: stretch). */
+    #appNav {
+        height: 60px;
+        align-self: auto;
+    }
+
+    /* Row 2: patient sub-nav, full width, pushed last via order */
+    #navPatientGroup {
+        order: 10;
+        width: 100%;
+        height: 50px;
+        border-top: 1px solid var(--border);
+        justify-content: space-around;
+        align-items: stretch;
+    }
+
+    /* Patient tab buttons: spread evenly */
+    #navPatientGroup .nav-btn {
+        flex: 1;
+        justify-content: center;
+        padding: 0;
+        height: 100%;
+    }
+
+    /* Separator and patient pill not needed in the flat icon row */
+    .nav-sep { display: none; }
+    .patient-ctx-pill { display: none; }
+}
+
+@media (max-width: 800px) {
+    /* Header stays a single row (search-quick is hidden, so brand + 2 icon
+       buttons fit in ~72px) — no need to make it static or re-pin the nav. */
+
+    /* Hide tagline in compact single-row header */
+    .brand-info > p { display: none; }
+
+    .hero-content h1 {
+        font-size: var(--font-size-2xl);
+    }
+
+    /* On mobile toasts live at the bottom — away from the sticky header,
+       matches iOS/Android conventions, and avoids the right-slide animation
+       looking wrong on a full-width container */
+    .toast-container {
+        top: auto;
+        bottom: var(--space-24);
+        right: var(--space-8);
+        left: var(--space-8);
+        max-width: none;
+    }
+
+    .toast {
+        animation-name: slideUp;
+    }
+
+    /* Tab header: let action controls wrap onto their own full-width row */
+    
+
+    /* Analyses search box: fill available space instead of fixed min-width */
+    
+    
+
+    /* Schedule date inputs: grow equally to share the row */
+    .schedule-date-input { flex: 1; min-width: 100px; }
+}
+
+/* Mobile timeline — stack time above card */
+@media (max-width: 700px) {
+    .timeline-row {
+        grid-template-columns: 1fr;
+        gap: var(--space-4);
+    }
+    .timeline-time-col {
+        flex-direction: row;
+        align-items: center;
+        gap: var(--space-8);
+        padding-top: 8px;
+    }
+    .timeline-time { padding-top: 0; font-size: var(--font-size-13); }
+    /* Drop the desktop halo ring — at this size it just reads as a smudge
+       next to the time, and reset to size against the actual dot pixel,
+       not the padded time label above it */
+    .timeline-dot {
+        margin-top: 0;
+        box-shadow: none !important;
+    }
+    .timeline-line { display: none; }
+    /* Grid instead of flex: avatar in its own column, name+region stacked
+       in the middle column (between the icon and the status pill), badge
+       pinned top-right, meta spanning the full width below. Flex-wrap
+       couldn't express "stack these two, but only in the middle column"
+       without an extra wrapper element — grid-template-areas does it
+       directly. .timeline-card-body only exists to group these in the
+       markup — unwrap it so its children can join the grid directly. */
+    .timeline-card {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        grid-template-areas:
+            "avatar name   badge"
+            "avatar region .";
+        column-gap: var(--space-12);
+        row-gap: 2px;
+        min-width: 0;
+    }
+    .timeline-mod-avatar { grid-area: avatar; width: var(--space-40); height: var(--space-40); font-size: var(--font-size-xs); }
+    .timeline-card-body { display: contents; }
+    .timeline-patient-row { grid-area: name; min-width: 0; }
+    .timeline-card-patient { flex: 1; min-width: 0; }
+    .timeline-status-badge { grid-area: badge; align-self: start; }
+    .timeline-card-region { grid-area: region; margin-top: 0; }
+    /* Not part of the template above, so it auto-places into an implicit
+       3rd row — just needs to span every column to read full-width */
+    .timeline-card-meta { grid-column: 1 / -1; }
+
+    /* Switch from flex to normal inline text flow — flex-wrap's line
+       packing is decided from each item's hypothetical (max-content)
+       width, which doesn't match its actual post-wrap size once the
+       physician name wraps to multiple lines, so a flex-basis:100%
+       "breaker" ends up sharing a line with it instead of starting
+       below it. Plain inline flow wraps predictably like a paragraph. */
+    .timeline-card-meta {
+        display: block;
+        white-space: normal;
+        overflow: visible;
+    }
+    .timeline-card-meta > * {
+        display: inline;
+    }
+    .timeline-card-meta i {
+        margin-right: 3px;
+    }
+    .timeline-meta-sep {
+        margin: 0 var(--space-4);
+    }
+    /* Forces a real line break before the code/id/pay-badge group */
+    .timeline-meta-requester + .timeline-meta-sep {
+        display: block;
+        height: var(--space-4);
+        visibility: hidden;
+    }
+}
+
+/* Very narrow: hide wordmark and collapse patient nav to icon-only */
+@media (max-width: 600px) {
+    .brand-wordmark { display: none; }
+    #navPatientGroup .nav-btn span { display: none; }
+    #navPatientGroup .nav-btn i { font-size: var(--font-size-sm); }
+}
+
+@media (max-width: 480px) {
+    .card-toolbar {
+        display: flex;
+        width: 100%;
+    }
+    .card-toolbar .btn-ai,
+    .card-toolbar .copy-md-btn {
+        flex: 1;
+        padding: var(--space-10) var(--space-12);
+    }
+    .card-toolbar .btn-ai,
+    .card-toolbar .copy-md-btn {
+        justify-content: center;
+    }
+
+    dialog.report-modal {
+        width: 96vw;
+        max-height: 82vh;
+        margin: auto;
+    }
+
+    .report-modal-footer {
+        flex-direction: column-reverse;
+        align-items: stretch;
+    }
+
+    .report-modal-footer .btn-primary,
+    .report-modal-footer .btn-secondary {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .report-modal-body {
+        padding: var(--space-8) var(--space-16);
+    }
+
+    /* Same treatment as the analysis-card identity block: smaller avatar,
+       tighter header padding to reclaim margin on a phone-width sheet */
+    .report-modal-header {
+        padding: var(--space-16) var(--space-16) var(--space-12);
+    }
+    .modal-mod-circle,
+    .modal-mod-circle svg {
+        width: var(--space-40);
+        height: var(--space-40);
+    }
+
+    /* Reclaim the wasted gutters on phones — content max-width and card
+       padding were tuned for desktop and left large empty margins. */
+    .main-content {
+        padding-left: var(--space-12);
+        padding-right: var(--space-12);
+    }
+
+    .patient-info-panel {
+        padding: var(--space-16) var(--space-16);
+    }
+
+    .analysis-card {
+        padding: var(--space-16);
+    }
+
+    /* Search box + submit button: the button carries a text label
+       ("Search Patient") that doesn't fit next to the input on a phone —
+       stack them instead of clipping/overflowing horizontally */
+    .search-input-row {
+        flex-direction: column;
+    }
+
+    .search-input-box {
+        padding: var(--space-10) var(--space-12);
+    }
+
+    .search-submit-btn {
+        justify-content: center;
+        padding: var(--space-12) var(--space-14);
+    }
+
+    .ai-summary-card {
+        margin-bottom: var(--space-16);
+    }
+
+    .ai-summary-header {
+        padding: var(--space-8) var(--space-12);
+    }
+
+    .ai-summary-text {
+        padding: var(--space-12) var(--space-14);
+    }
+
+    .ai-summary-header .card-toolbar {
+        width: auto;
+    }
+
+    /* Diagnosis badge can be a full sentence — never force it to
+       stay on one line, or it overflows the viewport horizontally */
+    .patient-badge {
+        white-space: normal;
+    }
+
+    /* Refresh sits inline with the name on wider screens; on phones there's
+       no room for both, so drop it to its own full-width row instead */
+    .patient-name-row .schedule-refresh-btn {
+        flex-basis: 100%;
+        justify-content: center;
+        padding: var(--space-8) var(--space-16);
+    }
+
+    .hero-content h1 {
+        font-size: var(--font-size-xl);
+    }
+
+    .patient-main-info h1 {
+        font-size: var(--font-size-xl);
+    }
+
+    .patient-hero-name {
+        font-size: var(--font-size-28);
+    }
+
+    .tab-title {
+        font-size: var(--font-size-28);
+    }
+
+    .analyses-chips {
+        gap: var(--space-6);
+    }
+
+    .chip {
+        padding: var(--space-6) var(--space-10);
+        font-size: var(--font-size-xs);
+    }
+
+    .patient-stats-strip {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: var(--space-16) var(--space-8);
+    }
+
+    .patient-stats-strip .stat-pill {
+        flex: 0 1 28%;
+    }
+
+    .stat-pill-value {
+        font-size: var(--font-size-2xl);
+    }
+
+    /* Report/AI tab: reclaim the desktop-tuned padding and gaps so the
+       card content uses the available phone width instead of floating
+       in a sea of margin */
+    .report-header,
+    .epicrisis-header {
+        margin-bottom: var(--space-16);
+        flex-wrap: wrap;
+    }
+
+    .report-card {
+        padding: var(--space-16);
+        gap: var(--space-16);
+    }
+
+    .report-identity-grid {
+        gap: var(--space-10);
+    }
+
+    /* When the header wraps, keep the AI/copy pill pinned to the right
+       instead of it landing flush against the left edge on its own line */
+    .report-header .card-toolbar,
+    .epicrisis-header .card-toolbar {
+        margin-left: auto;
+        align-self: flex-end;
+    }
+
+    .stat-pill-label {
+        white-space: nowrap;
+    }
+
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .search-hero-title {
+        font-size: clamp(var(--font-size-28), 8vw, var(--font-size-46));
+    }
+
+    /* Full-width buttons in main content — scoped so modal footers and
+       toolbar buttons (schedule-refresh-btn) are unaffected */
+    .main-content .btn-primary:not(.schedule-refresh-btn),
+    .main-content .btn-secondary:not(.schedule-refresh-btn) {
+        width: 100%;
+        justify-content: center;
+    }
+
+    /* Larger touch targets on mobile */
+    .btn-icon {
+        width: 44px;
+        height: 44px;
+    }
+
+    .btn-secondary {
+        padding: var(--space-16) var(--space-24);
+    }
+
+    /* Schedule header: hide dash separator between dates when stacked */
+    .schedule-date-sep { display: none; }
+
+    /* Schedule filters: full-width on mobile */
+    .schedule-filter-input,
+    .schedule-filter-select,
+    .schedule-date-input {
+        min-width: 0;
+        flex: 1 1 100%;
+        width: 100%;
+    }
+
+    .schedule-filters {
+        gap: var(--space-4);
+        flex-wrap: wrap;
+    }
+    .schedule-filters-spacer { display: none; }
+    .schedule-ward-pill {
+        margin-left: 0;
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    /* Schedule tab's refresh button (not the patient-header one, which is
+       already handled above): stretch full-width but keep it compact
+       rather than inheriting the generic larger mobile touch padding */
+    #refreshScheduleBtn {
+        margin-left: 0;
+        width: 100%;
+        justify-content: center;
+        padding: var(--space-8) var(--space-16);
+    }
 }
