@@ -1502,6 +1502,16 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    function stripOuterFence(text) {
+        if (!text) return text;
+        const lines = text.split('\n');
+        const fenceRe = /^```\w*\s*$/;
+        if (lines.length > 2 && fenceRe.test(lines[0].trimEnd()) && fenceRe.test(lines[lines.length - 1].trimStart())) {
+            return lines.slice(1, -1).join('\n').trimStart();
+        }
+        return text;
+    }
+
     // Place `card` immediately before `anchor`; if the anchor is missing but
     // an `intoParent` container is given, prepend into it instead.
     function placeAiCard(card, anchor, intoParent) {
@@ -1540,7 +1550,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const body = card.querySelector('.ai-summary-body');
                 card.classList.remove('ai-card-error');
                 body.classList.remove('ai-summary-loading');
-                body.innerHTML = marked.parse(cached || '_(empty response)_');
+                body.innerHTML = marked.parse(stripOuterFence(cached || '_(empty response)_'));
                 body.dataset.markdown = cached || '_(empty response)_';
             } catch (_) {
                 // Silent — an auto-probe failure shouldn't surface to the user.
@@ -1576,12 +1586,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     body.textContent = full;
                 });
                 body.classList.remove('ai-summary-streaming');
-                body.innerHTML = marked.parse(full || '_(empty response)_');
+                body.innerHTML = marked.parse(stripOuterFence(full || '_(empty response)_'));
                 body.dataset.markdown = full || '_(empty response)_';
             } else {
                 const summary = await aiSummarize(kind, text, { force: true });
                 body.classList.remove('ai-summary-loading');
-                body.innerHTML = marked.parse(summary || '_(empty response)_');
+                body.innerHTML = marked.parse(stripOuterFence(summary || '_(empty response)_'));
                 body.dataset.markdown = summary || '_(empty response)_';
             }
         } catch (err) {
@@ -1622,7 +1632,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (badge) badge.hidden = true;
         const body = card.querySelector('.ai-summary-body');
         body.classList.remove('ai-summary-loading');
-        body.innerHTML = marked.parse('**All lab values are within their reference intervals.**');
+        body.innerHTML = marked.parse(stripOuterFence('**All lab values are within their reference intervals.**'));
         body.dataset.markdown = '**All lab values are within their reference intervals.**';
     }
 
