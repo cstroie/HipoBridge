@@ -3994,16 +3994,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 cardCopyBtn.onclick = () => copyMarkdown(cardCopyBtn, cardCopyBtn, () => flashIcon(cardCopyBtn));
             }
 
-            // AI triage summary — imaging reports only (not lab value tables).
-            // Uses the report markdown; card renders above the report body.
-            if (cardAiBtn && copyMd && !copyIsLab) {
-                cardAiBtn.dataset.aiText = copyMd;
-                cardAiBtn.hidden = false;
-                cardAiBtn.onclick = () => runAiSummary(
-                    cardAiBtn, 'imaging',
-                    () => article.querySelector('.report-body'),
-                    () => cardAiBtn.dataset.aiText || '',
-                    { inline: true });
+                // AI triage summary — imaging reports only (not lab value tables).
+                // Uses the report markdown; card renders above the report body.
+                if (cardAiBtn && copyMd && !copyIsLab) {
+                    cardAiBtn.dataset.aiText = copyMd;
+                    cardAiBtn.hidden = false;
+                    cardAiBtn.onclick = () => runAiSummary(
+                        cardAiBtn, 'imaging',
+                        () => article.querySelector('.report-body'),
+                        () => cardAiBtn.dataset.aiText || '',
+                        { inline: true });
                 // Silently redisplay a previously generated summary for this
                 // report, if any (mirrors lab/epicrisis/report/pre_exam).
                 runAiSummary(
@@ -4011,8 +4011,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     () => article.querySelector('.report-body'),
                     () => cardAiBtn.dataset.aiText || '',
                     { inline: true, auto: true });
-                enqueueAiWarm('imaging', copyMd, dataGeneration);
-            }
+                //enqueueAiWarm('imaging', copyMd, dataGeneration);
+                }
 
             // ImagingStudy link
             const imagingStudyLink = article.querySelector('.imaging-study-link');
