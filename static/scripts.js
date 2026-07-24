@@ -1494,6 +1494,14 @@ document.addEventListener('DOMContentLoaded', function() {
         return card;
     }
 
+    function wireAiCardCopy(card) {
+        const copyBtn = card.querySelector('.ai-copy-btn');
+        const body = card.querySelector('.ai-summary-body');
+        if (copyBtn && body) {
+            copyBtn.addEventListener('click', () => copyMarkdown(body, copyBtn, () => flashIcon(copyBtn)));
+        }
+    }
+
     // Place `card` immediately before `anchor`; if the anchor is missing but
     // an `intoParent` container is given, prepend into it instead.
     function placeAiCard(card, anchor, intoParent) {
@@ -1520,6 +1528,7 @@ document.addEventListener('DOMContentLoaded', function() {
         let card = button._aiCard;
         if (!card || !card.isConnected) {
             card = makeAiCard(opts.inline);
+            wireAiCardCopy(card);
             button._aiCard = card;
         }
 
@@ -1532,6 +1541,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 card.classList.remove('ai-card-error');
                 body.classList.remove('ai-summary-loading');
                 body.innerHTML = marked.parse(cached || '_(empty response)_');
+                body.dataset.markdown = cached || '_(empty response)_';
             } catch (_) {
                 // Silent — an auto-probe failure shouldn't surface to the user.
             }
@@ -1543,7 +1553,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const body = card.querySelector('.ai-summary-body');
         card.classList.remove('ai-card-error');
         body.classList.add('ai-summary-loading');
-        body.textContent = 'Generating…';
+        body.textContent = 'Waiting for data…';
         button.disabled = true;
         try {
             if (STREAMING_KINDS.has(kind)) {
@@ -1551,7 +1561,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 let first = true;
                 await aiSummarizeStream(kind, text, (piece) => {
                     if (first) {
-                        // First chunk arrived — drop the "Generating…"
+                        // First chunk arrived — drop the "Waiting for data…"
                         // placeholder and render plain text incrementally.
                         // No partial-Markdown parsing: a half-finished
                         // "### heading" or "**bold" mid-stream renders broken,
@@ -1567,16 +1577,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
                 body.classList.remove('ai-summary-streaming');
                 body.innerHTML = marked.parse(full || '_(empty response)_');
+                body.dataset.markdown = full || '_(empty response)_';
             } else {
                 const summary = await aiSummarize(kind, text, { force: true });
                 body.classList.remove('ai-summary-loading');
                 body.innerHTML = marked.parse(summary || '_(empty response)_');
+                body.dataset.markdown = summary || '_(empty response)_';
             }
         } catch (err) {
             console.error(`AI summary failed (${kind}):`, err);
             body.classList.remove('ai-summary-loading', 'ai-summary-streaming');
             card.classList.add('ai-card-error');
             body.textContent = `AI summary failed: ${err.message}`;
+            body.dataset.markdown = `AI summary failed: ${err.message}`;
         } finally {
             button.disabled = false;
         }
@@ -1600,6 +1613,7 @@ document.addEventListener('DOMContentLoaded', function() {
         let card = button._aiCard;
         if (!card || !card.isConnected) {
             card = makeAiCard(true);
+            wireAiCardCopy(card);
             button._aiCard = card;
         }
         placeAiCard(card, elements.trendsContainer?.firstChild || null, elements.trendsContainer);
@@ -1609,6 +1623,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const body = card.querySelector('.ai-summary-body');
         body.classList.remove('ai-summary-loading');
         body.innerHTML = marked.parse('**All lab values are within their reference intervals.**');
+        body.dataset.markdown = '**All lab values are within their reference intervals.**';
     }
 
     async function loadAndDisplayReport(patientData, analysesData) {
