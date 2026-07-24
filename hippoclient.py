@@ -3606,7 +3606,15 @@ class HippoClientCerere(HippoClient):
                 elif 'tre_class_generic_1' in classes and current_anl_id:
                     cells = row.find_all('td', class_='tdh')
                     if len(cells) >= 2 and 'Rezultat' in cells[0].get_text():
-                        text = cells[1].get_text(strip=True)
+                        # Convert div/p tags to newlines, then extract plain text
+                        result_cell = cells[1]
+                        for div in result_cell.find_all('div'):
+                            div.insert_after('\n\n')
+                            div.unwrap()
+                        for p in result_cell.find_all('p'):
+                            p.insert_after('\n\n')
+                            p.unwrap()
+                        text = result_cell.get_text(strip=True)
                         if text:
                             validate_entries[current_anl_id]['text'] = text
 

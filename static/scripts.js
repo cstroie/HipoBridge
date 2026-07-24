@@ -2753,8 +2753,22 @@ document.addEventListener('DOMContentLoaded', function() {
     // shows any surviving <p> literally. Sending plain text with a blank line
     // between sentences avoids both: no tags to strip or leak, and Hipocrate's
     // own storage/preview appears to turn real newlines into visible breaks.
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
     function textToReportHtml(text) {
-        return text.trim().split('\n').filter(Boolean).join('\n \n');
+        const paragraphs = text.trim().split('\n').filter(Boolean);
+        if (paragraphs.length === 0) return '';
+
+        // First paragraph unwrapped, rest wrapped in <div>
+        const html = paragraphs.map((para, i) =>
+            i === 0 ? escapeHtml(para) : `<div>${escapeHtml(para)}</div>`
+        ).join('\n');
+
+        return html;
     }
 
     function displayPatientData(patientData) {
