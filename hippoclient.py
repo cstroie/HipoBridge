@@ -3609,12 +3609,13 @@ class HippoClientCerere(HippoClient):
                         # Convert div/p tags to newlines, then extract plain text
                         result_cell = cells[1]
                         for div in result_cell.find_all('div'):
-                            div.insert_after('\n\n')
+                            div.insert_after('\n')
                             div.unwrap()
                         for p in result_cell.find_all('p'):
-                            p.insert_after('\n\n')
+                            p.insert_after('\n')
                             p.unwrap()
-                        text = result_cell.get_text(strip=True)
+                        text = result_cell.get_text(strip=False)
+                        text = text.strip()
                         if text:
                             validate_entries[current_anl_id]['text'] = text
 
@@ -4678,6 +4679,22 @@ def _invalidate_observation_bundle_from_cerere_cache(client: 'HippoClient', cere
         HippoClientObservationBundle.invalidate_cache(patient_id)
 
 
+def _text_to_report_html(text: str) -> str:
+    """Convert plain text to Hipocrate report HTML format.
+
+    Hipocrate stores reports with: first paragraph unwrapped, rest in <div> tags.
+    Input:  "First\\nSecond\\nThird"
+    Output: "First<div>Second</div><div>Third</div>"
+    """
+    import html as html_module
+    paragraphs = [p for p in text.strip().split('\n') if p]
+    if not paragraphs:
+        return ''
+    first = html_module.escape(paragraphs[0])
+    rest = ''.join(f'<div>{html_module.escape(p)}</div>' for p in paragraphs[1:])
+    return first + rest
+
+
 class HippoClientReportWrite(HippoClient):
     """Write a radiology report result via Hipocrate Rezultate.asp.
 
@@ -4718,10 +4735,11 @@ class HippoClientReportWrite(HippoClient):
         field_code = field_el["name"][1:]  # strip leading 'v'
         logger.info(f"ReportWrite: field_code={field_code} url={rez_url}")
 
-        # Step 3 — POST the report text
+        # Step 3 — POST the report text (convert to Hipocrate HTML format)
+        report_html = _text_to_report_html(text)
         post_data = {
-            f"v{field_code}": text,
-            f"v{field_code}HtmlArea": text,
+            f"v{field_code}": report_html,
+            f"v{field_code}HtmlArea": report_html,
             "intCodeIDJ": anl_id,
             f"h{field_code}": "",
             "hdnAction": "S",

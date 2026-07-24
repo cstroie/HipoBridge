@@ -2753,23 +2753,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // shows any surviving <p> literally. Sending plain text with a blank line
     // between sentences avoids both: no tags to strip or leak, and Hipocrate's
     // own storage/preview appears to turn real newlines into visible breaks.
-    function escapeHtml(str) {
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
-    }
-
-    function textToReportHtml(text) {
-        const paragraphs = text.trim().split('\n').filter(Boolean);
-        if (paragraphs.length === 0) return '';
-
-        // First paragraph unwrapped, rest wrapped in <div>
-        const html = paragraphs.map((para, i) =>
-            i === 0 ? escapeHtml(para) : `<div>${escapeHtml(para)}</div>`
-        ).join('\n');
-
-        return html;
-    }
 
     function displayPatientData(patientData) {
         log('Displaying patient data:', patientData);
@@ -4267,11 +4250,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 for (const { ta, anl_id } of textareas) {
                     const text = ta.value.trim();
                     if (!text) continue;
-                    const html = textToReportHtml(text);
                     const resp = await apiFetch(`/api/request/${cerereId}/report`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ anl_id, text: html }),
+                        body: JSON.stringify({ anl_id, text }),
                     });
                     if (!resp.ok) {
                         const msg = await resp.text().catch(() => `HTTP ${resp.status}`);

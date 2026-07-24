@@ -12,3 +12,5 @@
 - [ ] After log in, check whoami to get the user's name and permissions.
 
 - [ ] Do not automatically generate the AI content after patient load.
+
+- [ ] Add support for "in progress" (perfomed, i think), and 'cancelled' exam status
