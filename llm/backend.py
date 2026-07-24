@@ -60,6 +60,7 @@ class ServerBackend:
             "messages": messages,
             "max_tokens": max_tokens,
             "temperature": temperature,
+            "reasoning": {"effort": "none"},
         }
         async with _llm_semaphore:
             async with self._client().post(
