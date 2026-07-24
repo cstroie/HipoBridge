@@ -33,7 +33,7 @@ from datetime import datetime
 
 from markdown import html_to_markdown
 
-logger = logging.getLogger('HipoExtractor')
+logger = logging.getLogger('HippoExtractor')
 
 
 def parse_date_time(date_str: str) -> Optional[datetime]:

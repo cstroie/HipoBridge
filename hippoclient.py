@@ -22,14 +22,14 @@ different types of medical data retrieval and parsing, with support for authenti
 caching, and FHIR-compatible data formatting.
 
 Key features:
-- HipoClient: Base client for general Hipocrate service interactions
-- HipoClientPatient: Specialized client for patient data
-- HipoClientPatientSearch: Specialized client for patient search operations
-- HipoClientCheckout: Specialized client for patient discharge/checkout data
-- HipoClientServiceRequest: Specialized client for medical service requests
-- HipoClientServiceRequestSearch: Specialized client for service request search operations
-- HipoClientImagingStudy: Specialized client for imaging study data
-- HipoClientDiagnosticReport: Specialized client for diagnostic report data
+- HippoClient: Base client for general Hipocrate service interactions
+- HippoClientPatient: Specialized client for patient data
+- HippoClientPatientSearch: Specialized client for patient search operations
+- HippoClientCheckout: Specialized client for patient discharge/checkout data
+- HippoClientServiceRequest: Specialized client for medical service requests
+- HippoClientServiceRequestSearch: Specialized client for service request search operations
+- HippoClientImagingStudy: Specialized client for imaging study data
+- HippoClientDiagnosticReport: Specialized client for diagnostic report data
 - Automatic session management with cookie handling
 - Response caching with LRU eviction and timeout
 - FHIR-compatible data structure conversion
@@ -87,10 +87,10 @@ from fhir import Encounter as FHIREncounter
 from fhir import Bundle as FHIRBundle
 from fhir import Observation as FHIRObservation
 
-# Import HipoData class
-from hipodata import HipoData
+# Import HippoData class
+from hippodata import HippoData
 
-logger = logging.getLogger('HipoClient')
+logger = logging.getLogger('HippoClient')
 
 
 
@@ -144,11 +144,11 @@ ANALYSIS_TYPES = {
 }
 
 # Lab domain IDs on this Hipocrate installation (from analysesALL.asp?type=PA dropdown).
-# These are fetched in parallel alongside imaging domains in HipoClientServiceRequestSearch.
+# These are fetched in parallel alongside imaging domains in HippoClientServiceRequestSearch.
 LAB_DOMAINS = [1, 2, 3, 5, 8, 9, 15, 19, 21, 22, 23, 24, 27, 39, 41]
 
 
-def evict_patient_cache(client: 'HipoClient', patient_id: str) -> None:
+def evict_patient_cache(client: 'HippoClient', patient_id: str) -> None:
     """Force-refresh a patient's demographic, imaging/lab list, and Observation
     data by evicting every cache entry keyed off patient_id.
 
@@ -165,7 +165,7 @@ def evict_patient_cache(client: 'HipoClient', patient_id: str) -> None:
     for domain_id in imaging_domains + LAB_DOMAINS:
         client.cache_remove(client.get_full_url(f"{episode_url}&strDomeniu={domain_id}&NrPePag=100"))
 
-    HipoClientObservationBundle.invalidate_cache(patient_id)
+    HippoClientObservationBundle.invalidate_cache(patient_id)
 
 
 
@@ -320,7 +320,7 @@ class UserSessionManager:
             logger.info(f"Closing session for user {username}")
             await session.close()
         self._authenticated.pop(username, None)
-        HipoClientWhoami.invalidate_cache(username)
+        HippoClientWhoami.invalidate_cache(username)
 
     async def close_all_sessions(self):
         """Close all user sessions and free associated resources."""
@@ -336,7 +336,7 @@ class UserSessionManager:
 user_session_manager = UserSessionManager()
 
 
-class HipoClient:
+class HippoClient:
     """Base client for interacting with the Hipocrate medical system.
 
     Provides core functionality for authenticating with the Hipocrate service,
@@ -783,12 +783,12 @@ class HipoClient:
         logger.info(f"Page retrieved in {duration:.2f}s: {current_url}")
         return response_text, None
 
-    def parse_data(self, html_content: str, **kwargs) -> HipoData:
-        """Override in subclasses to parse Hipocrate HTML into HipoData."""
-        return HipoData(status="error", message="No data")
+    def parse_data(self, html_content: str, **kwargs) -> HippoData:
+        """Override in subclasses to parse Hipocrate HTML into HippoData."""
+        return HippoData(status="error", message="No data")
 
-    def fhir_response(self, parsed_data: HipoData, **kwargs) -> FHIROperationOutcome:
-        """Override in subclasses to convert HipoData to a FHIR resource."""
+    def fhir_response(self, parsed_data: HippoData, **kwargs) -> FHIROperationOutcome:
+        """Override in subclasses to convert HippoData to a FHIR resource."""
         return FHIROperationOutcome.from_error(
             message="No data",
             code="not-supported",
@@ -796,8 +796,8 @@ class HipoClient:
         )
 
     async def fetch_and_parse(self, *args, max_redirects=5, **kwargs):
-        """Fetch request_url (formatted with kwargs) and return parsed HipoData."""
-        data = HipoData(status="success", message="")
+        """Fetch request_url (formatted with kwargs) and return parsed HippoData."""
+        data = HippoData(status="success", message="")
         url = self.request_url.format(**kwargs)
         try:
             response_text, error_message = await self.get_page(url, max_redirects)
@@ -838,7 +838,7 @@ class HipoClient:
 
 
 
-class HipoClientPatient(HipoClient):
+class HippoClientPatient(HippoClient):
     """Specialized client for patient related operations in the Hipocrate medical system.
 
     Handles retrieval and parsing of patient information including personal data,
@@ -849,9 +849,9 @@ class HipoClientPatient(HipoClient):
         super().__init__(service_url=service_url, request=request)
         self.request_url = "/Pacient/edit.asp?id={id}"
 
-    def parse_data(self, html_content: str, **kwargs) -> HipoData:
-        """Parse a Hipocrate patient page into HipoData (patient, presentation, checkin, checkout)."""
-        data = HipoData(status="success")
+    def parse_data(self, html_content: str, **kwargs) -> HippoData:
+        """Parse a Hipocrate patient page into HippoData (patient, presentation, checkin, checkout)."""
+        data = HippoData(status="success")
 
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
@@ -918,8 +918,8 @@ class HipoClientPatient(HipoClient):
             data.set_error(str(e))
             return data
 
-    def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRPatient, FHIROperationOutcome]:
-        """Convert parsed patient HipoData to a FHIR Patient resource."""
+    def fhir_response(self, parsed_data: HippoData, **kwargs) -> Union[FHIRPatient, FHIROperationOutcome]:
+        """Convert parsed patient HippoData to a FHIR Patient resource."""
         http_request = kwargs.get('http_request', self.request)
         patient_id = kwargs.get('id', '')
 
@@ -1039,7 +1039,7 @@ class HipoClientPatient(HipoClient):
             return FHIROperationOutcome.from_exception(e, code="exception")
 
 
-class HipoClientPatientSearch(HipoClientPatient):
+class HippoClientPatientSearch(HippoClientPatient):
     """Specialized client for patient search operations in the Hipocrate medical system.
 
     Handles searching for patients by various criteria including name, CNP (personal identification number),
@@ -1051,7 +1051,7 @@ class HipoClientPatientSearch(HipoClientPatient):
         super().__init__(service_url=service_url, request=request)
         self.request_url = "/files/search.asp?what=PA"
 
-    async def search(self, search_term: str, **kwargs) -> HipoData:
+    async def search(self, search_term: str, **kwargs) -> HippoData:
         """Search for patients by various criteria.
 
         Handles searching for patients by name, CNP, partial CNP, or patient code.
@@ -1062,9 +1062,9 @@ class HipoClientPatientSearch(HipoClientPatient):
             **kwargs: Additional arguments
 
         Returns:
-            HipoData containing search results or error information
+            HippoData containing search results or error information
         """
-        data = HipoData(status="success", message="", patients=[])
+        data = HippoData(status="success", message="", patients=[])
 
         if search_term.isdigit():
             if len(search_term) == 13:
@@ -1146,13 +1146,13 @@ class HipoClientPatientSearch(HipoClientPatient):
             data.set_error(f"Patient search failed: {str(e)}")
             return data
 
-    def parse_one_patient_data(self, html_content: str, **kwargs) -> HipoData:
+    def parse_one_patient_data(self, html_content: str, **kwargs) -> HippoData:
         """Parse a single-patient Hipocrate page (delegates to parse_data)."""
         return self.parse_data(html_content, **kwargs)
 
-    def parse_multiple_patients_data(self, html_content: str) -> HipoData:
-        """Parse a multi-patient Hipocrate search results page into HipoData."""
-        data = HipoData(status="success", message="", patients=[])
+    def parse_multiple_patients_data(self, html_content: str) -> HippoData:
+        """Parse a multi-patient Hipocrate search results page into HippoData."""
+        data = HippoData(status="success", message="", patients=[])
 
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
@@ -1199,7 +1199,7 @@ class HipoClientPatientSearch(HipoClientPatient):
 
         return data
 
-    def fhir_bundle_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRBundle, FHIROperationOutcome]:
+    def fhir_bundle_response(self, parsed_data: HippoData, **kwargs) -> Union[FHIRBundle, FHIROperationOutcome]:
         """Convert parsed patient search data to a FHIR Bundle of Patient resources."""
         http_request = kwargs.get('http_request', self.request)
         
@@ -1248,7 +1248,7 @@ class HipoClientPatientSearch(HipoClientPatient):
             return FHIROperationOutcome.from_exception(e, code="exception")
 
 
-class HipoClientServiceRequest(HipoClient):
+class HippoClientServiceRequest(HippoClient):
     """Specialized client for service request related operations in the Hipocrate medical system.
 
     Handles retrieval and parsing of medical service requests including laboratory
@@ -1260,9 +1260,9 @@ class HipoClientServiceRequest(HipoClient):
         super().__init__(service_url=service_url, request=request)
         self.request_url = "/PARA/Printabile/buletinRecoltari.asp?id={id}"
 
-    def parse_data(self, html_content: str, **kwargs) -> HipoData:
-        """Parse a Hipocrate buletinRecoltari page into HipoData."""
-        data = HipoData(status="success", message="")
+    def parse_data(self, html_content: str, **kwargs) -> HippoData:
+        """Parse a Hipocrate buletinRecoltari page into HippoData."""
+        data = HippoData(status="success", message="")
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
 
@@ -1371,8 +1371,8 @@ class HipoClientServiceRequest(HipoClient):
             data.set_error(str(e))
             return data
 
-    def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRServiceRequest, FHIROperationOutcome]:
-        """Convert parsed service request HipoData to a FHIR ServiceRequest resource.
+    def fhir_response(self, parsed_data: HippoData, **kwargs) -> Union[FHIRServiceRequest, FHIROperationOutcome]:
+        """Convert parsed service request HippoData to a FHIR ServiceRequest resource.
 
         Transforms parsed service request data into a FHIR-compatible ServiceRequest
         resource with proper structure, references, coding systems, and extensions.
@@ -1531,7 +1531,7 @@ class HipoClientServiceRequest(HipoClient):
             return FHIROperationOutcome.from_exception(e, code="exception")
 
 
-class HipoClientServiceRequestSearch(HipoClientServiceRequest):
+class HippoClientServiceRequestSearch(HippoClientServiceRequest):
     """Specialized client for patient search operations in the Hipocrate medical system.
 
     Handles searching for patients by various criteria including name, CNP (personal identification number),
@@ -1544,7 +1544,7 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
         self.request_url_all = "/Pacient/analysesALL.asp?type=PA&pacid={pacid}"
         self.request_url_episode = "/Pacient/analysesEpisod.asp?pacid={pacid}"
 
-    async def search(self, patient_id: str, **kwargs) -> HipoData:
+    async def search(self, patient_id: str, **kwargs) -> HippoData:
         """Search for service requests by patient ID.
 
         Retrieves all service requests associated with a specific patient.
@@ -1557,9 +1557,9 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                      'dt' for filtering by date_time - year will be extracted from this)
 
         Returns:
-            HipoData containing service requests or error information
+            HippoData containing service requests or error information
         """      
-        data = HipoData(status="success", message="")
+        data = HippoData(status="success", message="")
 
         try:
             if kwargs.get('type'):
@@ -1592,7 +1592,7 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                     url = (self.request_url_episode + f"&strDomeniu={domain_id}&NrPePag=100").format(pacid=patient_id)
                     tasks.append(self.get_page(url))
                 results = await asyncio.gather(*tasks)
-                merged = HipoData(status="success", message="")
+                merged = HippoData(status="success", message="")
                 seen_ids = set()
                 all_requests = []
                 for (type_tag, _domain_id), (html, err) in zip(fetch_specs, results):
@@ -1645,9 +1645,9 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
             data.set_error(f"Data retrieval failed: {str(e)}")
             return data
 
-    def parse_data(self, html_content: str, **kwargs) -> HipoData:
-        """Parse a Hipocrate service request page into HipoData."""
-        data = HipoData(status="success", message="")
+    def parse_data(self, html_content: str, **kwargs) -> HippoData:
+        """Parse a Hipocrate service request page into HippoData."""
+        data = HippoData(status="success", message="")
 
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
@@ -1691,7 +1691,7 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
                     continue
                 seen_ids.add(request_id)
 
-                request = HipoData(id=request_id, type="unknown", regions=[])
+                request = HippoData(id=request_id, type="unknown", regions=[])
 
                 # Cell 1: "BARCODE - NNNN-type"
                 cell1_text = cells[1].get_text(strip=True)
@@ -1799,8 +1799,8 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
         # Return the service requests
         return data
 
-    def fhir_bundle_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRBundle, FHIROperationOutcome]:
-        """Convert parsed service request HipoData to a FHIR Bundle of ServiceRequest resources."""
+    def fhir_bundle_response(self, parsed_data: HippoData, **kwargs) -> Union[FHIRBundle, FHIROperationOutcome]:
+        """Convert parsed service request HippoData to a FHIR Bundle of ServiceRequest resources."""
         http_request = kwargs.get('http_request', self.request)
         
         patient_id = kwargs.get('patient_id', '')
@@ -1886,7 +1886,7 @@ class HipoClientServiceRequestSearch(HipoClientServiceRequest):
             return FHIROperationOutcome.from_exception(e, code="exception")
 
 
-def _parse_buletin_header(soup, data: HipoData) -> None:
+def _parse_buletin_header(soup, data: HippoData) -> None:
     """Parse the shared header of BuletinAnalize pages (type=1, type=2, type=3).
 
     Row 1 cell 1: "BULETIN ... Data si ora recoltarii: <date>"
@@ -2072,7 +2072,7 @@ def _parse_narrative_studies(soup: BeautifulSoup) -> list:
     return studies
 
 
-class HipoClientImagingStudy(HipoClient):
+class HippoClientImagingStudy(HippoClient):
     """Specialized client for imaging study related operations in the Hipocrate medical system.
 
     Handles retrieval and parsing of medical imaging studies including radiology,
@@ -2084,9 +2084,9 @@ class HipoClientImagingStudy(HipoClient):
         super().__init__(service_url=service_url, request=request)
         self.request_url = "/PARA/Printabile/BuletinAnalize.asp?id={id}&type=3&IdP=1"
 
-    def parse_data(self, html_content: str, **kwargs) -> HipoData:
-        """Parse a BuletinAnalize type=3 (radiology/imaging) page into HipoData."""
-        data = HipoData(status="success", message="")
+    def parse_data(self, html_content: str, **kwargs) -> HippoData:
+        """Parse a BuletinAnalize type=3 (radiology/imaging) page into HippoData."""
+        data = HippoData(status="success", message="")
 
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
@@ -2108,9 +2108,9 @@ class HipoClientImagingStudy(HipoClient):
 
         except Exception as e:
             logger.error(f"Error parsing imaging study data: {e}")
-            return HipoData(status="error", message=str(e))
+            return HippoData(status="error", message=str(e))
 
-    async def fetch_and_parse(self, *args, **kwargs) -> HipoData:
+    async def fetch_and_parse(self, *args, **kwargs) -> HippoData:
         """Fetch and parse an imaging study, evicting the cache if all results are empty.
 
         An empty result text means the report has not been filled yet in Hipocrate.
@@ -2126,8 +2126,8 @@ class HipoClientImagingStudy(HipoClient):
                 logger.debug(f"Evicted empty imaging study from cache: {url}")
         return parsed_data
 
-    def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRImagingStudy, FHIROperationOutcome]:
-        """Convert parsed imaging study HipoData to a FHIR ImagingStudy resource."""
+    def fhir_response(self, parsed_data: HippoData, **kwargs) -> Union[FHIRImagingStudy, FHIROperationOutcome]:
+        """Convert parsed imaging study HippoData to a FHIR ImagingStudy resource."""
         http_request = kwargs.get('http_request', self.request)
         
         study_id = kwargs.get('id', '')
@@ -2273,7 +2273,7 @@ class HipoClientImagingStudy(HipoClient):
             return FHIROperationOutcome.from_exception(e, code="exception")
 
 
-class HipoClientDiagnosticReport(HipoClient):
+class HippoClientDiagnosticReport(HippoClient):
     """Specialized client for diagnostic report related operations in the Hipocrate medical system.
 
     Handles retrieval and parsing of diagnostic reports including laboratory results,
@@ -2302,9 +2302,9 @@ class HipoClientDiagnosticReport(HipoClient):
                 logger.debug(f"Evicted empty diagnostic report from cache: {url}")
         return parsed_data
 
-    def parse_data(self, html_content: str, **kwargs) -> HipoData:
-        """Parse a BuletinAnalize type=1 (lab diagnostics) page into HipoData."""
-        data = HipoData(status="success", message="")
+    def parse_data(self, html_content: str, **kwargs) -> HippoData:
+        """Parse a BuletinAnalize type=1 (lab diagnostics) page into HippoData."""
+        data = HippoData(status="success", message="")
 
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
@@ -2408,10 +2408,10 @@ class HipoClientDiagnosticReport(HipoClient):
 
         except Exception as e:
             logger.error(f"Error parsing diagnostic report data: {e}")
-            return HipoData(status="error", message=str(e))
+            return HippoData(status="error", message=str(e))
 
-    def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRDiagnosticReport, FHIROperationOutcome]:
-        """Convert parsed diagnostic report HipoData to a FHIR DiagnosticReport resource."""
+    def fhir_response(self, parsed_data: HippoData, **kwargs) -> Union[FHIRDiagnosticReport, FHIROperationOutcome]:
+        """Convert parsed diagnostic report HippoData to a FHIR DiagnosticReport resource."""
         http_request = kwargs.get('http_request', self.request)
         
         report_id = kwargs.get('id', '')
@@ -2600,7 +2600,7 @@ class HipoClientDiagnosticReport(HipoClient):
             return FHIROperationOutcome.from_exception(e, code="exception")
 
 
-class HipoClientCheckout(HipoClient):
+class HippoClientCheckout(HippoClient):
     """Specialized client for checkout-related operations in the Hipocrate medical system.
 
     Handles retrieval and parsing of patient discharge/checkout information from
@@ -2627,9 +2627,9 @@ class HipoClientCheckout(HipoClient):
                 logger.debug(f"Evicted empty checkout epicrisis from cache: {url}")
         return parsed_data
 
-    def parse_data(self, html_content: str, **kwargs) -> HipoData:
-        """Parse a Hipocrate BiletExternare (printable discharge form) into HipoData."""
-        data = HipoData(status="success", message="")
+    def parse_data(self, html_content: str, **kwargs) -> HippoData:
+        """Parse a Hipocrate BiletExternare (printable discharge form) into HippoData."""
+        data = HippoData(status="success", message="")
 
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
@@ -2781,8 +2781,8 @@ class HipoClientCheckout(HipoClient):
             data.set_error(str(e))
             return data
 
-    def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIREncounter, FHIROperationOutcome]:
-        """Convert parsed checkout HipoData to a FHIR Encounter resource.
+    def fhir_response(self, parsed_data: HippoData, **kwargs) -> Union[FHIREncounter, FHIROperationOutcome]:
+        """Convert parsed checkout HippoData to a FHIR Encounter resource.
         """
         try:
             if parsed_data.get("status") == "error":
@@ -2987,15 +2987,15 @@ class HipoClientCheckout(HipoClient):
             return FHIROperationOutcome.from_exception(e, code="exception")
 
 
-class HipoClientCheckin(HipoClient):
+class HippoClientCheckin(HippoClient):
     """Parses the admission record (/files/checkin.asp?id={id})."""
 
     def __init__(self, service_url=None, request=None):
         super().__init__(service_url=service_url, request=request)
         self.request_url = "/files/checkin.asp?id={id}"
 
-    def parse_data(self, html_content: str, **kwargs) -> HipoData:
-        data = HipoData(status="success", message="")
+    def parse_data(self, html_content: str, **kwargs) -> HippoData:
+        data = HippoData(status="success", message="")
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
             if not self.is_expected_page(soup, 'FISA INTERNARE'):
@@ -3101,8 +3101,8 @@ class HipoClientCheckin(HipoClient):
             data.set_error(str(e))
             return data
 
-    def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIREncounter, FHIROperationOutcome]:
-        """Convert parsed checkin HipoData to a FHIR Encounter resource (status=in-progress)."""
+    def fhir_response(self, parsed_data: HippoData, **kwargs) -> Union[FHIREncounter, FHIROperationOutcome]:
+        """Convert parsed checkin HippoData to a FHIR Encounter resource (status=in-progress)."""
         try:
             if parsed_data.get("status") == "error":
                 return FHIROperationOutcome.from_error(
@@ -3249,15 +3249,15 @@ class HipoClientCheckin(HipoClient):
         return self.fhir_response(parsed, **kwargs)
 
 
-class HipoClientCheckup(HipoClient):
+class HippoClientCheckup(HippoClient):
     """Parses the emergency/outpatient consultation (/files/checkup.asp?cuid={id})."""
 
     def __init__(self, service_url=None, request=None):
         super().__init__(service_url=service_url, request=request)
         self.request_url = "/files/checkup.asp?cuid={id}"
 
-    def parse_data(self, html_content: str, **kwargs) -> HipoData:
-        data = HipoData(status="success", message="")
+    def parse_data(self, html_content: str, **kwargs) -> HippoData:
+        data = HippoData(status="success", message="")
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
             if not self.is_expected_page(soup, 'Consult'):
@@ -3338,7 +3338,7 @@ class HipoClientCheckup(HipoClient):
             data.set_error(str(e))
             return data
 
-    def fhir_response(self, parsed_data: HipoData, id=None, **kwargs) -> Union[FHIREncounter, FHIROperationOutcome]:
+    def fhir_response(self, parsed_data: HippoData, id=None, **kwargs) -> Union[FHIREncounter, FHIROperationOutcome]:
         if parsed_data.get("status") == "error":
             return FHIROperationOutcome.from_error(parsed_data.get("message", "Unknown error"), code="not-found")
 
@@ -3395,7 +3395,7 @@ class HipoClientCheckup(HipoClient):
         return self.fhir_response(parsed, id=id, **kwargs)
 
 
-class HipoClientCerere(HipoClient):
+class HippoClientCerere(HippoClient):
     """Fetches a request edit page (cerere.asp) and extracts patient and request metadata."""
 
     def __init__(self, service_url=None, request=None):
@@ -3416,8 +3416,8 @@ class HipoClientCerere(HipoClient):
                 return opt.get_text(strip=True)
         return ''
 
-    def parse_data(self, html_content: str, **kwargs) -> HipoData:
-        data = HipoData(status="success", message="")
+    def parse_data(self, html_content: str, **kwargs) -> HippoData:
+        data = HippoData(status="success", message="")
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
 
@@ -3619,7 +3619,7 @@ class HipoClientCerere(HipoClient):
             data.set_error(str(e))
             return data
 
-    def fhir_response(self, parsed_data: HipoData, id=None, **kwargs) -> Union[FHIRServiceRequest, FHIROperationOutcome]:
+    def fhir_response(self, parsed_data: HippoData, id=None, **kwargs) -> Union[FHIRServiceRequest, FHIROperationOutcome]:
         """Convert parsed cerere data to a FHIR ServiceRequest resource."""
         request_id = id or parsed_data.get("request.id", "")
         try:
@@ -3710,7 +3710,7 @@ class HipoClientCerere(HipoClient):
         return self.fhir_response(parsed, id=id, **kwargs)
 
 
-class HipoClientPresentation(HipoClient):
+class HippoClientPresentation(HippoClient):
     """Parses an outpatient/ER presentation printable form (/gen_printabile/FisaPrezentare.asp)."""
 
     def __init__(self, service_url=None, request=None):
@@ -3739,8 +3739,8 @@ class HipoClientPresentation(HipoClient):
             return s[len(prefix):].strip()
         return ''
 
-    def parse_data(self, html_content: str, **kwargs) -> HipoData:
-        data = HipoData(status="success", message="")
+    def parse_data(self, html_content: str, **kwargs) -> HippoData:
+        data = HippoData(status="success", message="")
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
             title = self.get_title(soup)
@@ -3863,8 +3863,8 @@ class HipoClientPresentation(HipoClient):
             data.set_error(str(e))
             return data
 
-    def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIREncounter, FHIROperationOutcome]:
-        """Convert parsed presentation HipoData to a FHIR R4 Encounter (ambulatory/emergency)."""
+    def fhir_response(self, parsed_data: HippoData, **kwargs) -> Union[FHIREncounter, FHIROperationOutcome]:
+        """Convert parsed presentation HippoData to a FHIR R4 Encounter (ambulatory/emergency)."""
         try:
             if parsed_data.get("status") == "error":
                 return FHIROperationOutcome.from_error(
@@ -4094,7 +4094,7 @@ def _parse_observation_value(result_text: str, reference_text: str):
     return value, unit, low, high, flag
 
 
-class HipoClientObservationBundle(HipoClient):
+class HippoClientObservationBundle(HippoClient):
     """Aggregates lab analyte Observations for a patient across all DiagnosticReports.
 
     Fetches all lab service requests for the patient, then fetches each DiagnosticReport
@@ -4139,8 +4139,8 @@ class HipoClientObservationBundle(HipoClient):
         """Drop a patient's cached bundle, e.g. after a report write/validate/perform."""
         cls._bundle_cache.pop(f"__obs_bundle__:{patient_id}", None)
 
-    async def fetch_and_parse(self, patient_id=None, start_date=None, end_date=None, **kwargs) -> HipoData:
-        data = HipoData(status="success", message="")
+    async def fetch_and_parse(self, patient_id=None, start_date=None, end_date=None, **kwargs) -> HippoData:
+        data = HippoData(status="success", message="")
         if not patient_id:
             data.set_error("patient_id is required")
             return data
@@ -4170,9 +4170,9 @@ class HipoClientObservationBundle(HipoClient):
         self.url_cache.mark_inflight(bundle_key)
         try:
             # 1. Fetch historical lab results per domain. NrPePag=100 matches
-            # HipoClientServiceRequestSearch's unfiltered fan-out so both paths
+            # HippoClientServiceRequestSearch's unfiltered fan-out so both paths
             # hit the same cache key and don't double-scrape the same domains.
-            sr_client = HipoClientServiceRequestSearch(self.service_url, self.request)
+            sr_client = HippoClientServiceRequestSearch(self.service_url, self.request)
             episode_url = sr_client.request_url_episode  # "/Pacient/analysesEpisod.asp?pacid={pacid}"
             lab_fetch_tasks = []
             for domain_id in LAB_DOMAINS:
@@ -4218,7 +4218,7 @@ class HipoClientObservationBundle(HipoClient):
 
             async def fetch_report(req):
                 async with sem:
-                    dr_client = HipoClientDiagnosticReport(self.service_url, self.request)
+                    dr_client = HippoClientDiagnosticReport(self.service_url, self.request)
                     try:
                         return req, await dr_client.fetch_and_parse(id=req["result_id"])
                     except Exception as e:
@@ -4268,7 +4268,7 @@ class HipoClientObservationBundle(HipoClient):
 
         except Exception as e:
             self.url_cache.resolve_inflight(bundle_key)
-            logger.error(f"HipoClientObservationBundle.fetch_and_parse failed: {e}")
+            logger.error(f"HippoClientObservationBundle.fetch_and_parse failed: {e}")
             data.set_error(str(e))
             return data
 
@@ -4276,7 +4276,7 @@ class HipoClientObservationBundle(HipoClient):
         data.store("patient.id", patient_id)
         return data
 
-    def fhir_response(self, parsed_data: HipoData, patient_id=None, **kwargs) -> Union[FHIRBundle, FHIROperationOutcome]:
+    def fhir_response(self, parsed_data: HippoData, patient_id=None, **kwargs) -> Union[FHIRBundle, FHIROperationOutcome]:
         if parsed_data.get("status") == "error":
             return FHIROperationOutcome.from_error(
                 message=parsed_data.get("message", "Unknown error"),
@@ -4325,7 +4325,7 @@ class HipoClientObservationBundle(HipoClient):
                 bundle.append_entry(resource=observation)
             return bundle
         except Exception as e:
-            logger.error(f"HipoClientObservationBundle.fhir_response failed: {e}")
+            logger.error(f"HippoClientObservationBundle.fhir_response failed: {e}")
             return FHIROperationOutcome.from_exception(e, code="exception")
 
     async def fetch_respond_fhir(self, patient_id=None, **kwargs) -> Union[FHIRBundle, FHIROperationOutcome]:
@@ -4333,7 +4333,7 @@ class HipoClientObservationBundle(HipoClient):
         return self.fhir_response(parsed, patient_id=patient_id, **kwargs)
 
 
-class HipoClientWhoami(HipoClient):
+class HippoClientWhoami(HippoClient):
     """Extracts the logged-in user identity from the sidebar menu iframe
     (Template/menu.asp), CONTUL MEU / Informatii personale section."""
 
@@ -4342,7 +4342,7 @@ class HipoClientWhoami(HipoClient):
     # mask a logout/re-login, so it's invalidated explicitly on session close
     # rather than relying on a long TTL alone.
     _CACHE_TTL = 60.0
-    _cache: Dict[str, Tuple[HipoData, float]] = {}
+    _cache: Dict[str, Tuple[HippoData, float]] = {}
 
     def __init__(self, service_url=None, request=None):
         super().__init__(service_url=service_url, request=request)
@@ -4380,13 +4380,13 @@ class HipoClientWhoami(HipoClient):
             self._cache[self.username] = (parsed_data, time.monotonic())
         return parsed_data
 
-    def parse_data(self, html_content: str, **kwargs) -> HipoData:
+    def parse_data(self, html_content: str, **kwargs) -> HippoData:
         """Parse the CONTUL MEU section of the menu iframe.
 
         It carries the display name in a <small> tag ("[ DR. STROIE COSTIN ]")
         and a cont.asp?id= link ("Informatii personale") with the user ID.
         """
-        data = HipoData(status="success", message="")
+        data = HippoData(status="success", message="")
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
             found = False
@@ -4418,7 +4418,7 @@ class HipoClientWhoami(HipoClient):
             return data
 
 
-class HipoClientSchedule(HipoClient):
+class HippoClientSchedule(HippoClient):
     """Parses the daily imaging/lab request worklist (/PARA/NOM/Listare/?id=44)."""
 
     _MODALITY_DISPLAY = {
@@ -4472,8 +4472,8 @@ class HipoClientSchedule(HipoClient):
                f"&PARA_Ordonare=2")
         return url
 
-    async def fetch_and_parse(self, **kwargs) -> HipoData:
-        data = HipoData(status="success", message="")
+    async def fetch_and_parse(self, **kwargs) -> HippoData:
+        data = HippoData(status="success", message="")
         url = self._build_url(
             kwargs.get('start_date') or kwargs.get('date'),
             kwargs.get('end_date'),
@@ -4509,8 +4509,8 @@ class HipoClientSchedule(HipoClient):
         except Exception as e:
             return f"Page retrieval failed: {str(e)}"
 
-    def parse_data(self, html_content: str, **kwargs) -> HipoData:
-        data = HipoData(status="success", message="")
+    def parse_data(self, html_content: str, **kwargs) -> HippoData:
+        data = HippoData(status="success", message="")
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
             table = soup.find('table', class_='tbl_listare')
@@ -4583,8 +4583,8 @@ class HipoClientSchedule(HipoClient):
         'terminata':                          'ended',
     }
 
-    def fhir_response(self, parsed_data: HipoData, **kwargs) -> Union[FHIRBundle, FHIROperationOutcome]:
-        """Convert parsed schedule HipoData to a FHIR Bundle of ServiceRequest resources."""
+    def fhir_response(self, parsed_data: HippoData, **kwargs) -> Union[FHIRBundle, FHIROperationOutcome]:
+        """Convert parsed schedule HippoData to a FHIR Bundle of ServiceRequest resources."""
         http_request = kwargs.get('http_request', self.request)
         try:
             if parsed_data.get("status") == "error":
@@ -4654,7 +4654,7 @@ class HipoClientSchedule(HipoClient):
         return self.fhir_response(parsed, **kwargs)
 
 
-def _invalidate_observation_bundle_from_cerere_cache(client: 'HipoClient', cerere_id: str) -> None:
+def _invalidate_observation_bundle_from_cerere_cache(client: 'HippoClient', cerere_id: str) -> None:
     """Best-effort: if cerere.asp for this request is already cached, use it to
     find the patient ID and drop their ObservationBundle cache entry, so
     /fhir/Observation doesn't keep serving pre-write data after a report is
@@ -4664,13 +4664,13 @@ def _invalidate_observation_bundle_from_cerere_cache(client: 'HipoClient', cerer
     cached_html = client.url_cache.get(cerere_url)
     if not cached_html:
         return
-    parsed = HipoClientCerere().parse_data(cached_html, id=cerere_id)
+    parsed = HippoClientCerere().parse_data(cached_html, id=cerere_id)
     patient_id = parsed.get("patient.id")
     if patient_id:
-        HipoClientObservationBundle.invalidate_cache(patient_id)
+        HippoClientObservationBundle.invalidate_cache(patient_id)
 
 
-class HipoClientReportWrite(HipoClient):
+class HippoClientReportWrite(HippoClient):
     """Write a radiology report result via Hipocrate Rezultate.asp.
 
     Flow:
@@ -4682,8 +4682,8 @@ class HipoClientReportWrite(HipoClient):
 
     request_url = "/PARA/NOM/Listare/cerere.asp?id={id}"
 
-    async def write(self, cerere_id: str, anl_id: str, text: str) -> HipoData:
-        data = HipoData()
+    async def write(self, cerere_id: str, anl_id: str, text: str) -> HippoData:
+        data = HippoData()
 
         if not self.session:
             self.session = self.get_user_session(self.username)
@@ -4740,11 +4740,11 @@ class HipoClientReportWrite(HipoClient):
         return data
 
 
-class HipoClientReportValidate(HipoClient):
+class HippoClientReportValidate(HippoClient):
     """Validate or devalidate a radiology report result via Ajax_Cerere.asp."""
 
-    async def validate(self, cerere_id: str, anl_id: str, id_grup: str, validated: bool) -> HipoData:
-        data = HipoData()
+    async def validate(self, cerere_id: str, anl_id: str, id_grup: str, validated: bool) -> HippoData:
+        data = HippoData()
 
         if not self.session:
             self.session = self.get_user_session(self.username)
@@ -4774,7 +4774,7 @@ class HipoClientReportValidate(HipoClient):
         return data
 
 
-class HipoClientCererePerform(HipoClient):
+class HippoClientCererePerform(HippoClient):
     """Mark a radiology exam as performed by replaying the cerere.asp form with DataEfectuarii set.
 
     Flow:
@@ -4829,8 +4829,8 @@ class HipoClientCererePerform(HipoClient):
 
         return fields
 
-    async def perform(self, cerere_id: str, performed_at: str = None) -> HipoData:
-        data = HipoData()
+    async def perform(self, cerere_id: str, performed_at: str = None) -> HippoData:
+        data = HippoData()
 
         if not self.session:
             self.session = self.get_user_session(self.username)
@@ -4865,7 +4865,7 @@ class HipoClientCererePerform(HipoClient):
 
         patient_id = form_data.get('strPacientId')
         if patient_id:
-            HipoClientObservationBundle.invalidate_cache(patient_id)
+            HippoClientObservationBundle.invalidate_cache(patient_id)
 
         self.cache_remove(cerere_url)
         for suffix in ["&type=3&IdP=1", "&type=1&IdP=1"]:

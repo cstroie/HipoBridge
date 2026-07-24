@@ -229,7 +229,7 @@ Lists lab/imaging requests for a date range. One row per request.
 
 ## Request edit form — `PARA/NOM/Listare/cerere.asp?id={request_id}`
 
-**HippoBridge:** `/api/request/{id}/patient` (full HipoData JSON) · `/fhir/ServiceRequest/{id}?type=cerere` (FHIR ServiceRequest)
+**HippoBridge:** `/api/request/{id}/patient` (full HippoData JSON) · `/fhir/ServiceRequest/{id}?type=cerere` (FHIR ServiceRequest)
 
 The full request edit form. Fully implemented: patient name, CNP, demographics (derived from CNP), request date/time, priority, payment type, ordering physician, section, diagnosis, clinical indication, justification, and ordered exam list.
 
@@ -385,7 +385,7 @@ Sidebar menu iframe. Provides authenticated user identity.
 
 ## High-value candidates for future implementation
 
-1. **Procedures in checkin** (`checkin.asp` embedded table) — DRACO procedure codes, dates, quantities. Already scraped, not yet exposed in HipoData/FHIR.
+1. **Procedures in checkin** (`checkin.asp` embedded table) — DRACO procedure codes, dates, quantities. Already scraped, not yet exposed in HippoData/FHIR.
 2. **Discharge medication** (`FMD_medicatie.asp`) — medication list at discharge, richer than BiletExternare treatment text.
 3. **Analysis trends** (`analyse/evolution/show.asp`) — longitudinal lab values per patient. Useful for clinical summary.
 4. **Ambulatory prescription** (`amb_recepy.asp`) — prescriptions issued at outpatient consultations.

@@ -1121,7 +1121,7 @@
     "/api/schedule": {
       "get": {
         "summary": "Get schedule (raw JSON)",
-        "description": "Same as /fhir/Schedule but returns raw HipoData JSON. Accepts the same query parameters.",
+        "description": "Same as /fhir/Schedule but returns raw HippoData JSON. Accepts the same query parameters.",
         "parameters": [
           {"name": "start_date", "in": "query", "required": false, "schema": {"type": "string"}},
           {"name": "end_date", "in": "query", "required": false, "schema": {"type": "string"}},
@@ -1145,7 +1145,7 @@
           {"name": "debug", "in": "query", "required": false, "description": "Pass 'page' to get raw Hipocrate HTML", "schema": {"type": "string"}}
         ],
         "responses": {
-          "200": {"description": "Full request and patient details as HipoData JSON"},
+          "200": {"description": "Full request and patient details as HippoData JSON"},
           "403": {"description": "Access denied to this lab"},
           "401": {"description": "Authentication required"}
         }
@@ -1160,7 +1160,7 @@
           {"name": "debug", "in": "query", "required": false, "description": "Pass 'page' to get raw Hipocrate HTML", "schema": {"type": "string"}}
         ],
         "responses": {
-          "200": {"description": "Admission record as HipoData JSON"},
+          "200": {"description": "Admission record as HippoData JSON"},
           "404": {"description": "Admission not found"},
           "401": {"description": "Authentication required"}
         }
@@ -1175,7 +1175,7 @@
           {"name": "debug", "in": "query", "required": false, "description": "Pass 'page' to get raw Hipocrate HTML", "schema": {"type": "string"}}
         ],
         "responses": {
-          "200": {"description": "Consultation record as HipoData JSON"},
+          "200": {"description": "Consultation record as HippoData JSON"},
           "404": {"description": "Consultation not found"},
           "401": {"description": "Authentication required"}
         }

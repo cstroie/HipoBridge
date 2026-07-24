@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""HipoData class for storing structured medical data with section support.
+"""HippoData class for storing structured medical data with section support.
 
 Copyright (C) 2025 Costin Stroie <costinstroie@eridu.eu.org>
 
@@ -21,10 +21,10 @@ from datetime import datetime
 from typing import Any
 import logging
 
-logger = logging.getLogger('HipoData')
+logger = logging.getLogger('HippoData')
 
 
-class HipoData(dict):
+class HippoData(dict):
     """A specialised dict for structured medical data with dot-notation storage.
 
     ``store("section.key", value)`` normalises and stores a value in a nested

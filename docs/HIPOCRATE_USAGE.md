@@ -7,25 +7,25 @@ that cost was redundant. See also the "Concurrency and caching" and
 
 ## Client → endpoint mapping
 
-| Client (`hipoclient.py`) | Hipocrate URL | HippoBridge route(s) | Calls / invocation |
+| Client (`hippoclient.py`) | Hipocrate URL | HippoBridge route(s) | Calls / invocation |
 |---|---|---|---|
-| `HipoClientPatient` | `/Pacient/edit.asp?id=` | `/api/patient/{id}`, `/fhir/Patient/{id}` | 1 |
-| `HipoClientPatientSearch` | `/files/search.asp?what=PA` (+`edit.asp` on single hit) | `/api/patient`, `/fhir/Patient` | 1–2 |
-| `HipoClientServiceRequest` | `buletinRecoltari.asp?id=` | `/api/request/{id}`, `/fhir/ServiceRequest/{id}` | 1 |
-| `HipoClientServiceRequestSearch` | `analysesEpisod.asp` / `analysesALL.asp` per domain | `/api/request`, `/fhir/ServiceRequest` (unfiltered) | **24** (9 imaging + 15 lab domains, parallel) when no `type`/`dt` filter given; 1 otherwise |
-| `HipoClientImagingStudy` | `BuletinAnalize.asp?type=3` | `/api/study/{id}`, `/fhir/ImagingStudy/{id}` | 1 direct; FHIR route adds ServiceRequest (+ Cerere fallback) — 2–3 total |
-| `HipoClientDiagnosticReport` | `BuletinAnalize.asp?type=1` | `/api/report/{id}`, `/fhir/DiagnosticReport/{id}` | 1; called N times by `ObservationBundle` |
-| `HipoClientCheckout` | `BiletExternare.asp` | `/api/checkout/{id}`, Encounter auto-detect (1st probe) | 1 |
-| `HipoClientCheckin` | `checkin.asp` | `/api/checkin/{id}`, Encounter auto-detect (2nd probe) | 1 |
-| `HipoClientCheckup` | `checkup.asp` | `/api/checkup/{id}` (explicit `?type=` only, not in auto-detect chain) | 1 |
-| `HipoClientCerere` | `cerere.asp?id=` | `/api/request/{id}/patient`, `/fhir/ServiceRequest/{id}?type=cerere`, worklist enrichment | 1 |
-| `HipoClientPresentation` | `FisaPrezentare.asp` | `/api/presentation/{id}`, Encounter auto-detect (final fallback) | 1 |
-| `HipoClientObservationBundle` | 15× `analysesEpisod.asp` (lab domains) + N× `BuletinAnalize.asp` | `/fhir/Observation`, `/api/observation` | **15 + N** on a cold miss (N = lab requests inside the 90-day window), report fetches capped at 5 concurrent; 0 on a hit against its own dedicated bundle cache |
-| `HipoClientWhoami` | `Template/menu.asp` | `/api/whoami` | 1 (2 if login needed) on a cold miss; 0 on a hit against the per-username identity cache. The `menu.asp` page itself is still never cached by URL — shared URL, per-user content |
-| `HipoClientSchedule` | `PARA/NOM/Listare/?id=44` | `/api/schedule`, `/fhir/Schedule`, worklist refresh | 1 |
-| `HipoClientReportWrite` | `Rezultate.asp` (GET then POST) | `POST /api/request/{id}/report` | 2 |
-| `HipoClientReportValidate` | `Ajax_Cerere.asp?action=VDV` | `POST /api/request/{id}/validate` | 1 |
-| `HipoClientCererePerform` | `cerere.asp` (GET then POST) | `POST /api/request/{id}/perform` | 2 |
+| `HippoClientPatient` | `/Pacient/edit.asp?id=` | `/api/patient/{id}`, `/fhir/Patient/{id}` | 1 |
+| `HippoClientPatientSearch` | `/files/search.asp?what=PA` (+`edit.asp` on single hit) | `/api/patient`, `/fhir/Patient` | 1–2 |
+| `HippoClientServiceRequest` | `buletinRecoltari.asp?id=` | `/api/request/{id}`, `/fhir/ServiceRequest/{id}` | 1 |
+| `HippoClientServiceRequestSearch` | `analysesEpisod.asp` / `analysesALL.asp` per domain | `/api/request`, `/fhir/ServiceRequest` (unfiltered) | **24** (9 imaging + 15 lab domains, parallel) when no `type`/`dt` filter given; 1 otherwise |
+| `HippoClientImagingStudy` | `BuletinAnalize.asp?type=3` | `/api/study/{id}`, `/fhir/ImagingStudy/{id}` | 1 direct; FHIR route adds ServiceRequest (+ Cerere fallback) — 2–3 total |
+| `HippoClientDiagnosticReport` | `BuletinAnalize.asp?type=1` | `/api/report/{id}`, `/fhir/DiagnosticReport/{id}` | 1; called N times by `ObservationBundle` |
+| `HippoClientCheckout` | `BiletExternare.asp` | `/api/checkout/{id}`, Encounter auto-detect (1st probe) | 1 |
+| `HippoClientCheckin` | `checkin.asp` | `/api/checkin/{id}`, Encounter auto-detect (2nd probe) | 1 |
+| `HippoClientCheckup` | `checkup.asp` | `/api/checkup/{id}` (explicit `?type=` only, not in auto-detect chain) | 1 |
+| `HippoClientCerere` | `cerere.asp?id=` | `/api/request/{id}/patient`, `/fhir/ServiceRequest/{id}?type=cerere`, worklist enrichment | 1 |
+| `HippoClientPresentation` | `FisaPrezentare.asp` | `/api/presentation/{id}`, Encounter auto-detect (final fallback) | 1 |
+| `HippoClientObservationBundle` | 15× `analysesEpisod.asp` (lab domains) + N× `BuletinAnalize.asp` | `/fhir/Observation`, `/api/observation` | **15 + N** on a cold miss (N = lab requests inside the 90-day window), report fetches capped at 5 concurrent; 0 on a hit against its own dedicated bundle cache |
+| `HippoClientWhoami` | `Template/menu.asp` | `/api/whoami` | 1 (2 if login needed) on a cold miss; 0 on a hit against the per-username identity cache. The `menu.asp` page itself is still never cached by URL — shared URL, per-user content |
+| `HippoClientSchedule` | `PARA/NOM/Listare/?id=44` | `/api/schedule`, `/fhir/Schedule`, worklist refresh | 1 |
+| `HippoClientReportWrite` | `Rezultate.asp` (GET then POST) | `POST /api/request/{id}/report` | 2 |
+| `HippoClientReportValidate` | `Ajax_Cerere.asp?action=VDV` | `POST /api/request/{id}/validate` | 1 |
+| `HippoClientCererePerform` | `cerere.asp` (GET then POST) | `POST /api/request/{id}/perform` | 2 |
 
 Write clients (`ReportWrite`, `ReportValidate`, `CererePerform`) always bypass
 the cache and evict downstream `BuletinAnalize.asp`/`cerere.asp` entries on
@@ -50,7 +50,7 @@ success.
 - Manual per-patient refresh: `GET /api/patient/{id}`, `/fhir/Patient/{id}`,
   `/api/request`, `/fhir/ServiceRequest`, `/api/observation`, and
   `/fhir/Observation` all accept `?refresh=1`, which calls
-  `hipoclient.evict_patient_cache()` before fetching — it evicts the
+  `hippoclient.evict_patient_cache()` before fetching — it evicts the
   patient's `edit.asp` entry, all 24 imaging/lab domain search URLs, and
   the `ObservationBundle` dedicated cache entry, then lets the normal
   fetch path repopulate them live. Scope is intentionally limited to
@@ -67,19 +67,19 @@ success.
 - Two results get their own dedicated caches outside the shared
   `url_cache`, because they're either too expensive to rebuild or too
   cheap to key by URL:
-  - `HipoClientObservationBundle`'s assembled bundle (15+N upstream
+  - `HippoClientObservationBundle`'s assembled bundle (15+N upstream
     calls to rebuild) lives in its own 100-entry LRU with a 30-min TTL,
     keyed by patient ID, so unrelated traffic against the shared
-    500-entry cache can't evict it. `HipoClientReportWrite`,
-    `HipoClientReportValidate`, and `HipoClientCererePerform` explicitly
+    500-entry cache can't evict it. `HippoClientReportWrite`,
+    `HippoClientReportValidate`, and `HippoClientCererePerform` explicitly
     invalidate a patient's entry on a successful write/validate/perform
     (see N+1 item 8 below) so this cache can't mask a just-written
     report.
-  - `HipoClientWhoami`'s parsed identity is cached per username (not by
+  - `HippoClientWhoami`'s parsed identity is cached per username (not by
     URL, since `menu.asp`'s URL is shared across all users) with a 60s
     TTL, explicitly invalidated on logout
     (`UserSessionManager.close_user_session` calls
-    `HipoClientWhoami.invalidate_cache`). The underlying `menu.asp` page
+    `HippoClientWhoami.invalidate_cache`). The underlying `menu.asp` page
     itself is still never left in the shared URL cache.
 
 ## N+1 / redundant-fetch patterns found and fixed
@@ -136,8 +136,8 @@ success.
    in-memory cache (60s TTL, invalidated on logout) sitting in front of
    the still-uncached `menu.asp` fetch.
 8. **`ObservationBundle` cache left stale after a report write** —
-   `HipoClientReportWrite`, `HipoClientReportValidate`, and
-   `HipoClientCererePerform` evict `BuletinAnalize.asp`/`cerere.asp` by
+   `HippoClientReportWrite`, `HippoClientReportValidate`, and
+   `HippoClientCererePerform` evict `BuletinAnalize.asp`/`cerere.asp` by
    request ID on success, but never knew the *patient* ID, so they
    couldn't invalidate that patient's `ObservationBundle` entry. This
    predates the dedicated bundle cache above but got worse once that

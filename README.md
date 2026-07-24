@@ -19,7 +19,7 @@ pip install -r requirements.txt
 
 ```bash
 export HYP_USER=<username> HYP_PASS=<password>
-python3 hipobridge.py
+python3 hippobridge.py
 ```
 
 Server listens on `http://0.0.0.0:44660` by default. Override with `local.cfg` (not tracked by git) or CLI switches:
@@ -33,11 +33,11 @@ service_url = http://192.168.3.230/hipocrate
 ```
 
 ```bash
-python3 hipobridge.py --port 8080 --host 127.0.0.1
-python3 hipobridge.py --service-url http://192.168.3.230/hipocrate
-python3 hipobridge.py --log-level DEBUG    # DEBUG | INFO | WARNING | ERROR
-python3 hipobridge.py --no-disk-cache      # disable FilesystemCache even if configured
-python3 hipobridge.py --no-worklist        # skip DICOM MWL SCP even if worklist.cfg exists
+python3 hippobridge.py --port 8080 --host 127.0.0.1
+python3 hippobridge.py --service-url http://192.168.3.230/hipocrate
+python3 hippobridge.py --log-level DEBUG    # DEBUG | INFO | WARNING | ERROR
+python3 hippobridge.py --no-disk-cache      # disable FilesystemCache even if configured
+python3 hippobridge.py --no-worklist        # skip DICOM MWL SCP even if worklist.cfg exists
 ```
 
 CLI switches take precedence over config files.
@@ -61,7 +61,7 @@ Every resource has two routes:
 
 | Route | Returns |
 |---|---|
-| `GET /api/<resource>` | Raw `HipoData` JSON (internal/debug) |
+| `GET /api/<resource>` | Raw `HippoData` JSON (internal/debug) |
 | `GET /fhir/<Resource>` | FHIR R4 JSON |
 
 Add `?debug=page` to any `/api/*` endpoint to get the raw Hipocrate HTML.
@@ -101,7 +101,7 @@ POST /api/request/{id}/validate — toggle validation state for a report; radiol
 
 ### Radiology report workflow
 
-The three write endpoints are restricted to usernames listed under `[radiology] allowed_radiologists` in `hipobridge.cfg`. The `/api/whoami` response includes `can_write_reports: true` when the user is in this list — the web interface uses this to gate the action buttons.
+The three write endpoints are restricted to usernames listed under `[radiology] allowed_radiologists` in `hippobridge.cfg`. The `/api/whoami` response includes `can_write_reports: true` when the user is in this list — the web interface uses this to gate the action buttons.
 
 Workflow: **Perform → Write → Validate**. Each step replays the `cerere.asp` form with the appropriate field override; caches for `cerere.asp` and `BuletinAnalize` are evicted after every write.
 
@@ -144,7 +144,7 @@ cp worklist.cfg.example worklist.cfg   # fill in credentials and device sections
 python3 runtests.py               # all groups
 python3 runtests.py extractors    # offline
 python3 runtests.py markdown      # offline
-python3 runtests.py hipodata      # offline
+python3 runtests.py hippodata      # offline
 ```
 
 Groups requiring a live server: `root`, `auth`, `patients`, `analyses`, `reports`, `checkout`, `cnp`.

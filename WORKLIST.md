@@ -17,7 +17,7 @@ If these packages are not installed, the MWL server is silently disabled and the
 ```bash
 cp worklist.cfg.example worklist.cfg
 $EDITOR worklist.cfg          # fill in credentials and device sections
-python3 hipobridge.py         # MWL server starts automatically alongside the HTTP server
+python3 hippobridge.py         # MWL server starts automatically alongside the HTTP server
 ```
 
 `worklist.cfg` is listed in `.gitignore` and must never be committed — it contains Hipocrate credentials.
@@ -93,8 +93,8 @@ pynetdicom thread (sync)
     → _lab_ids_for_profile(profile)       # DICOM code → [lab_id, ...]
     → _on_demand_refresh(lab_ids)         # asyncio.run_coroutine_threadsafe
         → WorklistRefresher.refresh_if_stale(lab_id)
-            → _fetch_schedule(lab_id)     # HipoClientSchedule
-            → _enrich(request_id)         # HipoClientCerere → HipoClientPatient
+            → _fetch_schedule(lab_id)     # HippoClientSchedule
+            → _enrich(request_id)         # HippoClientCerere → HippoClientPatient
             → _build_datasets(entry, info)# one Dataset per exam
             → WorklistCache.update(lab_id, datasets, raw)
     → WorklistCache.snapshot_multi(lab_ids)
@@ -129,8 +129,8 @@ pynetdicom `AE` instance. Runs in a daemon thread (`DicomMWL`). Supports C-ECHO 
 ### Patient enrichment
 
 For each active schedule entry:
-1. `HipoClientCerere(request_id)` → `patient.id` + exam names (e.g. `ULTRASONOGRAFIA ABDOMINALA`)
-2. `HipoClientPatient(patient_id)` → name, DOB, sex, CNP
+1. `HippoClientCerere(request_id)` → `patient.id` + exam names (e.g. `ULTRASONOGRAFIA ABDOMINALA`)
+2. `HippoClientPatient(patient_id)` → name, DOB, sex, CNP
 
 `PatientID` is set to the CNP (13-digit Romanian national ID), which falls back to the Hipocrate numeric patient ID. `PatientBirthDate` and sex are derived from the CNP when the patient record itself doesn't provide them — the CNP encodes both.
 
