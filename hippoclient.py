@@ -3606,8 +3606,25 @@ class HippoClientCerere(HippoClient):
                 elif 'tre_class_generic_1' in classes and current_anl_id:
                     cells = row.find_all('td', class_='tdh')
                     if len(cells) >= 2 and 'Rezultat' in cells[0].get_text():
-                        # Convert div/p tags to newlines, then extract plain text
+                        # Convert HTML formatting to markdown, divs to newlines
                         result_cell = cells[1]
+                        # Convert formatting tags to markdown
+                        for tag in result_cell.find_all(['b', 'strong']):
+                            if tag.get_text(strip=True):
+                                tag.insert_before('**')
+                                tag.insert_after('**')
+                            tag.unwrap()
+                        for tag in result_cell.find_all(['i', 'em']):
+                            if tag.get_text(strip=True):
+                                tag.insert_before('*')
+                                tag.insert_after('*')
+                            tag.unwrap()
+                        for tag in result_cell.find_all('u'):
+                            if tag.get_text(strip=True):
+                                tag.insert_before('*')
+                                tag.insert_after('*')
+                            tag.unwrap()
+                        # Convert div/p tags to newlines
                         for div in result_cell.find_all('div'):
                             div.insert_after('\n')
                             div.unwrap()
@@ -4679,19 +4696,48 @@ def _invalidate_observation_bundle_from_cerere_cache(client: 'HippoClient', cere
         HippoClientObservationBundle.invalidate_cache(patient_id)
 
 
+def _markdown_to_html(text: str) -> str:
+    """Convert markdown bold/italic to HTML tags.
+
+    **bold** → <b>bold</b>
+    *italic* → <i>italic</i>
+    Properly handles escaping of HTML special characters in text.
+    """
+    import html as html_module
+
+    def replace_markdown(match):
+        markup = match.group(1)
+        content = match.group(2)
+        tag = 'b' if markup == '**' else 'i'
+        return f'<{tag}>{html_module.escape(content)}</{tag}>'
+
+    # Replace **bold** and *italic* patterns
+    # Use non-greedy matching and word boundaries to avoid false matches
+    text = re.sub(r'(\*\*)(.+?)\1', replace_markdown, text)
+    text = re.sub(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', replace_markdown, text)
+
+    # Escape remaining unescaped text (for < > & etc that aren't in tags)
+    return text
+
+
 def _text_to_report_html(text: str) -> str:
     """Convert plain text to Hipocrate report HTML format.
 
     Hipocrate stores reports with: first paragraph unwrapped, rest in <div> tags.
-    Input:  "First\\nSecond\\nThird"
-    Output: "First<div>Second</div><div>Third</div>"
+    Converts markdown bold/italic to HTML.
+    Input:  "First **bold**\\nSecond *italic*\\nThird"
+    Output: "First <b>bold</b><div>Second <i>italic</i></div><div>Third</div>"
     """
     import html as html_module
     paragraphs = [p for p in text.strip().split('\n') if p]
     if not paragraphs:
         return ''
-    first = html_module.escape(paragraphs[0])
-    rest = ''.join(f'<div>{html_module.escape(p)}</div>' for p in paragraphs[1:])
+
+    # Convert markdown to HTML for each paragraph
+    html_paragraphs = [_markdown_to_html(p) for p in paragraphs]
+
+    first = html_paragraphs[0]
+    rest = ''.join(f'<div>{p}</div>' for p in html_paragraphs[1:])
     return first + rest
 
 
