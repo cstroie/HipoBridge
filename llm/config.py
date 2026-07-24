@@ -1,9 +1,9 @@
 """Config for the LLM subsystem: one or more OpenAI-compatible providers, one
 active at a time, each exposing three model tiers.
 
-Mirrors hipobridge.py's load_config() layering exactly: defaults -> llm.cfg
+Mirrors hippobridge.py's load_config() layering exactly: defaults -> llm.cfg
 -> local.cfg (later wins). Deliberately a separate file/section namespace
-from hipobridge.cfg's own [server] so the two don't collide.
+from hippobridge.cfg's own [server] so the two don't collide.
 
 configparser has no nesting, so each provider is a prefixed section
 `[provider:<name>]` with `url`, `key` (empty = no auth) and one model name

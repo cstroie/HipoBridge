@@ -13,7 +13,7 @@ import aiohttp
 
 logger = logging.getLogger(__name__)
 
-# Bounds concurrent outbound calls to the server, mirroring hipoclient.py's
+# Bounds concurrent outbound calls to the server, mirroring hippoclient.py's
 # module-level _hipocrate_semaphore pattern.
 _llm_semaphore = asyncio.Semaphore(6)
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for the HipoData class."""
+"""Tests for the HippoData class."""
 
 import sys
 import os
@@ -7,13 +7,13 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import unittest
 from datetime import datetime
-from hipodata import HipoData
+from hippodata import HippoData
 
 
-class TestHipoData(unittest.TestCase):
+class TestHippoData(unittest.TestCase):
 
     def setUp(self):
-        self.data = HipoData()
+        self.data = HippoData()
 
     # ------------------------------------------------------------------
     # Basic construction
@@ -25,13 +25,13 @@ class TestHipoData(unittest.TestCase):
 
     def test_init_with_kwargs_normalised(self):
         """__init__ routes kwargs through store() so values are normalised."""
-        d = HipoData(name="  Alice  ", score=None)
+        d = HippoData(name="  Alice  ", score=None)
         self.assertEqual(d["name"], "Alice")       # stripped
         self.assertNotIn("score", d)               # None skipped
 
     def test_init_status_success_no_message(self):
         """status='success' with no message stores only status."""
-        d = HipoData(status="success")
+        d = HippoData(status="success")
         self.assertEqual(d["status"], "success")
         self.assertNotIn("message", d)
 

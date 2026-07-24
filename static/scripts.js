@@ -1414,7 +1414,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Rare sentinel (ASCII Unit Separator) the server uses to signal a
     // mid-stream failure it can no longer report via HTTP status, since the
     // response has already committed to 200 once streaming starts. Must
-    // match hipobridge.py's _STREAM_ERROR_SENTINEL exactly.
+    // match hippobridge.py's _STREAM_ERROR_SENTINEL exactly.
     const STREAM_ERROR_SENTINEL = '\x1f';
 
     // Streaming counterpart to aiSummarize(): POSTs to /api/ai/summarize/stream
@@ -1926,13 +1926,13 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             setText('reportCNP', cnp);
 
-            const patHipoUrl = (patientData.extension || []).find(e => e.url === 'hipocrateUrl')?.valueUri;
+            const patHippoUrl = (patientData.extension || []).find(e => e.url === 'hipocrateUrl')?.valueUri;
             const pidWrap = document.getElementById('reportPatientIdWrap');
             if (pidWrap) {
                 pidWrap.innerHTML = '';
-                if (pid && patHipoUrl) {
+                if (pid && patHippoUrl) {
                     const a = document.createElement('a');
-                    a.href = patHipoUrl;
+                    a.href = patHippoUrl;
                     a.target = '_blank';
                     a.rel = 'noopener noreferrer';
                     a.textContent = pid;
@@ -2944,11 +2944,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const age = calculateAge(patientData.birthDate);
         if (elements.patientId) {
             const pid = patientData.id || '';
-            const patHipoUrl = (patientData.extension || []).find(e => e.url === 'hipocrateUrl')?.valueUri;
+            const patHippoUrl = (patientData.extension || []).find(e => e.url === 'hipocrateUrl')?.valueUri;
             elements.patientId.innerHTML = '';
-            if (pid && patHipoUrl) {
+            if (pid && patHippoUrl) {
                 const a = document.createElement('a');
-                a.href = patHipoUrl;
+                a.href = patHippoUrl;
                 a.target = '_blank';
                 a.rel = 'noopener noreferrer';
                 a.textContent = `ID: ${pid}`;

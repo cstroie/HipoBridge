@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-HipoBridge - FHIR Bridge for Hipocrate Medical System
+HippoBridge - FHIR Bridge for Hipocrate Medical System
 
 Copyright (C) 2025 Costin Stroie <costinstroie@eridu.eu.org>
 
@@ -18,8 +18,8 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 FHIR R4 API bridge to Hipocrate: scrapes HTML on every request, no database.
-Routes: /api/* returns raw HipoData JSON; /fhir/* returns FHIR R4 resources.
-Config: hipobridge.cfg (defaults) overridden by local.cfg (not tracked by git).
+Routes: /api/* returns raw HippoData JSON; /fhir/* returns FHIR R4 resources.
+Config: hippobridge.cfg (defaults) overridden by local.cfg (not tracked by git).
 """
 import asyncio
 import os
@@ -37,12 +37,12 @@ from hashlib import sha256
 
 from fhir import OperationOutcome, Resource
 
-from hipoclient import ANALYSIS_TYPES
-from hipoclient import HipoClient, HipoClientPatient, HipoClientPatientSearch, HipoClientImagingStudy, HipoClientDiagnosticReport, HipoClientServiceRequest, HipoClientServiceRequestSearch, HipoClientCheckout, HipoClientCheckin, HipoClientCheckup, HipoClientSchedule, HipoClientCerere, HipoClientPresentation, HipoClientObservationBundle, HipoClientWhoami, HipoClientReportWrite, HipoClientReportValidate, HipoClientCererePerform
-from hipoclient import user_session_manager, url_cache
-from hipoclient import evict_patient_cache
+from hippoclient import ANALYSIS_TYPES
+from hippoclient import HippoClient, HippoClientPatient, HippoClientPatientSearch, HippoClientImagingStudy, HippoClientDiagnosticReport, HippoClientServiceRequest, HippoClientServiceRequestSearch, HippoClientCheckout, HippoClientCheckin, HippoClientCheckup, HippoClientSchedule, HippoClientCerere, HippoClientPresentation, HippoClientObservationBundle, HippoClientWhoami, HippoClientReportWrite, HippoClientReportValidate, HippoClientCererePerform
+from hippoclient import user_session_manager, url_cache
+from hippoclient import evict_patient_cache
 from urlcache import FilesystemCache, URLCache
-from hipodata import HipoData
+from hippodata import HippoData
 
 from extractors import parse_cnp
 from markdown import markdown_to_html
@@ -61,7 +61,7 @@ logging.basicConfig(
     level=getattr(logging, os.getenv('LOG_LEVEL', 'INFO').upper(), logging.INFO),
     format='%(asctime)s | %(levelname)8s | %(message)s'
 )
-logger = logging.getLogger('HipoBridge')
+logger = logging.getLogger('HippoBridge')
 
 DEFAULT_CONFIG = {
     'server': {
@@ -102,7 +102,7 @@ def require_auth(handler):
     async def wrapper(request):
         auth = get_basic_auth(request)
         if not auth:
-            return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HipoBridge"'})
+            return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
         username, password = auth
         request['auth_credentials'] = (username, password)
         return await handler(request)
@@ -111,13 +111,13 @@ def require_auth(handler):
 
 @require_auth
 async def search_patient(request):
-    """Search patients by name, CNP, or patient code. Returns raw HipoData JSON."""
+    """Search patients by name, CNP, or patient code. Returns raw HippoData JSON."""
     search_term = request.query.get('q', '')
     if not search_term:
         return web_error_response("Search term is required")
     logger.info(f"Searching for patients with term: {search_term}")
 
-    client = HipoClientPatientSearch(SERVICE_URL, request)
+    client = HippoClientPatientSearch(SERVICE_URL, request)
     parsed_data = await client.search(search_term)
     return web_json_response(parsed_data)
 
@@ -129,7 +129,7 @@ async def search_fhir_patient(request):
         return web_fhir_response("Search term is required")
     logger.info(f"Searching for patients with term: {search_term}")
 
-    client = HipoClientPatientSearch(SERVICE_URL, request)
+    client = HippoClientPatientSearch(SERVICE_URL, request)
     parsed_data = await client.search(search_term)
 
     if parsed_data.get('patient'):
@@ -148,14 +148,14 @@ async def search_fhir_patient(request):
 
 @require_auth
 async def get_patient(request):
-    """Retrieve patient by ID. Returns raw HipoData JSON. ?refresh=1 forces a
+    """Retrieve patient by ID. Returns raw HippoData JSON. ?refresh=1 forces a
     live reload of demographic, imaging/lab list, and Observation data."""
     id = request.match_info.get('id')
     if not id:
         return web_error_response("Patient ID is required")
     logger.info(f"Retrieving patient with ID: {id}")
 
-    client = HipoClientPatient(SERVICE_URL, request)
+    client = HippoClientPatient(SERVICE_URL, request)
     if request.rel_url.query.get('refresh') == '1':
         evict_patient_cache(client, id)
 
@@ -175,7 +175,7 @@ async def get_fhir_patient(request):
         return web_fhir_response("Patient ID is required")
     logger.info(f"Retrieving patient with ID: {id}")
 
-    client = HipoClientPatient(SERVICE_URL, request)
+    client = HippoClientPatient(SERVICE_URL, request)
     if request.rel_url.query.get('refresh') == '1':
         evict_patient_cache(client, id)
     response = await client.fetch_respond_fhir(id=id)
@@ -184,7 +184,7 @@ async def get_fhir_patient(request):
 
 @require_auth
 async def search_request(request):
-    """Search service requests for a patient. Returns raw HipoData JSON.
+    """Search service requests for a patient. Returns raw HippoData JSON.
     ?refresh=1 forces a live reload of the patient's imaging/lab lists."""
     patient_id = request.query.get('patient', '')
     if not patient_id:
@@ -195,7 +195,7 @@ async def search_request(request):
     exam_region = request.query.get('region')
     exam_datetime = request.query.get('dt')
 
-    client = HipoClientServiceRequestSearch(SERVICE_URL, request)
+    client = HippoClientServiceRequestSearch(SERVICE_URL, request)
     if request.rel_url.query.get('refresh') == '1':
         evict_patient_cache(client, patient_id)
     parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime)
@@ -214,7 +214,7 @@ async def search_fhir_service_request(request):
     exam_region = request.query.get('region')
     exam_datetime = request.query.get('dt')
 
-    client = HipoClientServiceRequestSearch(SERVICE_URL, request)
+    client = HippoClientServiceRequestSearch(SERVICE_URL, request)
     if request.rel_url.query.get('refresh') == '1':
         evict_patient_cache(client, patient_id)
     parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime)
@@ -232,13 +232,13 @@ def _is_meaningful_text(text):
 
 @require_auth
 async def get_request(request):
-    """Retrieve service request by ID. Returns raw HipoData JSON."""
+    """Retrieve service request by ID. Returns raw HippoData JSON."""
     id = request.match_info.get('id')
     if not id:
         return web_error_response("Service request ID is required")
     logger.info(f"Retrieving service request with ID: {id}")
 
-    client = HipoClientServiceRequest(SERVICE_URL, request)
+    client = HippoClientServiceRequest(SERVICE_URL, request)
 
     debug_resp = await web_debug_response(client, request, id=id)
     if debug_resp is not None:
@@ -260,23 +260,23 @@ async def get_fhir_service_request(request):
     logger.info(f"Retrieving service request with ID: {id}")
 
     if request.rel_url.query.get('type', '').lower() == 'cerere':
-        cerere_client = HipoClientCerere(SERVICE_URL, request)
+        cerere_client = HippoClientCerere(SERVICE_URL, request)
         return web_fhir_response(await cerere_client.fetch_respond_fhir(id=id))
 
-    client = HipoClientServiceRequest(SERVICE_URL, request)
+    client = HippoClientServiceRequest(SERVICE_URL, request)
     response = await client.fetch_respond_fhir(id=id)
     return web_fhir_response(response)
 
 
 @require_auth
 async def get_study(request):
-    """Retrieve imaging study by ID. Returns raw HipoData JSON."""
+    """Retrieve imaging study by ID. Returns raw HippoData JSON."""
     id = request.match_info.get('id')
     if not id:
         return web_error_response("Imaging study ID is required")
     logger.info(f"Retrieving imaging study with ID: {id}")
 
-    client = HipoClientImagingStudy(SERVICE_URL, request)
+    client = HippoClientImagingStudy(SERVICE_URL, request)
 
     debug_resp = await web_debug_response(client, request, id=id)
     if debug_resp is not None:
@@ -293,20 +293,20 @@ async def get_fhir_imaging_study(request):
         return web_fhir_response("Imaging study ID is required")
     logger.info(f"Retrieving imaging study with ID: {id}")
 
-    client = HipoClientImagingStudy(SERVICE_URL, request)
+    client = HippoClientImagingStudy(SERVICE_URL, request)
     parsed_data = await client.fetch_and_parse(id=id)
 
     if parsed_data.get("status") != "error":
         # Priority: buletinRecoltari.asp's "Comentariile medicului" first, then
         # cerere.asp's Justificare, then cerere.asp's clinical-situation diagnosis
         # (falling back to buletinRecoltari.asp's DIAGNOSTIC field) as a last resort.
-        sr_client = HipoClientServiceRequest(SERVICE_URL, request)
+        sr_client = HippoClientServiceRequest(SERVICE_URL, request)
         sr_data = await sr_client.fetch_and_parse(id=id)
         comment = sr_data.get("request.comment")
         if _is_meaningful_text(comment):
             parsed_data.store("request.justification", comment)
         else:
-            cerere_client = HipoClientCerere(SERVICE_URL, request)
+            cerere_client = HippoClientCerere(SERVICE_URL, request)
             cerere_data = await cerere_client.fetch_and_parse(id=id)
             justification = cerere_data.get("request.justification")
             if _is_meaningful_text(justification):
@@ -322,13 +322,13 @@ async def get_fhir_imaging_study(request):
 
 @require_auth
 async def get_report(request):
-    """Retrieve diagnostic report by ID. Returns raw HipoData JSON."""
+    """Retrieve diagnostic report by ID. Returns raw HippoData JSON."""
     id = request.match_info.get('id')
     if not id:
         return web_error_response("Diagnostic report ID is required")
     logger.info(f"Retrieving diagnostic report with ID: {id}")
 
-    client = HipoClientDiagnosticReport(SERVICE_URL, request)
+    client = HippoClientDiagnosticReport(SERVICE_URL, request)
 
     debug_resp = await web_debug_response(client, request, id=id)
     if debug_resp is not None:
@@ -345,20 +345,20 @@ async def get_fhir_diagnostic_report(request):
         return web_fhir_response("Diagnostic report ID is required")
     logger.info(f"Retrieving diagnostic report with ID: {id}")
 
-    client = HipoClientDiagnosticReport(SERVICE_URL, request)
+    client = HippoClientDiagnosticReport(SERVICE_URL, request)
     response = await client.fetch_respond_fhir(id=id)
     return web_fhir_response(response)
 
 
 @require_auth
 async def get_checkout(request):
-    """Retrieve discharge summary by ID. Returns raw HipoData JSON."""
+    """Retrieve discharge summary by ID. Returns raw HippoData JSON."""
     id = request.match_info.get('id')
     if not id:
         return web_error_response("Checkout ID is required")
     logger.info(f"Retrieving checkout with ID: {id}")
 
-    client = HipoClientCheckout(SERVICE_URL, request)
+    client = HippoClientCheckout(SERVICE_URL, request)
 
     debug_resp = await web_debug_response(client, request, id=id)
     if debug_resp is not None:
@@ -369,12 +369,12 @@ async def get_checkout(request):
 
 @require_auth
 async def get_checkin(request):
-    """Retrieve admission record by ID. Returns raw HipoData JSON."""
+    """Retrieve admission record by ID. Returns raw HippoData JSON."""
     id = request.match_info.get('id')
     if not id:
         return web_error_response("Checkin ID is required")
     logger.info(f"Retrieving checkin with ID: {id}")
-    client = HipoClientCheckin(SERVICE_URL, request)
+    client = HippoClientCheckin(SERVICE_URL, request)
     debug_resp = await web_debug_response(client, request, id=id)
     if debug_resp is not None:
         return debug_resp
@@ -383,12 +383,12 @@ async def get_checkin(request):
 
 @require_auth
 async def get_checkup(request):
-    """Retrieve outpatient/emergency consultation by ID. Returns raw HipoData JSON."""
+    """Retrieve outpatient/emergency consultation by ID. Returns raw HippoData JSON."""
     id = request.match_info.get('id')
     if not id:
         return web_error_response("Checkup ID is required")
     logger.info(f"Retrieving checkup with ID: {id}")
-    client = HipoClientCheckup(SERVICE_URL, request)
+    client = HippoClientCheckup(SERVICE_URL, request)
     debug_resp = await web_debug_response(client, request, id=id)
     if debug_resp is not None:
         return debug_resp
@@ -397,12 +397,12 @@ async def get_checkup(request):
 
 @require_auth
 async def get_presentation(request):
-    """Retrieve outpatient/ER presentation by ID. Returns raw HipoData JSON."""
+    """Retrieve outpatient/ER presentation by ID. Returns raw HippoData JSON."""
     id = request.match_info.get('id')
     if not id:
         return web_error_response("Presentation ID is required")
     logger.info(f"Retrieving presentation with ID: {id}")
-    client = HipoClientPresentation(SERVICE_URL, request)
+    client = HippoClientPresentation(SERVICE_URL, request)
     debug_resp = await web_debug_response(client, request, id=id)
     if debug_resp is not None:
         return debug_resp
@@ -415,7 +415,7 @@ async def get_request_patient(request):
     id = request.match_info.get('id')
     if not id:
         return web_error_response("Request ID is required")
-    client = HipoClientCerere(SERVICE_URL, request)
+    client = HippoClientCerere(SERVICE_URL, request)
     debug_resp = await web_debug_response(client, request, id=id)
     if debug_resp is not None:
         return debug_resp
@@ -431,7 +431,7 @@ async def get_schedule(request):
     section_name = request.rel_url.query.get('section_name')
     patient_text = request.rel_url.query.get('patient_text')
     force        = request.rel_url.query.get('refresh') == '1'
-    client = HipoClientSchedule(SERVICE_URL, request)
+    client = HippoClientSchedule(SERVICE_URL, request)
     debug_resp = await web_debug_response(client, request, start_date=start_date, end_date=end_date,
                                           lab_id=lab_id, patient_text=patient_text)
     if debug_resp is not None:
@@ -452,7 +452,7 @@ async def get_fhir_schedule(request):
     force        = request.rel_url.query.get('refresh') == '1'
     limit_raw    = request.rel_url.query.get('limit')
     limit        = int(limit_raw) if limit_raw and limit_raw.isdigit() else None
-    client = HipoClientSchedule(SERVICE_URL, request)
+    client = HippoClientSchedule(SERVICE_URL, request)
     response = await client.fetch_respond_fhir(
         start_date=start_date, end_date=end_date,
         lab_id=lab_id, section_name=section_name, patient_text=patient_text,
@@ -468,7 +468,7 @@ async def get_fhir_observation(request):
         return web_fhir_response("patient parameter is required")
     start_date = request.rel_url.query.get('start_date')
     end_date   = request.rel_url.query.get('end_date')
-    client = HipoClientObservationBundle(SERVICE_URL, request)
+    client = HippoClientObservationBundle(SERVICE_URL, request)
     if request.rel_url.query.get('refresh') == '1':
         evict_patient_cache(client, patient_id)
     response = await client.fetch_respond_fhir(
@@ -480,14 +480,14 @@ async def get_fhir_observation(request):
 
 @require_auth
 async def get_observation(request):
-    """Raw HipoData aggregation of lab Observations for a patient.
+    """Raw HippoData aggregation of lab Observations for a patient.
     ?patient={id}&start_date=YYYY-MM-DD&end_date=YYYY-MM-DD&refresh=1"""
     patient_id = request.rel_url.query.get('patient')
     if not patient_id:
         return web_error_response("patient parameter is required")
     start_date = request.rel_url.query.get('start_date')
     end_date   = request.rel_url.query.get('end_date')
-    client = HipoClientObservationBundle(SERVICE_URL, request)
+    client = HippoClientObservationBundle(SERVICE_URL, request)
     if request.rel_url.query.get('refresh') == '1':
         evict_patient_cache(client, patient_id)
     parsed = await client.fetch_and_parse(
@@ -499,8 +499,8 @@ async def get_observation(request):
 
 @require_auth
 async def get_whoami(request):
-    """Return the logged-in Hipocrate user identity. Returns raw HipoData JSON."""
-    client = HipoClientWhoami(SERVICE_URL, request)
+    """Return the logged-in Hipocrate user identity. Returns raw HippoData JSON."""
+    client = HippoClientWhoami(SERVICE_URL, request)
     debug_resp = await web_debug_response(client, request)
     if debug_resp is not None:
         return debug_resp
@@ -525,7 +525,7 @@ async def post_study_report(request):
         return web.Response(status=400, text='Invalid JSON body')
     if not anl_id or not text:
         return web.Response(status=400, text='anl_id and text are required')
-    client = HipoClientReportWrite(SERVICE_URL, request)
+    client = HippoClientReportWrite(SERVICE_URL, request)
     result = await client.write(cerere_id, anl_id, text)
     return web_json_response(result)
 
@@ -545,7 +545,7 @@ async def post_report_validate(request):
         return web.Response(status=400, text='Invalid JSON body')
     if not anl_id:
         return web.Response(status=400, text='anl_id is required')
-    client = HipoClientReportValidate(SERVICE_URL, request)
+    client = HippoClientReportValidate(SERVICE_URL, request)
     result = await client.validate(cerere_id, anl_id, id_grup, validated)
     return web_json_response(result)
 
@@ -561,7 +561,7 @@ async def post_study_perform(request):
         performed_at = (body.get('performed_at') or '').strip() or None
     except Exception:
         performed_at = None
-    client = HipoClientCererePerform(SERVICE_URL, request)
+    client = HippoClientCererePerform(SERVICE_URL, request)
     result = await client.perform(cerere_id, performed_at)
     return web_json_response(result)
 
@@ -570,7 +570,7 @@ async def post_logout(request):
     """Close the user's Hipocrate session held by the bridge."""
     username, _ = request['auth_credentials']
     await user_session_manager.close_user_session(username)
-    return web_json_response(HipoData(status="success", message=""))
+    return web_json_response(HippoData(status="success", message=""))
 
 @require_auth
 async def debug_passthrough(request):
@@ -578,7 +578,7 @@ async def debug_passthrough(request):
     path = request.query.get('path', '')
     if not path:
         return web.Response(text='Missing ?path=', status=400)
-    client = HipoClient(SERVICE_URL, request)
+    client = HippoClient(SERVICE_URL, request)
     html, err = await client.get_page(path)
     if err:
         return web.Response(text=f'Error: {err}', status=500)
@@ -599,39 +599,39 @@ async def get_fhir_encounter(request):
     logger.info(f"Retrieving encounter {id} (type={enc_type or 'auto'})")
 
     if enc_type == 'presentation':
-        presentation_client = HipoClientPresentation(SERVICE_URL, request)
+        presentation_client = HippoClientPresentation(SERVICE_URL, request)
         return web_fhir_response(await presentation_client.fetch_respond_fhir(id=id))
 
     if enc_type == 'checkin':
-        checkin_client = HipoClientCheckin(SERVICE_URL, request)
+        checkin_client = HippoClientCheckin(SERVICE_URL, request)
         checkin_data = await checkin_client.fetch_and_parse(id=id)
         return web_fhir_response(checkin_client.fhir_response(checkin_data, id=id))
 
     if enc_type == 'checkout':
-        checkout_client = HipoClientCheckout(SERVICE_URL, request)
+        checkout_client = HippoClientCheckout(SERVICE_URL, request)
         checkout_data = await checkout_client.fetch_and_parse(id=id)
         return web_fhir_response(checkout_client.fhir_response(checkout_data, id=id))
 
     if enc_type == 'checkup':
-        checkup_client = HipoClientCheckup(SERVICE_URL, request)
+        checkup_client = HippoClientCheckup(SERVICE_URL, request)
         checkup_data = await checkup_client.fetch_and_parse(id=id)
         return web_fhir_response(checkup_client.fhir_response(checkup_data, id=id))
 
     # No hint — try checkout (completed discharge) first
-    checkout_client = HipoClientCheckout(SERVICE_URL, request)
+    checkout_client = HippoClientCheckout(SERVICE_URL, request)
     checkout_data = await checkout_client.fetch_and_parse(id=id)
     checkout_name = (checkout_data.get("patient.name") or "").replace("-", "").replace(" ", "")
     if checkout_data.get("status") != "error" and checkout_name:
         return web_fhir_response(checkout_client.fhir_response(checkout_data, id=id))
 
     logger.info(f"Checkout {id} not found or empty — trying checkin")
-    checkin_client = HipoClientCheckin(SERVICE_URL, request)
+    checkin_client = HippoClientCheckin(SERVICE_URL, request)
     checkin_data = await checkin_client.fetch_and_parse(id=id)
     if checkin_data.get("status") != "error" and checkin_data.get("checkin.diagnosis"):
         return web_fhir_response(checkin_client.fhir_response(checkin_data, id=id))
 
     logger.info(f"Checkin {id} not found or empty — trying presentation")
-    presentation_client = HipoClientPresentation(SERVICE_URL, request)
+    presentation_client = HippoClientPresentation(SERVICE_URL, request)
     return web_fhir_response(await presentation_client.fetch_respond_fhir(id=id))
 
 
@@ -685,19 +685,19 @@ async def serve_fhir_metadata(request):
 
     capability_statement = Resource(
         resourceType="CapabilityStatement",
-        id="hipobridge-fhir-capability-statement",
+        id="hippobridge-fhir-capability-statement",
         url=f"{request.scheme}://{request.host}/fhir/Metadata",
         version="1.0.0",
-        name="HipoBridgeFHIRCapabilityStatement",
-        title="HipoBridge FHIR Capability Statement",
+        name="HippoBridgeFHIRCapabilityStatement",
+        title="HippoBridge FHIR Capability Statement",
         status="active",
         experimental=False,
         date=datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S'),
-        publisher="HipoBridge",
-        description="This is the FHIR capability statement for the HipoBridge FHIR API",
+        publisher="HippoBridge",
+        description="This is the FHIR capability statement for the HippoBridge FHIR API",
         kind="instance",
         software={
-            "name": "HipoBridge",
+            "name": "HippoBridge",
             "version": "1.0.0"
         },
         fhirVersion="4.0.1",
@@ -976,7 +976,7 @@ def web_error_response(message: str, status_code: int = 400, details: Dict[str, 
 
 
 def web_json_response(data: Dict[str, Any]) -> web.Response:
-    """Return 200 for successful HipoData, 401 for auth failures, 404 for not-found, 500 for other errors."""
+    """Return 200 for successful HippoData, 401 for auth failures, 404 for not-found, 500 for other errors."""
     s = data.get("status")
     if s == "success":
         status = 200
@@ -1063,18 +1063,18 @@ async def post_cache_cleanup(request):
 
 
 def load_config():
-    """Load hipobridge.cfg then overlay local.cfg if present."""
+    """Load hippobridge.cfg then overlay local.cfg if present."""
     config = configparser.ConfigParser()
     config.read_dict(DEFAULT_CONFIG)
 
-    if os.path.exists('hipobridge.cfg'):
-        logger.info("Loading hipobridge.cfg configuration")
-        config.read('hipobridge.cfg')
+    if os.path.exists('hippobridge.cfg'):
+        logger.info("Loading hippobridge.cfg configuration")
+        config.read('hippobridge.cfg')
     else:
-        logger.info("hipobridge.cfg not found, using default configuration")
+        logger.info("hippobridge.cfg not found, using default configuration")
 
     if os.path.exists('local.cfg'):
-        logger.info("Loading local.cfg configuration (overrides hipobridge.cfg)")
+        logger.info("Loading local.cfg configuration (overrides hippobridge.cfg)")
         config.read('local.cfg')
 
     return config
@@ -1194,7 +1194,7 @@ if __name__ == "__main__":
     import argparse
     import asyncio
 
-    parser = argparse.ArgumentParser(description='HipoBridge scraping proxy server')
+    parser = argparse.ArgumentParser(description='HippoBridge scraping proxy server')
     parser.add_argument(
         '--log-level', metavar='LEVEL',
         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
@@ -1234,7 +1234,7 @@ if __name__ == "__main__":
             host=args.host,
             service_url=args.service_url,
         )
-        logger.info(f"Starting HipoBridge server on {_HOST}:{_PORT}")
+        logger.info(f"Starting HippoBridge server on {_HOST}:{_PORT}")
         runner = web.AppRunner(app)
         await runner.setup()
         site = web.TCPSite(runner, _HOST, _PORT)

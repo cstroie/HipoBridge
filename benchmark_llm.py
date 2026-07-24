@@ -63,7 +63,7 @@ DEFAULT_MODELS = [
 # --- input assembly -----------------------------------------------------
 
 def _flatten_json(obj) -> list[str]:
-    """Recursively collect non-empty string leaf values from a HipoData JSON."""
+    """Recursively collect non-empty string leaf values from a HippoData JSON."""
     out: list[str] = []
     if isinstance(obj, dict):
         for v in obj.values():

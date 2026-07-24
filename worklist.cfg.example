@@ -2,10 +2,10 @@
 #
 # SETUP
 # -----
-# 1. Copy this file to worklist.cfg in the same directory as hipobridge.py.
+# 1. Copy this file to worklist.cfg in the same directory as hippobridge.py.
 # 2. Fill in your Hipocrate credentials (or export HYP_USER / HYP_PASS).
 # 3. Add one [SECTION] per imaging device (see "Device profiles" below).
-# 4. Start hipobridge.py — the DICOM MWL SCP starts automatically.
+# 4. Start hippobridge.py — the DICOM MWL SCP starts automatically.
 #
 # If worklist.cfg is absent the MWL server is silently disabled; the main
 # HTTP server starts normally.  worklist.cfg is listed in .gitignore and

@@ -5,14 +5,14 @@ Serves Scheduled Procedure Steps from the Hipocrate schedule to imaging
 devices via the DICOM C-FIND protocol (MWL SOP Class 1.2.840.10008.5.1.4.31).
 
 Architecture:
-- An asyncio background task (WorklistRefresher) polls HipoClientSchedule
+- An asyncio background task (WorklistRefresher) polls HippoClientSchedule
   and enriches each entry with patient demographics.
 - The refresher builds a list of pydicom Datasets and stores them in a
   thread-safe WorklistCache.
 - A pynetdicom AE (WorklistServer) runs in a daemon thread, reads from the
   cache, and responds to C-FIND requests.
 
-Configuration: worklist.cfg (alongside hipobridge.cfg).
+Configuration: worklist.cfg (alongside hippobridge.cfg).
 
 Copyright (C) 2025 Costin Stroie <costinstroie@eridu.eu.org>
 """
@@ -35,7 +35,7 @@ try:
 except ImportError:
     DICOM_AVAILABLE = False
 
-from hipoclient import HipoClientSchedule, HipoClientCerere, HipoClientPatient, HipoClientCheckin
+from hippoclient import HippoClientSchedule, HippoClientCerere, HippoClientPatient, HippoClientCheckin
 from extractors import parse_cnp
 
 logger = logging.getLogger('Worklist')
@@ -74,7 +74,7 @@ _LAB_ID_FETCH_DAYS: Dict[str, int] = {
 }
 
 # Maps schedule modality slugs → DICOM modality codes.
-# 'irm' is the slug HipoClientSchedule uses for MRI (from _lab_to_modality).
+# 'irm' is the slug HippoClientSchedule uses for MRI (from _lab_to_modality).
 _MODALITY_CODE: Dict[str, str] = {
     'radio':  'CR',
     'eco':    'US',
@@ -93,11 +93,11 @@ for _slug, _lab_id in _MODALITY_SLUG_TO_LAB_ID.items():
     if _code:
         _DICOM_CODE_TO_LAB_IDS.setdefault(_code, []).append(_lab_id)
 
-# HipoClientSchedule._FHIR_STATUS values that mean the study is still pending.
+# HippoClientSchedule._FHIR_STATUS values that mean the study is still pending.
 # Entries with any other status (completed, ended, entered-in-error) are excluded.
 _ACTIVE_FHIR_STATUSES = frozenset({'on-hold', 'draft', 'active'})
 
-# Hipocrate status text → FHIR status (mirrors HipoClientSchedule._FHIR_STATUS).
+# Hipocrate status text → FHIR status (mirrors HippoClientSchedule._FHIR_STATUS).
 _HIPOCRATE_TO_FHIR: Dict[str, str] = {
     'cerere netrimisa':                   'on-hold',
     'trimisa in laborator':               'draft',
@@ -411,7 +411,7 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
     section       = (patient_info or {}).get('section') or ''
     phone         = (patient_info or {}).get('phone') or ''
     address       = (patient_info or {}).get('address') or ''
-    hipo_id       = (patient_info or {}).get('id') or ''
+    hippo_id       = (patient_info or {}).get('id') or ''
     priority      = 'STAT' if (entry.get('priority') or '').lower() not in ('normala', 'normal', '') else 'ROUTINE'
     size          = _height_to_meters((patient_info or {}).get('height') or '')
     weight        = _weight_to_kg((patient_info or {}).get('weight') or '')
@@ -419,12 +419,12 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
     comments      = (patient_info or {}).get('comment') or ''
     if email:
         comments = f'Email: {email}' + (f'\n{comments}' if comments else '')
-    admission_id  = (patient_info or {}).get('admission_id') or hipo_id or request_id
+    admission_id  = (patient_info or {}).get('admission_id') or hippo_id or request_id
 
     other_ids = None
-    if hipo_id:
+    if hippo_id:
         other_id = Dataset()
-        other_id.PatientID = hipo_id
+        other_id.PatientID = hippo_id
         other_id.IssuerOfPatientID = 'Hipocrate'
         other_ids = Sequence([other_id])
 
@@ -847,7 +847,7 @@ class WorklistRefresher:
         self._last_range:     Dict[str, Tuple[str, str]] = {}
 
     def _client(self, cls):
-        """Return a HipoClient subclass instance authenticated with the service account."""
+        """Return a HippoClient subclass instance authenticated with the service account."""
         c = cls(self._svc_url)
         c.set_credentials(self._username, self._password)
         return c
@@ -858,13 +858,13 @@ class WorklistRefresher:
             return self._patient_cache[request_id]
 
         try:
-            cerere = self._client(HipoClientCerere)
+            cerere = self._client(HippoClientCerere)
             cerere_data = await cerere.fetch_and_parse(id=request_id)
             patient_id = cerere_data.get('patient.id')
             if not patient_id:
                 return None
 
-            patient_client = self._client(HipoClientPatient)
+            patient_client = self._client(HippoClientPatient)
             patient_data = await patient_client.fetch_and_parse(id=patient_id)
             if patient_data.get('status') == 'error':
                 return None
@@ -876,7 +876,7 @@ class WorklistRefresher:
             checkin_ids = patient_data.get('checkin') or []
             if checkin_ids:
                 latest_checkin_id = max(checkin_ids, key=lambda cid: int(cid))
-                checkin_client = self._client(HipoClientCheckin)
+                checkin_client = self._client(HippoClientCheckin)
                 checkin_data = await checkin_client.fetch_and_parse(id=latest_checkin_id)
                 if checkin_data.get('status') != 'error':
                     admission_id = checkin_data.get('checkin.id') or latest_checkin_id
@@ -932,10 +932,10 @@ class WorklistRefresher:
             end = max_end
 
         # refresh_if_stale throttles how often this runs (default 60s), but
-        # HipoClientSchedule's own URLCache TTL is 30 minutes — without force=True
+        # HippoClientSchedule's own URLCache TTL is 30 minutes — without force=True
         # a "refresh" just replays the same stale HTML and status changes on
         # Hipocrate (e.g. a study finishing) never reach the worklist cache.
-        client = self._client(HipoClientSchedule)
+        client = self._client(HippoClientSchedule)
         data = await client.fetch_and_parse(
             start_date=start, end_date=end, lab_id=lab_id, force=True
         )

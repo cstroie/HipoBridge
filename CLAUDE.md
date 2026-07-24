@@ -8,7 +8,7 @@
 
 ```bash
 export HYP_USER=<username> HYP_PASS=<password>
-python3 hipobridge.py
+python3 hippobridge.py
 ```
 
 Test credentials are in `worklist.cfg` (`username` / `password` fields under `[worklist]`). Server runs on `http://127.0.0.1:44660`.
@@ -28,7 +28,7 @@ CLI: `--port`, `--host`, `--service-url`, `--log-level DEBUG|INFO|WARNING|ERROR`
 
 ```bash
 python3 runtests.py               # all tests
-python3 runtests.py extractors    # no server needed (also: markdown, hipodata)
+python3 runtests.py extractors    # no server needed (also: markdown, hippodata)
 ```
 
 ## Architecture
@@ -36,30 +36,30 @@ python3 runtests.py extractors    # no server needed (also: markdown, hipodata)
 HippoBridge is a **scraping proxy** — no database. Every request authenticates against Hipocrate, scrapes HTML, returns JSON or FHIR R4.
 
 ```
-HTTP client → hipobridge.py (@require_auth) → HipoClient* (cache + semaphore) → fhir.py → response
+HTTP client → hippobridge.py (@require_auth) → HippoClient* (cache + semaphore) → fhir.py → response
 ```
 
 ### Client routing table
 
 | Class | Route | Hipocrate URL |
 |---|---|---|
-| `HipoClientPatient` | `/api/patient/{id}` | `/Pacient/edit.asp?id={id}` |
-| `HipoClientPatientSearch` | `/api/patient?q=` | `/files/search.asp?what=PA` |
-| `HipoClientServiceRequest` | `/api/request/{id}` | `/PARA/Printabile/buletinRecoltari.asp?id={id}` |
-| `HipoClientServiceRequestSearch` | `/api/request?patient=` | `/Pacient/analysesEpisod.asp` |
-| `HipoClientImagingStudy` | `/api/study/{id}` | `/PARA/Printabile/BuletinAnalize.asp?id={id}&type=3` |
-| `HipoClientDiagnosticReport` | `/api/report/{id}` | `/PARA/Printabile/BuletinAnalize.asp?id={id}&type=1` |
-| `HipoClientCheckout` | `/api/checkout/{id}` | `/gen_printabile/BiletExternare.asp?RelId={id}&RelName=CO` |
-| `HipoClientCheckin` | `/api/checkin/{id}`, `/fhir/Encounter/{id}?type=checkin` | `/files/checkin.asp?id={id}` |
-| `HipoClientCheckup` | `/api/checkup/{id}`, `/fhir/Encounter/{id}?type=checkup` | `/files/checkup.asp?cuid={id}` |
-| `HipoClientPresentation` | `/api/presentation/{id}`, `/fhir/Encounter/{id}?type=presentation` | `/gen_printabile/FisaPrezentare.asp?relname=PR&id={id}` |
-| `HipoClientCerere` | `/api/request/{id}/patient`, `/fhir/ServiceRequest/{id}?type=cerere` | `/PARA/NOM/Listare/cerere.asp?id={id}` |
-| `HipoClientReportWrite` | `POST /api/request/{id}/report` | `/PARA/NOM/Listare/cerere.asp` (POST) |
-| `HipoClientReportValidate` | `POST /api/request/{id}/validate` | `/PARA/NOM/Listare/cerere.asp` (POST action=VDV) |
-| `HipoClientCererePerform` | `POST /api/request/{id}/perform` | `/PARA/NOM/Listare/cerere.asp` (form replay, sets DataEfectuarii) |
-| `HipoClientSchedule` | `/api/schedule`, `/fhir/Schedule` | `/PARA/NOM/Listare/?id=44&NrPePag=100` |
-| `HipoClientObservationBundle` | `/fhir/Observation?patient=` | `/Pacient/analysesEpisod.asp` (parallel per domain) |
-| `HipoClientWhoami` | `/api/whoami` | `Template/menu.asp` |
+| `HippoClientPatient` | `/api/patient/{id}` | `/Pacient/edit.asp?id={id}` |
+| `HippoClientPatientSearch` | `/api/patient?q=` | `/files/search.asp?what=PA` |
+| `HippoClientServiceRequest` | `/api/request/{id}` | `/PARA/Printabile/buletinRecoltari.asp?id={id}` |
+| `HippoClientServiceRequestSearch` | `/api/request?patient=` | `/Pacient/analysesEpisod.asp` |
+| `HippoClientImagingStudy` | `/api/study/{id}` | `/PARA/Printabile/BuletinAnalize.asp?id={id}&type=3` |
+| `HippoClientDiagnosticReport` | `/api/report/{id}` | `/PARA/Printabile/BuletinAnalize.asp?id={id}&type=1` |
+| `HippoClientCheckout` | `/api/checkout/{id}` | `/gen_printabile/BiletExternare.asp?RelId={id}&RelName=CO` |
+| `HippoClientCheckin` | `/api/checkin/{id}`, `/fhir/Encounter/{id}?type=checkin` | `/files/checkin.asp?id={id}` |
+| `HippoClientCheckup` | `/api/checkup/{id}`, `/fhir/Encounter/{id}?type=checkup` | `/files/checkup.asp?cuid={id}` |
+| `HippoClientPresentation` | `/api/presentation/{id}`, `/fhir/Encounter/{id}?type=presentation` | `/gen_printabile/FisaPrezentare.asp?relname=PR&id={id}` |
+| `HippoClientCerere` | `/api/request/{id}/patient`, `/fhir/ServiceRequest/{id}?type=cerere` | `/PARA/NOM/Listare/cerere.asp?id={id}` |
+| `HippoClientReportWrite` | `POST /api/request/{id}/report` | `/PARA/NOM/Listare/cerere.asp` (POST) |
+| `HippoClientReportValidate` | `POST /api/request/{id}/validate` | `/PARA/NOM/Listare/cerere.asp` (POST action=VDV) |
+| `HippoClientCererePerform` | `POST /api/request/{id}/perform` | `/PARA/NOM/Listare/cerere.asp` (form replay, sets DataEfectuarii) |
+| `HippoClientSchedule` | `/api/schedule`, `/fhir/Schedule` | `/PARA/NOM/Listare/?id=44&NrPePag=100` |
+| `HippoClientObservationBundle` | `/fhir/Observation?patient=` | `/Pacient/analysesEpisod.asp` (parallel per domain) |
+| `HippoClientWhoami` | `/api/whoami` | `Template/menu.asp` |
 
 ### Concurrency and caching (critical — Hipocrate is fragile)
 
@@ -76,7 +76,7 @@ HTTP client → hipobridge.py (@require_auth) → HipoClient* (cache + semaphore
 - `OperationOutcome.from_error()` default code is `"processing"`. Pass explicit code for `"not-found"`, `"required"`, etc.
 - `Encounter` uses R4 field names: `period`, `reasonCode`, `reasonReference`, `hospitalization` — not R5 names.
 
-**`hipodata.py`**:
+**`hippodata.py`**:
 - `store()` strips strings, unwraps single-item lists, converts `datetime` → ISO, skips `None`. Dot-notation creates nested dicts.
 - `get(key)` defaults to `None` — callers that need `""` must pass it explicitly.
 - `set_success()` removes the `message` key rather than setting it to `""`.
@@ -130,9 +130,9 @@ Both prompts were rewritten per `_testing_/final50/{REPORT,EPICRISIS}_PROPOSALS.
 ### Error handling
 
 - `OperationOutcome` HTTP status: `not-found` → 404; `error`/`fatal` severity → 500; `warning` → 400.
-- `HipoClientDiagnosticReport` and `HipoClientCheckout` evict cache on empty result.
+- `HippoClientDiagnosticReport` and `HippoClientCheckout` evict cache on empty result.
 - Datetime comparisons use naive datetimes — strip `tzinfo` if caller passes TZ-aware strings.
-- Never swallow exceptions in `fetch_and_parse` — log and include in returned `HipoData`.
+- Never swallow exceptions in `fetch_and_parse` — log and include in returned `HippoData`.
 
 ### Scraper-specific gotchas
 
@@ -156,7 +156,7 @@ Both prompts were rewritten per `_testing_/final50/{REPORT,EPICRISIS}_PROPOSALS.
 
 **Radiology report workflow** (cerere.asp write path):
 - Access controlled by `_ALLOWED_RADIOLOGISTS` — a set of usernames from `[radiology] allowed_radiologists` in config. All three write endpoints (perform/report/validate) return 403 for non-members. `GET /api/whoami` returns `can_write_reports: true` when the authenticated user is in this set.
-- **Perform**: `HipoClientCererePerform` GETs cerere.asp, extracts all form fields (skipping submit/button/image/reset; only checked checkboxes/radios), then POSTs back with `DataEfectuarii` overridden and `hdnAction=S`. JS validation in the browser blocks empty `DataEfectuarii`, but the server accepts it without `strSituatieNeincadrabila`/`Justificare`. Evicts cerere.asp and BuletinAnalize caches after POST.
+- **Perform**: `HippoClientCererePerform` GETs cerere.asp, extracts all form fields (skipping submit/button/image/reset; only checked checkboxes/radios), then POSTs back with `DataEfectuarii` overridden and `hdnAction=S`. JS validation in the browser blocks empty `DataEfectuarii`, but the server accepts it without `strSituatieNeincadrabila`/`Justificare`. Evicts cerere.asp and BuletinAnalize caches after POST.
 - **Write**: POSTs report HTML to cerere.asp. Frontend converts textarea markdown to HTML via `marked.parse()` before posting.
 - **Validate**: POSTs `action=VDV` to cerere.asp. Evicts both BuletinAnalize and cerere.asp caches.
 - `performed_at` comes from `DataEfectuarii` input on cerere.asp. If blank (old exam done via Hipocrate UI), frontend also treats `allValidated` as implicit performed to suppress the Perform button.
@@ -196,5 +196,5 @@ SPA: `main.html` + `scripts.js` + `styles.css` + `marked.js`. All assets self-ho
 
 ### Dual API surface
 
-- `/api/<resource>` → `HipoData` plain JSON; `?debug=page` returns raw Hipocrate HTML.
+- `/api/<resource>` → `HippoData` plain JSON; `?debug=page` returns raw Hipocrate HTML.
 - `/fhir/<Resource>` → FHIR R4 JSON.
