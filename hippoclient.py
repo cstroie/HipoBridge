@@ -1667,9 +1667,10 @@ class HippoClientServiceRequestSearch(HippoClientServiceRequest):
             data.store("patient.cnp", extract_text_after_label(soup, r'CNP\s*:', 'tr'))
             if data.get("patient.cnp"):
                 parsed_cnp = parse_cnp(data.get("patient.cnp"))
-                data.store("patient.gender", parsed_cnp.get("gender"))
-                data.store("patient.date", parsed_cnp.get("birth_date"))
-                data.store("patient.age", parsed_cnp.get("age"))
+                if parsed_cnp.get("valid"):
+                    data.store("patient.gender", parsed_cnp.get("gender"))
+                    data.store("patient.date", parsed_cnp.get("birth_date"))
+                    data.store("patient.age", parsed_cnp.get("age"))
 
             requests = []
             seen_ids = set()
@@ -1932,7 +1933,6 @@ def _parse_buletin_header(soup, data: HippoData) -> None:
                 cnp = cnp_m.group(1)
                 data.store("patient.cnp", cnp)
                 parsed = parse_cnp(cnp)
-                data.store("patient.gender", parsed.get("gender"))
                 data.store("patient.birth_date", parsed.get("birth_date"))
                 data.store("patient.age", parsed.get("age"))
 
@@ -1941,6 +1941,12 @@ def _parse_buletin_header(soup, data: HippoData) -> None:
             if pid_m:
                 data.store("patient.id", pid_m.group(1))
             data.store("request.is_urgent", bool(re.search(r'Urgenta:DA', cell1)))
+
+            sex_m = re.search(r'SEX:\s*([MF])', cell1, re.IGNORECASE)
+            if sex_m:
+                data.store("patient.gender", "male" if sex_m.group(1).upper() == "M" else "female")
+            elif cnp_m and parsed.get("valid"):
+                data.store("patient.gender", parsed.get("gender"))
 
             cell2 = row2_cells[2].get_text(strip=True)
             section_m = re.search(r'SECTIE:(.*?)(?:MEDIC:|$)', cell2)
@@ -2687,9 +2693,10 @@ class HippoClientCheckout(HippoClient):
                     cnp = cells[1][len('CNP:'):]
                     data.store("patient.cnp", cnp)
                     parsed = parse_cnp(cnp)
-                    data.store("patient.gender", parsed.get("gender"))
-                    data.store("patient.date", parsed.get("birth_date"))
-                    data.store("patient.age", parsed.get("age"))
+                    if parsed.get("valid"):
+                        data.store("patient.gender", parsed.get("gender"))
+                        data.store("patient.date", parsed.get("birth_date"))
+                        data.store("patient.age", parsed.get("age"))
 
                 elif nc == 2 and 'CASA ASIGURARE:' in cells[0]:
                     data.store("patient.insurance_house", cells[0].split('CASA ASIGURARE:',1)[1].strip())
@@ -3019,9 +3026,10 @@ class HippoClientCheckin(HippoClient):
                         data.store("patient.name", m.group(1).strip())
                         data.store("patient.cnp", m.group(2))
                         parsed = parse_cnp(m.group(2))
-                        data.store("patient.gender", parsed.get("gender"))
-                        data.store("patient.date", parsed.get("birth_date"))
-                        data.store("patient.age", parsed.get("age"))
+                        if parsed.get("valid"):
+                            data.store("patient.gender", parsed.get("gender"))
+                            data.store("patient.date", parsed.get("birth_date"))
+                            data.store("patient.age", parsed.get("age"))
                     if nc >= 2:
                         m2 = re.search(r'Prezentare\s*\[\s*(\S+)\s*\]\s*Data:\s*(\S+\s+\S+)\s*Urgenta:\s*(\S+)\s*Sect\w*:\s*(\S+)', cells[1])
                         if m2:
@@ -3281,9 +3289,10 @@ class HippoClientCheckup(HippoClient):
                         data.store("patient.name", m.group(1).strip())
                         data.store("patient.cnp", m.group(2))
                         parsed = parse_cnp(m.group(2))
-                        data.store("patient.gender", parsed.get("gender"))
-                        data.store("patient.date", parsed.get("birth_date"))
-                        data.store("patient.age", parsed.get("age"))
+                        if parsed.get("valid"):
+                            data.store("patient.gender", parsed.get("gender"))
+                            data.store("patient.date", parsed.get("birth_date"))
+                            data.store("patient.age", parsed.get("age"))
                     m2 = re.search(r'Prezentare\s*\[\s*(\S+)\s*\]\s*Data:\s*(\S+\s+\S+)\s*Urgenta:\s*(\S+)\s*Sect\w*:\s*(\S+)', cells[1] if nc > 1 else '')
                     if m2:
                         data.store("presentation.date_time", m2.group(2))
@@ -3829,7 +3838,8 @@ class HippoClientPresentation(HippoClient):
                             parsed = parse_cnp(cnp_raw)
                             if parsed.get("valid"):
                                 data.store("patient.cnp", cnp_raw)
-                                data.store("patient.gender", parsed["gender"])
+                                if not data.get("patient.gender"):
+                                    data.store("patient.gender", parsed["gender"])
                                 data.store("patient.birth_date", parsed["birth_date"])
                                 data.store("patient.age", parsed["age"])
 
@@ -4736,9 +4746,10 @@ def _text_to_report_html(text: str) -> str:
     # Convert markdown to HTML for each paragraph
     html_paragraphs = [_markdown_to_html(p) for p in paragraphs]
 
-    first = html_paragraphs[0]
-    rest = ''.join(f'<div>{p}</div>' for p in html_paragraphs[1:])
-    return first + rest
+    #first = html_paragraphs[0]
+    #rest = ''.join(f'<div>{p}</div>' for p in html_paragraphs[1:])
+    #return first + rest
+    return ''.join(f'<div>{p}</div>' for p in html_paragraphs)
 
 
 class HippoClientReportWrite(HippoClient):
