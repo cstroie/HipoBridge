@@ -4045,6 +4045,22 @@ document.addEventListener('DOMContentLoaded', function() {
         } finally {
             if (loadingEl) loadingEl.hidden = true;
             if (bodyEl) bodyEl.hidden = false;
+
+            // Lab requests with no report data yet (not performed / no results)
+            // clutter the grid with empty cards a radiologist can't act on
+            // (no write access — see createAnalysisCard). Drop them instead.
+            if (!IMAGING_TYPES.includes(type) && article.classList.contains('no-report')) {
+                article.remove();
+                if (elements.labCount) {
+                    const n = parseInt(elements.labCount.textContent, 10);
+                    if (!Number.isNaN(n)) elements.labCount.textContent = Math.max(0, n - 1);
+                }
+                if (elements.labGrid && elements.labNoData && !elements.labGrid.querySelector('.analysis-card')) {
+                    elements.labNoData.style.display = 'block';
+                }
+                return;
+            }
+
             // Show write/validate buttons for imaging types once canWriteReports is resolved
             // (radiologists have no write access to lab reports — skip lab cards entirely)
             await whoamiReady;
