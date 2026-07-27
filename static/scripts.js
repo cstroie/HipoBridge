@@ -4796,7 +4796,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
             } else if (isImaging && resultNotes.length > 0) {
-                const showTitles = resultNotes.length > 1 && series.length >= resultNotes.length;
+                // Matches the Imaging tab card's condition (fetchAndFillReport) so a
+                // single-investigation report still gets a .series-result-title —
+                // refreshActionState's merge pass below matches by title text, and
+                // without one here it couldn't tell this investigation was already
+                // rendered, appending a duplicate copy underneath.
+                const showTitles = series.length >= resultNotes.length;
                 resultNotes.forEach((note, i) => {
                     if (!note.text) return;
                     if (showTitles && series[i]?.description) {
@@ -4834,6 +4839,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const imagingTypes = ['radio', 'ct', 'irm', 'eco', 'rads', 'fluoro'];
         const isImaging = imagingTypes.includes(modality);
+
+        // Set by loadAndRenderReport, read by refreshActionState's `performed`
+        // calc — mirrors fetchAndFillReport's hasReportFromStudy: once an exam
+        // is fully finalised, cerere.asp may stop exposing fn_validate_cerere
+        // calls (so allValidated/performed_at both read empty) even though a
+        // real report already exists.
+        let hasReportFromStudy = false;
 
         async function loadAndRenderReport() {
             const endpoint = isImaging
@@ -4875,6 +4887,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 renderReportContent(reportData, isImaging);
                 const hasReport = !bodyDiv.classList.contains('report-empty');
+                hasReportFromStudy = hasReport;
 
                 if (examiner && hasReport) {
                     const signed = document.createElement('p');
@@ -4909,7 +4922,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 const hasReport    = analyses.some(a => a.text);
                 const isEditable   = analyses.some(a => a.editable);
                 const allValidated = analyses.length > 0 && analyses.every(a => a.validated);
-                const performed    = Boolean(d.performed_at) || allValidated;
+                // Treat as performed if: DataEfectuarii set, all cerere analyses
+                // validated, or the report content already exists (cerere.asp may not
+                // expose fn_validate_cerere calls once the exam is fully finalised).
+                const performed    = Boolean(d.performed_at) || allValidated || hasReportFromStudy;
 
                 // Ensure every requested investigation is represented (mirrors the
                 // Imaging tab card's fetchAndFillReport): match by label against

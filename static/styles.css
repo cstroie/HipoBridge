@@ -3558,6 +3558,16 @@ dialog.modal article > footer {
     color: var(--ink-3);
 }
 
+.report-modal-validate-toggles {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--space-8);
+    padding: var(--space-12) var(--space-24);
+    border-top: 1px solid var(--border);
+}
+.report-modal-validate-toggles[hidden] { display: none; }
+
 .report-modal-footer {
     padding: var(--space-16) var(--space-24);
     border-top: 1px solid var(--border);
