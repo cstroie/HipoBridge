@@ -3843,6 +3843,14 @@ document.addEventListener('DOMContentLoaded', function() {
             ? `/fhir/ImagingStudy/${id}`
             : `/fhir/DiagnosticReport/${id}`;
 
+        // Resolve whoami up front — this function can fire from the
+        // IntersectionObserver right after page load, racing the in-flight
+        // fetchWhoami() call. Reading canWriteReports before it settles (it's
+        // used below, well before the old await point) would silently treat
+        // an allowed radiologist as read-only on the first render pass after
+        // a reload.
+        await whoamiReady;
+
         const loadingEl = article.querySelector('.report-loading');
         const bodyEl    = article.querySelector('.report-body');
 
@@ -4067,7 +4075,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // just without the Perform/Edit/validate controls (canWriteReports-gated
             // below). /api/request/{id}/patient only requires auth, not radiologist
             // write access, so this call is safe for any logged-in user.
-            await whoamiReady;
+            // (whoamiReady already awaited at the top of this function.)
             if (IMAGING_TYPES.includes(type)) {
                 const writeBtn = article.querySelector('.btn-write-report');
                 const performBtn = article.querySelector('.btn-perform-exam');
