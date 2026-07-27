@@ -2015,6 +2015,11 @@ select {
     margin-top: 0;
 }
 
+.report-note-pending {
+    font-style: italic;
+    color: var(--muted);
+}
+
 .report-loading {
     display: flex;
     align-items: center;

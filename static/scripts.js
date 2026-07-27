@@ -4082,26 +4082,32 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Store for editor
                     article.dataset.reportAnalyses = JSON.stringify(analyses);
 
-                    // Show unvalidated report text if BuletinAnalize had nothing yet
+                    // Show unvalidated report text if BuletinAnalize had nothing yet.
+                    // List every requested investigation (not just the ones with text
+                    // already filled in) so a multi-step request (e.g. anesthesia +
+                    // the scan itself) always shows all its steps, and a not-yet-performed
+                    // exam still shows its investigation name(s) instead of a blank card.
                     const previewEl = article.querySelector('.report-preview');
-                    if (previewEl && !previewEl.textContent.trim()) {
-                        const withText = analyses.filter(a => a.text);
-                        if (withText.length) {
-                            const showTitles = withText.length > 1 || withText[0]?.label;
-                            for (const a of withText) {
-                                if (showTitles && a.label) {
-                                    const titleEl = document.createElement('p');
-                                    titleEl.className = 'series-result-title';
-                                    titleEl.textContent = a.label;
-                                    previewEl.appendChild(titleEl);
-                                }
-                                const div = document.createElement('div');
+                    if (previewEl && !previewEl.textContent.trim() && analyses.length) {
+                        const showTitles = analyses.length > 1 || analyses[0]?.label;
+                        for (const a of analyses) {
+                            if (showTitles && a.label) {
+                                const titleEl = document.createElement('p');
+                                titleEl.className = 'series-result-title';
+                                titleEl.textContent = a.label;
+                                previewEl.appendChild(titleEl);
+                            }
+                            const div = document.createElement('div');
+                            if (a.text) {
                                 div.className = 'report-note';
                                 div.innerHTML = a.text;
-                                previewEl.appendChild(div);
+                            } else {
+                                div.className = 'report-note report-note-pending';
+                                div.textContent = 'Not yet reported.';
                             }
-                            article.classList.remove('no-report');
+                            previewEl.appendChild(div);
                         }
+                        article.classList.remove('no-report');
                     }
 
                     const hasReport    = analyses.some(a => a.text);
@@ -4858,12 +4864,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Imaging tab cards use, so a just-saved report doesn't read as
                 // "not yet available".
                 if (bodyDiv.classList.contains('report-empty')) {
-                    const withText = analyses.filter(a => a.text);
-                    if (withText.length) {
+                    if (analyses.length) {
                         bodyDiv.innerHTML = '';
                         bodyDiv.classList.remove('report-empty');
-                        const showTitles = withText.length > 1 || withText[0]?.label;
-                        for (const a of withText) {
+                        const showTitles = analyses.length > 1 || analyses[0]?.label;
+                        for (const a of analyses) {
                             if (showTitles && a.label) {
                                 const titleEl = document.createElement('p');
                                 titleEl.className = 'series-result-title';
@@ -4871,8 +4876,13 @@ document.addEventListener('DOMContentLoaded', function() {
                                 bodyDiv.appendChild(titleEl);
                             }
                             const div = document.createElement('div');
-                            div.className = 'report-note';
-                            div.innerHTML = a.text;
+                            if (a.text) {
+                                div.className = 'report-note';
+                                div.innerHTML = a.text;
+                            } else {
+                                div.className = 'report-note report-note-pending';
+                                div.textContent = 'Not yet reported.';
+                            }
                             bodyDiv.appendChild(div);
                         }
                     }
