@@ -4732,9 +4732,12 @@ def _markdown_to_html(text: str) -> str:
         return f'<{tag}>{html_module.escape(content)}</{tag}>'
 
     # Replace **bold** and *italic* patterns
-    # Use non-greedy matching and word boundaries to avoid false matches
+    # Use non-greedy matching and word boundaries to avoid false matches.
+    # Both patterns capture the markup itself (group 1) so replace_markdown's
+    # group(1)/group(2) lookup works for either — the italic pattern previously
+    # had no markup group, so group(2) raised IndexError on any *italic*-only text.
     text = re.sub(r'(\*\*)(.+?)\1', replace_markdown, text)
-    text = re.sub(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', replace_markdown, text)
+    text = re.sub(r'(?<!\*)(\*)(?!\*)(.+?)(?<!\*)\*(?!\*)', replace_markdown, text)
 
     # Escape remaining unescaped text (for < > & etc that aren't in tags)
     return text
