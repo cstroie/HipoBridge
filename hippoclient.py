@@ -4620,10 +4620,13 @@ class HippoClientSchedule(HippoClient):
         'trimisa in laborator':               'draft',
         'primita in laborator':               'draft',
         'in lucru(nv)':                       'active',
+        'in lucru(pv)':                       'active',
         'fara analize':                       'entered-in-error',
         'cerere completata':                  'completed',
         'cerere completata/partial validata': 'completed',
         'terminata':                          'ended',
+        'terminata!':                         'ended',
+        'cerere anulata':                     'revoked',
     }
 
     def fhir_response(self, parsed_data: HippoData, **kwargs) -> Union[FHIRBundle, FHIROperationOutcome]:

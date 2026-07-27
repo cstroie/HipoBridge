@@ -140,6 +140,7 @@
     --st-inlab:    #1d4ed8;  /* blue-700   */
     --st-finished: #92400e;  /* amber-800  */
     --st-completed:#065f46;  /* emerald-800*/
+    --st-cancelled:#78716c;  /* stone-600  */
     --urgent:      #dc2626;
     --danger: #ef4444;
     --warning: #f59e0b;
@@ -304,6 +305,7 @@
     --st-inlab:    #60a5fa;
     --st-finished: #fbbf24;
     --st-completed:#34d399;
+    --st-cancelled:#a8a29e;  /* stone-400  */
     --urgent:      #f87171;
     /* Dark-theme text on solid accent surfaces: light-theme accents are dark
        (white text passes 4.5:1), but dark-theme accents are pastel/light —
@@ -2979,7 +2981,7 @@ select {
 .timeline-status-badge.status-active   { color: var(--st-inlab);    background: color-mix(in srgb,var(--st-inlab)    12%,transparent); }
 .timeline-status-badge.status-done     { color: var(--st-completed);background: color-mix(in srgb,var(--st-completed)12%,transparent); }
 .timeline-status-badge.status-ended    { color: var(--st-completed); background: color-mix(in srgb,var(--st-completed) 12%,transparent); }
-.timeline-status-badge.status-revoked  { color: var(--muted);       background: color-mix(in srgb,var(--muted)       12%,transparent); }
+.timeline-status-badge.status-revoked  { color: var(--st-cancelled); background: color-mix(in srgb,var(--st-cancelled) 12%,transparent); }
 .timeline-status-badge.status-error    { color: var(--urgent);      background: color-mix(in srgb,var(--urgent)      12%,transparent); }
 
 /* Date range + limit + refresh */
