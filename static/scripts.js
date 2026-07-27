@@ -3817,11 +3817,13 @@ document.addEventListener('DOMContentLoaded', function() {
             setCardIndication(article, indication);
         }
 
-        // Remove write/validate controls from non-imaging cards immediately (type is known now)
-        const IMAGING_TYPES_WRITE = ['radio', 'ct', 'irm', 'eco', 'rads'];
-        if (!IMAGING_TYPES_WRITE.includes(analysisType)) {
+        // Remove write/perform/validate controls from non-imaging cards immediately
+        // (type is known now) — a radiologist has no access to write lab reports.
+        if (!IMAGING_TYPES.includes(analysisType)) {
             article.querySelector('.btn-write-report')?.remove();
+            article.querySelector('.btn-perform-exam')?.remove();
             article.querySelector('.validate-toggles')?.remove();
+            article.querySelector('.report-actions')?.remove();
         }
 
         return article;
@@ -4044,8 +4046,9 @@ document.addEventListener('DOMContentLoaded', function() {
             if (loadingEl) loadingEl.hidden = true;
             if (bodyEl) bodyEl.hidden = false;
             // Show write/validate buttons for imaging types once canWriteReports is resolved
+            // (radiologists have no write access to lab reports — skip lab cards entirely)
             await whoamiReady;
-            if (canWriteReports) {
+            if (canWriteReports && IMAGING_TYPES.includes(type)) {
                 const writeBtn = article.querySelector('.btn-write-report');
                 const performBtn = article.querySelector('.btn-perform-exam');
                 if (writeBtn) writeBtn.hidden = true;
