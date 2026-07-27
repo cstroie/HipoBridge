@@ -3850,6 +3850,16 @@ document.addEventListener('DOMContentLoaded', function() {
         // an allowed radiologist as read-only on the first render pass after
         // a reload.
         await whoamiReady;
+        // The automatic whoami fired by initApp() is fire-and-forget with a
+        // silent catch — if that one attempt failed (e.g. a cold Hipocrate
+        // session right after reload), nothing retries it and the user is
+        // stuck read-only for the rest of the session (previously only
+        // fixed by opening the account modal, which happens to retry).
+        // Self-heal here instead: retry once if it never got whoamiData.
+        if (!whoamiData) {
+            whoamiReady = fetchWhoami().catch(() => {});
+            await whoamiReady;
+        }
 
         const loadingEl = article.querySelector('.report-loading');
         const bodyEl    = article.querySelector('.report-body');
