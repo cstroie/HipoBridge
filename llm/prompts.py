@@ -117,11 +117,11 @@ def _language_directive(language: str) -> str:
 
 
 # Kinds served by the streaming endpoint (POST /api/ai/summarize/stream).
-# Separate from DATE_AWARE_KINDS even though currently the same set — one is
+# Separate from DATE_AWARE_KINDS even though currently overlapping — one is
 # about date context, the other about transport; independently editable.
-# imaging (40 tokens) and lab (already fast, table-free prose) don't benefit
-# enough from streaming to justify a second code path for them.
-STREAMING_KINDS = frozenset({"report", "epicrisis", "pre_exam"})
+# imaging (40 tokens) is excluded — too short for streaming to buy anything.
+# lab (400 tokens) is included — long enough that perceived latency matters.
+STREAMING_KINDS = frozenset({"report", "epicrisis", "pre_exam", "lab"})
 
 
 def _build_messages(client, kind: str, text: str) -> list[dict]:

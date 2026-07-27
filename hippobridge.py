@@ -840,10 +840,10 @@ _STREAM_ERROR_SENTINEL = "\x1f"
 async def post_ai_summarize_stream(request):
     """Streaming counterpart to post_ai_summarize, for the kinds where
     perceived latency matters most: report, epicrisis, pre_exam (up to ~900
-    tokens / ~100s on a 4B model). imaging (40 tokens) and lab stay on the
-    non-streaming endpoint — streaming buys them nothing.
+    tokens / ~100s on a 4B model), and lab (400 tokens). imaging (40 tokens)
+    stays on the non-streaming endpoint — streaming buys it nothing.
 
-    Body: {"kind": "report|epicrisis|pre_exam", "text": "...", "force": bool}.
+    Body: {"kind": "report|epicrisis|pre_exam|lab", "text": "...", "force": bool}.
     Same auth/cache/validation gates as post_ai_summarize, and the same
     ai_cache keyed by (kind, sha256(text)) — a result cached by either
     endpoint is visible to both. On a cache hit the full cached text is

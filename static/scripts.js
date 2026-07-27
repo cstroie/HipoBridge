@@ -1420,10 +1420,10 @@ document.addEventListener('DOMContentLoaded', function() {
         return data.summary || '';
     }
 
-    // Kinds served by /api/ai/summarize/stream (report/epicrisis/pre_exam —
-    // the ones long enough that perceived latency matters; imaging/lab stay
-    // on the plain aiSummarize() endpoint above).
-    const STREAMING_KINDS = new Set(['report', 'epicrisis', 'pre_exam']);
+    // Kinds served by /api/ai/summarize/stream (report/epicrisis/pre_exam/lab —
+    // the ones long enough that perceived latency matters; imaging stays on
+    // the plain aiSummarize() endpoint above, too short to benefit).
+    const STREAMING_KINDS = new Set(['report', 'epicrisis', 'pre_exam', 'lab']);
 
     // Rare sentinel (ASCII Unit Separator) the server uses to signal a
     // mid-stream failure it can no longer report via HTTP status, since the
