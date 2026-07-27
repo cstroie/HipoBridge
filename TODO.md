@@ -17,7 +17,7 @@
 
 - [X] Derive patient gender from CNP if not clearly specified 
 
-- [ ] Find a better color for the exams counter in Schedule
+- [X] Find a better color for the exams counter in Schedule
 
 - [ ] Remove the "Urgent" badge in lab and imaging and keep only the red border 
 
