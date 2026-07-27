@@ -3778,11 +3778,9 @@ document.addEventListener('DOMContentLoaded', function() {
             regionsEl.textContent = ` · ${regions.join(', ')}`;
         }
 
-        // Urgent badge
+        // Urgent: red border only
         if (serviceRequest.priority === 'urgent') {
             article.classList.add('urgent-card');
-            const urgentEl = article.querySelector('.urgent-badge');
-            if (urgentEl) urgentEl.hidden = false;
         }
 
         // Ordering physician (from ServiceRequest.requester)
