@@ -14,3 +14,10 @@
 - [ ] Do not automatically generate the AI content after patient load.
 
 - [ ] Add support for "in progress" (perfomed, i think), and 'cancelled' exam status
+
+- [X] Derive patient gender from CNP if not clearly specified 
+
+- [ ] Find a better color for the exams counter in Schedule
+
+- [ ] Remove the "Urgent" badge in lab and imaging and keep only the red border 
+
