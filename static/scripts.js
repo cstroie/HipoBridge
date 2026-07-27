@@ -4061,18 +4061,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            // Show write/validate buttons for imaging types once canWriteReports is resolved
-            // (radiologists have no write access to lab reports — skip lab cards entirely)
+            // Fetch cerere.asp state (investigation names/text + per-analysis validate
+            // info) for every imaging card, regardless of write access — a read-only
+            // viewer should still see each investigation's name and pending status,
+            // just without the Perform/Edit/validate controls (canWriteReports-gated
+            // below). /api/request/{id}/patient only requires auth, not radiologist
+            // write access, so this call is safe for any logged-in user.
             await whoamiReady;
-            if (canWriteReports && IMAGING_TYPES.includes(type)) {
+            if (IMAGING_TYPES.includes(type)) {
                 const writeBtn = article.querySelector('.btn-write-report');
                 const performBtn = article.querySelector('.btn-perform-exam');
-                if (writeBtn) writeBtn.hidden = true;
-                if (performBtn) performBtn.hidden = true;
-                const togglesElReset = article.querySelector('.validate-toggles');
-                if (togglesElReset) { togglesElReset.hidden = true; togglesElReset.replaceChildren(); }
+                if (canWriteReports) {
+                    if (writeBtn) writeBtn.hidden = true;
+                    if (performBtn) performBtn.hidden = true;
+                    const togglesElReset = article.querySelector('.validate-toggles');
+                    if (togglesElReset) { togglesElReset.hidden = true; togglesElReset.replaceChildren(); }
+                }
                 // write button is shown after cerere fetch confirms editable analyses exist
-                // Fetch cerere.asp state: report text (may be unvalidated) + per-analysis validate toggles
                 const cerereId = article.dataset.serviceRequestId;
                 try {
                     const r = await fetch(`/api/request/${cerereId}/patient`, { headers: authHeader() });
@@ -4128,6 +4133,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     if (performed) article.classList.remove('no-report');
 
+                    if (canWriteReports) {
                     // State 1: not performed → perform button only
                     if (performBtn && !performed) {
                         performBtn.hidden = false;
@@ -4196,6 +4202,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 togglesEl.hidden = false;
                             }
                         }
+                    }
                     }
                 } catch (_) {}
             }
