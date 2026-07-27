@@ -2968,7 +2968,7 @@ select {
 .timeline-status-badge.status-sent     { color: var(--st-inlab);    background: color-mix(in srgb,var(--st-inlab)    12%,transparent); }
 .timeline-status-badge.status-active   { color: var(--st-inlab);    background: color-mix(in srgb,var(--st-inlab)    12%,transparent); }
 .timeline-status-badge.status-done     { color: var(--st-completed);background: color-mix(in srgb,var(--st-completed)12%,transparent); }
-.timeline-status-badge.status-ended    { color: var(--st-finished); background: color-mix(in srgb,var(--st-finished) 12%,transparent); }
+.timeline-status-badge.status-ended    { color: var(--st-completed); background: color-mix(in srgb,var(--st-completed) 12%,transparent); }
 .timeline-status-badge.status-revoked  { color: var(--muted);       background: color-mix(in srgb,var(--muted)       12%,transparent); }
 .timeline-status-badge.status-error    { color: var(--urgent);      background: color-mix(in srgb,var(--urgent)      12%,transparent); }
 
