@@ -4082,15 +4082,23 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Store for editor
                     article.dataset.reportAnalyses = JSON.stringify(analyses);
 
-                    // Show unvalidated report text if BuletinAnalize had nothing yet.
-                    // List every requested investigation (not just the ones with text
-                    // already filled in) so a multi-step request (e.g. anesthesia +
-                    // the scan itself) always shows all its steps, and a not-yet-performed
-                    // exam still shows its investigation name(s) instead of a blank card.
+                    // Ensure every requested investigation is represented in the preview,
+                    // not just the ones already reported/validated (BuletinAnalize only
+                    // renders series that have real content). A multi-step request (e.g.
+                    // anesthesia + the scan itself) previously lost any step without text
+                    // — invisible if none had text yet, or silently dropped if some did.
+                    // Match by label against titles already rendered from real content;
+                    // anything left over gets its own title + "Not yet reported." note,
+                    // formatted identically, so every step reads the same way.
                     const previewEl = article.querySelector('.report-preview');
-                    if (previewEl && !previewEl.textContent.trim() && analyses.length) {
+                    if (previewEl && analyses.length) {
+                        const existingTitles = new Set(
+                            [...previewEl.querySelectorAll('.series-result-title')]
+                                .map(t => (t.firstChild?.textContent ?? '').trim())
+                        );
+                        const missing = analyses.filter(a => !a.label || !existingTitles.has(a.label.trim()));
                         const showTitles = analyses.length > 1 || analyses[0]?.label;
-                        for (const a of analyses) {
+                        for (const a of missing) {
                             if (showTitles && a.label) {
                                 const titleEl = document.createElement('p');
                                 titleEl.className = 'series-result-title';
@@ -4107,7 +4115,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             }
                             previewEl.appendChild(div);
                         }
-                        article.classList.remove('no-report');
+                        if (missing.length) article.classList.remove('no-report');
                     }
 
                     const hasReport    = analyses.some(a => a.text);
@@ -4162,9 +4170,14 @@ document.addEventListener('DOMContentLoaded', function() {
                                 setValidated(article, cerereId, analysis.anl_id, analysis.id_grup, inp.checked);
                             });
 
-                            // Inject into matching series-result-title, fall back to validate-toggles row
-                            const titleEl = previewTitles.find(t => t.firstChild?.textContent?.trim() === analysis.label?.trim())
-                                ?? previewTitles[i];
+                            // Inject into the matching series-result-title (by exact label —
+                            // never by array position: a positional fallback here used to
+                            // attach one analysis's checkbox into a completely unrelated
+                            // title's row whenever label text didn't match exactly). The
+                            // preview-completion pass above gives every analysis a title,
+                            // so this should always match; the standalone row below is a
+                            // safety net for any label mismatch.
+                            const titleEl = previewTitles.find(t => t.firstChild?.textContent?.trim() === analysis.label?.trim());
                             if (titleEl) {
                                 titleEl.appendChild(lbl);
                             } else {
@@ -4859,32 +4872,38 @@ document.addEventListener('DOMContentLoaded', function() {
                 const allValidated = analyses.length > 0 && analyses.every(a => a.validated);
                 const performed    = Boolean(d.performed_at) || allValidated;
 
-                // If nothing rendered yet (report not validated/published), show
-                // the freshly-entered cerere text directly — same fallback the
-                // Imaging tab cards use, so a just-saved report doesn't read as
-                // "not yet available".
-                if (bodyDiv.classList.contains('report-empty')) {
-                    if (analyses.length) {
+                // Ensure every requested investigation is represented (mirrors the
+                // Imaging tab card's fetchAndFillReport): match by label against
+                // titles already rendered by renderReportContent, and give any
+                // investigation without real content yet its own title + "Not yet
+                // reported." note, instead of only showing steps with content.
+                if (analyses.length) {
+                    if (bodyDiv.classList.contains('report-empty')) {
                         bodyDiv.innerHTML = '';
                         bodyDiv.classList.remove('report-empty');
-                        const showTitles = analyses.length > 1 || analyses[0]?.label;
-                        for (const a of analyses) {
-                            if (showTitles && a.label) {
-                                const titleEl = document.createElement('p');
-                                titleEl.className = 'series-result-title';
-                                titleEl.textContent = a.label;
-                                bodyDiv.appendChild(titleEl);
-                            }
-                            const div = document.createElement('div');
-                            if (a.text) {
-                                div.className = 'report-note';
-                                div.innerHTML = a.text;
-                            } else {
-                                div.className = 'report-note report-note-pending';
-                                div.textContent = 'Not yet reported.';
-                            }
-                            bodyDiv.appendChild(div);
+                    }
+                    const existingTitles = new Set(
+                        [...bodyDiv.querySelectorAll('.series-result-title')]
+                            .map(t => (t.firstChild?.textContent ?? '').trim())
+                    );
+                    const missing = analyses.filter(a => !a.label || !existingTitles.has(a.label.trim()));
+                    const showTitles = analyses.length > 1 || analyses[0]?.label;
+                    for (const a of missing) {
+                        if (showTitles && a.label) {
+                            const titleEl = document.createElement('p');
+                            titleEl.className = 'series-result-title';
+                            titleEl.textContent = a.label;
+                            bodyDiv.appendChild(titleEl);
                         }
+                        const div = document.createElement('div');
+                        if (a.text) {
+                            div.className = 'report-note';
+                            div.innerHTML = a.text;
+                        } else {
+                            div.className = 'report-note report-note-pending';
+                            div.textContent = 'Not yet reported.';
+                        }
+                        bodyDiv.appendChild(div);
                     }
                 }
 
