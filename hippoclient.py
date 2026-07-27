@@ -893,6 +893,7 @@ class HippoClientPatient(HippoClient):
 
             if data.get("patient.cnp"):
                 parsed_cnp = parse_cnp(data.get("patient.cnp"))
+                data.store("patient.cnp_valid", parsed_cnp.get("valid", False))
                 if parsed_cnp.get("valid"):
                     data.store("patient.sex", parsed_cnp.get("gender", "unknown"))
                     data.store("patient.birth_date", parsed_cnp.get("birth_date", ""))
@@ -1014,11 +1015,17 @@ class HippoClientPatient(HippoClient):
 
             identifiers = []
             if parsed_data.get("patient.cnp") and http_request:
-                identifiers.append({
+                cnp_identifier = {
                     "use": "official",
                     "system": f"{http_request.scheme}://{http_request.host}/fhir/NamingSystem/patient-cnp",
                     "value": parsed_data.get("patient.cnp")
-                })
+                }
+                if parsed_data.get("patient.cnp_valid") is False:
+                    cnp_identifier["extension"] = [{
+                        "url": f"{http_request.scheme}://{http_request.host}/fhir/StructureDefinition/cnp-valid",
+                        "valueBoolean": False
+                    }]
+                identifiers.append(cnp_identifier)
             if parsed_data.get("patient.cid") and http_request:
                 identifiers.append({
                     "system": f"{http_request.scheme}://{http_request.host}/fhir/NamingSystem/patient-cid",

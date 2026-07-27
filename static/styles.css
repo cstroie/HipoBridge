@@ -1056,6 +1056,12 @@ small {
     word-break: break-word;
 }
 .info-cell dd#patientCnp { font-family: 'JetBrains Mono', monospace; }
+.info-cell dd#patientCnp.cnp-invalid {
+    text-decoration: line-through;
+    text-decoration-color: var(--urgent);
+    color: var(--urgent);
+    cursor: help;
+}
 
 .info-cell-wide { grid-column: 1 / -1; }
 

@@ -2976,7 +2976,12 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Personal info fields
         const cnp = extractCNP(patientData.identifier);
-        if (elements.patientCnp)       elements.patientCnp.textContent       = cnp || '—';
+        const cnpValid = isCnpValid(patientData.identifier);
+        if (elements.patientCnp) {
+            elements.patientCnp.textContent = cnp || '—';
+            elements.patientCnp.classList.toggle('cnp-invalid', !!cnp && !cnpValid);
+            elements.patientCnp.title = (cnp && !cnpValid) ? 'This CNP failed validation (checksum/date/county code) — verify with the patient record' : '';
+        }
         if (elements.patientBirthDate) elements.patientBirthDate.textContent = formatBirthDate(patientData.birthDate) || '—';
 
         const contactInfo = extractContactInfo(patientData.telecom);
@@ -3083,7 +3088,19 @@ document.addEventListener('DOMContentLoaded', function() {
         
         return cnpIdentifier ? cnpIdentifier.value : null;
     }
-    
+
+    // CNP is presumed valid unless the backend explicitly flags it invalid
+    // (checksum/date/county-code failure — see extractors.py parse_cnp).
+    function isCnpValid(identifierArray) {
+        if (!identifierArray || !Array.isArray(identifierArray)) {
+            return true;
+        }
+        const cnpIdentifier = identifierArray.find(id => id.system && id.system.includes('cnp'));
+        if (!cnpIdentifier) return true;
+        const ext = (cnpIdentifier.extension || []).find(e => e.url && e.url.includes('cnp-valid'));
+        return ext ? ext.valueBoolean !== false : true;
+    }
+
     // Enhanced contact info extraction
     function extractContactInfo(telecomArray) {
         const result = { phone: null, email: null };
