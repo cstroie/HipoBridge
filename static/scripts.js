@@ -1186,22 +1186,36 @@ document.addEventListener('DOMContentLoaded', function() {
     let whoamiData = null;
     let hipocrateUrl = localStorage.getItem('hipocrateUrl') || null;
     let canWriteReports = false;
+    let whoamiInFlight = null;
 
+    // Single-flight: many callers (initApp, every analysis card's
+    // fetchAndFillReport retry, the account modal, …) can call this within
+    // the same tick — e.g. once per card right after a page reload, while
+    // whoamiData is still unset. Without de-duping, each one fired its own
+    // /api/whoami request instead of sharing the one already in progress.
     async function fetchWhoami() {
         if (whoamiData) return whoamiData;
-        const resp = await apiFetch('/api/whoami');
-        const data = await resp.json().catch(() => ({}));
-        // Extract these fields regardless of HTTP status — server always sets them
-        if (data.hipocrate_url) {
-            hipocrateUrl = data.hipocrate_url.replace(/\/$/, '');
-            localStorage.setItem('hipocrateUrl', hipocrateUrl);
-        }
-        canWriteReports = data.can_write_reports === true;
-        if (!resp.ok || data.status !== 'success' || !data.user) {
-            throw new Error(data.message || `Whoami failed (${resp.status})`);
-        }
-        whoamiData = data.user;
-        return whoamiData;
+        if (whoamiInFlight) return whoamiInFlight;
+        whoamiInFlight = (async () => {
+            try {
+                const resp = await apiFetch('/api/whoami');
+                const data = await resp.json().catch(() => ({}));
+                // Extract these fields regardless of HTTP status — server always sets them
+                if (data.hipocrate_url) {
+                    hipocrateUrl = data.hipocrate_url.replace(/\/$/, '');
+                    localStorage.setItem('hipocrateUrl', hipocrateUrl);
+                }
+                canWriteReports = data.can_write_reports === true;
+                if (!resp.ok || data.status !== 'success' || !data.user) {
+                    throw new Error(data.message || `Whoami failed (${resp.status})`);
+                }
+                whoamiData = data.user;
+                return whoamiData;
+            } finally {
+                whoamiInFlight = null;
+            }
+        })();
+        return whoamiInFlight;
     }
 
     async function showUserModal() {
