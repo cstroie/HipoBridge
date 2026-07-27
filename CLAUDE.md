@@ -1,5 +1,9 @@
 # CLAUDE.md
 
+## Response style
+
+Be concise. Never waste tokens — no restating the task, no narrating obvious steps, no trailing summaries unless asked. Answer directly.
+
 ## Server restarts
 
 **Never restart the server yourself.** Tell the user when a restart is needed and wait for them to do it.
