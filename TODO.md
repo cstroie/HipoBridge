@@ -9,7 +9,7 @@
 
 - [X] Fix the card toolbar appearance inside epicrisis cards
 
-- [ ] After log in, check whoami to get the user's name and permissions.
+- [X] After log in, check whoami to get the user's name and permissions.
 
 - [X] Do not automatically generate the AI content after patient load.
 
