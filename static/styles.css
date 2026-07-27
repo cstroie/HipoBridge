@@ -1577,9 +1577,6 @@ select {
     gap: var(--space-10);
     flex-wrap: nowrap;
 }
-@media (max-width: 480px) {
-    .card-title-row { flex-wrap: wrap; }
-}
 /* hgroup has no default min-width:0, so a long title would otherwise force
    the row wider than the card and push .card-toolbar past its right edge */
 .card-title-row hgroup {
@@ -1695,6 +1692,13 @@ select {
     box-shadow: var(--focus-ring);
 }
 .copy-md-btn[hidden] { display: none; }
+
+/* AI card copy button — orange to match the AI accent (.btn-ai). */
+.copy-md-btn.ai-copy-btn { color: var(--warning, #d97706); }
+.copy-md-btn.ai-copy-btn:hover {
+    color: var(--warning, #d97706);
+    background: color-mix(in srgb, var(--warning, #d97706) 12%, transparent);
+}
 
 .card-title {
     margin: 0;
@@ -4030,6 +4034,10 @@ dialog.report-editor-modal article > section {
 }
 
 @media (max-width: 480px) {
+    .card-title-row { flex-wrap: wrap; }
+
+    .ai-summary-badge-verify { display: none; }
+
     .card-toolbar {
         display: flex;
         width: 100%;
@@ -4037,11 +4045,13 @@ dialog.report-editor-modal article > section {
     .card-toolbar .btn-ai,
     .card-toolbar .copy-md-btn {
         flex: 1;
+        justify-content: center;
+    }
+    .card-toolbar .btn-ai {
         padding: var(--space-10) var(--space-12);
     }
-    .card-toolbar .btn-ai,
     .card-toolbar .copy-md-btn {
-        justify-content: center;
+        padding: var(--space-6);
     }
 
     dialog.report-modal {
