@@ -201,6 +201,13 @@ Romanian physician and patient names are converted to DICOM PN format (`Family^G
 # Automated offline tests (no server or credentials needed)
 python3 runtests.py worklist
 
+# Interactive Python SCU test client — picks a device profile from
+# worklist.cfg, connects as that device (C-ECHO then C-FIND), prints the
+# worklist. Faster than findscu for routine manual testing.
+python3 dicom_worklist_client.py
+python3 dicom_worklist_client.py --profile EcoUPU          # skip the picker
+python3 dicom_worklist_client.py --profile UNKNOWN_DEVICE  # test 0xA700 rejection
+
 # Verify the live server responds to C-ECHO
 echoscu -aet FINDSCU -aec HIPPOBRIDGE 127.0.0.1 11112
 
