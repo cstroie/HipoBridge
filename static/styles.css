@@ -3814,6 +3814,14 @@ dialog.report-editor-modal article > section {
     margin-left: auto;
 }
 
+/* .validate-toggles has its own margin-left: auto for when it's the only
+   right-aligned item — but when Edit is also visible, two auto-margins
+   split the free space and pull them apart. Let Edit's margin do the
+   pushing and have the toggles just tuck in right after it. */
+.report-actions .btn-write-report:not([hidden]) ~ .validate-toggles {
+    margin-left: 0;
+}
+
 .btn-write-report:hover,
 .btn-edit-report:hover {
     background: var(--primary-dark);
