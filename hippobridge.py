@@ -41,6 +41,7 @@ from hippoclient import ANALYSIS_TYPES
 from hippoclient import HippoClient, HippoClientPatient, HippoClientPatientSearch, HippoClientImagingStudy, HippoClientDiagnosticReport, HippoClientServiceRequest, HippoClientServiceRequestSearch, HippoClientCheckout, HippoClientCheckin, HippoClientCheckup, HippoClientSchedule, HippoClientCerere, HippoClientBuletinSolicitare, HippoClientPresentation, HippoClientObservationBundle, HippoClientWhoami, HippoClientReportWrite, HippoClientReportValidate, HippoClientCererePerform
 from hippoclient import user_session_manager, url_cache
 from hippoclient import evict_patient_cache
+from hippoclient import is_meaningful_text as _is_meaningful_text
 from urlcache import FilesystemCache, URLCache
 from hippodata import HippoData
 
@@ -220,14 +221,6 @@ async def search_fhir_service_request(request):
     parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime)
     response = client.fhir_bundle_response(parsed_data, http_request=request, patient_id=patient_id)
     return web_fhir_response(response)
-
-
-_MEANINGFUL_TEXT_RE = re.compile(r'[A-Za-z0-9À-ɏ]')
-
-
-def _is_meaningful_text(text):
-    """True if text has at least one letter/digit — filters placeholder junk like ". .. .". """
-    return bool(text) and bool(_MEANINGFUL_TEXT_RE.search(text))
 
 
 @require_auth

@@ -338,6 +338,14 @@ class UserSessionManager:
 user_session_manager = UserSessionManager()
 
 
+_MEANINGFUL_TEXT_RE = re.compile(r'[A-Za-z0-9À-ɏ]')
+
+
+def is_meaningful_text(text):
+    """True if text has at least one letter/digit — filters placeholder junk like ". .. .". """
+    return bool(text) and bool(_MEANINGFUL_TEXT_RE.search(text))
+
+
 class HippoClient:
     """Base client for interacting with the Hipocrate medical system.
 
@@ -3770,11 +3778,14 @@ class HippoClientBuletinSolicitare(HippoClient):
             if section:
                 fhir_sr["note"] = [{"text": section}]
 
+            # Placeholder junk (e.g. "-", ". .. .") is common when a field is left
+            # unfilled — a plain truthiness check would let it win over a real
+            # value further down the priority list, so filter for meaningful text.
             indication = next((t for t in (
                 parsed_data.get("request.justification"),
                 parsed_data.get("request.clinical_situation"),
                 parsed_data.get("request.diagnosis_referral"),
-            ) if t), None)
+            ) if is_meaningful_text(t)), None)
             if indication:
                 fhir_sr["note"] = (fhir_sr.get("note") or []) + [
                     {"text": indication, "category": [{"text": "clinical-indication"}]}
