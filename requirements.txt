@@ -9,6 +9,9 @@ beautifulsoup4>=4.9.0
 pynetdicom>=2.0.0
 pydicom>=2.3.0
 
+# dicom_worklist_client.py --format=yaml (optional — json/table formats work without it)
+pyyaml>=6.0
+
 # Structured LLM extraction (schema validation, grammar-constrained generation
 # against an external OpenAI-compatible server — see llm.cfg)
 pydantic>=2

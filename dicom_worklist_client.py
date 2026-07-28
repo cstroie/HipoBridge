@@ -22,7 +22,14 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 import argparse
+import json
 import sys
+
+try:
+    import yaml
+    YAML_AVAILABLE = True
+except ImportError:
+    YAML_AVAILABLE = False
 
 try:
     from pydicom import Dataset
@@ -65,7 +72,8 @@ def _find_profile(profiles: list, name: str) -> dict:
         if p['name'].upper() == needle or p['ae_title'].upper() == needle:
             return p
     print(f"No profile named or titled '{name}' found in worklist.cfg — "
-          f"connecting with AE title '{needle}' anyway (expect it to be rejected).")
+          f"connecting with AE title '{needle}' anyway (expect it to be rejected).",
+          file=sys.stderr)
     return {'name': name, 'ae_title': needle, 'modality': None, 'wards': [], 'time_window_hours': 0.0}
 
 
@@ -82,26 +90,41 @@ def _build_identifier(patient_name: str, date: str) -> 'Dataset':
     return identifier
 
 
-def _print_results(results: list) -> int:
-    """Print one row per C-FIND match. Returns the number of matches."""
+def _build_records(results: list) -> list:
+    """Turn matched (status, Dataset) pairs into plain dicts for table/json/yaml output."""
+    records = []
+    for status, ds in results:
+        if not status or status.Status != 0xFF00:
+            continue
+        sps = ds.ScheduledProcedureStepSequence[0]
+        records.append({
+            'patient_name':          str(ds.PatientName),
+            'patient_id':            str(ds.PatientID),
+            'accession_number':      str(ds.AccessionNumber),
+            'modality':              str(sps.Modality),
+            'scheduled_date':        str(sps.ScheduledProcedureStepStartDate),
+            'scheduled_time':        str(sps.ScheduledProcedureStepStartTime),
+            'ward':                  str(getattr(ds, 'InstitutionalDepartmentName', '')),
+            'referring_physician':   str(ds.ReferringPhysicianName),
+            'procedure_description': str(sps.ScheduledProcedureStepDescription),
+            'procedure_id':          str(sps.ScheduledProcedureStepID),
+            'priority':              str(getattr(ds, 'RequestedProcedurePriority', '')),
+        })
+    return records
+
+
+def _render_table(records: list) -> None:
     header = (f"{'Patient':<28} {'PatientID':<15} {'Accession':<12} {'Mod':<4} "
               f"{'Scheduled':<15} {'Ward':<16} {'Referring physician':<24} Procedure")
     print(header)
     print('-' * len(header))
-
-    count = 0
-    for status, ds in results:
-        if not status or status.Status != 0xFF00:
-            continue
-        count += 1
-        sps = ds.ScheduledProcedureStepSequence[0]
-        scheduled = f"{sps.ScheduledProcedureStepStartDate}{sps.ScheduledProcedureStepStartTime}".strip()
-        print(f"{str(ds.PatientName):<28} {str(ds.PatientID):<15} "
-              f"{str(ds.AccessionNumber):<12} {str(sps.Modality):<4} "
-              f"{scheduled:<15} {str(getattr(ds, 'InstitutionalDepartmentName', '')):<16} "
-              f"{str(ds.ReferringPhysicianName):<24} "
-              f"{str(sps.ScheduledProcedureStepDescription)}")
-    return count
+    for r in records:
+        scheduled = f"{r['scheduled_date']}{r['scheduled_time']}".strip()
+        print(f"{r['patient_name']:<28} {r['patient_id']:<15} "
+              f"{r['accession_number']:<12} {r['modality']:<4} "
+              f"{scheduled:<15} {r['ward']:<16} "
+              f"{r['referring_physician']:<24} "
+              f"{r['procedure_description']}")
 
 
 def main() -> int:
@@ -111,25 +134,37 @@ def main() -> int:
     parser.add_argument('--profile', help="Device profile name or AE title (skips the interactive picker)")
     parser.add_argument('--date', default='', help="ScheduledProcedureStepStartDate filter: YYYYMMDD or YYYYMMDD-YYYYMMDD")
     parser.add_argument('--patient-name', default='', help="PatientName wildcard filter, e.g. POPESCU*")
+    parser.add_argument('--format', choices=['table', 'json', 'yaml'], default='table',
+                        help="Output format. json/yaml print only the result records to stdout "
+                             "(status messages go to stderr) — for scripting.")
     args = parser.parse_args()
 
+    scripted = args.format != 'table'
+    # Status/progress messages: stdout for the human table view, stderr when
+    # scripted so stdout stays pure data (pipeable into jq etc).
+    status = (lambda msg: print(msg, file=sys.stderr)) if scripted else print
+
+    if args.format == 'yaml' and not YAML_AVAILABLE:
+        print("PyYAML not installed. Run: pip install pyyaml", file=sys.stderr)
+        return 1
+
     if not DICOM_AVAILABLE:
-        print("pynetdicom/pydicom not installed. Run: pip install pynetdicom pydicom")
+        status("pynetdicom/pydicom not installed. Run: pip install pynetdicom pydicom")
         return 1
 
     server_cfg, profiles = _load_config(args.config)
     if not profiles:
-        print(f"No device profiles found in {args.config}")
+        status(f"No device profiles found in {args.config}")
         return 1
 
     profile = _find_profile(profiles, args.profile) if args.profile else _pick_profile(profiles)
 
     if len(profile['ae_title']) > 16:
-        print(f"AE title '{profile['ae_title']}' exceeds the DICOM 16-character limit.")
+        status(f"AE title '{profile['ae_title']}' exceeds the DICOM 16-character limit.")
         return 1
 
-    print(f"\nConnecting as AE '{profile['ae_title']}' (profile: {profile['name']}) "
-          f"to {args.host}:{server_cfg['port']} (called AE '{server_cfg['ae_title']}')...")
+    status(f"\nConnecting as AE '{profile['ae_title']}' (profile: {profile['name']}) "
+           f"to {args.host}:{server_cfg['port']} (called AE '{server_cfg['ae_title']}')...")
 
     ae = AE(ae_title=profile['ae_title'])
     ae.add_requested_context(Verification)
@@ -137,12 +172,12 @@ def main() -> int:
 
     assoc = ae.associate(args.host, server_cfg['port'], ae_title=server_cfg['ae_title'])
     if not assoc.is_established:
-        print("Association failed — is the server running? Is the port/host correct?")
+        status("Association failed — is the server running? Is the port/host correct?")
         return 1
 
     echo_status = assoc.send_c_echo()
     echo_ok = bool(echo_status) and echo_status.Status == 0x0000
-    print(f"C-ECHO: {'OK' if echo_ok else f'FAILED (status={echo_status})'}")
+    status(f"C-ECHO: {'OK' if echo_ok else f'FAILED (status={echo_status})'}")
 
     identifier = _build_identifier(args.patient_name, args.date)
     results = list(assoc.send_c_find(identifier, ModalityWorklistInformationFind))
@@ -150,13 +185,20 @@ def main() -> int:
 
     statuses = [s.Status for s, _ in results if s]
     if any(s == 0xA700 for s in statuses):
-        print(f"\nC-FIND REJECTED (0xA700) — AE title '{profile['ae_title']}' is not authorised. "
-              f"Add a [{profile['ae_title']}] section to {args.config} to authorise this device.")
+        status(f"\nC-FIND REJECTED (0xA700) — AE title '{profile['ae_title']}' is not authorised. "
+               f"Add a [{profile['ae_title']}] section to {args.config} to authorise this device.")
         return 1
 
-    print()
-    count = _print_results(results)
-    print(f"\n{count} entries returned")
+    records = _build_records(results)
+    if args.format == 'json':
+        print(json.dumps(records, indent=2))
+    elif args.format == 'yaml':
+        print(yaml.safe_dump(records, sort_keys=False, allow_unicode=True))
+    else:
+        print()
+        _render_table(records)
+
+    status(f"\n{len(records)} entries returned")
     return 0
 
 

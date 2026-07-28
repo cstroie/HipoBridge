@@ -207,6 +207,7 @@ python3 runtests.py worklist
 python3 dicom_worklist_client.py
 python3 dicom_worklist_client.py --profile EcoUPU          # skip the picker
 python3 dicom_worklist_client.py --profile UNKNOWN_DEVICE  # test 0xA700 rejection
+python3 dicom_worklist_client.py --profile EcoUPU --format json  # scripting: stdout is pure JSON, status on stderr
 
 # Verify the live server responds to C-ECHO
 echoscu -aet FINDSCU -aec HIPPOBRIDGE 127.0.0.1 11112
