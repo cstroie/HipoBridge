@@ -1,0 +1,175 @@
+# Architecture
+
+HippoBridge is a **scraping proxy** — no database. Every request authenticates against Hipocrate, scrapes HTML, returns JSON or FHIR R4.
+
+```
+HTTP client → hippobridge.py (@require_auth) → HippoClient* (cache + semaphore) → fhir.py → response
+```
+
+## Client routing table
+
+| Class | Route | Hipocrate URL |
+|---|---|---|
+| `HippoClientPatient` | `/api/patient/{id}` | `/Pacient/edit.asp?id={id}` |
+| `HippoClientPatientSearch` | `/api/patient?q=` | `/files/search.asp?what=PA` |
+| `HippoClientBuletinSolicitare` | `/api/request/{id}`, `/fhir/ServiceRequest/{id}` | `/PARA/Printabile/BuletinSolicitare.asp?id={id}&type=63&IdP=70` |
+| `HippoClientServiceRequestSearch` | `/api/request?patient=` | `/Pacient/analysesEpisod.asp` |
+| `HippoClientImagingStudy` | `/api/study/{id}` | `/PARA/Printabile/BuletinAnalize.asp?id={id}&type=3` |
+| `HippoClientDiagnosticReport` | `/api/report/{id}` | `/PARA/Printabile/BuletinAnalize.asp?id={id}&type=1` |
+| `HippoClientCheckout` | `/api/checkout/{id}` | `/gen_printabile/BiletExternare.asp?RelId={id}&RelName=CO` |
+| `HippoClientCheckin` | `/api/checkin/{id}`, `/fhir/Encounter/{id}?type=checkin` | `/files/checkin.asp?id={id}` |
+| `HippoClientCheckup` | `/api/checkup/{id}`, `/fhir/Encounter/{id}?type=checkup` | `/files/checkup.asp?cuid={id}` |
+| `HippoClientPresentation` | `/api/presentation/{id}`, `/fhir/Encounter/{id}?type=presentation` | `/gen_printabile/FisaPrezentare.asp?relname=PR&id={id}` |
+| `HippoClientCerere` | `/api/request/{id}/patient`, `/fhir/Task/{id}` | `/PARA/NOM/Listare/cerere.asp?id={id}` |
+| `HippoClientServiceRequest` | `/fhir/Specimen/{id}` | `/PARA/Printabile/buletinRecoltari.asp?id={id}` |
+| `HippoClientReportWrite` | `POST /api/request/{id}/report` | `/PARA/NOM/Listare/cerere.asp` (POST) |
+| `HippoClientReportValidate` | `POST /api/request/{id}/validate` | `/PARA/NOM/Listare/cerere.asp` (POST action=VDV) |
+| `HippoClientCererePerform` | `POST /api/request/{id}/perform` | `/PARA/NOM/Listare/cerere.asp` (form replay, sets DataEfectuarii) |
+| `HippoClientSchedule` | `/api/schedule`, `/fhir/Schedule` | `/PARA/NOM/Listare/?id=44&NrPePag=100` |
+| `HippoClientObservationBundle` | `/fhir/Observation?patient=` | `/Pacient/analysesEpisod.asp` (parallel per domain) |
+| `HippoClientWhoami` | `/api/whoami` | `Template/menu.asp` |
+
+## Concurrency and caching (critical — Hipocrate is fragile)
+
+- **Semaphore**: `_hipocrate_semaphore = asyncio.Semaphore(6)` — all outbound calls including login.
+- **URLCache** (`urlcache.py`): LRU 500 entries, 30-min TTL. In-flight deduplication via `asyncio.Event` — `resolve_inflight()` **must** be called on every exit path including re-auth failures or waiters hang permanently.
+- **UserSessionManager**: one `aiohttp.ClientSession` per username; per-user `asyncio.Lock` prevents concurrent login sequences.
+- `login_if_needed(force=True)` skips the is-logged-in `main.asp` probe when session is known-expired.
+- `DICOM_MODALITY` dict maps type codes to `(DICOM_code, human_display)` — never repeat the code string as display value.
+
+## Key module gotchas
+
+**`fhir.py`**:
+- `Resource.__setitem__(key, None)` removes the key — never stores `None`.
+- `OperationOutcome.from_error()` default code is `"processing"`. Pass explicit code for `"not-found"`, `"required"`, etc.
+- `Encounter` uses R4 field names: `period`, `reasonCode`, `reasonReference`, `hospitalization` — not R5 names.
+
+**`hippodata.py`**:
+- `store()` strips strings, unwraps single-item lists, converts `datetime` → ISO, skips `None`. Dot-notation creates nested dicts.
+- `get(key)` defaults to `None` — callers that need `""` must pass it explicitly.
+- `set_success()` removes the `message` key rather than setting it to `""`.
+
+**`extractors.py`**: `parse_date_time` handles Romanian month abbreviations including `Noi` for November.
+
+**`markdown.py`**: `html_to_markdown` decomposes icon-only `<i>` tags; `markdown_to_html` uses STX/ETX sentinels for bold/italic ordering.
+
+**`llm/`** (AI summary buttons — report/epicrisis/imaging/lab/pre_exam):
+- Current production model: **`mistralai/ministral-3-3b` at Q4_K_M** (set in `local.cfg`'s `[provider:lmstudio]`, `default`/`medical` tiers). Chosen after an extensive benchmark survey — see `docs/llm_benchmark_2026-07-19.md` for the full methodology, per-kind fidelity scores, and model comparisons. Runner-up/fallback candidates: `medgemma-4b-it` (resident for xrayvision, so zero cold-load) and `google/gemma-3n-e4b`.
+- **Do not "optimize" by dropping to a smaller quantization** — IQ4_XS and Q3_K_M were benchmarked and are *slower* on this model (more complex quant schemes cost more per-token dequant compute than they save in memory bandwidth at batch-size-1), with no quality upside. Stay on Q4_K_M.
+- Prompts live in `llm/prompts/<kind>.md`, not hardcoded in `prompts.py` — edit the `.md` file to tune a prompt, no code change needed. Each kind's prompt is **fully self-contained** (its own role framing, its own restated anti-hallucination rule, its own no-reasoning instruction) — there is deliberately **no shared preamble** prepended to every kind. An earlier design *did* share one (`llm/prompts/system.md`, since deleted); A/B testing (`benchmark_prompt_format.py`, `docs/llm_benchmark_2026-07-21.md`) showed it measurably diluted medgemma-4b-it's language-instruction-following on the short `imaging` kind. `_build_messages()` appends the date directive (if `DATE_AWARE_KINDS`) then the language directive directly after the kind's task prompt — no shared text ahead of it.
+- A kind's `.md` file may reference the concrete configured language via a literal `{language}` placeholder (see `pre_exam.md`) — substituted with a targeted `str.replace`, not `str.format`, so a prompt containing unrelated literal braces can't break.
+- **Known unresolved limitation**: medgemma-4b-it regresses to the source language (Romanian) on `pre_exam` specifically, on long, source-language-heavy input (~7500 chars). Three escalating prompt-wording fixes were tried and verified live, none fixed it — likely volume-driven language drift, not a wording/ordering problem. `gemma-3n-e4b` handles the same input correctly. **Prefer `gemma-3n-e4b` or `ministral-3-3b` over medgemma-4b-it for `pre_exam`** until this is understood further (see `docs/llm_benchmark_2026-07-21.md`).
+- `has_meaningful_content()` (`llm/prompts.py`) gates every call — never hand the model near-empty input; a small model will confidently fabricate an entire scenario (including demographics) rather than say there's nothing to summarize.
+- `DATE_AWARE_KINDS`/`STREAMING_KINDS` (`llm/prompts.py`) are deliberately separate constants even though currently identical sets — one is about date context, the other about transport.
+- The 4096-token context ceiling is real: an oversized input makes LM Studio return an SSE `event: error` line with no `choices` key, not a normal completion — `ServerBackend.chat_stream()`/`chat()` must check for `chunk.get("error")` explicitly or the failure is silently swallowed.
+- This LM Studio instance also serves another project (xrayvision radiology). A model can be evicted mid-generation under radiology load, surfacing as `RuntimeError: terminated` — not a prompt/quality bug. `benchmark_prompt_format.py` retries this a bounded number of times with backoff.
+- `ServerBackend.chat`/`chat_stream` request bodies set `"reasoning": {"effort": "none"}` — reasoning-capable models otherwise burn tokens on hidden thinking before the visible completion, eating into the 4096-token ceiling.
+
+### LM Studio Server & Model Selection (2026-07-22 findings)
+
+**Server info endpoint**: `http://192.168.3.238:1234/api/v1/models` — check `loaded_instances` to see which models are currently active.
+
+**medgemma-4b-it behavior**:
+- ✅ Reliable for pre_exam (lead with clinical question, surface seizure-like events, safety flags) — produces concise, grounded output with correct age, full translation, no fabrication on rich cases
+- ❌ Struggles with report.md (executive summary from discharge record) — does not compress to 3-5 sentences; either outputs raw source text (untranslated Romanian) or produces verbose clinical detail instead of radiologist-focused summary
+- **Root issue**: medgemma's language instruction-following (documented weakness in benchmark_2026-07-21.md) makes it unreliable for high-compression tasks (discharge summary). It can do detail-preserving translation (pre_exam) but cannot reliably abstract/summarize.
+
+**Recommendation**: Route `report.md` to `gemma-3n-e4b` or `ministral-3-3b` (both handle compression/abstraction better). Keep medgemma-4b-it for pre_exam (it works well there). Update `local.cfg` `[provider:lmstudio]` tier assignments accordingly, or wire report specifically to a better model.
+
+**Validation methodology**: Empirically tested both pre_exam and report.md prompts on 50 real pediatric discharge records. pre_exam validated clean (no fabrication, correct demographics, proper translation, safety flags surfaced). report.md validation showed medgemma cannot meet the (then-current) "3-5 sentence executive summary" requirement — produces either raw input or 900+ char verbose output instead.
+
+### report.md / epicrisis.md refactor (2026-07-23)
+
+Both prompts were rewritten per `_testing_/final50/{REPORT,EPICRISIS}_PROPOSALS.md` (a 50-case gap analysis, not tracked in git). Validated against `ministral-3:3b` on the `ct` provider, both on narrative-only input and on real production-shaped composite input (narrative + real Recent Labs + real Recent Imaging sections, pulled live from the server) — not just synthetic fixtures.
+
+- `report.md`: length target tightened from "3-5 sentences" to a firm **2-3**, with the outcome/current-status stated early so truncation can't delete it (was silently dropping the outcome on the richest cases at the old target + 220-token budget). Added an explicit no-fabricated-recommendations rule, extended the copy-verbatim rule to family-history relations, added priority ordering for clinician-emphasized facts over routine logistics, made placeholder-demographic omission mechanical, and clarified that lab/vital-heavy records with little narrative prose still count as meaningful content (fixed a reproducible false-negative "Insufficient clinical information" on a real, dense, non-empty case).
+- `epicrisis.md`: gained a 5th, conditional **Flag** line for safety/procedure-relevant facts that don't fit Admission/Diagnosis/Treatment/Outcome (MRI-incompatible hardware, allergies, substance use, family cancer history) — the 4-field format had no home for these and was silently dropping them, including an MRI-safety fact `report.md` caught on the identical source text. Also restructured the field-definition block (was an inline `**Label:** description` block that the model would echo verbatim as if it were example text) and added a concrete filled example.
+- **Residual, not prompt-fixable**: on real dense records, ministral still occasionally fabricates a procedure/diagnosis name under compression (e.g. renaming a laparoscopic cystectomy to "cholecystectomy" and inventing "teratoma") or invents an expansion for an undefined source abbreviation. Same category as medgemma's `pre_exam` language-drift issue above — a model-capability ceiling, not something a further wording change reliably fixes. Track alongside the existing model-routing recommendations rather than adding more rules chasing this specific model's idiosyncrasies.
+
+## Entry point conventions
+
+- Log level: `LOG_LEVEL` env var or `--log-level`. Never hardcode `DEBUG`.
+- Config loads in `init_app()`, not at import time.
+- File paths: `os.path.join(os.path.dirname(__file__), ...)`.
+- Credentials: `request['auth_credentials']` (aiohttp dict-style), not a plain attribute.
+- `web_fhir_response(str)` → 400 OperationOutcome. Don't pass strings for server-side failures.
+- `web_json_response`: `status="success"` → 200; "not found" in message → 404; other errors → 500.
+
+## Error handling
+
+- `OperationOutcome` HTTP status: `not-found` → 404; `error`/`fatal` severity → 500; `warning` → 400.
+- `HippoClientDiagnosticReport` and `HippoClientCheckout` evict cache on empty result.
+- Datetime comparisons use naive datetimes — strip `tzinfo` if caller passes TZ-aware strings.
+- Never swallow exceptions in `fetch_and_parse` — log and include in returned `HippoData`.
+
+## Scraper-specific gotchas
+
+**Whoami**: Evicts the shared cache URL before and after each fetch (same URL for all users, user-specific content).
+
+**Security**: `/gen_administrare/listare/cont.asp?id={user.id}&ses=1` echoes the user's password in plaintext (`strParola`) — do not scrape or expose this page.
+
+**Cerere**: `cerere.asp` renders only the selected `<option>` with no `selected=` attribute — `_select_text()` takes the first `<option>` text.
+
+**Schedule**:
+- `html.parser` does not inject `<tbody>` — iterate `table.find_all('tr')` directly.
+- Lab IDs are hardcoded (CT=26, US=28, MRI=32, X-Ray=49, IR=35, Fluoro=50) — do not guess.
+- Ward filtering is Python-side (`?section_name=`); lab and patient-text filters are native Hipocrate URL params.
+- **2026-07-28**: Hipocrate removed the "Solicitat de" (requester) and "Laborator" columns from the per-request detail table (now 7 `<td>`s, not 8). `requested_by` is permanently unavailable from this page now (`''`). Modality can no longer be read off the row — `HippoClientSchedule._LAB_ID_TO_MODALITY` derives it instead from the `PARA_ID_Laborator` (`lab_id`) the fetch was filtered by. The old label-sniffing `_lab_to_modality`/`_lab_to_display` classmethods were removed as dead code.
+- Because of the above, a call with no `lab_id` (the frontend's "All" schedule view) can no longer get modality per row from Hipocrate at all. `fetch_and_parse` now detects a missing `lab_id` and fans out via `_fetch_and_parse_all_labs`: one concurrent fetch per known lab_id, results deduped by `request_id` and merged, then **sorted by `date_time` descending** so the merged view is one continuous timeline with modalities intermixed — not concatenated per-modality blocks (concatenation was the initial, wrong version of this fix).
+- `requested_by` is permanently gone from the schedule row (Hipocrate dropped the column). The frontend's requester slot (`.timeline-meta-requester`) stays in the DOM with `hidden = true` (reference stashed on `regionLine._requesterEl`/`_requesterSep`) and is revealed via `_applyReferrer()` once the row's lazy fetch resolves — see below.
+- The schedule row's lazy per-row fetch (`scheduleExamObserver`, triggered when a row scrolls into view) is a single request to `/fhir/ServiceRequest/{id}` (`HippoClientBuletinSolicitare` → `BuletinSolicitare.asp`, the request/order form, title "FISA DE SOLICITARE") — gives region (`Organ tinta / segment anatomic`), indication (`Justificare`), and **the correct ordering physician** in one request. `type=63&IdP=70` are fixed and work across modalities (verified on eco/radio/ct) despite the page always being titled "FISA SOLICITARE ECOGRAFIE".
+- `bodySite` is not the raw `Organ tinta` text (e.g. "ULTRASONOGRAFIA ABDOMINALA (INCLUSIV PELVIS)") — `fhir_response` runs it through `identify_study_type_and_region()` (the same `regions.cfg`-driven abstraction `ImagingStudy`'s `series.bodySite` uses) to get the short label ("Abdomen", "Chest") the schedule timeline showed before this endpoint switch. Omitted entirely when the region can't be identified (`region == "unknown"`), matching `ImagingStudy`'s own guard — don't fall back to the raw organ text there, that was never the prior behavior.
+- **Medic curant vs. Medic solicitant**: `cerere.asp`'s `strMedicId` (`HippoClientCerere` → `request.physician`) only ever resolves to **Medic curant**, the patient's attending physician — never **Medic solicitant**, the physician who actually placed this specific order. The two differ whenever the patient's regular doctor isn't the one who ordered the exam (confirmed on live requests). Only `BuletinSolicitare.asp` distinguishes them. `HippoClientBuletinSolicitare.fhir_response` sets `requester` from Medic solicitant, falling back to Medic curant only if no distinct orderer was recorded — `worklist.py`'s `_enrich()` does the same for the DICOM worklist's `ReferringPhysicianName` (see **worklist.py** below). Task's `requester` (`cerere.asp` → `request.physician`) is still Medic curant — that field genuinely represents the attending physician handing the task off, not the orderer, so it's correct as-is.
+- `BuletinAnalize.asp?type=2` was inspected as a candidate for region/indication and rejected: its `MEDIC:` header field is Medic curant too (not the orderer), and the actual performer only appears as `Validat de:` once a report is finalized — not present on an unperformed row.
+- `HippoClientBuletinSolicitare.fhir_response`'s indication priority chain (`justification` > `clinical_situation` > `diagnosis_referral`) must filter candidates through `hippoclient.is_meaningful_text()`, not plain truthiness — an unfilled `Justificare` field on the form renders as the literal placeholder `"-"`, which is truthy and would otherwise always win over a real `Situatie clinica` value further down the chain. `is_meaningful_text()` (moved from `hippobridge.py`, which now imports it) is the shared "has at least one letter/digit" filter used for this placeholder-junk problem across the codebase.
+
+**DiagnosticReport / ObservationBundle**: `_parse_observation_value` is shared. Frontend detects lab entries by presence of `reference` key in `presentedForm`, not by `type="lab"` — immunology is typed `"other"` but still has `reference`.
+
+**worklist.py**: Check `parse_cnp()` result via `parsed.get('valid')`, not `parsed.get('status')`. `wards` (not `sections`) key for ward filtering. `resolve_inflight()` must be called from `WorklistRefresher` exit paths too.
+- `_enrich()` fetches `BuletinSolicitare.asp` (`HippoClientBuletinSolicitare`) alongside `cerere`/patient/checkin per request, specifically for `request.physician_solicitant` — the true ordering physician, distinct from `cerere.asp`'s `request.physician` (Medic curant, the attending physician). `info['physician']` prefers the former, falling back to the latter only when no distinct orderer was recorded. `_build_datasets`' `ReferringPhysicianName` reads `patient_info['physician']`, so it gets the correct orderer too (see the Medic curant vs. Medic solicitant note above).
+- dedup/sort: After `_fetch_schedule`, entries are deduplicated by `request_id` (first occurrence wins) and sorted numerically by `request_id` before enrichment.
+
+**Encounter route**: `?type=checkout|checkin|presentation` skips to right scraper. Without hint: tries all three in sequence (noisy logs). Frontend always passes `?type=`.
+
+**Radiology report workflow** (cerere.asp write path):
+- Access controlled by `_ALLOWED_RADIOLOGISTS` — a set of usernames from `[radiology] allowed_radiologists` in config. All three write endpoints (perform/report/validate) return 403 for non-members. `GET /api/whoami` returns `can_write_reports: true` when the authenticated user is in this set.
+- **Perform**: `HippoClientCererePerform` GETs cerere.asp, extracts all form fields (skipping submit/button/image/reset; only checked checkboxes/radios), then POSTs back with `DataEfectuarii` overridden and `hdnAction=S`. JS validation in the browser blocks empty `DataEfectuarii`, but the server accepts it without `strSituatieNeincadrabila`/`Justificare`. Evicts cerere.asp and BuletinAnalize caches after POST.
+- **Write**: `HippoClientReportWrite.write()` POSTs to Rezultate.asp. Frontend sends the textarea's plain text as-is (no client-side conversion). **2026-07-28**: server-side markdown→HTML conversion (`_text_to_report_html()`, which wrapped paragraphs in `<div>` and converted `**bold**`/`*italic*`) is temporarily disabled — upstream Rezultate.asp changed and the converted HTML wasn't being stored/rendered correctly there — so plain text is posted unmodified for now. `_text_to_report_html()` is kept (unused) to re-enable once the new upstream format is understood.
+- **Validate**: POSTs `action=VDV` to cerere.asp. Evicts both BuletinAnalize and cerere.asp caches.
+- `performed_at` comes from `DataEfectuarii` input on cerere.asp. If blank (old exam done via Hipocrate UI), frontend also treats `allValidated` as implicit performed to suppress the Perform button.
+
+## Frontend (`static/`)
+
+SPA: `main.html` + `scripts.js` + `styles.css` + `marked.js`. All assets self-hosted — no external requests.
+
+**Critical rules:**
+- **Never** `new Date(hipocrate_string)` — non-ISO strings produce `RangeError`. Always use `formatDate()` / `formatDateWithTime()`.
+- **`calculateAge`** uses string splitting on `YYYY-MM-DD` — never `new Date(birthDate)`.
+- **No `innerHTML`** with interpolated strings — use `<template>` + `cloneNode(true)` + `textContent`.
+- **No `id` attributes inside `<template>`** — duplicated on every clone.
+- Card type is in `article.dataset.type`, read by `filterAnalyses` — don't detect from `className`.
+- Lab filter chip (`data-filter="lab"`) requires matching `<option value="lab">` in `#analysesFilter` or it silently no-ops.
+- `SPARSE_THRESHOLD = 100` chars — checkin block is sparse if shorter, shows Last Admission stacked below.
+- Multiple patient search results must show selection overlay — never silently pick `entry[0]`.
+- Imaging history is always unfiltered; lab requests are limited to within 90 days of most recent result.
+- `presentedForm` with `reference` key = lab entry regardless of `type` field.
+- `.fas` rules need both `font-family` and `font-weight: 900` or icons are invisible.
+- Nav uses `aria-current="page"` on `<li>`, not `role="tablist"` / `role="tab"` / `aria-selected`.
+- All DOM elements cached at startup in `elements` — never query inside repeated functions.
+- `whoamiReady` is a Promise that resolves after `fetchWhoami()` completes. Gate any UI that needs `canWriteReports` on `await whoamiReady`. After login, reassign `whoamiReady = fetchWhoami().catch(() => {})` so the flag is re-evaluated with the new credentials.
+- `localDateStr(d?)` returns a `YYYY-MM-DD` string using local date methods — never `toISOString()` for date-only values (UTC lag).
+- Report action buttons follow a 4-state machine per card: (1) not performed → Perform button only; (2) performed, no report → Edit Report; (3) performed + report → Edit Report + validate toggle; (4) performed + all validated → validate toggle only. Reset both buttons to `hidden` at the top of each `fetchAndFillReport` pass before re-evaluating state.
+- New icon glyphs must be added to `static/fontawesome.css` — the file is a curated subset, not the full FA bundle. Check before using any `fa-*` class.
+
+## CSS design system
+
+- `var(--radius-sm/md/lg/full)` — `var(--radius)` is **not defined**.
+- `var(--font-size-xs/sm/base/lg/2xl/3xl/5xl)` / `var(--font-weight-normal/medium/semibold/bold)`.
+- `var(--spacing-xs/sm/md/lg/xl/2xl)` — no hardcoded `px` or `rem`.
+- `--header-height: 72px` for sticky nav `top` offset.
+- Modality colours: `--mod-xr`, `--mod-ct`, `--mod-mr`, `--mod-us`, `--mod-fl` (not `--modality-*`).
+
+## Dual API surface
+
+- `/api/<resource>` → `HippoData` plain JSON; `?debug=page` returns raw Hipocrate HTML.
+- `/fhir/<Resource>` → FHIR R4 JSON.
