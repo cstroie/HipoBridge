@@ -5336,14 +5336,15 @@ document.addEventListener('DOMContentLoaded', function() {
             if (_examCache[id]) { _applyExamLabel(el, _examCache[id]); return; }
             // cerere.asp is the only reliable source of the referring physician —
             // ImagingStudy only has `performer` (who did the exam), not `referrer` —
-            // so fetch it alongside regardless of which branch below resolves.
-            apiFetch(`/fhir/ServiceRequest/${id}?type=cerere`)
+            // and it's also needed by the not-yet-reported fallback below for
+            // Justificare text, so fetch it once and share the promise both places.
+            const cererePromise = apiFetch(`/fhir/ServiceRequest/${id}?type=cerere`)
                 .then(r => r.ok ? r.json() : null)
-                .then(cerereForReferrer => {
-                    const referrer = cerereForReferrer?.requester?.display || '';
-                    if (referrer) _applyReferrer(el, referrer);
-                })
-                .catch(() => {});
+                .catch(() => null);
+            cererePromise.then(cerere => {
+                const referrer = cerere?.requester?.display || '';
+                if (referrer) _applyReferrer(el, referrer);
+            });
             apiFetch(`/fhir/ImagingStudy/${id}`)
                 .then(r => r.ok ? r.json() : null)
                 .then(data => {
@@ -5358,10 +5359,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         return;
                     }
                     // Study not yet reported — fall back to ServiceRequest for ordered procedure
-                    // regions, plus the cerere.asp variant (only source of Justificare text)
+                    // regions, plus the already-in-flight cerere.asp variant for Justificare text
                     return Promise.all([
                         apiFetch(`/fhir/ServiceRequest/${id}`).then(r => r.ok ? r.json() : null),
-                        apiFetch(`/fhir/ServiceRequest/${id}?type=cerere`).then(r => r.ok ? r.json() : null)
+                        cererePromise
                     ]).then(([d, cerere]) => {
                         // Priority: doctor's comment (buletinRecoltari) > justification (cerere) > diagnosis
                         // — placeholder junk (e.g. ". .. .") is treated as absent.
