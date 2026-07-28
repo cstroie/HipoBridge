@@ -29,10 +29,10 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
 
             <!-- Global nav: always visible -->
             <nav id="appNav" class="app-nav" aria-label="Main navigation">
-                <button class="nav-btn nav-item" data-tab="search">
+                <button class="nav-btn nav-item" data-tab="search" title="Search for a patient">
                     <i class="fas fa-magnifying-glass" aria-hidden="true"></i><span>Search</span>
                 </button>
-                <button class="nav-btn nav-item" data-tab="schedule">
+                <button class="nav-btn nav-item" data-tab="schedule" title="View schedule">
                     <i class="fas fa-calendar-day" aria-hidden="true"></i><span>Schedule</span>
                 </button>
             </nav>
@@ -42,28 +42,28 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                 <hr class="nav-sep" aria-hidden="true">
 
                 <!-- Patient pill -->
-                <button type="button" class="patient-ctx-pill nav-item" data-tab="patient">
+                <button type="button" class="patient-ctx-pill nav-item" data-tab="patient" title="Patient overview">
                     <i class="fas fa-user-injured" aria-hidden="true"></i>
                     <span id="navPatientLabel">Patient</span>
                 </button>
 
                 <!-- Patient sub-nav -->
-                <button class="nav-btn nav-item" data-tab="patient" data-sub="profile">
+                <button class="nav-btn nav-item" data-tab="patient" data-sub="profile" title="Patient profile">
                     <i class="fas fa-user-injured" aria-hidden="true"></i><span>Profile</span>
                 </button>
-                <button class="nav-btn nav-item" data-tab="imaging">
+                <button class="nav-btn nav-item" data-tab="imaging" title="Imaging studies">
                     <i class="fas fa-x-ray" aria-hidden="true"></i><span>Imaging</span>
                 </button>
-                <button class="nav-btn nav-item" data-tab="laboratory">
+                <button class="nav-btn nav-item" data-tab="laboratory" title="Lab results">
                     <i class="fas fa-flask" aria-hidden="true"></i><span>Lab</span>
                 </button>
-                <button class="nav-btn nav-item" data-tab="epicrisis">
+                <button class="nav-btn nav-item" data-tab="epicrisis" title="Hospitalization records">
                     <i class="fas fa-file-prescription" aria-hidden="true"></i><span>Epicrisis</span>
                 </button>
-                <button class="nav-btn nav-item" data-tab="report">
+                <button class="nav-btn nav-item" data-tab="report" title="Clinical report">
                     <i class="fas fa-notes-medical" aria-hidden="true"></i><span>Report</span>
                 </button>
-                <button class="nav-btn nav-item" data-tab="ai">
+                <button class="nav-btn nav-item" data-tab="ai" title="AI assistant">
                     <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>AI</span>
                 </button>
             </nav>
@@ -72,10 +72,10 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
             <div class="app-bar-spacer" aria-hidden="true"></div>
 
             <!-- End controls -->
-            <button class="btn-icon" id="themeToggle" aria-label="Toggle theme">
+            <button class="btn-icon" id="themeToggle" aria-label="Toggle theme" title="Toggle theme">
                 <i class="fas fa-moon"></i>
             </button>
-            <div class="app-bar-user" id="userButton" aria-label="User account" role="button" tabindex="0">
+            <div class="app-bar-user" id="userButton" aria-label="User account" title="User account" role="button" tabindex="0">
                 <i class="fas fa-circle-user" aria-hidden="true"></i>
             </div>
 
@@ -102,7 +102,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                                         placeholder="CNP, patient code, or name…"
                                         required aria-describedby="cnpHelp">
                                 </div>
-                                <button type="submit" id="analyzeBtn" class="search-submit-btn" aria-label="Search">
+                                <button type="submit" id="analyzeBtn" class="search-submit-btn" aria-label="Search" title="Search">
                                     <i class="fas fa-arrow-right" aria-hidden="true"></i>
                                 </button>
                             </div>
@@ -112,7 +112,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                         <aside class="recent-searches">
                             <header class="recent-header">
                                 <span class="recent-heading-label">Recent searches</span>
-                                <button type="button" id="clearRecentBtn" class="btn-link" hidden>Clear</button>
+                                <button type="button" id="clearRecentBtn" class="btn-link" hidden title="Clear recent searches">Clear</button>
                             </header>
                             <ul class="recent-list" id="recentSearchesList"></ul>
                             <p class="recent-empty" id="recentEmpty" hidden>No recent searches yet</p>
@@ -132,7 +132,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             <div class="patient-header-left">
                                 <div class="patient-name-row">
                                     <h1 id="patient-tab-heading" class="patient-hero-name"><span id="patientName">Patient Name</span></h1>
-                                    <button type="button" class="btn-secondary schedule-refresh-btn" id="refreshPatientBtn" aria-label="Reload patient data from Hipocrate">
+                                    <button type="button" class="btn-secondary schedule-refresh-btn" id="refreshPatientBtn" aria-label="Reload patient data from Hipocrate" title="Reload patient data from Hipocrate">
                                         <i class="fas fa-sync-alt" aria-hidden="true"></i>
                                         <span>Refresh</span>
                                     </button>
@@ -154,15 +154,15 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                                     <span class="stat-pill-value" id="checkinsCount">0</span>
                                     <span class="stat-pill-label">Admissions</span>
                                 </div>
-                                <button type="button" class="stat-pill stat-pill-link" data-goto="epicrisis" aria-label="View hospitalizations">
+                                <button type="button" class="stat-pill stat-pill-link" data-goto="epicrisis" aria-label="View hospitalizations" title="View hospitalizations">
                                     <span class="stat-pill-value accent" id="checkoutsCount">0</span>
                                     <span class="stat-pill-label accent">Discharges ↗</span>
                                 </button>
-                                <button type="button" class="stat-pill stat-pill-link" data-goto="imaging" aria-label="View imaging studies">
+                                <button type="button" class="stat-pill stat-pill-link" data-goto="imaging" aria-label="View imaging studies" title="View imaging studies">
                                     <span class="stat-pill-value accent" id="imagingCount">?</span>
                                     <span class="stat-pill-label accent">Imaging ↗</span>
                                 </button>
-                                <button type="button" class="stat-pill stat-pill-link" data-goto="laboratory" aria-label="View lab results">
+                                <button type="button" class="stat-pill stat-pill-link" data-goto="laboratory" aria-label="View lab results" title="View lab results">
                                     <span class="stat-pill-value accent" id="labCount">?</span>
                                     <span class="stat-pill-label accent">Lab ↗</span>
                                 </button>
@@ -253,15 +253,15 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             <p class="analyses-meta" id="imagingMeta"></p>
                         </div>
                         <div class="analyses-chips" id="imagingChips" role="group" aria-label="Filter by modality">
-                            <button type="button" class="chip chip-active" data-filter="all">All</button>
-                            <button type="button" class="chip" data-filter="eco">Ultrasound</button>
-                            <button type="button" class="chip" data-filter="radio">X-Ray</button>
-                            <button type="button" class="chip" data-filter="ct">CT</button>
-                            <button type="button" class="chip" data-filter="irm">MRI</button>
-                            <button type="button" class="chip" data-filter="rads">Fluoroscopy</button>
+                            <button type="button" class="chip chip-active" data-filter="all" title="Show all modalities">All</button>
+                            <button type="button" class="chip" data-filter="eco" title="Filter: Ultrasound">Ultrasound</button>
+                            <button type="button" class="chip" data-filter="radio" title="Filter: X-Ray">X-Ray</button>
+                            <button type="button" class="chip" data-filter="ct" title="Filter: CT">CT</button>
+                            <button type="button" class="chip" data-filter="irm" title="Filter: MRI">MRI</button>
+                            <button type="button" class="chip" data-filter="rads" title="Filter: Fluoroscopy">Fluoroscopy</button>
                         </div>
                     </header>
-                    <select id="imagingFilter" aria-label="Filter by modality" style="display:none">
+                    <select id="imagingFilter" aria-label="Filter by modality" title="Filter by modality" style="display:none">
                         <option value="all">All</option>
                         <option value="eco">Ultrasound</option>
                         <option value="radio">X-Ray</option>
@@ -287,7 +287,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             <p class="analyses-meta" id="labMeta"></p>
                         </div>
                         <div class="analyses-chips" id="labChips" role="group" aria-label="Filter by lab section">
-                            <button type="button" class="chip chip-active" data-filter="all">All</button>
+                            <button type="button" class="chip chip-active" data-filter="all" title="Show all sections">All</button>
                         </div>
                     </header>
                     <section id="trendsSection" hidden aria-labelledby="trends-heading">
@@ -308,7 +308,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                         <div id="trendsContainer" class="trends-container" aria-live="polite"></div>
                     </section>
 
-                    <select id="labFilter" aria-label="Filter lab results" style="display:none">
+                    <select id="labFilter" aria-label="Filter lab results" title="Filter lab results" style="display:none">
                         <option value="all">All</option>
                         <option value="lab">Lab</option>
                     </select>
@@ -457,14 +457,14 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                     <!-- Controls row -->
                     <div class="schedule-actions">
                         <label for="schedulePatientFilter" class="sr-only">Patient name</label>
-                        <input type="search" id="schedulePatientFilter" class="schedule-filter-input" placeholder="Filter by patient name…" aria-label="Filter by patient name">
+                        <input type="search" id="schedulePatientFilter" class="schedule-filter-input" placeholder="Filter by patient name…" aria-label="Filter by patient name" title="Filter by patient name">
                         <label for="scheduleStartDate" class="sr-only">From date</label>
-                        <input type="date" id="scheduleStartDate" class="schedule-date-input" aria-label="From date" autocomplete="off">
+                        <input type="date" id="scheduleStartDate" class="schedule-date-input" aria-label="From date" title="From date" autocomplete="off">
                         <span class="schedule-date-sep" aria-hidden="true">–</span>
                         <label for="scheduleEndDate" class="sr-only">To date</label>
-                        <input type="date" id="scheduleEndDate" class="schedule-date-input" aria-label="To date" autocomplete="off">
+                        <input type="date" id="scheduleEndDate" class="schedule-date-input" aria-label="To date" title="To date" autocomplete="off">
                         <label for="scheduleLabFilter" class="sr-only">Modality</label>
-                        <select id="scheduleLabFilter" class="schedule-filter-select" aria-label="Filter by modality">
+                        <select id="scheduleLabFilter" class="schedule-filter-select" aria-label="Filter by modality" title="Filter by modality">
                             <option value="">All modalities</option>
                             <option value="26">CT</option>
                             <option value="28">Ultrasound</option>
@@ -474,13 +474,13 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             <option value="50">Fluoroscopy</option>
                         </select>
                         <label for="scheduleLimitSelect" class="sr-only">Max results</label>
-                        <select id="scheduleLimitSelect" class="schedule-filter-select" aria-label="Max results">
+                        <select id="scheduleLimitSelect" class="schedule-filter-select" aria-label="Max results" title="Max results">
                             <option value="20">20 items</option>
                             <option value="50" selected>50 items</option>
                             <option value="100">100 items</option>
                             <option value="200">200 items</option>
                         </select>
-                        <button class="btn-secondary schedule-refresh-btn" id="refreshScheduleBtn" aria-label="Refresh schedule">
+                        <button class="btn-secondary schedule-refresh-btn" id="refreshScheduleBtn" aria-label="Refresh schedule" title="Refresh schedule">
                             <i class="fas fa-sync-alt" aria-hidden="true"></i>
                             <span>Refresh</span>
                         </button>
@@ -491,13 +491,13 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
 
                         <!-- Status chips -->
                         <div class="schedule-status-chips" id="scheduleStatusChips" role="group" aria-label="Filter by status">
-                            <button type="button" class="chip chip-active" data-status="">All</button>
-                            <button type="button" class="chip" data-status="on-hold">Not sent</button>
-                            <button type="button" class="chip" data-status="draft">In lab</button>
-                            <button type="button" class="chip" data-status="active">In progress</button>
-                            <button type="button" class="chip" data-status="completed">Completed</button>
-                            <button type="button" class="chip" data-status="ended">Finished</button>
-                            <button type="button" class="chip" data-status="revoked">Cancelled</button>
+                            <button type="button" class="chip chip-active" data-status="" title="Show all statuses">All</button>
+                            <button type="button" class="chip" data-status="on-hold" title="Filter: Not sent to lab yet">Not sent</button>
+                            <button type="button" class="chip" data-status="draft" title="Filter: Sent to lab, awaiting exam">In lab</button>
+                            <button type="button" class="chip" data-status="active" title="Filter: Currently in progress">In progress</button>
+                            <button type="button" class="chip" data-status="completed" title="Filter: Completed">Completed</button>
+                            <button type="button" class="chip" data-status="ended" title="Filter: Finished">Finished</button>
+                            <button type="button" class="chip" data-status="revoked" title="Filter: Cancelled">Cancelled</button>
                         </div>
 
                         <div class="schedule-filters-spacer"></div>
@@ -506,7 +506,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                         <div class="schedule-ward-pill">
                             <i class="fas fa-hospital" aria-hidden="true"></i>
                             <label for="scheduleSectionFilter" class="sr-only">Ward</label>
-                            <select id="scheduleSectionFilter" aria-label="Filter by ward">
+                            <select id="scheduleSectionFilter" aria-label="Filter by ward" title="Filter by ward">
                                 <option value="">All wards</option>
                             </select>
                             <i class="fas fa-chevron-down" aria-hidden="true"></i>
@@ -578,14 +578,14 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                 </section>
                 <footer class="report-actions">
                     <div class="action-group" hidden>
-                        <button class="btn-perform-exam" aria-label="Mark as performed">
+                        <button class="btn-perform-exam" aria-label="Mark as performed" title="Mark as performed">
                             <i class="fas fa-check-circle" aria-hidden="true"></i> Perform
                         </button>
-                        <button class="btn-cancel-request" aria-label="Cancel request">
+                        <button class="btn-cancel-request" aria-label="Cancel request" title="Cancel request">
                             <i class="fas fa-ban" aria-hidden="true"></i> Cancel
                         </button>
                     </div>
-                    <button class="btn-write-report" hidden aria-label="Edit report">
+                    <button class="btn-write-report" hidden aria-label="Edit report" title="Edit report">
                         <i class="fas fa-pen" aria-hidden="true"></i> Edit
                     </button>
                     <div class="validate-toggles"></div>
@@ -606,7 +606,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                     <span class="history-dot"></span>
                     <span class="history-line"></span>
                 </div>
-                <button type="button" class="history-load">
+                <button type="button" class="history-load" title="View this hospitalisation">
                     <div class="history-load-top">
                         <span class="history-period"></span>
                         <span class="history-nights"></span>
@@ -619,7 +619,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
 
         <template id="recent-item-template">
             <li class="recent-item">
-                <button type="button" class="recent-load">
+                <button type="button" class="recent-load" title="Open this patient">
                     <div class="recent-avatar">
                         <i class="fas" aria-hidden="true"></i>
                     </div>
@@ -649,7 +649,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                 <article>
                     <header>
                         <h2 id="imaging-study-modal-title"><i class="fas fa-x-ray" aria-hidden="true"></i> <span class="modal-title"></span></h2>
-                        <button class="close" aria-label="Close modal"><i class="fas fa-times"></i></button>
+                        <button class="close" aria-label="Close modal" title="Close"><i class="fas fa-times"></i></button>
                     </header>
                     <div>
                         <section class="study-section">
@@ -661,11 +661,11 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             <ul class="series-list" aria-label="Series list"></ul>
                         </section>
                         <section class="study-section">
-                            <p><a href="#" class="back-to-report" aria-label="Back to report"><i class="fas fa-arrow-left"></i> Back to Report <span class="back-report-id"></span></a></p>
+                            <p><a href="#" class="back-to-report" aria-label="Back to report" title="Back to report"><i class="fas fa-arrow-left"></i> Back to Report <span class="back-report-id"></span></a></p>
                         </section>
                     </div>
                     <footer>
-                        <button class="btn-secondary" data-close-modal aria-label="Close modal">
+                        <button class="btn-secondary" data-close-modal aria-label="Close modal" title="Close">
                             <i class="fas fa-times"></i><span>Close</span>
                         </button>
                     </footer>
@@ -700,20 +700,20 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                                     </p>
                                 </hgroup>
                             </div>
-                            <button class="report-modal-close" aria-label="Close modal"><i class="fas fa-times"></i></button>
+                            <button class="report-modal-close" aria-label="Close modal" title="Close"><i class="fas fa-times"></i></button>
                         </div>
                     </header>
                     <div class="report-modal-body markdown-content"></div>
                     <p class="report-modal-error" hidden></p>
                     <div class="report-modal-validate-toggles" hidden></div>
                     <footer class="report-modal-footer">
-                        <button class="btn-secondary" data-close-modal aria-label="Close"><i class="fas fa-times"></i> <span>Close</span></button>
+                        <button class="btn-secondary" data-close-modal aria-label="Close" title="Close"><i class="fas fa-times"></i> <span>Close</span></button>
                         <div class="action-group" hidden>
-                            <button class="btn-perform-exam" aria-label="Mark as performed"><i class="fas fa-check-circle"></i> <span>Perform</span></button>
-                            <button class="btn-cancel-request" aria-label="Cancel request"><i class="fas fa-ban"></i> <span>Cancel</span></button>
+                            <button class="btn-perform-exam" aria-label="Mark as performed" title="Mark as performed"><i class="fas fa-check-circle"></i> <span>Perform</span></button>
+                            <button class="btn-cancel-request" aria-label="Cancel request" title="Cancel request"><i class="fas fa-ban"></i> <span>Cancel</span></button>
                         </div>
-                        <button class="btn-edit-report" hidden aria-label="Edit report"><i class="fas fa-pen"></i> <span>Edit</span></button>
-                        <button class="btn-primary modal-load-patient-btn" aria-label="Load patient"><i class="fas fa-user-injured"></i> <span>Load Patient</span></button>
+                        <button class="btn-edit-report" hidden aria-label="Edit report" title="Edit report"><i class="fas fa-pen"></i> <span>Edit</span></button>
+                        <button class="btn-primary modal-load-patient-btn" aria-label="Load patient" title="Load patient"><i class="fas fa-user-injured"></i> <span>Load Patient</span></button>
                     </footer>
                 </article>
             </dialog>
@@ -724,7 +724,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                 <article>
                     <header>
                         <h2 id="user-modal-title"><i class="fas fa-user-circle" aria-hidden="true"></i> <span class="modal-title">User Account</span></h2>
-                        <button class="close" aria-label="Close modal"><i class="fas fa-times"></i></button>
+                        <button class="close" aria-label="Close modal" title="Close"><i class="fas fa-times"></i></button>
                     </header>
                     <div>
                         <div class="user-modal-identity">
@@ -738,10 +738,10 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                         </dl>
                     </div>
                     <footer>
-                        <button class="btn-secondary" data-close-modal aria-label="Close modal">
+                        <button class="btn-secondary" data-close-modal aria-label="Close modal" title="Close">
                             <i class="fas fa-times"></i><span>Close</span>
                         </button>
-                        <button class="btn-primary user-logout-btn" aria-label="Log out">
+                        <button class="btn-primary user-logout-btn" aria-label="Log out" title="Log out">
                             <i class="fas fa-sign-out-alt"></i><span>Log Out</span>
                         </button>
                     </footer>
@@ -751,7 +751,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
 
         <template id="epi-card-template">
             <article class="epi-card">
-                <button type="button" class="epi-card-btn" aria-expanded="false">
+                <button type="button" class="epi-card-btn" aria-expanded="false" title="Expand for details">
                     <div class="epi-btn-left">
                         <div class="epi-dot"></div>
                         <div>
@@ -792,7 +792,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                     <div class="timeline-mod-avatar"></div>
                     <div class="timeline-card-body">
                         <div class="timeline-patient-row">
-                            <button class="timeline-card-patient"></button>
+                            <button class="timeline-card-patient" title="Open this patient"></button>
                             <strong class="urgent-badge" hidden>Urgent</strong>
                         </div>
                         <div class="timeline-card-region"></div>
@@ -801,7 +801,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             <span class="timeline-meta-sep" aria-hidden="true">·</span>
                             <span class="timeline-meta-requester"><i class="fas fa-user-doctor" aria-hidden="true"></i> <span></span></span>
                             <span class="timeline-meta-sep" aria-hidden="true">·</span>
-                            <button class="timeline-code"></button>
+                            <button class="timeline-code" title="View request details"></button>
                             <span class="timeline-meta-sep timeline-pay-sep" aria-hidden="true">·</span>
                             <span class="timeline-numeric-id"></span>
                             <span class="timeline-meta-sep timeline-pay-sep" aria-hidden="true">·</span>
@@ -855,14 +855,14 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
             <dialog class="modal report-editor-modal" aria-modal="true">
                 <article>
                     <header>
-                        <button class="close" aria-label="Close">×</button>
+                        <button class="close" aria-label="Close" title="Close">×</button>
                         <h2>Imaging report <span class="editor-report-id"></span></h2>
                         <p class="editor-report-date"></p>
                     </header>
                     <section class="editor-analyses"></section>
                     <footer>
-                        <button class="btn-secondary" data-close-modal>Cancel</button>
-                        <button class="btn-primary editor-save">Save</button>
+                        <button class="btn-secondary" data-close-modal title="Discard changes">Cancel</button>
+                        <button class="btn-primary editor-save" title="Save report">Save</button>
                     </footer>
                 </article>
             </dialog>
@@ -887,7 +887,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                     <p id="loginError" class="login-error" hidden></p>
                 </div>
                 <div class="login-dialog-footer">
-                    <button type="submit" class="btn-primary" id="loginSubmitBtn">Sign in</button>
+                    <button type="submit" class="btn-primary" id="loginSubmitBtn" title="Sign in">Sign in</button>
                 </div>
             </form>
         </dialog>
@@ -902,7 +902,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
             <div class="loading-error" id="loadingError" hidden>
                 <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
                 <p id="loadingErrorMsg"></p>
-                <button id="loadingErrorDismiss" class="btn-secondary">Dismiss</button>
+                <button id="loadingErrorDismiss" class="btn-secondary" title="Dismiss">Dismiss</button>
             </div>
         </div>
 

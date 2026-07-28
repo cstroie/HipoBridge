@@ -976,6 +976,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const meta = [cnp, dob, gender].filter(Boolean).join(' · ');
                 const btn = document.createElement('button');
                 btn.className = 'btn-secondary';
+                btn.title = 'Select this patient';
                 btn.style.cssText = 'display:block;width:100%;margin-top:var(--space-8);text-align:left';
                 const nameEl = document.createElement('span');
                 nameEl.style.cssText = 'display:block;font-weight:var(--font-weight-semibold)';
@@ -993,6 +994,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const cancel = document.createElement('button');
             cancel.className = 'btn-secondary';
+            cancel.title = 'Cancel selection';
             cancel.style.cssText = 'display:block;width:100%;margin-top:var(--space-16)';
             cancel.textContent = 'Cancel';
             cancel.addEventListener('click', () => dismiss(null));
@@ -1195,6 +1197,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // the same tick — e.g. once per card right after a page reload, while
     // whoamiData is still unset. Without de-duping, each one fired its own
     // /api/whoami request instead of sharing the one already in progress.
+    function formatUserDisplayName(user) {
+        return user.display_name
+            ? user.display_name.toLowerCase()
+            : (user.username || '').replace(/\./g, ' ');
+    }
+
     async function fetchWhoami() {
         if (whoamiData) return whoamiData;
         if (whoamiInFlight) return whoamiInFlight;
@@ -1212,6 +1220,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     throw new Error(data.message || `Whoami failed (${resp.status})`);
                 }
                 whoamiData = data.user;
+                if (elements.userButton) {
+                    const label = formatUserDisplayName(whoamiData);
+                    if (label) elements.userButton.title = label;
+                }
                 return whoamiData;
             } finally {
                 whoamiInFlight = null;
@@ -1252,9 +1264,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         try {
             const user = await fetchWhoami();
-            const displayName = user.display_name
-                ? user.display_name.toLowerCase()
-                : (user.username || '').replace(/\./g, ' ');
+            const displayName = formatUserDisplayName(user);
             nameEl.textContent = displayName || 'Unknown user';
             modal.querySelector('.user-detail-username').textContent = user.username || '—';
             modal.querySelector('.user-detail-id').textContent = user.id || '—';
@@ -1304,6 +1314,7 @@ document.addEventListener('DOMContentLoaded', function() {
             chip.className = 'chip';
             chip.dataset.filter = sec;
             chip.textContent = sec.split(' ').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ');
+            chip.title = `Filter: ${chip.textContent}`;
             container.appendChild(chip);
         }
     }
@@ -4722,6 +4733,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const chevron = card.querySelector('.epi-chevron');
 
             btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            btn.title = isOpen ? 'Collapse' : 'Expand for details';
             card.querySelector('.epi-date-range').textContent = item.active ? `${admission} → Present` : `${admission} → ${discharge}`;
             const serviceParts = [ward, attender].filter(Boolean);
             card.querySelector('.epi-service').textContent = serviceParts.length ? serviceParts.join(' · ') : (service || 'Admission');
@@ -4758,6 +4770,7 @@ document.addEventListener('DOMContentLoaded', function() {
             btn.addEventListener('click', () => {
                 const open = card.classList.toggle('epi-card-open');
                 btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                btn.title = open ? 'Collapse' : 'Expand for details';
                 body.hidden = !open;
                 chevron.className = `fas fa-chevron-${open ? 'up' : 'down'} epi-chevron`;
             });
