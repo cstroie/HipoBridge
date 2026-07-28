@@ -35,7 +35,7 @@ try:
 except ImportError:
     DICOM_AVAILABLE = False
 
-from hippoclient import HippoClientSchedule, HippoClientCerere, HippoClientPatient, HippoClientCheckin
+from hippoclient import HippoClientSchedule, HippoClientCerere, HippoClientBuletinSolicitare, HippoClientPatient, HippoClientCheckin
 from extractors import parse_cnp
 
 logger = logging.getLogger('Worklist')
@@ -407,7 +407,9 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
     dt_str       = entry.get('date_time', '')
     modality     = _MODALITY_CODE.get(entry.get('modality') or '', 'OT')
     # Hipocrate's schedule page no longer lists the requester per row (2026-07);
-    # cerere.asp's "Medic" select is fetched during enrichment and used instead.
+    # 'physician' is populated during enrichment from BuletinSolicitare.asp's
+    # "Medic solicitant" (the true orderer), falling back to cerere.asp's
+    # "Medic curant" (attending physician) only if no distinct orderer exists.
     referrer     = _name_to_dicom((patient_info or {}).get('physician') or entry.get('requested_by', ''))
     study_uid    = f'1.2.840.99999999.1.{request_id}' if request_id else generate_uid()
     accession    = f"{accession_prefix}{request_id}" if request_id else request_code
@@ -869,6 +871,17 @@ class WorklistRefresher:
             if not patient_id:
                 return None
 
+            # BuletinSolicitare.asp's "Medic solicitant" is the physician who
+            # actually ordered this exam — cerere.asp's strMedicId only ever
+            # gives "Medic curant" (the attending physician), a different
+            # person whenever the patient's regular doctor isn't the orderer.
+            solicitare = self._client(HippoClientBuletinSolicitare)
+            solicitare_data = await solicitare.fetch_and_parse(id=request_id)
+            physician_solicitant = (
+                solicitare_data.get('request.physician_solicitant') or
+                solicitare_data.get('request.physician_curant')
+            )
+
             patient_client = self._client(HippoClientPatient)
             patient_data = await patient_client.fetch_and_parse(id=patient_id)
             if patient_data.get('status') == 'error':
@@ -895,7 +908,7 @@ class WorklistRefresher:
                 'birth_date':    patient_data.get('patient.birth_date'),
                 'sex':           patient_data.get('patient.sex'),
                 'exams':         cerere_data.get('exams') or [],
-                'physician':     cerere_data.get('request.physician'),
+                'physician':     physician_solicitant or cerere_data.get('request.physician'),
                 'justification': cerere_data.get('request.justification'),
                 'section':       cerere_data.get('request.section'),
                 'phone':         patient_data.get('patient.phone'),
