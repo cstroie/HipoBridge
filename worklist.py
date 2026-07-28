@@ -74,7 +74,7 @@ _LAB_ID_FETCH_DAYS: Dict[str, int] = {
 }
 
 # Maps schedule modality slugs → DICOM modality codes.
-# 'irm' is the slug HippoClientSchedule uses for MRI (from _lab_to_modality).
+# 'irm' is the slug HippoClientSchedule uses for MRI (from _LAB_ID_TO_MODALITY).
 _MODALITY_CODE: Dict[str, str] = {
     'radio':  'CR',
     'eco':    'US',

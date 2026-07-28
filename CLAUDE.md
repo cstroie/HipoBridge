@@ -149,8 +149,9 @@ Both prompts were rewritten per `_testing_/final50/{REPORT,EPICRISIS}_PROPOSALS.
 **Schedule**:
 - `html.parser` does not inject `<tbody>` — iterate `table.find_all('tr')` directly.
 - Lab IDs are hardcoded (CT=26, US=28, MRI=32, X-Ray=49, IR=35, Fluoro=50) — do not guess.
-- `_lab_to_modality`: check `radioscopii` before `radiografie` or combined labels resolve wrong.
 - Ward filtering is Python-side (`?section_name=`); lab and patient-text filters are native Hipocrate URL params.
+- **2026-07-28**: Hipocrate removed the "Solicitat de" (requester) and "Laborator" columns from the per-request detail table (now 7 `<td>`s, not 8). `requested_by` is permanently unavailable from this page now (`''`). Modality can no longer be read off the row — `HippoClientSchedule._LAB_ID_TO_MODALITY` derives it instead from the `PARA_ID_Laborator` (`lab_id`) the fetch was filtered by. The old label-sniffing `_lab_to_modality`/`_lab_to_display` classmethods were removed as dead code.
+- Because of the above, a call with no `lab_id` (the frontend's "All" schedule view) can no longer get modality per row from Hipocrate at all. `fetch_and_parse` now detects a missing `lab_id` and fans out via `_fetch_and_parse_all_labs`: one concurrent fetch per known lab_id, results deduped by `request_id` and merged, then **sorted by `date_time` descending** so the merged view is one continuous timeline with modalities intermixed — not concatenated per-modality blocks (concatenation was the initial, wrong version of this fix).
 
 **DiagnosticReport / ObservationBundle**: `_parse_observation_value` is shared. Frontend detects lab entries by presence of `reference` key in `presentedForm`, not by `type="lab"` — immunology is typed `"other"` but still has `reference`.
 

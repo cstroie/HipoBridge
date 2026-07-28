@@ -4467,31 +4467,24 @@ class HippoClientSchedule(HippoClient):
     _MODALITY_DISPLAY = {
         'eco':   'Ultrasound',
         'fluoro': 'Fluoroscopy',
+        'rads':  'Interventional Radiology',
         'radio': 'X-Ray',
         'ct':    'CT',
         'irm':   'MRI',
         'lab':   'Laboratory',
     }
 
-    @classmethod
-    def _lab_to_modality(cls, lab: str) -> Optional[str]:
-        """Map Hipocrate laboratory label to a modality slug."""
-        l = lab.lower().strip()
-        if 'ecografie' in l:                            return 'eco'
-        if 'radioscopii' in l:                          return 'fluoro'
-        if 'radiografie' in l:                          return 'radio'
-        if 'tomografie' in l or 'computerizata' in l:   return 'ct'
-        if 'computer tomograf' in l:                    return 'ct'
-        if l == 'ct' or l.startswith('ct '):            return 'ct'
-        if 'imagistica' in l or 'rezonanta' in l:       return 'irm'
-        if 'laborator' in l:                            return 'lab'
-        return None
-
-    @classmethod
-    def _lab_to_display(cls, lab: str) -> str:
-        """Return a normalised display name for a Hipocrate laboratory label."""
-        slug = cls._lab_to_modality(lab)
-        return cls._MODALITY_DISPLAY.get(slug, lab) if slug else lab
+    # Hipocrate no longer renders a per-row laboratory/requester column (removed
+    # 2026-07); the modality is only knowable from the PARA_ID_Laborator filter
+    # used for the fetch. IDs from /gen_lib/filtre_ajax_dropdown.asp — do not guess.
+    _LAB_ID_TO_MODALITY = {
+        '26': 'ct',
+        '28': 'eco',
+        '32': 'irm',
+        '49': 'radio',
+        '35': 'rads',
+        '50': 'fluoro',
+    }
 
     def __init__(self, service_url=None, request=None):
         super().__init__(service_url=service_url, request=request)
@@ -4516,6 +4509,12 @@ class HippoClientSchedule(HippoClient):
         return url
 
     async def fetch_and_parse(self, **kwargs) -> HippoData:
+        # The page no longer states each request's modality (see _LAB_ID_TO_MODALITY);
+        # an unfiltered call has to fan out per known lab_id and merge, or every
+        # entry comes back with an empty/unknown modality.
+        if not kwargs.get('lab_id'):
+            return await self._fetch_and_parse_all_labs(**kwargs)
+
         data = HippoData(status="success", message="")
         url = self._build_url(
             kwargs.get('start_date') or kwargs.get('date'),
@@ -4536,6 +4535,39 @@ class HippoClientSchedule(HippoClient):
             logger.error(f"fetch_and_parse (schedule) failed: {e}")
             data.set_error(f"Data retrieval failed: {e}")
             return data
+
+    async def _fetch_and_parse_all_labs(self, **kwargs) -> HippoData:
+        """Merge one fetch per known PARA_ID_Laborator so each entry keeps its modality."""
+        sub_kwargs_list = [dict(kwargs, lab_id=lab_id) for lab_id in self._LAB_ID_TO_MODALITY]
+        results = await asyncio.gather(
+            *(HippoClientSchedule(self.service_url, self.request).fetch_and_parse(**sub_kwargs)
+              for sub_kwargs in sub_kwargs_list),
+            return_exceptions=True,
+        )
+
+        merged = []
+        seen_ids = set()
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error(f"fetch_and_parse (schedule, per-lab) failed: {result}")
+                continue
+            if result.get("status") == "error":
+                logger.warning(f"fetch_and_parse (schedule, per-lab) error: {result.get('message')}")
+                continue
+            for req in result.get("requests") or []:
+                request_id = req.get('request_id')
+                if request_id and request_id in seen_ids:
+                    continue
+                if request_id:
+                    seen_ids.add(request_id)
+                merged.append(req)
+
+        merged.sort(key=lambda req: req.get('date_time') or '', reverse=True)
+
+        data = HippoData(status="success", message="")
+        data.store_list("requests", merged)
+        data.store("total", len(merged))
+        return data
 
     async def debug_page(self, **kwargs):
         url = self._build_url(
@@ -4577,10 +4609,15 @@ class HippoClientSchedule(HippoClient):
                 # Inner table has a header row then a data row; take the last tr
                 detail_rows = cells[2].select('div.div_detalii table tr')
                 detail_cells = detail_rows[-1].find_all('td') if detail_rows else []
-                if len(detail_cells) >= 8:
+                if len(detail_cells) >= 7:
                     raw_dt = detail_cells[0].get_text(strip=True)
                     parsed_dt = parse_date_time(raw_dt)
                     iso_dt = parsed_dt.strftime('%Y-%m-%d %H:%M') if parsed_dt else raw_dt
+                    # Hipocrate dropped the "Solicitat de" and "Laborator" columns from
+                    # this table (2026-07) — modality can only be inferred from the
+                    # PARA_ID_Laborator filter the fetch was made with, if any.
+                    lab_id = kwargs.get('lab_id')
+                    modality = self._LAB_ID_TO_MODALITY.get(str(lab_id)) if lab_id else None
                     requests.append({
                         'patient_name': patient_name,
                         'request_code': request_code,
@@ -4590,9 +4627,9 @@ class HippoClientSchedule(HippoClient):
                         'payment_type': detail_cells[2].get_text(strip=True),
                         'priority': detail_cells[3].get_text(strip=True),
                         'section': detail_cells[4].get_text(strip=True),
-                        'requested_by': detail_cells[6].get_text(strip=True),
-                        'laboratory': self._lab_to_display(raw_lab := detail_cells[7].get_text(strip=True)),
-                        'modality': self._lab_to_modality(raw_lab),
+                        'requested_by': '',
+                        'laboratory': self._MODALITY_DISPLAY.get(modality, ''),
+                        'modality': modality,
                     })
 
             data.store_list("requests", requests)
