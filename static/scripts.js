@@ -5334,6 +5334,16 @@ document.addEventListener('DOMContentLoaded', function() {
             const id = el.dataset.requestId;
             if (!id) return;
             if (_examCache[id]) { _applyExamLabel(el, _examCache[id]); return; }
+            // cerere.asp is the only reliable source of the referring physician —
+            // ImagingStudy only has `performer` (who did the exam), not `referrer` —
+            // so fetch it alongside regardless of which branch below resolves.
+            apiFetch(`/fhir/ServiceRequest/${id}?type=cerere`)
+                .then(r => r.ok ? r.json() : null)
+                .then(cerereForReferrer => {
+                    const referrer = cerereForReferrer?.requester?.display || '';
+                    if (referrer) _applyReferrer(el, referrer);
+                })
+                .catch(() => {});
             apiFetch(`/fhir/ImagingStudy/${id}`)
                 .then(r => r.ok ? r.json() : null)
                 .then(data => {
@@ -5342,8 +5352,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     // placeholder junk) and falls back to reason (diagnosis) when neither exist.
                     const noteIndication = (data?.note || []).find(n => n.category?.[0]?.text === 'clinical-indication')?.text || '';
                     const indication = _isMeaningfulText(noteIndication) ? noteIndication : (data?.reason?.[0]?.text || '');
-                    const referrer = data?.referrer?.display || '';
-                    if (referrer) _applyReferrer(el, referrer);
                     if (regions.length || indication) {
                         _examCache[id] = { regions, indication };
                         _applyExamLabel(el, _examCache[id]);
@@ -5361,8 +5369,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         const cerereIndication = (cerere?.note || []).find(n => n.category?.[0]?.text === 'clinical-indication')?.text || '';
                         const diagnosis = cerere?.reason?.[0]?.display || d?.reason?.[0]?.display || '';
                         const indication = [commentIndication, cerereIndication, diagnosis].find(_isMeaningfulText) || '';
-                        const referrer = d?.requester?.display || cerere?.requester?.display || '';
-                        if (referrer) _applyReferrer(el, referrer);
                         const cached = { regions: _extractRegions(d), indication };
                         _examCache[id] = cached;
                         _applyExamLabel(el, cached);
