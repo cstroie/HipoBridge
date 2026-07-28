@@ -2550,23 +2550,20 @@ document.addEventListener('DOMContentLoaded', function() {
             return cache.encounters[checkoutId];
         }
 
-        try {
-            const response = await apiFetch(`/fhir/Encounter/${checkoutId}?type=checkout`);
+        const response = await apiFetch(`/fhir/Encounter/${checkoutId}?type=checkout`);
 
-            if (!response.ok) {
-                console.error(`Error fetching encounter data for checkout ${checkoutId}:`, response.status);
-                return null;
-            }
-            
-            const encounterData = await response.json();
-            cachePut(cache.encounters, checkoutId, encounterData);
-            log(`Encounter data fetched successfully for checkout ${checkoutId}:`, encounterData);
-            return encounterData;
-            
-        } catch (error) {
-            console.error(`Error fetching encounter data for checkout ${checkoutId}:`, error);
-            return null;
+        // 404 means this checkout simply isn't viewable via this scrape path
+        // (e.g. superseded record) — a normal empty state, not a failure.
+        if (response.status === 404) return null;
+        if (!response.ok) {
+            console.error(`Error fetching encounter data for checkout ${checkoutId}:`, response.status);
+            throw new Error(`HTTP ${response.status}`);
         }
+
+        const encounterData = await response.json();
+        cachePut(cache.encounters, checkoutId, encounterData);
+        log(`Encounter data fetched successfully for checkout ${checkoutId}:`, encounterData);
+        return encounterData;
     }
 
     // Helper function to fetch encounter data for a checkin ID (active admission, not yet discharged)
@@ -2574,20 +2571,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (cache.encounters[checkinId]) {
             return cache.encounters[checkinId];
         }
-        try {
-            const response = await apiFetch(`/fhir/Encounter/${checkinId}?type=checkin`);
-            if (!response.ok) {
-                console.error(`Error fetching encounter data for checkin ${checkinId}:`, response.status);
-                return null;
-            }
-            const encounterData = await response.json();
-            cachePut(cache.encounters, checkinId, encounterData);
-            log(`Encounter data fetched successfully for checkin ${checkinId}:`, encounterData);
-            return encounterData;
-        } catch (error) {
-            console.error(`Error fetching encounter data for checkin ${checkinId}:`, error);
-            return null;
+        const response = await apiFetch(`/fhir/Encounter/${checkinId}?type=checkin`);
+        // 404 means this checkin simply isn't viewable via this scrape path
+        // (e.g. superseded record) — a normal empty state, not a failure.
+        if (response.status === 404) return null;
+        if (!response.ok) {
+            console.error(`Error fetching encounter data for checkin ${checkinId}:`, response.status);
+            throw new Error(`HTTP ${response.status}`);
         }
+        const encounterData = await response.json();
+        cachePut(cache.encounters, checkinId, encounterData);
+        log(`Encounter data fetched successfully for checkin ${checkinId}:`, encounterData);
+        return encounterData;
     }
 
     
@@ -2825,20 +2820,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (elements.historyLoading) elements.historyLoading.hidden = false;
         try {
+            // A null result means either "not found" (404 — a normal, silent
+            // outcome; see fetchEncounterDataForCheckout etc.) or a genuine
+            // fetch failure. Only the latter should count toward the warning
+            // toast below, so track it explicitly instead of inferring it
+            // from missing results.
+            let failedCount = 0;
             const [encounters, activeEncounters, presentations] = await Promise.all([
                 limitedMap(checkoutIds, MAX_CONCURRENT_REQUESTS,
-                    async id => { try { return await fetchEncounterDataForCheckout(id); } catch (_) { return null; } }),
+                    async id => { try { return await fetchEncounterDataForCheckout(id); } catch (_) { failedCount++; return null; } }),
                 limitedMap(checkinIds, MAX_CONCURRENT_REQUESTS,
-                    async id => { try { return await fetchEncounterDataForCheckin(id); } catch (_) { return null; } }),
+                    async id => { try { return await fetchEncounterDataForCheckin(id); } catch (_) { failedCount++; return null; } }),
                 limitedMap(presentationIds, MAX_CONCURRENT_REQUESTS,
-                    async id => { try { return await fetchPresentation(id); } catch (_) { return null; } })
+                    async id => { try { return await fetchPresentation(id); } catch (_) { failedCount++; return null; } })
             ]);
 
-            const failedCount = [
-                [checkoutIds, encounters],
-                [checkinIds, activeEncounters],
-                [presentationIds, presentations],
-            ].reduce((sum, [ids, results]) => sum + (ids.length - results.filter(Boolean).length), 0);
             if (failedCount > 0) {
                 showToast(`Failed to load ${failedCount} history record${failedCount > 1 ? 's' : ''}`, 'warning');
             }
@@ -4541,7 +4537,10 @@ document.addEventListener('DOMContentLoaded', function() {
     async function fetchPresentation(id) {
         if (cache.encounters[id]) return cache.encounters[id];
         const response = await apiFetch(`/fhir/Encounter/${id}?type=presentation`);
-        if (!response.ok) return null;
+        // 404 means this presentation simply isn't viewable via this scrape path
+        // (e.g. it became an inpatient admission) — a normal empty state, not a failure.
+        if (response.status === 404) return null;
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
         if (data.resourceType !== 'Encounter') return null;
         cachePut(cache.encounters, id, data);
