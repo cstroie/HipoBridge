@@ -369,6 +369,82 @@ class ServiceRequest(Resource):
         )
 
 
+class Task(Resource):
+    def __init__(self,
+                 id: Optional[str] = None,
+                 identifier: Optional[List[Dict[str, Any]]] = None,
+                 status: Optional[str] = None,
+                 businessStatus: Optional[Dict[str, Any]] = None,
+                 intent: Optional[str] = None,
+                 priority: Optional[str] = None,
+                 code: Optional[Dict[str, Any]] = None,
+                 description: Optional[str] = None,
+                 focus: Optional[Dict[str, Any]] = None,
+                 for_: Optional[Dict[str, Any]] = None,
+                 encounter: Optional[Dict[str, Any]] = None,
+                 executionPeriod: Optional[Dict[str, Any]] = None,
+                 authoredOn: Optional[str] = None,
+                 lastModified: Optional[str] = None,
+                 requester: Optional[Dict[str, Any]] = None,
+                 owner: Optional[Dict[str, Any]] = None,
+                 note: Optional[List[Dict[str, Any]]] = None,
+                 input: Optional[List[Dict[str, Any]]] = None,
+                 output: Optional[List[Dict[str, Any]]] = None,
+                 **kwargs):
+        super().__init__(
+            resourceType="Task",
+            id=id,                             # Logical id of this artifact
+            identifier=identifier,             # Task Instance Identifier
+            status=status,                     # draft | requested | received | accepted | ... | in-progress | completed | ...
+            businessStatus=businessStatus,     # E.g. "signed", "pending validation"
+            intent=intent,                     # unknown | proposal | plan | order | original-order | reflex-order | filler-order | instance-order | option
+            priority=priority,                 # routine | urgent | asap | stat
+            code=code,                         # Task Type
+            description=description,           # Human-readable explanation of task
+            focus=focus,                       # What task is acting on (e.g. the ServiceRequest)
+            **({'for': for_} if for_ is not None else {}),  # Beneficiary of the Task (patient) — "for" is a Python keyword
+            encounter=encounter,               # Healthcare event during which this task originated
+            executionPeriod=executionPeriod,   # Start and end time of execution
+            authoredOn=authoredOn,             # Task Creation Date
+            lastModified=lastModified,         # Task Last Modified Date
+            requester=requester,               # Who is asking for task to be done
+            owner=owner,                       # Responsible individual/organization
+            note=note,                         # Comments made about the task
+            input=input,                       # Information used to perform task
+            output=output,                     # Information produced as part of task
+            **kwargs
+        )
+
+
+class Specimen(Resource):
+    def __init__(self,
+                 id: Optional[str] = None,
+                 identifier: Optional[List[Dict[str, Any]]] = None,
+                 accessionIdentifier: Optional[Dict[str, Any]] = None,
+                 status: Optional[str] = None,
+                 type: Optional[Dict[str, Any]] = None,
+                 subject: Optional[Dict[str, Any]] = None,
+                 receivedTime: Optional[str] = None,
+                 request: Optional[List[Dict[str, Any]]] = None,
+                 collection: Optional[Dict[str, Any]] = None,
+                 note: Optional[List[Dict[str, Any]]] = None,
+                 **kwargs):
+        super().__init__(
+            resourceType="Specimen",
+            id=id,                                     # Logical id of this artifact
+            identifier=identifier,                     # External Identifier
+            accessionIdentifier=accessionIdentifier,   # Identifier assigned by the lab
+            status=status,                             # available | unsatisfactory | entered-in-error | unknown
+            type=type,                                 # Kind of material that forms the specimen
+            subject=subject,                           # Where the specimen came from (patient)
+            receivedTime=receivedTime,                 # The time when specimen was received for processing
+            request=request,                           # Why the specimen was collected
+            collection=collection,                     # Collection details
+            note=note,                                 # Comments
+            **kwargs
+        )
+
+
 class Condition(Resource):
     def __init__(self,
                  identifier: Optional[List[Dict[str, Any]]] = None,

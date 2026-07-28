@@ -5343,7 +5343,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (_examCache[id].referrer) _applyReferrer(el, _examCache[id].referrer);
                 return;
             }
-            apiFetch(`/fhir/ServiceRequest/${id}?type=solicitare`)
+            apiFetch(`/fhir/ServiceRequest/${id}`)
                 .then(r => r.ok ? r.json() : null)
                 .then(data => {
                     const regions = _extractRegions(data);

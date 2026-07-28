@@ -86,6 +86,8 @@ from fhir import DiagnosticReport as FHIRDiagnosticReport
 from fhir import Encounter as FHIREncounter
 from fhir import Bundle as FHIRBundle
 from fhir import Observation as FHIRObservation
+from fhir import Task as FHIRTask
+from fhir import Specimen as FHIRSpecimen
 
 # Import HippoData class
 from hippodata import HippoData
@@ -1378,25 +1380,18 @@ class HippoClientServiceRequest(HippoClient):
             data.set_error(str(e))
             return data
 
-    def fhir_response(self, parsed_data: HippoData, **kwargs) -> Union[FHIRServiceRequest, FHIROperationOutcome]:
-        """Convert parsed service request HippoData to a FHIR ServiceRequest resource.
+    def fhir_response(self, parsed_data: HippoData, **kwargs) -> Union[FHIRSpecimen, FHIROperationOutcome]:
+        """Convert parsed buletinRecoltari HippoData to a FHIR Specimen resource.
 
-        Transforms parsed service request data into a FHIR-compatible ServiceRequest
-        resource with proper structure, references, coding systems, and extensions.
-
-        Args:
-            parsed_data: Parsed service request data from parse_data method
-            **kwargs: Additional arguments including 'http_request' for host information
-                     and 'id' for service request ID
-
-        Returns:
-            FHIR ServiceRequest resource or FHIROperationOutcome in case of error
+        buletinRecoltari.asp ("Recoltari" = collections) is the lab/imaging
+        department's own handoff paperwork accompanying the request — closest
+        standard match is Specimen, though it's a stretch for imaging orders
+        that have no physical specimen. It's used here only as a request
+        (`Specimen.request`) reference alongside the real order
+        (BuletinSolicitare.asp / HippoClientBuletinSolicitare, /fhir/ServiceRequest).
         """
-        http_request = kwargs.get('http_request', self.request)
-        
-        # Get service request ID from the request URL parameters
-        service_request_id = kwargs.get('id', '')
-        
+        request_id = kwargs.get('id', '')
+
         try:
             if parsed_data.get("status") == "error":
                 return FHIROperationOutcome.from_error(
@@ -1405,134 +1400,45 @@ class HippoClientServiceRequest(HippoClient):
                     severity="error"
                 )
 
-            # Create FHIR ServiceRequest resource using the FHIR class
-            fhir_service_request = FHIRServiceRequest(
-                id=service_request_id,
-                status="active",
-                intent="order",
-                priority="urgent" if parsed_data.get("request.is_urgent", False) else "routine"
-            )
+            fhir_specimen = FHIRSpecimen(id=request_id, status="available")
 
-            # Create subject reference
             patient_id = parsed_data.get("patient.id")
-            subject = FHIRReference(
-                reference=f"Patient/{patient_id}"
-            )
-
-            # Add patient name to subject if available
+            subject = FHIRReference(reference=f"Patient/{patient_id}")
             patient_name = parsed_data.get("patient.name")
             if patient_name:
                 subject["display"] = patient_name
-            fhir_service_request["subject"] = subject
+            fhir_specimen["subject"] = subject
 
-            # Create codeable concept for the service type
-            if http_request:
-                system_url = f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/service-types"
-            else:
-                system_url = "http://example.com/fhir/CodeSystem/service-types"
-                
-            code = FHIRCodeableConcept(
-                coding=[{
-                    "system": system_url,
-                    "code": "imaging-study",
-                    "display": "Imaging Study"
-                }],
-                text="Imaging Study Request"
-            )
-            fhir_service_request["code"] = code
+            if request_id:
+                fhir_specimen["request"] = [FHIRReference(reference=f"ServiceRequest/{request_id}")]
 
-            # Add requester if available (requesting doctor)
-            medic = parsed_data.get("checkin.medic")
-            if medic:
-                fhir_service_request["requester"] = FHIRReference(display=medic)
+            request_code = parsed_data.get("request.code")
+            if request_code:
+                fhir_specimen["accessionIdentifier"] = {"value": request_code}
 
-            # Add encounter if we can derive it
-            admission_id = parsed_data.get("checkin.id")
-            if admission_id:
-                # Handle case where admission_id might be a list
-                if isinstance(admission_id, list) and len(admission_id) > 0:
-                    admission_id = admission_id[0]
-                fhir_service_request["encounter"] = FHIRReference(
-                    reference=f"Encounter/{admission_id}"
-                )
+            laboratory = parsed_data.get("request.laboratory")
+            if laboratory:
+                fhir_specimen["type"] = FHIRCodeableConcept(text=laboratory)
 
-            # Add reason code if diagnosis is available
-            diagnosis = parsed_data.get("request.diagnosis")
-            if diagnosis:
-                # Try to extract ICD-10 code from the diagnosis text
-                # Format is usually "CODE Description"
-                diagnosis_match = re.match(r'^(\d{3,4})\s+(.+)$', diagnosis)
-                if diagnosis_match:
-                    condition = FHIRReference(
-                        reference=f"Condition/{diagnosis_match.group(1)}",
-                        display=diagnosis_match.group(2)
-                    )
-                else:
-                    # If no code found, use the entire diagnosis as display text
-                    condition = FHIRReference(display=diagnosis)
-                fhir_service_request["reason"] = [condition]
-
-            # Add reason reference if clinical comments are available
-            clinical_comments = parsed_data.get("request.clinical_comments")
-            if clinical_comments:
-                fhir_service_request["supportingInfo"] = [{
-                    "display": clinical_comments
-                }]
+            registered_by = parsed_data.get("request.registered_by")
+            request_date_time = parsed_data.get("request.date_time")
+            collection = {}
+            if request_date_time:
+                parsed_dt = parse_date_time(request_date_time)
+                collection["collectedDateTime"] = parsed_dt.isoformat() if parsed_dt else request_date_time
+            if registered_by:
+                collection["collector"] = FHIRReference(display=registered_by)
+            if collection:
+                fhir_specimen["collection"] = collection
 
             # Physician comment (Comentariile medicului) — tagged clinical-indication
             # so it doubles as a fallback source when cerere.asp's Justificare is
             # empty or unreachable (e.g. lab-level permission restrictions).
             comment = parsed_data.get("request.comment")
             if comment:
-                fhir_service_request["note"] = [{"text": comment, "category": [{"text": "clinical-indication"}]}]
+                fhir_specimen["note"] = [{"text": comment, "category": [{"text": "clinical-indication"}]}]
 
-            # Add order details for imaging studies
-            studies = parsed_data.get("studies")
-            if studies:
-                order_details = []
-                if http_request:
-                    study_system_url = f"{http_request.scheme}://{http_request.host}/fhir/CodeSystem/study-codes"
-                else:
-                    study_system_url = "http://example.com/fhir/CodeSystem/study-codes"
-                         
-                for study_info in studies:
-                    code = study_info.get("id")
-                    description = study_info.get("description", "") if isinstance(study_info, dict) else str(study_info)
-                    order_detail = FHIRCodeableConcept(
-                        coding=[{
-                            "system": study_system_url,
-                            "code": f"study-{code}",
-                            "display": description
-                        }],
-                        text=description
-                    )
-                    order_details.append(order_detail)
-                fhir_service_request["orderDetail"] = order_details
-
-            # Add authoredOn if request date_time is available
-            request_date_time = parsed_data.get("request.date_time")
-            if request_date_time:
-                # Parse the date_time using our parse_date_time function
-                parsed_dt = parse_date_time(request_date_time)
-                if parsed_dt:
-                    # Convert to ISO format
-                    fhir_service_request["authoredOn"] = parsed_dt.isoformat()
-                else:
-                    fhir_service_request["authoredOn"] = request_date_time
-
-            # bodySite: unique non-unknown regions across all ordered studies
-            if studies:
-                seen_regions = set()
-                body_sites = []
-                for study_info in studies:
-                    region = study_info.get("region") if isinstance(study_info, dict) else None
-                    if region and region != "unknown" and region not in seen_regions:
-                        seen_regions.add(region)
-                        body_sites.append({"text": region.replace("_", " ").title()})
-                if body_sites:
-                    fhir_service_request["bodySite"] = body_sites
-
-            return fhir_service_request
+            return fhir_specimen
         except Exception as e:
             logger.error(f"Error converting service request data: {e}")
             return FHIROperationOutcome.from_exception(e, code="exception")
@@ -3661,8 +3567,13 @@ class HippoClientCerere(HippoClient):
             data.set_error(str(e))
             return data
 
-    def fhir_response(self, parsed_data: HippoData, id=None, **kwargs) -> Union[FHIRServiceRequest, FHIROperationOutcome]:
-        """Convert parsed cerere data to a FHIR ServiceRequest resource."""
+    def fhir_response(self, parsed_data: HippoData, id=None, **kwargs) -> Union[FHIRTask, FHIROperationOutcome]:
+        """Convert parsed cerere data to a FHIR Task — cerere.asp is the internal
+        workflow record (perform/report/validate act on it directly), not the
+        order itself. The order lives in BuletinSolicitare.asp (see
+        HippoClientBuletinSolicitare, /fhir/ServiceRequest), which Task.focus
+        references.
+        """
         request_id = id or parsed_data.get("request.id", "")
         try:
             if parsed_data.get("status") == "error":
@@ -3672,60 +3583,81 @@ class HippoClientCerere(HippoClient):
                     severity="error"
                 )
 
+            report = parsed_data.get("report") or []
+            performed_at = parsed_data.get("performed_at")
+            if report and all(r.get('validated') for r in report):
+                status = "completed"
+            elif performed_at:
+                status = "in-progress"
+            else:
+                status = "requested"
+
             priority_text = (parsed_data.get("request.priority") or "").lower()
-            fhir_sr = FHIRServiceRequest(
+            fhir_task = FHIRTask(
                 id=request_id,
-                status="active",
-                intent="order",
+                status=status,
+                intent="filler-order",
                 priority="urgent" if "urgent" in priority_text else "routine",
+                focus=FHIRReference(reference=f"ServiceRequest/{request_id}") if request_id else None,
             )
 
-            # Subject (patient)
+            # Subject (patient) — Task's field is literally named "for"
             patient_id = parsed_data.get("patient.id")
-            subject = FHIRReference(reference=f"Patient/{patient_id}")
+            patient_for = FHIRReference(reference=f"Patient/{patient_id}")
             patient_name = parsed_data.get("patient.name")
             if patient_name:
-                subject["display"] = patient_name
-            fhir_sr["subject"] = subject
+                patient_for["display"] = patient_name
+            fhir_task["for"] = patient_for
 
-            # Identifier
-            if request_id:
-                fhir_sr["identifier"] = [{"value": request_id}]
-
-            # Authored date
-            date_time = parsed_data.get("request.date_time")
-            if date_time:
-                dt = parse_date_time(date_time)
-                fhir_sr["authoredOn"] = dt.isoformat() if dt else date_time
-
-            # Requester (referring physician)
-            physician = parsed_data.get("request.physician")
-            if physician:
-                fhir_sr["requester"] = FHIRReference(display=physician)
-
-            # Diagnosis (clinical situation) → reason
-            diagnosis = parsed_data.get("request.diagnosis")
-            if diagnosis:
-                fhir_sr["reason"] = [FHIRReference(display=diagnosis)]
-
-            # Payment / hospitalization type → category
-            payment_type = parsed_data.get("request.payment_type")
-            if payment_type:
-                fhir_sr["category"] = [FHIRCodeableConcept(text=payment_type)]
-
-            # Request code (e.g. ET6987) → additional identifier
+            identifiers = [{"value": request_id}] if request_id else []
             req_code = parsed_data.get("request.code")
             if req_code:
-                fhir_sr["identifier"] = (fhir_sr.get("identifier") or []) + [{"value": req_code}]
+                identifiers.append({"value": req_code})
+            if identifiers:
+                fhir_task["identifier"] = identifiers
 
-            # Ordered exams → orderDetail
+            # Authored / execution period
+            date_time = parsed_data.get("request.date_time")
+            start = None
+            if date_time:
+                dt = parse_date_time(date_time)
+                start = dt.isoformat() if dt else date_time
+                fhir_task["authoredOn"] = start
+            if start or performed_at:
+                period = {}
+                if start:
+                    period["start"] = start
+                if performed_at:
+                    period["end"] = performed_at
+                fhir_task["executionPeriod"] = period
+
+            # Requester — the attending physician handing this off to the department
+            # (NOT necessarily who ordered this exam; see ServiceRequest.requester
+            # from BuletinSolicitare's "Medic solicitant" for that).
+            physician = parsed_data.get("request.physician")
+            if physician:
+                fhir_task["requester"] = FHIRReference(display=physician)
+
+            # Ordered exams (itemized) — cerere.asp's own list, distinct from and
+            # more granular than BuletinSolicitare's single "Organ tinta" field.
             exams = parsed_data.get("exams") or []
             if isinstance(exams, str):
                 exams = [exams]
             if exams:
-                fhir_sr["orderDetail"] = [FHIRCodeableConcept(text=e) for e in exams]
+                fhir_task["input"] = [
+                    {"type": FHIRCodeableConcept(text="exam"), "valueString": e} for e in exams
+                ]
 
-            # Notes: section, laboratory, clinical indication, justification
+            # Report/result text per analysis, once written
+            outputs = [
+                {"type": FHIRCodeableConcept(text=r.get('label') or 'result'), "valueString": r['text']}
+                for r in report if r.get('text')
+            ]
+            if outputs:
+                fhir_task["output"] = outputs
+
+            # Notes: section, laboratory, clinical indication (Info suplimentare —
+            # unique to cerere.asp, not available anywhere else)
             notes = []
             section = parsed_data.get("request.section")
             if section:
@@ -3736,13 +3668,10 @@ class HippoClientCerere(HippoClient):
             clinical = parsed_data.get("request.clinical_indication")
             if clinical:
                 notes.append({"text": clinical})
-            justification = parsed_data.get("request.justification")
-            if justification:
-                notes.append({"text": justification, "category": [{"text": "clinical-indication"}]})
             if notes:
-                fhir_sr["note"] = notes
+                fhir_task["note"] = notes
 
-            return fhir_sr
+            return fhir_task
         except Exception as e:
             logger.error(f"Error converting cerere data to FHIR: {e}")
             return FHIROperationOutcome.from_exception(e, code="exception")

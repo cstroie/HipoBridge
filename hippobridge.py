@@ -232,13 +232,16 @@ def _is_meaningful_text(text):
 
 @require_auth
 async def get_request(request):
-    """Retrieve service request by ID. Returns raw HippoData JSON."""
+    """Retrieve the request/order form by ID. Returns raw HippoData JSON.
+
+    Backed by BuletinSolicitare.asp — see HippoClientBuletinSolicitare.
+    """
     id = request.match_info.get('id')
     if not id:
         return web_error_response("Service request ID is required")
     logger.info(f"Retrieving service request with ID: {id}")
 
-    client = HippoClientServiceRequest(SERVICE_URL, request)
+    client = HippoClientBuletinSolicitare(SERVICE_URL, request)
 
     debug_resp = await web_debug_response(client, request, id=id)
     if debug_resp is not None:
@@ -249,25 +252,51 @@ async def get_request(request):
 
 @require_auth
 async def get_fhir_service_request(request):
-    """Retrieve service request by ID. Returns FHIR ServiceRequest resource.
+    """Retrieve the request/order form by ID. Returns FHIR ServiceRequest resource.
 
-    Accepts ?type=cerere to fetch from cerere.asp (full request metadata).
-    Accepts ?type=solicitare to fetch from BuletinSolicitare.asp (order form:
-    region, indication, and the true ordering physician — see HippoClientBuletinSolicitare).
-    Without a hint, fetches buletinRecoltari.asp (lab/imaging order content).
+    Backed by BuletinSolicitare.asp (see HippoClientBuletinSolicitare) — region,
+    indication, and the true ordering physician ("Medic solicitant").
+    See also /fhir/Task/{id} (cerere.asp — workflow state) and
+    /fhir/Specimen/{id} (buletinRecoltari.asp — lab/imaging handoff paperwork).
     """
     id = request.match_info.get('id')
     if not id:
         return web_fhir_response("Service request ID is required")
     logger.info(f"Retrieving service request with ID: {id}")
 
-    request_type = request.rel_url.query.get('type', '').lower()
-    if request_type == 'cerere':
-        cerere_client = HippoClientCerere(SERVICE_URL, request)
-        return web_fhir_response(await cerere_client.fetch_respond_fhir(id=id))
-    if request_type == 'solicitare':
-        solicitare_client = HippoClientBuletinSolicitare(SERVICE_URL, request)
-        return web_fhir_response(await solicitare_client.fetch_respond_fhir(id=id))
+    client = HippoClientBuletinSolicitare(SERVICE_URL, request)
+    response = await client.fetch_respond_fhir(id=id)
+    return web_fhir_response(response)
+
+@require_auth
+async def get_fhir_task(request):
+    """Retrieve the request's workflow state by ID. Returns FHIR Task resource.
+
+    Backed by cerere.asp (see HippoClientCerere) — status, execution period,
+    itemized exams, and report output. Task.focus references the corresponding
+    ServiceRequest (BuletinSolicitare.asp).
+    """
+    id = request.match_info.get('id')
+    if not id:
+        return web_fhir_response("Request ID is required")
+    logger.info(f"Retrieving task (cerere) with ID: {id}")
+
+    client = HippoClientCerere(SERVICE_URL, request)
+    response = await client.fetch_respond_fhir(id=id)
+    return web_fhir_response(response)
+
+@require_auth
+async def get_fhir_specimen(request):
+    """Retrieve the lab/imaging handoff paperwork by ID. Returns FHIR Specimen resource.
+
+    Backed by buletinRecoltari.asp (see HippoClientServiceRequest) — a stretch of
+    the Specimen resource (imaging orders have no physical specimen), kept for
+    the residual fields (comment, registration) not available elsewhere.
+    """
+    id = request.match_info.get('id')
+    if not id:
+        return web_fhir_response("Request ID is required")
+    logger.info(f"Retrieving specimen (buletinRecoltari) with ID: {id}")
 
     client = HippoClientServiceRequest(SERVICE_URL, request)
     response = await client.fetch_respond_fhir(id=id)
@@ -1166,6 +1195,8 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     app.router.add_get('/fhir/Patient/{id}', get_fhir_patient)
     app.router.add_get('/fhir/ServiceRequest', search_fhir_service_request)
     app.router.add_get('/fhir/ServiceRequest/{id}', get_fhir_service_request)
+    app.router.add_get('/fhir/Task/{id}', get_fhir_task)
+    app.router.add_get('/fhir/Specimen/{id}', get_fhir_specimen)
     app.router.add_get('/fhir/ImagingStudy/{id}', get_fhir_imaging_study)
     app.router.add_get('/fhir/DiagnosticReport/{id}', get_fhir_diagnostic_report)
     app.router.add_get('/fhir/Encounter/{id}', get_fhir_encounter)
