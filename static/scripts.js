@@ -5388,7 +5388,7 @@ document.addEventListener('DOMContentLoaded', function() {
         el.innerHTML = '';
         const modality = el.dataset.modality || '';
         const regionText = regions.length
-            ? regions.join(', ') + (modality ? ' · ' + modality : '')
+            ? (modality ? modality + ' · ' : '') + regions.join(', ')
             : modality;
         if (regionText) {
             el.appendChild(document.createTextNode(regionText));
