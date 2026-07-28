@@ -4828,6 +4828,10 @@ def _markdown_to_html(text: str) -> str:
 def _text_to_report_html(text: str) -> str:
     """Convert plain text to Hipocrate report HTML format.
 
+    Currently unused — HippoClientReportWrite.write() posts plain text as-is
+    (disabled 2026-07-28, upstream Rezultate.asp form changed). Kept here to
+    re-enable once the new upstream format is understood.
+
     Hipocrate stores reports with: first paragraph unwrapped, rest in <div> tags.
     Converts markdown bold/italic to HTML.
     Input:  "First **bold**\\nSecond *italic*\\nThird"
@@ -4887,8 +4891,12 @@ class HippoClientReportWrite(HippoClient):
         field_code = field_el["name"][1:]  # strip leading 'v'
         logger.info(f"ReportWrite: field_code={field_code} url={rez_url}")
 
-        # Step 3 — POST the report text (convert to Hipocrate HTML format)
-        report_html = _text_to_report_html(text)
+        # Step 3 — POST the report text.
+        # Markdown->HTML conversion (_text_to_report_html) is disabled for now:
+        # Hipocrate's Rezultate.asp form changed upstream and the converted
+        # HTML is no longer being stored/rendered correctly there. Post the
+        # plain text as-is until the new upstream format is understood.
+        report_html = text
         post_data = {
             f"v{field_code}": report_html,
             f"v{field_code}HtmlArea": report_html,
