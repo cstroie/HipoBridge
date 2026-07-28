@@ -594,6 +594,17 @@ async def post_study_perform(request):
     return web_json_response(result)
 
 @require_auth
+async def post_request_cancel(request):
+    """Cancel a request by replaying cerere.asp with hdnAction=A (the Anulează button)."""
+    cerere_id = request.match_info['id']
+    username, _ = request['auth_credentials']
+    if username not in _ALLOWED_RADIOLOGISTS:
+        return web.Response(status=403, text='Not authorised to cancel requests')
+    client = HippoClientCererePerform(SERVICE_URL, request)
+    result = await client.cancel(cerere_id)
+    return web_json_response(result)
+
+@require_auth
 async def post_logout(request):
     """Close the user's Hipocrate session held by the bridge."""
     username, _ = request['auth_credentials']
@@ -1177,6 +1188,7 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     app.router.add_post('/api/request/{id}/report', post_study_report)
     app.router.add_post('/api/request/{id}/validate', post_report_validate)
     app.router.add_post('/api/request/{id}/perform', post_study_perform)
+    app.router.add_post('/api/request/{id}/cancel', post_request_cancel)
     app.router.add_get('/api/schedule', get_schedule)
     app.router.add_get('/fhir/Schedule', get_fhir_schedule)
     app.router.add_get('/api/whoami', get_whoami)

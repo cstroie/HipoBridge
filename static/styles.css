@@ -1248,6 +1248,17 @@ button.stat-pill {
     border-color: var(--primary);
 }
 
+.btn-cancel-request {
+    color: var(--danger);
+    border-color: var(--danger);
+}
+
+.btn-cancel-request:hover {
+    background: var(--danger);
+    color: var(--on-accent);
+    border-color: var(--danger);
+}
+
 /* Tab section headers — title on the left, action buttons on the right */
 
 /* Tab glyph: spans the full height of the h1 + subtitle column */

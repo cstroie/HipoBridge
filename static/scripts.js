@@ -4120,6 +4120,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (canWriteReports) {
                     if (writeBtn) writeBtn.hidden = true;
                     if (performBtn) performBtn.hidden = true;
+                    const cancelBtnReset = article.querySelector('.btn-cancel-request');
+                    if (cancelBtnReset) cancelBtnReset.hidden = true;
                     const togglesElReset = article.querySelector('.validate-toggles');
                     if (togglesElReset) { togglesElReset.hidden = true; togglesElReset.replaceChildren(); }
                 }
@@ -4180,12 +4182,21 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (performed) article.classList.remove('no-report');
 
                     if (canWriteReports) {
-                    // State 1: not performed → perform button only
+                    // State 1: not performed → perform + cancel buttons
                     if (performBtn && !performed) {
                         performBtn.hidden = false;
                         performBtn.replaceWith(performBtn.cloneNode(true));
                         article.querySelector('.btn-perform-exam')
                             .addEventListener('click', () => markExamPerformed(article, cerereId));
+                    }
+                    const cancelBtn = article.querySelector('.btn-cancel-request');
+                    if (cancelBtn) {
+                        cancelBtn.hidden = performed;
+                        cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+                        if (!performed) {
+                            article.querySelector('.btn-cancel-request')
+                                .addEventListener('click', () => cancelRequest(article, cerereId));
+                        }
                     }
 
                     // States 2 & 3: performed + editable + not fully validated → write button
@@ -4293,6 +4304,31 @@ document.addEventListener('DOMContentLoaded', function() {
     async function markExamPerformed(article, cerereId) {
         const btn = article.querySelector('.btn-perform-exam');
         await markExamPerformedCore(cerereId, {
+            setDisabled: (v) => { if (btn) btn.disabled = v; },
+            onDone: () => fetchAndFillReport(article)
+        });
+    }
+
+    async function cancelRequestCore(cerereId, { setDisabled, onDone }) {
+        if (!confirm('Cancel this request? This cannot be undone.')) return;
+        setDisabled(true);
+        const resp = await fetch(`/api/request/${cerereId}/cancel`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeader() },
+            body: JSON.stringify({}),
+        });
+        if (!resp.ok) {
+            setDisabled(false);
+            showToast(await resp.text().catch(() => `HTTP ${resp.status}`), 'error');
+            return;
+        }
+        showToast('Request cancelled', 'success');
+        onDone();
+    }
+
+    async function cancelRequest(article, cerereId) {
+        const btn = article.querySelector('.btn-cancel-request');
+        await cancelRequestCore(cerereId, {
             setDisabled: (v) => { if (btn) btn.disabled = v; },
             onDone: () => fetchAndFillReport(article)
         });
@@ -4988,6 +5024,22 @@ document.addEventListener('DOMContentLoaded', function() {
                         performBtn.addEventListener('click', () => {
                             markExamPerformedCore(requestId, {
                                 setDisabled: v => { performBtn.disabled = v; },
+                                onDone: refreshAll
+                            });
+                        });
+                    }
+                }
+
+                // Cancel request button — same not-yet-performed condition as Perform.
+                let cancelBtn = modal.querySelector('.btn-cancel-request');
+                if (cancelBtn) {
+                    cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+                    cancelBtn = modal.querySelector('.btn-cancel-request');
+                    cancelBtn.hidden = performed;
+                    if (!performed) {
+                        cancelBtn.addEventListener('click', () => {
+                            cancelRequestCore(requestId, {
+                                setDisabled: v => { cancelBtn.disabled = v; },
                                 onDone: refreshAll
                             });
                         });

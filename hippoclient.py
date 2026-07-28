@@ -4968,12 +4968,13 @@ class HippoClientReportValidate(HippoClient):
 
 
 class HippoClientCererePerform(HippoClient):
-    """Mark a radiology exam as performed by replaying the cerere.asp form with DataEfectuarii set.
+    """Mark a request performed, or cancel it, by replaying the cerere.asp form.
 
     Flow:
       1. GET cerere.asp to extract all current form field values.
-      2. Override DataEfectuarii with the provided (or current) date/time.
-      3. POST to cerere.asp with hdnAction=S.
+      2. Apply overrides (e.g. DataEfectuarii for perform; none for cancel).
+      3. POST to cerere.asp with hdnAction=S (perform) or hdnAction=A (cancel,
+         mirrors the "Anulează" button).
       4. Evict cerere and BuletinAnalize caches.
     """
 
@@ -5022,7 +5023,8 @@ class HippoClientCererePerform(HippoClient):
 
         return fields
 
-    async def perform(self, cerere_id: str, performed_at: str = None) -> HippoData:
+    async def _replay_form(self, cerere_id: str, hdn_action: str, overrides: dict, log_label: str) -> HippoData:
+        """GET cerere.asp, apply field overrides + hdnAction, POST it back."""
         data = HippoData()
 
         if not self.session:
@@ -5043,15 +5045,13 @@ class HippoClientCererePerform(HippoClient):
             data.store("message", "No form found in cerere.asp")
             return data
 
-        if performed_at is None:
-            performed_at = datetime.now().strftime('%Y-%m-%d %H:%M')
-        form_data['DataEfectuarii'] = performed_at
-        form_data['hdnAction'] = 'S'
+        form_data.update(overrides)
+        form_data['hdnAction'] = hdn_action
 
-        logger.info(f"CererePerform: cerere={cerere_id} DataEfectuarii={performed_at}")
+        logger.info(f"{log_label}: cerere={cerere_id} overrides={overrides}")
         post_resp, err = await self.make_authenticated_request(
             cerere_url, "POST", form_data, self.username, self.password)
-        logger.info(f"CererePerform POST result: err={err!r} resp_len={len(post_resp) if post_resp else 0}")
+        logger.info(f"{log_label} POST result: err={err!r} resp_len={len(post_resp) if post_resp else 0}")
         if err:
             data.store("message", err)
             return data
@@ -5067,3 +5067,18 @@ class HippoClientCererePerform(HippoClient):
 
         data.set_success()
         return data
+
+    async def perform(self, cerere_id: str, performed_at: str = None) -> HippoData:
+        if performed_at is None:
+            performed_at = datetime.now().strftime('%Y-%m-%d %H:%M')
+        return await self._replay_form(
+            cerere_id, hdn_action='S',
+            overrides={'DataEfectuarii': performed_at},
+            log_label='CererePerform')
+
+    async def cancel(self, cerere_id: str) -> HippoData:
+        """Cancel a request by replaying cerere.asp with hdnAction=A (the Anulează button)."""
+        return await self._replay_form(
+            cerere_id, hdn_action='A',
+            overrides={},
+            log_label='CerereCancel')
