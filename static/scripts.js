@@ -43,6 +43,8 @@ document.addEventListener('DOMContentLoaded', function() {
         historyList: document.getElementById('historyList'),
         historyLoading: document.getElementById('historyLoading'),
         historyEmpty: document.getElementById('historyEmpty'),
+        patientScheduleTimeline: document.getElementById('patientScheduleTimeline'),
+        patientScheduleEmpty: document.getElementById('patientScheduleEmpty'),
         presentationsCount: document.getElementById('presentationsCount'),
         checkinsCount: document.getElementById('checkinsCount'),
         checkoutsCount: document.getElementById('checkoutsCount'),
@@ -2787,6 +2789,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Hospitalisation history loads lazily; don't block the profile render
         loadHospitalisationHistory(patientData);
+        renderPatientScheduleCard(patientData);
 
         log('Patient data display completed');
     }
@@ -5196,18 +5199,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const hasTime = authoredOn.includes(' ');
             const day = hasTime ? authoredOn.split(' ')[0] : authoredOn;
             const time = hasTime ? authoredOn.split(' ')[1] : '';
-
-            const patientName = r.subject?.display || '';
-            const requestCode = r.identifier?.[0]?.value || r.id || '';
-            const section = r.note?.[0]?.text || '';
-            const requestedBy = r.requester?.display || '';
-            const laboratory = r.code?.text || '';
-            const modalitySlug  = r.category?.[0]?.coding?.[0]?.code || '';
-            const paymentSlug   = r.category?.[1]?.coding?.[0]?.code || '';
-            const status = r.status || '';
-            const statusClass = SCHEDULE_STATUS_CLASS[status] || '';
-            const isUrgent = r.priority === 'urgent';
-            const avatar = MODALITY_AVATAR[modalitySlug] || { icon: 'fa-question', cls: '' };
             const isLast = idx === visibleEntries.length - 1;
 
             // Day group heading
@@ -5219,109 +5210,171 @@ document.addEventListener('DOMContentLoaded', function() {
                 container.appendChild(heading);
             }
 
-            // Row: time col + card
-            const row = document.importNode(document.getElementById('timeline-row-template').content, true).firstElementChild;
-            if (modalitySlug) row.dataset.modality = modalitySlug;
-
-            // Time column
-            const timeEl = row.querySelector('.timeline-time');
-            timeEl.dateTime = authoredOn.replace(' ', 'T');
-            timeEl.textContent = isMultiDay ? (time || day) : (time || authoredOn);
-
-            const dot = row.querySelector('.timeline-dot');
-            if (avatar.cls) dot.classList.add(avatar.cls);
-            if (isLast) row.querySelector('.timeline-line').remove();
-
-            // Card
-            const card = row.querySelector('.timeline-card');
-            if (isUrgent) card.classList.add('urgent-ring');
-
-            const avatarEl = row.querySelector('.timeline-mod-avatar');
-            if (avatar.cls) avatarEl.classList.add(avatar.cls);
-            avatarEl.innerHTML = modAvatarHTML(modalitySlug);
-            avatarEl.title = MODALITY_INFO[modalitySlug]?.label || laboratory || modalitySlug;
-
-            const nameBtn = row.querySelector('.timeline-card-patient');
-            nameBtn.textContent = patientName;
-            nameBtn.title = `Load patient record for ${patientName}`;
-            nameBtn.addEventListener('click', () => loadPatientFromRequest(r.id, patientName, nameBtn));
-
-            const urgBadge = row.querySelector('.urgent-badge');
-            if (isUrgent) { urgBadge.hidden = false; } else { urgBadge.remove(); }
-
-            const payInfo = PAYMENT_TYPE[paymentSlug];
-            const payBadge = row.querySelector('.timeline-pay-badge');
-            // Two separators now carry .timeline-pay-sep (one just spaces the
-            // code from the numeric id; the other gates the pay badge) — grab
-            // the one actually adjacent to the badge, not the first match.
-            const paySep   = payBadge?.previousElementSibling;
-            if (payInfo) {
-                payBadge.textContent = payInfo.label;
-                if (payInfo.cls) payBadge.classList.add(payInfo.cls);
-                payBadge.hidden = false;
-            } else {
-                payBadge.remove();
-                paySep?.remove();
-            }
-
-            const regionLine = row.querySelector('.timeline-card-region');
-            regionLine.textContent = laboratory;
-            regionLine.dataset.requestId = r.id;
-            regionLine.dataset.modality = laboratory;
-
-            // Meta line: hide unused parts
-            const metaSectionEl  = row.querySelector('.timeline-meta-section');
-            const metaRequesterEl = row.querySelector('.timeline-meta-requester');
-            const seps = row.querySelectorAll('.timeline-meta-sep');
-            if (section) {
-                metaSectionEl.querySelector('span').textContent = section;
-            } else {
-                metaSectionEl.remove();
-                seps[0]?.remove();
-            }
-            if (requestedBy) {
-                metaRequesterEl.querySelector('span').textContent = requestedBy;
-            } else {
-                // Schedule rows no longer carry a requester (Hipocrate dropped the
-                // column) — keep the slot hidden but in the DOM so the lazy exam-info
-                // fetch below can fill it in from cerere.asp/ImagingStudy once known.
-                metaRequesterEl.hidden = true;
-                if (seps[1]) seps[1].hidden = true;
-                regionLine._requesterEl = metaRequesterEl;
-                regionLine._requesterSep = seps[1] || null;
-            }
-
-            const codeBtn = row.querySelector('.timeline-code');
-            codeBtn.textContent = requestCode;
-            codeBtn.title = `View request details (${requestCode})`;
-            codeBtn.addEventListener('click', () => showRequestModal(r.id, requestCode, patientName, modalitySlug, codeBtn, requestedBy));
-            const numericIdEl = row.querySelector('.timeline-numeric-id');
-            if (hipocrateUrl) {
-                const idLink = document.createElement('a');
-                idLink.href = `${hipocrateUrl}/PARA/NOM/Listare/cerere.asp?id=${r.id}`;
-                idLink.target = '_blank';
-                idLink.rel = 'noopener noreferrer';
-                idLink.textContent = `#${r.id}`;
-                numericIdEl.appendChild(idLink);
-            } else {
-                numericIdEl.textContent = `#${r.id}`;
-            }
-
-            const statusBadge = row.querySelector('.timeline-status-badge');
-            if (statusClass) statusBadge.classList.add(statusClass);
-            statusBadge.textContent = SCHEDULE_STATUS_LABEL[status] || status;
-            statusBadge.title = status;
-
-            container.appendChild(row);
-            scheduleExamObserver.observe(regionLine);
+            const timeLabel = isMultiDay ? (time || day) : (time || authoredOn);
+            container.appendChild(buildTimelineRow(r, { isLast, timeLabel }));
         });
 
         if (elements.scheduleTable) elements.scheduleTable.hidden = false;
     }
 
+    // Builds one schedule timeline row (shared by renderSchedule and the
+    // patient-profile "Related Requests" card). timeLabel is precomputed by
+    // the caller since the two contexts need different date/time logic (day
+    // grouping vs. always-show-full-date).
+    function buildTimelineRow(r, { isLast, timeLabel }) {
+        const authoredOn = r.authoredOn || '';
+        const patientName = r.subject?.display || '';
+        const requestCode = r.identifier?.[0]?.value || r.id || '';
+        const section = r.note?.[0]?.text || '';
+        const requestedBy = r.requester?.display || '';
+        const laboratory = r.code?.text || '';
+        const modalitySlug  = r.category?.[0]?.coding?.[0]?.code || '';
+        const paymentSlug   = r.category?.[1]?.coding?.[0]?.code || '';
+        const status = r.status || '';
+        const statusClass = SCHEDULE_STATUS_CLASS[status] || '';
+        const isUrgent = r.priority === 'urgent';
+        const avatar = MODALITY_AVATAR[modalitySlug] || { icon: 'fa-question', cls: '' };
+
+        // Row: time col + card
+        const row = document.importNode(document.getElementById('timeline-row-template').content, true).firstElementChild;
+        if (modalitySlug) row.dataset.modality = modalitySlug;
+
+        // Time column
+        const timeEl = row.querySelector('.timeline-time');
+        timeEl.dateTime = authoredOn.replace(' ', 'T');
+        timeEl.textContent = timeLabel;
+
+        const dot = row.querySelector('.timeline-dot');
+        if (avatar.cls) dot.classList.add(avatar.cls);
+        if (isLast) row.querySelector('.timeline-line').remove();
+
+        // Card
+        const card = row.querySelector('.timeline-card');
+        if (isUrgent) card.classList.add('urgent-ring');
+
+        const avatarEl = row.querySelector('.timeline-mod-avatar');
+        if (avatar.cls) avatarEl.classList.add(avatar.cls);
+        avatarEl.innerHTML = modAvatarHTML(modalitySlug);
+        avatarEl.title = MODALITY_INFO[modalitySlug]?.label || laboratory || modalitySlug;
+
+        const nameBtn = row.querySelector('.timeline-card-patient');
+        nameBtn.textContent = patientName;
+        nameBtn.title = `Load patient record for ${patientName}`;
+        nameBtn.addEventListener('click', () => loadPatientFromRequest(r.id, patientName, nameBtn));
+
+        const urgBadge = row.querySelector('.urgent-badge');
+        if (isUrgent) { urgBadge.hidden = false; } else { urgBadge.remove(); }
+
+        const payInfo = PAYMENT_TYPE[paymentSlug];
+        const payBadge = row.querySelector('.timeline-pay-badge');
+        // Two separators now carry .timeline-pay-sep (one just spaces the
+        // code from the numeric id; the other gates the pay badge) — grab
+        // the one actually adjacent to the badge, not the first match.
+        const paySep   = payBadge?.previousElementSibling;
+        if (payInfo) {
+            payBadge.textContent = payInfo.label;
+            if (payInfo.cls) payBadge.classList.add(payInfo.cls);
+            payBadge.hidden = false;
+        } else {
+            payBadge.remove();
+            paySep?.remove();
+        }
+
+        const regionLine = row.querySelector('.timeline-card-region');
+        regionLine.textContent = laboratory;
+        regionLine.dataset.requestId = r.id;
+        regionLine.dataset.modality = laboratory;
+
+        // Meta line: hide unused parts
+        const metaSectionEl  = row.querySelector('.timeline-meta-section');
+        const metaRequesterEl = row.querySelector('.timeline-meta-requester');
+        const seps = row.querySelectorAll('.timeline-meta-sep');
+        if (section) {
+            metaSectionEl.querySelector('span').textContent = section;
+        } else {
+            metaSectionEl.remove();
+            seps[0]?.remove();
+        }
+        if (requestedBy) {
+            metaRequesterEl.querySelector('span').textContent = requestedBy;
+        } else {
+            // Schedule rows no longer carry a requester (Hipocrate dropped the
+            // column) — keep the slot hidden but in the DOM so the lazy exam-info
+            // fetch below can fill it in from cerere.asp/ImagingStudy once known.
+            metaRequesterEl.hidden = true;
+            if (seps[1]) seps[1].hidden = true;
+            regionLine._requesterEl = metaRequesterEl;
+            regionLine._requesterSep = seps[1] || null;
+        }
+
+        const codeBtn = row.querySelector('.timeline-code');
+        codeBtn.textContent = requestCode;
+        codeBtn.title = `View request details (${requestCode})`;
+        codeBtn.addEventListener('click', () => showRequestModal(r.id, requestCode, patientName, modalitySlug, codeBtn, requestedBy));
+        const numericIdEl = row.querySelector('.timeline-numeric-id');
+        if (hipocrateUrl) {
+            const idLink = document.createElement('a');
+            idLink.href = `${hipocrateUrl}/PARA/NOM/Listare/cerere.asp?id=${r.id}`;
+            idLink.target = '_blank';
+            idLink.rel = 'noopener noreferrer';
+            idLink.textContent = `#${r.id}`;
+            numericIdEl.appendChild(idLink);
+        } else {
+            numericIdEl.textContent = `#${r.id}`;
+        }
+
+        const statusBadge = row.querySelector('.timeline-status-badge');
+        if (statusClass) statusBadge.classList.add(statusClass);
+        statusBadge.textContent = SCHEDULE_STATUS_LABEL[status] || status;
+        statusBadge.title = status;
+
+        scheduleExamObserver.observe(regionLine);
+        return row;
+    }
+
     // Filters placeholder junk like ". .. ." that doctors sometimes type just to pass form validation
     function _isMeaningfulText(text) {
         return !!text && /[A-Za-z0-9À-ɏ]/.test(text);
+    }
+
+    function _normalizeScheduleName(s) {
+        return (s || '').toUpperCase().replace(/\s+/g, ' ').trim();
+    }
+
+    // "Related Requests" card on the patient profile: reuses whatever is
+    // already in scheduleEntries (populated by visiting the Schedule tab) —
+    // no dedicated fetch, so this is empty until the Schedule tab has loaded
+    // at least once this session. Matches on the patient's structured
+    // name (family + given), not the schedule row's scraped display string,
+    // since Hipocrate's own formatting/spacing is inconsistent between pages.
+    function renderPatientScheduleCard(patientData) {
+        const container = elements.patientScheduleTimeline;
+        const emptyEl = elements.patientScheduleEmpty;
+        if (!container) return;
+        container.innerHTML = '';
+
+        const family = patientData.name?.[0]?.family || '';
+        const given  = (patientData.name?.[0]?.given || []).join(' ');
+        const fullName = _normalizeScheduleName(`${family} ${given}`);
+
+        const matches = fullName
+            ? scheduleEntries.filter(r => _normalizeScheduleName(r.subject?.display) === fullName)
+            : [];
+
+        if (matches.length === 0) {
+            container.hidden = true;
+            if (emptyEl) emptyEl.hidden = false;
+            return;
+        }
+        if (emptyEl) emptyEl.hidden = true;
+        container.hidden = false;
+
+        matches.forEach((r, idx) => {
+            const authoredOn = r.authoredOn || '';
+            const [day, time] = authoredOn.includes(' ') ? authoredOn.split(' ') : [authoredOn, ''];
+            const timeLabel = time ? `${day} ${time}` : day;
+            container.appendChild(buildTimelineRow(r, { isLast: idx === matches.length - 1, timeLabel }));
+        });
     }
 
     // Intersection observer: one lazy fetch per row (BuletinSolicitare.asp, the

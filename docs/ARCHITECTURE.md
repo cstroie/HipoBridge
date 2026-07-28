@@ -160,6 +160,7 @@ SPA: `main.html` + `scripts.js` + `styles.css` + `marked.js`. All assets self-ho
 - `localDateStr(d?)` returns a `YYYY-MM-DD` string using local date methods — never `toISOString()` for date-only values (UTC lag).
 - Report action buttons follow a 4-state machine per card: (1) not performed → Perform button only; (2) performed, no report → Edit Report; (3) performed + report → Edit Report + validate toggle; (4) performed + all validated → validate toggle only. Reset both buttons to `hidden` at the top of each `fetchAndFillReport` pass before re-evaluating state.
 - New icon glyphs must be added to `static/fontawesome.css` — the file is a curated subset, not the full FA bundle. Check before using any `fa-*` class.
+- The profile tab's "Related Requests" panel (`renderPatientScheduleCard`) reuses the Schedule tab's row markup — `buildTimelineRow(r, { isLast, timeLabel })` was extracted out of `renderSchedule()` for this. It's a **client-side filter of `scheduleEntries`, not a dedicated fetch**: it only shows entries already loaded by having visited the Schedule tab this session (matched by the patient's structured `family`+`given` name, not the schedule row's scraped display string — Hipocrate's own spacing/formatting differs between the two pages). It does not refresh if the Schedule tab is (re)loaded after the profile is already displayed — call `renderPatientScheduleCard(patientData)` again if that gap needs closing later.
 
 ## CSS design system
 
