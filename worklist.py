@@ -406,7 +406,9 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
     exams        = (patient_info or {}).get('exams') or []
     dt_str       = entry.get('date_time', '')
     modality     = _MODALITY_CODE.get(entry.get('modality') or '', 'OT')
-    referrer     = _name_to_dicom(entry.get('requested_by', ''))
+    # Hipocrate's schedule page no longer lists the requester per row (2026-07);
+    # cerere.asp's "Medic" select is fetched during enrichment and used instead.
+    referrer     = _name_to_dicom((patient_info or {}).get('physician') or entry.get('requested_by', ''))
     study_uid    = f'1.2.840.99999999.1.{request_id}' if request_id else generate_uid()
     accession    = f"{accession_prefix}{request_id}" if request_id else request_code
 
@@ -893,6 +895,7 @@ class WorklistRefresher:
                 'birth_date':    patient_data.get('patient.birth_date'),
                 'sex':           patient_data.get('patient.sex'),
                 'exams':         cerere_data.get('exams') or [],
+                'physician':     cerere_data.get('request.physician'),
                 'justification': cerere_data.get('request.justification'),
                 'section':       cerere_data.get('request.section'),
                 'phone':         patient_data.get('patient.phone'),
