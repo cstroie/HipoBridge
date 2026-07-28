@@ -3770,9 +3770,16 @@ class HippoClientBuletinSolicitare(HippoClient):
             if referrer:
                 fhir_sr["requester"] = FHIRReference(display=referrer)
 
+            # Abstract the raw procedure name (e.g. "ULTRASONOGRAFIA ABDOMINALA
+            # (INCLUSIV PELVIS)") down to a short region label ("Abdomen"), same
+            # as ImagingStudy's series.bodySite — regions.cfg-driven, so this
+            # matches what the schedule timeline showed before it was switched
+            # to this endpoint.
             organ = parsed_data.get("request.organ")
             if organ:
-                fhir_sr["bodySite"] = [FHIRCodeableConcept(text=organ)]
+                _, region = identify_study_type_and_region(organ)
+                if region and region != "unknown":
+                    fhir_sr["bodySite"] = [FHIRCodeableConcept(text=region.replace("_", " ").title())]
 
             section = parsed_data.get("request.section")
             if section:
