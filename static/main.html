@@ -198,6 +198,16 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             </dl>
                         </section>
 
+                        <!-- Requests for this patient found in the currently loaded schedule
+                             (client-side filter of scheduleEntries — no dedicated fetch).
+                             timeline-compact forces the narrow/stacked row layout regardless
+                             of viewport width — this column is always narrow. -->
+                        <section class="patient-info-panel">
+                            <h2 class="panel-heading">Related Requests</h2>
+                            <div class="schedule-timeline timeline-compact" id="patientScheduleTimeline" hidden></div>
+                            <p class="history-empty" id="patientScheduleEmpty">No related requests in the currently loaded schedule</p>
+                        </section>
+
                         <!-- QR codes for scanning -->
                         <section class="patient-info-panel" id="patientQrPanel" hidden>
                             <h2 class="panel-heading">Scan Codes</h2>
@@ -229,14 +239,6 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             </div>
                             <ul class="history-list" id="historyList"></ul>
                             <p class="history-empty" id="historyEmpty" hidden>No hospitalisations found</p>
-                        </section>
-
-                        <!-- Requests for this patient found in the currently loaded schedule
-                             (client-side filter of scheduleEntries — no dedicated fetch) -->
-                        <section class="patient-info-panel">
-                            <h2 class="panel-heading">Related Requests</h2>
-                            <div class="schedule-timeline" id="patientScheduleTimeline" hidden></div>
-                            <p class="history-empty" id="patientScheduleEmpty">No related requests in the currently loaded schedule</p>
                         </section>
                     </div>
 

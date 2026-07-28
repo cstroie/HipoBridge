@@ -4049,6 +4049,65 @@ dialog.report-editor-modal article > section {
     }
 }
 
+/* .timeline-compact: same narrow/stacked row layout as the mobile media query
+   above, but unconditional — for containers that are always narrow regardless
+   of viewport width (e.g. the profile tab's "Related Requests" panel, one
+   column in a ~360px masonry layout even on a wide desktop). Duplicated
+   rather than shared with the media query since plain CSS can't combine a
+   media condition with a descendant-selector condition in one rule. */
+.timeline-compact .timeline-row {
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+}
+.timeline-compact .timeline-time-col {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-8);
+    padding-top: 8px;
+}
+.timeline-compact .timeline-time { padding-top: 0; font-size: var(--font-size-13); }
+.timeline-compact .timeline-dot {
+    margin-top: 0;
+    box-shadow: none !important;
+}
+.timeline-compact .timeline-line { display: none; }
+.timeline-compact .timeline-card {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+        "avatar name   badge"
+        "avatar region .";
+    column-gap: var(--space-12);
+    row-gap: 2px;
+    min-width: 0;
+}
+.timeline-compact .timeline-mod-avatar { grid-area: avatar; width: var(--space-40); height: var(--space-40); font-size: var(--font-size-xs); }
+.timeline-compact .timeline-card-body { display: contents; }
+.timeline-compact .timeline-patient-row { grid-area: name; min-width: 0; }
+.timeline-compact .timeline-card-patient { flex: 1; min-width: 0; }
+.timeline-compact .timeline-status-badge { grid-area: badge; align-self: start; }
+.timeline-compact .timeline-card-region { grid-area: region; margin-top: 0; }
+.timeline-compact .timeline-card-meta { grid-column: 1 / -1; }
+.timeline-compact .timeline-card-meta {
+    display: block;
+    white-space: normal;
+    overflow: visible;
+}
+.timeline-compact .timeline-card-meta > * {
+    display: inline;
+}
+.timeline-compact .timeline-card-meta i {
+    margin-right: 3px;
+}
+.timeline-compact .timeline-meta-sep {
+    margin: 0 var(--space-4);
+}
+.timeline-compact .timeline-meta-requester + .timeline-meta-sep {
+    display: block;
+    height: var(--space-4);
+    visibility: hidden;
+}
+
 /* Very narrow: hide wordmark and collapse patient nav to icon-only */
 @media (max-width: 600px) {
     .brand-wordmark { display: none; }
