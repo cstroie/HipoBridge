@@ -3835,11 +3835,27 @@ dialog.report-editor-modal article > section {
 .btn-cancel-request:hover { background: var(--danger); color: var(--on-accent); }
 
 .btn-perform-exam:disabled,
-.btn-cancel-request:disabled,
+.btn-cancel-request:disabled {
+    color: var(--muted);
+    cursor: not-allowed;
+}
+.btn-perform-exam:disabled:hover,
+.btn-cancel-request:disabled:hover {
+    background: none;
+    color: var(--muted);
+}
+
 .btn-write-report:disabled,
 .btn-edit-report:disabled {
-    opacity: 0.5;
-    cursor: default;
+    background: var(--border);
+    border-color: var(--border);
+    color: var(--muted);
+    cursor: not-allowed;
+}
+.btn-write-report:disabled:hover,
+.btn-edit-report:disabled:hover {
+    background: var(--border);
+    border-color: var(--border);
 }
 
 /* Perform + Cancel share one pill-shaped segmented toolbar — they're

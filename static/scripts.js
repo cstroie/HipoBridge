@@ -4118,8 +4118,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 const writeBtn = article.querySelector('.btn-write-report');
                 const actionGroup = article.querySelector('.action-group');
                 if (canWriteReports) {
-                    if (writeBtn) writeBtn.hidden = true;
-                    if (actionGroup) actionGroup.hidden = true;
+                    // Perform/Cancel/Edit stay visible throughout — only their
+                    // enabled/disabled state changes below, so the toolbar
+                    // doesn't shift around as the request moves through states.
+                    // Disabled by default until the fetch below confirms the real
+                    // state, so nothing is clickable during the loading window.
+                    if (writeBtn) { writeBtn.hidden = false; writeBtn.disabled = true; }
+                    if (actionGroup) {
+                        actionGroup.hidden = false;
+                        actionGroup.querySelectorAll('button').forEach(b => { b.disabled = true; });
+                    }
                     const togglesElReset = article.querySelector('.validate-toggles');
                     if (togglesElReset) { togglesElReset.hidden = true; togglesElReset.replaceChildren(); }
                 }
@@ -4176,35 +4184,49 @@ document.addEventListener('DOMContentLoaded', function() {
                     // or BuletinAnalize already has a published report (cerere.asp may not render
                     // fn_validate_cerere calls once the exam is fully finalised in Hipocrate)
                     const performed    = Boolean(d.performed_at) || allValidated || hasReportFromStudy;
+                    // Cancellation isn't reflected in cerere.asp's own fields (Hipocrate
+                    // gives us no signal to re-derive it from a fresh fetch) — rely on
+                    // the flag cancelRequest() sets locally right after a successful
+                    // /cancel call, which persists on this article across re-renders.
+                    const cancelled = article.dataset.cancelled === '1';
 
                     if (performed) article.classList.remove('no-report');
 
                     if (canWriteReports) {
-                    // State 1: not performed → perform + cancel buttons, grouped
+                    // Perform + Cancel: active until performed or cancelled, then
+                    // locked (disabled, muted) instead of disappearing.
                     if (actionGroup) {
-                        actionGroup.hidden = performed;
-                        if (!performed) {
-                            const performBtn = actionGroup.querySelector('.btn-perform-exam');
-                            if (performBtn) {
-                                performBtn.replaceWith(performBtn.cloneNode(true));
-                                actionGroup.querySelector('.btn-perform-exam')
-                                    .addEventListener('click', () => markExamPerformed(article, cerereId));
+                        const locked = performed || cancelled;
+                        let performBtn = actionGroup.querySelector('.btn-perform-exam');
+                        if (performBtn) {
+                            performBtn.replaceWith(performBtn.cloneNode(true));
+                            performBtn = actionGroup.querySelector('.btn-perform-exam');
+                            performBtn.disabled = locked;
+                            if (!locked) {
+                                performBtn.addEventListener('click', () => markExamPerformed(article, cerereId));
                             }
-                            const cancelBtn = actionGroup.querySelector('.btn-cancel-request');
-                            if (cancelBtn) {
-                                cancelBtn.replaceWith(cancelBtn.cloneNode(true));
-                                actionGroup.querySelector('.btn-cancel-request')
-                                    .addEventListener('click', () => cancelRequest(article, cerereId));
+                        }
+                        let cancelBtn = actionGroup.querySelector('.btn-cancel-request');
+                        if (cancelBtn) {
+                            cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+                            cancelBtn = actionGroup.querySelector('.btn-cancel-request');
+                            cancelBtn.disabled = locked;
+                            if (!locked) {
+                                cancelBtn.addEventListener('click', () => cancelRequest(article, cerereId));
                             }
                         }
                     }
 
-                    // States 2 & 3: performed + editable + not fully validated → write button
-                    if (writeBtn && performed && isEditable && !allValidated) {
-                        writeBtn.hidden = false;
+                    // Edit: disabled until performed; once performed, enabled only
+                    // while there's still an editable, not-fully-validated analysis.
+                    if (writeBtn) {
+                        const editable = performed && isEditable && !allValidated;
                         writeBtn.replaceWith(writeBtn.cloneNode(true));
-                        article.querySelector('.btn-write-report')
-                            .addEventListener('click', () => openReportEditor(article));
+                        const wb = article.querySelector('.btn-write-report');
+                        wb.disabled = !editable;
+                        if (editable) {
+                            wb.addEventListener('click', () => openReportEditor(article));
+                        }
                     }
 
                     // States 3 & 4: performed + report exists → validate toggles
@@ -4330,7 +4352,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const btn = article.querySelector('.btn-cancel-request');
         await cancelRequestCore(cerereId, {
             setDisabled: (v) => { if (btn) btn.disabled = v; },
-            onDone: () => fetchAndFillReport(article)
+            onDone: () => {
+                article.dataset.cancelled = '1';
+                fetchAndFillReport(article);
+            }
         });
     }
     
@@ -4965,6 +4990,16 @@ document.addEventListener('DOMContentLoaded', function() {
         // elements instead of an imaging-card article.
         async function refreshActionState() {
             if (!canWriteReports) return;
+            // Perform/Cancel/Edit stay visible throughout — only their enabled/
+            // disabled state changes below. Disabled by default until the fetch
+            // confirms the real state, so nothing is clickable during loading.
+            const actionGroupInit = modal.querySelector('.action-group');
+            if (actionGroupInit) {
+                actionGroupInit.hidden = false;
+                actionGroupInit.querySelectorAll('button').forEach(b => { b.disabled = true; });
+            }
+            const editBtnInit = modal.querySelector('.btn-edit-report');
+            if (editBtnInit) { editBtnInit.hidden = false; editBtnInit.disabled = true; }
             try {
                 const r = await fetch(`/api/request/${requestId}/patient`, { headers: authHeader() });
                 const d = await r.json();
@@ -4977,6 +5012,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 // validated, or the report content already exists (cerere.asp may not
                 // expose fn_validate_cerere calls once the exam is fully finalised).
                 const performed    = Boolean(d.performed_at) || allValidated || hasReportFromStudy;
+                // Cancellation isn't reflected in cerere.asp's own fields — rely on the
+                // flag set locally right after a successful /cancel call (see the
+                // Cancel button handler below), which persists on this modal element
+                // across refreshAll() re-renders.
+                const cancelled = modal.dataset.cancelled === '1';
 
                 // Ensure every requested investigation is represented (mirrors the
                 // Imaging tab card's fetchAndFillReport): match by label against
@@ -5013,17 +5053,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
 
-                // Perform + Cancel buttons, grouped in one pill toolbar — clone-and-replace
-                // to drop stale listeners from a previous refresh (same trick
+                // Perform + Cancel: active until performed or cancelled, then locked
+                // (disabled, muted) instead of disappearing — clone-and-replace to
+                // drop stale listeners from a previous refresh (same trick
                 // fetchAndFillReport uses).
                 const actionGroup = modal.querySelector('.action-group');
                 if (actionGroup) {
-                    actionGroup.hidden = performed;
-                    if (!performed) {
-                        let performBtn = actionGroup.querySelector('.btn-perform-exam');
-                        if (performBtn) {
-                            performBtn.replaceWith(performBtn.cloneNode(true));
-                            performBtn = actionGroup.querySelector('.btn-perform-exam');
+                    const locked = performed || cancelled;
+                    let performBtn = actionGroup.querySelector('.btn-perform-exam');
+                    if (performBtn) {
+                        performBtn.replaceWith(performBtn.cloneNode(true));
+                        performBtn = actionGroup.querySelector('.btn-perform-exam');
+                        performBtn.disabled = locked;
+                        if (!locked) {
                             performBtn.addEventListener('click', () => {
                                 markExamPerformedCore(requestId, {
                                     setDisabled: v => { performBtn.disabled = v; },
@@ -5031,28 +5073,32 @@ document.addEventListener('DOMContentLoaded', function() {
                                 });
                             });
                         }
-                        let cancelBtn = actionGroup.querySelector('.btn-cancel-request');
-                        if (cancelBtn) {
-                            cancelBtn.replaceWith(cancelBtn.cloneNode(true));
-                            cancelBtn = actionGroup.querySelector('.btn-cancel-request');
+                    }
+                    let cancelBtn = actionGroup.querySelector('.btn-cancel-request');
+                    if (cancelBtn) {
+                        cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+                        cancelBtn = actionGroup.querySelector('.btn-cancel-request');
+                        cancelBtn.disabled = locked;
+                        if (!locked) {
                             cancelBtn.addEventListener('click', () => {
                                 cancelRequestCore(requestId, {
                                     setDisabled: v => { cancelBtn.disabled = v; },
-                                    onDone: refreshAll
+                                    onDone: () => { modal.dataset.cancelled = '1'; refreshAll(); }
                                 });
                             });
                         }
                     }
                 }
 
-                // Edit Report button
+                // Edit: disabled until performed; once performed, enabled only while
+                // there's still an editable, not-fully-validated analysis to write.
                 let editBtn = modal.querySelector('.btn-edit-report');
                 if (editBtn) {
                     editBtn.replaceWith(editBtn.cloneNode(true));
                     editBtn = modal.querySelector('.btn-edit-report');
-                    const showEdit = performed && isEditable && !allValidated;
-                    editBtn.hidden = !showEdit;
-                    if (showEdit) {
+                    const editable = performed && isEditable && !allValidated;
+                    editBtn.disabled = !editable;
+                    if (editable) {
                         editBtn.addEventListener('click', () => {
                             openReportEditorCore(requestId, analyses, { onSaved: refreshAll });
                         });
