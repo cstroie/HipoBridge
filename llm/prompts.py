@@ -61,11 +61,11 @@ _TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "prompts")
 # prompts/<kind>.md. Add a kind here and drop in a matching, self-contained
 # .md file.
 PROMPT_META = {
-    "report":    ("default", 220),
-    "epicrisis": ("default", 280),
-    "imaging":   ("medical", 40),
-    "lab":       ("medical", 400),
-    "pre_exam":  ("medical", 900),
+    "report":    ("default", 340),
+    "epicrisis": ("default", 420),
+    "imaging":   ("medical", 60),
+    "lab":       ("medical", 600),
+    "pre_exam":  ("medical", 1300),
 }
 
 
