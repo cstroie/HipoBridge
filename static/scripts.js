@@ -691,7 +691,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const name = pendingEpicrisisData?.name?.[0]?.text || 'patient';
         showLoading(`Loading hospitalization records for ${name}…`);
         try {
-            setLoadingStep('Fetching hospitalisation episodes from Hipocrate…');
+            setLoadingStep('Fetching hospitalization episodes from Hipocrate…');
             await loadAndDisplayEpicrisis(pendingEpicrisisData);
             hideLoading();
         } catch (err) {
@@ -2483,7 +2483,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     lines.push(`- **${range}**${label ? ' — ' + label : ''}`);
                 });
                 if (!lines.length) return '';
-                return '## Hospitalisation Timeline\n\n' + lines.join('\n') + '\n\n';
+                return '## Hospitalization Timeline\n\n' + lines.join('\n') + '\n\n';
             }
             const timelineMd = buildTimelineMarkdown(encounters);
 

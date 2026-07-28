@@ -210,7 +210,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
 
                         <!-- QR codes for scanning -->
                         <section class="patient-info-panel" id="patientQrPanel" hidden>
-                            <h2 class="panel-heading">Scan Codes</h2>
+                            <h2 class="panel-heading">QR Codes</h2>
                             <div class="qr-grid">
                                 <figure class="qr-cell">
                                     <canvas id="qrLastName"></canvas>
@@ -231,14 +231,14 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             </div>
                         </section>
 
-                        <!-- Hospitalisation history -->
+                        <!-- Hospitalization history -->
                         <section class="patient-info-panel">
-                            <h2 class="panel-heading">Hospitalisation History</h2>
-                            <div class="history-loading" id="historyLoading" role="status" aria-label="Loading hospitalisation history" hidden>
+                            <h2 class="panel-heading">Hospitalization History</h2>
+                            <div class="history-loading" id="historyLoading" role="status" aria-label="Loading hospitalization history" hidden>
                                 <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
                             </div>
                             <ul class="history-list" id="historyList"></ul>
-                            <p class="history-empty" id="historyEmpty" hidden>No hospitalisations found</p>
+                            <p class="history-empty" id="historyEmpty" hidden>No hospitalizations found</p>
                         </section>
                     </div>
 
@@ -398,9 +398,9 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             <h3 class="report-section-title"><i class="fas fa-flask"></i> Recent Labs</h3>
                             <div class="report-labs-list" id="reportLabsList"></div>
                         </section>
-                        <!-- §5 Hospitalisation timeline -->
+                        <!-- §5 Hospitalization timeline -->
                         <section class="report-section report-section-last" id="reportSectionTimeline" hidden>
-                            <h3 class="report-section-title"><i class="fas fa-timeline"></i> Hospitalisation Timeline</h3>
+                            <h3 class="report-section-title"><i class="fas fa-timeline"></i> Hospitalization Timeline</h3>
                             <div class="report-timeline" id="reportTimeline"></div>
                         </section>
                     </div>
@@ -446,7 +446,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                         <div class="schedule-hero-left">
                             <p class="tab-eyebrow" id="scheduleDayLabel">Medical Imaging · Today</p>
                             <h1 id="schedule-tab-heading" class="schedule-hero-date">Schedule</h1>
-                            <p class="schedule-hero-sub" id="scheduleHeroSub">Imaging and lab requests for the selected date</p>
+                            <p class="schedule-hero-sub" id="scheduleHeroSub">Imaging and lab requests for the selected date range</p>
                         </div>
                         <div class="schedule-day-metrics" id="scheduleDayMetrics"></div>
                     </header>
@@ -606,7 +606,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                     <span class="history-dot"></span>
                     <span class="history-line"></span>
                 </div>
-                <button type="button" class="history-load" title="View this hospitalisation">
+                <button type="button" class="history-load" title="View this hospitalization">
                     <div class="history-load-top">
                         <span class="history-period"></span>
                         <span class="history-nights"></span>
