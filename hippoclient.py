@@ -3752,6 +3752,111 @@ class HippoClientCerere(HippoClient):
         return self.fhir_response(parsed, id=id, **kwargs)
 
 
+class HippoClientBuletinSolicitare(HippoClient):
+    """Parses the request/order form (BuletinSolicitare.asp) — one lightweight fetch
+    (plain table, no <select> reload) that gives region, indication and, crucially,
+    the *ordering* physician ("Medic solicitant"), distinct from the patient's
+    attending physician ("Medic curant"). cerere.asp's strMedicId only ever exposes
+    the latter, which is the wrong referrer whenever the two differ.
+
+    type=63&IdP=70 work for every modality tested (eco/radio/ct), not just ultrasound
+    despite the page always being titled "FISA SOLICITARE ECOGRAFIE".
+    """
+
+    def __init__(self, service_url=None, request=None):
+        super().__init__(service_url=service_url, request=request)
+        self.request_url = "/PARA/Printabile/BuletinSolicitare.asp?id={id}&type=63&IdP=70"
+
+    @staticmethod
+    def _field(table_html: str, label: str) -> str:
+        m = re.search(re.escape(label) + r'\s*<b>(.*?)</b>', table_html, re.DOTALL)
+        return re.sub(r'<[^>]+>', ' ', m.group(1)).strip() if m else ''
+
+    def parse_data(self, html_content: str, **kwargs) -> HippoData:
+        data = HippoData(status="success", message="")
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+
+            if not self.is_expected_page(soup, 'FISA DE SOLICITARE'):
+                data.set_error(f"Unexpected page for BuletinSolicitare: {self.get_title(soup)}")
+                logger.warning(f"{data['message']}: {self.get_error(soup)}")
+                return data
+
+            data.store("request.id", kwargs.get('id'))
+
+            table = soup.find('table', class_='Rap_table_class_generic')
+            if not table:
+                data.set_error("Unexpected page: Rap_table_class_generic table not found")
+                return data
+            table_html = str(table)
+
+            data.store("request.organ", self._field(table_html, 'Organ tinta / segment anatomic *'))
+            data.store("request.section", self._field(table_html, 'Sectia:'))
+            data.store("request.physician_curant", self._field(table_html, 'Medic curant:'))
+            data.store("request.justification", self._field(table_html, 'Justificare:'))
+            data.store("request.clinical_situation", self._field(table_html, 'Situatie clinica:'))
+            data.store("request.diagnosis_referral", self._field(table_html, 'Diagnostic de trimitere:'))
+
+            # "Medic solicitant" (the true orderer) is a signature block: the name
+            # comes BEFORE its own label, in the last <td colspan="2"> of the table.
+            solicitant_m = re.search(
+                r'<td colspan="2"><b>(.*?)</b>\s*<br/?>\s*<br/?>\s*Medic solicitant',
+                table_html, re.DOTALL)
+            data.store("request.physician_solicitant",
+                       re.sub(r'<[^>]+>', ' ', solicitant_m.group(1)).strip() if solicitant_m else '')
+
+            return data
+        except Exception as e:
+            logger.error(f"Error parsing BuletinSolicitare data: {e}")
+            data.set_error(str(e))
+            return data
+
+    def fhir_response(self, parsed_data: HippoData, id=None, **kwargs) -> Union[FHIRServiceRequest, FHIROperationOutcome]:
+        request_id = id or parsed_data.get("request.id", "")
+        try:
+            if parsed_data.get("status") == "error":
+                return FHIROperationOutcome.from_error(
+                    message=parsed_data.get("message", "Error parsing BuletinSolicitare data"),
+                    code="processing",
+                    severity="error"
+                )
+
+            fhir_sr = FHIRServiceRequest(id=request_id, status="active", intent="order")
+
+            if request_id:
+                fhir_sr["identifier"] = [{"value": request_id}]
+
+            # Ordering physician takes priority — falls back to the attending
+            # physician only when no distinct orderer was recorded.
+            referrer = (parsed_data.get("request.physician_solicitant") or
+                        parsed_data.get("request.physician_curant"))
+            if referrer:
+                fhir_sr["requester"] = FHIRReference(display=referrer)
+
+            organ = parsed_data.get("request.organ")
+            if organ:
+                fhir_sr["bodySite"] = [FHIRCodeableConcept(text=organ)]
+
+            section = parsed_data.get("request.section")
+            if section:
+                fhir_sr["note"] = [{"text": section}]
+
+            indication = next((t for t in (
+                parsed_data.get("request.justification"),
+                parsed_data.get("request.clinical_situation"),
+                parsed_data.get("request.diagnosis_referral"),
+            ) if t), None)
+            if indication:
+                fhir_sr["note"] = (fhir_sr.get("note") or []) + [
+                    {"text": indication, "category": [{"text": "clinical-indication"}]}
+                ]
+
+            return fhir_sr
+        except Exception as e:
+            logger.error(f"Error converting BuletinSolicitare data to FHIR: {e}")
+            return FHIROperationOutcome.from_exception(e, code="exception")
+
+
 class HippoClientPresentation(HippoClient):
     """Parses an outpatient/ER presentation printable form (/gen_printabile/FisaPrezentare.asp)."""
 

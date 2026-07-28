@@ -5324,7 +5324,12 @@ document.addEventListener('DOMContentLoaded', function() {
         return !!text && /[A-Za-z0-9À-ɏ]/.test(text);
     }
 
-    // Intersection observer: fetch exam names from cerere when card scrolls into view
+    // Intersection observer: one lazy fetch per row (BuletinSolicitare.asp, the
+    // request/order form) when it scrolls into view. It's the only page that
+    // reliably has all three: region, indication, AND the true ordering
+    // physician ("Medic solicitant") — cerere.asp's strMedicId only ever gives
+    // the attending physician ("Medic curant"), which differs from the orderer
+    // whenever the patient's regular doctor isn't the one who placed this order.
     const _examCache = {};
     const scheduleExamObserver = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
@@ -5333,47 +5338,22 @@ document.addEventListener('DOMContentLoaded', function() {
             scheduleExamObserver.unobserve(el);
             const id = el.dataset.requestId;
             if (!id) return;
-            if (_examCache[id]) { _applyExamLabel(el, _examCache[id]); return; }
-            // cerere.asp is the only reliable source of the referring physician —
-            // ImagingStudy only has `performer` (who did the exam), not `referrer` —
-            // and it's also needed by the not-yet-reported fallback below for
-            // Justificare text, so fetch it once and share the promise both places.
-            const cererePromise = apiFetch(`/fhir/ServiceRequest/${id}?type=cerere`)
-                .then(r => r.ok ? r.json() : null)
-                .catch(() => null);
-            cererePromise.then(cerere => {
-                const referrer = cerere?.requester?.display || '';
-                if (referrer) _applyReferrer(el, referrer);
-            });
-            apiFetch(`/fhir/ImagingStudy/${id}`)
+            if (_examCache[id]) {
+                _applyExamLabel(el, _examCache[id]);
+                if (_examCache[id].referrer) _applyReferrer(el, _examCache[id].referrer);
+                return;
+            }
+            apiFetch(`/fhir/ServiceRequest/${id}?type=solicitare`)
                 .then(r => r.ok ? r.json() : null)
                 .then(data => {
                     const regions = _extractRegions(data);
-                    // Backend already applies comment > justification priority (filtering
-                    // placeholder junk) and falls back to reason (diagnosis) when neither exist.
                     const noteIndication = (data?.note || []).find(n => n.category?.[0]?.text === 'clinical-indication')?.text || '';
-                    const indication = _isMeaningfulText(noteIndication) ? noteIndication : (data?.reason?.[0]?.text || '');
-                    if (regions.length || indication) {
-                        _examCache[id] = { regions, indication };
-                        _applyExamLabel(el, _examCache[id]);
-                        return;
-                    }
-                    // Study not yet reported — fall back to ServiceRequest for ordered procedure
-                    // regions, plus the already-in-flight cerere.asp variant for Justificare text
-                    return Promise.all([
-                        apiFetch(`/fhir/ServiceRequest/${id}`).then(r => r.ok ? r.json() : null),
-                        cererePromise
-                    ]).then(([d, cerere]) => {
-                        // Priority: doctor's comment (buletinRecoltari) > justification (cerere) > diagnosis
-                        // — placeholder junk (e.g. ". .. .") is treated as absent.
-                        const commentIndication = (d?.note || []).find(n => n.category?.[0]?.text === 'clinical-indication')?.text || '';
-                        const cerereIndication = (cerere?.note || []).find(n => n.category?.[0]?.text === 'clinical-indication')?.text || '';
-                        const diagnosis = cerere?.reason?.[0]?.display || d?.reason?.[0]?.display || '';
-                        const indication = [commentIndication, cerereIndication, diagnosis].find(_isMeaningfulText) || '';
-                        const cached = { regions: _extractRegions(d), indication };
-                        _examCache[id] = cached;
-                        _applyExamLabel(el, cached);
-                    });
+                    const indication = _isMeaningfulText(noteIndication) ? noteIndication : '';
+                    const referrer = data?.requester?.display || '';
+                    const cached = { regions, indication, referrer };
+                    _examCache[id] = cached;
+                    _applyExamLabel(el, cached);
+                    if (referrer) _applyReferrer(el, referrer);
                 })
                 .catch(() => {});
         });

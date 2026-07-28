@@ -38,7 +38,7 @@ from hashlib import sha256
 from fhir import OperationOutcome, Resource
 
 from hippoclient import ANALYSIS_TYPES
-from hippoclient import HippoClient, HippoClientPatient, HippoClientPatientSearch, HippoClientImagingStudy, HippoClientDiagnosticReport, HippoClientServiceRequest, HippoClientServiceRequestSearch, HippoClientCheckout, HippoClientCheckin, HippoClientCheckup, HippoClientSchedule, HippoClientCerere, HippoClientPresentation, HippoClientObservationBundle, HippoClientWhoami, HippoClientReportWrite, HippoClientReportValidate, HippoClientCererePerform
+from hippoclient import HippoClient, HippoClientPatient, HippoClientPatientSearch, HippoClientImagingStudy, HippoClientDiagnosticReport, HippoClientServiceRequest, HippoClientServiceRequestSearch, HippoClientCheckout, HippoClientCheckin, HippoClientCheckup, HippoClientSchedule, HippoClientCerere, HippoClientBuletinSolicitare, HippoClientPresentation, HippoClientObservationBundle, HippoClientWhoami, HippoClientReportWrite, HippoClientReportValidate, HippoClientCererePerform
 from hippoclient import user_session_manager, url_cache
 from hippoclient import evict_patient_cache
 from urlcache import FilesystemCache, URLCache
@@ -252,16 +252,22 @@ async def get_fhir_service_request(request):
     """Retrieve service request by ID. Returns FHIR ServiceRequest resource.
 
     Accepts ?type=cerere to fetch from cerere.asp (full request metadata).
-    Without the hint, fetches buletinRecoltari.asp (lab/imaging order content).
+    Accepts ?type=solicitare to fetch from BuletinSolicitare.asp (order form:
+    region, indication, and the true ordering physician — see HippoClientBuletinSolicitare).
+    Without a hint, fetches buletinRecoltari.asp (lab/imaging order content).
     """
     id = request.match_info.get('id')
     if not id:
         return web_fhir_response("Service request ID is required")
     logger.info(f"Retrieving service request with ID: {id}")
 
-    if request.rel_url.query.get('type', '').lower() == 'cerere':
+    request_type = request.rel_url.query.get('type', '').lower()
+    if request_type == 'cerere':
         cerere_client = HippoClientCerere(SERVICE_URL, request)
         return web_fhir_response(await cerere_client.fetch_respond_fhir(id=id))
+    if request_type == 'solicitare':
+        solicitare_client = HippoClientBuletinSolicitare(SERVICE_URL, request)
+        return web_fhir_response(await solicitare_client.fetch_respond_fhir(id=id))
 
     client = HippoClientServiceRequest(SERVICE_URL, request)
     response = await client.fetch_respond_fhir(id=id)
