@@ -3935,6 +3935,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (!existing?.textContent) setCardIndication(article, indicationNotes[0].text);
             }
 
+            // ImagingStudy's own note (BuletinAnalize.asp's INFO SUPLIMENTAR) is
+            // often empty even when a clinical indication was recorded on the
+            // request itself (Justificare / Situatie clinica on
+            // BuletinSolicitare.asp). Fall back to the same per-request fetch
+            // the Schedule tab already uses for this (scheduleExamObserver).
+            if (imagingTypes.includes(type) && !article.querySelector('.card-indication-text')?.textContent) {
+                try {
+                    const srResp = await apiFetch(`/fhir/ServiceRequest/${id}`);
+                    if (srResp.ok) {
+                        const srData = await srResp.json();
+                        const srIndication = (srData.note || [])
+                            .find(n => n.category?.[0]?.text === 'clinical-indication')?.text || '';
+                        if (_isMeaningfulText(srIndication)) setCardIndication(article, srIndication);
+                    }
+                } catch (_) { /* best-effort */ }
+            }
+
             // Report text
             const forms = data.presentedForm || [];
             const hasReport = forms.length > 0
