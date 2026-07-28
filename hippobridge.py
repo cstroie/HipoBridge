@@ -279,6 +279,23 @@ async def get_fhir_task(request):
     return web_fhir_response(response)
 
 @require_auth
+async def get_specimen(request):
+    """Retrieve the lab/imaging handoff paperwork by ID. Returns raw HippoData JSON."""
+    id = request.match_info.get('id')
+    if not id:
+        return web_error_response("Request ID is required")
+    logger.info(f"Retrieving specimen (buletinRecoltari) with ID: {id}")
+
+    client = HippoClientServiceRequest(SERVICE_URL, request)
+
+    debug_resp = await web_debug_response(client, request, id=id)
+    if debug_resp is not None:
+        return debug_resp
+
+    parsed_data = await client.fetch_and_parse(id=id)
+    return web_json_response(parsed_data)
+
+@require_auth
 async def get_fhir_specimen(request):
     """Retrieve the lab/imaging handoff paperwork by ID. Returns FHIR Specimen resource.
 
@@ -1184,6 +1201,8 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     app.router.add_get('/api/checkin/{id}', get_checkin)
     app.router.add_get('/api/checkup/{id}', get_checkup)
     app.router.add_get('/api/presentation/{id}', get_presentation)
+    app.router.add_get('/api/specimen/{id}', get_specimen)
+    app.router.add_get('/api/cnp', serve_validate_cnp)
     app.router.add_get('/api/request/{id}/patient', get_request_patient)
     app.router.add_post('/api/request/{id}/report', post_study_report)
     app.router.add_post('/api/request/{id}/validate', post_report_validate)

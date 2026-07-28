@@ -21,7 +21,7 @@ HTTP client → hippobridge.py (@require_auth) → HippoClient* (cache + semapho
 | `HippoClientCheckup` | `/api/checkup/{id}`, `/fhir/Encounter/{id}?type=checkup` | `/files/checkup.asp?cuid={id}` |
 | `HippoClientPresentation` | `/api/presentation/{id}`, `/fhir/Encounter/{id}?type=presentation` | `/gen_printabile/FisaPrezentare.asp?relname=PR&id={id}` |
 | `HippoClientCerere` | `/api/request/{id}/patient`, `/fhir/Task/{id}` | `/PARA/NOM/Listare/cerere.asp?id={id}` |
-| `HippoClientServiceRequest` | `/fhir/Specimen/{id}` | `/PARA/Printabile/buletinRecoltari.asp?id={id}` |
+| `HippoClientServiceRequest` | `/api/specimen/{id}`, `/fhir/Specimen/{id}` | `/PARA/Printabile/buletinRecoltari.asp?id={id}` |
 | `HippoClientReportWrite` | `POST /api/request/{id}/report` | `/PARA/NOM/Listare/cerere.asp` (POST) |
 | `HippoClientReportValidate` | `POST /api/request/{id}/validate` | `/PARA/NOM/Listare/cerere.asp` (POST action=VDV) |
 | `HippoClientCererePerform` | `POST /api/request/{id}/perform`, `POST /api/request/{id}/cancel` | `/PARA/NOM/Listare/cerere.asp` (form replay via shared `_replay_form()`: perform sets DataEfectuarii + hdnAction=S; cancel sets hdnAction=A, mirrors the "Anulează" button) |

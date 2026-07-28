@@ -65,7 +65,7 @@ Most resources have two routes:
 | `GET /api/<resource>` | Raw `HippoData` JSON (internal/debug) |
 | `GET /fhir/<Resource>` | FHIR R4 JSON |
 
-Exceptions: `/fhir/Specimen/{id}` and `/fhir/ValueSet/cnp` have no raw `/api/*` counterpart; `/fhir/Metadata`, `/fhir/spec`, `/fhir/CodeSystem/analysis-types`, and `/fhir/md2html` are meta/utility endpoints, not resources, so there's nothing to pair them with.
+Exceptions: `/fhir/Metadata`, `/fhir/spec`, `/fhir/CodeSystem/analysis-types`, and `/fhir/md2html` are meta/utility endpoints, not resources, so there's nothing to pair them with.
 
 Add `?debug=page` to any `/api/*` single-resource endpoint to get the raw Hipocrate HTML.
 
@@ -99,6 +99,8 @@ GET  /api/checkin/{id}          — admission record (checkin.asp)
 GET  /api/checkup/{id}          — emergency consultation (checkup.asp)
 GET  /api/debug?path=...        — raw Hipocrate HTML passthrough for any path
 GET  /api/whoami                — logged-in user info; includes can_write_reports flag
+GET  /api/specimen/{id}         — raw counterpart of /fhir/Specimen/{id}
+GET  /api/cnp?id={cnp}          — raw counterpart of /fhir/ValueSet/cnp (same handler, mounted twice)
 POST /api/logout                — close the caller's Hipocrate session
 GET  /api/cache/stats           — URLCache size/hit stats
 POST /api/cache/cleanup         — evict expired cache entries
