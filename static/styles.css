@@ -1248,17 +1248,6 @@ button.stat-pill {
     border-color: var(--primary);
 }
 
-.btn-cancel-request {
-    color: var(--danger);
-    border-color: var(--danger);
-}
-
-.btn-cancel-request:hover {
-    background: var(--danger);
-    color: var(--on-accent);
-    border-color: var(--danger);
-}
-
 /* Tab section headers — title on the left, action buttons on the right */
 
 /* Tab glyph: spans the full height of the h1 + subtitle column */
@@ -3785,46 +3774,67 @@ dialog.report-editor-modal article > section {
 /* No action available for this report (not performed yet with write
    access off, or already fully validated with nothing to toggle) — don't
    render an empty bar with just a top border */
-.report-actions:has(> .btn-perform-exam[hidden]):has(> .btn-write-report[hidden]):has(> .validate-toggles:empty) {
+.report-actions:has(> .action-group[hidden]):has(> .btn-write-report[hidden]):has(> .validate-toggles:empty) {
     display: none;
 }
 
-.btn-write-report:not([hidden]),
-.btn-perform-exam:not([hidden]) {
+/* Compact pill buttons shared by Perform / Cancel / Edit — small footprint
+   so several can sit in a card footer without dominating it. */
+.btn-perform-exam,
+.btn-cancel-request,
+.btn-write-report,
+.btn-edit-report {
     display: inline-flex;
     align-items: center;
     gap: var(--space-4);
-    padding: var(--space-4) var(--space-16);
-    border: 1px solid var(--primary);
-    border-radius: var(--radius-md);
-    font-size: var(--font-size-sm);
+    padding: var(--space-4) var(--space-10);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.3;
+    border: none;
+    background: none;
     cursor: pointer;
     transition: background var(--transition-fast), color var(--transition-fast);
 }
 
-.btn-write-report:not([hidden]) {
+.btn-write-report,
+.btn-edit-report {
+    border-radius: 999px;
+    border: 1px solid var(--primary);
     background: var(--primary);
     color: var(--on-accent);
 }
 
-.btn-write-report:hover {
+.btn-write-report:hover,
+.btn-edit-report:hover {
     background: var(--primary-dark);
-    color: var(--on-accent);
+    border-color: var(--primary-dark);
 }
 
-.btn-perform-exam:not([hidden]) {
-    background: none;
-    color: var(--primary);
-}
+.btn-perform-exam { color: var(--primary); }
+.btn-perform-exam:hover { background: var(--primary); color: var(--on-accent); }
 
-.btn-perform-exam:hover {
-    background: var(--primary);
-    color: var(--on-accent);
-}
+.btn-cancel-request { color: var(--danger); }
+.btn-cancel-request:hover { background: var(--danger); color: var(--on-accent); }
 
-.btn-perform-exam:disabled {
+.btn-perform-exam:disabled,
+.btn-cancel-request:disabled,
+.btn-write-report:disabled,
+.btn-edit-report:disabled {
     opacity: 0.5;
     cursor: default;
+}
+
+/* Perform + Cancel share one pill-shaped segmented toolbar — they're
+   mutually exclusive actions on the same not-yet-performed request. */
+.action-group {
+    display: inline-flex;
+    border-radius: 999px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+}
+.action-group > .btn-cancel-request {
+    border-left: 1px solid var(--border);
 }
 
 .validate-toggles {
@@ -4159,9 +4169,15 @@ dialog.report-editor-modal article > section {
     }
 
     .report-modal-footer .btn-primary,
-    .report-modal-footer .btn-secondary {
+    .report-modal-footer .btn-secondary,
+    .report-modal-footer .action-group,
+    .report-modal-footer .btn-edit-report {
         width: 100%;
         justify-content: center;
+    }
+
+    .report-modal-footer .action-group > button {
+        flex: 1;
     }
 
     .report-modal-body {

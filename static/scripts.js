@@ -4116,12 +4116,10 @@ document.addEventListener('DOMContentLoaded', function() {
             // (whoamiReady already awaited at the top of this function.)
             if (IMAGING_TYPES.includes(type)) {
                 const writeBtn = article.querySelector('.btn-write-report');
-                const performBtn = article.querySelector('.btn-perform-exam');
+                const actionGroup = article.querySelector('.action-group');
                 if (canWriteReports) {
                     if (writeBtn) writeBtn.hidden = true;
-                    if (performBtn) performBtn.hidden = true;
-                    const cancelBtnReset = article.querySelector('.btn-cancel-request');
-                    if (cancelBtnReset) cancelBtnReset.hidden = true;
+                    if (actionGroup) actionGroup.hidden = true;
                     const togglesElReset = article.querySelector('.validate-toggles');
                     if (togglesElReset) { togglesElReset.hidden = true; togglesElReset.replaceChildren(); }
                 }
@@ -4182,20 +4180,22 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (performed) article.classList.remove('no-report');
 
                     if (canWriteReports) {
-                    // State 1: not performed → perform + cancel buttons
-                    if (performBtn && !performed) {
-                        performBtn.hidden = false;
-                        performBtn.replaceWith(performBtn.cloneNode(true));
-                        article.querySelector('.btn-perform-exam')
-                            .addEventListener('click', () => markExamPerformed(article, cerereId));
-                    }
-                    const cancelBtn = article.querySelector('.btn-cancel-request');
-                    if (cancelBtn) {
-                        cancelBtn.hidden = performed;
-                        cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+                    // State 1: not performed → perform + cancel buttons, grouped
+                    if (actionGroup) {
+                        actionGroup.hidden = performed;
                         if (!performed) {
-                            article.querySelector('.btn-cancel-request')
-                                .addEventListener('click', () => cancelRequest(article, cerereId));
+                            const performBtn = actionGroup.querySelector('.btn-perform-exam');
+                            if (performBtn) {
+                                performBtn.replaceWith(performBtn.cloneNode(true));
+                                actionGroup.querySelector('.btn-perform-exam')
+                                    .addEventListener('click', () => markExamPerformed(article, cerereId));
+                            }
+                            const cancelBtn = actionGroup.querySelector('.btn-cancel-request');
+                            if (cancelBtn) {
+                                cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+                                actionGroup.querySelector('.btn-cancel-request')
+                                    .addEventListener('click', () => cancelRequest(article, cerereId));
+                            }
                         }
                     }
 
@@ -5013,36 +5013,35 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
 
-                // Perform button — clone-and-replace to drop stale listeners
-                // from a previous refresh (same trick fetchAndFillReport uses).
-                let performBtn = modal.querySelector('.btn-perform-exam');
-                if (performBtn) {
-                    performBtn.replaceWith(performBtn.cloneNode(true));
-                    performBtn = modal.querySelector('.btn-perform-exam');
-                    performBtn.hidden = performed;
+                // Perform + Cancel buttons, grouped in one pill toolbar — clone-and-replace
+                // to drop stale listeners from a previous refresh (same trick
+                // fetchAndFillReport uses).
+                const actionGroup = modal.querySelector('.action-group');
+                if (actionGroup) {
+                    actionGroup.hidden = performed;
                     if (!performed) {
-                        performBtn.addEventListener('click', () => {
-                            markExamPerformedCore(requestId, {
-                                setDisabled: v => { performBtn.disabled = v; },
-                                onDone: refreshAll
+                        let performBtn = actionGroup.querySelector('.btn-perform-exam');
+                        if (performBtn) {
+                            performBtn.replaceWith(performBtn.cloneNode(true));
+                            performBtn = actionGroup.querySelector('.btn-perform-exam');
+                            performBtn.addEventListener('click', () => {
+                                markExamPerformedCore(requestId, {
+                                    setDisabled: v => { performBtn.disabled = v; },
+                                    onDone: refreshAll
+                                });
                             });
-                        });
-                    }
-                }
-
-                // Cancel request button — same not-yet-performed condition as Perform.
-                let cancelBtn = modal.querySelector('.btn-cancel-request');
-                if (cancelBtn) {
-                    cancelBtn.replaceWith(cancelBtn.cloneNode(true));
-                    cancelBtn = modal.querySelector('.btn-cancel-request');
-                    cancelBtn.hidden = performed;
-                    if (!performed) {
-                        cancelBtn.addEventListener('click', () => {
-                            cancelRequestCore(requestId, {
-                                setDisabled: v => { cancelBtn.disabled = v; },
-                                onDone: refreshAll
+                        }
+                        let cancelBtn = actionGroup.querySelector('.btn-cancel-request');
+                        if (cancelBtn) {
+                            cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+                            cancelBtn = actionGroup.querySelector('.btn-cancel-request');
+                            cancelBtn.addEventListener('click', () => {
+                                cancelRequestCore(requestId, {
+                                    setDisabled: v => { cancelBtn.disabled = v; },
+                                    onDone: refreshAll
+                                });
                             });
-                        });
+                        }
                     }
                 }
 

@@ -577,14 +577,16 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                     </div>
                 </section>
                 <footer class="report-actions">
-                    <button class="btn-perform-exam" hidden aria-label="Mark as performed">
-                        <i class="fas fa-check-circle" aria-hidden="true"></i> Perform
-                    </button>
-                    <button class="btn-cancel-request btn-secondary" hidden aria-label="Cancel request">
-                        <i class="fas fa-ban" aria-hidden="true"></i> Cancel request
-                    </button>
+                    <div class="action-group" hidden>
+                        <button class="btn-perform-exam" aria-label="Mark as performed">
+                            <i class="fas fa-check-circle" aria-hidden="true"></i> Perform
+                        </button>
+                        <button class="btn-cancel-request" aria-label="Cancel request">
+                            <i class="fas fa-ban" aria-hidden="true"></i> Cancel
+                        </button>
+                    </div>
                     <button class="btn-write-report" hidden aria-label="Edit report">
-                        <i class="fas fa-pen" aria-hidden="true"></i> Edit report
+                        <i class="fas fa-pen" aria-hidden="true"></i> Edit
                     </button>
                     <div class="validate-toggles"></div>
                 </footer>
@@ -706,9 +708,11 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                     <div class="report-modal-validate-toggles" hidden></div>
                     <footer class="report-modal-footer">
                         <button class="btn-secondary" data-close-modal aria-label="Close"><i class="fas fa-times"></i> <span>Close</span></button>
-                        <button class="btn-primary btn-perform-exam" hidden aria-label="Mark as performed"><i class="fas fa-check-circle"></i> <span>Perform</span></button>
-                        <button class="btn-cancel-request btn-secondary" hidden aria-label="Cancel request"><i class="fas fa-ban"></i> <span>Cancel request</span></button>
-                        <button class="btn-primary btn-edit-report" hidden aria-label="Edit report"><i class="fas fa-pen"></i> <span>Edit Report</span></button>
+                        <div class="action-group" hidden>
+                            <button class="btn-perform-exam" aria-label="Mark as performed"><i class="fas fa-check-circle"></i> <span>Perform</span></button>
+                            <button class="btn-cancel-request" aria-label="Cancel request"><i class="fas fa-ban"></i> <span>Cancel</span></button>
+                        </div>
+                        <button class="btn-edit-report" hidden aria-label="Edit report"><i class="fas fa-pen"></i> <span>Edit</span></button>
                         <button class="btn-primary modal-load-patient-btn" aria-label="Load patient"><i class="fas fa-user-injured"></i> <span>Load Patient</span></button>
                     </footer>
                 </article>
