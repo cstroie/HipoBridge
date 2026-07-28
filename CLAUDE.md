@@ -32,7 +32,7 @@ CLI: `--port`, `--host`, `--service-url`, `--log-level DEBUG|INFO|WARNING|ERROR`
 
 ```bash
 python3 runtests.py               # all tests
-python3 runtests.py extractors    # no server needed (also: markdown, hippodata)
+python3 runtests.py extractors    # no server needed (also: markdown, hippodata, worklist, llm)
 ```
 
 ## Architecture and gotchas

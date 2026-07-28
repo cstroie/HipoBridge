@@ -13,7 +13,7 @@
 
 - [X] Do not automatically generate the AI content after patient load.
 
-- [X] Add support for "in progress" (perfomed, i think), and 'cancelled' exam status
+- [X] Add support for "in progress" (performed, i think), and 'cancelled' exam status
 
 - [X] Derive patient gender from CNP if not clearly specified 
 

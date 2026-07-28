@@ -25,11 +25,11 @@ that cost was redundant. See also the "Concurrency and caching" and
 | `HippoClientSchedule` | `PARA/NOM/Listare/?id=44` | `/api/schedule`, `/fhir/Schedule`, worklist refresh | 1 |
 | `HippoClientReportWrite` | `Rezultate.asp` (GET then POST) | `POST /api/request/{id}/report` | 2 |
 | `HippoClientReportValidate` | `Ajax_Cerere.asp?action=VDV` | `POST /api/request/{id}/validate` | 1 |
-| `HippoClientCererePerform` | `cerere.asp` (GET then POST) | `POST /api/request/{id}/perform` | 2 |
+| `HippoClientCererePerform` | `cerere.asp` (GET then POST) | `POST /api/request/{id}/perform`, `POST /api/request/{id}/cancel` | 2 |
 
-Write clients (`ReportWrite`, `ReportValidate`, `CererePerform`) always bypass
-the cache and evict downstream `BuletinAnalize.asp`/`cerere.asp` entries on
-success.
+Write clients (`ReportWrite`, `ReportValidate`, `CererePerform` — perform and
+cancel both go through it, sharing `_replay_form()`) always bypass the cache
+and evict downstream `BuletinAnalize.asp`/`cerere.asp` entries on success.
 
 ## Caching model
 
@@ -72,7 +72,7 @@ success.
     keyed by patient ID, so unrelated traffic against the shared
     500-entry cache can't evict it. `HippoClientReportWrite`,
     `HippoClientReportValidate`, and `HippoClientCererePerform` explicitly
-    invalidate a patient's entry on a successful write/validate/perform
+    invalidate a patient's entry on a successful write/validate/perform/cancel
     (see N+1 item 8 below) so this cache can't mask a just-written
     report.
   - `HippoClientWhoami`'s parsed identity is cached per username (not by

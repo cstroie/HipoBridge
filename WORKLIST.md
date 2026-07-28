@@ -149,7 +149,7 @@ A single Hipocrate request with multiple exams produces multiple Datasets — on
 | `(0010,0030)` | PatientBirthDate | From patient record; derived from CNP if absent |
 | `(0010,0040)` | PatientSex | From patient record; derived from CNP if absent |
 | `(0008,0050)` | AccessionNumber | `{accession_prefix}{request_id}` (e.g. `1721991` or `HB-1721991`) |
-| `(0008,0090)` | ReferringPhysicianName | `requested_by` → DICOM PN |
+| `(0008,0090)` | ReferringPhysicianName | `patient_info['physician']` (Medic solicitant via BuletinSolicitare.asp, falling back to Medic curant from cerere.asp) → DICOM PN; falls back to the schedule row's `requested_by`, which is permanently empty since Hipocrate dropped that column (2026-07-28, see `docs/ARCHITECTURE.md`) |
 | `(0032,1060)` | RequestedProcedureDescription | Exam name from cerere.asp; falls back to lab name |
 | `(0020,000D)` | StudyInstanceUID | `1.2.840.99999999.1.{request_id}` |
 | `(0040,0100)[n]` | ScheduledProcedureStepSequence | one entry per exam |

@@ -142,6 +142,17 @@ Returns: patient name/CNP, presentation date/urgency/section, admission info, IC
 
 ---
 
+## Outpatient / ER Presentation
+
+| HippoBridge endpoint | Hipocrate URL |
+|---|---|
+| `GET /api/presentation/{id}` | `/gen_printabile/FisaPrezentare.asp?relname=PR&id={id}` |
+| `GET /fhir/Encounter/{id}?type=presentation` | same |
+
+Printable outpatient/ER presentation form (decision, section, reason, notes). Also part of the `Encounter` auto-detect fallback chain (Checkout → Checkin → Presentation) when `?type=` is omitted.
+
+---
+
 ## Schedule (worklist)
 
 | HippoBridge endpoint | Hipocrate URL |
@@ -191,9 +202,24 @@ FHIR ServiceRequest status mapping:
 | HippoBridge endpoint | Hipocrate URL |
 |---|---|
 | `GET /api/request/{id}/patient` | `/PARA/NOM/Listare/cerere.asp?id={id}` |
-| `GET /fhir/ServiceRequest/{id}?type=cerere` | `/PARA/NOM/Listare/cerere.asp?id={id}` |
+| `GET /fhir/Task/{id}` | `/PARA/NOM/Listare/cerere.asp?id={id}` |
 
 Full request edit form. Returns patient name, CNP, demographics (derived from CNP), request date/time, priority, payment type, ordering physician, ward/section, clinical diagnosis, clinical indication, justification, request code, laboratory name, and exam list (when present). Also resolves the numeric `patient.id` — used by the Schedule tab to load a patient record. Returns an access-denied error for labs the authenticated user cannot view (e.g. Ecografie); use `/api/request/{id}` (buletinRecoltari) as fallback for patient demographics in that case.
+
+---
+
+## Request Write Actions (radiologists only, restricted to `[radiology] allowed_radiologists`)
+
+All three replay the `cerere.asp` form: GET it, patch specific fields, POST it back.
+
+| HippoBridge endpoint | Hipocrate URL | Field patched |
+|---|---|---|
+| `POST /api/request/{id}/perform` | `/PARA/NOM/Listare/cerere.asp?id={id}` (POST) | `DataEfectuarii` = now (or given timestamp), `hdnAction=S` |
+| `POST /api/request/{id}/cancel` | `/PARA/NOM/Listare/cerere.asp?id={id}` (POST) | `hdnAction=A` — mirrors Hipocrate's own "Anulează" button, no field override |
+| `POST /api/request/{id}/report` | `/PARA/NOM/Listare/Rezultate.asp` (GET then POST) | report text for one analysis |
+| `POST /api/request/{id}/validate` | `/PARA/NOM/Listare/Ajax_Cerere.asp?action=VDV` (POST) | validation toggle for one analysis |
+
+Perform/cancel evict `cerere.asp` and `BuletinAnalize.asp` caches for that request, plus that patient's `/fhir/Observation` bundle cache, on success.
 
 ---
 
@@ -203,11 +229,8 @@ Full request edit form. Returns patient name, CNP, demographics (derived from CN
 |---|---|
 | Patient history (all analyses) | `/Pacient/analysesALL.asp?type=PA&pacid={id}` |
 | Patient admission history | `/Pacient/history.asp?pacid={id}` |
-| Lab request detail | `/PARA/NOM/Listare/cerere.asp?id={id}` |
 | Appointments list | `/gen_apps/` |
 | User info | `/gen_administrare/listare/cont.asp?id={id}&ses=1` |
-| Imaging request bulletin (BuletinSolicitare) | `/PARA/Printabile/BuletinSolicitare.asp?id={id}&type=2&IdP={IdP}` — example: `id=1723502`, `type=2` (imaging), `IdP=12` |
-| Presentation printable sheet (FisaPrezentare) | `/gen_printabile/FisaPrezentare.asp?relname=PR&id={id}` — printable version; data source is `/files/presentation.asp?id={id}` |
 | Emergency Department Sheet (FUPU / Foaie UPU) | `/gen_printabile/FUPU.asp?id={presentation_id}#pg={page}` — full ED clinical record: triage, vitals, anamnesis, systematic exam, meds, discharge; up to 8 pages + medications page |
 | Medical Letter (ScrisoareMedicala / Anexa 43) | `/gen_printabile/ScrisoareMedicala.asp?relname=PR&id={presentation_id}` — referral/discharge letter to GP or outpatient specialist; includes diagnosis, labs, imaging, treatment, prescriptions, follow-up; valid 6 months |
 | Checkup from presentation (back-link) | `/files/checkup.asp?presid={presentation_id}&cuid={checkup_id}` — same as `/files/checkup.asp?cuid={id}`; `presid` is navigation context only, no extra data |
