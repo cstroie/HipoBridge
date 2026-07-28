@@ -2505,6 +2505,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         } catch (error) {
             console.error('Error displaying patient report:', error);
+            showToast('Failed to generate patient report', 'error');
         }
     }
     
@@ -2821,6 +2822,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 limitedMap(presentationIds, MAX_CONCURRENT_REQUESTS,
                     async id => { try { return await fetchPresentation(id); } catch (_) { return null; } })
             ]);
+
+            const failedCount = [
+                [checkoutIds, encounters],
+                [checkinIds, activeEncounters],
+                [presentationIds, presentations],
+            ].reduce((sum, [ids, results]) => sum + (ids.length - results.filter(Boolean).length), 0);
+            if (failedCount > 0) {
+                showToast(`Failed to load ${failedCount} history record${failedCount > 1 ? 's' : ''}`, 'warning');
+            }
 
             // Build a unified list with type tags
             const encItems = encounters.filter(Boolean).map(enc => ({
@@ -3732,6 +3742,7 @@ document.addEventListener('DOMContentLoaded', function() {
             renderTrends(bundle.entry.map(e => e.resource).filter(Boolean));
         } catch (e) {
             console.warn('Trends load failed:', e);
+            showToast('Failed to load trends', 'warning');
         }
     }
 
@@ -4366,6 +4377,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 errEl.textContent = err.message || 'Error saving report';
                 saveBtn.disabled = false;
+                showToast(err.message || 'Error saving report', 'error');
             }
         });
     }
