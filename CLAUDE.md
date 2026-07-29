@@ -26,7 +26,7 @@ port = 8080
 service_url = http://192.168.3.230/hipocrate
 ```
 
-CLI: `--port`, `--host`, `--service-url`, `--log-level DEBUG|INFO|WARNING|ERROR`, `--no-disk-cache`, `--no-worklist`.
+CLI: `--port`, `--host`, `--service-url`, `--log-level DEBUG|INFO|WARNING|ERROR`, `--log-file PATH`, `--no-disk-cache`, `--no-worklist`.
 
 ## Running tests
 

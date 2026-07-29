@@ -29,6 +29,7 @@ from aiohttp import web
 from typing import Dict, Any
 import json
 import logging
+from logging.handlers import RotatingFileHandler
 import functools
 from datetime import datetime, timezone
 import configparser
@@ -79,6 +80,11 @@ DEFAULT_CONFIG = {
     },
     'radiology': {
         'allowed_radiologists': '',
+    },
+    'logging': {
+        'file': '',
+        'max_bytes': '10485760',
+        'backup_count': '5',
     },
 }
 
@@ -1160,7 +1166,8 @@ async def on_cleanup(app):
         await _ai_client.close()
 
 async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
-                   port: int = None, host: str = None, service_url: str = None):
+                   port: int = None, host: str = None, service_url: str = None,
+                   log_file: str = None):
     """Load config, wire up routes and lifecycle handlers, return the configured app."""
     global SERVICE_URL, _PORT, _HOST, _ALLOWED_RADIOLOGISTS, _ai_client
     config = load_config()
@@ -1171,6 +1178,17 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
         u.strip() for u in config.get('radiology', 'allowed_radiologists').split(',') if u.strip()
     }
     logger.info(f"Service URL: {SERVICE_URL}")
+
+    log_file = log_file or config.get('logging', 'file').strip()
+    if log_file:
+        file_handler = RotatingFileHandler(
+            log_file,
+            maxBytes=config.getint('logging', 'max_bytes'),
+            backupCount=config.getint('logging', 'backup_count'),
+        )
+        file_handler.setFormatter(logging.Formatter('%(asctime)s | %(levelname)8s | %(message)s'))
+        logging.getLogger().addHandler(file_handler)
+        logger.info(f"Logging to file: {log_file}")
 
     llm_config = init_llm()
     _ai_client = build_client(llm_config)
@@ -1274,6 +1292,10 @@ if __name__ == "__main__":
         help='Override Hipocrate base URL (default: from config)'
     )
     parser.add_argument(
+        '--log-file', metavar='PATH',
+        help='Override log file path (default: from config, size-limited rotation)'
+    )
+    parser.add_argument(
         '--no-disk-cache', action='store_true',
         help='Disable persistent filesystem cache even if cache.dir is configured'
     )
@@ -1294,6 +1316,7 @@ if __name__ == "__main__":
             port=args.port,
             host=args.host,
             service_url=args.service_url,
+            log_file=args.log_file,
         )
         logger.info(f"Starting HippoBridge server on {_HOST}:{_PORT}")
         runner = web.AppRunner(app)

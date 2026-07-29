@@ -89,6 +89,7 @@ Both prompts were rewritten per `_testing_/final50/{REPORT,EPICRISIS}_PROPOSALS.
 ## Entry point conventions
 
 - Log level: `LOG_LEVEL` env var or `--log-level`. Never hardcode `DEBUG`.
+- File logging is off by default; set `[logging] file` in `local.cfg` (or `--log-file`) to enable a size-limited `RotatingFileHandler` (`max_bytes`/`backup_count`, default 10MB × 5). Wired in `init_app()`, so it captures everything logged to the root logger — including `Worklist.*` and pydicom's `warn_and_log` warnings.
 - Config loads in `init_app()`, not at import time.
 - File paths: `os.path.join(os.path.dirname(__file__), ...)`.
 - Credentials: `request['auth_credentials']` (aiohttp dict-style), not a plain attribute.
