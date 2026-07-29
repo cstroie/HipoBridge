@@ -35,7 +35,8 @@ try:
 except ImportError:
     DICOM_AVAILABLE = False
 
-from hippoclient import HippoClientSchedule, HippoClientCerere, HippoClientBuletinSolicitare, HippoClientPatient, HippoClientCheckin
+from hippoclient import (HippoClientSchedule, HippoClientCerere, HippoClientBuletinSolicitare,
+                          HippoClientPatient, HippoClientCheckin, identify_study_type_and_region)
 from extractors import parse_cnp
 
 logger = logging.getLogger('Worklist')
@@ -406,10 +407,10 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
     study_uid    = f'1.2.840.99999999.1.{request_id}' if request_id else generate_uid()
     accession    = f"{accession_prefix}{request_id}" if request_id else request_code
 
-    justification = (patient_info or {}).get('justification') or ''
-    section       = (patient_info or {}).get('section') or ''
-    phone         = (patient_info or {}).get('phone') or ''
-    address       = (patient_info or {}).get('address') or ''
+    justification = ((patient_info or {}).get('justification') or '')[:64]
+    section       = ((patient_info or {}).get('section') or '')[:64]
+    phone         = ((patient_info or {}).get('phone') or '')[:64]
+    address       = ((patient_info or {}).get('address') or '')[:64]
     hippo_id       = (patient_info or {}).get('id') or ''
     priority      = 'STAT' if (entry.get('priority') or '').lower() not in ('normala', 'normal', '') else 'ROUTINE'
     size          = _height_to_meters((patient_info or {}).get('height') or '')
@@ -433,7 +434,8 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
     datasets = []
 
     for idx, exam_name in enumerate(exam_list, start=1):
-        exam_name = exam_name[:64]
+        _, region = identify_study_type_and_region(exam_name)
+        exam_name = region.replace('_', ' ').title() if region != 'unknown' else exam_name[:64]
         ds = Dataset()
         ds.PatientName      = patient_name
         ds.PatientID        = patient_id
