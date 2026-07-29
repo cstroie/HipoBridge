@@ -72,6 +72,23 @@ class ServerBackend:
         except (aiohttp.ClientError, asyncio.TimeoutError):
             return False
 
+    async def list_models(self) -> list[str]:
+        """List model ids the server currently exposes via the standard
+        OpenAI `GET /models` route (`{"data": [{"id": ...}, ...]}`) — not
+        any provider-specific extension (e.g. LM Studio's `/api/v1/models`,
+        which also reports load state but isn't part of the OpenAI API and
+        wouldn't work against a plain llama.cpp/Ollama/vLLM backend).
+        Raises on a network error or non-2xx status; callers decide whether
+        that's fatal (a model survey failing shouldn't usually block
+        startup)."""
+        async with _llm_semaphore:
+            async with self._client().get(
+                f"{self.base_url}/models", headers=self._headers(),
+                timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+        return [m["id"] for m in data.get("data", []) if "id" in m]
+
     async def chat(self, model: str, messages: list[dict], *,
                     max_tokens: int = 512, temperature: float = 0.1) -> str:
         payload = {

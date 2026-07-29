@@ -60,10 +60,17 @@ from llm.prompts import summarize_stream as llm_summarize_stream
 from llm.prompts import has_meaningful_content
 from llm.backend import strip_think_block
 
-logging.basicConfig(
-    level=getattr(logging, os.getenv('LOG_LEVEL', 'INFO').upper(), logging.INFO),
-    format='%(asctime)s | %(levelname)8s | %(message)s'
-)
+# Root logger stays permissive (DEBUG) so nothing is filtered out before it
+# reaches a handler; each handler then applies its own level. Console stays
+# at LOG_LEVEL/--log-level (default INFO, quiet) while a configured log file
+# always captures DEBUG (full detail) regardless of console verbosity — see
+# the RotatingFileHandler setup in init_app().
+_LOG_FORMAT = '%(asctime)s | %(levelname)8s | %(message)s'
+logging.getLogger().setLevel(logging.DEBUG)
+_console_handler = logging.StreamHandler()
+_console_handler.setLevel(getattr(logging, os.getenv('LOG_LEVEL', 'INFO').upper(), logging.INFO))
+_console_handler.setFormatter(logging.Formatter(_LOG_FORMAT))
+logging.getLogger().addHandler(_console_handler)
 logger = logging.getLogger('HippoBridge')
 
 DEFAULT_CONFIG = {
@@ -1187,13 +1194,25 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
             maxBytes=config.getint('logging', 'max_bytes'),
             backupCount=config.getint('logging', 'backup_count'),
         )
-        file_handler.setFormatter(logging.Formatter('%(asctime)s | %(levelname)8s | %(message)s'))
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(logging.Formatter(_LOG_FORMAT))
         logging.getLogger().addHandler(file_handler)
-        logger.info(f"Logging to file: {log_file}")
+        logger.info(f"Logging to file: {log_file} (DEBUG level, console stays at {logging.getLevelName(_console_handler.level)})")
 
     llm_config = init_llm()
     _ai_client = build_client(llm_config)
     logger.info(f"AI summary provider: {_ai_client.base_url}")
+    configured = _ai_client.configured_models()
+    try:
+        available = await _ai_client.list_models()
+        logger.info(f"LLM server model survey: {len(available)} available: {', '.join(available)}")
+        for tier, model in configured.items():
+            status = "available" if model in available else "NOT FOUND on server"
+            logger.info(f"  tier '{tier}' configured as '{model}' — {status}")
+    except Exception as exc:
+        # A survey failure is diagnostic, not fatal — the server may just be
+        # cold/unreachable right now and come up before the first AI call.
+        logger.warning(f"LLM server model survey failed ({_ai_client.base_url}): {exc}")
 
     cache_dir = config.get('cache', 'dir').strip()
     if cache_dir and not no_disk_cache:
@@ -1312,7 +1331,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.log_level:
-        logging.getLogger().setLevel(getattr(logging, args.log_level))
+        # Only the console handler's threshold changes — root logger and the
+        # log file (if configured) stay at DEBUG regardless of this flag.
+        _console_handler.setLevel(getattr(logging, args.log_level))
 
     async def _main():
         global SERVICE_URL, _PORT, _HOST

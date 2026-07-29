@@ -47,6 +47,12 @@ class LLMClient:
     async def health(self) -> bool:
         return await self._backend.health()
 
+    async def list_models(self) -> list[str]:
+        return await self._backend.list_models()
+
+    def configured_models(self) -> dict[str, str]:
+        return dict(self._models)
+
     async def status(self) -> dict:
         healthy = await self._backend.health()
         return {tier: {"model": self._models.get(tier), "healthy": healthy} for tier in TIERS}
