@@ -22,11 +22,22 @@ import aiohttp
 import argparse
 import os
 import sys
+from urllib.parse import quote
 
-BASE_URL = "http://localhost:44660"
+# Overridden in main() from --base-url / HIPPOBRIDGE_URL; every request
+# function reads this module global at call time, so setting it before any
+# operation runs is enough — no need to thread it through every call.
+BASE_URL = os.getenv("HIPPOBRIDGE_URL", "http://localhost:44660")
 
 FHIR_PATIENT = "Patient"
 FHIR_BUNDLE  = "Bundle"
+
+
+def _seg(value: str) -> str:
+    """URL-encode a path segment (e.g. an ID interpolated into /fhir/X/{id}).
+    IDs are normally alnum, but this also covers a raw CNP/free-text value
+    passed straight through by a caller who skipped resolution."""
+    return quote(str(value), safe="")
 
 # Simple LRU-style cache: evict oldest entry when full
 _cnp_cache: dict = {}
@@ -41,20 +52,23 @@ def _cnp_cache_put(cnp: str, patient_code: str) -> None:
     _cnp_cache[cnp] = patient_code
 
 
-async def _get(session: aiohttp.ClientSession, url: str) -> tuple[dict, bool]:
-    """GET url; return (response_body, ok)."""
+async def _get(session: aiohttp.ClientSession, path: str, params: dict = None) -> tuple[dict, bool]:
+    """GET BASE_URL+path with optional query params; return (response_body, ok).
+    params go through aiohttp's own encoding (session.get(..., params=...)) —
+    never build the query string by hand, a raw f-string breaks on '&'/'#'/'%'
+    in free-text values like a patient search term."""
     try:
-        async with session.get(url) as resp:
+        async with session.get(f"{BASE_URL}{path}", params=params) as resp:
             body = await resp.json()
             return body, resp.status == 200
     except Exception as e:
         return {"status": "error", "message": str(e)}, False
 
 
-async def _post(session: aiohttp.ClientSession, url: str, payload: dict) -> tuple[dict, bool]:
-    """POST url with JSON payload; return (response_body, ok)."""
+async def _post(session: aiohttp.ClientSession, path: str, payload: dict) -> tuple[dict, bool]:
+    """POST BASE_URL+path with JSON payload; return (response_body, ok)."""
     try:
-        async with session.post(url, json=payload) as resp:
+        async with session.post(f"{BASE_URL}{path}", json=payload) as resp:
             body = await resp.json()
             return body, resp.status == 200
     except Exception as e:
@@ -93,7 +107,7 @@ def _pick_patient_from_bundle(data: dict, context: str) -> str | None:
 async def search_patients(session: aiohttp.ClientSession, search_term: str) -> bool:
     """Search for patients and print results."""
     print(f"Searching for patients: '{search_term}'")
-    data, ok = await _get(session, f"{BASE_URL}/fhir/Patient?q={search_term}")
+    data, ok = await _get(session, "/fhir/Patient", params={"q": search_term})
     if not ok:
         print(f"Patient search failed: {data.get('message', '')}")
         return False
@@ -118,7 +132,7 @@ async def get_patient(session: aiohttp.ClientSession, patient_id: str) -> bool:
         patient_id = resolved
 
     print(f"Retrieving patient: {patient_id}")
-    data, ok = await _get(session, f"{BASE_URL}/fhir/Patient/{patient_id}")
+    data, ok = await _get(session, f"/fhir/Patient/{_seg(patient_id)}")
     if not ok:
         print(f"Patient retrieval failed: {data.get('message', '')}")
         return False
@@ -164,7 +178,7 @@ async def get_patient(session: aiohttp.ClientSession, patient_id: str) -> bool:
 async def get_report(session: aiohttp.ClientSession, report_id: str) -> bool:
     """Retrieve and display a DiagnosticReport by ID."""
     print(f"Retrieving report: {report_id}")
-    data, ok = await _get(session, f"{BASE_URL}/fhir/DiagnosticReport/{report_id}")
+    data, ok = await _get(session, f"/fhir/DiagnosticReport/{_seg(report_id)}")
     if not ok:
         print(f"Report retrieval failed: {data.get('message', '')}")
         return False
@@ -204,7 +218,7 @@ async def get_report(session: aiohttp.ClientSession, report_id: str) -> bool:
 async def get_imaging_study(session: aiohttp.ClientSession, study_id: str) -> bool:
     """Retrieve and display an ImagingStudy by ID."""
     print(f"Retrieving imaging study: {study_id}")
-    data, ok = await _get(session, f"{BASE_URL}/fhir/ImagingStudy/{study_id}")
+    data, ok = await _get(session, f"/fhir/ImagingStudy/{_seg(study_id)}")
     if not ok:
         print(f"Imaging study retrieval failed: {data.get('message', '')}")
         return False
@@ -267,7 +281,7 @@ async def get_checkout(session: aiohttp.ClientSession, checkout_id: str) -> bool
     """Retrieve and display an Encounter (checkout) by ID."""
     print(f"Retrieving checkout: {checkout_id}")
     # Correct route: path parameter, not query string
-    data, ok = await _get(session, f"{BASE_URL}/fhir/Encounter/{checkout_id}")
+    data, ok = await _get(session, f"/fhir/Encounter/{_seg(checkout_id)}")
     if not ok:
         print(f"Checkout retrieval failed: {data.get('message', '')}")
         return False
@@ -325,14 +339,14 @@ async def get_analyses(session: aiohttp.ClientSession, patient_id: str,
     if resolved:
         patient_id = resolved
 
-    url = f"{BASE_URL}/fhir/ServiceRequest?patient={patient_id}"
+    params = {"patient": patient_id}
     if analysis_type:
-        url += f"&type={analysis_type}"
+        params["type"] = analysis_type
     if datetime_filter:
-        url += f"&dt={datetime_filter}"
+        params["dt"] = datetime_filter
 
     print(f"Retrieving analyses for patient: {patient_id}")
-    data, ok = await _get(session, url)
+    data, ok = await _get(session, "/fhir/ServiceRequest", params=params)
     if not ok:
         print(f"Analyses retrieval failed: {data.get('message', '')}")
         return False
@@ -363,10 +377,134 @@ async def get_analyses(session: aiohttp.ClientSession, patient_id: str,
     return True
 
 
+async def get_task(session: aiohttp.ClientSession, task_id: str) -> bool:
+    """Retrieve and display a request's workflow state (FHIR Task) by ID."""
+    print(f"Retrieving task: {task_id}")
+    data, ok = await _get(session, f"/fhir/Task/{_seg(task_id)}")
+    if not ok:
+        print(f"Task retrieval failed: {data.get('message', '')}")
+        return False
+
+    print("\n--- Task ---")
+    print(f"ID: {data.get('id', 'N/A')}")
+    if data.get("status"):
+        print(f"Status: {data['status']}")
+    period = data.get("executionPeriod", {})
+    if period.get("start"):
+        print(f"Started: {period['start']}")
+    if period.get("end"):
+        print(f"Ended: {period['end']}")
+    focus = data.get("focus", {})
+    if focus.get("reference"):
+        print(f"ServiceRequest: {focus['reference']}")
+    for note in data.get("note", []):
+        if note.get("text"):
+            print(f"Note: {note['text']}")
+    print("------------")
+    return True
+
+
+async def get_specimen(session: aiohttp.ClientSession, specimen_id: str) -> bool:
+    """Retrieve and display the lab/imaging handoff paperwork (FHIR Specimen) by ID."""
+    print(f"Retrieving specimen: {specimen_id}")
+    data, ok = await _get(session, f"/fhir/Specimen/{_seg(specimen_id)}")
+    if not ok:
+        print(f"Specimen retrieval failed: {data.get('message', '')}")
+        return False
+
+    print("\n--- Specimen ---")
+    print(f"ID: {data.get('id', 'N/A')}")
+    if data.get("status"):
+        print(f"Status: {data['status']}")
+    subject = data.get("subject", {})
+    if subject.get("reference"):
+        print(f"Patient: {subject['reference']}")
+    if data.get("type", {}).get("text"):
+        print(f"Laboratory: {data['type']['text']}")
+    collection = data.get("collection", {})
+    if collection.get("collectedDateTime"):
+        print(f"Collected: {collection['collectedDateTime']}")
+    for coll_note in data.get("note", []):
+        if coll_note.get("text"):
+            print(f"Note: {coll_note['text']}")
+    print("----------------")
+    return True
+
+
+async def get_observations(session: aiohttp.ClientSession, patient_id: str,
+                            start_date: str = None, end_date: str = None) -> bool:
+    """Retrieve and display aggregated lab Observations for a patient."""
+    resolved = await _resolve_patient_id(session, patient_id)
+    if resolved:
+        patient_id = resolved
+
+    params = {"patient": patient_id}
+    if start_date:
+        params["start_date"] = start_date
+    if end_date:
+        params["end_date"] = end_date
+
+    print(f"Retrieving observations for patient: {patient_id}")
+    data, ok = await _get(session, "/fhir/Observation", params=params)
+    if not ok:
+        print(f"Observations retrieval failed: {data.get('message', '')}")
+        return False
+
+    if data.get("resourceType") != FHIR_BUNDLE:
+        print("No observations found.")
+        return True
+
+    entries = data.get("entry", [])
+    print(f"\nObservations ({len(entries)} found):")
+    for entry in entries:
+        obs = entry.get("resource", {})
+        analyte = obs.get("code", {}).get("text", "?")
+        date = obs.get("effectiveDateTime", "")
+        vq = obs.get("valueQuantity")
+        if vq is not None:
+            value = f"{vq.get('value')}{' ' + vq['unit'] if vq.get('unit') else ''}"
+        else:
+            value = obs.get("valueString", "")
+        flag = (obs.get("interpretation") or [{}])[0].get("text", "")
+        ref = (obs.get("referenceRange") or [{}])[0].get("text", "")
+        line = f"  {date}  {analyte}: {value}"
+        if flag:
+            line += f" ({flag})"
+        if ref:
+            line += f"  [ref: {ref}]"
+        print(line)
+
+    return True
+
+
+async def get_whoami(session: aiohttp.ClientSession) -> bool:
+    """Retrieve and display the logged-in Hipocrate user identity."""
+    print("Retrieving current user identity")
+    data, ok = await _get(session, "/api/whoami")
+    if not ok:
+        print(f"Whoami request failed: {data.get('message', '')}")
+        return False
+
+    print("\n--- Whoami ---")
+    user = data.get("user", {})
+    if user.get("display_name"):
+        print(f"Name: {user['display_name']}")
+    if user.get("username"):
+        print(f"Username: {user['username']}")
+    if user.get("id"):
+        print(f"User ID: {user['id']}")
+    if data.get("hipocrate_url"):
+        print(f"Hipocrate URL: {data['hipocrate_url']}")
+    if "can_write_reports" in data:
+        print(f"Can write reports: {data['can_write_reports']}")
+    print("--------------")
+    return True
+
+
 async def validate_cnp(session: aiohttp.ClientSession, cnp: str) -> bool:
     """Validate a Romanian CNP and print the result."""
     print(f"Validating CNP: {cnp}")
-    data, ok = await _get(session, f"{BASE_URL}/fhir/ValueSet/cnp?id={cnp}")
+    data, ok = await _get(session, "/fhir/ValueSet/cnp", params={"id": cnp})
     if not ok:
         print(f"CNP validation request failed: {data.get('message', '')}")
         return False
@@ -384,11 +522,11 @@ async def _resolve_patient_id(session: aiohttp.ClientSession, patient_id: str) -
     if patient_id.isdigit() and len(patient_id) == 13:
         if patient_id in _cnp_cache:
             return _cnp_cache[patient_id]
-        val_data, val_ok = await _get(session, f"{BASE_URL}/fhir/ValueSet/cnp?id={patient_id}")
+        val_data, val_ok = await _get(session, "/fhir/ValueSet/cnp", params={"id": patient_id})
         if not val_ok or not val_data.get("valid"):
             print(f"CNP {patient_id} invalid, using as-is")
             return None
-        data, ok = await _get(session, f"{BASE_URL}/fhir/Patient?q={patient_id}")
+        data, ok = await _get(session, "/fhir/Patient", params={"q": patient_id})
         if not ok:
             return None
         code = _extract_patient_code(data, f"CNP {patient_id}")
@@ -397,7 +535,7 @@ async def _resolve_patient_id(session: aiohttp.ClientSession, patient_id: str) -
         return code
 
     if patient_id.endswith("*") and patient_id[:-1]:
-        data, ok = await _get(session, f"{BASE_URL}/fhir/Patient?q={patient_id}")
+        data, ok = await _get(session, "/fhir/Patient", params={"q": patient_id})
         if not ok:
             return None
         return _extract_patient_code(data, f"partial CNP {patient_id}")
@@ -414,7 +552,10 @@ def _extract_patient_code(data: dict, context: str) -> str | None:
 
 
 async def main() -> int:
+    global BASE_URL
     parser = argparse.ArgumentParser(description="HippoBridge API Client")
+    parser.add_argument("--base-url", help=f"HippoBridge server URL (default: {BASE_URL}, or $HIPPOBRIDGE_URL)")
+    parser.add_argument("--timeout", type=float, default=30.0, help="Per-request timeout in seconds (default: 30)")
     parser.add_argument("--username", "-u", help="Username for authentication")
     parser.add_argument("--password", "-w", help="Password for authentication")
     parser.add_argument("--search",         "-s", help="Search term for patient search")
@@ -426,13 +567,23 @@ async def main() -> int:
     parser.add_argument("--analysis-type",  "-t", help="Analysis type filter (radio, ct, irm, eco, rads, lab)")
     parser.add_argument("--datetime-filter","-d", help="Date/time filter ISO (YYYY-MM-DDTHH:MM:SS)")
     parser.add_argument("--cnp",            "-c", help="CNP to validate")
+    parser.add_argument("--task",           "-k", help="Task (cerere) ID to retrieve workflow state for")
+    parser.add_argument("--specimen",       "-x", help="Specimen ID to retrieve handoff paperwork for")
+    parser.add_argument("--observations",   "-O", help="Patient ID to retrieve aggregated lab observations for")
+    parser.add_argument("--start-date", help="Start date filter for --observations (YYYY-MM-DD)")
+    parser.add_argument("--end-date",   help="End date filter for --observations (YYYY-MM-DD)")
+    parser.add_argument("--whoami", action="store_true", help="Show the logged-in Hipocrate user identity")
     args = parser.parse_args()
+
+    if args.base_url:
+        BASE_URL = args.base_url.rstrip("/")
 
     username = args.username or os.getenv("HYP_USER")
     password = args.password or os.getenv("HYP_PASS")
 
     if not any([args.search, args.patient, args.report, args.imaging_study,
-                args.checkout, args.analyses, args.cnp]):
+                args.checkout, args.analyses, args.cnp, args.task,
+                args.specimen, args.observations, args.whoami]):
         print("Error: at least one operation flag is required")
         parser.print_help()
         return 1
@@ -443,7 +594,8 @@ async def main() -> int:
 
     # HippoBridge uses HTTP Basic Auth on every request — no separate login endpoint
     auth = aiohttp.BasicAuth(username, password)
-    async with aiohttp.ClientSession(auth=auth) as session:
+    timeout = aiohttp.ClientTimeout(total=args.timeout)
+    async with aiohttp.ClientSession(auth=auth, timeout=timeout) as session:
         ops = [
             (args.search,        lambda: search_patients(session, args.search)),
             (args.patient,       lambda: get_patient(session, args.patient)),
@@ -453,6 +605,11 @@ async def main() -> int:
             (args.analyses,      lambda: get_analyses(session, args.analyses,
                                                        args.analysis_type, args.datetime_filter)),
             (args.cnp,           lambda: validate_cnp(session, args.cnp)),
+            (args.task,          lambda: get_task(session, args.task)),
+            (args.specimen,      lambda: get_specimen(session, args.specimen)),
+            (args.observations,  lambda: get_observations(session, args.observations,
+                                                           args.start_date, args.end_date)),
+            (args.whoami,        lambda: get_whoami(session)),
         ]
         for flag, coro_fn in ops:
             if flag:
