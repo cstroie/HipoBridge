@@ -55,7 +55,7 @@ import html
 import json
 from datetime import date, datetime, timedelta
 import configparser
-from urllib.parse import unquote
+from urllib.parse import quote, unquote
 
 from typing import Any, Dict, List, Optional, Tuple, Union
 from collections import OrderedDict
@@ -160,9 +160,14 @@ def evict_patient_cache(client: 'HippoClient', patient_id: str) -> None:
     (BuletinAnalize.asp / cerere.asp), since those are cheap to reopen
     individually and are already evicted correctly on report writes.
     """
-    client.cache_remove(client.get_full_url(f"/Pacient/edit.asp?id={patient_id}"))
+    # Encode patient_id the same way _format_request_url() does for the URLs
+    # that were actually fetched/cached — otherwise a patient_id containing
+    # '&'/'#'/etc. would be evicted under a different key than it was stored
+    # under, silently leaving the stale entry in place.
+    safe_patient_id = quote(str(patient_id), safe="")
+    client.cache_remove(client.get_full_url(f"/Pacient/edit.asp?id={safe_patient_id}"))
 
-    episode_url = f"/Pacient/analysesEpisod.asp?pacid={patient_id}"
+    episode_url = f"/Pacient/analysesEpisod.asp?pacid={safe_patient_id}"
     imaging_domains = [v['domain'] for v in ANALYSIS_TYPES.values() if v['domain'] != 0]
     for domain_id in imaging_domains + LAB_DOMAINS:
         client.cache_remove(client.get_full_url(f"{episode_url}&strDomeniu={domain_id}&NrPePag=100"))
@@ -344,6 +349,27 @@ _MEANINGFUL_TEXT_RE = re.compile(r'[A-Za-z0-9À-ɏ]')
 def is_meaningful_text(text):
     """True if text has at least one letter/digit — filters placeholder junk like ". .. .". """
     return bool(text) and bool(_MEANINGFUL_TEXT_RE.search(text))
+
+
+def _format_request_url(template: str, **kwargs) -> str:
+    """Format a Hipocrate request-URL template, percent-encoding every
+    interpolated value first.
+
+    kwargs (id, patient_id, ...) ultimately trace back to unvalidated
+    caller input (a URL path segment or query param on HippoBridge's own
+    API). Without encoding, a value containing '&' or '#' injects extra
+    query params or truncates the outbound Hipocrate URL — verified live
+    that request.match_info values reach here unescaped. Non-string
+    kwargs (e.g. an aiohttp Request passed through for context) are left
+    alone; template.format() only substitutes the placeholders it
+    actually references, so encoding a value nothing refers to would be
+    wasted work, not a correctness issue either way.
+    """
+    safe_kwargs = {
+        k: (quote(str(v), safe="") if isinstance(v, (str, int)) else v)
+        for k, v in kwargs.items()
+    }
+    return template.format(**safe_kwargs)
 
 
 class HippoClient:
@@ -808,7 +834,7 @@ class HippoClient:
     async def fetch_and_parse(self, *args, max_redirects=5, **kwargs):
         """Fetch request_url (formatted with kwargs) and return parsed HippoData."""
         data = HippoData(status="success", message="")
-        url = self.request_url.format(**kwargs)
+        url = _format_request_url(self.request_url, **kwargs)
         try:
             response_text, error_message = await self.get_page(url, max_redirects)
             if error_message:
@@ -837,7 +863,7 @@ class HippoClient:
 
     async def debug_page(self, *args, max_redirects=5, **kwargs):
         """Return raw Hipocrate HTML for the request URL (used by ?debug=page)."""
-        url = self.request_url.format(**kwargs)
+        url = _format_request_url(self.request_url, **kwargs)
         try:
             response_text, error_message = await self.get_page(url, max_redirects)
             if error_message:
@@ -1510,7 +1536,7 @@ class HippoClientServiceRequestSearch(HippoClientServiceRequest):
                 fetch_specs += [('lab', d) for d in LAB_DOMAINS]
                 tasks = []
                 for _type_tag, domain_id in fetch_specs:
-                    url = (self.request_url_episode + f"&strDomeniu={domain_id}&NrPePag=100").format(pacid=patient_id)
+                    url = _format_request_url(self.request_url_episode + f"&strDomeniu={domain_id}&NrPePag=100", pacid=patient_id)
                     tasks.append(self.get_page(url))
                 results = await asyncio.gather(*tasks)
                 merged = HippoData(status="success", message="")
@@ -1552,7 +1578,7 @@ class HippoClientServiceRequestSearch(HippoClientServiceRequest):
                 merged['requests'] = all_requests
                 return merged
 
-            url = request_url.format(pacid=patient_id)
+            url = _format_request_url(request_url, pacid=patient_id)
 
             response_text, error_message = await self.get_page(url)
 
@@ -2048,7 +2074,7 @@ class HippoClientImagingStudy(HippoClient):
             studies = parsed_data.get("studies") or []
             all_empty = all(not s.get("result") for s in studies) if studies else True
             if all_empty:
-                url = self.request_url.format(**kwargs)
+                url = _format_request_url(self.request_url, **kwargs)
                 self.cache_remove(self.get_full_url(url))
                 logger.debug(f"Evicted empty imaging study from cache: {url}")
         return parsed_data
@@ -2224,7 +2250,7 @@ class HippoClientDiagnosticReport(HippoClient):
             studies = parsed_data.get("studies") or []
             all_empty = all(not s.get("result") for s in studies) if studies else True
             if all_empty:
-                url = self.request_url.format(**kwargs)
+                url = _format_request_url(self.request_url, **kwargs)
                 self.cache_remove(self.get_full_url(url))
                 logger.debug(f"Evicted empty diagnostic report from cache: {url}")
         return parsed_data
@@ -2549,7 +2575,7 @@ class HippoClientCheckout(HippoClient):
         parsed_data = await super().fetch_and_parse(*args, **kwargs)
         if parsed_data.get("status") != "error":
             if not parsed_data.get("checkout.epicrisis"):
-                url = self.request_url.format(**kwargs)
+                url = _format_request_url(self.request_url, **kwargs)
                 self.cache_remove(self.get_full_url(url))
                 logger.debug(f"Evicted empty checkout epicrisis from cache: {url}")
         return parsed_data
@@ -4271,7 +4297,7 @@ class HippoClientObservationBundle(HippoClient):
             episode_url = sr_client.request_url_episode  # "/Pacient/analysesEpisod.asp?pacid={pacid}"
             lab_fetch_tasks = []
             for domain_id in LAB_DOMAINS:
-                url = (episode_url + f"&strDomeniu={domain_id}&NrPePag=100").format(pacid=patient_id)
+                url = _format_request_url(episode_url + f"&strDomeniu={domain_id}&NrPePag=100", pacid=patient_id)
                 lab_fetch_tasks.append(self.get_page(url))
             domain_results = await asyncio.gather(*lab_fetch_tasks)
 
