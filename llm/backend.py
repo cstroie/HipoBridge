@@ -96,7 +96,14 @@ class ServerBackend:
             "messages": messages,
             "max_tokens": max_tokens,
             "temperature": temperature,
+            # Two different shapes because servers disagree: some read the
+            # nested "reasoning.effort" object, this LM Studio build only
+            # honors the flat "reasoning_effort" string (verified live —
+            # the nested form alone left gemma-4-e2b-it reasoning on every
+            # call, burning its whole max_tokens budget before any content).
+            # Harmless to send both; an unrecognized field is just ignored.
             "reasoning": {"effort": "none"},
+            "reasoning_effort": "none",
         }
         start = time.monotonic()
         async with _llm_semaphore:
@@ -130,6 +137,7 @@ class ServerBackend:
             "max_tokens": max_tokens,
             "temperature": temperature,
             "reasoning": {"effort": "none"},
+            "reasoning_effort": "none",
             "stream": True,
             "stream_options": {"include_usage": True},
         }

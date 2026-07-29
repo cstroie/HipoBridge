@@ -3896,10 +3896,16 @@ document.addEventListener('DOMContentLoaded', function() {
         if (indication) parts.push(`**Indication:** ${indication}`);
         const when = data.started ? formatDateWithTime(data.started) : '';
         if (when && when !== 'Unknown') parts.push(`**Date/time:** ${when}`);
-        const examType = data.modality?.[0]?.display
+        // Prefer the card's own known type/region — set from the ServiceRequest
+        // and reliably correct — over data.modality, which for a DiagnosticReport
+        // often comes back as a generic "Other" even for a plain CT/MRI/etc.
+        const examType = article.querySelector('.type-text')?.textContent
             || MODALITY_INFO[type]?.label
-            || article.querySelector('.type-text')?.textContent;
-        if (examType) parts.push(`**Examination:** ${examType}`);
+            || data.modality?.[0]?.display;
+        const region = article.querySelector('.card-regions')?.textContent
+            ?.replace(/^\s*·\s*/, '').trim();
+        const exam = [examType, region].filter(Boolean).join(' · ');
+        if (exam) parts.push(`**Examination:** ${exam}`);
         if (!parts.length) return '';
         return parts.join('  \n') + '\n\n---\n\n';
     }
