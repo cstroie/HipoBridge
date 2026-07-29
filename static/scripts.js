@@ -3717,7 +3717,21 @@ document.addEventListener('DOMContentLoaded', function() {
             return [name, interval, ...cells].join(' | ');
         });
         labHasAbnormal = abnormalAnalytes.length > 0;
-        labAiText = labHasAbnormal ? [header, ...rows].join('\n') : '';
+        // Short context header — same reasoning as buildImagingCardHeader:
+        // grounds lab.md's interpretation with who the analytes belong to.
+        const patientData = pendingAnalysesData?.patientData;
+        const headerParts = [];
+        if (patientData) {
+            const name = formatPatientName(patientData.name);
+            const gender = formatGender(patientData.gender);
+            const age = calculateAge(patientData.birthDate);
+            const demo = [name, gender, age].filter(v => v && v !== 'N/A').join(', ');
+            if (demo) headerParts.push(`**Patient:** ${demo}`);
+        }
+        const diagnosis = elements.patientDiagnosis?.textContent?.trim();
+        if (diagnosis) headerParts.push(`**Diagnosis:** ${diagnosis}`);
+        const labHeader = headerParts.length ? headerParts.join('  \n') + '\n\n---\n\n' : '';
+        labAiText = labHasAbnormal ? labHeader + [header, ...rows].join('\n') : '';
         if (elements.copyLabBtn) {
             elements.copyLabBtn.hidden = !labHasAbnormal;
             elements.trendsContainer.dataset.markdown = labHasAbnormal
@@ -3862,6 +3876,32 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         return article;
+    }
+
+    // Short context header prepended to an imaging card's copied/AI-analysed
+    // markdown: patient demographics, indication, exam date/time, and
+    // modality — grounds imaging.md's dominant-finding call the same way the
+    // visible card already grounds a human reader.
+    function buildImagingCardHeader(article, data, type) {
+        const parts = [];
+        const patientData = pendingAnalysesData?.patientData;
+        if (patientData) {
+            const age = calculateAge(patientData.birthDate);
+            const gender = formatGender(patientData.gender);
+            const demo = [gender, age].filter(v => v && v !== 'N/A').join(', ');
+            if (demo) parts.push(`**Patient:** ${demo}`);
+        }
+        const indication = article.querySelector('.card-indication-text')?.textContent
+            ?.replace(/^\s*·\s*/, '').trim();
+        if (indication) parts.push(`**Indication:** ${indication}`);
+        const when = data.started ? formatDateWithTime(data.started) : '';
+        if (when && when !== 'Unknown') parts.push(`**Date/time:** ${when}`);
+        const examType = data.modality?.[0]?.display
+            || MODALITY_INFO[type]?.label
+            || article.querySelector('.type-text')?.textContent;
+        if (examType) parts.push(`**Examination:** ${examType}`);
+        if (!parts.length) return '';
+        return parts.join('  \n') + '\n\n---\n\n';
     }
 
     function setCardIndication(article, text) {
@@ -4064,6 +4104,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 } else {
                     article.classList.add('no-report');
                 }
+            }
+
+            // Prepend a short context header (demographics, indication, date/time,
+            // exam type) — same markdown feeds both the copy button and imaging.md.
+            if (copyMd && !copyIsLab && imagingTypes.includes(type)) {
+                const header = buildImagingCardHeader(article, data, type);
+                if (header) copyMd = header + copyMd;
             }
 
             // Reveal the header copy button once report content is known.

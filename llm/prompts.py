@@ -26,6 +26,7 @@ schema, no validation, no echo-detection: these are free-text aids the frontend
 presents as unverified ("AI-generated — verify against source"), not validated
 results.
 """
+import collections.abc
 import logging
 import os
 import re
@@ -81,11 +82,42 @@ def _load_template(name: str) -> str:
     return text
 
 
+class _PromptRegistry(collections.abc.Mapping):
+    """kind -> (tier, task_prompt, max_tokens), transparently re-reading a
+    kind's .md file from disk when it changes (mtime) so an edit made while
+    the server is running takes effect on the next request, without a
+    restart. Templates are still loaded eagerly at construction time so a
+    missing/empty file still fails loudly at import, as before."""
+
+    def __init__(self, meta: dict[str, tuple[str, int]]):
+        self._meta = meta
+        self._cache: dict[str, tuple[float, str]] = {}  # kind -> (mtime, text)
+        for kind in meta:
+            self[kind]
+
+    def __getitem__(self, kind: str) -> tuple[str, str, int]:
+        tier, max_tokens = self._meta[kind]  # KeyError for unknown kind
+        path = os.path.join(_TEMPLATE_DIR, f"{kind}.md")
+        mtime = os.path.getmtime(path)
+        cached = self._cache.get(kind)
+        if cached is None or cached[0] != mtime:
+            if cached is not None:
+                logger.info(f"Prompt template changed on disk, reloading: {path}")
+            text = _load_template(kind)
+            self._cache[kind] = (mtime, text)
+        else:
+            text = cached[1]
+        return tier, text, max_tokens
+
+    def __iter__(self):
+        return iter(self._meta)
+
+    def __len__(self):
+        return len(self._meta)
+
+
 # kind -> (tier, task_prompt, max_tokens)
-PROMPTS = {
-    kind: (tier, _load_template(kind), max_tokens)
-    for kind, (tier, max_tokens) in PROMPT_META.items()
-}
+PROMPTS = _PromptRegistry(PROMPT_META)
 
 
 # Kinds that aggregate or narrate events across time, where knowing "today"
