@@ -27,6 +27,8 @@ service_url = http://192.168.3.230/hipocrate
 
 CLI: `--port`, `--host`, `--service-url`, `--log-level DEBUG|INFO|WARNING|ERROR`, `--log-file PATH`, `--no-disk-cache`, `--no-worklist`, `--pidfile PATH`.
 
+`--log-level`/`LOG_LEVEL` only sets the console handler's level (default INFO). A configured log file (`--log-file` or `[logging] file` in `local.cfg`) always logs at `DEBUG` regardless — the root logger itself is always `DEBUG` internally so file logging never misses anything even when the console is quieter.
+
 ## Restarting the server
 
 `--pidfile PATH` writes the PID on startup and removes it on clean shutdown; `SIGTERM`/`SIGINT` both resolve an asyncio event so `runner.cleanup()` runs (no abrupt kill). `./restart.sh` stops the process tracked by `hippobridge.pid`, waits up to `STOP_TIMEOUT` (default 15s, then SIGKILLs), and relaunches — extra args pass through to `hippobridge.py`. This exists so *the user* can restart quickly; it does not change the "never restart the server yourself" rule above.

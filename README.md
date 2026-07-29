@@ -40,13 +40,14 @@ service_url = http://192.168.3.230/hipocrate
 ```bash
 python3 hippobridge.py --port 8080 --host 127.0.0.1
 python3 hippobridge.py --service-url http://192.168.3.230/hipocrate
-python3 hippobridge.py --log-level DEBUG    # DEBUG | INFO | WARNING | ERROR
+python3 hippobridge.py --log-level DEBUG    # DEBUG | INFO | WARNING | ERROR — console only
+python3 hippobridge.py --log-file hippobridge.log  # also log to file, always at DEBUG regardless of --log-level
 python3 hippobridge.py --no-disk-cache      # disable FilesystemCache even if configured
 python3 hippobridge.py --no-worklist        # skip DICOM MWL SCP even if worklist.cfg exists
 python3 hippobridge.py --pidfile hippobridge.pid  # write PID for restart.sh, remove on clean exit
 ```
 
-CLI switches take precedence over config files.
+CLI switches take precedence over config files. `--log-level`/`LOG_LEVEL` only controls the console; a configured log file (`--log-file` or `[logging] file` in `local.cfg`) always captures everything at `DEBUG`, so the console can stay quiet while the file keeps full detail.
 
 ### Restarting / running as a service
 
