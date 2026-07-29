@@ -4980,6 +4980,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (indicationNote?.text) {
                     modal.querySelector('.modal-indication-text').textContent = indicationNote.text;
                     modal.querySelector('.report-modal-indication').hidden = false;
+                } else if (isImaging) {
+                    // ImagingStudy's own note (BuletinAnalize.asp's INFO SUPLIMENTAR) is
+                    // often empty even when a clinical indication was recorded on the
+                    // request itself (Justificare / Situatie clinica on
+                    // BuletinSolicitare.asp) — same fallback as the Imaging tab card.
+                    try {
+                        const srResp = await apiFetch(`/fhir/ServiceRequest/${requestId}`);
+                        if (srResp.ok) {
+                            const srData = await srResp.json();
+                            const srIndication = (srData.note || [])
+                                .find(n => n.category?.[0]?.text === 'clinical-indication')?.text || '';
+                            if (_isMeaningfulText(srIndication)) {
+                                modal.querySelector('.modal-indication-text').textContent = srIndication;
+                                modal.querySelector('.report-modal-indication').hidden = false;
+                            }
+                        }
+                    } catch (_) { /* best-effort */ }
                 }
 
                 // Examiner (reporting physician) appended below content — only
