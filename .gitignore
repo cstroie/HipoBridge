@@ -1,6 +1,7 @@
 .aider*
 local.cfg
 worklist.cfg
+*.log
 samples/*
 __pycache__
 _testing_

@@ -1257,6 +1257,363 @@
           }
         }
       }
+    },
+    "/api/patient": {
+      "get": {
+        "summary": "Search for patients (raw JSON)",
+        "description": "Same as /fhir/Patient but returns raw HippoData JSON.",
+        "parameters": [
+          {"name": "q", "in": "query", "required": true, "description": "Search term (patient name, CNP, patient code, or partial CNP ending with *)", "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "200": {"description": "Raw patient or patient-list data"},
+          "400": {"description": "Missing search term"},
+          "401": {"description": "Authentication required"}
+        }
+      }
+    },
+    "/api/patient/{id}": {
+      "get": {
+        "summary": "Get patient (raw JSON)",
+        "description": "Same as /fhir/Patient/{id} but returns raw HippoData JSON.",
+        "parameters": [
+          {"name": "id", "in": "path", "required": true, "description": "Patient ID, 13-digit CNP, or partial CNP with asterisk (*)", "schema": {"type": "string"}},
+          {"name": "refresh", "in": "query", "required": false, "description": "Set to 1 to force a live reload of demographic, imaging/lab list, and Observation data", "schema": {"type": "integer"}},
+          {"name": "debug", "in": "query", "required": false, "description": "Pass 'page' to get raw Hipocrate HTML", "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "200": {"description": "Raw patient data"},
+          "400": {"description": "Missing patient ID"},
+          "401": {"description": "Authentication required"}
+        }
+      }
+    },
+    "/api/request": {
+      "get": {
+        "summary": "Search service requests (raw JSON)",
+        "description": "Same as /fhir/ServiceRequest but returns raw HippoData JSON.",
+        "parameters": [
+          {"name": "patient", "in": "query", "required": true, "description": "Patient ID, 13-digit CNP, or partial CNP with asterisk (*)", "schema": {"type": "string"}},
+          {"name": "type", "in": "query", "required": false, "description": "Analysis type to filter by (e.g., radio, ct, irm, eco, lab, lac, lii, rads, apa)", "schema": {"type": "string"}},
+          {"name": "region", "in": "query", "required": false, "description": "Anatomical region to filter by", "schema": {"type": "string"}},
+          {"name": "dt", "in": "query", "required": false, "description": "Target date/time in ISO format, used for closest-match filtering", "schema": {"type": "string", "format": "date-time"}},
+          {"name": "refresh", "in": "query", "required": false, "description": "Set to 1 to force a live reload of the patient's imaging/lab lists", "schema": {"type": "integer"}}
+        ],
+        "responses": {
+          "200": {"description": "Raw list of service requests"},
+          "400": {"description": "Missing patient ID"},
+          "401": {"description": "Authentication required"}
+        }
+      }
+    },
+    "/api/request/{id}": {
+      "get": {
+        "summary": "Get a single service request (raw JSON)",
+        "description": "Same as /fhir/ServiceRequest/{id} but returns raw HippoData JSON. Backed by BuletinSolicitare.asp (the request/order form) — region, indication, and the ordering physician.",
+        "parameters": [
+          {"name": "id", "in": "path", "required": true, "description": "ServiceRequest ID", "schema": {"type": "string"}},
+          {"name": "debug", "in": "query", "required": false, "description": "Pass 'page' to get raw Hipocrate HTML", "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "200": {"description": "Raw service request data"},
+          "400": {"description": "Missing service request ID"},
+          "401": {"description": "Authentication required"}
+        }
+      }
+    },
+    "/api/study/{id}": {
+      "get": {
+        "summary": "Get imaging study (raw JSON)",
+        "description": "Same as /fhir/ImagingStudy/{id} but returns raw HippoData JSON.",
+        "parameters": [
+          {"name": "id", "in": "path", "required": true, "description": "Study ID", "schema": {"type": "string"}},
+          {"name": "debug", "in": "query", "required": false, "description": "Pass 'page' to get raw Hipocrate HTML", "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "200": {"description": "Raw imaging study data"},
+          "400": {"description": "Missing study ID"},
+          "401": {"description": "Authentication required"}
+        }
+      }
+    },
+    "/api/report/{id}": {
+      "get": {
+        "summary": "Get diagnostic report (raw JSON)",
+        "description": "Same as /fhir/DiagnosticReport/{id} but returns raw HippoData JSON.",
+        "parameters": [
+          {"name": "id", "in": "path", "required": true, "description": "Report ID", "schema": {"type": "string"}},
+          {"name": "debug", "in": "query", "required": false, "description": "Pass 'page' to get raw Hipocrate HTML", "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "200": {"description": "Raw diagnostic report data"},
+          "400": {"description": "Missing report ID"},
+          "401": {"description": "Authentication required"}
+        }
+      }
+    },
+    "/api/checkout/{id}": {
+      "get": {
+        "summary": "Get discharge summary (raw JSON)",
+        "description": "Same as /fhir/Encounter/{id} but scoped to checkout.asp only, returns raw HippoData JSON.",
+        "parameters": [
+          {"name": "id", "in": "path", "required": true, "description": "Checkout ID", "schema": {"type": "string"}},
+          {"name": "debug", "in": "query", "required": false, "description": "Pass 'page' to get raw Hipocrate HTML", "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "200": {"description": "Raw discharge summary data"},
+          "400": {"description": "Missing checkout ID"},
+          "401": {"description": "Authentication required"}
+        }
+      }
+    },
+    "/api/presentation/{id}": {
+      "get": {
+        "summary": "Get outpatient/ER presentation (raw JSON)",
+        "description": "Scrapes the outpatient/ER presentation record and returns raw HippoData JSON. No dedicated FHIR route; folded into /fhir/Encounter/{id}?type=presentation.",
+        "parameters": [
+          {"name": "id", "in": "path", "required": true, "description": "Presentation ID", "schema": {"type": "string"}},
+          {"name": "debug", "in": "query", "required": false, "description": "Pass 'page' to get raw Hipocrate HTML", "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "200": {"description": "Raw presentation data"},
+          "400": {"description": "Missing presentation ID"},
+          "401": {"description": "Authentication required"}
+        }
+      }
+    },
+    "/api/specimen/{id}": {
+      "get": {
+        "summary": "Get lab/imaging handoff paperwork (raw JSON)",
+        "description": "Same as /fhir/Specimen/{id} but returns raw HippoData JSON. Backed by buletinRecoltari.asp.",
+        "parameters": [
+          {"name": "id", "in": "path", "required": true, "description": "Request ID", "schema": {"type": "string"}},
+          {"name": "debug", "in": "query", "required": false, "description": "Pass 'page' to get raw Hipocrate HTML", "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "200": {"description": "Raw specimen (buletinRecoltari) data"},
+          "400": {"description": "Missing request ID"},
+          "401": {"description": "Authentication required"}
+        }
+      }
+    },
+    "/api/cnp": {
+      "get": {
+        "summary": "Validate CNP (raw JSON)",
+        "description": "Same as /fhir/ValueSet/cnp — validate a Romanian Personal Numerical Code (CNP) and return detailed information.",
+        "parameters": [
+          {"name": "id", "in": "query", "required": true, "description": "CNP to validate", "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "200": {"description": "CNP validation result with detailed information"},
+          "400": {"description": "Missing CNP"},
+          "401": {"description": "Authentication required"}
+        }
+      }
+    },
+    "/fhir/Specimen/{id}": {
+      "get": {
+        "summary": "Get lab/imaging handoff paperwork",
+        "description": "Retrieve the lab/imaging handoff paperwork by ID as FHIR Specimen resource. Backed by buletinRecoltari.asp — a stretch of the Specimen resource (imaging orders have no physical specimen), kept for fields (comment, registration) not available elsewhere.",
+        "parameters": [
+          {"name": "id", "in": "path", "required": true, "description": "Request ID", "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "200": {"description": "Specimen as FHIR Specimen resource"},
+          "400": {"description": "Missing request ID"},
+          "401": {"description": "Authentication required"}
+        }
+      }
+    },
+    "/fhir/Task/{id}": {
+      "get": {
+        "summary": "Get request workflow state",
+        "description": "Retrieve the request's workflow state by ID as FHIR Task resource. Backed by cerere.asp — status, execution period, itemized exams, and report output. Task.focus references the corresponding ServiceRequest (BuletinSolicitare.asp).",
+        "parameters": [
+          {"name": "id", "in": "path", "required": true, "description": "Request ID", "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "200": {"description": "Task as FHIR Task resource"},
+          "400": {"description": "Missing request ID"},
+          "401": {"description": "Authentication required"}
+        }
+      }
+    },
+    "/fhir/Observation": {
+      "get": {
+        "summary": "Get lab observations",
+        "description": "FHIR Bundle of Observations aggregated from all lab DiagnosticReports for a patient.",
+        "parameters": [
+          {"name": "patient", "in": "query", "required": true, "description": "Patient ID, 13-digit CNP, or partial CNP with asterisk (*)", "schema": {"type": "string"}},
+          {"name": "start_date", "in": "query", "required": false, "schema": {"type": "string", "format": "date"}},
+          {"name": "end_date", "in": "query", "required": false, "schema": {"type": "string", "format": "date"}},
+          {"name": "refresh", "in": "query", "required": false, "description": "Set to 1 to force a live reload", "schema": {"type": "integer"}}
+        ],
+        "responses": {
+          "200": {"description": "Bundle of Observation resources", "content": {"application/fhir+json": {"schema": {"type": "object", "properties": {"resourceType": {"type": "string", "example": "Bundle"}}}}}},
+          "400": {"description": "Missing patient parameter"},
+          "401": {"description": "Authentication required"}
+        }
+      }
+    },
+    "/api/observation": {
+      "get": {
+        "summary": "Get lab observations (raw JSON)",
+        "description": "Same as /fhir/Observation but returns raw HippoData JSON.",
+        "parameters": [
+          {"name": "patient", "in": "query", "required": true, "schema": {"type": "string"}},
+          {"name": "start_date", "in": "query", "required": false, "schema": {"type": "string", "format": "date"}},
+          {"name": "end_date", "in": "query", "required": false, "schema": {"type": "string", "format": "date"}},
+          {"name": "refresh", "in": "query", "required": false, "schema": {"type": "integer"}}
+        ],
+        "responses": {
+          "200": {"description": "Raw observation data"},
+          "400": {"description": "Missing patient parameter"},
+          "401": {"description": "Authentication required"}
+        }
+      }
+    },
+    "/api/request/{id}/report": {
+      "post": {
+        "summary": "Write a radiology report",
+        "description": "Write a radiology report text for a request (cerere) via Hipocrate Rezultate.asp. Restricted to users in [radiology] allowed_radiologists.",
+        "parameters": [
+          {"name": "id", "in": "path", "required": true, "description": "Request (cerere) ID", "schema": {"type": "string"}}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"type": "object", "properties": {"anl_id": {"type": "string"}, "text": {"type": "string"}}, "required": ["anl_id", "text"]}}}
+        },
+        "responses": {
+          "200": {"description": "Write result"},
+          "400": {"description": "Invalid JSON body, or anl_id/text missing"},
+          "401": {"description": "Authentication required"},
+          "403": {"description": "Not authorised to write reports"}
+        }
+      }
+    },
+    "/api/request/{id}/validate": {
+      "post": {
+        "summary": "Validate or devalidate a report",
+        "description": "Validate or devalidate a radiology report result. Restricted to users in [radiology] allowed_radiologists.",
+        "parameters": [
+          {"name": "id", "in": "path", "required": true, "description": "Request (cerere) ID", "schema": {"type": "string"}}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"type": "object", "properties": {"anl_id": {"type": "string"}, "id_grup": {"type": "string"}, "validated": {"type": "boolean"}}, "required": ["anl_id"]}}}
+        },
+        "responses": {
+          "200": {"description": "Validation result"},
+          "400": {"description": "Invalid JSON body, or anl_id missing"},
+          "401": {"description": "Authentication required"},
+          "403": {"description": "Not authorised to validate reports"}
+        }
+      }
+    },
+    "/api/request/{id}/perform": {
+      "post": {
+        "summary": "Mark an exam as performed",
+        "description": "Mark a radiology exam as performed by setting DataEfectuarii on cerere.asp. Restricted to users in [radiology] allowed_radiologists.",
+        "parameters": [
+          {"name": "id", "in": "path", "required": true, "description": "Request (cerere) ID", "schema": {"type": "string"}}
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {"application/json": {"schema": {"type": "object", "properties": {"performed_at": {"type": "string", "description": "ISO timestamp; defaults to now if omitted"}}}}}
+        },
+        "responses": {
+          "200": {"description": "Perform result"},
+          "401": {"description": "Authentication required"},
+          "403": {"description": "Not authorised to perform exams"}
+        }
+      }
+    },
+    "/api/request/{id}/cancel": {
+      "post": {
+        "summary": "Cancel a request",
+        "description": "Cancel a request by replaying cerere.asp with hdnAction=A (the Anulează button). Restricted to users in [radiology] allowed_radiologists.",
+        "parameters": [
+          {"name": "id", "in": "path", "required": true, "description": "Request (cerere) ID", "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "200": {"description": "Cancel result"},
+          "401": {"description": "Authentication required"},
+          "403": {"description": "Not authorised to cancel requests"}
+        }
+      }
+    },
+    "/api/whoami": {
+      "get": {
+        "summary": "Get logged-in Hipocrate user identity",
+        "description": "Returns the authenticated user's Hipocrate identity, the configured Hipocrate base URL, and whether the user can write radiology reports.",
+        "responses": {
+          "200": {"description": "User identity as raw HippoData JSON, includes hipocrate_url and can_write_reports"},
+          "401": {"description": "Authentication required"}
+        }
+      }
+    },
+    "/api/logout": {
+      "post": {
+        "summary": "Log out",
+        "description": "Close the authenticated user's Hipocrate session held by the bridge.",
+        "responses": {
+          "200": {"description": "Logout result"},
+          "401": {"description": "Authentication required"}
+        }
+      }
+    },
+    "/api/cache/stats": {
+      "get": {
+        "summary": "Filesystem cache statistics",
+        "description": "Returns entry count, total size, and age range of the on-disk HTTP cache. {\"enabled\": false} when no cache.dir is configured.",
+        "responses": {
+          "200": {"description": "Cache statistics"},
+          "401": {"description": "Authentication required"}
+        }
+      }
+    },
+    "/api/cache/cleanup": {
+      "post": {
+        "summary": "Trigger a filesystem cache cleanup",
+        "description": "Deletes expired/oversized entries from the on-disk HTTP cache and returns counts. No-op ({\"enabled\": false}) when no cache.dir is configured.",
+        "responses": {
+          "200": {"description": "Cleanup result (deleted count, freed bytes)"},
+          "401": {"description": "Authentication required"}
+        }
+      }
+    },
+    "/api/ai/summarize": {
+      "post": {
+        "summary": "Generate an AI summary",
+        "description": "Generate a free-text AI summary for one item, in-process against the configured LLM provider (llm.cfg). Results are cached (in-memory + disk) keyed by (kind, sha256(text)). These are deliberately weak-guarantee aids: no schema, no validation.",
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"type": "object", "properties": {"kind": {"type": "string", "enum": ["report", "epicrisis", "imaging", "lab", "pre_exam"]}, "text": {"type": "string"}, "force": {"type": "boolean", "description": "Bypass the cache and regenerate"}, "check_only": {"type": "boolean", "description": "Skip generation, just report whether a cached summary exists"}}, "required": ["kind", "text"]}}}
+        },
+        "responses": {
+          "200": {"description": "Summary result, or {\"status\": \"not_cached\"} for check_only"},
+          "400": {"description": "Invalid JSON, unknown kind, empty text, or not enough clinical content to summarize"},
+          "401": {"description": "Authentication required"},
+          "503": {"description": "AI summaries not configured, or the AI service is unreachable"},
+          "504": {"description": "AI summary timed out"}
+        }
+      }
+    },
+    "/api/ai/summarize/stream": {
+      "post": {
+        "summary": "Generate an AI summary (streaming)",
+        "description": "Streaming counterpart to /api/ai/summarize, for kind in {report, epicrisis, pre_exam, lab}. On a cache hit the full cached text is written as a single chunk. Mid-stream failures can't change the HTTP status (client already committed to 200) — signalled instead with a sentinel: ASCII Unit Separator + \"ERROR\" + Unit Separator + message.",
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"type": "object", "properties": {"kind": {"type": "string", "enum": ["report", "epicrisis", "pre_exam", "lab"]}, "text": {"type": "string"}, "force": {"type": "boolean"}}, "required": ["kind", "text"]}}}
+        },
+        "responses": {
+          "200": {"description": "text/plain streamed summary chunks (or a mid-stream error sentinel)"},
+          "400": {"description": "Invalid JSON, unsupported kind, empty text, or not enough clinical content to summarize"},
+          "401": {"description": "Authentication required"},
+          "503": {"description": "AI summaries not configured"}
+        }
+      }
     }
   }
 }
