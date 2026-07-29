@@ -48,8 +48,8 @@ from llm.prompts import PROMPTS, _build_messages, _date_directive, _language_dir
 KIND_FILES = {
     "imaging":  ("/tmp/imaging_report.txt", "/tmp/reference_imaging.txt"),
     "lab":      ("/tmp/lab_panel_abn.txt", "/tmp/reference_lab.txt"),
-    "report":   ("/tmp/biliary-atresia-case_report_trim.txt", "/tmp/reference_report.txt"),
-    "pre_exam": ("/tmp/biliary-atresia-case_report_trim.txt", "/tmp/reference_pre_exam.txt"),
+    "report":   ("/tmp/biliary_atresia_case_trim.txt", "/tmp/reference_report.txt"),
+    "pre_exam": ("/tmp/biliary_atresia_case_trim.txt", "/tmp/reference_pre_exam.txt"),
 }
 
 # Substrings of transient failures caused by another project evicting the

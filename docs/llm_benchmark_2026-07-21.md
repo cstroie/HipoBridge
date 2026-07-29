@@ -6,7 +6,7 @@ prompt, assembled by `_build_messages()`), since prompts have changed
 materially since the original `docs/llm_benchmark_2026-07-19.md` survey. Also
 adds a new candidate, `medgemma-1.5-4b-it` (Q4_K_M, ~4.16 GB incl. mmproj).
 
-Same real input/reference set as the main survey (BILIARY-ATRESIA-CASE discharge
+Same real input/reference set as the main survey (biliary-atresia case discharge
 excerpt, real abnormal-labs panel, a real chest X-ray report) — see
 `docs/llm_benchmark_2026-07-19.md` for full provenance.
 
@@ -497,7 +497,7 @@ qwen3-4b for `pre_exam`; prefer gemma-3n-e4b/ministral-3-3b there).
 # pre_exam generality test: new unrelated case (aspiration pneumonia + GERD infant) (2026-07-22)
 
 ## Why
-All `pre_exam` tuning so far used one real case (BILIARY-ATRESIA-CASE, biliary atresia).
+All `pre_exam` tuning so far used one real case (the biliary-atresia case).
 The user supplied a second, unrelated real case
 (`_testing_/22/_report.md` — a 4-month-old with recurrent aspiration
 pneumonia and GERD) specifically to check whether `pre_exam.md` generalizes
@@ -549,8 +549,8 @@ instruction-quality fix, never case-specific wording.
 3. **medgemma's Romanian leak reproduces on unrelated content**, confirming
    it's a general model weakness on this kind, not something specific to
    the biliary-atresia case's phrasing or length.
-4. **BILIARY-ATRESIA-CASE regression check could not be run this session** — the
-   original test fixtures (`/tmp/biliary-atresia-case_report_trim.txt`,
+4. **Biliary-atresia regression check could not be run this session** — the
+   original test fixtures (`/tmp/biliary_atresia_case_trim.txt`,
    `/tmp/reference_pre_exam.txt`, etc.) no longer exist; `/tmp` was cleared
    between sessions since they were only ever ephemeral scratch files, never
    committed anywhere durable. The generality argument for the new clause
@@ -576,7 +576,7 @@ than reacting to single-model quirks seen on only two examples.
 
 ## Overview
 
-Fetched 10 consecutive real patient epicrisis discharge summaries from the live HippoBridge API (patient IDs REDACTED-PID–REDACTED-PID) to stress-test `pre_exam.md` against diverse real-world cases beyond the original BILIARY-ATRESIA-CASE (biliary atresia) case used for tuning.
+Fetched 10 consecutive real patient epicrisis discharge summaries from the live HippoBridge API to stress-test `pre_exam.md` against diverse real-world cases beyond the original biliary-atresia case used for tuning.
 
 **Cases analyzed**:
 - Allergic asthma with drug allergy; hydronephrosis follow-up; GERD with infantile hemangiomas; rectal polyp with IBD features; unspecified bacterial infection (URΤ/sinusitis); post-cholecystectomy follow-up; tricuspid valve insufficiency; acute leukemia with fistula; chronic HBV with reactive hepatitis; bilateral renal stone disease.

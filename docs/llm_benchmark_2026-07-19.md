@@ -177,7 +177,7 @@ python3 benchmark_llm.py --text-file /tmp/report.txt --kind epicrisis \
 # Round 2 — all prompts optimized + per-task model choice (2026-07-20)
 
 Extended the study to every AI kind (imaging, lab, report, pre_exam — epicrisis
-already done), each with a real BILIARY-ATRESIA-CASE input, a hand-written reference, and a
+already done), each with a real biliary-atresia case input, a hand-written reference, and a
 baseline-vs-v2 A/B on a model subset followed by a full-field ranking. All four
 v2 prompts were promoted into `llm/prompts.py`.
 
