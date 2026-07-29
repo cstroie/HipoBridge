@@ -32,6 +32,7 @@ import sys
 import time
 
 import aiohttp
+from urllib.parse import quote
 
 from llm.config import init_llm, select_provider
 from llm.prompts import PROMPTS, _build_messages, _date_directive, _language_directive, DATE_AWARE_KINDS
@@ -84,7 +85,7 @@ async def fetch_report_text(server: str, endpoint: str, report_id: str,
                             user: str, password: str) -> str:
     """Fetch a real report from the running HippoBridge server and flatten it
     to a single text blob for the LLM user message."""
-    path = endpoint.replace("{id}", str(report_id))
+    path = endpoint.replace("{id}", quote(str(report_id), safe=""))
     url = f"{server.rstrip('/')}{path}"
     token = base64.b64encode(f"{user}:{password}".encode()).decode()
     headers = {"Authorization": f"Basic {token}"}
@@ -121,6 +122,13 @@ async def stream_chat(session: aiohttp.ClientSession, base_url: str, key: str,
         "messages": messages,
         "max_tokens": max_tokens,
         "temperature": 0.2,
+        # Match llm/backend.py's ServerBackend exactly, or these numbers
+        # stop representing production: servers disagree on which shape
+        # they honor (verified live — the nested form alone left
+        # gemma-4-e2b-it reasoning through its whole max_tokens budget on
+        # every call; only the flat "reasoning_effort" suppressed it).
+        "reasoning": {"effort": "none"},
+        "reasoning_effort": "none",
         "stream": True,
         "stream_options": {"include_usage": True},
     }
