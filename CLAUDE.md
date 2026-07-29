@@ -6,7 +6,7 @@ Be concise. Never waste tokens — no restating the task, no narrating obvious s
 
 ## Server restarts
 
-**Never restart the server yourself.** Tell the user when a restart is needed and wait for them to do it.
+You may restart the server yourself, at your own judgment, using `./restart.sh` (see "Restarting the server" below) — do not `kill`/`pkill` the process directly or restart it any other way. Mention that you're doing it and why.
 
 ## Running the server
 
