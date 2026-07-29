@@ -18,8 +18,13 @@ pip install -r requirements.txt
 ## Running the server
 
 ```bash
-export HYP_USER=<username> HYP_PASS=<password>
 python3 hippobridge.py
+```
+
+The server itself takes no fixed credentials — `@require_auth` reads Basic Auth off each incoming request and forwards it to Hipocrate per-request. `HYP_USER`/`HYP_PASS` are only needed by client/test scripts (`runtests.py`, `client.py`, `tests/*.py`) and as a fallback for the worklist SCP if `worklist.cfg`'s `[worklist] username`/`password` aren't set:
+
+```bash
+export HYP_USER=<username> HYP_PASS=<password>
 ```
 
 Server listens on `http://0.0.0.0:44660` by default. Override with `local.cfg` (not tracked by git) or CLI switches:
@@ -38,9 +43,16 @@ python3 hippobridge.py --service-url http://192.168.3.230/hipocrate
 python3 hippobridge.py --log-level DEBUG    # DEBUG | INFO | WARNING | ERROR
 python3 hippobridge.py --no-disk-cache      # disable FilesystemCache even if configured
 python3 hippobridge.py --no-worklist        # skip DICOM MWL SCP even if worklist.cfg exists
+python3 hippobridge.py --pidfile hippobridge.pid  # write PID for restart.sh, remove on clean exit
 ```
 
 CLI switches take precedence over config files.
+
+### Restarting / running as a service
+
+`SIGTERM`/`SIGINT` trigger a graceful shutdown (`runner.cleanup()` runs, in-flight requests finish) — no abrupt kill. `./restart.sh` stops the process tracked by `hippobridge.pid` (SIGTERM, falling back to SIGKILL after `STOP_TIMEOUT`, default 15s) and relaunches it; extra args pass straight through to `hippobridge.py`.
+
+For a background/boot-time deployment, `hippobridge.service` is a systemd unit template (`Type=simple`, `Restart=on-failure`) — copy it to `/etc/systemd/system/`, adjust `User=`/paths. There is no custom fork-based daemon mode: forking after the asyncio event loop starts is fragile, and systemd already covers backgrounding, restart-on-crash, and log capture.
 
 ## Web interface
 
