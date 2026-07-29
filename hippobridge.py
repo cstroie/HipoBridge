@@ -34,6 +34,7 @@ import functools
 from datetime import datetime, timezone
 import configparser
 import base64
+import signal
 from hashlib import sha256
 
 from fhir import OperationOutcome, Resource
@@ -1303,6 +1304,11 @@ if __name__ == "__main__":
         '--no-worklist', action='store_true',
         help='Disable DICOM worklist SCP even if worklist.cfg is present'
     )
+    parser.add_argument(
+        '--pidfile', metavar='PATH',
+        help='Write the process PID to this file on startup and remove it on '
+             'clean shutdown; enables restart.sh to find and signal this process'
+    )
     args = parser.parse_args()
 
     if args.log_level:
@@ -1323,12 +1329,33 @@ if __name__ == "__main__":
         await runner.setup()
         site = web.TCPSite(runner, _HOST, _PORT)
         await site.start()
+
+        # SIGTERM (sent by restart.sh) and SIGINT (Ctrl-C) both resolve this
+        # event instead of tearing the process down immediately, so
+        # runner.cleanup() always runs and in-flight requests get a chance
+        # to finish — a bare KeyboardInterrupt/default SIGTERM would skip
+        # straight past the try/finally below.
+        stop_event = asyncio.Event()
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(sig, stop_event.set)
         try:
-            await asyncio.Event().wait()
+            await stop_event.wait()
+            logger.info("Shutdown signal received, stopping HippoBridge server")
         finally:
             await runner.cleanup()
+
+    if args.pidfile:
+        with open(args.pidfile, "w") as f:
+            f.write(str(os.getpid()))
 
     try:
         asyncio.run(_main())
     except KeyboardInterrupt:
         pass
+    finally:
+        if args.pidfile:
+            try:
+                os.remove(args.pidfile)
+            except FileNotFoundError:
+                pass

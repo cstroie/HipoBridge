@@ -2,6 +2,9 @@
 local.cfg
 worklist.cfg
 *.log
+*.pid
+*.out
+hippobridge.env
 samples/*
 __pycache__
 _testing_

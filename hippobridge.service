@@ -1,0 +1,22 @@
+[Unit]
+Description=HippoBridge scraping proxy server
+After=network.target
+
+[Service]
+Type=simple
+User=costin
+WorkingDirectory=/home/costin/work/hippobridge
+# The server itself needs no credentials (@require_auth forwards each
+# request's own Basic Auth to Hipocrate). Only uncomment EnvironmentFile if
+# you want the worklist SCP's HYP_USER/HYP_PASS fallback instead of setting
+# [worklist] username/password directly in worklist.cfg. If you do use it,
+# put credentials in that file (chmod 600, NOT in git) — never inline here.
+#EnvironmentFile=/home/costin/work/hippobridge/hippobridge.env
+ExecStart=/usr/bin/python3 /home/costin/work/hippobridge/hippobridge.py --pidfile /home/costin/work/hippobridge/hippobridge.pid
+# SIGTERM triggers hippobridge.py's own graceful-shutdown handler
+# (runner.cleanup()) — no need for KillSignal/TimeoutStopSec overrides.
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

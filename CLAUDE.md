@@ -11,11 +11,10 @@ Be concise. Never waste tokens — no restating the task, no narrating obvious s
 ## Running the server
 
 ```bash
-export HYP_USER=<username> HYP_PASS=<password>
 python3 hippobridge.py
 ```
 
-Test credentials are in `worklist.cfg` (`username` / `password` fields under `[worklist]`). Server runs on `http://127.0.0.1:44660`.
+The server itself takes no fixed credentials — `@require_auth` reads Basic Auth from each incoming request and forwards it to Hipocrate per-request. `HYP_USER`/`HYP_PASS` are only needed by client/test scripts (`runtests.py`, `client.py`, `tests/*.py`) calling the server, and as a fallback for the worklist SCP if `worklist.cfg`'s `[worklist] username`/`password` aren't set. Test credentials are in `worklist.cfg`. Server runs on `http://127.0.0.1:44660`.
 
 Default: `http://0.0.0.0:44660`. Override with `local.cfg` (not tracked by git):
 
@@ -26,7 +25,13 @@ port = 8080
 service_url = http://192.168.3.230/hipocrate
 ```
 
-CLI: `--port`, `--host`, `--service-url`, `--log-level DEBUG|INFO|WARNING|ERROR`, `--log-file PATH`, `--no-disk-cache`, `--no-worklist`.
+CLI: `--port`, `--host`, `--service-url`, `--log-level DEBUG|INFO|WARNING|ERROR`, `--log-file PATH`, `--no-disk-cache`, `--no-worklist`, `--pidfile PATH`.
+
+## Restarting the server
+
+`--pidfile PATH` writes the PID on startup and removes it on clean shutdown; `SIGTERM`/`SIGINT` both resolve an asyncio event so `runner.cleanup()` runs (no abrupt kill). `./restart.sh` stops the process tracked by `hippobridge.pid`, waits up to `STOP_TIMEOUT` (default 15s, then SIGKILLs), and relaunches — extra args pass through to `hippobridge.py`. This exists so *the user* can restart quickly; it does not change the "never restart the server yourself" rule above.
+
+For a background/boot-time service, `hippobridge.service` is a systemd unit template — copy it to `/etc/systemd/system/`, adjust `User=`/paths. `EnvironmentFile=hippobridge.env` is only needed if you want the worklist SCP's `HYP_USER`/`HYP_PASS` fallback instead of setting `[worklist] username`/`password` in `worklist.cfg` directly (create it, `chmod 600`, not tracked by git — never put credentials directly in the unit file). No custom fork-based daemon mode was added: forking after the asyncio event loop starts is fragile, and systemd's `Type=simple` + `Restart=on-failure` already covers backgrounding, restart-on-crash, and log capture without hand-rolled process-management code.
 
 ## Running tests
 
