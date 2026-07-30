@@ -46,6 +46,7 @@ The module handles the complexities of web scraping medical data including:
 import aiohttp
 from aiohttp import web
 from yarl import URL
+import hashlib
 import logging
 import re
 import time
@@ -284,57 +285,79 @@ url_cache = URLCache(max_size=500, timeout=30 * 60)
 _hipocrate_semaphore = asyncio.Semaphore(6)
 
 
+def _session_key(username: str, password: str) -> str:
+    """username + a short hash of password.
+
+    Used as the UserSessionManager/HippoClientWhoami cache key instead of
+    username alone — otherwise, once a username has ever authenticated
+    successfully, is_authenticated(username) stays True for that username
+    forever (or until a detected session expiry forces re-login), so any
+    caller who supplies that same username with *any* password (even
+    wrong) inherits the previously-verified session. Keying by
+    (username, password) means a wrong password computes a different key,
+    is_authenticated() is False for it, and a real login against Hipocrate
+    is forced — which correctly fails. Hashed (not the raw password) so
+    the plaintext password never sits as a literal dict key in memory.
+    """
+    pw_digest = hashlib.sha256((password or "").encode()).hexdigest()[:16]
+    return f"{username}:{pw_digest}"
+
+
 class UserSessionManager:
     """Manager for user-specific HTTP sessions with automatic cookie handling.
 
-    Holds one aiohttp.ClientSession per username (for cookie reuse) plus one
-    asyncio.Lock per username so that concurrent requests never trigger two
-    simultaneous logins for the same user.
+    Holds one aiohttp.ClientSession per (username, password) pair (for
+    cookie reuse) plus one asyncio.Lock per pair so that concurrent
+    requests never trigger two simultaneous logins for the same
+    credentials. Keyed by _session_key(), not username alone — see its
+    docstring for why.
     """
 
     def __init__(self):
         self.user_sessions: Dict[str, aiohttp.ClientSession] = {}
-        # Per-user lock: only one login sequence runs at a time per user
+        # Per-credential lock: only one login sequence runs at a time per (username, password)
         self._login_locks: Dict[str, asyncio.Lock] = {}
-        # Track which users have an established Hipocrate session
+        # Track which (username, password) pairs have an established Hipocrate session
         self._authenticated: Dict[str, bool] = {}
 
-    def get_user_session(self, username: str) -> aiohttp.ClientSession:
-        """Get or create a user-specific aiohttp session with cookie support."""
-        if username not in self.user_sessions or self.user_sessions[username].closed:
+    def get_user_session(self, username: str, password: str) -> aiohttp.ClientSession:
+        """Get or create a session for this (username, password) pair, with cookie support."""
+        key = _session_key(username, password)
+        if key not in self.user_sessions or self.user_sessions[key].closed:
             logger.debug(f"Creating new session for user {username}")
-            self.user_sessions[username] = aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(unsafe=True))
-            self._authenticated[username] = False
-        return self.user_sessions[username]
+            self.user_sessions[key] = aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(unsafe=True))
+            self._authenticated[key] = False
+        return self.user_sessions[key]
 
-    def get_login_lock(self, username: str) -> asyncio.Lock:
-        """Return the per-user login lock, creating it on first access."""
-        if username not in self._login_locks:
-            self._login_locks[username] = asyncio.Lock()
-        return self._login_locks[username]
+    def get_login_lock(self, username: str, password: str) -> asyncio.Lock:
+        """Return the per-(username, password) login lock, creating it on first access."""
+        key = _session_key(username, password)
+        if key not in self._login_locks:
+            self._login_locks[key] = asyncio.Lock()
+        return self._login_locks[key]
 
-    def is_authenticated(self, username: str) -> bool:
-        """Return True if this user has an active Hipocrate session."""
-        return self._authenticated.get(username, False)
+    def is_authenticated(self, username: str, password: str) -> bool:
+        """Return True if this exact (username, password) has an active Hipocrate session."""
+        return self._authenticated.get(_session_key(username, password), False)
 
-    def set_authenticated(self, username: str, value: bool) -> None:
-        self._authenticated[username] = value
+    def set_authenticated(self, username: str, password: str, value: bool) -> None:
+        self._authenticated[_session_key(username, password)] = value
 
-    async def close_user_session(self, username: str) -> None:
+    async def close_user_session(self, username: str, password: str) -> None:
         """Close one user's session and forget its authentication state."""
-        session = self.user_sessions.pop(username, None)
+        key = _session_key(username, password)
+        session = self.user_sessions.pop(key, None)
         if session and not session.closed:
             logger.info(f"Closing session for user {username}")
             await session.close()
-        self._authenticated.pop(username, None)
+        self._authenticated.pop(key, None)
         HippoClientWhoami.invalidate_cache(username)
 
     async def close_all_sessions(self):
         """Close all user sessions and free associated resources."""
         logger.info("Closing all user sessions")
-        for username, session in self.user_sessions.items():
+        for session in self.user_sessions.values():
             if session and not session.closed:
-                logger.debug(f"Closing session for user {username}")
                 await session.close()
         self._authenticated.clear()
 
@@ -407,16 +430,13 @@ class HippoClient:
         self.username = username
         self.password = password
 
-    def get_user_session(self, username: str):
-        """Get or create a user-specific session.
-
-        Args:
-            username: Username to get session for
+    def get_user_session(self):
+        """Get or create a session for this instance's (username, password).
 
         Returns:
             aiohttp.ClientSession for the user
         """
-        return user_session_manager.get_user_session(username)
+        return user_session_manager.get_user_session(self.username, self.password)
 
     async def get_authenticated_session(self, username: str, password: str):
         """Get an authenticated session for the user.
@@ -431,7 +451,7 @@ class HippoClient:
         Returns:
             Tuple of (session, success) where success is boolean
         """
-        session = self.get_user_session(username)
+        session = user_session_manager.get_user_session(username, password)
         login_success = await self.login_if_needed(session, username, password)
         return session, login_success
 
@@ -520,11 +540,11 @@ class HippoClient:
             logger.warning("Username or password not set, skipping login")
             return False
 
-        login_lock = user_session_manager.get_login_lock(username)
+        login_lock = user_session_manager.get_login_lock(username, password)
 
         async with login_lock:
             # Another coroutine may have completed login while we were waiting
-            if not force and user_session_manager.is_authenticated(username):
+            if not force and user_session_manager.is_authenticated(username, password):
                 logger.debug(f"User {username} already authenticated (lock released by peer)")
                 return True
 
@@ -538,7 +558,7 @@ class HippoClient:
                             main_text = await self.handle_response_encoding(resp)
                     if not self.is_login_page(main_text):
                         logger.info(f"User {username} already logged in")
-                        user_session_manager.set_authenticated(username, True)
+                        user_session_manager.set_authenticated(username, password, True)
                         return True
 
                 logger.info(f"Logging in user {username}")
@@ -570,16 +590,16 @@ class HippoClient:
 
                 if success:
                     logger.info(f"Login successful for user {username}")
-                    user_session_manager.set_authenticated(username, True)
+                    user_session_manager.set_authenticated(username, password, True)
                 else:
                     logger.warning(f"Login failed for user {username}")
-                    user_session_manager.set_authenticated(username, False)
+                    user_session_manager.set_authenticated(username, password, False)
 
                 return success
 
             except Exception as e:
                 logger.error(f"Login error for user {username}: {e}")
-                user_session_manager.set_authenticated(username, False)
+                user_session_manager.set_authenticated(username, password, False)
                 return False
 
     async def make_authenticated_request(self, url, method="GET", data=None, username=None, password=None):
@@ -624,6 +644,18 @@ class HippoClient:
             text = re.sub(r'[ \t]+', ' ', text)
             return text
 
+        # Verify the caller's own credentials are valid *before* touching the
+        # shared cache below — the cache has no notion of who's asking, so
+        # without this gate any caller supplying *some* Basic Auth header
+        # (never itself validated by @require_auth) could read any
+        # previously-cached page regardless of whether their own credentials
+        # are real. Cheap on the common warm path: login_if_needed() is a
+        # dict lookup, not a network call, once this exact (username,
+        # password) has been verified once.
+        if username and password:
+            if not await self.login_if_needed(self.session, username, password):
+                return None, "Authentication failed: invalid Hipocrate username or password"
+
         # For GET requests: check cache first, then deduplicate in-flight fetches
         if method == "GET":
             cached_response = self.cache_get(url)
@@ -655,7 +687,7 @@ class HippoClient:
             # Check if we got redirected to login page (session expired)
             if self.is_login_page(response_text):
                 logger.warning(f"Session expired for {username}, re-logging in")
-                user_session_manager.set_authenticated(username, False)
+                user_session_manager.set_authenticated(username, password, False)
                 login_success = await self.login_if_needed(self.session, username, password, force=True)
                 if login_success:
                     async with _hipocrate_semaphore:
@@ -780,7 +812,7 @@ class HippoClient:
         current_url = self.get_full_url(url)
 
         if not self.session:
-            self.session = self.get_user_session(self.username)
+            self.session = self.get_user_session()
 
         start_time = datetime.now()
         response_text, error_response = await self.make_authenticated_request(
@@ -803,7 +835,7 @@ class HippoClient:
         current_url = self.get_full_url(url)
 
         if not self.session:
-            self.session = self.get_user_session(self.username)
+            self.session = self.get_user_session()
 
         start_time = datetime.now()
         response_text, error_response = await self.make_authenticated_request(
@@ -4471,24 +4503,34 @@ class HippoClientWhoami(HippoClient):
 
     @classmethod
     def invalidate_cache(cls, username: str) -> None:
-        cls._cache.pop(username, None)
+        # Conservatively drops every cached entry for this username regardless
+        # of which password variant it was keyed under (see _session_key) —
+        # logout should never leave a stale identity behind for any of them.
+        for key in [k for k in cls._cache if k.startswith(f"{username}:")]:
+            cls._cache.pop(key, None)
 
     async def fetch_and_parse(self, *args, **kwargs):
-        cached = self._cache.get(self.username)
+        # Authenticate *before* consulting the cache below — this must not
+        # short-circuit on a cached entry for a caller who hasn't actually
+        # proven they know this username's password (see make_authenticated_
+        # request's identical fix for why cache-before-auth is unsafe here).
+        # menu.asp's logged-out rendering is HTTP 200 with a normal "HIPOCRATE - MENU"
+        # title (just a blank CONTUL MEU name) — it doesn't match is_login_page(), so
+        # make_authenticated_request's reactive re-login never fires here the way it
+        # does for other pages, hence the proactive login below.
+        if not self.session:
+            self.session = self.get_user_session()
+        if not await self.login_if_needed(self.session, self.username, self.password):
+            data = HippoData(status="error", message="")
+            data.set_error("Authentication failed: invalid Hipocrate username or password")
+            return data
+
+        cache_key = _session_key(self.username, self.password)
+        cached = self._cache.get(cache_key)
         if cached is not None:
             parsed_data, ts = cached
             if (time.monotonic() - ts) < self._CACHE_TTL:
                 return parsed_data
-
-        # menu.asp's logged-out rendering is HTTP 200 with a normal "HIPOCRATE - MENU"
-        # title (just a blank CONTUL MEU name) — it doesn't match is_login_page(), so
-        # make_authenticated_request's reactive re-login never fires here the way it
-        # does for other pages. If this is the first request ever made for this
-        # username, log in proactively instead of relying on that reactive check.
-        if not self.session:
-            self.session = self.get_user_session(self.username)
-        if not user_session_manager.is_authenticated(self.username):
-            await self.login_if_needed(self.session, self.username, self.password)
 
         # The menu page is the same URL for every user but its content is
         # user-specific — it must never be served from or left in the shared URL cache.
@@ -4498,7 +4540,7 @@ class HippoClientWhoami(HippoClient):
         self.cache_remove(menu_url)
 
         if parsed_data.get("status") != "error":
-            self._cache[self.username] = (parsed_data, time.monotonic())
+            self._cache[cache_key] = (parsed_data, time.monotonic())
         return parsed_data
 
     def parse_data(self, html_content: str, **kwargs) -> HippoData:
@@ -4900,7 +4942,7 @@ class HippoClientReportWrite(HippoClient):
         data = HippoData()
 
         if not self.session:
-            self.session = self.get_user_session(self.username)
+            self.session = self.get_user_session()
 
         guid = str(uuid.uuid4())
         logger.info(f"ReportWrite: cerere={cerere_id} anl={anl_id} guid={guid}")
@@ -4966,7 +5008,7 @@ class HippoClientReportValidate(HippoClient):
         data = HippoData()
 
         if not self.session:
-            self.session = self.get_user_session(self.username)
+            self.session = self.get_user_session()
 
         logger.info(f"ReportValidate: cerere={cerere_id} anl={anl_id} validated={validated} id_grup={id_grup}")
 
@@ -5054,7 +5096,7 @@ class HippoClientCererePerform(HippoClient):
         data = HippoData()
 
         if not self.session:
-            self.session = self.get_user_session(self.username)
+            self.session = self.get_user_session()
 
         cerere_path = f"/PARA/NOM/Listare/cerere.asp?id={cerere_id}"
         cerere_url = self.get_full_url(cerere_path)

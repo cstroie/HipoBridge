@@ -638,8 +638,8 @@ async def post_request_cancel(request):
 @require_auth
 async def post_logout(request):
     """Close the user's Hipocrate session held by the bridge."""
-    username, _ = request['auth_credentials']
-    await user_session_manager.close_user_session(username)
+    username, password = request['auth_credentials']
+    await user_session_manager.close_user_session(username, password)
     return web_json_response(HippoData(status="success", message=""))
 
 @require_auth
@@ -648,6 +648,11 @@ async def debug_passthrough(request):
     path = request.query.get('path', '')
     if not path:
         return web.Response(text='Missing ?path=', status=400)
+    # Must stay relative to SERVICE_URL — get_full_url() treats anything
+    # starting with "http" as an absolute URL and fetches it as-is, which
+    # would turn this debug tool into an open SSRF to any host.
+    if '://' in path:
+        return web.Response(text='path must be relative to the Hipocrate service (no scheme/host)', status=400)
     client = HippoClient(SERVICE_URL, request)
     html, err = await client.get_page(path)
     if err:
