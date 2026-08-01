@@ -16,38 +16,49 @@ at the same 2-warm-iteration settings as every other round).
 
 ## The finish line
 
-**Updated after Phase 2** (see below) — the original single-fixture verdict
-did not fully hold up. **`lmstudio-community/qwen3.5-4b`** is now the
-winner: it's the only model clean across *both* the original biliary-atresia
-case (English + Romanian, all 4 kinds, one narrow `pre_exam` caveat) *and*
-all 4 independent real fixtures pulled from `_testing_/cases_*` in Phase 2
-(orthopedics, cardiology, a no-clinical-content edge case, and a complex
-oncology case). `qwen/qwen3-4b` — the original Phase 1 winner — fabricated
-an admission narrative on Phase 2's Case C (a discharge-instructions-only
-fixture with no actual clinical content), the one case where the honest
-answer was "insufficient clinical information to summarize." That's a real
-failure the Phase 1 result didn't surface, since Phase 1 never tested a
-malformed/edge-case input. `qwen3.5-4b` is roughly comparable in speed to
-`qwen3-4b` (204s vs. 133s for a full English 4-kind battery — `qwen3-4b` is
-somewhat faster, but that's no longer the deciding factor since `qwen3.5-4b`
-is now the more broadly reliable one).
+**Updated again after Phase 2's extension** (5 more cases, 9 total, plus the
+`pre_exam` kind added on top of `report` — see below). The verdict changed
+twice over the course of this report, each time because more evidence
+surfaced a failure mode the prior round couldn't see. The final read,
+weighing **severity, not just raw fail count**:
 
-**Recommendation**: promote `lmstudio-community/qwen3.5-4b` to a staged
-rollout — non-critical kinds first, full rollout after the `pre_exam`
-garbled-date issue from Phase 1 is re-isolated and confirmed fixed or
-one-off (follow-up #2 in the detailed doc). `qwen/qwen3-4b` and
-`qwen3-4b-instruct-2507` are close seconds (each 3/4 clean on Phase 2,
-different failure modes) — worth keeping in consideration but not the lead
-pick anymore. `medgemma-4b-it` is the safer fallback of the two
-already-in-use models — see Phase 3 below, current production
-`ministral-3-3b-instruct-2512` tested for the first time this round and
-fared markedly worse than either.
+**`qwen/qwen3-4b`** is the recommendation. Across 17 independent test cells
+(9 cases × `report`, 8 of those 9 also × `pre_exam`) it had the fewest hard
+failures (2 of 17) and — critically — **zero severe or dangerous
+hallucinations**. Its failures are a language leak on one case and a
+fabricated narrative on the one case that had no real clinical content to
+summarize (and even that one self-corrected under `pre_exam`'s stricter
+format on the same case). `lmstudio-community/qwen3.5-4b`, this report's
+prior pick, looked cleanest on `report` alone (7/9) but a **specific,
+twice-independently-observed pattern** emerged under `pre_exam`: it inflates
+a routine ward readmission into an "ICU" admission when the source never
+says ICU (Cases D and H, unrelated specialties, same specific error) — a
+clinically meaningful acuity-escalation error, not just an omission.
+`qwen3-4b-instruct-2507` has the most hard failures (5/17) but none severe —
+a "death by a thousand cuts" profile (translation slips, a recurring
+"HTP"→general-hypertension terminology confusion, one serious organ
+conflation). `medgemma-4b-it` is decisively worst: 10/17 hard failures,
+including two of the most severe hallucinations found anywhere in this
+survey — a fully invented pneumonia hospitalization for a source with zero
+patient history, and an asserted epilepsy diagnosis that contradicts its
+own correctly-quoted "normal EEG" finding two lines later in the same
+output.
+
+**Recommendation**: promote `qwen/qwen3-4b` — non-critical kinds first
+(`lab`, its fastest and cleanest kind), full rollout after a third fixture
+confirms the pattern holds. `qwen3.5-4b` is a strong second choice but the
+ICU-inflation pattern needs a prompt-level fix (explicit instruction not to
+infer care-level/unit from an unstated admission) before it's trusted for
+`pre_exam`-style outputs specifically. `qwen3-4b-instruct-2507` is usable
+but the higher error frequency makes it the third choice among the three
+Qwen variants. `medgemma-4b-it` should not continue as a recommended
+fallback — see the keep/remove list below.
 
 **If speed matters more than this report's tiering implies**: within
-Tier A/B (the only tiers worth deploying), `qwen/qwen3-vl-4b` is the
-fastest option that still holds up under real fact-checking in Phase 1 —
-not yet Phase-2-tested, so treat that speed edge with the same caution
-Phase 2 just taught us to apply to Phase-1-only results.
+Tier A/B (the only tiers worth deploying), `qwen/qwen3-vl-4b` was the
+fastest option holding up under fact-checking in Phase 1 — not
+Phase-2-tested, so treat that speed edge with the same caution this report
+just demonstrated is necessary for any Phase-1-only result.
 
 ## Tier definitions
 
@@ -188,11 +199,12 @@ committed, same convention as the rest of this doc.
    Notably, it also produced the most detailed, accurate summary of Case D,
    the hardest fixture in either phase — it's inconsistent, not uniformly
    weak.
-3. **`qwen3.5-4b` is now the most-validated model across both phases** —
+3. **`qwen3.5-4b` looked like the most-validated model at this point** —
    clean on every kind of the original case and clean on all 4 independent
    fixtures, including correctly declining to summarize Case C rather than
-   inventing content. It's the only model tested twice with a perfect
-   second-round score.
+   inventing content. **This did not hold up under the Phase 2 extension**
+   (5 more cases, plus `pre_exam`) — see below, a recurring acuity-inflation
+   pattern emerged that this narrower 4-case batch was too small to catch.
 4. **`medgemma-4b-it` picked up a new, previously undocumented failure
    mode**: fact-inversion by omission-reversal (claiming a finding that the
    source explicitly negates, not just a vague/incomplete answer as seen in
@@ -208,6 +220,133 @@ committed, same convention as the rest of this doc.
    clinical content to summarize" when the source is administrative/
    instructional rather than clinical) regardless of which model is chosen,
    since even the winner of this report could hit a similar edge case.
+
+## Phase 2 extended: 5 more cases, plus `pre_exam`
+
+The original Phase 2 (4 cases, `report` only) was too small to trust a
+ranking built on a single-case margin between the top 3 contenders. Added:
+5 more real fixtures (Cases E-I, from the same `_testing_/cases_*` pool,
+chosen for specialty/size diversity — hepatology, ENT, febrile-infant
+pediatrics, cardiology/Holter, and a dense infant-respiratory case with a
+confirmed pertussis co-infection) and the `pre_exam` kind on 8 of the 9
+cases total (Case A excluded — at 345 bytes, too small to meaningfully
+stress a 1300-token synthesis prompt). Same 4 models, same settings. This
+brings the total evidence base to **17 independent test cells per model**.
+
+### Full scorecard
+
+| | `report` (9 cases) | `pre_exam` (8 cases) | Combined |
+|---|---|---|---|
+| `qwen/qwen3-4b` | 6 clean, 2 fail, 1 minor | 5 clean, 0 fail, 3 minor | **11 clean, 2 fail, 4 minor** |
+| `qwen3-4b-instruct-2507` | 5 clean, 3 fail, 1 minor | 4 clean, 2 fail, 2 minor | 9 clean, 5 fail, 3 minor |
+| `lmstudio-community/qwen3.5-4b` | 7 clean, 1 fail, 1 minor | 3 clean, 3 fail, 2 minor | 10 clean, 4 fail, 3 minor |
+| `medgemma-4b-it` | 2 clean, 5 fail, 2 minor | 2 clean, 5 fail, 1 minor | 4 clean, 10 fail, 3 minor |
+
+"Fail" = a real, verifiable error (fabrication, fact inversion, language
+leak, or a mistranslation changing clinical meaning). "Minor" = a real but
+lower-stakes issue (imprecise terminology, unsupported-but-plausible
+inference in the AI-suggestions section, thinness/omission without an
+active false claim).
+
+### New findings from the extension
+
+1. **`qwen3.5-4b`'s recurring "ICU inflation" pattern** — the most
+   significant new finding. On Case H (`pre_exam`) it wrote "readmitted to
+   the Cardiology **ICU**" when the source says "secția Cardiologie" (a
+   ward, not an ICU, and no acuity escalation is documented). On Case D
+   (`pre_exam`), independently, the same pattern: "Postoperative recovery...
+   in the **ICU**/PED setting" when the source only documents a hospital
+   transfer, not an ICU admission. Two unrelated cases, same specific
+   fabricated detail — this reads as a systematic bias (perhaps toward
+   assuming post-op pediatric patients default to ICU-level care) rather
+   than a one-off. This is a clinically meaningful error class: it could
+   cause a clinician to over-triage or misjudge acuity from an AI summary.
+2. **`medgemma-4b-it`'s two most severe hallucinations in the entire
+   survey, both found in this extension**: on Case C's `pre_exam` (a source
+   with zero patient history — vaccination/hygiene instructions only), it
+   invented a complete fictional pneumonia hospitalization with specific
+   dates and a chest X-ray. On Case H's `pre_exam`, it asserted "**Epileptic
+   seizures**" as the lead diagnosis while its own `History` section, two
+   lines later, correctly quotes the source's normal EEG and normal
+   neurology consult that specifically ruled epilepsy out — a
+   self-contradicting hallucination within a single output.
+3. **`qwen3-4b-instruct-2507`'s "HTP" terminology confusion is confirmed
+   recurring, not a one-off**: it appeared on Case B under both `report`
+   ("no evidence of hypertension") and `pre_exam` ("hypertensive crisis
+   unlikely") — the source's "HTP" abbreviation means pulmonary
+   hypertension in this context, not general/systemic hypertension. Same
+   specific misreading, twice, independently.
+4. **A second universal, prompt-induced fabrication trap, distinct from
+   Case C's "no content" trap**: Cases E and F have real clinical content
+   but **no dates anywhere** in the source (only relative durations like
+   "on Entecavir for 4 years"). Every model, on every kind, invented
+   specific absolute dates to fill the `pre_exam` template's date-bullet
+   `History` format — none consistently used `[not available]` for missing
+   dates the way several did for Case C's missing content overall. This is
+   a second, independent prompt-level fix worth making regardless of model
+   choice: the History section's format should explicitly permit
+   date-free entries when the source only gives relative timing.
+5. **The Case I `report`-kind omission (missing the confirmed Bordetella
+   pertussis diagnosis, noted in the first Phase 2 extension pass) turned
+   out to be a token-budget artifact, not a blind spot**: under `pre_exam`'s
+   1300-token budget on the same case, all 4 models correctly surfaced the
+   pertussis PCR result. `report`'s 340-token budget is tight enough that
+   even correct models can drop the single most decisive finding when a
+   case is this information-dense — worth knowing independent of which
+   model ships, since it affects prompt/budget design for `report` specifically.
+6. **Genuine mistranslations, not just omissions, recur across models and
+   cases**: `medgemma-4b-it` alone produced three in one case (Case H) —
+   "maternal aunt" → "maternal grandmother," an Apgar score of 9 → "length
+   9cm," and "hipotonie" (low muscle tone) → "hypotension" (low blood
+   pressure). These are Romanian medical-abbreviation and terminology traps
+   independent of the broader hallucination-vs-fabrication distinction —
+   worth a targeted glossary/prompt hint (SA = Apgar score, HTP = pulmonary
+   hypertension, RS = context-dependent for suprarenal gland vs. right
+   side) if any model in this family stays under consideration.
+
+## Keep vs. remove
+
+Based on all evidence in this report (Phase 1 English + Romanian, Phase 2's
+9-case/17-cell extension, and Phase 3's ministral test):
+
+**Keep / promote**:
+- **`qwen/qwen3-4b`** — recommended for staged production rollout. Fewest
+  hard failures, zero severe hallucinations found across 17 test cells in
+  either phase.
+- **`lmstudio-community/qwen3.5-4b`** — keep as a strong second candidate,
+  contingent on fixing the ICU-inflation pattern (prompt-level: explicit
+  instruction against inferring care level/unit from an unstated
+  admission) before trusting it for `pre_exam`-style outputs.
+
+**Keep in consideration, not lead candidates**:
+- **`qwen3-4b-instruct-2507`** — no severe errors, but the highest hard-fail
+  rate of the three Qwen variants (5/17). Usable as a fallback option if
+  either of the above is unavailable, not a first choice.
+- **`nvidia/nemotron-3-nano-4b`, `qwen/qwen3-vl-4b`** (Phase 1 only,
+  Tier B/C) — plausible secondary options per the original tier ranking,
+  not yet subjected to the Phase 2 extension's scrutiny; treat any
+  Phase-1-only standing with the same caution this report just
+  demonstrated is warranted.
+
+**Remove from consideration**:
+- **`medgemma-4b-it`** — despite being the current de facto fallback
+  referenced in the 07-19/07-21 rounds, this survey found it decisively
+  the worst of the four seriously-tested candidates: 10/17 hard failures,
+  including two of the most severe, dangerous hallucinations found
+  anywhere in this whole survey (a fully fabricated hospitalization, and a
+  self-contradicting epilepsy diagnosis). Do not carry forward as a
+  fallback without a fresh, favorable re-test — the evidence here doesn't
+  support it.
+- **`ministral-3-3b-instruct-2512`** (current production) — Phase 3 found
+  it the weakest model tested against the incumbent-candidate battery: 3
+  outright fabrications (including inventing an entire liver-transplant
+  care pathway) and a refusal-bias pattern that misfires on real clinical
+  content. The question is no longer whether to replace it, but which
+  candidate replaces it — this report's answer is `qwen/qwen3-4b`.
+- **Every Tier D/F model** from the original 33-model survey (see the
+  Ranked Comparison section above) — architecturally broken, wrong-tool,
+  unsuppressable reasoning leaks, or frequent fabrication already
+  documented there; nothing in Phase 2/3 changes that assessment.
 
 ## Phase 3: current production (`ministral-3-3b-instruct-2512`) tested for the first time
 
