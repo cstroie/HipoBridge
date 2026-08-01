@@ -316,6 +316,9 @@ async def async_main(args):
         text = await fetch_report_text(args.server, args.endpoint,
                                        args.report_id, user, password)
         source = f"{args.endpoint.replace('{id}', str(args.report_id))}"
+    if args.no_think:
+        text = text.rstrip() + "\n/no_think"
+        print("Appended /no_think to input (Qwen3 reasoning-suppression token)")
     print(f"Input: {source} ({len(text)} chars)")
 
     # Build the exact production message for --kind, reusing _build_messages()
@@ -325,7 +328,7 @@ async def async_main(args):
     # position) so a candidate task prompt can be A/B-tested before being
     # promoted into llm/prompts/<kind>.md.
     tier, task_prompt, max_tokens = PROMPTS[args.kind]
-    language = config["llm"].get("language", "English") or "English"
+    language = args.language or config["llm"].get("language", "English") or "English"
     shim = _ClientShim(language)
     if args.system_file:
         with open(args.system_file) as f:
@@ -409,6 +412,11 @@ def main():
                         "--reference, a reference) to a markdown file for review")
     p.add_argument("--reference",
                    help="Reference-summary text file to include in --dump-outputs")
+    p.add_argument("--no-think", action="store_true",
+                   help="Append '/no_think' to the input text (Qwen3 reasoning-model "
+                   "leak suppression; not a production code path)")
+    p.add_argument("--language", help="Override output language for this run only "
+                   "(default: [llm] language from config)")
     p.add_argument("--system-file",
                    help="Override the registry system prompt with this text file "
                         "(for A/B prompt testing before promoting to llm/prompts.py)")
