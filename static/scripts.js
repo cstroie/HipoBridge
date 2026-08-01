@@ -1554,6 +1554,29 @@ document.addEventListener('DOMContentLoaded', function() {
     // opts.auto: silent cache-only probe (used on page/tab load to redisplay
     // a previously generated summary) — no spinner, no toast on miss, and it
     // never calls the LLM. A real click always forces regeneration.
+    // Deterministic intro line for the Pre-Exam card — the prompt itself is
+    // forbidden from stating age/sex (small models fabricate them when asked
+    // to restate demographics from free text; see getPatientClinicalText
+    // above), so the real identity is spliced in here from the already-loaded,
+    // trustworthy patient record instead, the same way buildImagingCardHeader
+    // grounds an imaging card. Prepended to the rendered markdown, never sent
+    // to the LLM.
+    function buildPreExamHeader() {
+        const patientData = pendingAnalysesData?.patientData;
+        if (!patientData) return '';
+        const name = formatPatientName(patientData.name);
+        const age = calculateAge(patientData.birthDate);
+        const gender = formatGender(patientData.gender);
+        const dob = formatBirthDate(patientData.birthDate);
+        const parts = [];
+        if (name && name !== 'N/A') parts.push(`**${name}**`);
+        const demo = [gender, age].filter(v => v && v !== 'N/A').join(', ');
+        if (demo) parts.push(demo);
+        if (dob && dob !== 'N/A') parts.push(`DOB ${dob}`);
+        if (!parts.length) return '';
+        return parts.join(' · ') + '\n\n---\n\n';
+    }
+
     async function runAiSummary(button, kind, getAnchor, getText, opts = {}) {
         if (!button) return;
         const text = (getText() || '').trim();
@@ -1577,8 +1600,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 const body = card.querySelector('.ai-summary-body');
                 card.classList.remove('ai-card-error');
                 body.classList.remove('ai-summary-loading');
-                body.innerHTML = marked.parse(stripOuterFence(cached || '_(empty response)_'));
-                body.dataset.markdown = cached || '_(empty response)_';
+                const header = kind === 'pre_exam' ? buildPreExamHeader() : '';
+                const shown = header + (cached || '_(empty response)_');
+                body.innerHTML = marked.parse(stripOuterFence(shown));
+                body.dataset.markdown = shown;
             } catch (_) {
                 // Silent — an auto-probe failure shouldn't surface to the user.
             }
@@ -1613,13 +1638,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     body.textContent = full;
                 });
                 body.classList.remove('ai-summary-streaming');
-                body.innerHTML = marked.parse(stripOuterFence(full || '_(empty response)_'));
-                body.dataset.markdown = full || '_(empty response)_';
+                const header = kind === 'pre_exam' ? buildPreExamHeader() : '';
+                const shown = header + (full || '_(empty response)_');
+                body.innerHTML = marked.parse(stripOuterFence(shown));
+                body.dataset.markdown = shown;
             } else {
                 const summary = await aiSummarize(kind, text, { force: true });
                 body.classList.remove('ai-summary-loading');
-                body.innerHTML = marked.parse(stripOuterFence(summary || '_(empty response)_'));
-                body.dataset.markdown = summary || '_(empty response)_';
+                const header = kind === 'pre_exam' ? buildPreExamHeader() : '';
+                const shown = header + (summary || '_(empty response)_');
+                body.innerHTML = marked.parse(stripOuterFence(shown));
+                body.dataset.markdown = shown;
             }
         } catch (err) {
             console.error(`AI summary failed (${kind}):`, err);
