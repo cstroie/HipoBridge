@@ -38,9 +38,10 @@ garbled-date issue from Phase 1 is re-isolated and confirmed fixed or
 one-off (follow-up #2 in the detailed doc). `qwen/qwen3-4b` and
 `qwen3-4b-instruct-2507` are close seconds (each 3/4 clean on Phase 2,
 different failure modes) — worth keeping in consideration but not the lead
-pick anymore. Keep `medgemma-4b-it` as fallback; Phase 2 surfaced a new,
-real weakness for it too (see below) on top of the two already documented
-in Phase 1.
+pick anymore. `medgemma-4b-it` is the safer fallback of the two
+already-in-use models — see Phase 3 below, current production
+`ministral-3-3b-instruct-2512` tested for the first time this round and
+fared markedly worse than either.
 
 **If speed matters more than this report's tiering implies**: within
 Tier A/B (the only tiers worth deploying), `qwen/qwen3-vl-4b` is the
@@ -208,17 +209,61 @@ committed, same convention as the rest of this doc.
    instructional rather than clinical) regardless of which model is chosen,
    since even the winner of this report could hit a similar edge case.
 
-## What this doesn't cover
+## Phase 3: current production (`ministral-3-3b-instruct-2512`) tested for the first time
 
-Current production (`ministral-3-3b-instruct-2512` default/medical,
-`gemma-3n-e4b` fallback, per the 07-19/07-21 rounds) was **not retested this
-round** — this survey only covers newly-discovered and newly-downloaded
-candidates plus `medgemma-4b-it` as a like-for-like baseline. If a
-production swap is being considered, `ministral-3-3b-instruct-2512` needs a
-fresh run under this exact methodology before it can be compared
-apples-to-apples against `qwen/qwen3-4b`.
+Every prior round referenced production as the incumbent baseline without
+ever actually benchmarking it under this methodology. Run here for the
+first time: full Phase 1 parity (imaging/lab/report/pre_exam × English +
+Romanian, same fixture as Phase 1) plus all 4 Phase 2 independent cases,
+`report` kind, English — the same 12-run battery `qwen3.5-4b` and the other
+top contenders went through.
+
+### Phase 1 parity (Ciobotaru case, both languages)
+
+| Kind | English | Romanian |
+|---|---|---|
+| imaging | ✅ correct | ✅ correct |
+| lab | ✅ correct | ❌ **fabricates a "hemolysis syndrome" diagnosis** — not supported by the panel given (no reticulocyte count, LDH, or haptoglobin data to establish hemolysis) |
+| report | ❌ **fabricates family history** — "a history of paternal grandfather's unspecified cardiac conditions requiring long-term monitoring" appears nowhere in the source | ⚠️ minor: nonsense compound term "echocardiografia abdominală" (mixes echocardiography/abdominal ultrasound); clinical content otherwise accurate |
+| pre_exam | ❌ **fabricates a liver-transplant workup**: "pediatric liver transplant evaluation," "follow-up liver transplant candidate" — this is a post-Kasai case, no transplant was ever considered in the source; also the recurring stray-header-date fabrication | ⚠️ correct primary diagnosis, but invents a **duplicate surgical event** — lists a fabricated second Kasai procedure under the stray date, separate from the real 07/11/2025 surgery |
+
+Score: **2/8 fully clean**, 3 clear fabrications, 3 minor-but-real issues.
+
+### Phase 2 (4 independent cases, `report`, English)
+
+| Case | Result |
+|---|---|
+| A (ortho) | ❌ **wrongly refuses** — "Insufficient clinical information to summarize" for a case that has a real diagnosis, a consult finding, and a treatment decision |
+| B (cardio) | ✅ accurate, correctly avoids the pericardial-effusion trap that caught `medgemma-4b-it` |
+| C (no clinical content) | ✅ correctly declines — this is the one case where declining is right |
+| D (oncology) | ✅ accurate and reasonably detailed |
+
+Score: **3/4**, but the A/C pattern is a flag on its own: ministral declined
+twice out of four cases, right once (C, genuinely empty) and wrong once (A,
+real content present). That reads less like principled recognition of
+"nothing to summarize" and more like a general bias toward declining —
+worth treating the 3/4 score with more caution than the same score earned
+by `qwen3-4b`/`qwen3-4b-instruct-2507`, which never triggered a false
+refusal.
+
+### What this means
+
+Production has now been tested apples-to-apples against every candidate in
+this report, for the first time. It does **not** hold up well: 5 of the 12
+runs had a real, verifiable problem — three outright fabrications
+(including inventing an entire liver-transplant care pathway for a patient
+who never needed one) and a refusal-bias pattern that misfires on real
+content. This is the weakest showing of any Tier-A/B/C-caliber model tested
+in either phase, `medgemma-4b-it` included. It reinforces rather than
+weakens the case for moving off current production — the question is no
+longer "is production good enough to keep by default," it's "which
+candidate replaces it," and this report's answer is `qwen3.5-4b`.
+
+`gemma-3n-e4b` (the documented fallback) remains untested — same caveat as
+before, now narrower in scope.
 
 Full evidence, source-text verification notes, and raw output samples for
 every row above are in `docs/llm_benchmark_2026-07-31.md`; raw JSON/markdown
-dumps are in `_testing_/r31*` (English) and `_testing_/r32_b*` (Romanian),
-gitignored but retained locally.
+dumps are in `_testing_/r31*`/`r32_b*`/`r34_ministral_*` (Phase 1/Romanian/
+Ministral) and `_testing_/r33_case*`/`r34_case*` (Phase 2, both
+`qwen`-family models and ministral), gitignored but retained locally.
