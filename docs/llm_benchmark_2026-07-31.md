@@ -374,6 +374,104 @@ procedure), `lfm2.5-1.2b-instruct` (fabricated findings), `google/gemma-3-1b`
 (too small / wrong tool), `phi-4-mini-instruct` (untested, corrupted
 download).
 
+## Romanian-language rerun
+
+Production's actual default is `[llm] language = Romanian` (`local.cfg`,
+still unconfirmed as intentional — see follow-up #1). Every result above was
+run with `--language English` for a clean apples-to-apples comparison with
+prior rounds, which means none of it tested what the app actually outputs
+by default. This section re-runs every model that produced *usable* output
+in English — i.e. excludes models that are structurally broken independent
+of language (`gemma-4-e2b-it`/`phi-4-mini-instruct` don't load,
+`lfm2-350m-extract`/`functiongemma-270m-it`/`gemma-3-270m-it` are wrong-
+tool/too-small, reasoning-leak models leak regardless of language,
+`tinyllama-1.1b-chat-v1.0` crashes from context length, `lfm2.5-350m`
+produced nonsense even in English, `phi-3.1-mini-4k-instruct` was already
+incoherent/crashing in English) — same method otherwise: just drop
+`--language English` so it falls through to Romanian, same fixtures, same 2
+warm iterations. 19 models × 4 kinds = 76 runs, in 4 batches (`_testing_/
+r32_b{1,2,3,4}_<kind>.md`/`.json`), `--no-think` kept for `qwen3-0.6b`/
+`qwen3-1.7b` since it's still needed regardless of output language.
+
+**Judged against the same source facts as the English round** (not the
+English reference text, since a faithful Romanian summary won't match it
+word-for-word).
+
+### Overall pattern: language leakage runs in *both* directions
+
+The English round's leak direction was consistently non-English-into-the-
+answer (Romanian terms/whole answers leaking into an English-requested
+output). In Romanian, several models leaked the *opposite* way — answering
+in English despite the Romanian directive — a failure mode that never
+appeared in the English round because there was nothing to leak into:
+
+- `lfm2.5-vl-1.6b`, `medgemma-1.5-4b-it`, and production `medgemma-4b-it`
+  itself all answered in **English** on the Romanian `lab` run.
+- `qwen3-0.6b` (`/no_think`) did the same on `lab`.
+- `google/gemma-3-1b` produced a bizarre hybrid on `pre_exam` — English
+  meta-commentary ("Okay, here's the Romanian translation of your provided
+  briefing...") instead of ever actually answering.
+
+This means language-instruction-following is inconsistent per kind per
+model, not a fixed per-model trait — the same model can honor the language
+directive on one kind and ignore it on another (`medgemma-4b-it` leaks only
+on `pre_exam` in English but leaks on `lab` in Romanian; the reverse-leak
+kind differs from the forward-leak kind).
+
+### `medgemma-1.5-4b-it`'s `pre_exam` breakdown does not reproduce in Romanian
+
+The single most significant delta: in English, `medgemma-1.5-4b-it` leaked
+raw chain-of-thought/planning tokens on `pre_exam` and burned its entire
+1300-token budget without ever producing an answer (see finding #10 above).
+In Romanian, it produces a full, faithful, well-structured 1300-token
+briefing with no CoT leak at all. This is a language-dependent failure, not
+a universal defect in the model — worth real weight before writing this
+model off entirely (see updated follow-up below).
+
+### New hallucinations that only appeared in Romanian
+
+Several models that were fabrication-free in English introduced new,
+Romanian-only hallucinations — the language switch itself seems to be a
+stress condition, not merely a style change:
+
+- `granite-4.1-3b` — clean on all 4 kinds in English — fabricated
+  "hidrocefalia" (hydrocephalus, a brain condition, completely unrelated to
+  this abdominal case) on `lab`, and invented "Biliopancreatic obstruction
+  (choledochal cyst)" on `pre_exam` (also reverting to English mid-answer
+  for that one line) — neither finding exists anywhere in the source.
+- `lfm2.5-1.2b-instruct` invented "colecistite"/"colecistectomie"
+  (cholecystitis / cholecystectomy — neither occurred) on `report` and
+  `pre_exam` respectively.
+- `lfm2.5-vl-1.6b` fabricated a nonsensical patient weight ("var. de 19890
+  kg") on `pre_exam` — garbling the same stray header field
+  (`19890`/`17/12/2025`) that tripped up other models in the English round,
+  but landing on an absurd, physically-impossible number here instead of a
+  wrong date. It also lists a **surgical procedure** ("Portoanastomoza cu
+  anse Y procedeu Kasai") under "Recommended imaging protocol" — a
+  category-confusion error not seen in any English run.
+- `nvidia/nemotron-3-nano-4b` degenerated into a **repetition loop** on
+  `lab` ("azotemia, azotemia, azotemia..." repeated many times instead of a
+  coherent impression) — was terse and clean in English; this is a
+  generation-quality failure specific to Romanian output, not a translation
+  or terminology issue.
+- `medgemma-4b-it` still fabricates a spurious history date, just less
+  severely than in English — invents "2025-12-17: Operatie de atrezie
+  biliară" from the same stray `17/12/2025` header field (a
+  more-plausible-but-still-wrong year here, vs. `2019-12-17` in English).
+- `google/gemma-3-1b` also failed outright on `report` in Romanian
+  ("Insufficient clinical information to summarize" — a flat non-answer for
+  input it handled fine in English) in addition to the `pre_exam` mixed-
+  language breakdown noted above.
+
+### What held up well in Romanian
+
+`qwen/qwen3-4b`, `qwen/qwen3-vl-4b`, and `google/gemma-3-4b` all stayed
+faithful and coherent in Romanian across every kind checked, with no new
+fabrications spotted — `qwen/qwen3-4b` in particular is now confirmed clean
+in **both** languages across all 4 kinds, strengthening its case as the
+top candidate from this whole survey. `qwen3-1.7b` (`/no_think`) also held
+up cleanly on `report`/`pre_exam` in Romanian.
+
 ## Follow-ups
 
 1. Confirm whether `local.cfg`'s `[llm] language = Romanian` is intentional
@@ -400,3 +498,23 @@ download).
 7. Investigate whether `medgemma-1.5-4b-it`'s `pre_exam` CoT leak is a
    one-off (VRAM contention, cold-load artifact) or a systematic issue with
    this specific finetune before writing it off — worth one isolated retest.
+   **Update from the Romanian rerun**: the leak did *not* reproduce in
+   Romanian — output was clean and faithful. This raises the earlier
+   "one-off" question to a real possibility; worth an isolated English
+   retest specifically (fresh load, no other models competing for VRAM)
+   before ruling this model out on that basis alone.
+8. `qwen/qwen3-4b` is now confirmed clean in both English and Romanian
+   across all 4 kinds — the strongest case yet for a follow-up promotion
+   round, ahead of the other candidates named above.
+9. The reverse language-leak pattern (English output despite a Romanian
+   directive: `lfm2.5-vl-1.6b`, `medgemma-1.5-4b-it`, `medgemma-4b-it`,
+   `qwen3-0.6b` on `lab`; `google/gemma-3-1b` on `pre_exam`) and
+   `nvidia/nemotron-3-nano-4b`'s repetition-loop degeneration on Romanian
+   `lab` are new failure modes with no English-round precedent — worth
+   tracking separately if any of these models stay in consideration, since
+   they indicate the language switch itself is a stress condition, not a
+   simple wording change.
+10. `zai-org/glm-edge-4b-chat-gguf` (Q4_K_M) is downloading per user
+    request as a Chinese-origin multilingual candidate (Zhipu AI) — not yet
+    tested as of this writing; benchmark once the download completes and
+    fold results into this doc.
