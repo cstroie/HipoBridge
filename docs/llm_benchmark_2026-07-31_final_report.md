@@ -16,24 +16,37 @@ at the same 2-warm-iteration settings as every other round).
 
 ## The finish line
 
-**`qwen/qwen3-4b`** is the winner. It is the only model in the entire
-33-model survey that is fabrication-free and language-correct across all 4
-kinds **in both English and Romanian** — no other model, including current
-production `medgemma-4b-it`, reaches that bar. It is mid-pack on speed
-(133s/76 tokens-per-second-weighted in English), not the fastest option,
-but nothing faster is close to matching its reliability.
+**Updated after Phase 2** (see below) — the original single-fixture verdict
+did not fully hold up. **`lmstudio-community/qwen3.5-4b`** is now the
+winner: it's the only model clean across *both* the original biliary-atresia
+case (English + Romanian, all 4 kinds, one narrow `pre_exam` caveat) *and*
+all 4 independent real fixtures pulled from `_testing_/cases_*` in Phase 2
+(orthopedics, cardiology, a no-clinical-content edge case, and a complex
+oncology case). `qwen/qwen3-4b` — the original Phase 1 winner — fabricated
+an admission narrative on Phase 2's Case C (a discharge-instructions-only
+fixture with no actual clinical content), the one case where the honest
+answer was "insufficient clinical information to summarize." That's a real
+failure the Phase 1 result didn't surface, since Phase 1 never tested a
+malformed/edge-case input. `qwen3.5-4b` is roughly comparable in speed to
+`qwen3-4b` (204s vs. 133s for a full English 4-kind battery — `qwen3-4b` is
+somewhat faster, but that's no longer the deciding factor since `qwen3.5-4b`
+is now the more broadly reliable one).
 
-**Recommendation**: promote `qwen/qwen3-4b` to a staged rollout —
-non-critical kinds first (`lab`, where it's fastest and cleanest), full
-rollout after a second fixture confirms the result isn't specific to this
-one case (see follow-up #5 in the detailed doc). Keep `medgemma-4b-it` as
-fallback; it remains usable but has two known, real weaknesses (see Tier B
-below) that `qwen3-4b` doesn't share.
+**Recommendation**: promote `lmstudio-community/qwen3.5-4b` to a staged
+rollout — non-critical kinds first, full rollout after the `pre_exam`
+garbled-date issue from Phase 1 is re-isolated and confirmed fixed or
+one-off (follow-up #2 in the detailed doc). `qwen/qwen3-4b` and
+`qwen3-4b-instruct-2507` are close seconds (each 3/4 clean on Phase 2,
+different failure modes) — worth keeping in consideration but not the lead
+pick anymore. Keep `medgemma-4b-it` as fallback; Phase 2 surfaced a new,
+real weakness for it too (see below) on top of the two already documented
+in Phase 1.
 
 **If speed matters more than this report's tiering implies**: within
-Tier A/B (the only tiers worth deploying), `lmstudio-community/qwen3.5-4b`
-and `qwen/qwen3-vl-4b` are the fastest options that still hold up under
-real fact-checking — see the table.
+Tier A/B (the only tiers worth deploying), `qwen/qwen3-vl-4b` is the
+fastest option that still holds up under real fact-checking in Phase 1 —
+not yet Phase-2-tested, so treat that speed edge with the same caution
+Phase 2 just taught us to apply to Phase-1-only results.
 
 ## Tier definitions
 
@@ -116,6 +129,84 @@ detailed doc's rerun-scope note).
 | `gemma-3-270m-it` | Too small — empty output or meta-commentary instead of an answer |
 | `gemma-4-e2b-it` | Server-side load failure (`"Error loading model."`) |
 | `phi-4-mini-instruct` | Untested — download corrupted after repeated resumes, fails to load; no delete endpoint or filesystem access available to retry cleanly |
+
+## Phase 2: confirmation on 4 independent real fixtures
+
+Everything above (Phase 1) used a single fixture — the `ciobotaru`
+biliary-atresia case — repeated across every model and kind. That's real
+production data, but it's one patient, one specialty, one writing style.
+Before trusting Phase 1's `qwen/qwen3-4b` win, the four closest contenders
+were re-tested on 4 more real, independent fixtures pulled from
+`_testing_/cases_2`/`cases_3`/`cases_4`/`cases_replacement` (65 real,
+previously de-identified-in-docs case folders used earlier to fine-tune the
+production prompts) — chosen for size and content-style diversity, not
+cherry-picked for outcome:
+
+- **Case A** (345 B) — pediatric orthopedics, bilateral equinus foot
+  deformity, clean narrative prose.
+- **Case B** (1.6 KB) — pediatric cardiology, dense structured
+  echocardiogram/ECG findings.
+- **Case C** (4.0 KB) — a **discharge-instructions sheet with no clinical
+  narrative at all** (vaccination schedule, sleep hygiene, quarantine
+  rules) — found by accident during selection, kept deliberately because it
+  tests whether a model can recognize "there's nothing to summarize here"
+  rather than inventing content to fill the expected shape.
+- **Case D** (9.4 KB) — pediatric oncology, high-risk hepatoblastoma,
+  chemotherapy + surgery across a multi-month course — the most complex
+  fixture tested in either phase.
+
+Models: `qwen/qwen3-4b`, `qwen3-4b-instruct-2507`, `lmstudio-community/
+qwen3.5-4b`, and production `medgemma-4b-it`, on `report` (the kind where
+Phase 1's `qwen3-4b`-family discrepancy showed up), English, same
+2-warm-iteration settings. Cases are referenced by letter only — the source
+`case_data.json` files contain real patient names, kept out of anything
+committed, same convention as the rest of this doc.
+
+### Results
+
+| Case | `qwen/qwen3-4b` | `qwen3-4b-instruct-2507` | `qwen3.5-4b` | `medgemma-4b-it` |
+|---|---|---|---|---|
+| A (ortho) | ✅ correct | ❌ mistranslates diagnosis as "polyneuropathy" (source: equinus **foot** deformity) | ✅ correct (verbose) | ✅ correct |
+| B (cardio) | ✅ correct | ✅ correct | ✅ correct | ❌ **fabricates** "a pericardial effusion" — source explicitly says "Pericard liber" (pericardium clear, no effusion) |
+| C (no clinical content) | ❌ **fabricates** an admission narrative ("admitted for respiratory symptoms... treated with a course of respiratory therapy") — none of this is in the source | ✅ correctly answers "Insufficient clinical information to summarize" | ✅ same correct non-answer | ❌ **fabricates** ("admitted for vaccination schedule and respiratory health management") |
+| D (oncology) | ✅ correct but thin (misses most of the clinical detail) | ✅ correct and detailed (tumor regression measurements, RS hypoplasia, port removal/reinsertion — all verified against source) | ✅ correct and detailed (transfer destination, wound status, port history — all verified) | ⚠️ **Romanian-language leak** again despite `--language English`; the portion produced before truncation appears factually sound |
+| **Score** | **3/4** | **3/4** | **4/4** | **1/4** |
+
+### What this changes
+
+1. **`qwen/qwen3-4b`'s Phase 1 perfection didn't generalize.** It fabricated
+   on the one fixture that was genuinely different in kind (no real clinical
+   content to summarize) rather than just different in specialty or length.
+   This is exactly the failure mode Phase 1 couldn't have caught, since
+   every Phase 1 kind always had real clinical content to work with.
+2. **`qwen3-4b-instruct-2507`'s Phase 1 flaw (report-kind fact inversion) is
+   confirmed as a real, recurring pattern** — Case A produced a *different*
+   translation error (not a repeat of the same bile-duct-dilation mistake),
+   meaning this model has a general reliability gap on terminology under
+   translation pressure, not a one-off quirk tied to that specific finding.
+   Notably, it also produced the most detailed, accurate summary of Case D,
+   the hardest fixture in either phase — it's inconsistent, not uniformly
+   weak.
+3. **`qwen3.5-4b` is now the most-validated model across both phases** —
+   clean on every kind of the original case and clean on all 4 independent
+   fixtures, including correctly declining to summarize Case C rather than
+   inventing content. It's the only model tested twice with a perfect
+   second-round score.
+4. **`medgemma-4b-it` picked up a new, previously undocumented failure
+   mode**: fact-inversion by omission-reversal (claiming a finding that the
+   source explicitly negates, not just a vague/incomplete answer as seen in
+   Phase 1's `imaging` result). Combined with its two already-documented
+   Phase 1 weaknesses (bidirectional language leaking, a recurring
+   date-fabrication), this is the third distinct reliability issue found
+   for the current production model across this whole survey.
+5. **The Case C result is the most important methodological finding of
+   Phase 2**: half the models tested (`qwen3-4b`, `medgemma-4b-it`)
+   fabricate a clinical narrative rather than recognizing there's nothing to
+   summarize. This is a real production risk independent of which model
+   ships — worth a prompt-level fix (an explicit instruction to say "no
+   clinical content to summarize" when the source is administrative/
+   instructional rather than clinical) regardless of which model is chosen,
+   since even the winner of this report could hit a similar edge case.
 
 ## What this doesn't cover
 
