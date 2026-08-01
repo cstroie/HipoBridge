@@ -37,6 +37,24 @@ concentrate, consistent with prior rounds.
   mid-transfer around 5-80% progress; LM Studio resumes from the partial
   bytes on the same job id when re-POSTed, so this used to require watching
   and manually re-running the request by hand.
+- **`benchmark_llm.py`** now always sends `"chat_template_kwargs":
+  {"enable_thinking": false}` on every request — this is Qwen3's actual
+  template-level reasoning switch (verified live: it alone suppresses
+  reasoning on base `lmstudio-community/qwen3.5-4b`, which the existing
+  `reasoning`/`reasoning_effort` params don't need to touch since that model
+  wasn't leaking anyway). It's a harmless no-op on non-Qwen3 models (an
+  unknown extra field, silently ignored — confirmed against `medgemma-4b-it`).
+  Important nuance discovered mid-round: **the two suppression mechanisms
+  are not interchangeable** — `chat_template_kwargs` alone does *not*
+  suppress base `qwen3-0.6b`/`qwen3-1.7b` (they still leaked verbosely
+  without `/no_think` even with the flag set), and neither mechanism (nor
+  `enable_reasoning`, tried as a guess) suppresses the
+  `qwen3.5-*-claude-4.6-opus-reasoning-distilled` finetunes at all — that
+  distillation appears to have baked in always-on reasoning that ignores
+  the template variable entirely, not fixable via any request parameter.
+  `--no-think` (the `/no_think` text-token trick) is therefore kept as a
+  separate, still-necessary flag for `qwen3-0.6b`/`qwen3-1.7b`, used
+  together with the now-standing `chat_template_kwargs`.
 
 ## New models found already on the server, and new downloads
 
@@ -483,10 +501,15 @@ up cleanly on `report`/`pre_exam` in Romanian.
 3. Investigate whether `gemma-4-e2b-it`'s load failure is fixable
    server-side (re-download, or a config/quantization mismatch) — currently
    fully untestable.
-4. If `qwen3.5`-family reasoning-distilled variants are wanted in the
-   shortlist in the future, they need a different suppression mechanism than
-   `/no_think` — investigate their native chat template/reasoning controls
-   rather than assuming the Qwen3 convention applies.
+4. **Resolved (investigated, not fixable)**: tried `chat_template_kwargs:
+   {enable_thinking: false}` (Qwen3's real template switch — confirmed
+   working on base `qwen3.5-4b`) and a guessed `enable_reasoning` variant
+   against `qwen3.5-4b-claude-4.6-opus-reasoning-distilled-v2` directly via
+   curl. Neither suppresses it — full CoT still leaks into
+   `reasoning_content` every time. The opus-distillation appears to have
+   baked in always-on reasoning at a level no request parameter reaches.
+   These finetunes are not usable for this app's low-latency kinds without
+   a different underlying checkpoint or a fine-tune to un-bake the behavior.
 5. Re-test `qwen/qwen3-4b` on a second, different real fixture (not just
    this biliary-atresia case) before promoting it to production — one
    clean case isn't enough to rule out the same "short-kind dilution"

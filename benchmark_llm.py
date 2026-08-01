@@ -129,6 +129,12 @@ async def stream_chat(session: aiohttp.ClientSession, base_url: str, key: str,
         # every call; only the flat "reasoning_effort" suppressed it).
         "reasoning": {"effort": "none"},
         "reasoning_effort": "none",
+        # Qwen3's actual template-level switch (verified: works on base
+        # qwen3.5-4b via chat_template_kwargs, unlike the two params above
+        # which that model ignores) - the /no_think text-token trick is a
+        # workaround for servers/models that don't wire this through.
+        # Harmless no-op on non-Qwen3 models (extra unknown field, ignored).
+        "chat_template_kwargs": {"enable_thinking": False},
         "stream": True,
         "stream_options": {"include_usage": True},
     }
