@@ -292,6 +292,24 @@ delete endpoint in the native REST API, and remote filesystem access to the
 LM Studio host wasn't available to remove the file by hand, so this model is
 untested this round — treat as unresolved, not as a quality finding.
 
+### `glm-edge-4b-chat` — new Chinese-origin candidate, hard context ceiling
+
+Downloaded per user request as a multilingual candidate (Zhipu AI/`zai-org`,
+`zai-org/glm-edge-4b-chat-gguf`, Q4_K_M, 2.63 GB). English-only tested this
+round (context limitation below makes a Romanian rerun moot for 2 of the 4
+kinds regardless of language). Results: ❌ wrong diagnosis on `imaging`
+("Right lobe liver hypervascularity" vs. the reference "Suspected biliary
+atresia") but coherent English; ✅ correct and clean on `lab`
+("leukocytosis" identified accurately); ❌ **crashes on `report`** —
+`RuntimeError: ... n_keep: 3534 >= n_ctx: 3072` — and would crash the same
+way on `pre_exam` for the same reason, not separately tested. Checked
+`max_context_length` directly via `/api/v1/models`: **3072 is a hard
+architectural ceiling for this model**, not a configurable load default (no
+`--context-length` override can raise it), so this is a permanent
+disqualifier for the two longer kinds on this fixture — same failure class
+as `tinyllama-1.1b-chat-v1.0`'s context crash, just a different underlying
+model family.
+
 ## Key findings
 
 1. **`qwen3-4b`-family fact inversions on `report`**: both `qwen/qwen3-vl-4b`
@@ -390,7 +408,8 @@ output), `lfm2.5-vl-1.6b` (hallucinates contradicting the core diagnosis),
 procedure), `lfm2.5-1.2b-instruct` (fabricated findings), `google/gemma-3-1b`
 (fabrication + fact inversion), `gemma-3-270m-it`/`functiongemma-270m-it`
 (too small / wrong tool), `phi-4-mini-instruct` (untested, corrupted
-download).
+download), `glm-edge-4b-chat` (hard 3072-token context ceiling, crashes
+`report`/`pre_exam`).
 
 ## Romanian-language rerun
 
@@ -537,7 +556,7 @@ up cleanly on `report`/`pre_exam` in Romanian.
    tracking separately if any of these models stay in consideration, since
    they indicate the language switch itself is a stress condition, not a
    simple wording change.
-10. `zai-org/glm-edge-4b-chat-gguf` (Q4_K_M) is downloading per user
-    request as a Chinese-origin multilingual candidate (Zhipu AI) — not yet
-    tested as of this writing; benchmark once the download completes and
-    fold results into this doc.
+10. **Resolved**: `zai-org/glm-edge-4b-chat-gguf` tested — ruled out. Its
+    3072-token `max_context_length` is a hard architectural ceiling that
+    crashes both `report` and `pre_exam` on this fixture, regardless of
+    language; not viable for this app's longer kinds.
