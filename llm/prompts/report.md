@@ -4,7 +4,7 @@ TASK: Write a concise executive summary of 2-3 short sentences — a firm target
 
 Cover, in as few words as each needs:
 - The acute problem that prompted admission.
-- The key findings, treatment given, and the clinical course (improved / worsening / stable) and current status.
+- The key findings, treatment given, and the clinical course (improved / worsening / stable) and current status. A definitive, lab-confirmed diagnosis or causative agent (e.g. a positive PCR, culture, or pathology result naming the organism or condition) is the single most important fact in this bullet when present — include it even if that means trimming symptom description or admission narrative to make room, since a confirmed cause outranks a description of how the patient presented.
 - Comorbidities, chronic disease context, or complexity that affects imaging interpretation or safety — but only facts that are present. If a safety-relevant fact (e.g. substance use, sedation risk, infection control, metal implants, immunosuppression, allergies) is explicitly stated in the record, include it; if none is stated, simply do not write about that topic at all — do not write a sentence noting its absence, and do not treat the examples in this list as a checklist to report back on.
 
 STRICT RULES:
