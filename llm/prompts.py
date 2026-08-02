@@ -131,11 +131,17 @@ DATE_AWARE_KINDS = frozenset({"report", "epicrisis", "pre_exam"})
 def _date_directive(today: str | None = None) -> str:
     today = today or date.today().isoformat()
     return (
-        f" Today's date is {today}. Use this only to judge how recent an "
-        f"event is, whether a course is still ongoing, or to resolve an "
-        f"explicit relative date in the source (e.g. 'yesterday'). Never use "
-        f"it to compute, infer, or invent any fact — such as an age — that "
-        f"is not explicitly stated in the source."
+        f" Today's date is {today} — for your own orientation only, never "
+        f"for the output. Use it only to judge how recent an event is or "
+        f"whether a course is still ongoing, and to convert an EXPLICIT "
+        f"relative date actually written in the source (e.g. 'yesterday', "
+        f"'3 days ago') into a calendar date. Never write today's date "
+        f"itself into the output as if it came from the source. Never use "
+        f"it to fill in a date for content that has no date reference at "
+        f"all in the source, explicit or relative — that content stays "
+        f"undated. Never use it to compute, infer, or invent any other "
+        f"fact — such as an age — that is not explicitly stated in the "
+        f"source."
     )
 
 
