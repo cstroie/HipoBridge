@@ -14,6 +14,101 @@ models can be resident at once and explains why heavier/longer-context kinds
 (`pre_exam`, 900–1300 tokens) are where crashes and VRAM contention
 concentrate, consistent with prior rounds.
 
+**Constraint driving model scope**: 4 GB VRAM per card, no CPU fallback,
+means any model that doesn't fit a single card at a usable quantization
+can't run here at all — hence "sub-4B" in the survey's own title. This is
+why `lfm2-8b-a1b` (5.04 GB) and `google/gemma-4-e4b` (6.33 GB actual, despite
+the "e4b" effective-param name) were excluded before testing rather than
+run and found wanting, and why `qwen3.5-*-opus-reasoning-distilled` and
+similar heavier finetunes were only tested at their smaller (2B/4B)
+variants. It's a hardware ceiling, not a judgment that larger models
+wouldn't perform better.
+
+## Methodology
+
+**Loading/unloading models.** LM Studio JIT-swaps models into VRAM on
+request by default, but with only 4 GB per card and no CPU fallback, an
+uncontrolled swap can leave a stale model resident and contending for VRAM
+with the one under test. `lmstudio_ctl.py` (new this round, wraps LM
+Studio's native REST API) makes this explicit: `unload --all --keep
+<model>` is run before every model group so exactly one candidate is
+resident at a time (production `medgemma-4b-it` is the standing exception —
+kept resident throughout, since xrayvision also depends on it being loaded).
+Models are run one-at-a-time, all iterations for a model before moving to
+the next, so the VRAM-swap/load cost is paid exactly once per model rather
+than once per call.
+
+**Downloading models.** New candidates not already on the server are
+pulled via `lmstudio_ctl.py download <HF link> --quantization Q4_K_M
+--wait`. The HF download link from this server is flaky and routinely dies
+mid-transfer (5-80% through); `--wait` auto-resumes on a `status: failed`
+response, up to `--retries` (default 5), re-POSTing to the same job id so
+LM Studio resumes from the partial bytes rather than restarting from zero.
+Models over the ~4 GB single-card VRAM ceiling are excluded before download
+even starts (checked against `lmstudio_ctl.py list` sizes).
+
+**What's tested, and why.** Every model is run through `benchmark_llm.py`
+against the app's *real* production code path — same message assembly
+(`_build_messages()`), same per-kind system prompt and `max_tokens` the
+live "AI" buttons actually use, not a synthetic prompt — so the numbers
+reflect production behavior, not a benchmark-only approximation. The same
+real fixture (a de-identified biliary-atresia case, referred to as "the
+primary fixture") is used across every model in Phase 1, so results are
+comparable model-to-model rather than confounded by fixture differences;
+Phase 2 (below) exists specifically to check whether the Phase 1 ranking
+generalizes beyond that one fixture.
+
+Four "kinds" are tested, corresponding to the app's four AI output types,
+each with production's real `max_tokens` budget: `imaging` (60 tokens, a
+one-line impression), `lab` (600 tokens), `report` (340 tokens, plain
+prose, tightest budget relative to input complexity), and `pre_exam` (1300
+tokens, the heaviest/most structured kind — this is also where VRAM
+contention and reasoning-leak failures concentrate, since it's the longest
+generation).
+
+**Disabling thinking/reasoning/CoT.** Several candidates are reasoning
+finetunes that, left default, leak raw chain-of-thought/planning tokens
+into the output and burn the entire `max_tokens` budget narrating instead
+of answering — unusable for these short, tightly-budgeted kinds regardless
+of underlying quality. Two independent suppression mechanisms were tried,
+and neither is a universal fix:
+
+1. `"chat_template_kwargs": {"enable_thinking": false}` — Qwen3's actual
+   template-level reasoning switch, sent on *every* request this round
+   (verified live: it alone suppresses reasoning on base
+   `lmstudio-community/qwen3.5-4b`). Harmless no-op on non-Qwen3 models (an
+   unknown extra field, silently ignored — confirmed against
+   `medgemma-4b-it`).
+2. `--no-think` (`benchmark_llm.py` flag, appends the `/no_think` text
+   token to the input) — needed *in addition to* (1) for base `qwen3-0.6b`/
+   `qwen3-1.7b`, which still leaked verbosely under `chat_template_kwargs`
+   alone.
+
+Neither mechanism, nor a guessed `enable_reasoning` parameter, suppresses
+the `qwen3.5-*-claude-4.6-opus-reasoning-distilled` finetunes at all — that
+distillation appears to have baked in always-on reasoning that ignores the
+template variable entirely, not fixable via any request parameter tried.
+`microsoft/phi-4-mini-reasoning` has the same unsuppressable-leak problem,
+via its own `reasoning`/`reasoning_effort` mechanism (no parameter value
+tried stops it either). Both are marked Tier F / ruled out on this basis,
+not on output quality — the leak alone makes them unusable regardless of
+what the answer underneath might have looked like.
+
+**How many times, and why.** Each model/kind combination is run once cold
+(first call after the model loads — includes the VRAM-swap cost, reported
+separately as `cold_ttft` and *not* used for quality judgment, since a slow
+first token is a load-time artifact, not a model-quality signal) followed
+by 2 **warm** iterations (model already resident). Warm-run timing/token
+metrics reported in results are the *median* of those 2 runs, not a single
+sample, to smooth out per-call jitter; the output text used for hand-
+verification is the final warm run's output. 2 iterations (rather than the
+tool's own default of 3) was chosen to fit the full 33-model sweep in a
+reasonable wall-clock window on 4 GB cards where every extra iteration
+multiplies real GPU time — judged sufficient here because the quality
+judgment (fabrication/fact-inversion/language-leak) is a categorical
+per-output finding checked against source text, not a statistical claim
+that needs many samples to stabilize.
+
 ## New tooling
 
 - **`lmstudio_ctl.py`** (new): CLI against LM Studio's native REST API
@@ -124,6 +219,16 @@ production `medical`-tier model, kept resident throughout this whole round
 but not itself re-benchmarked until now, since it wasn't a "new" model — added
 for a like-for-like baseline against this round's candidates.
 
+**Group 5** — added later still, after the fact: `ministral-3-3b-instruct-2512`,
+the model actually configured as production (`medgemma-4b-it` above is the
+`medical`-tier baseline, not the same thing). Its omission from every earlier
+round through this one was an oversight, not a judgment call — it was
+benchmarked after the fact, on this round's fixture, at full Phase 1 parity
+(imaging/lab/report/pre_exam, English + Romanian, same 2-warm-iteration
+settings), and is folded into the tables below rather than kept as a
+separate later addendum. Raw JSON/markdown dumps: `_testing_/r34_ministral_*`
+(gitignored, retained locally).
+
 The 4 Qwen3-family reasoning models that leaked chain-of-thought
 (`qwen3-0.6b`, `qwen3-1.7b`, both `qwen3.5-*-opus-reasoning-distilled`
 variants) were re-run with `--no-think` across all 4 kinds; those results
@@ -155,6 +260,7 @@ Sample outputs below; full text and timings in `_testing_/r31*.md`/`.json`
 | `lfm2-2.6b-transcript` | ⚠️ plausible finding but doesn't match reference framing |
 | `google/gemma-3n-e2b` | ⚠️ "Right lobe liver enlargement" — vague, not the reference finding |
 | `medgemma-4b-it` (production baseline) | ⚠️ "Liver with enlarged lob right prehepatic (8 cm), irregular contour" — accurate detail but doesn't state the suspected diagnosis, just describes the finding |
+| `ministral-3-3b-instruct-2512` (current production, added late — see Group 5 note above) | ✅ correct |
 | `medgemma-1.5-4b-it` | ⚠️ "...biliary duct dilation suspected due to enlarged hepatic artery and portal vein..." — **fact inversion**: the source explicitly says bile ducts are "nedilatate/nevizualizate" (non-dilated/not visualized), the opposite of what's claimed; also leaves an unclosed ` ```text ` code fence |
 | `google/gemma-3-4b` | ❌ Romanian: "Suspectă atrezie biliară, splenomegalie" — correct content, wrong language despite `--language English` |
 | `qwen/qwen3-4b` | ❌ Romanian: "Suspiciune de atrezie biliara" — same pattern |
@@ -182,6 +288,7 @@ Sample outputs below; full text and timings in `_testing_/r31*.md`/`.json`
 | `lfm2.5-350m`, `lfm2.5-vl-1.6b`, `lfm2-2.6b-transcript`, `tinyllama-1.1b-chat-v1.0` | ✅ plausible/correct (tinyllama fits within lab's shorter context here, unlike `report`/`pre_exam`) |
 | `lfm2.5-1.2b-thinking`, `lfm2.5-8b-a1b` | ❌ reasoning leak |
 | `medgemma-4b-it` (production baseline) | ✅ correct terms and impression ("Cholestasis with renal impairment and systemic inflammation"), clean English |
+| `ministral-3-3b-instruct-2512` (current production, added late — see Group 5 note above) | ✅ correct |
 | `medgemma-1.5-4b-it` | ✅ correct terms, clean English, well-structured findings list |
 | `google/gemma-3-4b` | ✅ correct, clean English |
 | `qwen/qwen3-4b` | ✅ correct, clean English |
@@ -210,6 +317,7 @@ Sample outputs below; full text and timings in `_testing_/r31*.md`/`.json`
 | `qwen3-0.6b`/`qwen3-1.7b` (`/no_think`) | ✅ clean, faithful English |
 | `qwen3.5-*-opus-distilled` (`/no_think`) | ❌ reasoning leak persists |
 | `medgemma-4b-it` (production baseline) | ✅ faithful, correct English summary; captures Kasai portoenterostomy, jaundice, ascites, bilateral hydrocele, postoperative course and prednisone, no fabrication |
+| `ministral-3-3b-instruct-2512` (current production, added late — see Group 5 note above) | ❌ **fabricates family history** — "a history of paternal grandfather's unspecified cardiac conditions requiring long-term monitoring" appears nowhere in the source |
 | `qwen/qwen3-4b` | ✅ faithful, correct, plausible inferences flagged as such |
 | `medgemma-1.5-4b-it` | ⚠️ mostly faithful but **fabricates** "recurrence of biliary atresia" (atresia is a congenital defect, corrected surgically — it doesn't "recur") and "post-operative complications including bowel obstruction requiring drainage" (the drain was routine post-Kasai placement, not a bowel-obstruction complication) |
 | `google/gemma-3-4b` | ❌ **hallucination**: misreads the Romanian ultrasound abbreviation "LDH" (lobul drept hepatic / right hepatic lobe measurement) as the lab test "LDH" (lactate dehydrogenase) — "elevated liver enzymes (LDH)" is not supported by the source at all |
@@ -237,6 +345,7 @@ Sample outputs below; full text and timings in `_testing_/r31*.md`/`.json`
 | `lfm2.5-1.2b-thinking`, `lfm2.5-8b-a1b` | ❌ reasoning leak |
 | `medgemma-4b-it` (production baseline) | ❌ **full Romanian-language leak** despite `--language English` — reproduces the source almost verbatim in Romanian rather than an English structured summary (same failure class documented in the 07-21/22 rounds for this exact model/kind combination); also fabricates the date "2019-12-17" for the biliary-atresia-operated history item, apparently misreading the "17/12/2025 12:00" header field and mangling the year. Slowest run of the whole survey: 174.9s total, 7.5 tok/s |
 | `qwen/qwen3-4b` | ✅ cleanest of this whole group — faithful summary, correctly captures the mild bile-duct dilation, well-structured, no fabrication |
+| `ministral-3-3b-instruct-2512` (current production, added late — see Group 5 note above) | ❌ **fabricates a liver-transplant workup** — "pediatric liver transplant evaluation," "follow-up liver transplant candidate" — this is a post-Kasai case, no transplant was ever considered in the source; also the recurring stray-header-date fabrication seen in other models on this kind |
 | `llama-3.2-1b-instruct` | ⚠️ reasonable structure and mostly faithful, but one nonsensical line ("Where its course is heading: Chasing cai biliare") |
 | `google/gemma-3-4b` | ❌ **serious fabrication**: invents "Fetal growth restriction" and "Gastroschisis" as diagnoses under 04.11.2025 — neither appears anywhere in the source (the actual source line there is birth history: gestational age 34 weeks, birth weight 1950g, unrelated to that date) |
 | `llama-3.2-3b-instruct` | ❌ Romanian language leak (violates `--language English`) |
@@ -310,7 +419,15 @@ disqualifier for the two longer kinds on this fixture — same failure class
 as `tinyllama-1.1b-chat-v1.0`'s context crash, just a different underlying
 model family.
 
-## Key findings
+## Key findings (Phase 1, English round)
+
+Scoped to this round's English-only Phase 1 data — a snapshot, not the
+final word. The Romanian-language rerun, Phase 2, Phase 2 extended, and
+Phase 4 sections further down each have their own "New findings"/"What
+this changes" writeups covering what came after this point; the current
+overall verdict belongs in `llm_benchmark_2026-07-31_final_report.md`
+(pending a rebuild from this now-complete doc), not here. Kept as-written
+below since it was accurate for what it covered at the time.
 
 1. **`qwen3-4b`-family fact inversions on `report`**: both `qwen/qwen3-vl-4b`
    and `qwen3-4b-instruct-2507` independently inverted the same clinical
@@ -352,12 +469,20 @@ model family.
    survey (174.9s, 7.5 tok/s). Confirms the `pre_exam` weakness is a
    standing, reproducible issue with the current production model, not a
    one-off from the earlier rounds.
-8. **`qwen/qwen3-4b` is the cleanest model in the entire survey**: correct
-   and clean English on all 4 kinds, zero fabrication spotted anywhere,
-   including the best-in-round faithful `pre_exam` output (no other model
-   this round or the last was fabrication-free on `pre_exam`). Distinct from
-   the already-tested `qwen3-4b-instruct-2507`, which *did* fact-invert on
-   `report`.
+8. **`qwen/qwen3-4b` is fabrication-free on 3 of 4 English kinds, with the
+   best-in-round faithful `pre_exam` output** (no other model this round or
+   the last was fabrication-free on `pre_exam`) — correct on `lab`,
+   `report`, and `pre_exam`. **Correction, caught during the final-report
+   rebuild**: it is *not* clean on all 4 English kinds — its own `imaging`
+   row above shows it answered in Romanian ("Suspiciune de atrezie
+   biliara") despite `--language English`, the same language-leak failure
+   class documented for several other models on this exact kind. The
+   "cleanest model in the entire survey" framing used here and in the
+   Romanian-rerun and Follow-ups sections below overstated this by missing
+   its own imaging row; corrected there too. Still distinct from the
+   already-tested `qwen3-4b-instruct-2507`, which *did* fact-invert on
+   `report`, and still the strongest Phase 1 record once this leak is
+   weighed against every other model's issues — just not a spotless one.
 9. **The same "LDH" misreading hallucination appeared independently in two
    different model families**: `google/gemma-3-4b` (on `pre_exam`) and
    `lfm2.5-1.2b-instruct` (also on `pre_exam`) both invented "elevated liver
@@ -380,7 +505,23 @@ model family.
     for a useful answer, the other is architecturally a function-calling
     model that refuses free-text summarization.
 
-## Updated recommendation
+## Updated recommendation (Phase 1, English round snapshot)
+
+Scoped to this round's English-only Phase 1 data, written before ministral
+was ever benchmarked (Group 5), before the Romanian rerun, and before
+either Phase 2 round. **Superseded** — kept as-written for the historical
+record, not as current guidance. In short, here's what changed after this
+snapshot: ministral (referenced below as "no change to production")
+turned out to be the weakest of the five models seriously tested once
+actually benchmarked (Phase 2 extended: 7 clean, 8 fail, 2 minor — see
+Group 5 and the Phase 2 extended section); `qwen/qwen3-4b`'s "cleanest
+model in the survey" standing here didn't fully generalize (it fabricates
+on Case C, the no-clinical-content trap, both in Phase 2 and again in the
+Phase 4 retest); and `qwen3.5-4b` picked up a recurring ICU-inflation
+issue in Phase 2 extended that a Phase 4 prompt fix only partially
+resolved before being reverted. See
+`llm_benchmark_2026-07-31_final_report.md` (pending a rebuild) for the
+current, full-data verdict.
 
 **No change to production** (`ministral-3-3b-instruct-2512` /
 `gemma-3n-e4b` fallback, per the 07-19/07-21 docs) — nothing tested this
@@ -499,21 +640,407 @@ stress condition, not merely a style change:
   ("Insufficient clinical information to summarize" — a flat non-answer for
   input it handled fine in English) in addition to the `pre_exam` mixed-
   language breakdown noted above.
+- `llama-3.2-3b-instruct` fabricated a **"deteriorated condition"** on
+  `pre_exam` in Romanian — not supported by the source, which documents a
+  routine postoperative course. (Its English-round `report` result — a
+  language leak plus the "febrilă"/"Afebril" fact inversion, documented
+  above — was a separate, English-round failure, not this one.)
+- `ministral-3-3b-instruct-2512` (current production, Group 5 — added late,
+  see note above) fabricated **"hemolysis syndrome"** on `lab` in Romanian —
+  a diagnosis the panel doesn't support (no reticulocyte count, LDH, or
+  haptoglobin data to establish hemolysis) — despite being clean on `lab` in
+  English. Its already-documented English fabrications (family history on
+  `report`; the liver-transplant workup on `pre_exam`) persist in Romanian
+  too, in altered form: `report` degrades to a minor nonsense compound term
+  ("echocardiografia abdominală") rather than the English fabrication, while
+  `pre_exam` keeps the correct primary diagnosis but invents a **duplicate
+  surgical event** (a second, fabricated Kasai procedure under the same
+  stray date that trips up other models). Unlike the other models in this
+  list, ministral was not clean in English to begin with — this is a model
+  that fabricates in both languages, just on different specifics.
 
 ### What held up well in Romanian
 
 `qwen/qwen3-4b`, `qwen/qwen3-vl-4b`, and `google/gemma-3-4b` all stayed
 faithful and coherent in Romanian across every kind checked, with no new
-fabrications spotted — `qwen/qwen3-4b` in particular is now confirmed clean
-in **both** languages across all 4 kinds, strengthening its case as the
-top candidate from this whole survey. `qwen3-1.7b` (`/no_think`) also held
-up cleanly on `report`/`pre_exam` in Romanian.
+fabrications spotted — `qwen/qwen3-4b` in particular is confirmed clean
+across all 4 kinds *when Romanian is the requested language*, still
+strengthening its case as a top candidate. **Correction**: this is not the
+same as "clean in both languages across all 4 kinds" as earlier drafts of
+this doc claimed — its English-round `imaging` result leaks into Romanian
+(see the Results-by-kind correction above), so its actual record is clean
+Romanian throughout, clean English on 3 of 4 kinds. `qwen3-1.7b`
+(`/no_think`) also held up cleanly on `report`/`pre_exam` in Romanian.
+
+## Speed
+
+Pulled directly from the benchmark JSON output for every model that
+reached at least Tier D quality (Tier F models were ruled out on
+correctness/architecture grounds before speed was a relevant factor, so no
+comparable battery exists for them). **Σt** = total wall-clock seconds for
+one full 4-kind battery (imaging+lab+report+pre_exam) at the warm-run
+settings described in Methodology above. **tok/s** = weighted throughput
+across those 4 kinds (`Σtokens / Σtime`, not an average of 4 per-kind
+rates, so a couple of near-instant `imaging`-kind outputs can't skew it).
+All 19 models below were retested in Romanian; every model that reached
+Tier D or better in English has both columns.
+
+| Model | EN Σt / tok/s | RO Σt / tok/s |
+|---|---|---|
+| `qwen/qwen3-4b` | 133s / 5.3 | 162s / 6.1 |
+| `lmstudio-community/qwen3.5-4b` | 179s / 6.6 | 204s / 6.6 |
+| `qwen/qwen3-vl-4b` | 118s / 7.6 | 177s / 8.3 |
+| `qwen3-4b-instruct-2507` | 193s / 5.9 | 263s / 6.0 |
+| `qwen3-1.7b` (`/no_think`) | 84s / 16.3 | 85s / 14.7 |
+| `lfm2-2.6b-transcript` | 138s / 11.4 | 159s / 14.0 |
+| `medgemma-4b-it` (production baseline) | 204s / 7.4 | 333s / 5.1 |
+| `granite-4.1-3b` | 135s / 8.6 | 89s / 9.1 |
+| `nvidia/nemotron-3-nano-4b` | 115s / 8.3 | 114s / 11.3 |
+| `qwen3-0.6b` (`/no_think`) | 46s / 24.8 | 45s / 25.1 |
+| `lmstudio-community/qwen3.5-2b` | 65s / 19.7 | 94s / 15.7 |
+| `google/gemma-3n-e2b` | 62s / 12.3 | 62s / 14.1 |
+| `llama-3.2-1b-instruct` | 54s / 26.8 | 106s / 15.4 |
+| `llama-3.2-3b-instruct` | 119s / 8.9 | 127s / 10.7 |
+| `medgemma-1.5-4b-it` | 246s / 7.0 | 160s / 11.7 |
+| `google/gemma-3-4b` | 95s / 9.0 | 132s / 9.0 |
+| `google/gemma-3-1b` | 45s / 24.7 | 34s / 29.6 |
+| `lfm2.5-1.2b-instruct` | 20s / 30.0 | 34s / 23.8 |
+| `lfm2.5-vl-1.6b` | 39s / 31.2 | 51s / 35.9 |
+
+Fastest raw throughput (`lfm2.5-vl-1.6b`, `lfm2.5-1.2b-instruct`,
+`google/gemma-3-1b`) belongs to Tier D models disqualified on correctness —
+speed only matters as a tiebreaker within Tier A/B, where `qwen/qwen3-vl-4b`
+is the fastest option holding up under fact-checking (see Follow-ups for
+the caveat that it's Phase-1-only, not yet run through Phase 2).
+`medgemma-4b-it`'s Romanian `pre_exam` run (folded into the 333s/5.1 RO
+total here) was individually the slowest single run of the whole survey at
+174.9s, 7.5 tok/s.
+
+## Phase 2: confirmation on 4 independent real fixtures
+
+Everything above (Phase 1) used a single fixture — the primary
+biliary-atresia case — repeated across every model and kind. That's real
+production data, but it's one patient, one specialty, one writing style.
+Before trusting Phase 1's `qwen/qwen3-4b` win, the four closest contenders
+were re-tested on 4 more real, independent fixtures pulled from
+`_testing_/cases_2`/`cases_3`/`cases_4`/`cases_replacement` (65 real,
+previously de-identified-in-docs case folders used earlier to fine-tune the
+production prompts) — chosen for size and content-style diversity, not
+cherry-picked for outcome:
+
+- **Case A** (345 B) — pediatric orthopedics, bilateral equinus foot
+  deformity, clean narrative prose.
+- **Case B** (1.6 KB) — pediatric cardiology, dense structured
+  echocardiogram/ECG findings.
+- **Case C** (4.0 KB) — a **discharge-instructions sheet with no clinical
+  narrative at all** (vaccination schedule, sleep hygiene, quarantine
+  rules) — found by accident during selection, kept deliberately because it
+  tests whether a model can recognize "there's nothing to summarize here"
+  rather than inventing content to fill the expected shape.
+- **Case D** (9.4 KB) — pediatric oncology, high-risk hepatoblastoma,
+  chemotherapy + surgery across a multi-month course — the most complex
+  fixture tested in either phase.
+
+Models: `qwen/qwen3-4b`, `qwen3-4b-instruct-2507`, `lmstudio-community/
+qwen3.5-4b`, and production `medgemma-4b-it`, on `report` (the kind where
+Phase 1's `qwen3-4b`-family discrepancy showed up), English, same
+2-warm-iteration settings. `ministral-3-3b-instruct-2512` (Group 5, added
+late) was run against the same 4 cases separately — see its own column
+below. Cases are referenced by letter only — the source `case_data.json`
+files contain real patient names, kept out of anything committed, same
+convention as the rest of this doc. Raw JSON/markdown dumps:
+`_testing_/r33_case*` (the 4 original contenders), `_testing_/r34_case*`
+(ministral) — both gitignored, retained locally.
+
+### Results
+
+| Case | `qwen/qwen3-4b` | `qwen3-4b-instruct-2507` | `qwen3.5-4b` | `medgemma-4b-it` | `ministral-3-3b-instruct-2512` (production) |
+|---|---|---|---|---|---|
+| A (ortho) | ✅ correct | ❌ mistranslates diagnosis as "polyneuropathy" (source: equinus **foot** deformity) | ✅ correct (verbose) | ✅ correct | ❌ **wrongly refuses** — "Insufficient clinical information to summarize" for a case that has a real diagnosis, a consult finding, and a treatment decision |
+| B (cardio) | ✅ correct | ✅ correct | ✅ correct | ❌ **fabricates** "a pericardial effusion" — source explicitly says "Pericard liber" (pericardium clear, no effusion) | ✅ accurate, correctly avoids the pericardial-effusion trap that caught `medgemma-4b-it` |
+| C (no clinical content) | ❌ **fabricates** an admission narrative ("admitted for respiratory symptoms... treated with a course of respiratory therapy") — none of this is in the source | ✅ correctly answers "Insufficient clinical information to summarize" | ✅ same correct non-answer | ❌ **fabricates** ("admitted for vaccination schedule and respiratory health management") | ✅ correctly declines — this is the one case where declining is right |
+| D (oncology) | ✅ correct but thin (misses most of the clinical detail) | ✅ correct and detailed (tumor regression measurements, RS hypoplasia, port removal/reinsertion — all verified against source) | ✅ correct and detailed (transfer destination, wound status, port history — all verified) | ⚠️ **Romanian-language leak** again despite `--language English`; the portion produced before truncation appears factually sound | ✅ accurate and reasonably detailed |
+| **Score** | **3/4** | **3/4** | **4/4** | **1/4** | **3/4** |
+
+`ministral`'s 3/4 score needs a caveat the others don't: it declined twice
+out of four cases, right once (C, genuinely empty) and wrong once (A, real
+content present). That reads less like principled recognition of "nothing
+to summarize" and more like a general bias toward declining — worth
+treating this 3/4 with more caution than the same score earned by
+`qwen3-4b`/`qwen3-4b-instruct-2507`, neither of which ever triggered a
+false refusal.
+
+### What this changes
+
+1. **`qwen/qwen3-4b`'s Phase 1 perfection didn't generalize.** It fabricated
+   on the one fixture that was genuinely different in kind (no real clinical
+   content to summarize) rather than just different in specialty or length.
+   This is exactly the failure mode Phase 1 couldn't have caught, since
+   every Phase 1 kind always had real clinical content to work with.
+2. **`qwen3-4b-instruct-2507`'s Phase 1 flaw (report-kind fact inversion) is
+   confirmed as a real, recurring pattern** — Case A produced a *different*
+   translation error (not a repeat of the same bile-duct-dilation mistake),
+   meaning this model has a general reliability gap on terminology under
+   translation pressure, not a one-off quirk tied to that specific finding.
+   Notably, it also produced the most detailed, accurate summary of Case D,
+   the hardest fixture in either phase — it's inconsistent, not uniformly
+   weak.
+3. **`qwen3.5-4b` looked like the most-validated model at this point** —
+   clean on every kind of the original case and clean on all 4 independent
+   fixtures, including correctly declining to summarize Case C rather than
+   inventing content. **This did not hold up under the Phase 2 extension**
+   (5 more cases, plus `pre_exam`) — see below, a recurring acuity-inflation
+   pattern emerged that this narrower 4-case batch was too small to catch.
+4. **`medgemma-4b-it` picked up a new, previously undocumented failure
+   mode**: fact-inversion by omission-reversal (claiming a finding that the
+   source explicitly negates, not just a vague/incomplete answer as seen in
+   Phase 1's `imaging` result). Combined with its two already-documented
+   Phase 1 weaknesses (bidirectional language leaking, a recurring
+   date-fabrication), this is the third distinct reliability issue found
+   for the current production model across this whole survey.
+5. **The Case C result is the most important methodological finding of
+   Phase 2**: half the models tested (`qwen3-4b`, `medgemma-4b-it`)
+   fabricate a clinical narrative rather than recognizing there's nothing to
+   summarize. This is a real production risk independent of which model
+   ships — worth a prompt-level fix (an explicit instruction to say "no
+   clinical content to summarize" when the source is administrative/
+   instructional rather than clinical) regardless of which model is chosen,
+   since even the winner of this report could hit a similar edge case.
+6. **`ministral` (current production), tested here for the first time
+   against this same battery, does not hold up well**: a false refusal on
+   real content (Case A) alongside a correct refusal on genuinely empty
+   content (Case C) — a pattern that reads as a general bias toward
+   declining rather than principled recognition of "nothing to summarize."
+
+## Phase 2 extended: 5 more cases, plus `pre_exam`
+
+The original Phase 2 (4 cases, `report` only) was too small to trust a
+ranking built on a single-case margin between the top 3 contenders. Added:
+5 more real fixtures (Cases E-I, from the same `_testing_/cases_*` pool,
+chosen for specialty/size diversity — hepatology, ENT, febrile-infant
+pediatrics, cardiology/Holter, and a dense infant-respiratory case with a
+confirmed pertussis co-infection) and the `pre_exam` kind on 8 of the 9
+cases total (Case A excluded — at 345 bytes, too small to meaningfully
+stress a 1300-token synthesis prompt). Same 4 models (`qwen/qwen3-4b`,
+`qwen3-4b-instruct-2507`, `qwen3.5-4b`, `medgemma-4b-it`), same settings.
+This brings the total evidence base to **17 independent test cells per
+model** for these four. `ministral-3-3b-instruct-2512` (Group 5) was not
+included when this section was originally written, but was closed out
+later at full parity: `report` on Cases E-I and `pre_exam` on Cases B-I,
+same settings, English. Raw JSON/markdown dumps: `_testing_/r35_case*`
+(the original 4 contenders' batch), `_testing_/r36_case*` (ministral's
+parity batch, run separately).
+
+### Full scorecard
+
+| | `report` (9 cases) | `pre_exam` (8 cases) | Combined |
+|---|---|---|---|
+| `qwen/qwen3-4b` | 6 clean, 2 fail, 1 minor | 5 clean, 0 fail, 3 minor | **11 clean, 2 fail, 4 minor** |
+| `qwen3-4b-instruct-2507` | 5 clean, 3 fail, 1 minor | 4 clean, 2 fail, 2 minor | 9 clean, 5 fail, 3 minor |
+| `lmstudio-community/qwen3.5-4b` | 7 clean, 1 fail, 1 minor | 3 clean, 3 fail, 2 minor | 10 clean, 4 fail, 3 minor |
+| `ministral-3-3b-instruct-2512` (production) | 5 clean, 3 fail, 1 minor | 2 clean, 5 fail, 1 minor | 7 clean, 8 fail, 2 minor |
+| `medgemma-4b-it` | 2 clean, 5 fail, 2 minor | 2 clean, 5 fail, 1 minor | 4 clean, 10 fail, 3 minor |
+
+"Fail" = a real, verifiable error (fabrication, fact inversion, language
+leak, or a mistranslation changing clinical meaning). "Minor" = a real but
+lower-stakes issue (imprecise terminology, unsupported-but-plausible
+inference in the AI-suggestions section, thinness/omission without an
+active false claim).
+
+`ministral`'s combined tally puts it second-worst of the five models
+tested against this battery — closer to `medgemma-4b-it`'s failure rate
+than to any of the three Qwen variants. Case-by-case: `report` — clean on
+B/C/D (repeating its earlier Phase 2 results)/E/F; fails on A (already
+documented, false refusal), G (Romanian-language leak despite `--language
+English`, content otherwise accurate), and H (see finding below); minor on
+I (an unsupported "may affect imaging interpretation" inference, though it
+correctly surfaces the Bordetella pertussis finding other models dropped
+under this same budget). `pre_exam` — clean on B and H; fails on C
+(severe — see below), D, G, and I (see findings below); minor on E and F
+(the already-documented date-fabrication trap, in two different flavors —
+see below).
+
+### New findings from the extension
+
+1. **`qwen3.5-4b`'s recurring "ICU inflation" pattern** — the most
+   significant new finding. On Case H (`pre_exam`) it wrote "readmitted to
+   the Cardiology **ICU**" when the source says "secția Cardiologie" (a
+   ward, not an ICU, and no acuity escalation is documented). On Case D
+   (`pre_exam`), independently, the same pattern: "Postoperative recovery...
+   in the **ICU**/PED setting" when the source only documents a hospital
+   transfer, not an ICU admission. Two unrelated cases, same specific
+   fabricated detail — this reads as a systematic bias (perhaps toward
+   assuming post-op pediatric patients default to ICU-level care) rather
+   than a one-off. This is a clinically meaningful error class: it could
+   cause a clinician to over-triage or misjudge acuity from an AI summary.
+2. **`medgemma-4b-it`'s two most severe hallucinations in the entire
+   survey, both found in this extension**: on Case C's `pre_exam` (a source
+   with zero patient history — vaccination/hygiene instructions only), it
+   invented a complete fictional pneumonia hospitalization with specific
+   dates and a chest X-ray. On Case H's `pre_exam`, it asserted "**Epileptic
+   seizures**" as the lead diagnosis while its own `History` section, two
+   lines later, correctly quotes the source's normal EEG and normal
+   neurology consult that specifically ruled epilepsy out — a
+   self-contradicting hallucination within a single output.
+3. **`qwen3-4b-instruct-2507`'s "HTP" terminology confusion is confirmed
+   recurring, not a one-off**: it appeared on Case B under both `report`
+   ("no evidence of hypertension") and `pre_exam` ("hypertensive crisis
+   unlikely") — the source's "HTP" abbreviation means pulmonary
+   hypertension in this context, not general/systemic hypertension. Same
+   specific misreading, twice, independently.
+4. **A second universal, prompt-induced fabrication trap, distinct from
+   Case C's "no content" trap**: Cases E and F have real clinical content
+   but **no dates anywhere** in the source (only relative durations like
+   "on Entecavir for 4 years"). Every model, on every kind, invented
+   specific absolute dates to fill the `pre_exam` template's date-bullet
+   `History` format — none consistently used `[not available]` for missing
+   dates the way several did for Case C's missing content overall. This is
+   a second, independent prompt-level fix worth making regardless of model
+   choice: the History section's format should explicitly permit
+   date-free entries when the source only gives relative timing.
+5. **The Case I `report`-kind omission (missing the confirmed Bordetella
+   pertussis diagnosis, noted in the first Phase 2 extension pass) turned
+   out to be a token-budget artifact, not a blind spot**: under `pre_exam`'s
+   1300-token budget on the same case, all 4 models correctly surfaced the
+   pertussis PCR result. `report`'s 340-token budget is tight enough that
+   even correct models can drop the single most decisive finding when a
+   case is this information-dense — worth knowing independent of which
+   model ships, since it affects prompt/budget design for `report` specifically.
+6. **Genuine mistranslations, not just omissions, recur across models and
+   cases**: `medgemma-4b-it` alone produced three in one case (Case H) —
+   "maternal aunt" → "maternal grandmother," an Apgar score of 9 → "length
+   9cm," and "hipotonie" (low muscle tone) → "hypotension" (low blood
+   pressure). These are Romanian medical-abbreviation and terminology traps
+   independent of the broader hallucination-vs-fabrication distinction —
+   worth a targeted glossary/prompt hint (SA = Apgar score, HTP = pulmonary
+   hypertension, RS = context-dependent for suprarenal gland vs. right
+   side) if any model in this family stays under consideration.
+7. **`ministral-3-3b-instruct-2512`'s worst hallucination of its entire
+   benchmark history, found on Case C's `pre_exam`**: given the same
+   "no clinical content" administrative sheet that made it fabricate an
+   admission narrative on `report`, `pre_exam` produced something more
+   severe — a fabricated **"chronic respiratory disease"** diagnosis
+   complete with a full differential (COPD exacerbation, interstitial lung
+   disease, bronchiectasis, pulmonary embolism, post-viral sequelae) and an
+   imaging-protocol recommendation, none of it grounded in anything the
+   source contains. The larger `pre_exam` budget didn't give the model more
+   room to notice there was nothing to summarize — it gave it more room to
+   invent a plausible-sounding workup.
+8. **`ministral` reproduces the RS-abbreviation ambiguity independently**:
+   on Case D's `pre_exam`, it translated "RS" (glanda suprarenala / left
+   suprarenal gland, per the source's own preceding "glandei suprarenale
+   stangi") as "right kidney" — wrong organ, wrong side. Same case also
+   shows a date conflation: the laparoscopic segmentectomy is dated
+   "05.11.2024" in the model's output, but that's the source's MRI date —
+   the actual surgery was "7.11.2024," documented one paragraph earlier and
+   again correctly used elsewhere in the same output for the port-catheter
+   procedure. Independent confirmation of the RS ambiguity already flagged
+   for `medgemma-4b-it`, and a second instance of the "confuses two
+   different dated events in the same source" pattern.
+9. **A third, distinct flavor of the date-fabrication trap**: on Case F
+   (another no-absolute-dates source), rather than inventing a specific
+   wrong date like every other model on Cases E/F, `ministral` emitted the
+   literal unfilled template string **"2026-MM"** three times in the
+   `History` section — a broken-placeholder leak, not a fabricated value.
+   Doesn't assert anything false, but it's a different way the same
+   date-bullet format breaks under a dateless source, worth folding into
+   the same prompt fix as the other date-trap findings.
+10. **Recurring bronchiolitis/failure mistranslation on Case I**: across
+    all three of its history's admission references, `ministral` rendered
+    the source's "Bronsiolita acuta" (acute bronchiolitis) as "acute
+    bronchitis" — a different, less severe pediatric diagnosis, repeated
+    consistently rather than a one-off slip. The same entry also
+    mistranslates "IRA" (insuficienta respiratorie acuta / acute
+    respiratory failure) as "fever," understating the severity of that
+    admission. The same output separately claims the pediatric cardiology
+    evaluation is "pending," when the source shows it was completed with a
+    normal result — a minor fact inversion on top of the terminology
+    errors.
+
+## Phase 4: prompt fixes for the ICU-inflation, date-fabrication, and no-content findings — attempted, reverted
+
+**Not a clear win — reverted, not shipped.** Three of findings 1/4 above
+(`qwen3.5-4b`'s ICU inflation, the universal date-fabrication trap, and
+Case C's fabrication-instead-of-declining pattern) got prompt-level fixes
+in `llm/prompts/pre_exam.md` and `llm/prompts/report.md`, tested below, and
+then **reverted to the last working (production) version** once the
+retest showed genuinely mixed results rather than a fix. `llm/prompts/*.md`
+are unchanged from before this round; nothing here is in production. The
+attempt and its findings are kept for the record and to inform the next
+attempt — treat every "Fixed" cell below as "fixed in that one retest, on
+an unshipped prompt version," not as a resolved issue.
+
+- **ICU-inflation guard** (`pre_exam`, "Current clinical status"): added
+  an explicit instruction not to state or imply a care level/unit unless
+  the record names it, and that higher acuity must never be inferred from
+  diagnosis or procedure alone.
+- **Date-free `History` bullets** (`pre_exam`, "History"): added
+  permission to write a bullet with no date when the source gives only a
+  relative duration, with an explicit ban on inventing/back-calculating a
+  date or emitting an unfilled placeholder.
+- **Stronger no-clinical-content trigger** (`pre_exam`'s `[not available]`
+  rule and `report`'s "Insufficient clinical information" fallback): both
+  now explicitly name administrative/instructional material (vaccination
+  schedules, hygiene/quarantine instructions, generic care guidelines) as
+  not counting as clinical content unless it states a patient-specific
+  finding — countering the failure mode where models treated
+  medically-themed text as license to fabricate a workup.
+
+Retested the two "keep/promote" candidates (`qwen/qwen3-4b`,
+`lmstudio-community/qwen3.5-4b`) on exactly the cases each finding came
+from: Case C (`report` + `pre_exam`), Cases D and H (`pre_exam`, the two
+ICU-inflation sites), Cases E and F (`pre_exam`, the two date-trap sites).
+Raw dumps: `_testing_/r37_case*`. **Results are mixed — not a clean fix**:
+
+| Case / finding | `qwen/qwen3-4b` | `qwen3.5-4b` |
+|---|---|---|
+| C, no-content (`pre_exam`) | **Regressed**: the pre-fix baseline (`_testing_/r35_caseC_pre_exam.json`) was actually clean — "No main diagnosis or specialty involved," "None applicable" throughout. Under the new prompt it instead fabricates a full "idiopathic interstitial pneumonia" diagnosis + differential + imaging protocol, in Romanian despite `--language English` — the prompt change made this specific cell measurably *worse*, not just unfixed | **Fixed**: `[not available]` in every section |
+| C, no-content (`report`) | Unchanged (already correct) | Unchanged (already correct) |
+| D, ICU-inflation (`pre_exam`) | n/a (not the affected model) | **Fixed**: no ICU mention (was "ICU/PED setting") |
+| H, ICU-inflation (`pre_exam`) | n/a (not the affected model) | **Not fixed**: still writes "Admission to **ICU**, Cardiology department" |
+| E, date-free bullets (`pre_exam`) | **Partially fixed**: no longer invents a full date range, but still invents month-level dates ("2026-01", "2026-05") not in the source | **Fixed**: describes the treatment with no invented date at all |
+| F, date-free bullets (`pre_exam`) | **Not fixed, new pattern**: silently wrote "2026-08-02" — today's actual system date — as if it were a source date | **Not fixed, new pattern, more blatant**: wrote "2026-08-01 (inferred as 'yesterday' relative to today's date of 2026-08-02)," narrating the fabrication logic in the output itself |
+
+**What this means**: the prompt fixes measurably helped in 3 of 7 cells
+(all `qwen3.5-4b`) but left the other 4 unresolved, including a mirror
+case for the same failure on the same model (`qwen3.5-4b` fixed on D but
+not H for the identical ICU pattern) — the instruction isn't reliably
+followed, just sometimes followed. The Case C cell is worse than
+"unresolved": it's a genuine regression on `qwen3-4b`, from clean to
+severely fabricating plus a new language leak — a reminder that a prompt
+change verified against one model/case can move a *different* failure
+mode on a model it wasn't even targeting.
+
+**Correction on the Case F finding**: it is *not* new to this round.
+Checking the pre-fix baseline confirms `qwen3-4b` already reached for the
+current system date on Case C's `pre_exam` under the original,
+unmodified prompt — `_testing_/r35_caseC_pre_exam.json` (run 2026-08-01)
+contains the bullet "2026-08-01: No relevant events documented," the exact
+date it was run on. This pattern predates Phase 4 entirely; it just hadn't
+been noticed before because it had only ever paired with otherwise-benign
+content (Case C's correct non-answer), not a fabricated diagnosis. Case
+F's retest is the first time it's been caught combining with real
+fabricated clinical content, not the first time it's occurred. Still worth
+a dedicated prompt fix (never treat the current date as a source of
+patient history) — just not a "new" finding, an old one finally showing
+its teeth.
+
+**Decision: reverted, not shipped.** 3 of 7 fixed cells against 1
+regression and 3 unresolved (one of them a brand-new failure mode) is not
+a result to ship on the strength of this one retest round. `llm/prompts/
+pre_exam.md` and `report.md` were reverted to the pre-Phase-4 version
+(`git checkout`) — production is running the same prompts as every prior
+round in this doc. The wording tried here is worth revisiting, but as a
+second, tighter attempt (including the new current-date rule) rather than
+promoting what was tested. See the todo file for the open items this
+leaves.
 
 ## Follow-ups
 
-1. Confirm whether `local.cfg`'s `[llm] language = Romanian` is intentional
-   current config or a leftover — it silently changes every AI button's
-   output language app-wide and doesn't match any prior documented decision.
+1. **Resolved**: `local.cfg`'s `[llm] language = Romanian` is confirmed
+   intentional current production config, not a leftover — the Romanian
+   rerun above is therefore the one that matters for production behavior,
+   not just a secondary check.
 2. Re-test `lmstudio-community/qwen3.5-4b` on `pre_exam` alone (fresh model
    load, isolated) to see if the garbled-date/graft-rejection issues
    reproduce or were one-off.
@@ -545,9 +1072,12 @@ up cleanly on `report`/`pre_exam` in Romanian.
    "one-off" question to a real possibility; worth an isolated English
    retest specifically (fresh load, no other models competing for VRAM)
    before ruling this model out on that basis alone.
-8. `qwen/qwen3-4b` is now confirmed clean in both English and Romanian
-   across all 4 kinds — the strongest case yet for a follow-up promotion
-   round, ahead of the other candidates named above.
+8. **Corrected**: `qwen/qwen3-4b` is clean across all 4 kinds in Romanian,
+   and clean on 3 of 4 in English (`imaging` leaks into Romanian — see the
+   Results-by-kind and "What held up well in Romanian" corrections above)
+   — not the "clean in both languages, all 4 kinds" claim originally made
+   here. Still the strongest Phase 1 record once weighed against every
+   other model's issues, just not spotless.
 9. The reverse language-leak pattern (English output despite a Romanian
    directive: `lfm2.5-vl-1.6b`, `medgemma-1.5-4b-it`, `medgemma-4b-it`,
    `qwen3-0.6b` on `lab`; `google/gemma-3-1b` on `pre_exam`) and
