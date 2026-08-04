@@ -11,6 +11,7 @@ Type=simple
 #   useradd --system --home-dir /opt/hippobridge --shell /usr/sbin/nologin hippobridge
 #   git clone <repo> /opt/hippobridge   # or rsync/symlink an existing checkout there
 #   chown -R hippobridge:hippobridge /opt/hippobridge
+#   sudo -u hippobridge /opt/hippobridge/install   # builds the .python venv
 User=hippobridge
 Group=hippobridge
 WorkingDirectory=/opt/hippobridge
@@ -28,7 +29,7 @@ WorkingDirectory=/opt/hippobridge
 # Group= above) for the duration of the service, so the pidfile lives with
 # other pidfiles under /run instead of inside the checkout.
 RuntimeDirectory=hippobridge
-ExecStart=/usr/bin/python3 /opt/hippobridge/hippobridge.py --pidfile /run/hippobridge/hippobridge.pid
+ExecStart=/opt/hippobridge/.python/bin/python3 /opt/hippobridge/hippobridge.py --pidfile /run/hippobridge/hippobridge.pid
 # SIGTERM triggers hippobridge.py's own graceful-shutdown handler
 # (runner.cleanup()) — no need for KillSignal overrides. Give in-flight
 # requests a bit of time before systemd escalates to SIGKILL.

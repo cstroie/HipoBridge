@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Bootstrap HippoBridge's virtualenv (.python) and install dependencies.
+# Run this once after `git clone`, and again whenever requirements.txt
+# changes. Safe to re-run (idempotent).
+#
+# Usage:
+#   ./install
+#   PYTHON=python3.11 ./install    # pick a specific interpreter to build the venv from
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")"
+
+VENV_DIR=".python"
+PYTHON="${PYTHON:-python3}"
+
+if [[ ! -d "$VENV_DIR" ]]; then
+    echo "Creating virtualenv at $VENV_DIR (using $PYTHON)..."
+    "$PYTHON" -m venv "$VENV_DIR"
+else
+    echo "Virtualenv already exists at $VENV_DIR, reusing it"
+fi
+
+echo "Installing dependencies from requirements.txt..."
+"$VENV_DIR/bin/pip" install --upgrade pip
+"$VENV_DIR/bin/pip" install -r requirements.txt
+
+echo "Done. Start the server with ./hippobridge start"

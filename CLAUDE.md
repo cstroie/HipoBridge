@@ -8,6 +8,10 @@ Be concise. Never waste tokens — no restating the task, no narrating obvious s
 
 You may restart the server yourself, at your own judgment, using `./hippobridge restart` (see "Restarting the server" below) — do not `kill`/`pkill` the process directly or restart it any other way. Mention that you're doing it and why.
 
+## Setup
+
+`./install` creates the `.python` venv and installs `requirements.txt` into it — run it once after cloning, and again whenever `requirements.txt` changes. `./hippobridge` and `hippobridge.service`/`hippobridge.openrc` all use `.python/bin/python3` when it exists (falling back to plain `python3` on PATH in `./hippobridge` if `.python` hasn't been created yet).
+
 ## Running the server
 
 ```bash

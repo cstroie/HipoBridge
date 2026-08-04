@@ -20,6 +20,14 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 PIDFILE="${PIDFILE:-hippobridge.pid}"
 STOP_TIMEOUT="${STOP_TIMEOUT:-15}"
 
+# Use the .python venv (see ./install) if it exists, otherwise fall back to
+# whatever python3 is on PATH.
+if [[ -x .python/bin/python3 ]]; then
+    PYTHON_BIN=.python/bin/python3
+else
+    PYTHON_BIN=python3
+fi
+
 # Sets RUNNING_PID on a running process, STALE_PID on a dead one referenced
 # by the pidfile. Returns 0 if running, 1 if stopped (stale or absent).
 check_pid() {
@@ -82,7 +90,7 @@ do_start() {
         rm -f "$PIDFILE"
     fi
     echo "Starting HippoBridge..."
-    exec python3 hippobridge.py --pidfile "$PIDFILE" "$@"
+    exec "$PYTHON_BIN" hippobridge.py --pidfile "$PIDFILE" "$@"
 }
 
 cmd="${1:-}"

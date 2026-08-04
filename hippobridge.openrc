@@ -5,6 +5,7 @@
 #   adduser -S -D -H -h /opt/hippobridge -s /sbin/nologin hippobridge
 #   git clone <repo> /opt/hippobridge   # or rsync/symlink an existing checkout there
 #   chown -R hippobridge:hippobridge /opt/hippobridge
+#   su -s /bin/sh hippobridge -c /opt/hippobridge/install   # builds the .python venv
 #   cp hippobridge.openrc /etc/init.d/hippobridge
 #   chmod +x /etc/init.d/hippobridge
 #   rc-update add hippobridge default
@@ -13,7 +14,7 @@
 # Optional overrides go in /etc/conf.d/hippobridge (auto-sourced by
 # openrc-run), e.g. to point at a different checkout or Python:
 #   hippobridge_home="/opt/hippobridge"
-#   hippobridge_python="/usr/bin/python3"
+#   hippobridge_python="/opt/hippobridge/.python/bin/python3"
 
 name="hippobridge"
 description="HippoBridge scraping proxy server"
@@ -21,7 +22,7 @@ description="HippoBridge scraping proxy server"
 : "${hippobridge_user:=hippobridge}"
 : "${hippobridge_group:=hippobridge}"
 : "${hippobridge_home:=/opt/hippobridge}"
-: "${hippobridge_python:=/usr/bin/python3}"
+: "${hippobridge_python:=${hippobridge_home}/.python/bin/python3}"
 
 # supervise-daemon (not start-stop-daemon --background) because
 # hippobridge.py runs in the foreground and doesn't fork itself — same

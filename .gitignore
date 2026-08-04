@@ -9,3 +9,4 @@ samples/*
 __pycache__
 _testing_
 log/
+.python/

@@ -12,8 +12,10 @@ HippoBridge is a scraping proxy that exposes a FHIR R4 API and a web interface o
 ## Installation
 
 ```bash
-pip install -r requirements.txt
+./install
 ```
+
+Creates a `.python` virtualenv and installs `requirements.txt` into it. Re-run it whenever `requirements.txt` changes. `./hippobridge` and the systemd/OpenRC service files all use `.python/bin/python3` automatically once it exists.
 
 ## Running the server
 
