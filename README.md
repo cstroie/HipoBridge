@@ -2,60 +2,14 @@
 
 HippoBridge is a scraping proxy that exposes a FHIR R4 API and a web interface on top of the legacy Hipocrate medical system. It has no database — every request authenticates against Hipocrate, scrapes HTML, and returns structured JSON or FHIR resources.
 
-## Prerequisites
-
-- Python 3.8+
-- Access to a Hipocrate instance
-- Hipocrate credentials
-- `pynetdicom` + `pydicom` — optional, required only for the DICOM MWL server
-
-## Installation
+## Installation & running
 
 ```bash
-./install
+./install         # one-time: creates .python venv, installs requirements.txt
+./hippobridge start
 ```
 
-Creates a `.python` virtualenv and installs `requirements.txt` into it. Re-run it whenever `requirements.txt` changes. `./hippobridge` and the systemd/OpenRC service files all use `.python/bin/python3` automatically once it exists.
-
-## Running the server
-
-```bash
-python3 hippobridge.py
-```
-
-The server itself takes no fixed credentials — `@require_auth` reads Basic Auth off each incoming request and forwards it to Hipocrate per-request. `HYP_USER`/`HYP_PASS` are only needed by client/test scripts (`runtests.py`, `client.py`, `tests/*.py`) and as a fallback for the worklist SCP if `worklist.cfg`'s `[worklist] username`/`password` aren't set:
-
-```bash
-export HYP_USER=<username> HYP_PASS=<password>
-```
-
-Server listens on `http://0.0.0.0:44660` by default. Override with `local.cfg` (not tracked by git) or CLI switches:
-
-```ini
-[server]
-port = 8080
-
-[hipocrate]
-service_url = http://192.168.3.230/hipocrate
-```
-
-```bash
-python3 hippobridge.py --port 8080 --host 127.0.0.1
-python3 hippobridge.py --service-url http://192.168.3.230/hipocrate
-python3 hippobridge.py --log-level DEBUG    # DEBUG | INFO | WARNING | ERROR — console only
-python3 hippobridge.py --log-file hippobridge.log  # also log to file, always at DEBUG regardless of --log-level
-python3 hippobridge.py --no-disk-cache      # disable FilesystemCache even if configured
-python3 hippobridge.py --no-worklist        # skip DICOM MWL SCP even if worklist.cfg exists
-python3 hippobridge.py --pidfile hippobridge.pid  # write PID for ./hippobridge, remove on clean exit
-```
-
-CLI switches take precedence over config files. `--log-level`/`LOG_LEVEL` only controls the console; a configured log file (`--log-file` or `[logging] file` in `local.cfg`) always captures everything at `DEBUG`, so the console can stay quiet while the file keeps full detail.
-
-### Restarting / running as a service
-
-`SIGTERM`/`SIGINT` trigger a graceful shutdown (`runner.cleanup()` runs, in-flight requests finish) — no abrupt kill. `./hippobridge {start|stop|restart|status}` uses the pidfile at `hippobridge.pid` to tell a running instance from a stale one (SIGTERM, falling back to SIGKILL after `STOP_TIMEOUT`, default 15s). `start`/`restart` run `hippobridge.py` in the foreground (no fork/`nohup`) — background it yourself if needed (e.g. `./hippobridge restart &`); extra args pass straight through to `hippobridge.py`.
-
-For a background/boot-time deployment, `hippobridge.service` is a systemd unit template (`Type=simple`, `Restart=on-failure`) — copy it to `/etc/systemd/system/`, adjust `User=`/paths. There is no custom fork-based daemon mode: forking after the asyncio event loop starts is fragile, and systemd already covers backgrounding, restart-on-crash, and log capture.
+See [INSTALL.md](INSTALL.md) for prerequisites, configuration, CLI flags, and running as a systemd/OpenRC service.
 
 ## Web interface
 
