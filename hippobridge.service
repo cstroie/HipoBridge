@@ -1,22 +1,53 @@
 [Unit]
 Description=HippoBridge scraping proxy server
-After=network.target
+Documentation=file:%h/work/hippobridge/docs/ARCHITECTURE.md
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
+# Adjust User=/Group= to the account that owns the checkout; %h then
+# resolves to that account's home directory, so no path below needs editing
+# beyond this line (assumes the checkout lives at ~/work/hippobridge).
 User=costin
-WorkingDirectory=/home/costin/work/hippobridge
+Group=costin
+WorkingDirectory=%h/work/hippobridge
+
 # The server itself needs no credentials (@require_auth forwards each
 # request's own Basic Auth to Hipocrate). Only uncomment EnvironmentFile if
 # you want the worklist SCP's HYP_USER/HYP_PASS fallback instead of setting
 # [worklist] username/password directly in worklist.cfg. If you do use it,
 # put credentials in that file (chmod 600, NOT in git) — never inline here.
-#EnvironmentFile=/home/costin/work/hippobridge/hippobridge.env
-ExecStart=/usr/bin/python3 /home/costin/work/hippobridge/hippobridge.py --pidfile /home/costin/work/hippobridge/hippobridge.pid
+# The leading "-" makes a missing file non-fatal.
+#EnvironmentFile=-%h/work/hippobridge/hippobridge.env
+
+ExecStart=/usr/bin/python3 %h/work/hippobridge/hippobridge.py
 # SIGTERM triggers hippobridge.py's own graceful-shutdown handler
-# (runner.cleanup()) — no need for KillSignal/TimeoutStopSec overrides.
+# (runner.cleanup()) — no need for KillSignal overrides. Give in-flight
+# requests a bit of time before systemd escalates to SIGKILL.
+TimeoutStopSec=20
 Restart=on-failure
 RestartSec=5
+
+# systemd captures stdout/stderr itself — no need for hippobridge.out.
+# Application logs still go to hippobridge.log via --log-file / local.cfg.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hippobridge
+
+# Hardening. ReadWritePaths covers the checkout (for hippobridge.log,
+# hippobridge.pid, worklist.cfg/local.cfg edits) and the on-disk cache under
+# /tmp; PrivateTmp isolates that cache from other services' /tmp.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/work/hippobridge
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
 
 [Install]
 WantedBy=multi-user.target
