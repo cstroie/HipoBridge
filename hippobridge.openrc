@@ -1,0 +1,60 @@
+#!/sbin/openrc-run
+# OpenRC init script for Alpine Linux (and other OpenRC systems).
+#
+# Install:
+#   adduser -S -D -H -h /opt/hippobridge -s /sbin/nologin hippobridge
+#   git clone <repo> /opt/hippobridge   # or rsync/symlink an existing checkout there
+#   chown -R hippobridge:hippobridge /opt/hippobridge
+#   cp hippobridge.openrc /etc/init.d/hippobridge
+#   chmod +x /etc/init.d/hippobridge
+#   rc-update add hippobridge default
+#   rc-service hippobridge start
+#
+# Optional overrides go in /etc/conf.d/hippobridge (auto-sourced by
+# openrc-run), e.g. to point at a different checkout or Python:
+#   hippobridge_home="/opt/hippobridge"
+#   hippobridge_python="/usr/bin/python3"
+
+name="hippobridge"
+description="HippoBridge scraping proxy server"
+
+: "${hippobridge_user:=hippobridge}"
+: "${hippobridge_group:=hippobridge}"
+: "${hippobridge_home:=/opt/hippobridge}"
+: "${hippobridge_python:=/usr/bin/python3}"
+
+# supervise-daemon (not start-stop-daemon --background) because
+# hippobridge.py runs in the foreground and doesn't fork itself — same
+# reasoning as Type=simple in the systemd unit. It also gives us respawn-
+# on-crash for free, mirroring Restart=on-failure there.
+supervisor="supervise-daemon"
+command="${hippobridge_python}"
+command_args="${hippobridge_home}/hippobridge.py"
+command_user="${hippobridge_user}:${hippobridge_group}"
+directory="${hippobridge_home}"
+pidfile="/run/${RC_SVCNAME}.pid"
+
+respawn_delay=5
+respawn_max=0
+
+# The server itself needs no credentials (@require_auth forwards each
+# request's own Basic Auth to Hipocrate). Only set HYP_USER/HYP_PASS in
+# /etc/conf.d/hippobridge (chmod 600, not tracked by git) if you want the
+# worklist SCP's fallback instead of [worklist] username/password in
+# worklist.cfg directly.
+#export HYP_USER="..."
+#export HYP_PASS="..."
+
+# supervise-daemon logs the supervised process's stdout/stderr here.
+# Application logs still go to hippobridge.log via --log-file / local.cfg.
+output_log="/var/log/${RC_SVCNAME}.log"
+error_log="/var/log/${RC_SVCNAME}.log"
+
+# SIGTERM triggers hippobridge.py's own graceful-shutdown handler
+# (runner.cleanup()); give in-flight requests a bit of time before escalating.
+retry="TERM/20/KILL/5"
+
+depend() {
+	need net
+	use dns
+}
