@@ -179,10 +179,15 @@ async def main():
 
     for kind in kinds:
         input_path, ref_path = KIND_FILES[kind]
-        with open(input_path) as f:
-            text = f.read()
-        with open(ref_path) as f:
-            reference = f.read().strip()
+        try:
+            with open(input_path) as f:
+                text = f.read()
+            with open(ref_path) as f:
+                reference = f.read().strip()
+        except FileNotFoundError as e:
+            sys.exit(f"error: {kind} needs {input_path} and {ref_path} on disk "
+                     f"(real clinical-text fixtures, kept out of git — see KIND_FILES "
+                     f"at the top of this script): {e}")
         print(f"\n=== {kind} (model={args.model}, input={len(text)} chars) ===")
 
         kind_dump = [f"## {kind}\n\n**Reference:**\n\n{reference}\n"]
