@@ -78,7 +78,7 @@ def loaded_instances(models: list[dict]) -> list[dict]:
         for inst in m.get("loaded_instances", []):
             out.append({"key": m["key"], "instance_id": inst["id"],
                         "params": m.get("params_string", "?"),
-                        "ttl": inst.get("config", {}).get("remaining_ttl_seconds")})
+                        "ttl": inst.get("remaining_ttl_seconds")})
     return out
 
 
