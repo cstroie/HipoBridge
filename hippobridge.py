@@ -1194,6 +1194,9 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
 
     log_file = log_file or config.get('logging', 'file').strip()
     if log_file:
+        log_dir = os.path.dirname(log_file)
+        if log_dir:
+            os.makedirs(log_dir, exist_ok=True)
         file_handler = RotatingFileHandler(
             log_file,
             maxBytes=config.getint('logging', 'max_bytes'),
