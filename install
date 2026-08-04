@@ -168,7 +168,9 @@ EOF
 # Restrict credential-bearing config files to the owner, if present.
 fix_config_perms() {
     for f in local.cfg worklist.cfg hippobridge.env; do
-        [[ -f "$f" ]] && chmod 600 "$f"
+        if [[ -f "$f" ]]; then
+            chmod 600 "$f"
+        fi
     done
 }
 
@@ -275,7 +277,9 @@ install_openrc() {
     if [[ "$INSTALL_DIR" != "/opt/hippobridge" || "$SERVICE_USER" != "hippobridge" ]]; then
         backup_if_exists /etc/conf.d/hippobridge
         {
-            [[ "$INSTALL_DIR" != "/opt/hippobridge" ]] && printf 'hippobridge_home="%s"\n' "$INSTALL_DIR"
+            if [[ "$INSTALL_DIR" != "/opt/hippobridge" ]]; then
+                printf 'hippobridge_home="%s"\n' "$INSTALL_DIR"
+            fi
             if [[ "$SERVICE_USER" != "hippobridge" ]]; then
                 printf 'hippobridge_user="%s"\n' "$SERVICE_USER"
                 printf 'hippobridge_group="%s"\n' "$SERVICE_USER"
