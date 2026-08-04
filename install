@@ -243,7 +243,10 @@ install_systemd() {
     systemctl daemon-reload
 
     write_uninstall
-    echo "Done. Enable and start with: sudo systemctl enable --now hippobridge"
+    echo "Done. Next steps:"
+    echo "  sudo systemctl enable --now hippobridge   # register at boot and start now"
+    echo "  sudo systemctl status hippobridge         # verify it's running"
+    echo "  journalctl -u hippobridge -f              # follow logs"
 }
 
 install_openrc() {
@@ -281,9 +284,10 @@ install_openrc() {
     fi
 
     write_uninstall
-    echo "Done. Register and start with:"
-    echo "  sudo rc-update add hippobridge default"
-    echo "  sudo rc-service hippobridge start"
+    echo "Done. Next steps:"
+    echo "  sudo rc-update add hippobridge default   # register to start at boot"
+    echo "  sudo rc-service hippobridge start        # start now"
+    echo "  sudo rc-service hippobridge status       # verify it's running"
 }
 
 case "$MODE" in

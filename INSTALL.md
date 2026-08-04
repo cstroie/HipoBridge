@@ -127,12 +127,19 @@ Once confirmed, for each mode:
   this run actually created it, never for one that already existed
 
 Neither mode enables, registers, or starts the service itself — that's a
-separate, explicit last step:
+separate, explicit last step (the install script prints these same commands
+at the end):
 
 ```bash
-sudo systemctl enable --now hippobridge     # systemd
-sudo rc-update add hippobridge default      # OpenRC
-sudo rc-service hippobridge start           # OpenRC
+# systemd
+sudo systemctl enable --now hippobridge   # register at boot and start now
+sudo systemctl status hippobridge         # verify it's running
+journalctl -u hippobridge -f              # follow logs
+
+# OpenRC
+sudo rc-update add hippobridge default    # register to start at boot
+sudo rc-service hippobridge start         # start now
+sudo rc-service hippobridge status        # verify it's running
 ```
 
 `EnvironmentFile=hippobridge.env` in the systemd unit (commented out by
