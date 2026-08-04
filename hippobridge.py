@@ -714,7 +714,7 @@ async def serve_spec(request):
     """Serve spec.json as OpenAPI specification, updating the server URL dynamically."""
     logger.info("GET /fhir/spec endpoint accessed")
 
-    spec_path = os.path.join(os.path.dirname(__file__), 'spec.json')
+    spec_path = os.path.join(os.path.dirname(__file__), 'static', 'spec.json')
     try:
         with open(spec_path, 'r') as f:
             spec = json.load(f)
