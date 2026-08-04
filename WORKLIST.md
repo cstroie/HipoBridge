@@ -7,10 +7,10 @@ Devices query the worklist instead of having technicians type patient demographi
 ## Prerequisites
 
 ```bash
-pip install pynetdicom pydicom
+./install
 ```
 
-If these packages are not installed, the MWL server is silently disabled and the main HTTP server starts normally.
+`pynetdicom`/`pydicom` are listed in `requirements.txt`, so the regular install already covers them. If they're not installed, the MWL server is silently disabled and the main HTTP server starts normally.
 
 ## Setup
 

@@ -9,7 +9,7 @@ Type=simple
 # Runs as a dedicated, unprivileged system account rather than a personal
 # user. One-time setup:
 #   useradd --system --home-dir /opt/hippobridge --shell /usr/sbin/nologin hippobridge
-#   git clone <repo> /opt/hippobridge   # or rsync/symlink an existing checkout there
+#   git clone https://github.com/cstroie/HipoBridge.git /opt/hippobridge   # or rsync/symlink an existing checkout there
 #   chown -R hippobridge:hippobridge /opt/hippobridge
 #   sudo -u hippobridge /opt/hippobridge/install   # builds the .python venv
 User=hippobridge

@@ -10,7 +10,7 @@
 ## Install
 
 ```bash
-git clone <repo> hippobridge
+git clone https://github.com/cstroie/HipoBridge.git hippobridge
 cd hippobridge
 ./install
 ```
@@ -81,7 +81,7 @@ The pidfile at `hippobridge.pid` (override with `PIDFILE=...`) distinguishes a r
 
 ```bash
 useradd --system --home-dir /opt/hippobridge --shell /usr/sbin/nologin hippobridge
-git clone <repo> /opt/hippobridge
+git clone https://github.com/cstroie/HipoBridge.git /opt/hippobridge
 chown -R hippobridge:hippobridge /opt/hippobridge
 sudo -u hippobridge /opt/hippobridge/install   # builds the .python venv
 cp hippobridge.service /etc/systemd/system/
@@ -97,7 +97,7 @@ systemctl enable --now hippobridge
 
 ```bash
 adduser -S -D -H -h /opt/hippobridge -s /sbin/nologin hippobridge
-git clone <repo> /opt/hippobridge
+git clone https://github.com/cstroie/HipoBridge.git /opt/hippobridge
 chown -R hippobridge:hippobridge /opt/hippobridge
 su -s /bin/sh hippobridge -c /opt/hippobridge/install   # builds the .python venv
 cp hippobridge.openrc /etc/init.d/hippobridge

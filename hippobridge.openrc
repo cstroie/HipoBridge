@@ -3,7 +3,7 @@
 #
 # Install:
 #   adduser -S -D -H -h /opt/hippobridge -s /sbin/nologin hippobridge
-#   git clone <repo> /opt/hippobridge   # or rsync/symlink an existing checkout there
+#   git clone https://github.com/cstroie/HipoBridge.git /opt/hippobridge   # or rsync/symlink an existing checkout there
 #   chown -R hippobridge:hippobridge /opt/hippobridge
 #   su -s /bin/sh hippobridge -c /opt/hippobridge/install   # builds the .python venv
 #   cp hippobridge.openrc /etc/init.d/hippobridge
