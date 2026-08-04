@@ -75,38 +75,58 @@ nohup ./hippobridge start &
 
 The pidfile at `hippobridge.pid` (override with `PIDFILE=...`) distinguishes a running instance from a stale one. `stop`/`restart` wait up to `STOP_TIMEOUT` (default 15s) before escalating to `SIGKILL`. Extra args after the subcommand pass straight through to `hippobridge.py` (`./hippobridge start --port 8080`).
 
-## Running as a systemd service
+## System-wide install (systemd or OpenRC)
 
-`hippobridge.service` is a unit template using a dedicated system account and `/opt/hippobridge` (standard FHS convention, no personal paths baked in):
-
-```bash
-useradd --system --home-dir /opt/hippobridge --shell /usr/sbin/nologin hippobridge
-git clone https://github.com/cstroie/HipoBridge.git /opt/hippobridge
-chown -R hippobridge:hippobridge /opt/hippobridge
-sudo -u hippobridge /opt/hippobridge/install   # builds the .python venv
-cp hippobridge.service /etc/systemd/system/
-systemctl daemon-reload
-systemctl enable --now hippobridge
-```
-
-`EnvironmentFile=hippobridge.env` (commented out by default) is only needed if you want the worklist SCP's `HYP_USER`/`HYP_PASS` fallback instead of setting `[worklist] username`/`password` in `worklist.cfg` directly — create it, `chmod 600`, not tracked by git, never put credentials directly in the unit file. There's no custom fork-based daemon mode: forking after the asyncio event loop starts is fragile, and systemd's `Type=simple` + `Restart=on-failure` already covers backgrounding, restart-on-crash, and log capture (`journalctl -u hippobridge`).
-
-## Running under OpenRC (Alpine Linux)
-
-`hippobridge.openrc` mirrors the systemd unit — same dedicated account, same `/opt/hippobridge` layout — using `supervise-daemon` for the non-forking foreground process:
+`./install systemd` and `./install openrc` (alias: `alpine`) automate the whole
+system-wide setup on top of the regular venv install:
 
 ```bash
-adduser -S -D -H -h /opt/hippobridge -s /sbin/nologin hippobridge
 git clone https://github.com/cstroie/HipoBridge.git /opt/hippobridge
-chown -R hippobridge:hippobridge /opt/hippobridge
-su -s /bin/sh hippobridge -c /opt/hippobridge/install   # builds the .python venv
-cp hippobridge.openrc /etc/init.d/hippobridge
-chmod +x /etc/init.d/hippobridge
-rc-update add hippobridge default
-rc-service hippobridge start
+cd /opt/hippobridge
+sudo ./install systemd     # or: sudo ./install openrc
 ```
 
-Optional overrides (e.g. `HYP_USER`/`HYP_PASS`, a different install path) go in `/etc/conf.d/hippobridge`, auto-sourced by `openrc-run`.
+These modes need root (creating a system user, chowning the checkout, and
+writing into `/etc` all require it) and, for each:
+
+- create a dedicated, unprivileged system account (`hippobridge`, no shell,
+  home = the checkout directory) if it doesn't already exist
+- `chown -R` the checkout to that account and `chmod 600` any `local.cfg`/
+  `worklist.cfg`/`hippobridge.env` found (they hold credentials)
+- create `log/` under the checkout, owned by that account — logs (both the
+  app's own `--log-file` output and, for OpenRC, `supervise-daemon`'s
+  captured stdout/stderr) stay there rather than under `/var/log`
+- render and install the unit/init script:
+  - systemd: `hippobridge.service` → `/etc/systemd/system/`, with its
+    `/opt/hippobridge` paths rewritten to wherever the checkout actually is,
+    then `systemctl daemon-reload`
+  - OpenRC: `hippobridge.openrc` → `/etc/init.d/hippobridge`, plus
+    `/etc/conf.d/hippobridge` with a `hippobridge_home` override if the
+    checkout isn't at `/opt/hippobridge`; then `rc-update add hippobridge
+    default`
+- write `UNINSTALL.md` in the checkout (gitignored) with the exact commands
+  to reverse everything the run just did
+
+The install script does **not** enable or start the service itself — do that
+last, once you've reviewed the installed unit file:
+
+```bash
+sudo systemctl enable --now hippobridge     # systemd
+sudo rc-service hippobridge start           # OpenRC
+```
+
+`EnvironmentFile=hippobridge.env` in the systemd unit (commented out by
+default) and `HYP_USER`/`HYP_PASS` exports in the OpenRC script are only
+needed for the worklist SCP's fallback if `worklist.cfg`'s `[worklist]
+username`/`password` aren't set — never put credentials directly in the
+unit/init file itself. Neither deployment uses a custom fork-based daemon
+mode: forking after the asyncio event loop starts is fragile, and
+`Type=simple` (systemd) / `supervise-daemon` (OpenRC) already cover
+backgrounding, restart-on-crash, and log capture.
+
+Re-running `./install systemd`/`openrc` is safe — it skips user creation if
+the account already exists and just re-renders the unit/init file and
+`UNINSTALL.md`.
 
 ## Running tests
 

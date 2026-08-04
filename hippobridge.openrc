@@ -46,10 +46,13 @@ respawn_max=0
 #export HYP_USER="..."
 #export HYP_PASS="..."
 
-# supervise-daemon logs the supervised process's stdout/stderr here.
-# Application logs still go to hippobridge.log via --log-file / local.cfg.
-output_log="/var/log/${RC_SVCNAME}.log"
-error_log="/var/log/${RC_SVCNAME}.log"
+# supervise-daemon logs the supervised process's stdout/stderr here. Kept
+# under the checkout's own log/ dir (not /var/log) so everything HippoBridge
+# writes stays in one place; ./install creates this directory and owns it by
+# hippobridge_user. Application logs still go to hippobridge.log via
+# --log-file / local.cfg, in the same directory.
+output_log="${hippobridge_home}/log/hippobridge.out"
+error_log="${hippobridge_home}/log/hippobridge.out"
 
 # SIGTERM triggers hippobridge.py's own graceful-shutdown handler
 # (runner.cleanup()); give in-flight requests a bit of time before escalating.
