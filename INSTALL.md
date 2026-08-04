@@ -77,41 +77,59 @@ The pidfile at `hippobridge.pid` (override with `PIDFILE=...`) distinguishes a r
 
 ## System-wide install (systemd or OpenRC)
 
-`./install systemd` and `./install openrc` (alias: `alpine`) automate the whole
-system-wide setup on top of the regular venv install:
+`./install systemd [user]` and `./install openrc [user]` (alias: `alpine`)
+automate the whole system-wide setup on top of the regular venv install:
 
 ```bash
 git clone https://github.com/cstroie/HipoBridge.git /opt/hippobridge
 cd /opt/hippobridge
-sudo ./install systemd     # or: sudo ./install openrc
+sudo ./install systemd            # or: sudo ./install openrc
+sudo ./install systemd daemon     # reuse an existing account instead of creating "hippobridge"
 ```
 
-These modes need root (creating a system user, chowning the checkout, and
-writing into `/etc` all require it) and, for each:
+These modes need root — creating/reusing a system account, chowning the
+checkout, and writing into `/etc` all require it. Before touching anything,
+the script prints a plan (the account it'll create or reuse — with `id`
+output if it already exists — the chown, the files it'll write) and asks
+`Proceed? [y/N]`; pass `ASSUME_YES=1` to skip the prompt for automation. A
+plain username that doesn't look like `[a-z_][a-z0-9_-]*` is rejected, and
+picking a shared account (`daemon`, `nobody`, `www-data`, ...) prints a
+warning but is still allowed.
 
-- create a dedicated, unprivileged system account (`hippobridge`, no shell,
-  home = the checkout directory) if it doesn't already exist
-- `chown -R` the checkout to that account and `chmod 600` any `local.cfg`/
-  `worklist.cfg`/`hippobridge.env` found (they hold credentials)
+Once confirmed, for each mode:
+
+- create the account (`useradd --system`/`adduser -S -D -H`, no shell, home
+  = the checkout directory) if it doesn't already exist — if it does, it's
+  reused as-is, untouched
+- `chown -R` the checkout to that account (this includes `.git` — a later
+  `git pull` as your own login will need `sudo` too) and `chmod 600` any
+  `local.cfg`/`worklist.cfg`/`hippobridge.env` found (they hold credentials)
 - create `log/` under the checkout, owned by that account — logs (both the
   app's own `--log-file` output and, for OpenRC, `supervise-daemon`'s
   captured stdout/stderr) stay there rather than under `/var/log`
-- render and install the unit/init script:
+- **(re)build `.python` as the service account itself**, via `su`, not as
+  root — root only ever chowns the checkout to that account first, so a
+  stale or tampered venv from an earlier unprivileged run is never executed
+  with root privileges
+- render and install the unit/init script, backing up any file it would
+  overwrite first (`<path>.bak.<timestamp>`):
   - systemd: `hippobridge.service` → `/etc/systemd/system/`, with its
-    `/opt/hippobridge` paths rewritten to wherever the checkout actually is,
-    then `systemctl daemon-reload`
-  - OpenRC: `hippobridge.openrc` → `/etc/init.d/hippobridge`, plus
-    `/etc/conf.d/hippobridge` with a `hippobridge_home` override if the
-    checkout isn't at `/opt/hippobridge`; then `rc-update add hippobridge
-    default`
-- write `UNINSTALL.md` in the checkout (gitignored) with the exact commands
-  to reverse everything the run just did
+    `/opt/hippobridge` paths and `User=`/`Group=hippobridge` rewritten to
+    the actual checkout dir/account, then `systemctl daemon-reload`
+  - OpenRC: `hippobridge.openrc` → `/etc/init.d/hippobridge` as-is, plus
+    `/etc/conf.d/hippobridge` with `hippobridge_home`/`hippobridge_user`/
+    `hippobridge_group` overrides for whichever differ from the shipped
+    defaults
+- (re)write `UNINSTALL.md` in the checkout (gitignored) with the exact
+  commands to reverse this run — it only tells you to remove the account if
+  this run actually created it, never for one that already existed
 
-The install script does **not** enable or start the service itself — do that
-last, once you've reviewed the installed unit file:
+Neither mode enables, registers, or starts the service itself — that's a
+separate, explicit last step:
 
 ```bash
 sudo systemctl enable --now hippobridge     # systemd
+sudo rc-update add hippobridge default      # OpenRC
 sudo rc-service hippobridge start           # OpenRC
 ```
 
@@ -124,9 +142,9 @@ mode: forking after the asyncio event loop starts is fragile, and
 `Type=simple` (systemd) / `supervise-daemon` (OpenRC) already cover
 backgrounding, restart-on-crash, and log capture.
 
-Re-running `./install systemd`/`openrc` is safe — it skips user creation if
-the account already exists and just re-renders the unit/init file and
-`UNINSTALL.md`.
+Re-running `./install systemd`/`openrc` is safe — it reuses the account if
+it already exists and just refreshes the venv, permissions, unit/init file,
+and `UNINSTALL.md`.
 
 ## Running tests
 
