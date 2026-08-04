@@ -1331,7 +1331,8 @@ if __name__ == "__main__":
     parser.add_argument(
         '--pidfile', metavar='PATH',
         help='Write the process PID to this file on startup and remove it on '
-             'clean shutdown; enables restart.sh to find and signal this process'
+             'clean shutdown; enables the hippobridge control script to find '
+             'and signal this process'
     )
     args = parser.parse_args()
 
@@ -1356,7 +1357,7 @@ if __name__ == "__main__":
         site = web.TCPSite(runner, _HOST, _PORT)
         await site.start()
 
-        # SIGTERM (sent by restart.sh) and SIGINT (Ctrl-C) both resolve this
+        # SIGTERM (sent by the hippobridge control script) and SIGINT (Ctrl-C) both resolve this
         # event instead of tearing the process down immediately, so
         # runner.cleanup() always runs and in-flight requests get a chance
         # to finish — a bare KeyboardInterrupt/default SIGTERM would skip

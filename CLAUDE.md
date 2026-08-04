@@ -6,7 +6,7 @@ Be concise. Never waste tokens — no restating the task, no narrating obvious s
 
 ## Server restarts
 
-You may restart the server yourself, at your own judgment, using `./restart.sh` (see "Restarting the server" below) — do not `kill`/`pkill` the process directly or restart it any other way. Mention that you're doing it and why.
+You may restart the server yourself, at your own judgment, using `./hippobridge restart` (see "Restarting the server" below) — do not `kill`/`pkill` the process directly or restart it any other way. Mention that you're doing it and why.
 
 ## Running the server
 
@@ -31,7 +31,7 @@ CLI: `--port`, `--host`, `--service-url`, `--log-level DEBUG|INFO|WARNING|ERROR`
 
 ## Restarting the server
 
-`--pidfile PATH` writes the PID on startup and removes it on clean shutdown; `SIGTERM`/`SIGINT` both resolve an asyncio event so `runner.cleanup()` runs (no abrupt kill). `./restart.sh` stops the process tracked by `hippobridge.pid`, waits up to `STOP_TIMEOUT` (default 15s, then SIGKILLs), and relaunches — extra args pass through to `hippobridge.py`. This exists so *the user* can restart quickly; it does not change the "never restart the server yourself" rule above.
+`--pidfile PATH` writes the PID on startup and removes it on clean shutdown; `SIGTERM`/`SIGINT` both resolve an asyncio event so `runner.cleanup()` runs (no abrupt kill). `./hippobridge {start|stop|restart|status}` uses the pidfile at `hippobridge.pid` (override with `PIDFILE=...`) to tell a running instance from a stale one. `start`/`restart` do **not** background the process themselves (no fork, no `nohup`) — they `exec` `hippobridge.py` in the foreground, so background it yourself if you need that (e.g. `./hippobridge restart &`). `stop`/`restart` wait up to `STOP_TIMEOUT` (default 15s, then SIGKILL). Extra args pass through to `hippobridge.py` (`./hippobridge start --port 8080`). This exists so *the user* can restart quickly; it does not change the "never restart the server yourself" rule above.
 
 For a background/boot-time service, `hippobridge.service` is a systemd unit template — copy it to `/etc/systemd/system/`, adjust `User=`/paths. `EnvironmentFile=hippobridge.env` is only needed if you want the worklist SCP's `HYP_USER`/`HYP_PASS` fallback instead of setting `[worklist] username`/`password` in `worklist.cfg` directly (create it, `chmod 600`, not tracked by git — never put credentials directly in the unit file). No custom fork-based daemon mode was added: forking after the asyncio event loop starts is fragile, and systemd's `Type=simple` + `Restart=on-failure` already covers backgrounding, restart-on-crash, and log capture without hand-rolled process-management code.
 

@@ -44,14 +44,14 @@ python3 hippobridge.py --log-level DEBUG    # DEBUG | INFO | WARNING | ERROR —
 python3 hippobridge.py --log-file hippobridge.log  # also log to file, always at DEBUG regardless of --log-level
 python3 hippobridge.py --no-disk-cache      # disable FilesystemCache even if configured
 python3 hippobridge.py --no-worklist        # skip DICOM MWL SCP even if worklist.cfg exists
-python3 hippobridge.py --pidfile hippobridge.pid  # write PID for restart.sh, remove on clean exit
+python3 hippobridge.py --pidfile hippobridge.pid  # write PID for ./hippobridge, remove on clean exit
 ```
 
 CLI switches take precedence over config files. `--log-level`/`LOG_LEVEL` only controls the console; a configured log file (`--log-file` or `[logging] file` in `local.cfg`) always captures everything at `DEBUG`, so the console can stay quiet while the file keeps full detail.
 
 ### Restarting / running as a service
 
-`SIGTERM`/`SIGINT` trigger a graceful shutdown (`runner.cleanup()` runs, in-flight requests finish) — no abrupt kill. `./restart.sh` stops the process tracked by `hippobridge.pid` (SIGTERM, falling back to SIGKILL after `STOP_TIMEOUT`, default 15s) and relaunches it; extra args pass straight through to `hippobridge.py`.
+`SIGTERM`/`SIGINT` trigger a graceful shutdown (`runner.cleanup()` runs, in-flight requests finish) — no abrupt kill. `./hippobridge {start|stop|restart|status}` uses the pidfile at `hippobridge.pid` to tell a running instance from a stale one (SIGTERM, falling back to SIGKILL after `STOP_TIMEOUT`, default 15s). `start`/`restart` run `hippobridge.py` in the foreground (no fork/`nohup`) — background it yourself if needed (e.g. `./hippobridge restart &`); extra args pass straight through to `hippobridge.py`.
 
 For a background/boot-time deployment, `hippobridge.service` is a systemd unit template (`Type=simple`, `Restart=on-failure`) — copy it to `/etc/systemd/system/`, adjust `User=`/paths. There is no custom fork-based daemon mode: forking after the asyncio event loop starts is fragile, and systemd already covers backgrounding, restart-on-crash, and log capture.
 
