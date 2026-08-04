@@ -28,15 +28,20 @@ project (xrayvision) that can evict the loaded model under radiology load,
 which shows up as a mid-generation crash unrelated to prompt quality.
 
 Usage:
-    python3 benchmark_prompt_format.py --model medgemma-4b-it
-    python3 benchmark_prompt_format.py --model medgemma-4b-it --kind imaging
+    python3 tools/benchmark_prompt_format.py --model medgemma-4b-it
+    python3 tools/benchmark_prompt_format.py --model medgemma-4b-it --kind imaging
 """
 import argparse
 import asyncio
 import json
+import os
 import statistics
 import sys
 import time
+
+# llm.* is a repo-root package; Python only puts this script's own directory
+# (tools/) on sys.path, not the repo root, so the import below needs a hand.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from llm.config import init_llm, select_provider
 from llm.backend import ServerBackend

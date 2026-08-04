@@ -18,8 +18,8 @@ Reuses the app's own config layering (llm.config) and prompt registry
 
 Usage:
     export HYP_USER=<u> HYP_PASS=<p>
-    python3 benchmark_llm.py --report-id 12345 --kind epicrisis --iterations 3
-    python3 benchmark_llm.py --text-file sample.txt --models lfm2.5-230m
+    python3 tools/benchmark_llm.py --report-id 12345 --kind epicrisis --iterations 3
+    python3 tools/benchmark_llm.py --text-file sample.txt --models lfm2.5-230m
 """
 import argparse
 import asyncio
@@ -33,6 +33,10 @@ import time
 
 import aiohttp
 from urllib.parse import quote
+
+# llm.* is a repo-root package; Python only puts this script's own directory
+# (tools/) on sys.path, not the repo root, so the import below needs a hand.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from llm.config import init_llm, select_provider
 from llm.prompts import PROMPTS, _build_messages, _date_directive, _language_directive, DATE_AWARE_KINDS
