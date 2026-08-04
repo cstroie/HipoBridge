@@ -24,7 +24,11 @@ WorkingDirectory=/opt/hippobridge
 # non-fatal.
 #EnvironmentFile=-/opt/hippobridge/hippobridge.env
 
-ExecStart=/usr/bin/python3 /opt/hippobridge/hippobridge.py
+# RuntimeDirectory creates /run/hippobridge (mode 0755, owned by the User=/
+# Group= above) for the duration of the service, so the pidfile lives with
+# other pidfiles under /run instead of inside the checkout.
+RuntimeDirectory=hippobridge
+ExecStart=/usr/bin/python3 /opt/hippobridge/hippobridge.py --pidfile /run/hippobridge/hippobridge.pid
 # SIGTERM triggers hippobridge.py's own graceful-shutdown handler
 # (runner.cleanup()) — no need for KillSignal overrides. Give in-flight
 # requests a bit of time before systemd escalates to SIGKILL.
@@ -39,8 +43,8 @@ StandardError=journal
 SyslogIdentifier=hippobridge
 
 # Hardening. ReadWritePaths covers the checkout (for hippobridge.log,
-# hippobridge.pid, worklist.cfg/local.cfg edits) and the on-disk cache under
-# /tmp; PrivateTmp isolates that cache from other services' /tmp.
+# worklist.cfg/local.cfg edits); RuntimeDirectory above handles the pidfile
+# and PrivateTmp isolates the on-disk cache under /tmp from other services.
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
