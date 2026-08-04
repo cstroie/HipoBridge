@@ -128,7 +128,11 @@ def _render_table(records: list) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description="Interactive DICOM Modality Worklist (MWL) SCU test client — "
+                     "picks a device profile from worklist.cfg, connects to the "
+                     "HippoBridge MWL SCP as that device (C-ECHO then C-FIND), and "
+                     "prints the worklist it gets back.")
     parser.add_argument('--config', default='worklist.cfg', help="Path to worklist.cfg")
     parser.add_argument('--host', default='127.0.0.1', help="MWL server host")
     parser.add_argument('--profile', help="Device profile name or AE title (skips the interactive picker)")

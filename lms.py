@@ -14,22 +14,27 @@ Reuses the app's own provider config (llm.config) to find the server host,
 so it always points at whatever `local.cfg`/`llm.cfg` currently configure.
 
 Usage:
-    python3 lmstudio_ctl.py list
-    python3 lmstudio_ctl.py unload medgemma-4b-it
-    python3 lmstudio_ctl.py unload --all --keep medgemma-4b-it
-    python3 lmstudio_ctl.py load qwen/qwen3-4b --context-length 8192
-    python3 lmstudio_ctl.py swap qwen/qwen3-4b --keep medgemma-4b-it
-    python3 lmstudio_ctl.py download google/gemma-3-4b
-    python3 lmstudio_ctl.py download https://huggingface.co/unsloth/Phi-4-mini-instruct-GGUF \\
+    python3 lms.py list
+    python3 lms.py unload medgemma-4b-it
+    python3 lms.py unload --all --keep medgemma-4b-it
+    python3 lms.py load qwen/qwen3-4b --context-length 8192
+    python3 lms.py swap qwen/qwen3-4b --keep medgemma-4b-it
+    python3 lms.py download google/gemma-3-4b
+    python3 lms.py download https://huggingface.co/unsloth/Phi-4-mini-instruct-GGUF \\
         --quantization Q4_K_M --wait
-    python3 lmstudio_ctl.py download-status job_493c7c9ded
+    python3 lms.py download-status job_493c7c9ded
+
+Run from the repo root (or via `./hippobridge`'s venv) — it imports
+`llm.config`, which is only importable with the repo root on sys.path.
+Uses only the standard library (urllib), no extra dependencies beyond
+what's already in requirements.txt.
 """
 import argparse
 import json
 import sys
 import time
-
-import requests
+import urllib.error
+import urllib.request
 
 from llm.config import init_llm, select_provider
 
@@ -43,10 +48,27 @@ def _api_base() -> tuple[str, dict]:
     return f"{host}/api/v1", headers
 
 
+def _request(method: str, url: str, headers: dict, body: dict | None = None,
+             timeout: float = 30) -> dict:
+    """Minimal JSON-in/JSON-out HTTP helper (stdlib urllib, no `requests`)."""
+    data = json.dumps(body).encode() if body is not None else None
+    req_headers = dict(headers)
+    if data is not None:
+        req_headers["Content-Type"] = "application/json"
+    req = urllib.request.Request(url, data=data, headers=req_headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read()
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode(errors="replace")
+        raise RuntimeError(f"{method} {url} -> HTTP {e.code}: {detail}") from e
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"{method} {url} -> {e.reason}") from e
+    return json.loads(raw) if raw else {}
+
+
 def list_models(base: str, headers: dict) -> list[dict]:
-    resp = requests.get(f"{base}/models", headers=headers, timeout=30)
-    resp.raise_for_status()
-    return resp.json()["models"]
+    return _request("GET", f"{base}/models", headers)["models"]
 
 
 def loaded_instances(models: list[dict]) -> list[dict]:
@@ -91,9 +113,7 @@ def cmd_unload(args: argparse.Namespace) -> None:
         targets = [i for i in args.instance_id if i not in args.keep]
 
     for instance_id in targets:
-        resp = requests.post(f"{base}/models/unload", headers=headers,
-                              json={"instance_id": instance_id}, timeout=30)
-        resp.raise_for_status()
+        _request("POST", f"{base}/models/unload", headers, {"instance_id": instance_id})
         print(f"unloaded: {instance_id}")
 
     kept = set(args.instance_id or []) & set(args.keep) if not args.all else \
@@ -114,9 +134,7 @@ def cmd_load(args: argparse.Namespace) -> None:
     if args.num_experts is not None:
         body["num_experts"] = args.num_experts
 
-    resp = requests.post(f"{base}/models/load", headers=headers, json=body, timeout=args.timeout)
-    resp.raise_for_status()
-    data = resp.json()
+    data = _request("POST", f"{base}/models/load", headers, body, timeout=args.timeout)
     print(f"loaded: {data['instance_id']} in {data['load_time_seconds']:.2f}s")
     if "load_config" in data:
         print(f"  config: {data['load_config']}")
@@ -126,9 +144,7 @@ def _start_download(base: str, headers: dict, model: str, quantization: str | No
     body = {"model": model}
     if quantization:
         body["quantization"] = quantization
-    resp = requests.post(f"{base}/models/download", headers=headers, json=body, timeout=30)
-    resp.raise_for_status()
-    return resp.json()
+    return _request("POST", f"{base}/models/download", headers, body)
 
 
 def cmd_download(args: argparse.Namespace) -> None:
@@ -181,9 +197,7 @@ def _wait_for_download(base: str, headers: dict, job_id: str, poll_interval: flo
 
 
 def _get_download_status(base: str, headers: dict, job_id: str) -> dict:
-    resp = requests.get(f"{base}/models/download/status/{job_id}", headers=headers, timeout=30)
-    resp.raise_for_status()
-    return resp.json()
+    return _request("GET", f"{base}/models/download/status/{job_id}", headers)
 
 
 def cmd_download_status(args: argparse.Namespace) -> None:
@@ -204,17 +218,13 @@ def cmd_swap(args: argparse.Namespace) -> None:
     targets = [inst["instance_id"] for inst in loaded_instances(models)
                if inst["instance_id"] not in args.keep and inst["instance_id"] != args.model]
     for instance_id in targets:
-        resp = requests.post(f"{base}/models/unload", headers=headers,
-                              json={"instance_id": instance_id}, timeout=30)
-        resp.raise_for_status()
+        _request("POST", f"{base}/models/unload", headers, {"instance_id": instance_id})
         print(f"unloaded: {instance_id}")
 
     body = {"model": args.model, "echo_load_config": True}
     if args.context_length is not None:
         body["context_length"] = args.context_length
-    resp = requests.post(f"{base}/models/load", headers=headers, json=body, timeout=args.timeout)
-    resp.raise_for_status()
-    data = resp.json()
+    data = _request("POST", f"{base}/models/load", headers, body, timeout=args.timeout)
     print(f"loaded: {data['instance_id']} in {data['load_time_seconds']:.2f}s")
 
 

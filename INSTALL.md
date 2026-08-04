@@ -2,10 +2,10 @@
 
 ## Prerequisites
 
-- Python 3.8+
+- Python 3.10+ (the codebase uses `X | None` union-type hints)
 - Access to a Hipocrate instance
 - Hipocrate credentials
-- `pynetdicom` + `pydicom` — optional, required only for the DICOM MWL server (see [WORKLIST.md](WORKLIST.md))
+- `pynetdicom` + `pydicom` — optional, required only for the DICOM MWL server (see [docs/WORKLIST.md](docs/WORKLIST.md))
 
 ## Install
 

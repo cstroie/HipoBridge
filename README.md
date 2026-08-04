@@ -113,7 +113,7 @@ No `--checkin`/`--checkup` flags — those endpoints are reachable via the HTTP 
 
 HippoBridge can serve the imaging schedule to CT, MRI, ultrasound, and X-Ray devices via the DICOM MWL protocol (C-FIND, SOP Class `1.2.840.10008.5.1.4.31`), so technicians don't type patient demographics at the console.
 
-The MWL server starts automatically alongside the HTTP server when `worklist.cfg` is present. Copy `worklist.cfg.example` to get started. See [WORKLIST.md](WORKLIST.md) for full documentation.
+The MWL server starts automatically alongside the HTTP server when `worklist.cfg` is present. Copy `worklist.cfg.example` to get started. See [docs/WORKLIST.md](docs/WORKLIST.md) for full documentation.
 
 ```bash
 pip install pynetdicom pydicom
