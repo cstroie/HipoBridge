@@ -77,13 +77,15 @@ The pidfile at `hippobridge.pid` (override with `PIDFILE=...`) distinguishes a r
 
 ## System-wide install (systemd or OpenRC)
 
-`./install systemd [user]` and `./install openrc [user]` (alias: `alpine`)
-automate the whole system-wide setup on top of the regular venv install:
+`./install systemd [user]` and `./install openrc [user]` (OpenRC covers Alpine
+and other OpenRC systems) automate the whole system-wide setup on top of the
+regular venv install. `./install service [user]` auto-detects which one to
+use (checks for `systemctl`, then `rc-update`):
 
 ```bash
 git clone https://github.com/cstroie/HipoBridge.git /opt/hippobridge
 cd /opt/hippobridge
-sudo ./install systemd            # or: sudo ./install openrc
+sudo ./install service            # auto-detect, or: sudo ./install systemd / openrc
 sudo ./install systemd daemon     # reuse an existing account instead of creating "hippobridge"
 ```
 

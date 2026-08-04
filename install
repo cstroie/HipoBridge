@@ -5,8 +5,8 @@
 # Usage:
 #   ./install                        # venv + dependencies only, no root needed
 #   ./install systemd [user]         # + install hippobridge.service under a system account
-#   ./install openrc  [user]         # + install hippobridge.openrc under a system account
-#   ./install alpine  [user]         # alias for openrc
+#   ./install openrc  [user]         # + install hippobridge.openrc under a system account (Alpine and others)
+#   ./install service [user]         # + auto-detect systemd vs OpenRC and install that
 #
 #   [user] defaults to "hippobridge"; e.g. `./install systemd daemon` reuses
 #   the existing "daemon" account instead of creating a new one.
@@ -53,13 +53,23 @@ fi
 
 MODE="${1:-}"
 case "$MODE" in
-    ""|systemd|openrc|alpine) ;;
+    ""|systemd|openrc) ;;
+    service)
+        if command -v systemctl >/dev/null; then
+            MODE=systemd
+        elif command -v rc-update >/dev/null; then
+            MODE=openrc
+        else
+            echo "error: couldn't detect systemd or OpenRC on this system — pass 'systemd' or 'openrc' explicitly" >&2
+            exit 1
+        fi
+        echo "Detected init system: $MODE"
+        ;;
     *)
-        echo "Usage: $0 [systemd|openrc|alpine] [service-user]" >&2
+        echo "Usage: $0 [systemd|openrc|service] [service-user]" >&2
         exit 2
         ;;
 esac
-[[ "$MODE" == "alpine" ]] && MODE="openrc"
 
 if [[ -z "$MODE" ]]; then
     build_venv
