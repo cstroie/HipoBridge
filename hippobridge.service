@@ -1,27 +1,30 @@
 [Unit]
 Description=HippoBridge scraping proxy server
-Documentation=file:%h/work/hippobridge/docs/ARCHITECTURE.md
+Documentation=file:/opt/hippobridge/docs/ARCHITECTURE.md
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-# Adjust User=/Group= to the account that owns the checkout; %h then
-# resolves to that account's home directory, so no path below needs editing
-# beyond this line (assumes the checkout lives at ~/work/hippobridge).
-User=costin
-Group=costin
-WorkingDirectory=%h/work/hippobridge
+# Runs as a dedicated, unprivileged system account rather than a personal
+# user. One-time setup:
+#   useradd --system --home-dir /opt/hippobridge --shell /usr/sbin/nologin hippobridge
+#   git clone <repo> /opt/hippobridge   # or rsync/symlink an existing checkout there
+#   chown -R hippobridge:hippobridge /opt/hippobridge
+User=hippobridge
+Group=hippobridge
+WorkingDirectory=/opt/hippobridge
 
 # The server itself needs no credentials (@require_auth forwards each
 # request's own Basic Auth to Hipocrate). Only uncomment EnvironmentFile if
 # you want the worklist SCP's HYP_USER/HYP_PASS fallback instead of setting
 # [worklist] username/password directly in worklist.cfg. If you do use it,
-# put credentials in that file (chmod 600, NOT in git) — never inline here.
-# The leading "-" makes a missing file non-fatal.
-#EnvironmentFile=-%h/work/hippobridge/hippobridge.env
+# put credentials in that file (chmod 600, owned by hippobridge:hippobridge,
+# NOT in git) — never inline here. The leading "-" makes a missing file
+# non-fatal.
+#EnvironmentFile=-/opt/hippobridge/hippobridge.env
 
-ExecStart=/usr/bin/python3 %h/work/hippobridge/hippobridge.py
+ExecStart=/usr/bin/python3 /opt/hippobridge/hippobridge.py
 # SIGTERM triggers hippobridge.py's own graceful-shutdown handler
 # (runner.cleanup()) — no need for KillSignal overrides. Give in-flight
 # requests a bit of time before systemd escalates to SIGKILL.
@@ -41,8 +44,8 @@ SyslogIdentifier=hippobridge
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ProtectHome=read-only
-ReadWritePaths=%h/work/hippobridge
+ProtectHome=true
+ReadWritePaths=/opt/hippobridge
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
