@@ -30,7 +30,8 @@ try:
     from pydicom.sequence import Sequence
     from pydicom.uid import generate_uid
     from pynetdicom import AE, evt
-    from pynetdicom.sop_class import ModalityWorklistInformationFind, Verification
+    from pynetdicom.sop_class import (ModalityWorklistInformationFind, Verification,
+                                       ModalityPerformedProcedureStep)
     DICOM_AVAILABLE = True
 except ImportError:
     DICOM_AVAILABLE = False
@@ -806,6 +807,33 @@ class WorklistServer:
             logger.info("Shutting down DICOM MWL SCP")
             self._ae.shutdown()
 
+    def _handle_mpps_create(self, event):
+        """MPPS N-CREATE (exam started). Observation only — logs and accepts,
+        takes no action against Hipocrate. See _handle_mpps_set."""
+        calling_ae = (event.assoc.requestor.ae_title or '').strip()
+        ds = event.attribute_list
+        sop_instance_uid = getattr(event.request, 'AffectedSOPInstanceUID', None)
+        logger.info(
+            "MPPS N-CREATE from '%s' (SOP Instance: %s):\n%s",
+            calling_ae, sop_instance_uid, ds,
+        )
+        return 0x0000, ds
+
+    def _handle_mpps_set(self, event):
+        """MPPS N-SET (exam completed/discontinued). Observation only — logs
+        and accepts, takes no action against Hipocrate. This is a temporary
+        instrumentation pass: run for a few days, then inspect the logs to see
+        which devices actually send MPPS and what they report, before deciding
+        whether to wire this up to HippoClientCererePerform."""
+        calling_ae = (event.assoc.requestor.ae_title or '').strip()
+        ds = event.attribute_list
+        sop_instance_uid = getattr(event.request, 'RequestedSOPInstanceUID', None)
+        logger.info(
+            "MPPS N-SET from '%s' (SOP Instance: %s):\n%s",
+            calling_ae, sop_instance_uid, ds,
+        )
+        return 0x0000, ds
+
     def serve(self) -> None:
         """Start the DICOM SCP. Blocks until shutdown() is called or the process exits."""
         if not DICOM_AVAILABLE:
@@ -815,12 +843,16 @@ class WorklistServer:
         self._ae = AE(ae_title=self._ae_title)
         self._ae.add_supported_context(Verification)
         self._ae.add_supported_context(ModalityWorklistInformationFind)
+        self._ae.add_supported_context(ModalityPerformedProcedureStep)
 
         logger.info(
-            "DICOM MWL SCP listening on port %d (AE: %s)", self._port, self._ae_title
+            "DICOM MWL SCP listening on port %d (AE: %s), MPPS logging enabled",
+            self._port, self._ae_title,
         )
         self._ae.start_server(('', self._port), block=True,
-                              evt_handlers=[(evt.EVT_C_FIND, self.handle_find)])
+                              evt_handlers=[(evt.EVT_C_FIND, self.handle_find),
+                                            (evt.EVT_N_CREATE, self._handle_mpps_create),
+                                            (evt.EVT_N_SET, self._handle_mpps_set)])
 
 
 # ---------------------------------------------------------------------------
