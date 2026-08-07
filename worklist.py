@@ -23,6 +23,7 @@ import logging
 import os
 import threading
 from datetime import datetime, timedelta
+from logging.handlers import RotatingFileHandler
 from typing import Dict, List, Optional, Tuple
 
 try:
@@ -41,6 +42,8 @@ from hippoclient import (HippoClientSchedule, HippoClientCerere, HippoClientBule
 from extractors import parse_cnp
 
 logger = logging.getLogger('Worklist')
+
+_LOG_FORMAT = '%(asctime)s | %(levelname)8s | %(message)s'
 
 # Maps modality slugs → Hipocrate lab IDs used by the schedule page filter
 # (PARA_ID_Laborator). Used to do modality-specific on-demand refreshes.
@@ -124,7 +127,7 @@ def _load_config(config_path: str) -> Tuple[dict, List[dict]]:
 
     Returns (server_cfg, device_profiles).
 
-    server_cfg keys: ae_title, port, on_demand_refresh_seconds, username, password.
+    server_cfg keys: ae_title, port, on_demand_refresh_seconds, username, password, log_file.
     device_profiles: list of dicts with keys name, ae_title, modality,
                      wards (list), time_window_hours, day_care ('yes'/'no'/'any').
     """
@@ -136,6 +139,7 @@ def _load_config(config_path: str) -> Tuple[dict, List[dict]]:
         'port':                       config.getint('worklist', 'port', fallback=11112),
         'on_demand_refresh_seconds':  config.getfloat('worklist', 'on_demand_refresh_seconds', fallback=60.0),
         'accession_prefix':           config.get('worklist', 'accession_prefix', fallback=''),
+        'log_file':                   config.get('worklist', 'log_file', fallback='log/worklist.log'),
         'username':                   config.get('worklist', 'username',
                                                  fallback=os.getenv('HYP_USER', '')),
         'password':                   config.get('worklist', 'password',
@@ -1126,6 +1130,19 @@ def start_worklist(service_url: str,
             "— DICOM MWL server disabled"
         )
         return None
+
+    log_file = server_cfg.get('log_file', '').strip()
+    if log_file:
+        log_path = log_file if os.path.isabs(log_file) else \
+            os.path.join(os.path.dirname(config_path), log_file)
+        log_dir = os.path.dirname(log_path)
+        if log_dir:
+            os.makedirs(log_dir, exist_ok=True)
+        file_handler = RotatingFileHandler(log_path, maxBytes=10485760, backupCount=5)
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(logging.Formatter(_LOG_FORMAT))
+        logger.addHandler(file_handler)
+        logger.info("Worklist logging also going to %s (DEBUG level)", log_path)
 
     cache = WorklistCache()
 
