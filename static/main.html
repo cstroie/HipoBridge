@@ -502,15 +502,15 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
 
                         <div class="schedule-filters-spacer"></div>
 
-                        <!-- Ward pill wrapping the native select -->
-                        <div class="schedule-ward-pill">
-                            <i class="fas fa-hospital" aria-hidden="true"></i>
-                            <label for="scheduleSectionFilter" class="sr-only">Ward</label>
-                            <select id="scheduleSectionFilter" aria-label="Filter by ward" title="Filter by ward">
-                                <option value="">All wards</option>
-                            </select>
-                            <i class="fas fa-chevron-down" aria-hidden="true"></i>
-                        </div>
+                        <label for="scheduleSectionFilter" class="sr-only">Ward</label>
+                        <select id="scheduleSectionFilter" class="schedule-filter-select" aria-label="Filter by ward" title="Filter by ward">
+                            <option value="">All wards</option>
+                        </select>
+
+                        <button type="button" class="btn-secondary schedule-clear-filters-btn" id="scheduleClearFiltersBtn" title="Clear all filters" hidden>
+                            <i class="fas fa-times" aria-hidden="true"></i>
+                            <span>Clear filters</span>
+                        </button>
                     </div>
 
                     <!-- Timeline -->

@@ -2015,11 +2015,14 @@ def _parse_narrative_studies(soup: BeautifulSoup) -> list:
                 for child in list(br.children):
                     br.insert_before(child)
                 br.replace_with('\n')
+            # insert_before (not just after) so the boundary before the first
+            # p/div — Hipocrate's unwrapped first paragraph — isn't lost; there's
+            # no preceding tag to hang an insert_after('\n\n') off of for that one.
             for p in result_cell.find_all('p'):
-                p.insert_after('\n\n')
+                p.insert_before('\n\n')
                 p.unwrap()
             for div in result_cell.find_all('div'):
-                div.insert_after('\n\n')
+                div.insert_before('\n\n')
                 div.unwrap()
             for tag in result_cell.find_all(['b', 'strong']):
                 if tag.get_text(strip=True):
@@ -2447,24 +2450,6 @@ class HippoClientDiagnosticReport(HippoClient):
                     checkin_datetime = parsed_data.get("checkin.date_time")
                     if checkin_datetime:
                         fhir_report["effectiveDateTime"] = checkin_datetime
-
-            # Add performer if available
-            performer = parsed_data.get("study.performer")
-            if performer:
-                fhir_report["performer"] = [
-                    {
-                        "display": performer
-                    }
-                ]
-
-            # Add results interpreter
-            medic = parsed_data.get("study.medic")
-            if medic:
-                fhir_report["resultsInterpreter"] = [
-                    {
-                        "display": medic
-                    }
-                ]
 
             # Add results if studies are available
             studies = parsed_data.get("studies")
@@ -3596,6 +3581,16 @@ class HippoClientCerere(HippoClient):
                     if len(cells) >= 2 and 'Rezultat' in cells[0].get_text():
                         # Convert HTML formatting to markdown, divs to newlines
                         result_cell = cells[1]
+                        # <br> first — html.parser nests following elements as
+                        # children of an unclosed <br>, so extract them out before
+                        # replacing to avoid silently dropping content. Real
+                        # Hipocrate-authored reports can use bare <br>-separated
+                        # text with no <div>/<p> at all (confirmed on report
+                        # #1743482), so this must run even when no div/p exist.
+                        for br in result_cell.find_all('br'):
+                            for child in list(br.children):
+                                br.insert_before(child)
+                            br.replace_with('\n')
                         # Convert formatting tags to markdown
                         for tag in result_cell.find_all(['b', 'strong']):
                             if tag.get_text(strip=True):
@@ -3612,12 +3607,20 @@ class HippoClientCerere(HippoClient):
                                 tag.insert_before('*')
                                 tag.insert_after('*')
                             tag.unwrap()
-                        # Convert div/p tags to newlines
+                        # Convert div/p tags to newlines — legacy shape seen on
+                        # reports written through Hipocrate's own editor, which
+                        # can wrap every line (including an empty first one) in
+                        # <div> rather than use <br> (confirmed on #1743548; we
+                        # ourselves write <br>-separated text, see
+                        # _text_to_report_html, but must still read this shape).
+                        # insert_before (not just after) so the boundary before
+                        # the very first div isn't lost — there's no preceding
+                        # tag to hang an insert_after('\n') off of for that one.
                         for div in result_cell.find_all('div'):
-                            div.insert_after('\n')
+                            div.insert_before('\n')
                             div.unwrap()
                         for p in result_cell.find_all('p'):
-                            p.insert_after('\n')
+                            p.insert_before('\n')
                             p.unwrap()
                         text = result_cell.get_text(strip=False)
                         text = text.strip()
@@ -4606,6 +4609,24 @@ class HippoClientSchedule(HippoClient):
         '50': 'fluoro',
     }
 
+    # (username, lab_id) pairs whose fan-out fetch recently came back without a
+    # tbl_listare table — most likely because that Hipocrate user isn't permitted
+    # to see that lab/module. Hipocrate doesn't expose an API that lists a user's
+    # accessible labs (the dropdown is populated by an undocumented ajax call we
+    # won't guess the shape of against a live system), so this is learned
+    # adaptively instead: skip a lab for a user after the first such failure,
+    # and retry it after the TTL in case permissions change.
+    _inaccessible_labs: Dict[Tuple[str, str], float] = {}
+    _INACCESSIBLE_LAB_TTL = 3600  # seconds
+    # A single tbl_listare failure can be a transient Hipocrate/session hiccup
+    # rather than a real permission gap (confirmed 2026-08-09: the raw-page
+    # cache used to retain such a bad response, so it kept "failing" until a
+    # manual refresh — now fixed by evicting on parse failure, see
+    # fetch_and_parse). Require a few consecutive failures before believing
+    # it's a genuine per-user access restriction and skip-listing the lab.
+    _lab_failure_streak: Dict[Tuple[str, str], int] = {}
+    _INACCESSIBLE_LAB_STREAK_THRESHOLD = 3
+
     def __init__(self, service_url=None, request=None):
         super().__init__(service_url=service_url, request=request)
         self.request_url = "/PARA/NOM/Listare/"
@@ -4650,15 +4671,50 @@ class HippoClientSchedule(HippoClient):
             if error_message:
                 data.set_error(error_message)
                 return data
-            return self.parse_data(response_text, **kwargs)
+            parsed = self.parse_data(response_text, **kwargs)
+            if parsed.get("status") == "error":
+                # get_page() caches the raw HTML unconditionally, before parsing
+                # ever runs — a transient bad response (e.g. missing tbl_listare,
+                # likely a session/permission hiccup) would otherwise sit cached
+                # and keep failing on every normal request until someone
+                # manually force-refreshes. Evict it now so the next request
+                # (no force needed) gets a fresh fetch instead of repeating the
+                # same failure for the rest of the cache TTL.
+                self.cache_remove(self.get_full_url(url))
+            parsed.store_list("requests", self._apply_filters(
+                parsed.get("requests") or [],
+                section_name=kwargs.get('section_name'),
+                status=kwargs.get('status'),
+            ))
+            parsed.store("total", len(parsed.get("requests") or []))
+            return parsed
         except Exception as e:
             logger.error(f"fetch_and_parse (schedule) failed: {e}")
             data.set_error(f"Data retrieval failed: {e}")
             return data
 
+    def _apply_filters(self, requests: list, section_name=None, status=None) -> list:
+        """Server-side filtering shared by /api/schedule and /fhir/Schedule so both
+        endpoints behave identically regardless of output format."""
+        section_name = (section_name or '').strip()
+        if section_name:
+            requests = [r for r in requests if (r.get('section') or '') == section_name]
+        status = (status or '').strip()
+        if status:
+            requests = [r for r in requests
+                        if self._FHIR_STATUS.get((r.get('status') or '').lower(), 'unknown') == status]
+        return requests
+
     async def _fetch_and_parse_all_labs(self, **kwargs) -> HippoData:
         """Merge one fetch per known PARA_ID_Laborator so each entry keeps its modality."""
-        sub_kwargs_list = [dict(kwargs, lab_id=lab_id) for lab_id in self._LAB_ID_TO_MODALITY]
+        now = time.time()
+        username = self.username or ''
+        skip_labs = {
+            lab_id for (user, lab_id), failed_at in self._inaccessible_labs.items()
+            if user == username and now - failed_at < self._INACCESSIBLE_LAB_TTL
+        }
+        lab_ids = [lab_id for lab_id in self._LAB_ID_TO_MODALITY if lab_id not in skip_labs]
+        sub_kwargs_list = [dict(kwargs, lab_id=lab_id) for lab_id in lab_ids]
         results = await asyncio.gather(
             *(HippoClientSchedule(self.service_url, self.request).fetch_and_parse(**sub_kwargs)
               for sub_kwargs in sub_kwargs_list),
@@ -4667,13 +4723,28 @@ class HippoClientSchedule(HippoClient):
 
         merged = []
         seen_ids = set()
-        for result in results:
+        for lab_id, result in zip(lab_ids, results):
             if isinstance(result, Exception):
                 logger.error(f"fetch_and_parse (schedule, per-lab) failed: {result}")
                 continue
             if result.get("status") == "error":
-                logger.warning(f"fetch_and_parse (schedule, per-lab) error: {result.get('message')}")
+                message = result.get('message') or ''
+                if 'tbl_listare table not found' in message:
+                    key = (username, lab_id)
+                    streak = self._lab_failure_streak.get(key, 0) + 1
+                    self._lab_failure_streak[key] = streak
+                    if streak >= self._INACCESSIBLE_LAB_STREAK_THRESHOLD:
+                        # Consistently failing, not just a one-off — most likely
+                        # this user lacks access to this lab/module. Stop fanning
+                        # out to it for a while instead of retrying (and
+                        # re-warning) on every future schedule fetch.
+                        self._inaccessible_labs[key] = now
+                logger.warning(f"fetch_and_parse (schedule, per-lab) error: {message}")
                 continue
+            # A successful fetch means any prior failures for this lab were
+            # transient, not a real access restriction — clear the streak so a
+            # single future blip doesn't nearly skip-list it again.
+            self._lab_failure_streak.pop((username, lab_id), None)
             for req in result.get("requests") or []:
                 request_id = req.get('request_id')
                 if request_id and request_id in seen_ids:
@@ -4683,6 +4754,10 @@ class HippoClientSchedule(HippoClient):
                 merged.append(req)
 
         merged.sort(key=lambda req: req.get('date_time') or '', reverse=True)
+
+        limit_raw = kwargs.get('limit')
+        if limit_raw and str(limit_raw).isdigit():
+            merged = merged[:int(limit_raw)]
 
         data = HippoData(status="success", message="")
         data.store_list("requests", merged)
@@ -4797,12 +4872,10 @@ class HippoClientSchedule(HippoClient):
                     severity="error"
                 )
 
+            # section/status filtering already applied upstream in fetch_and_parse/
+            # _fetch_and_parse_all_labs via _apply_filters, so both /api/schedule and
+            # /fhir/Schedule see identical, already-filtered rows here.
             requests = parsed_data.get("requests") or []
-
-            # Python-side filtering for section (by name; lab is filtered natively by Hipocrate via PARA_ID_Laborator)
-            section_name = (kwargs.get('section_name') or '').strip()
-            if section_name:
-                requests = [r for r in requests if (r.get('section') or '') == section_name]
 
             bundle = FHIRBundle(type="searchset", total=len(requests))
 
@@ -4901,29 +4974,34 @@ def _markdown_to_html(text: str) -> str:
 
 
 def _text_to_report_html(text: str) -> str:
-    """Convert plain text to Hipocrate report HTML format.
+    """Convert markdown report text to HTML for Hipocrate's Rezultate.asp
+    result field.
 
-    Currently unused — HippoClientReportWrite.write() posts plain text as-is
-    (disabled 2026-07-28, upstream Rezultate.asp form changed). Kept here to
-    re-enable once the new upstream format is understood.
+    Confirmed 2026-08-09 (report #1729398): the field is a literal HTML
+    sink — whatever string is posted is stored verbatim in the Rezultat
+    <td>, with no interpretation of its own (raw '\\n' is stripped entirely
+    with no substitute whitespace, and markdown syntax is stored as literal
+    text). So real HTML must be sent for line breaks and emphasis to render
+    at all.
 
-    Hipocrate stores reports with: first paragraph unwrapped, rest in <div> tags.
-    Converts markdown bold/italic to HTML.
+    There's no single canonical "Hipocrate format" to mimic — real
+    human-authored reports checked the same day show two different shapes
+    (#1743548: every line, including an empty first one, wrapped in <div>;
+    #1743482: plain text with no <div> at all, lines separated by <br/>),
+    almost certainly just artifacts of the browser's contenteditable
+    behavior (a <div> per Enter, a <br> per Shift+Enter) rather than a rule
+    Hipocrate enforces. Since the field stores whatever we send verbatim
+    either way, <br> is used here as the simpler of the two: no asymmetric
+    "first paragraph" special case, and the read side must already handle
+    <br>-only reports since real ones use that shape.
     Input:  "First **bold**\\nSecond *italic*\\nThird"
-    Output: "First <b>bold</b><div>Second <i>italic</i></div><div>Third</div>"
+    Output: "First <b>bold</b><br>Second <i>italic</i><br>Third"
     """
-    import html as html_module
-    paragraphs = [p for p in text.strip().split('\n') if p]
-    if not paragraphs:
+    text = text.strip()
+    if not text:
         return ''
-
-    # Convert markdown to HTML for each paragraph
-    html_paragraphs = [_markdown_to_html(p) for p in paragraphs]
-
-    #first = html_paragraphs[0]
-    #rest = ''.join(f'<div>{p}</div>' for p in html_paragraphs[1:])
-    #return first + rest
-    return ''.join(f'<div>{p}</div>' for p in html_paragraphs)
+    lines = text.split('\n')
+    return '<br>'.join(_markdown_to_html(line) for line in lines)
 
 
 class HippoClientReportWrite(HippoClient):
@@ -4966,12 +5044,12 @@ class HippoClientReportWrite(HippoClient):
         field_code = field_el["name"][1:]  # strip leading 'v'
         logger.info(f"ReportWrite: field_code={field_code} url={rez_url}")
 
-        # Step 3 — POST the report text.
-        # Markdown->HTML conversion (_text_to_report_html) is disabled for now:
-        # Hipocrate's Rezultate.asp form changed upstream and the converted
-        # HTML is no longer being stored/rendered correctly there. Post the
-        # plain text as-is until the new upstream format is understood.
-        report_html = text
+        # Step 3 — POST the report text as HTML. The result field stores
+        # whatever it's given verbatim (see _text_to_report_html) — posting
+        # raw markdown text left literal '**'/'*' and no paragraph breaks at
+        # all (confirmed via report #1729398), so markdown must be converted
+        # to real HTML here first.
+        report_html = _text_to_report_html(text)
         post_data = {
             f"v{field_code}": report_html,
             f"v{field_code}HtmlArea": report_html,

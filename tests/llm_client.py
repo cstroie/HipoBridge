@@ -57,7 +57,7 @@ class TestProviderSelection(unittest.TestCase):
 
 class TestPromptRegistry(unittest.TestCase):
     def test_kinds_map_to_valid_tiers(self):
-        self.assertEqual(set(PROMPTS), {"report", "epicrisis", "imaging", "lab", "pre_exam"})
+        self.assertEqual(set(PROMPTS), {"report", "epicrisis", "imaging", "imaging_episode", "lab", "pre_exam"})
         for kind, (tier, system, max_tokens) in PROMPTS.items():
             self.assertIn(tier, TIERS, f"{kind} uses unknown tier {tier}")
             self.assertTrue(system.strip(), f"{kind} has an empty prompt")

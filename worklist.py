@@ -1142,7 +1142,17 @@ def start_worklist(service_url: str,
         file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(logging.Formatter(_LOG_FORMAT))
         logger.addHandler(file_handler)
-        logger.info("Worklist logging also going to %s (DEBUG level)", log_path)
+        logger.propagate = False
+
+        # pynetdicom emits its own association/protocol log records under a
+        # separate 'pynetdicom' logger (not a child of 'Worklist') — route
+        # those to the same dedicated file instead of letting them leak into
+        # the main hippobridge.log via the root logger.
+        pynetdicom_logger = logging.getLogger('pynetdicom')
+        pynetdicom_logger.addHandler(file_handler)
+        pynetdicom_logger.propagate = False
+
+        logger.info("Worklist logging (including pynetdicom) routed to %s only (DEBUG level)", log_path)
 
     cache = WorklistCache()
 

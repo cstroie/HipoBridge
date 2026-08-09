@@ -483,11 +483,12 @@ async def get_request_patient(request):
 
 @require_auth
 async def get_schedule(request):
-    """List imaging/lab requests. ?start_date=&end_date=&lab_id=&section_name=&patient_text=&refresh=1"""
+    """List imaging/lab requests. ?start_date=&end_date=&lab_id=&section_name=&status=&patient_text=&refresh=1"""
     start_date   = request.rel_url.query.get('start_date') or request.rel_url.query.get('date')
     end_date     = request.rel_url.query.get('end_date')
     lab_id       = request.rel_url.query.get('lab_id')
     section_name = request.rel_url.query.get('section_name')
+    status       = request.rel_url.query.get('status')
     patient_text = request.rel_url.query.get('patient_text')
     force        = request.rel_url.query.get('refresh') == '1'
     client = HippoClientSchedule(SERVICE_URL, request)
@@ -496,17 +497,18 @@ async def get_schedule(request):
     if debug_resp is not None:
         return debug_resp
     parsed_data = await client.fetch_and_parse(start_date=start_date, end_date=end_date,
-                                               lab_id=lab_id, section_name=section_name,
+                                               lab_id=lab_id, section_name=section_name, status=status,
                                                patient_text=patient_text, force=force)
     return web_json_response(parsed_data)
 
 @require_auth
 async def get_fhir_schedule(request):
-    """FHIR Bundle of ServiceRequest resources for the worklist. ?start_date=&end_date=&lab_id=&section_name=&patient_text=&refresh=1"""
+    """FHIR Bundle of ServiceRequest resources for the worklist. ?start_date=&end_date=&lab_id=&section_name=&status=&patient_text=&refresh=1"""
     start_date   = request.rel_url.query.get('start_date') or request.rel_url.query.get('date')
     end_date     = request.rel_url.query.get('end_date')
     lab_id       = request.rel_url.query.get('lab_id')
     section_name = request.rel_url.query.get('section_name')
+    status       = request.rel_url.query.get('status')
     patient_text = request.rel_url.query.get('patient_text')
     force        = request.rel_url.query.get('refresh') == '1'
     limit_raw    = request.rel_url.query.get('limit')
@@ -514,7 +516,7 @@ async def get_fhir_schedule(request):
     client = HippoClientSchedule(SERVICE_URL, request)
     response = await client.fetch_respond_fhir(
         start_date=start_date, end_date=end_date,
-        lab_id=lab_id, section_name=section_name, patient_text=patient_text,
+        lab_id=lab_id, section_name=section_name, status=status, patient_text=patient_text,
         force=force, limit=limit, http_request=request)
     return web_fhir_response(response)
 

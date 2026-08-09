@@ -1317,6 +1317,52 @@ select {
     .analyses-grid { columns: 1; }
 }
 
+/* Episode divider — spans both masonry columns and restarts column
+   balancing beneath it, separating "Current Episode" from "Historical
+   Episodes" cards within the same grid. */
+.episode-divider {
+    column-span: all;
+    font: var(--font-weight-semibold) var(--font-size-sm) 'Inter', sans-serif;
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: var(--space-16) 0 var(--space-8);
+    padding-bottom: var(--space-8);
+    border-bottom: 1px solid var(--border);
+}
+.episode-divider:first-child { margin-top: 0; }
+
+/* Current Episode's imaging heading, when it also carries an AI | Copy
+   toolbar (imaging_episode synopsis) — wraps the divider text so the
+   toolbar can sit flush right on the same row, still spanning both masonry
+   columns as a unit. */
+.episode-header {
+    column-span: all;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-16);
+    margin: var(--space-16) 0 var(--space-8);
+    padding-bottom: var(--space-8);
+    border-bottom: 1px solid var(--border);
+}
+.episode-header:first-child { margin-top: 0; }
+/* The border/margin above already separates the section — the nested
+   divider text itself stays bare so there's no double border. */
+.episode-header .episode-divider {
+    column-span: initial;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+/* An AI synopsis card inserted directly into the multicol imaging/lab grid
+   (e.g. the imaging_episode synopsis) must span both columns the same way
+   .episode-divider/.episode-header do, or it renders squeezed into one. */
+.analyses-grid > .ai-summary-card {
+    column-span: all;
+}
+
 /* ── Lab Trends ─────────────────────────────────────────────────────────── */
 
 /* ── Lab result table (card + modal) ────────────────────────────────────── */
@@ -3021,42 +3067,11 @@ select {
 
 .schedule-status-chips { display: flex; gap: var(--space-6); flex-wrap: wrap; }
 
-/* Ward pill — wraps the native select for styling */
-.schedule-ward-pill {
-    display: flex;
-    align-items: center;
-    gap: var(--space-8);
-    background: var(--card-bg);
-    border: 1px solid var(--line-2);
-    border-radius: var(--radius-md);
-    padding: var(--space-8) var(--space-12);
-    font: 500 var(--font-size-13) 'Inter', sans-serif;
-    color: var(--text-light);
-    position: relative;
-}
-.schedule-ward-pill i { color: var(--muted); font-size: var(--font-size-11); }
-.schedule-ward-pill i.fa-chevron-down { font-size: var(--font-size-10); }
-.schedule-ward-pill select {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-    width: 100%;
-    cursor: pointer;
-}
-/* Show the selected ward label via JS — see populateSectionFilter */
-.schedule-ward-pill .ward-label { pointer-events: none; }
-
-.schedule-filter-select {
-    font-size: var(--font-size-sm);
-    padding: var(--space-4) var(--space-8);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--card-bg);
-    color: var(--text);
-    min-width: 0;
-    width: 120px;
-}
-
+/* Shared base for every schedule filter control (search input, date inputs,
+   modality/ward/limit selects) — one consistent height/padding/border/radius
+   instead of separately hand-tuned per-widget blocks. */
+.schedule-filter-input,
+.schedule-filter-select,
 .schedule-date-input {
     font-size: var(--font-size-sm);
     padding: var(--space-4) var(--space-8);
@@ -3064,6 +3079,14 @@ select {
     border-radius: var(--radius-sm);
     background: var(--card-bg);
     color: var(--text);
+}
+
+.schedule-filter-select {
+    min-width: 0;
+    width: 120px;
+}
+
+.schedule-date-input {
     color-scheme: light;
 }
 
@@ -3078,14 +3101,19 @@ select {
 }
 
 .schedule-filter-input {
-    font-size: var(--font-size-sm);
-    padding: var(--space-4) var(--space-8);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--card-bg);
-    color: var(--text);
     min-width: 200px;
     flex: 1 1 200px;
+}
+
+.schedule-clear-filters-btn {
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* .btn-secondary sets display:inline-flex unconditionally, which otherwise
+   beats the native [hidden] default — force it hidden explicitly. */
+.schedule-clear-filters-btn[hidden] {
+    display: none;
 }
 
 /* ── Epicrisis cards + navigator ──────────────────────────────────────── */
@@ -4404,10 +4432,11 @@ dialog.report-editor-modal article > section {
         flex-wrap: wrap;
     }
     .schedule-filters-spacer { display: none; }
-    .schedule-ward-pill {
+
+    .schedule-clear-filters-btn {
         margin-left: 0;
         width: 100%;
-        justify-content: space-between;
+        justify-content: center;
     }
 
     /* Schedule tab's refresh button (not the patient-header one, which is

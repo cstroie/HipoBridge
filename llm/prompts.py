@@ -62,11 +62,12 @@ _TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "prompts")
 # prompts/<kind>.md. Add a kind here and drop in a matching, self-contained
 # .md file.
 PROMPT_META = {
-    "report":    ("default", 340),
-    "epicrisis": ("default", 420),
-    "imaging":   ("medical", 60),
-    "lab":       ("medical", 600),
-    "pre_exam":  ("medical", 1300),
+    "report":          ("default", 340),
+    "epicrisis":       ("default", 420),
+    "imaging":         ("medical", 60),
+    "imaging_episode": ("medical", 700),
+    "lab":             ("medical", 600),
+    "pre_exam":        ("medical", 1300),
 }
 
 
@@ -159,7 +160,9 @@ def _language_directive(language: str) -> str:
 # about date context, the other about transport; independently editable.
 # imaging (40 tokens) is excluded — too short for streaming to buy anything.
 # lab (400 tokens) is included — long enough that perceived latency matters.
-STREAMING_KINDS = frozenset({"report", "epicrisis", "pre_exam", "lab"})
+# imaging_episode (multi-study synopsis, 700 tokens) is included for the
+# same reason as lab.
+STREAMING_KINDS = frozenset({"report", "epicrisis", "pre_exam", "lab", "imaging_episode"})
 
 
 def _build_messages(client, kind: str, text: str) -> list[dict]:

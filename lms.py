@@ -96,6 +96,29 @@ def cmd_list(args: argparse.Namespace) -> None:
     if not loaded:
         print("  (none)")
 
+    if args.all:
+        unloaded = [m for m in models if not m.get("loaded_instances")]
+        print(f"\n{len(unloaded)} downloaded but not loaded:\n")
+        for m in unloaded:
+            print(f"  [avail ] {m['key']}")
+        if not unloaded:
+            print("  (none)")
+
+
+def _resolve_instance_id(loaded: list[dict], name: str) -> str:
+    """Accept an exact instance_id, or a substring that uniquely identifies
+    one loaded instance (matched against instance_id or key)."""
+    ids = [inst["instance_id"] for inst in loaded]
+    if name in ids:
+        return name
+    matches = [inst["instance_id"] for inst in loaded
+               if name in inst["instance_id"] or name in inst["key"]]
+    if len(matches) == 1:
+        return matches[0]
+    if not matches:
+        sys.exit(f"unload: no loaded instance matches {name!r}")
+    sys.exit(f"unload: {name!r} matches multiple loaded instances: {', '.join(matches)}")
+
 
 def cmd_unload(args: argparse.Namespace) -> None:
     base, headers = _api_base()
@@ -110,7 +133,9 @@ def cmd_unload(args: argparse.Namespace) -> None:
     else:
         if not args.instance_id:
             sys.exit("unload: provide instance_id(s) or use --all")
-        targets = [i for i in args.instance_id if i not in args.keep]
+        loaded = loaded_instances(list_models(base, headers))
+        targets = [_resolve_instance_id(loaded, i) for i in args.instance_id]
+        targets = [i for i in targets if i not in args.keep]
 
     for instance_id in targets:
         _request("POST", f"{base}/models/unload", headers, {"instance_id": instance_id})
@@ -234,6 +259,7 @@ def main() -> None:
 
     p_list = sub.add_parser("list", help="List known models and which instances are currently loaded")
     p_list.add_argument("--json", action="store_true", help="Print raw JSON instead of a table")
+    p_list.add_argument("--all", action="store_true", help="Also list downloaded models that aren't currently loaded")
 
     p_unload = sub.add_parser("unload", help="Unload one or more loaded model instances")
     p_unload.add_argument("instance_id", nargs="*", help="Instance id(s) to unload (as shown by `list`)")

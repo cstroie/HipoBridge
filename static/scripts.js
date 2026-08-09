@@ -10,6 +10,11 @@ function localDateStr(d = new Date()) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+    // Schedule tab state — declared early since the initial tab switch on
+    // page load can call fetchScheduleFromInputs synchronously, before a
+    // `let` declared later in this scope would be initialized (TDZ).
+    let activeScheduleStatusFilter = '';
+
     // DOM Elements - Cache selectors for better performance
     const elements = {
         form: document.getElementById('cnpForm'),
@@ -111,6 +116,7 @@ document.addEventListener('DOMContentLoaded', function() {
         noSchedule: document.getElementById('noSchedule'),
         scheduleTimeline: document.getElementById('scheduleTimeline'),
         scheduleStatusChips: document.getElementById('scheduleStatusChips'),
+        scheduleClearFiltersBtn: document.getElementById('scheduleClearFiltersBtn'),
         scheduleHero: document.getElementById('scheduleHero'),
         scheduleDayMetrics: document.getElementById('scheduleDayMetrics'),
         scheduleModBars: document.getElementById('scheduleModBars')
@@ -421,21 +427,20 @@ document.addEventListener('DOMContentLoaded', function() {
             elements.refreshPatientBtn.addEventListener('click', refreshCurrentPatient);
         }
         if (elements.schedulePatientFilter) {
-            elements.schedulePatientFilter.addEventListener('keydown', e => {
-                if (e.key === 'Enter') fetchScheduleFromInputs();
-            });
+            const debouncedScheduleFetch = debounce(() => fetchScheduleFromInputs(), 400);
+            elements.schedulePatientFilter.addEventListener('input', debouncedScheduleFetch);
         }
         if (elements.scheduleLabFilter) {
             elements.scheduleLabFilter.addEventListener('change', fetchScheduleFromInputs);
         }
         if (elements.scheduleSectionFilter) {
-            elements.scheduleSectionFilter.addEventListener('change', () => {
-                updateWardPillLabel();
-                fetchScheduleFromInputs();
-            });
+            elements.scheduleSectionFilter.addEventListener('change', fetchScheduleFromInputs);
         }
         if (elements.scheduleLimitSelect) {
             elements.scheduleLimitSelect.addEventListener('change', fetchScheduleFromInputs);
+        }
+        if (elements.scheduleClearFiltersBtn) {
+            elements.scheduleClearFiltersBtn.addEventListener('click', clearScheduleFilters);
         }
 
         // Imaging chips — delegated so it works regardless of when chips render
@@ -466,7 +471,7 @@ document.addEventListener('DOMContentLoaded', function() {
             elements.scheduleStatusChips.querySelectorAll('.chip').forEach(c => c.classList.remove('chip-active'));
             chip.classList.add('chip-active');
             activeScheduleStatusFilter = chip.dataset.status;
-            renderSchedule();
+            fetchScheduleFromInputs();
         });
     }
     
@@ -604,12 +609,22 @@ document.addEventListener('DOMContentLoaded', function() {
         if (gen !== dataGeneration) return;
         try {
             const checkoutIds = extractCheckoutIds(patientData);
-            if (!checkoutIds.length) return;
-            await limitedMap(checkoutIds, MAX_CONCURRENT_REQUESTS, async id => {
-                if (gen !== dataGeneration) return null;
-                try { return await fetchEncounterDataForCheckout(id); }
-                catch { return null; }
-            });
+            const checkinIds = extractCheckinIds(patientData);
+            if (!checkoutIds.length && !checkinIds.length) return;
+            await Promise.all([
+                limitedMap(checkoutIds, MAX_CONCURRENT_REQUESTS, async id => {
+                    if (gen !== dataGeneration) return null;
+                    try { return await fetchEncounterDataForCheckout(id); }
+                    catch { return null; }
+                }),
+                // Also warms the checkin side of computeCurrentEpisodeBoundary's
+                // cache.encounters lookups, not just the Epicrisis tab.
+                limitedMap(checkinIds, MAX_CONCURRENT_REQUESTS, async id => {
+                    if (gen !== dataGeneration) return null;
+                    try { return await fetchEncounterDataForCheckin(id); }
+                    catch { return null; }
+                }),
+            ]);
         } catch (err) {
             log('Prefetch epicrisis failed (silent):', err);
         }
@@ -627,11 +642,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const bundle = result.data || { resourceType: 'Bundle', entry: [] };
             const IMAGING = ['radio', 'ct', 'irm', 'eco', 'rads'];
             const entries = (bundle.entry || []).filter(e => IMAGING.includes(e.resource?.code?.coding?.[0]?.code));
+            const allDates = (bundle.entry || []).map(e => e.resource?.authoredOn).filter(Boolean);
             setLoadingStep(entries.length ? `Organising ${entries.length} imaging studies…` : 'No imaging studies found.');
             await populateStudyGrid(entries, {
                 grid: elements.imagingGrid, noData: elements.imagingNoData,
                 eyebrow: elements.imagingEyebrow, eyebrowLabel: `Imaging · ${patientLabel}`,
-                metaId: 'imagingMeta', types: IMAGING,
+                metaId: 'imagingMeta', types: IMAGING, patientData, allDates,
             });
             if (pendingReportData) pendingReportData.analysesData = bundle;
             hideLoading();
@@ -654,11 +670,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const bundle = result.data || { resourceType: 'Bundle', entry: [] };
             const LAB = ['lab'];
             const entries = (bundle.entry || []).filter(e => LAB.includes(e.resource?.code?.coding?.[0]?.code));
+            const allDates = (bundle.entry || []).map(e => e.resource?.authoredOn).filter(Boolean);
             setLoadingStep(entries.length ? `Organising ${entries.length} lab results…` : 'No lab results found.');
             await populateStudyGrid(entries, {
                 grid: elements.labGrid, noData: elements.labNoData,
                 eyebrow: elements.labEyebrow, eyebrowLabel: `Laboratory · ${patientLabel}`,
-                metaId: 'labMeta', types: LAB,
+                metaId: 'labMeta', types: LAB, patientData, allDates,
             });
             loadTrends(patientData.id);
             hideLoading();
@@ -1134,6 +1151,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Clear lazy-load state
         pendingAnalysesData = null;
         cachedServiceRequests = null;
+        episodeBoundaryPromise = null;
         if (elements.imagingGrid) delete elements.imagingGrid.dataset.loaded;
         if (elements.labGrid) delete elements.labGrid.dataset.loaded;
 
@@ -1276,6 +1294,25 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     
+    // Chips filter across both episode sections; hide a section's divider
+    // header once every card under it is filtered out, so no empty
+    // "Current Episode" / "Historical Episodes" heading is left dangling.
+    function updateEpisodeDividers(gridEl) {
+        if (!gridEl) return;
+        let visibleSinceDivider = 0;
+        let lastDivider = null;
+        for (const child of gridEl.children) {
+            if (child.classList.contains('episode-divider')) {
+                if (lastDivider) lastDivider.style.display = visibleSinceDivider > 0 ? '' : 'none';
+                lastDivider = child;
+                visibleSinceDivider = 0;
+            } else if (child.classList.contains('analysis-card') && child.style.display !== 'none') {
+                visibleSinceDivider++;
+            }
+        }
+        if (lastDivider) lastDivider.style.display = visibleSinceDivider > 0 ? '' : 'none';
+    }
+
     function filterGrid(gridEl, noDataEl, filterType = 'all') {
         if (!gridEl) return;
         const cards = gridEl.querySelectorAll('.analysis-card');
@@ -1285,6 +1322,7 @@ document.addEventListener('DOMContentLoaded', function() {
             card.style.display = show ? 'block' : 'none';
             if (show) visible++;
         });
+        updateEpisodeDividers(gridEl);
         if (noDataEl) noDataEl.style.display = visible === 0 ? 'block' : 'none';
     }
 
@@ -1297,6 +1335,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 card.style.display = show ? 'block' : 'none';
                 if (show) visible++;
             });
+            updateEpisodeDividers(elements.labGrid);
             if (elements.labNoData) elements.labNoData.style.display = visible === 0 ? 'block' : 'none';
         }
         elements.trendsContainer?.querySelectorAll('[data-trend-section]').forEach(wrap => {
@@ -2009,36 +2048,13 @@ document.addEventListener('DOMContentLoaded', function() {
             else if (heightWrap) heightWrap.hidden = true;
 
             // ── §2 + §4 Encounters (parallel with analyses) ──────────────
-            const [analysesMarkdown, epicrisisMarkdown, encounters] = await Promise.all([
+            const analysesDates = (analysesData?.entry || []).map(e => e.resource?.authoredOn).filter(Boolean);
+            const [analysesMarkdown, epicrisisMarkdown, episodeInfo] = await Promise.all([
                 analysesData ? populateAnalysesMarkdown(analysesData) : Promise.resolve(''),
                 generateEpicrisisMarkdown(patientData),
-                (async () => {
-                    const checkoutIds = new Set(extractCheckoutIds(patientData));
-                    const checkinIds  = extractCheckinIds(patientData);
-                    const allIds = [...checkinIds, ...checkoutIds]; // active admissions first
-                    if (!allIds.length) return [];
-                    const enc = await limitedMap(allIds, MAX_CONCURRENT_REQUESTS,
-                        async id => {
-                            try {
-                                const type = checkoutIds.has(id) ? 'checkout' : 'checkin';
-                                if (cache.encounters[id]) return cache.encounters[id];
-                                const r = await apiFetch(`/fhir/Encounter/${id}?type=${type}`);
-                                if (!r.ok) return null;
-                                const data = await r.json();
-                                cachePut(cache.encounters, id, data);
-                                return data;
-                            } catch { return null; }
-                        });
-                    return enc
-                        .map((e, i) => e && e.resourceType === 'Encounter' ? { enc: e, id: allIds[i] } : null)
-                        .filter(Boolean)
-                        .sort((a, b) => {
-                            const da = a.enc.period?.end || a.enc.period?.start || '';
-                            const db = b.enc.period?.end || b.enc.period?.start || '';
-                            return db > da ? 1 : -1;
-                        });
-                })()
+                getEpisodeBoundary(patientData, analysesDates),
             ]);
+            const { encounters, activeAdm, lastDischarge, boundaryDate, source: boundarySource } = episodeInfo;
 
             // Primary diagnosis from most recent encounter
             const latestDx = encounters[0] ? extractDiagnosisText(encounters[0].enc) : '';
@@ -2090,27 +2106,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 sec.hidden = false;
             }
 
-            // A checkin encounter's "in-progress" status is a static artifact
-            // of the checkin.asp scrape — it never updates once the patient
-            // is discharged, so a checkin can still claim "in-progress" long
-            // after a checkout for that same stay exists (confirmed live: a
-            // patient checked in 2026-07-15 and discharged 2026-07-21 still
-            // showed "Current Admission: ...present (ongoing)" right next to
-            // its own separate, complete "Last Admission" section for the
-            // exact same dates). Treat a checkin as genuinely active only if
-            // it starts after every already-known checkout has concluded —
-            // i.e. it's a fresh admission, not one a checkout already closed.
-            const latestCheckoutEnd = encounters
-                .filter(e => e.enc.status !== 'in-progress')
-                .reduce((latest, e) => {
-                    const end = e.enc.period?.end || e.enc.period?.start || '';
-                    return end > latest ? end : latest;
-                }, '');
-            const activeAdm = encounters.find(e =>
-                e.enc.status === 'in-progress' &&
-                (!latestCheckoutEnd || (e.enc.period?.start || '') > latestCheckoutEnd));
-            const lastDischarge = encounters.find(e => e.enc.status !== 'in-progress' && isSubstantiveText(extractEpicrisisText(e.enc)));
-
+            // activeAdm/lastDischarge come from the shared computeCurrentEpisodeBoundary
+            // helper (episodeInfo above) — see its comment for the "in-progress can be
+            // stale" rationale; this is display-only usage of that already-computed data.
             const secAdmission = document.getElementById('reportSectionAdmission');
             const secLastAdmission = document.getElementById('reportSectionLastAdmission');
             if (secAdmission) secAdmission.hidden = true;
@@ -2128,7 +2126,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 fillAdmissionBlock('reportSectionLastAdmission', 'reportLastAdmissionPeriod', 'reportLastAdmissionText', lastDischarge.enc, false);
             }
 
-            // §3 Recent imaging — up to 5 most recent entries from analysesData
+            // §3 Recent imaging — up to 5 most recent entries from the current
+            // episode (scoped by boundaryDate; falls back to unfiltered
+            // most-recent when there's no episode signal at all).
             const secImaging = document.getElementById('reportSectionImaging');
             const imagingList = document.getElementById('reportImagingList');
             if (secImaging) secImaging.hidden = true;
@@ -2139,6 +2139,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (imagingList && analysesData?.entry?.length) {
                 const candidates = [...analysesData.entry]
                     .filter(e => MOD_SHORT[e.resource?.code?.coding?.[0]?.code])
+                    .filter(e => !boundaryDate || (e.resource.authoredOn || '') >= boundaryDate)
                     .sort((a, b) => (b.resource.authoredOn || '') > (a.resource.authoredOn || '') ? 1 : -1)
                     .slice(0, 20); // fetch more than needed so we can skip empty ones
 
@@ -2370,10 +2371,12 @@ document.addEventListener('DOMContentLoaded', function() {
             let labsMd = '';
             let labItems = [];
             try {
-                // Scope to the current/last hospitalization period rather than a
-                // fixed lookback window — an ongoing admission has no end yet.
-                const periodStart = (activeAdm || lastDischarge)?.enc.period?.start;
-                const periodEnd = activeAdm ? undefined : lastDischarge?.enc.period?.end;
+                // Scope to the current episode boundary (admission-, discharge-,
+                // or gap-cluster-derived) rather than a fixed lookback window —
+                // an ongoing admission or cluster has no end yet. Only a closed
+                // discharge has a natural end date.
+                const periodStart = boundaryDate;
+                const periodEnd = boundarySource === 'discharge' ? lastDischarge?.enc.period?.end : undefined;
                 if (periodStart) {
                     const params = new URLSearchParams({ patient: pid, start_date: localDateStr(new Date(periodStart)) });
                     if (periodEnd) params.set('end_date', localDateStr(new Date(periodEnd)));
@@ -3394,7 +3397,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Populate a study grid (imaging or lab) from a pre-filtered entries array.
     // ctx: { grid, noData, eyebrow, eyebrowLabel, metaId, types }
     async function populateStudyGrid(entries, ctx) {
-        const { grid, noData, eyebrow, eyebrowLabel, metaId, types } = ctx;
+        const { grid, noData, eyebrow, eyebrowLabel, metaId, types, patientData, allDates } = ctx;
+        const myGeneration = dataGeneration;
 
         if (entries.length === 0) {
             if (noData) noData.style.display = 'block';
@@ -3434,15 +3438,51 @@ document.addEventListener('DOMContentLoaded', function() {
             else { chip.style.opacity = ''; chip.disabled = false; }
         });
 
+        // Split into Current Episode / Historical Episodes using the shared
+        // episode boundary. entries[] arrives already sorted most-recent-
+        // first by the backend, so each partition stays in that order.
+        let currentEntries = entries, historicalEntries = [];
+        let showDividers = false;
+        if (patientData) {
+            const { boundaryDate } = await getEpisodeBoundary(patientData, allDates || []);
+            if (myGeneration !== dataGeneration) return; // patient changed while awaiting
+            if (boundaryDate) {
+                showDividers = true;
+                currentEntries = entries.filter(e => (e.resource?.authoredOn || '') >= boundaryDate);
+                historicalEntries = entries.filter(e => (e.resource?.authoredOn || '') < boundaryDate);
+            }
+        }
+
         // Create cards immediately; lazily load report content as cards scroll into view
-        const cards = entries.map(entry => {
-            const sr = entry.resource;
-            const type = sr.code?.coding?.[0]?.code || 'unknown';
-            const text = sr.code?.coding?.[0]?.display || 'analysis';
-            const card = createAnalysisCard(sr, type, text);
-            grid.appendChild(card);
-            return card;
-        });
+        const cards = [];
+        const appendSection = (label, list) => {
+            if (!list.length) return;
+            if (showDividers) {
+                // Current Episode's imaging heading additionally gets an AI |
+                // Copy toolbar (mirroring Lab Trends) when there's more than
+                // one study to compare — a single study already has its own
+                // per-card AI button.
+                const wantsEpisodeToolbar = label === 'Current Episode' && grid.id === 'imagingGrid' && list.length > 1;
+                if (wantsEpisodeToolbar) {
+                    grid.appendChild(buildImagingEpisodeHeader(list, patientData));
+                } else {
+                    const heading = document.createElement('h3');
+                    heading.className = 'episode-divider';
+                    heading.textContent = label;
+                    grid.appendChild(heading);
+                }
+            }
+            for (const entry of list) {
+                const sr = entry.resource;
+                const type = sr.code?.coding?.[0]?.code || 'unknown';
+                const text = sr.code?.coding?.[0]?.display || 'analysis';
+                const card = createAnalysisCard(sr, type, text);
+                grid.appendChild(card);
+                cards.push(card);
+            }
+        };
+        appendSection('Current Episode', currentEntries);
+        appendSection('Historical Episodes', historicalEntries);
 
         const observer = new IntersectionObserver((observed, obs) => {
             for (const entry of observed) {
@@ -3939,6 +3979,122 @@ document.addEventListener('DOMContentLoaded', function() {
         return parts.join('  \n') + '\n\n---\n\n';
     }
 
+    // Bounds the imaging_episode AI synopsis's prompt size — same tunable-
+    // constant pattern as EPISODE_GAP_DAYS/SPARSE_THRESHOLD.
+    const IMAGING_EPISODE_STUDY_CAP = 8;
+
+    // Dated, chronological (oldest→newest) markdown fed to the imaging_episode
+    // AI synopsis — same "grounding header + per-item blocks" shape as
+    // labAiText, and the same "fetch more candidates than the cap, keep the
+    // first N with usable content" skimming the Report tab's §3 uses.
+    // `list` arrives most-recent-first (populateStudyGrid's current-episode
+    // partition); returns '' if nothing has a usable report body.
+    async function buildImagingEpisodeText(list, patientData) {
+        const candidates = list.slice(0, IMAGING_EPISODE_STUDY_CAP * 2);
+        const parts = await limitedMap(candidates, MAX_CONCURRENT_REQUESTS,
+            e => getImagingReportParts(e.resource.id));
+
+        const kept = [];
+        for (let i = 0; i < candidates.length && kept.length < IMAGING_EPISODE_STUDY_CAP; i++) {
+            if (parts[i]?.body) kept.push({ entry: candidates[i], parts: parts[i] });
+        }
+        if (!kept.length) return '';
+        kept.reverse(); // oldest → newest, as the prompt expects
+
+        const headerParts = [];
+        if (patientData) {
+            const name = formatPatientName(patientData.name);
+            const gender = formatGender(patientData.gender);
+            const age = calculateAge(patientData.birthDate);
+            const demo = [name, gender, age].filter(v => v && v !== 'N/A').join(', ');
+            if (demo) headerParts.push(`**Patient:** ${demo}`);
+        }
+        const diagnosis = elements.patientDiagnosis?.textContent?.trim();
+        if (diagnosis) headerParts.push(`**Diagnosis:** ${diagnosis}`);
+        const header = headerParts.length ? headerParts.join('  \n') + '\n\n---\n\n' : '';
+
+        const blocks = kept.map(({ entry, parts: p }) => {
+            const sr = entry.resource;
+            const mod = sr.code?.coding?.[0]?.code || '';
+            const modLabel = MODALITY_INFO[mod]?.label || mod;
+            const region = (sr.bodySite || []).map(b => b.text).filter(Boolean).join(', ');
+            const date = sr.authoredOn ? formatDate(sr.authoredOn) : 'Unknown date';
+            const title = [modLabel, region].filter(Boolean).join(' · ');
+            let block = `### ${date} — ${title}\n\n`;
+            if (p.indication) block += `*Indication:* ${p.indication}\n\n`;
+            block += p.body;
+            return block;
+        });
+
+        return header + blocks.join('\n\n');
+    }
+
+    // Builds the "Current Episode" heading row for the Imaging grid, with an
+    // AI | Copy toolbar (mirrors Lab Trends' #aiLabBtn/#copyLabBtn pair) —
+    // only used when the episode has more than one study to compare. The
+    // episode text is built lazily on first AI/Copy click (not eagerly at
+    // grid render), since it requires fetching each study's full report body
+    // — work the app otherwise defers until a card scrolls into view.
+    function buildImagingEpisodeHeader(list, patientData) {
+        let episodeTextPromise = null;
+        const getEpisodeText = () => episodeTextPromise ||= buildImagingEpisodeText(list, patientData);
+
+        const headerRow = document.createElement('div');
+        headerRow.className = 'episode-header';
+
+        const heading = document.createElement('h3');
+        heading.className = 'episode-divider';
+        heading.textContent = 'Current Episode';
+
+        const toolbar = document.createElement('div');
+        toolbar.className = 'card-toolbar';
+
+        const aiBtn = document.createElement('button');
+        aiBtn.type = 'button';
+        aiBtn.className = 'btn-ai';
+        aiBtn.setAttribute('aria-label', 'AI imaging episode synopsis');
+        aiBtn.title = 'AI imaging episode synopsis';
+        aiBtn.innerHTML = '<i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>AI</span>';
+        aiBtn.addEventListener('click', async () => {
+            aiBtn.disabled = true;
+            let text;
+            try {
+                text = await getEpisodeText();
+            } catch (err) {
+                aiBtn.disabled = false;
+                showToast('Failed to load imaging data for AI summary', 'error');
+                return;
+            }
+            // headerRow's next sibling is this section's first card — the AI
+            // card is inserted right above it, once headerRow is in the DOM.
+            runAiSummary(aiBtn, 'imaging_episode',
+                () => headerRow.nextElementSibling, () => text,
+                { inline: true, intoAnchorParent: () => headerRow.parentElement });
+        });
+
+        const copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.className = 'copy-md-btn';
+        copyBtn.setAttribute('aria-label', 'Copy current episode imaging as Markdown');
+        copyBtn.title = 'Copy current episode imaging as Markdown';
+        copyBtn.innerHTML = '<i class="fas fa-copy" aria-hidden="true"></i>';
+        copyBtn.addEventListener('click', async () => {
+            copyBtn.disabled = true;
+            try {
+                headerRow.dataset.markdown = await getEpisodeText();
+            } catch (err) {
+                headerRow.dataset.markdown = '';
+            }
+            copyBtn.disabled = false;
+            // copyMarkdown itself no-ops with a toast if dataset.markdown is empty.
+            copyMarkdown(headerRow, copyBtn, () => flashIcon(copyBtn));
+        });
+
+        toolbar.append(aiBtn, copyBtn);
+        headerRow.append(heading, toolbar);
+        return headerRow;
+    }
+
     function setCardIndication(article, text) {
         if (!text) return;
         const indText = article.querySelector('.card-indication-text');
@@ -4273,7 +4429,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             const div = document.createElement('div');
                             if (a.text) {
                                 div.className = 'report-note';
-                                div.innerHTML = a.text;
+                                div.innerHTML = marked.parse(a.text).trim();
                             } else {
                                 div.className = 'report-note report-note-pending';
                                 div.textContent = 'Not yet reported.';
@@ -4611,7 +4767,126 @@ document.addEventListener('DOMContentLoaded', function() {
             return `${formatDate(dateString)} · ${time}`;
         } catch { return dateString; }
     }
-    
+
+    // ── Current episode boundary ────────────────────────────────────────
+    // Centralizes the "active admission" heuristic (previously duplicated
+    // between displayPatientReport and loadAndDisplayEpicrisis) and extends
+    // it to outpatient-only patients via gap-based date clustering, so
+    // imaging/lab history can be split into "current episode" vs.
+    // "historical episodes" everywhere it's shown.
+    const EPISODE_GAP_DAYS = 60; // gap (days) between orders that starts a new episode
+    let episodeBoundaryPromise = null; // memoized per patient; reset alongside dataGeneration in clearResults()
+
+    // Parses only the YYYY-MM-DD prefix (never `new Date(hipocrate_string)`
+    // on the raw value) into whole UTC days, for gap-day arithmetic only.
+    function isoDateToUTCDays(dateStr) {
+        const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr || '');
+        if (!m) return null;
+        return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) / 86400000;
+    }
+
+    // Given a set of order dates, finds the start of the most recent cluster
+    // — the date right after the last gap exceeding EPISODE_GAP_DAYS.
+    function clusterEpisodeStart(dates) {
+        const sorted = [...new Set(dates.filter(Boolean))].sort();
+        if (!sorted.length) return null;
+        let clusterStart = sorted[0];
+        let prevDays = isoDateToUTCDays(sorted[0]);
+        for (let i = 1; i < sorted.length; i++) {
+            const days = isoDateToUTCDays(sorted[i]);
+            if (prevDays != null && days != null && (days - prevDays) > EPISODE_GAP_DAYS) {
+                clusterStart = sorted[i];
+            }
+            prevDays = days;
+        }
+        return clusterStart;
+    }
+
+    // dates: flat array of ISO date strings (imaging + lab order dates) used
+    // only for the outpatient gap-clustering fallback.
+    async function computeCurrentEpisodeBoundary(patientData, dates = []) {
+        const checkoutIds = extractCheckoutIds(patientData);
+        const checkinIds = extractCheckinIds(patientData);
+        const allIds = [...checkinIds, ...checkoutIds]; // active admissions first
+
+        let encounters = [];
+        if (allIds.length) {
+            const checkoutIdSet = new Set(checkoutIds);
+            const enc = await limitedMap(allIds, MAX_CONCURRENT_REQUESTS,
+                async id => {
+                    try {
+                        const type = checkoutIdSet.has(id) ? 'checkout' : 'checkin';
+                        if (cache.encounters[id]) return cache.encounters[id];
+                        const r = await apiFetch(`/fhir/Encounter/${id}?type=${type}`);
+                        if (!r.ok) return null;
+                        const data = await r.json();
+                        cachePut(cache.encounters, id, data);
+                        return data;
+                    } catch { return null; }
+                });
+            encounters = enc
+                .map((e, i) => e && e.resourceType === 'Encounter' ? { enc: e, id: allIds[i] } : null)
+                .filter(Boolean)
+                .sort((a, b) => {
+                    const da = a.enc.period?.end || a.enc.period?.start || '';
+                    const db = b.enc.period?.end || b.enc.period?.start || '';
+                    return db > da ? 1 : -1;
+                });
+        }
+
+        // A checkin's "in-progress" status is a static scrape artifact that
+        // never updates once the patient is discharged, so treat a checkin
+        // as genuinely active only if it starts after every already-known
+        // checkout has already concluded (see displayPatientReport for the
+        // full rationale — this replaces that inline computation).
+        const latestCheckoutEnd = encounters
+            .filter(e => e.enc.status !== 'in-progress')
+            .reduce((latest, e) => {
+                const end = e.enc.period?.end || e.enc.period?.start || '';
+                return end > latest ? end : latest;
+            }, '');
+        const activeAdm = encounters.find(e =>
+            e.enc.status === 'in-progress' &&
+            (!latestCheckoutEnd || (e.enc.period?.start || '') > latestCheckoutEnd));
+        const lastDischarge = encounters.find(e => e.enc.status !== 'in-progress' && isSubstantiveText(extractEpicrisisText(e.enc)));
+
+        if (activeAdm) {
+            return { boundaryDate: activeAdm.enc.period?.start || null, source: 'admission', activeAdm, lastDischarge, encounters };
+        }
+
+        if (lastDischarge) {
+            // Only trust the discharge as the episode start if no newer
+            // imaging/lab activity has drifted more than EPISODE_GAP_DAYS
+            // past it — otherwise an old discharge would wrongly pull in
+            // everything since as "current" for a patient who's since come
+            // back for something unrelated.
+            const dischargeDays = isoDateToUTCDays(lastDischarge.enc.period?.end || lastDischarge.enc.period?.start || '');
+            const staleRelativeToActivity = dates.some(d => {
+                const days = isoDateToUTCDays(d);
+                return dischargeDays != null && days != null && (days - dischargeDays) > EPISODE_GAP_DAYS;
+            });
+            if (!staleRelativeToActivity) {
+                return { boundaryDate: lastDischarge.enc.period?.start || null, source: 'discharge', activeAdm, lastDischarge, encounters };
+            }
+        }
+
+        const clusterStart = clusterEpisodeStart(dates);
+        if (clusterStart) {
+            return { boundaryDate: clusterStart, source: 'cluster', activeAdm, lastDischarge, encounters };
+        }
+
+        return { boundaryDate: null, source: null, activeAdm, lastDischarge, encounters };
+    }
+
+    // Memoized wrapper — all call sites (Imaging/Lab grids, Report tab)
+    // share one checkin/checkout fetch + boundary computation per patient.
+    function getEpisodeBoundary(patientData, dates = []) {
+        if (!episodeBoundaryPromise) {
+            episodeBoundaryPromise = computeCurrentEpisodeBoundary(patientData, dates);
+        }
+        return episodeBoundaryPromise;
+    }
+
     function extractCheckoutIds(patientData) {
         if (!patientData.extension) return [];
         const checkoutExt = patientData.extension.find(ext => ext.url && ext.url.includes('checkout-ids'));
@@ -4919,7 +5194,6 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     let scheduleEntries = [];
-    let activeScheduleStatusFilter = '';
 
     async function showRequestModal(requestId, requestCode, patientName, modality, triggerEl, requesterName) {
         const tmpl = document.getElementById('schedule-request-modal-template');
@@ -5172,7 +5446,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         const div = document.createElement('div');
                         if (a.text) {
                             div.className = 'report-note';
-                            div.innerHTML = a.text;
+                            div.innerHTML = marked.parse(a.text).trim();
                         } else {
                             div.className = 'report-note report-note-pending';
                             div.textContent = 'Not yet reported.';
@@ -5331,11 +5605,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const patientText = elements.schedulePatientFilter?.value.trim() || null;
         const labId       = elements.scheduleLabFilter?.value || null;
         const sectionName = elements.scheduleSectionFilter?.value || null;
+        const status      = activeScheduleStatusFilter || null;
         const limit       = elements.scheduleLimitSelect?.value || null;
-        fetchSchedule(start, end, force, patientText, labId, sectionName, limit);
+        fetchSchedule(start, end, force, patientText, labId, sectionName, status, limit);
+        updateScheduleClearFiltersVisibility();
     }
 
-    async function fetchSchedule(startDate, endDate, force = false, patientText = null, labId = null, sectionName = null, limit = null) {
+    async function fetchSchedule(startDate, endDate, force = false, patientText = null, labId = null, sectionName = null, status = null, limit = null) {
         if (!elements.scheduleBody) return;
         const params = new URLSearchParams();
         if (startDate)   params.set('start_date', startDate);
@@ -5344,6 +5620,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (patientText) params.set('patient_text', patientText);
         if (labId)       params.set('lab_id', labId);
         if (sectionName) params.set('section_name', sectionName);
+        if (status)      params.set('status', status);
         if (limit)       params.set('limit', limit);
         const url = `/fhir/Schedule${params.toString() ? '?' + params.toString() : ''}`;
         if (elements.noSchedule) elements.noSchedule.style.display = 'none';
@@ -5364,24 +5641,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function updateWardPillLabel() {
-        const sel = elements.scheduleSectionFilter;
-        if (!sel) return;
-        const pill = sel.closest('.schedule-ward-pill');
-        if (!pill) return;
-        let label = pill.querySelector('.ward-label');
-        if (!label) {
-            label = document.createElement('span');
-            label.className = 'ward-label';
-            // insert between the two icons
-            const chevron = pill.querySelector('.fa-chevron-down');
-            pill.insertBefore(label, chevron);
-        }
-        label.textContent = sel.value
-            ? sel.options[sel.selectedIndex]?.text || 'All wards'
-            : 'All wards';
-    }
-
     function populateSectionFilter(entries) {
         if (!elements.scheduleSectionFilter) return;
         const sections = [...new Set(entries.map(r => r.note?.[0]?.text || '').filter(Boolean))].sort();
@@ -5394,7 +5653,30 @@ document.addEventListener('DOMContentLoaded', function() {
             if (s === current) opt.selected = true;
             elements.scheduleSectionFilter.appendChild(opt);
         });
-        updateWardPillLabel();
+    }
+
+    function isScheduleFilterActive() {
+        return !!(
+            (elements.schedulePatientFilter?.value.trim()) ||
+            (elements.scheduleLabFilter?.value) ||
+            (elements.scheduleSectionFilter?.value) ||
+            activeScheduleStatusFilter
+        );
+    }
+
+    function updateScheduleClearFiltersVisibility() {
+        if (!elements.scheduleClearFiltersBtn) return;
+        elements.scheduleClearFiltersBtn.hidden = !isScheduleFilterActive();
+    }
+
+    function clearScheduleFilters() {
+        if (elements.schedulePatientFilter) elements.schedulePatientFilter.value = '';
+        if (elements.scheduleLabFilter) elements.scheduleLabFilter.value = '';
+        if (elements.scheduleSectionFilter) elements.scheduleSectionFilter.value = '';
+        activeScheduleStatusFilter = '';
+        elements.scheduleStatusChips?.querySelectorAll('.chip').forEach(c => c.classList.remove('chip-active'));
+        elements.scheduleStatusChips?.querySelector('.chip[data-status=""]')?.classList.add('chip-active');
+        fetchScheduleFromInputs();
     }
 
     function renderSchedule() {
@@ -5403,9 +5685,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         container.innerHTML = '';
 
-        const visibleEntries = activeScheduleStatusFilter
-            ? scheduleEntries.filter(r => r.status === activeScheduleStatusFilter)
-            : scheduleEntries;
+        // Status filtering happens server-side now (see fetchScheduleFromInputs);
+        // scheduleEntries already reflects the active status filter.
+        const visibleEntries = scheduleEntries;
 
         if (scheduleEntries.length === 0) {
             if (elements.scheduleTable) elements.scheduleTable.hidden = true;

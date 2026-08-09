@@ -1,0 +1,416 @@
+<title>Hipocrate cerere status map</title>
+<style>
+:root{
+  --paper:#f2f3f5;
+  --ink:#1a2027;
+  --ink-soft:#4c5563;
+  --line:#d6d9df;
+  --surface:#ffffff;
+  --accent:#2f5f8a;
+  --accent-soft:#e4ecf3;
+  --flag:#b5651d;
+  --flag-soft:#f6e9dc;
+  --mono-bg:#eceef1;
+  --code-ink:#243040;
+
+  --s-onhold:#6b7280;      --s-onhold-bg:#e7e8ea;
+  --s-draft:#2f5f8a;       --s-draft-bg:#e4ecf3;
+  --s-active:#b5651d;      --s-active-bg:#f6e9dc;
+  --s-completed:#3f7a4d;   --s-completed-bg:#e3ede5;
+  --s-ended:#245c4a;       --s-ended-bg:#dcece6;
+  --s-revoked:#9c3b3b;     --s-revoked-bg:#f3e1e1;
+  --s-error:#7a2e2e;       --s-error-bg:#efd9d9;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#14181e;
+    --ink:#e8eaee;
+    --ink-soft:#a7afbc;
+    --line:#2c333d;
+    --surface:#1b2029;
+    --accent:#7fb0dd;
+    --accent-soft:#1f2f3d;
+    --flag:#e0975a;
+    --flag-soft:#3a2a1b;
+    --mono-bg:#232a34;
+    --code-ink:#cfd8e3;
+
+    --s-onhold:#9ba3b0;    --s-onhold-bg:#252a32;
+    --s-draft:#7fb0dd;     --s-draft-bg:#1f2f3d;
+    --s-active:#e0975a;    --s-active-bg:#3a2a1b;
+    --s-completed:#82c294; --s-completed-bg:#1f3324;
+    --s-ended:#7fd6b8;     --s-ended-bg:#173229;
+    --s-revoked:#e08a8a;   --s-revoked-bg:#3a2222;
+    --s-error:#e08a8a;     --s-error-bg:#3a2222;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#14181e;
+  --ink:#e8eaee;
+  --ink-soft:#a7afbc;
+  --line:#2c333d;
+  --surface:#1b2029;
+  --accent:#7fb0dd;
+  --accent-soft:#1f2f3d;
+  --flag:#e0975a;
+  --flag-soft:#3a2a1b;
+  --mono-bg:#232a34;
+  --code-ink:#cfd8e3;
+
+  --s-onhold:#9ba3b0;    --s-onhold-bg:#252a32;
+  --s-draft:#7fb0dd;     --s-draft-bg:#1f2f3d;
+  --s-active:#e0975a;    --s-active-bg:#3a2a1b;
+  --s-completed:#82c294; --s-completed-bg:#1f3324;
+  --s-ended:#7fd6b8;     --s-ended-bg:#173229;
+  --s-revoked:#e08a8a;   --s-revoked-bg:#3a2222;
+  --s-error:#e08a8a;     --s-error-bg:#3a2222;
+}
+
+*{box-sizing:border-box;}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  line-height:1.6;
+  margin:0;
+  padding:0 1.25rem 6rem;
+}
+.wrap{max-width:840px;margin:0 auto;}
+.mono{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+
+header.hero{
+  padding:3.5rem 0 1.75rem;
+  border-bottom:1px solid var(--line);
+}
+.eyebrow{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:0.75rem;
+  letter-spacing:0.08em;
+  text-transform:uppercase;
+  color:var(--accent);
+  margin:0 0 0.9rem;
+}
+h1{
+  font-family:Georgia,"Iowan Old Style","Palatino Linotype",Palatino,serif;
+  font-size:clamp(1.9rem,4vw,2.6rem);
+  line-height:1.15;
+  margin:0 0 0.6rem;
+  text-wrap:balance;
+  font-weight:600;
+}
+.sub{
+  color:var(--ink-soft);
+  font-size:1.05rem;
+  max-width:60ch;
+  margin:0;
+}
+
+section{margin:2.75rem 0;}
+h2{
+  font-family:Georgia,"Iowan Old Style","Palatino Linotype",Palatino,serif;
+  font-size:1.4rem;
+  font-weight:600;
+  margin:0 0 0.9rem;
+  padding-bottom:0.5rem;
+  border-bottom:1px solid var(--line);
+}
+h3{
+  font-size:1rem;
+  font-weight:700;
+  margin:1.6rem 0 0.6rem;
+}
+p{margin:0.75rem 0;max-width:70ch;}
+ul,ol{max-width:70ch;padding-left:1.3rem;}
+li{margin:0.35rem 0;}
+strong{color:var(--ink);}
+a{color:var(--accent);}
+code{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  background:var(--mono-bg);
+  color:var(--code-ink);
+  padding:0.1em 0.35em;
+  border-radius:4px;
+  font-size:0.88em;
+}
+
+/* status pill */
+.pill{
+  display:inline-flex;
+  align-items:center;
+  gap:0.4em;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:0.82rem;
+  font-weight:600;
+  padding:0.18em 0.6em;
+  border-radius:999px;
+  white-space:nowrap;
+}
+.pill.onhold{color:var(--s-onhold);background:var(--s-onhold-bg);}
+.pill.draft{color:var(--s-draft);background:var(--s-draft-bg);}
+.pill.active{color:var(--s-active);background:var(--s-active-bg);}
+.pill.completed{color:var(--s-completed);background:var(--s-completed-bg);}
+.pill.ended{color:var(--s-ended);background:var(--s-ended-bg);}
+.pill.revoked{color:var(--s-revoked);background:var(--s-revoked-bg);}
+.pill.error{color:var(--s-error);background:var(--s-error-bg);}
+
+/* tables */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface);}
+table{border-collapse:collapse;width:100%;font-size:0.92rem;min-width:600px;}
+th,td{text-align:left;padding:0.65rem 0.85rem;border-bottom:1px solid var(--line);vertical-align:top;}
+thead th{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:0.72rem;
+  letter-spacing:0.05em;
+  text-transform:uppercase;
+  color:var(--ink-soft);
+  background:var(--mono-bg);
+}
+tbody tr:last-child td{border-bottom:none;}
+td.hipo{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:0.85rem;}
+
+/* diagram */
+.diagram{
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--surface);
+  padding:1.25rem;
+  overflow-x:auto;
+}
+
+/* evidence card */
+.evidence{
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-left:3px solid var(--accent);
+  border-radius:6px;
+  padding:1rem 1.25rem;
+  margin:1rem 0;
+}
+.evidence .src{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:0.75rem;
+  color:var(--ink-soft);
+  margin-bottom:0.5rem;
+}
+.evidence pre{
+  margin:0;
+  white-space:pre-wrap;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:0.82rem;
+  color:var(--code-ink);
+  background:var(--mono-bg);
+  padding:0.7rem 0.85rem;
+  border-radius:6px;
+}
+
+/* flag / open question */
+.flag{
+  background:var(--flag-soft);
+  border:1px solid color-mix(in srgb, var(--flag) 35%, transparent);
+  border-radius:8px;
+  padding:0.9rem 1.1rem;
+  margin:1rem 0;
+}
+.flag .ftitle{
+  font-weight:700;
+  color:var(--flag);
+  font-size:0.85rem;
+  text-transform:uppercase;
+  letter-spacing:0.04em;
+  margin-bottom:0.35rem;
+}
+
+/* memo block for the draft request */
+.memo{
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:1.75rem 2rem;
+}
+.memo .to{font-size:0.85rem;color:var(--ink-soft);margin-bottom:1.1rem;}
+.memo .to div{display:flex;gap:0.5em;}
+.memo .to b{width:5em;flex:none;color:var(--ink);}
+.memo hr{border:none;border-top:1px solid var(--line);margin:1.1rem 0;}
+.memo ol{padding-left:1.4rem;}
+.memo li{margin:0.6rem 0;}
+
+footer{
+  margin-top:3.5rem;
+  padding-top:1.25rem;
+  border-top:1px solid var(--line);
+  color:var(--ink-soft);
+  font-size:0.82rem;
+}
+</style>
+
+<div class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">hippobridge — internal note</p>
+  <h1>What a Hipocrate cerere status actually means</h1>
+  <p class="sub">A field-verified map of every request/exam status hippobridge has observed live, what <code>(NV)</code> / <code>(PV)</code> most likely stand for, and where the "performed but not yet reported" gap sits — with a draft ask for the Hipocrate team.</p>
+</header>
+
+<section>
+<h2>1. The eleven statuses, confirmed live</h2>
+<p>Pulled from <code>/PARA/NOM/Listare/?id=44</code> (the schedule/worklist listing) across a live query of 1,018 requests, 2026‑01‑01 → 2026‑08‑09. This is the complete set actually seen — anything not in this table hasn't shown up in nine months of requests, though that isn't proof it can't exist (see §4).</p>
+
+<div class="tbl-wrap">
+<table>
+<thead><tr><th>Hipocrate text</th><th>Seen</th><th>Meaning</th><th>hippobridge / FHIR status</th></tr></thead>
+<tbody>
+<tr><td class="hipo">Cerere netrimisa</td><td>38</td><td>Request created, not yet sent to the lab/department.</td><td><span class="pill onhold">on-hold</span></td></tr>
+<tr><td class="hipo">Trimisa in laborator</td><td>104</td><td>Sent to the lab; work not started.</td><td><span class="pill draft">draft</span></td></tr>
+<tr><td class="hipo">Primita in laborator</td><td>2</td><td>Lab acknowledged receipt; work not started.</td><td><span class="pill draft">draft</span></td></tr>
+<tr><td class="hipo">In lucru(NV)</td><td>0 in sample</td><td>In progress, <strong>zero</strong> of the requested items have a result entered yet. (inferred — see §2)</td><td><span class="pill active">active</span></td></tr>
+<tr><td class="hipo">In lucru(PV)</td><td>1</td><td>In progress, <strong>some but not all</strong> requested items have a result entered. (confirmed by evidence — see §2)</td><td><span class="pill active">active</span></td></tr>
+<tr><td class="hipo">Fara analize</td><td>76</td><td>Request has no analyses attached — an empty/junk record.</td><td><span class="pill error">entered-in-error</span></td></tr>
+<tr><td class="hipo">Cerere completata</td><td>11</td><td><strong>All</strong> requested items have a result entered; none validated yet.</td><td><span class="pill completed">completed</span></td></tr>
+<tr><td class="hipo">Cerere completata/partial validata</td><td>3</td><td>All items reported; some (not all) validated.</td><td><span class="pill completed">completed</span></td></tr>
+<tr><td class="hipo">Terminata</td><td>762</td><td>All items reported <strong>and</strong> validated. The terminal, healthy-path state.</td><td><span class="pill ended">ended</span></td></tr>
+<tr><td class="hipo">Terminata!</td><td>15</td><td>Same as above; the <code>!</code> hasn't been isolated to a distinct condition yet.</td><td><span class="pill ended">ended</span></td></tr>
+<tr><td class="hipo">Cerere anulata</td><td>6</td><td>Cancelled — an actor and timestamp are logged (<code>"Cerere anulata de: …"</code>).</td><td><span class="pill revoked">revoked</span></td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section>
+<h2>2. What NV / PV most likely stand for</h2>
+<p>Hipocrate never spells the abbreviation out anywhere in the page markup or JS we could reach (no tooltip, no legend). But <code>cerere.asp</code> exposes a per-request change log at <code>ajax_modificari.asp?Id=…</code> with two distinct sections — <b>MODIFICARI / INTRODUCERI REZULTATE</b> (who typed a result, and when) and <b>VALIDARI REZULTATE</b> (who signed it off, and when) — and comparing that log against the request's item count across live examples pins the abbreviation down behaviorally, even without Hipocrate's own definition.</p>
+
+<div class="evidence">
+<div class="src">cerere 1715945 — ES9634 — status: <span class="pill active">In lucru(PV)</span> — 2 items requested</div>
+<pre>Cerere introdusa de: FLORIN CRISTIAN DRAGOMIR — 11 Jun 2026 07:50
+
+MODIFICARI / INTRODUCERI REZULTATE:
+  IMAGISTICA PRIN REZONANTA MAGNETICA A CREIERULUI — ADRIAN DR. MARGARIT — 26 Jun 2026 10:35
+
+VALIDARI REZULTATE:
+  (empty — nothing validated)</pre>
+</div>
+
+<div class="evidence">
+<div class="src">cerere 1742674 — status: <span class="pill completed">Cerere completata</span> — 2 items requested</div>
+<pre>MODIFICARI / INTRODUCERI REZULTATE:
+  Anestezia generala, ASA 29 — Silviu Florin Mihaila — 07 Aug 2026 09:25
+  IMAGISTICA PRIN REZONANTA MAGNETICA A CAPULUI — Rezident Garda Radiologie — 07 Aug 2026 12:23
+
+VALIDARI REZULTATE:
+  (empty — nothing validated)</pre>
+</div>
+
+<p><strong>Pattern:</strong> 1715945 has a result for 1 of its 2 items → <code>PV</code>. 1742674 has results for 2 of its 2 items → the status graduates from "in lucru" to <code>Cerere completata</code> outright. Neither has any validation logged, yet neither uses a validation-flavored label — so <code>V</code> in <code>NV</code>/<code>PV</code> reads as <em>results entered</em>, not <em>validated</em>:</p>
+<ul>
+<li><code>NV</code> — <strong>N</strong>ici un rezultat <strong>V</strong>(izat/introdus): zero items reported yet.</li>
+<li><code>PV</code> — <strong>P</strong>arțial <strong>V</strong>(izat/introdus): some but not all items reported.</li>
+</ul>
+<div class="flag">
+<div class="ftitle">Confidence: inferred, not confirmed</div>
+This is the reading that fits every example we could pull live, but hippobridge never saw a live <code>NV</code> case to test the zero-items-reported half of the hypothesis, and Hipocrate's own glossary (if one exists) hasn't been checked. Worth a direct question in §5 rather than treating this as settled.
+</div>
+</section>
+
+<section>
+<h2>3. The journey, as actually observed</h2>
+<div class="diagram">
+<pre class="mermaid">
+stateDiagram-v2
+    [*] --> netrimisa: request created
+    netrimisa: Cerere netrimisa
+    trimisa: Trimisa in laborator
+    primita: Primita in laborator
+    lucru_nv: In lucru (NV)\n0 / N items reported
+    lucru_pv: In lucru (PV)\n1..N-1 / N items reported
+    completata: Cerere completata\nN / N reported, 0 validated
+    completata_pv: Cerere completata\n/ partial validata
+    terminata: Terminata(!)\nN / N reported AND validated
+    anulata: Cerere anulata
+    fara: Fara analize
+
+    netrimisa --> trimisa: sent to lab
+    trimisa --> primita: lab receipt
+    primita --> lucru_nv: work begins
+    lucru_nv --> lucru_pv: first result entered
+    lucru_pv --> lucru_pv: more results entered
+    lucru_pv --> completata: last item reported
+    completata --> completata_pv: first validation
+    completata_pv --> terminata: last validation
+    completata --> terminata: all validated at once
+
+    netrimisa --> anulata: cancelled
+    trimisa --> anulata: cancelled
+    primita --> anulata: cancelled
+    lucru_nv --> anulata: cancelled
+    lucru_pv --> anulata: cancelled
+
+    netrimisa --> fara: no analyses attached
+</pre>
+</div>
+<p style="color:var(--ink-soft);font-size:0.85rem;">Dotted through-line: <b>reporting</b> (someone types findings) and <b>validation</b> (someone signs off) are tracked as two separate events per item — the status text only ever encodes the reporting side (<code>NV</code>/<code>PV</code>/completata) or the fully-validated end state (<code>terminata</code>). There is no status in between that says "reported, awaiting sign-off" for a single-item request — see §4.</p>
+</section>
+
+<section>
+<h2>4. The actual gap: "performed" isn't tracked at all</h2>
+<p>Everything in §1–3 is downstream of a <em>report being typed</em>. Nothing in this vocabulary reflects that the exam <em>happened</em> — a technologist ran the scanner, at a known time, and no radiologist has looked at it yet. Two things confirm the field for that doesn't work the way it should:</p>
+<ul>
+<li><strong><code>DataEfectuarii</code> ("Data Efectuarii" / exam-performed date) is manual and decoupled from acquisition.</strong> It's a plain form field on <code>cerere.asp</code>, set only when someone calls the "Perform" action (<code>hdnAction=S</code>) — usually the person entering the report. On live request 1715945 above, a radiologist had already typed MRI findings, yet <code>Data Efectuarii</code> was still blank (<code>"-"</code> in the schedule listing). The field that's supposed to mean "this happened" doesn't get set even after it demonstrably did.</li>
+<li><strong>No field records who ran the study.</strong> The change log has <code>RECOLTAT DE</code> / <code>RECEPTIONAT DE</code> (specimen collected/received by — lab workflow only) and result-entry attribution (the <em>radiologist</em> who typed findings). There's no equivalent for imaging's technologist/operator.</li>
+</ul>
+<p>hippobridge already has the right raw signal for this: DICOM MPPS (<code>ModalityPerformedProcedureStep</code>, added to <code>worklist.py</code>'s SCP on 2026‑08‑07, currently observation-only) carries exactly <em>performed date/time</em> and <em>operator name</em> straight from the modality, independent of any human touching Hipocrate afterward. As of this note it has logged <b>zero</b> MPPS messages — no connected modality is sending it yet — so it's unverified in practice, but it's the mechanism that would close this gap once wired up.</p>
+</section>
+
+<section>
+<h2>4.1 "Performed" existed before the Hipocrate upgrade — and got lost</h2>
+<p>The code as it stood right before Hipocrate's 2026‑06‑09 upgrade (commit <code>7c099a2</code>, "fix: adapt all scrapers to Hipocrate server URL and HTML changes" — the one where every scraper broke at once) was checked out directly for comparison.</p>
+<p><strong>The <code>cerere.asp</code> status vocabulary (§1–3) didn't exist at all before that commit.</strong> <code>HipoClientCerere</code> and <code>HipoClientSchedule</code> weren't in the codebase — they were added after the rewrite, adapting to the new Hipocrate. There's no older vocabulary to compare against; the one above is entirely new.</p>
+<p><strong>But "performed by someone" existed explicitly, and it's now dead code.</strong> The old <code>HipoClientDiagnosticReport</code> (reading the printed bulletin at <code>/analyse/Reports/analyseFile.asp</code>) had a direct label on the page:</p>
+<div class="evidence">
+<div class="src">hipoclient.py, pre-upgrade (parent of commit 7c099a2)</div>
+<pre># Extract performer (Efectuata de catre:)
+data.store("study.performer", extract_text_after_label(soup, r'Efectuata de catre:'))
+data.store("study.medic", extract_text_after_label(soup, r'MEDIC,|Medic validator:', ...))</pre>
+</div>
+<p>"<b>Efectuata de catre:</b>" = "<b>Performed by:</b>" — an explicit field on the old bulletin naming the person who ran the exam, distinct from the validating physician. That's exactly the operator field this investigation started by asking about.</p>
+<p>The June 2026 rewrite moved parsing to <code>BuletinAnalize.asp</code>, which carries no such label (confirmed live — the current <code>?type=1</code> and <code>?type=3</code> pages for a finished radiology bulletin were checked directly; no "Efectuat"/"performer"/"operator"/"tehnician" text anywhere). Nobody removed the code that <em>consumed</em> that field, though — until this note, <code>hippoclient.py</code> still had:</p>
+<div class="evidence">
+<div class="src">hippoclient.py, HippoClientDiagnosticReport.fhir_response — before the fix below</div>
+<pre>performer = parsed_data.get("study.performer")   # never populated since June 2026
+if performer:
+    fhir_report["performer"] = [...]
+medic = parsed_data.get("study.medic")            # same
+if medic:
+    fhir_report["resultsInterpreter"] = [...]</pre>
+</div>
+<p><code>DiagnosticReport.performer</code> and <code>.resultsInterpreter</code> have therefore been silently empty in every FHIR response since the upgrade — not because Hipocrate stopped tracking who performed or validated a study, but because the label moved pages and nothing followed it. (Per-study <em>validation</em> info does still reach FHIR, through <code>presentedForm[].validator</code>/<code>validation_date</code>, sourced from the current <code>Validat de:</code> label — only "who physically performed the exam" is uncovered.)</p>
+<p><strong>Fix applied:</strong> the dead code (<code>study.performer</code>/<code>study.medic</code> plus their reads in <code>fhir_response</code>) has been removed from <code>hippoclient.py</code> — there was nothing to restore it from, since "Efectuata de catre:" has no equivalent on any page hippobridge currently reads. This stays a solid argument for the request below: Hipocrate <em>did</em> surface this before, on its own UI — it isn't a new ask, just one lost in migration.</p>
+</section>
+
+<section>
+<h2>5. Draft request to the Hipocrate dev team</h2>
+<div class="memo">
+<div class="to">
+  <div><b>To</b> Hipocrate development team</div>
+  <div><b>From</b> hippobridge / radiology integration</div>
+  <div><b>Re</b> A status for "performed, awaiting report", and confirming NV/PV</div>
+</div>
+<hr>
+<p>We're integrating DICOM MPPS so hippobridge learns the moment a modality finishes an exam — exact timestamp plus the operator who ran it — independent of anyone touching Hipocrate. Right now there's nowhere for that information to land:</p>
+<ol>
+<li><strong>Please confirm what <code>(NV)</code> and <code>(PV)</code> stand for on the "In lucru" status</strong>, and whether our reading is right: <code>NV</code> = no items reported yet, <code>PV</code> = some but not all items reported (see evidence above). If there's an internal glossary for the full <code>cerere</code> status vocabulary, that would save us re-deriving it from behavior.</li>
+<li><strong>Are there status values we haven't seen?</strong> We've only observed the 11 texts above across ~1,000 live requests over 9 months (e.g. never a "no-show" or "rescheduled" case, if those exist as distinct states rather than being handled another way).</li>
+<li><strong>A distinct status for "exam performed, no report yet"</strong> — something like <code>Efectuat, neexaminat</code> — separate from <code>In lucru(NV)</code>, which today is indistinguishable from "not started." This is the state an exam sits in for however long a radiologist takes to pick it up, and right now it's invisible.</li>
+<li><strong>A way to set <code>Data Efectuarii</code> (and, ideally, an operator/technologist field) independent of entering a report</strong> — an API call or a POST hippobridge can make when MPPS confirms completion, rather than that field only ever being set as a side effect of someone typing findings.</li>
+<li><strong>This isn't a new ask</strong> — the old bulletin page (before the June 2026 update) had an explicit "Efectuata de catre:" label naming who ran the exam, distinct from the validating physician. It was lost in the move to <code>BuletinAnalize.asp</code> and has no equivalent today on any page we read. We'd simply like that information back, in whatever form it's available now.</li>
+</ol>
+<p>Happy to share the raw MPPS payloads once a modality actually sends us one, if that helps scope this.</p>
+</div>
+</section>
+
+<footer>
+Sources: live queries against <code>/api/schedule</code> and <code>/api/debug?path=/para/nom/listare/ajax_modificari.asp</code> through hippobridge, 2026‑08‑09 · status↔FHIR mapping mirrors <code>hippoclient.py</code> (<code>HippoClientSchedule._FHIR_STATUS</code>) and <code>worklist.py</code> (<code>_HIPOCRATE_TO_FHIR</code>) · MPPS instrumentation: commit <code>9bebb8d</code> · pre-upgrade code checked out at the parent of commit <code>7c099a2</code> (2026‑06‑09).
+</footer>
+
+</div>
