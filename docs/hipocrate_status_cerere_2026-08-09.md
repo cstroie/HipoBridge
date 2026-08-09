@@ -381,6 +381,83 @@ intern, nu ceva de cerut echipei Hipocrate.
 
 Trei resurse separate, trei axe separate — nu un enum mai lung.
 
+## 7. Flux simplificat pentru implementare (doar execuție + raportare)
+
+Axa A (flux comandă, §6.1) rămâne neimplementată deocamdată — e o piesă
+lipsă în întregime azi (nu există niciun semnal Hipocrate pentru
+"programat"/"neprezentare"), și se va aborda separat, la momentul
+potrivit. Ce rămâne de implementat efectiv acum, cu semnale disponibile
+azi sau imediat ce MPPS iese din modul de observare, e Axa B (execuție) și
+Axa C (raportare) — dar combinate într-un model mai simplu decât cele 11
+stări separate din §6.2/§6.3, redus la ce chiar contează pentru un
+utilizator care se uită la statusul unei cereri.
+
+### 7.1 Stările reduse
+
+| Stare | Sens | Sursă semnal |
+|---|---|---|
+| `neefectuat` | Nicio achiziție încă. Stare implicită, înainte de orice semnal MPPS. | (implicit) |
+| `în curs` | Tehnicianul achiziționează imaginile. | MPPS `IN PROGRESS` |
+| `efectuat, neraportat` | Achiziție încheiată, 0 itemi raportați — starea "Efectuat, neexaminat" cerută la §5.3. | MPPS `COMPLETED` |
+| `raportare parțială` | 1..N-1 itemi raportați. | `In lucru(PV)` |
+| `raportat` | N/N itemi raportați, indiferent de stadiul validării (simplificare — vezi §7.2). | `Cerere completata` / `.../partial validata` |
+| `finalizat` | N/N raportați ȘI validați complet. | `Terminata`/`Terminata!` |
+| `întrerupt / anulat` | Ramură de ieșire unică, accesibilă din orice stare de mai sus — fie procedura a fost întreruptă (Axa B), fie cererea/raportul a fost anulat (Axa C). | MPPS `DISCONTINUED` / `Cerere anulata` |
+
+Șapte stări, un singur flux principal liniar plus o singură ramură de
+excepție — față de cele 11 din modelul complet.
+
+### 7.2 Ce s-a redus față de modelul complet (§6.2–§6.3)
+
+- **`arrived` (Axa B) a fost eliminat** — nu are o sursă de semnal fiabilă
+  azi (nu face parte din vocabularul standard MPPS) și nu aduce nimic în
+  plus față de ce oferă deja `în curs`.
+- **`preliminary` + `partially-validated` (Axa C) au fost unificate în
+  `raportat`** — diferența dintre "0 validate" și "parțial validate" e o
+  nuanță utilă pentru audit, dar nu schimbă ce trebuie să facă cineva care
+  se uită la status: raportul există, așteaptă semnătura finală. Dacă se
+  dovedește necesară mai târziu, distincția poate reveni ca un câmp
+  auxiliar (`validated_count`/`total_count`), nu ca stare separată.
+- **`discontinued` (Axa B) și `cancelled` (Axa C) au fost unificate în
+  `întrerupt / anulat`** — ambele înseamnă azi, practic, "acest flux nu se
+  mai termină normal"; separarea lor n-are un consumator concret azi.
+- **`amended`/`corrected` (Axa C) a fost eliminat ca stare separată** — un
+  raport corectat rămâne `finalizat`; corectarea se poate urmări separat
+  (istoricul de modificări de la `ajax_modificari.asp`, deja disponibil),
+  nu ca tranziție de stare vizibilă.
+- **Axa A a fost eliminată complet din acest model** — se implementează
+  separat, ca etapă ulterioară.
+
+### 7.3 Graficul fluxului simplificat
+
+```mermaid
+stateDiagram-v2
+    [*] --> neefectuat
+    neefectuat : neefectuat
+    in_curs : în curs
+    efectuat : efectuat, neraportat
+    raportare_partiala : raportare parțială
+    raportat : raportat
+    finalizat : finalizat
+    intrerupt : întrerupt / anulat
+
+    neefectuat --> in_curs : tehnicianul începe (MPPS IN PROGRESS)
+    in_curs --> efectuat : achiziție încheiată (MPPS COMPLETED)
+    efectuat --> raportare_partiala : primul rezultat introdus
+    raportare_partiala --> raportare_partiala : mai multe rezultate
+    raportare_partiala --> raportat : ultimul item raportat
+    raportat --> finalizat : validare completă
+
+    neefectuat --> intrerupt : anulare
+    in_curs --> intrerupt : întrerupere / anulare
+    efectuat --> intrerupt : anulare
+    raportare_partiala --> intrerupt : anulare
+    raportat --> intrerupt : anulare (rar)
+
+    finalizat --> [*]
+    intrerupt --> [*]
+```
+
 ---
 
 *Surse: interogări live pe `/api/schedule` și
@@ -388,4 +465,5 @@ Trei resurse separate, trei axe separate — nu un enum mai lung.
 2026-08-09 · maparea status↔FHIR reflectă `hippoclient.py`
 (`HippoClientSchedule._FHIR_STATUS`) și `worklist.py`
 (`_HIPOCRATE_TO_FHIR`) · instrumentare MPPS: commit `9bebb8d` · modelul pe
-trei axe (§6): 2026-08-10.*
+trei axe (§6): 2026-08-10 · fluxul simplificat, doar execuție + raportare
+(§7): 2026-08-10.*
