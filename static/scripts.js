@@ -1296,7 +1296,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Chips filter across both episode sections; hide a section's divider
     // header once every card under it is filtered out, so no empty
-    // "Current Episode" / "Historical Episodes" heading is left dangling.
+    // "Current Episode" / "Prior Episodes" heading is left dangling.
     function updateEpisodeDividers(gridEl) {
         if (!gridEl) return;
         let visibleSinceDivider = 0;
@@ -1457,14 +1457,34 @@ document.addEventListener('DOMContentLoaded', function() {
     // skips generation entirely — returns null if nothing is cached yet,
     // instead of calling the LLM. Server caches by (kind, sha256(text)), so
     // the same text always redisplays the same summary until forced.
+    // Bounds how long the UI can sit on "Waiting for data…" with no signal
+    // that the connection died silently (a stall with no TCP reset — apiFetch
+    // itself has no timeout, since long-running Hipocrate scrapes elsewhere
+    // legitimately need to run long). Scoped to just the AI summary requests.
+    const AI_SUMMARY_TIMEOUT_MS = 45000;
+    const AI_TIMEOUT_MESSAGE = 'AI summary timed out — the connection may have been lost. Please try again.';
+
     async function aiSummarize(kind, text, opts = {}) {
-        const resp = await apiFetch('/api/ai/summarize', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ kind, text, force: !!opts.force, check_only: !!opts.checkOnly }),
-        });
-        let data = {};
-        try { data = await resp.json(); } catch (_) { /* non-JSON error */ }
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), AI_SUMMARY_TIMEOUT_MS);
+        let resp, data = {};
+        try {
+            resp = await apiFetch('/api/ai/summarize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ kind, text, force: !!opts.force, check_only: !!opts.checkOnly }),
+                signal: controller.signal,
+            });
+            // .json() shares the same AbortSignal as the fetch above, so a
+            // stall while reading the body (not just before headers arrive)
+            // is covered too — the timer must stay armed until this returns.
+            try { data = await resp.json(); } catch (_) { /* non-JSON error */ }
+        } catch (err) {
+            if (err.name === 'AbortError') throw new Error(AI_TIMEOUT_MESSAGE);
+            throw err;
+        } finally {
+            clearTimeout(timer);
+        }
         if (!resp.ok || data.status === 'error') {
             throw new Error(data.message || `AI summary failed (HTTP ${resp.status})`);
         }
@@ -1475,7 +1495,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Kinds served by /api/ai/summarize/stream (report/epicrisis/pre_exam/lab —
     // the ones long enough that perceived latency matters; imaging stays on
     // the plain aiSummarize() endpoint above, too short to benefit).
-    const STREAMING_KINDS = new Set(['report', 'epicrisis', 'pre_exam', 'lab']);
+    const STREAMING_KINDS = new Set(['report', 'epicrisis', 'pre_exam', 'lab', 'imaging_episode']);
 
     // Rare sentinel (ASCII Unit Separator) the server uses to signal a
     // mid-stream failure it can no longer report via HTTP status, since the
@@ -1489,12 +1509,33 @@ document.addEventListener('DOMContentLoaded', function() {
     // cache-probe path never streams. Throws on error, same contract as
     // aiSummarize(), so callers need no special-casing.
     async function aiSummarizeStream(kind, text, onChunk) {
-        const resp = await apiFetch('/api/ai/summarize/stream', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ kind, text, force: true }),
-        });
+        // Inactivity timeout, not a flat cap — reset on every chunk, so a
+        // slow-but-progressing generation isn't cut off, only a genuine
+        // stall (silent connection loss, no TCP reset) trips it. The same
+        // AbortSignal covers both the initial fetch and every subsequent
+        // reader.read() call, since they share one request/response lifecycle.
+        const controller = new AbortController();
+        let timer = setTimeout(() => controller.abort(), AI_SUMMARY_TIMEOUT_MS);
+        const armTimer = () => {
+            clearTimeout(timer);
+            timer = setTimeout(() => controller.abort(), AI_SUMMARY_TIMEOUT_MS);
+        };
+
+        let resp;
+        try {
+            resp = await apiFetch('/api/ai/summarize/stream', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ kind, text, force: true }),
+                signal: controller.signal,
+            });
+        } catch (err) {
+            clearTimeout(timer);
+            if (err.name === 'AbortError') throw new Error(AI_TIMEOUT_MESSAGE);
+            throw err;
+        }
         if (!resp.ok) {
+            clearTimeout(timer);
             let data = {};
             try { data = await resp.json(); } catch (_) { /* non-JSON error */ }
             throw new Error(data.message || `AI summary failed (HTTP ${resp.status})`);
@@ -1502,15 +1543,26 @@ document.addEventListener('DOMContentLoaded', function() {
         const reader = resp.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            if (buffer.includes(STREAM_ERROR_SENTINEL)) {
-                const [, , message] = buffer.split(STREAM_ERROR_SENTINEL);
-                throw new Error(message || 'AI summary failed');
+        try {
+            while (true) {
+                let done, value;
+                try {
+                    ({ done, value } = await reader.read());
+                } catch (err) {
+                    if (err.name === 'AbortError') throw new Error(AI_TIMEOUT_MESSAGE);
+                    throw err;
+                }
+                armTimer();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                if (buffer.includes(STREAM_ERROR_SENTINEL)) {
+                    const [, , message] = buffer.split(STREAM_ERROR_SENTINEL);
+                    throw new Error(message || 'AI summary failed');
+                }
+                if (buffer) { onChunk(buffer); buffer = ''; }
             }
-            if (buffer) { onChunk(buffer); buffer = ''; }
+        } finally {
+            clearTimeout(timer);
         }
     }
 
@@ -3438,7 +3490,7 @@ document.addEventListener('DOMContentLoaded', function() {
             else { chip.style.opacity = ''; chip.disabled = false; }
         });
 
-        // Split into Current Episode / Historical Episodes using the shared
+        // Split into Current Episode / Prior Episodes using the shared
         // episode boundary. entries[] arrives already sorted most-recent-
         // first by the backend, so each partition stays in that order.
         let currentEntries = entries, historicalEntries = [];
@@ -3482,7 +3534,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         };
         appendSection('Current Episode', currentEntries);
-        appendSection('Historical Episodes', historicalEntries);
+        appendSection('Prior Episodes', historicalEntries);
 
         const observer = new IntersectionObserver((observed, obs) => {
             for (const entry of observed) {
