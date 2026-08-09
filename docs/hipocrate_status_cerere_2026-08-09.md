@@ -3,7 +3,9 @@
 Notă internă hippobridge — hartă verificată pe date live a statusurilor unei
 cereri (`cerere.asp`), ipoteza pentru `(NV)`/`(PV)`, și punctul unde
 informația "efectuat" se pierde complet, cu o cerere propusă pentru echipa
-Hipocrate.
+Hipocrate și, la final (§6), un model complet de statusuri pe trei axe —
+comandă / execuție / raportare — cu toate statusurile lipsă completate și
+maparea pe FHIR.
 
 ## 1. Cele 11 statusuri, confirmate live
 
@@ -231,7 +233,9 @@ să ajungă această informație:
    ceva de tipul `Efectuat, neexaminat` — separat de `In lucru(NV)`, care
    azi e imposibil de deosebit de "neînceput". Aceasta e starea în care o
    examinare stă oricât durează până când un radiolog o preia, și în acest
-   moment e invizibilă.
+   moment e invizibilă. Vezi §6.2 pentru propunerea completă — nu ca status
+   unic în același șir, ci ca axă separată de "s-a efectuat fizic
+   examinarea", independentă de raportare.
 4. **O modalitate de a seta `Data Efectuarii` (și, ideal, un câmp pentru
    operator/tehnician) independent de introducerea unui raport** — un apel
    API sau un POST pe care hippobridge să îl poată face când MPPS confirmă
@@ -247,10 +251,141 @@ să ajungă această informație:
 Putem trimite payload-urile MPPS brute de îndată ce un aparat chiar ne
 trimite unul, dacă ajută la definirea domeniului.
 
+## 6. Propunere: model de statusuri pe trei axe
+
+Diagnosticul din §1–§4 are un tipar comun: fiecare gol identificat —
+ambiguitatea `NV`/`PV` (§2), imposibilitatea de a distinge "efectuat" de
+"neînceput" (§4), lipsa unui status pentru neprezentare/reprogramare
+(§5.2) — vine din faptul că **un singur șir de status** încearcă să
+codifice trei lucruri independente: dacă cererea a fost **rutată**, dacă
+examinarea a fost **efectuată fizic**, și dacă **raportul** a fost scris
+și semnat. Aceste trei axe nu avansează mereu împreună — o radiografie
+portabilă STAT poate fi efectuată și raportată în câteva minute; un RMN de
+rutină poate sta "programat" săptămâni fără ca nimic altceva să se
+schimbe. Un enum plat nu poate reprezenta corect asta, indiferent de câte
+texte i s-ar mai adăuga.
+
+Mai jos: cele trei axe separate, complet cu statusurile lipsă identificate
+în §2/§4/§5, plus cum se mapează pe FHIR-ul pe care hippobridge deja îl
+expune.
+
+### 6.1 Axa A — Flux comandă (workflow)
+
+| Status | Sens | Hipocrate azi |
+|---|---|---|
+| `draft` | Creată, netrimisă | `Cerere netrimisa` |
+| `requested` | Trimisă la laborator/secție | `Trimisa in laborator` |
+| `received` | Laboratorul a confirmat primirea | `Primita in laborator` |
+| `scheduled` | Programare (dată/oră) stabilită | **lipsă azi** |
+| `no-show` | Pacientul nu s-a prezentat la programare | **lipsă azi** (întrebat la §5.2) |
+| `cancelled` | Anulată înainte de efectuare | `Cerere anulata` (nediferențiată de anularea post-raport) |
+| `entered-in-error` | Înregistrare goală/eronată | `Fara analize` |
+
+### 6.2 Axa B — Execuție procedură (complet lipsă azi — golul din §4)
+
+| Status | Sens |
+|---|---|
+| `arrived` | Pacientul s-a prezentat la aparat (opțional, dar util) |
+| `in-progress` | Tehnicianul achiziționează imaginile — MPPS `IN PROGRESS` |
+| `performed` | Imagini achiziționate, fără raport încă — exact starea "Efectuat, neexaminat" cerută la §5.3 — MPPS `COMPLETED` |
+| `discontinued` | Începută dar întreruptă (defecțiune, pacient intolerant, reacție la contrast) — azi indistinctă de "neînceput" |
+
+### 6.3 Axa C — Raportare/semnare (vocabularul existent al Hipocrate, făcut explicit)
+
+| Status | Sens | Hipocrate azi |
+|---|---|---|
+| `unreported` | 0/N itemi au rezultat | `In lucru(NV)` |
+| `partial` | 1..N-1/N itemi au rezultat | `In lucru(PV)` |
+| `preliminary` | N/N raportate, 0 validate | `Cerere completata` |
+| `partially-validated` | N/N raportate, unele validate | `Cerere completata/partial validata` |
+| `final` | N/N raportate ȘI validate | `Terminata`/`Terminata!` |
+| `amended`/`corrected` | Modificat după finalizare | **lipsă azi** — un raport corectat post-semnare e indistinct de unul original |
+| `cancelled` | Raport anulat după ce a existat (pacient greșit, duplicat) | nediferențiat de anularea pre-efectuare |
+
+### 6.4 Graficele celor trei axe
+
+```mermaid
+stateDiagram-v2
+    [*] --> draft : cerere creată
+    draft : draft — Cerere netrimisa
+    requested : requested — Trimisa in laborator
+    received : received — Primita in laborator
+    scheduled : scheduled — [propus]
+    noshow : no-show — [propus]
+    cancelled : cancelled — Cerere anulata
+    error : entered-in-error — Fara analize
+
+    draft --> requested : trimisă la laborator
+    requested --> received : confirmare primire
+    received --> scheduled : programare stabilită
+    scheduled --> noshow : pacient neprezentat
+    scheduled --> [*] : pacient prezent → Axa B (§6.2)
+    draft --> error : fără analize atașate
+    draft --> cancelled : anulare
+    requested --> cancelled : anulare
+    received --> cancelled : anulare
+    scheduled --> cancelled : anulare
+```
+
+```mermaid
+stateDiagram-v2
+    [*] --> arrived : pacient prezent (opțional)
+    arrived --> in_progress : tehnicianul începe achiziția
+    in_progress : in-progress
+    in_progress --> performed : achiziție încheiată (MPPS COMPLETED)
+    in_progress --> discontinued : întreruptă
+    performed --> [*] : predat spre raportare → Axa C (§6.3)
+```
+
+```mermaid
+stateDiagram-v2
+    [*] --> unreported : predat spre raportare (Axa B)
+    unreported : unreported — In lucru(NV)
+    partial : partial — In lucru(PV)
+    preliminary : preliminary — Cerere completata
+    partially_validated : partially-validated — completata/partial validata
+    final : final — Terminata(!)
+    amended : amended/corrected — [propus]
+    cancelled_report : cancelled — [propus]
+
+    unreported --> partial : primul rezultat introdus
+    partial --> partial : mai multe rezultate
+    partial --> preliminary : ultimul item raportat
+    preliminary --> partially_validated : prima validare
+    partially_validated --> final : ultima validare
+    final --> amended : corecție ulterioară
+    unreported --> cancelled_report : anulare, fără raport
+    preliminary --> cancelled_report : anulare, cu raport existent (rar)
+```
+
+### 6.5 Recomandare de reprezentare FHIR
+
+hippobridge expune deja `HippoClientCerere` ca `/fhir/Task/{id}` — iar
+`Task.status` (`draft | requested | received | accepted | rejected |
+ready | cancelled | in-progress | on-hold | failed | completed |
+entered-in-error`) acoperă aproape direct **Axa A**, cu o
+extensie/`Task.executionPeriod` pentru **Axa B** (exact ce cere §5.4 — un
+mod de a seta "efectuat" independent de introducerea raportului), iar
+`DiagnosticReport.status` (`registered | partial | preliminary | final |
+amended | corrected | cancelled | entered-in-error`) e vocabularul
+standard, deja definit de spec, pentru **Axa C** — mai bun decât
+inventarea unui cod nou.
+
+De observat: mapările curente folosesc `ended` pentru `Terminata` (§1), dar
+`ended` nu e un cod FHIR valid pentru `ServiceRequest.status` (setul valid
+e `draft | active | on-hold | revoked | completed | entered-in-error |
+unknown`; `Encounter` folosește `finished`, nu `ended`). Merită corectat în
+`hippoclient.py` (`HippoClientSchedule._FHIR_STATUS`) și `worklist.py`
+(`_HIPOCRATE_TO_FHIR`) separat de soarta acestei propuneri — e un bug
+intern, nu ceva de cerut echipei Hipocrate.
+
+Trei resurse separate, trei axe separate — nu un enum mai lung.
+
 ---
 
 *Surse: interogări live pe `/api/schedule` și
 `/api/debug?path=/para/nom/listare/ajax_modificari.asp` prin hippobridge,
 2026-08-09 · maparea status↔FHIR reflectă `hippoclient.py`
 (`HippoClientSchedule._FHIR_STATUS`) și `worklist.py`
-(`_HIPOCRATE_TO_FHIR`) · instrumentare MPPS: commit `9bebb8d`.*
+(`_HIPOCRATE_TO_FHIR`) · instrumentare MPPS: commit `9bebb8d` · modelul pe
+trei axe (§6): 2026-08-10.*

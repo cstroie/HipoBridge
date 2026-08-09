@@ -154,6 +154,7 @@ code{
 .pill.ended{color:var(--s-ended);background:var(--s-ended-bg);}
 .pill.revoked{color:var(--s-revoked);background:var(--s-revoked-bg);}
 .pill.error{color:var(--s-error);background:var(--s-error-bg);}
+.pill.proposed{color:var(--ink-soft);background:transparent;border:1px dashed var(--ink-soft);}
 
 /* tables */
 .tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface);}
@@ -250,7 +251,7 @@ footer{
 <header class="hero">
   <p class="eyebrow">hippobridge — internal note</p>
   <h1>What a Hipocrate cerere status actually means</h1>
-  <p class="sub">A field-verified map of every request/exam status hippobridge has observed live, what <code>(NV)</code> / <code>(PV)</code> most likely stand for, and where the "performed but not yet reported" gap sits — with a draft ask for the Hipocrate team.</p>
+  <p class="sub">A field-verified map of every request/exam status hippobridge has observed live, what <code>(NV)</code> / <code>(PV)</code> most likely stand for, and where the "performed but not yet reported" gap sits — with a draft ask for the Hipocrate team, and, at the end (§6), a full three-axis status model with every missing status filled in and mapped to FHIR.</p>
 </header>
 
 <section>
@@ -401,7 +402,7 @@ if medic:
 <ol>
 <li><strong>Please confirm what <code>(NV)</code> and <code>(PV)</code> stand for on the "In lucru" status</strong>, and whether our reading is right: <code>NV</code> = no items reported yet, <code>PV</code> = some but not all items reported (see evidence above). If there's an internal glossary for the full <code>cerere</code> status vocabulary, that would save us re-deriving it from behavior.</li>
 <li><strong>Are there status values we haven't seen?</strong> We've only observed the 11 texts above across ~1,000 live requests over 9 months (e.g. never a "no-show" or "rescheduled" case, if those exist as distinct states rather than being handled another way).</li>
-<li><strong>A distinct status for "exam performed, no report yet"</strong> — something like <code>Efectuat, neexaminat</code> — separate from <code>In lucru(NV)</code>, which today is indistinguishable from "not started." This is the state an exam sits in for however long a radiologist takes to pick it up, and right now it's invisible.</li>
+<li><strong>A distinct status for "exam performed, no report yet"</strong> — something like <code>Efectuat, neexaminat</code> — separate from <code>In lucru(NV)</code>, which today is indistinguishable from "not started." This is the state an exam sits in for however long a radiologist takes to pick it up, and right now it's invisible. See §6.2 for the full proposal — not as one more status in the same string, but as a separate axis for "was it physically performed," independent of reporting.</li>
 <li><strong>A way to set <code>Data Efectuarii</code> (and, ideally, an operator/technologist field) independent of entering a report</strong> — an API call or a POST hippobridge can make when MPPS confirms completion, rather than that field only ever being set as a side effect of someone typing findings.</li>
 <li><strong>This isn't a new ask</strong> — the old bulletin page (before the June 2026 update) had an explicit "Efectuata de catre:" label naming who ran the exam, distinct from the validating physician. It was lost in the move to <code>BuletinAnalize.asp</code> and has no equivalent today on any page we read. We'd simply like that information back, in whatever form it's available now.</li>
 </ol>
@@ -409,8 +410,126 @@ if medic:
 </div>
 </section>
 
+<section>
+<h2>6. Proposal: a three-axis status model</h2>
+<p>The diagnosis in §1–§4 has a common shape: every gap identified — the <code>NV</code>/<code>PV</code> ambiguity (§2), the inability to tell "performed" from "not started" (§4), the missing no-show/rescheduled status (§5.2) — comes from the fact that <strong>one status string</strong> is trying to encode three independent things: whether the request has been <strong>routed</strong>, whether the exam was <strong>physically performed</strong>, and whether the <strong>report</strong> was written and signed. These three axes don't always advance together — a STAT portable X-ray can be performed and reported within minutes; a routine outpatient MRI can sit "scheduled" for weeks with nothing else changing. A flat enum can't represent that correctly, no matter how many more strings get added to it.</p>
+<p>Below: the three axes, separated out, complete with the missing statuses identified in §2/§4/§5, and how they map onto the FHIR hippobridge already exposes. Dashed pills mark statuses that don't exist in Hipocrate today.</p>
+
+<h3>6.1 Axis A — Order workflow</h3>
+<div class="tbl-wrap">
+<table>
+<thead><tr><th>Status</th><th>Meaning</th><th>Hipocrate today</th></tr></thead>
+<tbody>
+<tr><td class="hipo">draft</td><td>Created, not sent</td><td><span class="pill onhold">Cerere netrimisa</span></td></tr>
+<tr><td class="hipo">requested</td><td>Sent to the lab/department</td><td><span class="pill draft">Trimisa in laborator</span></td></tr>
+<tr><td class="hipo">received</td><td>Department confirmed receipt</td><td><span class="pill draft">Primita in laborator</span></td></tr>
+<tr><td class="hipo">scheduled</td><td>Appointment date/time set</td><td><span class="pill proposed">missing today</span></td></tr>
+<tr><td class="hipo">no-show</td><td>Patient didn't show up for the appointment</td><td><span class="pill proposed">missing today</span> (asked at §5.2)</td></tr>
+<tr><td class="hipo">cancelled</td><td>Cancelled before performance</td><td><span class="pill revoked">Cerere anulata</span> (not distinguished from a post-report cancel)</td></tr>
+<tr><td class="hipo">entered-in-error</td><td>Empty/junk record</td><td><span class="pill error">Fara analize</span></td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>6.2 Axis B — Procedure execution (entirely missing today — the §4 gap)</h3>
+<div class="tbl-wrap">
+<table>
+<thead><tr><th>Status</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td class="hipo">arrived</td><td>Patient checked in at the modality (optional, but useful) — <span class="pill proposed">missing today</span></td></tr>
+<tr><td class="hipo">in-progress</td><td>Technologist is acquiring images — MPPS <code>IN PROGRESS</code> — <span class="pill proposed">missing today</span></td></tr>
+<tr><td class="hipo">performed</td><td>Images acquired, no report yet — exactly the "Efectuat, neexaminat" state asked for in §5.3 — MPPS <code>COMPLETED</code> — <span class="pill proposed">missing today</span></td></tr>
+<tr><td class="hipo">discontinued</td><td>Started but aborted (equipment fault, patient intolerance, contrast reaction) — today indistinguishable from "never started" — <span class="pill proposed">missing today</span></td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>6.3 Axis C — Reporting/signing (Hipocrate's existing vocabulary, made explicit)</h3>
+<div class="tbl-wrap">
+<table>
+<thead><tr><th>Status</th><th>Meaning</th><th>Hipocrate today</th></tr></thead>
+<tbody>
+<tr><td class="hipo">unreported</td><td>0/N items have a result</td><td><span class="pill active">In lucru(NV)</span></td></tr>
+<tr><td class="hipo">partial</td><td>1..N-1/N items have a result</td><td><span class="pill active">In lucru(PV)</span></td></tr>
+<tr><td class="hipo">preliminary</td><td>N/N reported, 0 validated</td><td><span class="pill completed">Cerere completata</span></td></tr>
+<tr><td class="hipo">partially-validated</td><td>N/N reported, some validated</td><td><span class="pill completed">Cerere completata/partial validata</span></td></tr>
+<tr><td class="hipo">final</td><td>N/N reported AND validated</td><td><span class="pill ended">Terminata / Terminata!</span></td></tr>
+<tr><td class="hipo">amended / corrected</td><td>Changed after finalization</td><td><span class="pill proposed">missing today</span> — a report corrected post-signature is indistinguishable from an original one</td></tr>
+<tr><td class="hipo">cancelled</td><td>Report voided after it existed (wrong patient, duplicate)</td><td><span class="pill proposed">missing today</span> — not distinguished from a pre-performance cancel</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>6.4 The three axes, graphed</h3>
+<div class="diagram">
+<pre class="mermaid">
+stateDiagram-v2
+    [*] --> draft : request created
+    draft : draft — Cerere netrimisa
+    requested : requested — Trimisa in laborator
+    received : received — Primita in laborator
+    scheduled : scheduled — [proposed]
+    noshow : no-show — [proposed]
+    cancelled : cancelled — Cerere anulata
+    error : entered-in-error — Fara analize
+
+    draft --> requested : sent to lab
+    requested --> received : lab receipt
+    received --> scheduled : appointment set
+    scheduled --> noshow : patient didn't show
+    scheduled --> [*] : patient arrives → Axis B (§6.2)
+    draft --> error : no analyses attached
+    draft --> cancelled : cancelled
+    requested --> cancelled : cancelled
+    received --> cancelled : cancelled
+    scheduled --> cancelled : cancelled
+</pre>
+</div>
+<div class="diagram">
+<pre class="mermaid">
+stateDiagram-v2
+    [*] --> arrived : patient present (optional)
+    arrived --> in_progress : technologist begins acquisition
+    in_progress : in-progress
+    in_progress --> performed : acquisition finished (MPPS COMPLETED)
+    in_progress --> discontinued : interrupted
+    performed --> [*] : handed off to reporting → Axis C (§6.3)
+</pre>
+</div>
+<div class="diagram">
+<pre class="mermaid">
+stateDiagram-v2
+    [*] --> unreported : handed off to reporting (Axis B)
+    unreported : unreported — In lucru(NV)
+    partial : partial — In lucru(PV)
+    preliminary : preliminary — Cerere completata
+    partially_validated : partially-validated — completata/partial validata
+    final : final — Terminata(!)
+    amended : amended/corrected — [proposed]
+    cancelled_report : cancelled — [proposed]
+
+    unreported --> partial : first result entered
+    partial --> partial : more results entered
+    partial --> preliminary : last item reported
+    preliminary --> partially_validated : first validation
+    partially_validated --> final : last validation
+    final --> amended : later correction
+    unreported --> cancelled_report : cancelled, no report
+    preliminary --> cancelled_report : cancelled, report exists (rare)
+</pre>
+</div>
+
+<h3>6.5 FHIR representation recommendation</h3>
+<p>hippobridge already exposes <code>HippoClientCerere</code> as <code>/fhir/Task/{id}</code> — and <code>Task.status</code> (<code>draft | requested | received | accepted | rejected | ready | cancelled | in-progress | on-hold | failed | completed | entered-in-error</code>) covers <strong>Axis A</strong> almost directly, with a <code>Task.executionPeriod</code>/extension for <strong>Axis B</strong> (exactly what §5.4 is asking Hipocrate for — a way to set "performed" independent of report entry), while <code>DiagnosticReport.status</code> (<code>registered | partial | preliminary | final | amended | corrected | cancelled | entered-in-error</code>) is the standard, spec-defined vocabulary for <strong>Axis C</strong> — better than inventing a new code.</p>
+<div class="flag">
+<div class="ftitle">Internal correctness note, not a Hipocrate ask</div>
+The current mapping uses <code>ended</code> for <code>Terminata</code> (§1), but <code>ended</code> isn't a valid FHIR code for <code>ServiceRequest.status</code> (the valid set is <code>draft | active | on-hold | revoked | completed | entered-in-error | unknown</code>; <code>Encounter</code> uses <code>finished</code>, not <code>ended</code>). Worth fixing in <code>hippoclient.py</code> (<code>HippoClientSchedule._FHIR_STATUS</code>) and <code>worklist.py</code> (<code>_HIPOCRATE_TO_FHIR</code>) separately from whatever happens with this proposal.
+</div>
+<p>Three separate resources, three separate axes — not a longer enum.</p>
+</section>
+
 <footer>
-Sources: live queries against <code>/api/schedule</code> and <code>/api/debug?path=/para/nom/listare/ajax_modificari.asp</code> through hippobridge, 2026‑08‑09 · status↔FHIR mapping mirrors <code>hippoclient.py</code> (<code>HippoClientSchedule._FHIR_STATUS</code>) and <code>worklist.py</code> (<code>_HIPOCRATE_TO_FHIR</code>) · MPPS instrumentation: commit <code>9bebb8d</code> · pre-upgrade code checked out at the parent of commit <code>7c099a2</code> (2026‑06‑09).
+Sources: live queries against <code>/api/schedule</code> and <code>/api/debug?path=/para/nom/listare/ajax_modificari.asp</code> through hippobridge, 2026‑08‑09 · status↔FHIR mapping mirrors <code>hippoclient.py</code> (<code>HippoClientSchedule._FHIR_STATUS</code>) and <code>worklist.py</code> (<code>_HIPOCRATE_TO_FHIR</code>) · MPPS instrumentation: commit <code>9bebb8d</code> · pre-upgrade code checked out at the parent of commit <code>7c099a2</code> (2026‑06‑09) · three-axis model (§6): 2026‑08‑10.
 </footer>
 
 </div>
