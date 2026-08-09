@@ -27,4 +27,4 @@
 
 - [X] Propose a better model/template for Hipocrate 'Cereri' page
 
-- [ ] Fix the markdown submission format and conversion
+- [X] Fix the markdown submission format and conversion
