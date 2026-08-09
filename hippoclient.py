@@ -3472,9 +3472,18 @@ class HippoClientCerere(HippoClient):
             if ta:
                 data.store("request.clinical_indication", ta.get_text(strip=True))
 
-            # Request code and laboratory from the header div
+            # Request code, laboratory, and status from the header div
             # The div contains nested <p> tags so we use get_text() not string=
-            # "Cerere paraclinic ET6987 / Laborator : Ecografie / ..."
+            # "Cerere paraclinic ET6987 / Laborator : Ecografie / ... / Status : Terminata"
+            # Status wasn't previously extracted here — cancellation used to be
+            # tracked purely as a local frontend flag (dataset.cancelled) set
+            # right after a successful /cancel call, since nothing on this page
+            # was read back to confirm it. Confirmed live (cerere 1743583,
+            # 2026-08-10) that this same header div carries "Status : Cerere
+            # anulata" for a cancelled request, plus a separate #divError
+            # banner reading "CEREREA ESTE ANULATA" — both checked below so a
+            # reload (or a different user/tab) now sees the real state instead
+            # of trusting only the ephemeral local flag.
             for div in soup.find_all('div', class_='div_sectiunePACFULL_titlu'):
                 header_text = div.get_text(' ', strip=True)
                 if 'Cerere paraclinic' in header_text:
@@ -3484,7 +3493,24 @@ class HippoClientCerere(HippoClient):
                     m = re.search(r'Laborator\s*:\s*([^/]+)', header_text)
                     if m:
                         data.store("request.laboratory", m.group(1).strip())
+                    # Status has nothing bounding it on the right (no trailing
+                    # "/" like the fields above) — a regex on header_text would
+                    # also swallow the trailing "ISTORIC MODIFICARI" button
+                    # label, which lives in a <b> sibling after the last <p>,
+                    # not inside it (confirmed live: 4 <p> tags in document
+                    # order — code, laboratory, payment type, status — with
+                    # nothing else tag-wrapped in this div), so take that last
+                    # <p> directly instead of trying to regex-bound it.
+                    ps = div.find_all('p')
+                    if ps:
+                        data.store("request.status_text", ps[-1].get_text(strip=True))
                     break
+
+            status_text = (data.get("request.status_text") or '').strip().lower()
+            error_banner = soup.find('font', class_='error')
+            banner_text = error_banner.get_text(strip=True).upper() if error_banner else ''
+            cancelled = status_text == 'cerere anulata' or 'ANULATA' in banner_text
+            data.store("cancelled", cancelled)
 
             # Exam names — four patterns in priority order:
             exams = []

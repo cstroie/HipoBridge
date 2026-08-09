@@ -4498,11 +4498,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     // or BuletinAnalize already has a published report (cerere.asp may not render
                     // fn_validate_cerere calls once the exam is fully finalised in Hipocrate)
                     const performed    = Boolean(d.performed_at) || allValidated || hasReportFromStudy;
-                    // Cancellation isn't reflected in cerere.asp's own fields (Hipocrate
-                    // gives us no signal to re-derive it from a fresh fetch) — rely on
-                    // the flag cancelRequest() sets locally right after a successful
-                    // /cancel call, which persists on this article across re-renders.
-                    const cancelled = article.dataset.cancelled === '1';
+                    // cerere.asp itself confirms cancellation (its header div's "Status :"
+                    // field reads "Cerere anulata", plus a "CEREREA ESTE ANULATA" banner —
+                    // see HippoClientCerere.parse_data) — d.cancelled is that server-
+                    // confirmed truth, so it survives reload/other sessions unlike a
+                    // purely local flag. The local flag (set by cancelRequest() right
+                    // after a successful /cancel call) is kept as an optimistic fallback
+                    // in case this fetch races ahead of Hipocrate's own state update.
+                    const cancelled = Boolean(d.cancelled) || article.dataset.cancelled === '1';
 
                     if (performed) article.classList.remove('no-report');
 
@@ -4626,7 +4629,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const resp = await fetch(`/api/request/${cerereId}/perform`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ...authHeader() },
-            body: JSON.stringify({}),
+            body: JSON.stringify({}), // no performed_at — server defaults to now()
         });
         if (!resp.ok) {
             setDisabled(false);
@@ -4639,9 +4642,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function markExamPerformed(article, cerereId) {
         const btn = article.querySelector('.btn-perform-exam');
+        const sibling = article.querySelector('.btn-cancel-request');
         await markExamPerformedCore(cerereId, {
-            setDisabled: (v) => { if (btn) btn.disabled = v; },
-            onDone: () => fetchAndFillReport(article)
+            // Lock both buttons while in flight — Perform and Cancel act on
+            // the same request, so nothing should fire a concurrent racing
+            // call against it while the other is still in progress.
+            setDisabled: (v) => { if (btn) btn.disabled = v; if (sibling) sibling.disabled = v; },
+            onDone: () => fetchAndFillReport(article),
         });
     }
 
@@ -4664,8 +4671,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function cancelRequest(article, cerereId) {
         const btn = article.querySelector('.btn-cancel-request');
+        const sibling = article.querySelector('.btn-perform-exam');
         await cancelRequestCore(cerereId, {
-            setDisabled: (v) => { if (btn) btn.disabled = v; },
+            setDisabled: (v) => { if (btn) btn.disabled = v; if (sibling) sibling.disabled = v; },
             onDone: () => {
                 article.dataset.cancelled = '1';
                 fetchAndFillReport(article);
@@ -5466,11 +5474,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 // validated, or the report content already exists (cerere.asp may not
                 // expose fn_validate_cerere calls once the exam is fully finalised).
                 const performed    = Boolean(d.performed_at) || allValidated || hasReportFromStudy;
-                // Cancellation isn't reflected in cerere.asp's own fields — rely on the
-                // flag set locally right after a successful /cancel call (see the
-                // Cancel button handler below), which persists on this modal element
-                // across refreshAll() re-renders.
-                const cancelled = modal.dataset.cancelled === '1';
+                // cerere.asp confirms cancellation itself (see fetchAndFillReport's
+                // matching comment above) — d.cancelled is the server-confirmed
+                // truth; the local flag (set by the Cancel button handler below,
+                // persisting on this modal element across refreshAll() re-renders)
+                // is kept only as an optimistic fallback.
+                const cancelled = Boolean(d.cancelled) || modal.dataset.cancelled === '1';
 
                 // Ensure every requested investigation is represented (mirrors the
                 // Imaging tab card's fetchAndFillReport): match by label against
@@ -5522,8 +5531,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (!locked) {
                             performBtn.addEventListener('click', () => {
                                 markExamPerformedCore(requestId, {
-                                    setDisabled: v => { performBtn.disabled = v; },
-                                    onDone: refreshAll
+                                    // Lock both buttons while in flight — see the same
+                                    // reasoning in markExamPerformed/cancelRequest above.
+                                    setDisabled: v => { performBtn.disabled = v; if (cancelBtn) cancelBtn.disabled = v; },
+                                    onDone: refreshAll,
                                 });
                             });
                         }
@@ -5536,7 +5547,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (!locked) {
                             cancelBtn.addEventListener('click', () => {
                                 cancelRequestCore(requestId, {
-                                    setDisabled: v => { cancelBtn.disabled = v; },
+                                    setDisabled: v => { cancelBtn.disabled = v; if (performBtn) performBtn.disabled = v; },
                                     onDone: () => { modal.dataset.cancelled = '1'; refreshAll(); }
                                 });
                             });
