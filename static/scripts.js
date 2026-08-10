@@ -4062,7 +4062,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const kept = [];
         for (let i = 0; i < candidates.length && kept.length < IMAGING_EPISODE_STUDY_CAP; i++) {
-            if (parts[i]?.body) kept.push({ entry: candidates[i], parts: parts[i] });
+            // _isMeaningfulText, not plain truthiness: a report body can be
+            // non-empty but placeholder junk (e.g. "-", ". .." — doctors
+            // sometimes type that just to pass form validation), which
+            // would otherwise feed the model a fake "study" with no real
+            // content.
+            if (_isMeaningfulText(parts[i]?.body)) kept.push({ entry: candidates[i], parts: parts[i] });
         }
         if (!kept.length) return '';
         kept.reverse(); // oldest → newest, as the prompt expects
@@ -4085,10 +4090,13 @@ document.addEventListener('DOMContentLoaded', function() {
             const modLabel = MODALITY_INFO[mod]?.label || mod;
             const region = (sr.bodySite || []).map(b => b.text).filter(Boolean).join(', ');
             const date = sr.authoredOn ? formatDate(sr.authoredOn) : 'Unknown date';
+            // Date, modality (+ region), and the clinical info attached to
+            // this exam all live in the heading itself now — previously the
+            // indication was a separate line below, easy to lose track of
+            // across a long multi-study timeline.
             const title = [modLabel, region].filter(Boolean).join(' · ');
-            let block = `### ${date} — ${title}\n\n`;
-            if (p.indication) block += `*Indication:* ${p.indication}\n\n`;
-            block += p.body;
+            const clinicalInfo = _isMeaningfulText(p.indication) ? ` — ${p.indication}` : '';
+            const block = `### ${date} — ${title}${clinicalInfo}\n\n${p.body}`;
             return block;
         });
 
