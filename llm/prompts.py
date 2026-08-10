@@ -67,7 +67,12 @@ PROMPT_META = {
     "report":          ("default", 340),
     "epicrisis":       ("default", 420),
     "imaging":         ("medical", 60),
-    "imaging_episode": ("medical", 700),
+    # 700 -> 180: the prompt now asks for only the Impression-style
+    # conclusion (no per-date narrative) — a few sentences, not a report.
+    # Also cuts generation time roughly proportionally on this backend
+    # (~2-3.5 tok/s measured), directly easing the timeout risk this kind
+    # was most exposed to (largest max_tokens among the streaming kinds).
+    "imaging_episode": ("medical", 180),
     "lab":             ("medical", 600),
     "pre_exam":        ("medical", 1300),
 }
@@ -170,9 +175,9 @@ def _language_directive(language: str) -> str:
 # Separate from DATE_AWARE_KINDS even though currently overlapping — one is
 # about date context, the other about transport; independently editable.
 # imaging (40 tokens) is excluded — too short for streaming to buy anything.
-# lab (400 tokens) is included — long enough that perceived latency matters.
-# imaging_episode (multi-study synopsis, 700 tokens) is included for the
-# same reason as lab.
+# lab (600 tokens) is included — long enough that perceived latency matters.
+# imaging_episode (Impression-only conclusion, 180 tokens — see PROMPT_META)
+# is included too: still ~1min+ on this backend, so streaming still helps.
 STREAMING_KINDS = frozenset({"report", "epicrisis", "pre_exam", "lab", "imaging_episode"})
 
 
