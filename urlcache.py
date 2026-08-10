@@ -201,12 +201,8 @@ class URLCache:
         # Optional L2 filesystem backing store; set by init_app() after construction
         self.fs_cache: Optional[FilesystemCache] = None
 
-    def get(self, url: str) -> Optional[str]:
-        """Return cached response for url, or None if absent or expired.
-
-        Checks L1 first.  On L1 miss, checks L2 (filesystem) if attached; a
-        hit there warms L1 so the next request stays in memory.
-        """
+    def _l1_get(self, url: str) -> Optional[str]:
+        """Check L1 only; returns None on miss or expiry (does not touch L2)."""
         if url in self._cache:
             text, ts = self._cache[url]
             age = (datetime.now(timezone.utc) - ts).total_seconds()
@@ -214,16 +210,45 @@ class URLCache:
                 del self._cache[url]
                 self._inflight.pop(url, None)
                 logger.debug(f"Expired cache entry removed: {url}")
-                # Fall through to L2 check below
             else:
                 self._cache.move_to_end(url)
                 logger.debug(f"Cache hit (L1): {url} (age {age:.1f}s)")
                 return text
+        return None
+
+    def get(self, url: str) -> Optional[str]:
+        """Return cached response for url, or None if absent or expired.
+
+        Checks L1 first.  On L1 miss, checks L2 (filesystem) if attached; a
+        hit there warms L1 so the next request stays in memory.
+
+        Synchronous — does blocking disk I/O on L2 miss/hit. Prefer
+        ``get_async`` from coroutines so filesystem access doesn't stall the
+        event loop; this sync version remains for non-async callers.
+        """
+        text = self._l1_get(url)
+        if text is not None:
+            return text
 
         if self.fs_cache is not None:
             text = self.fs_cache.get(url)
             if text is not None:
                 # Warm L1 without writing back to L2
+                self._l1_put(url, text)
+                return text
+
+        return None
+
+    async def get_async(self, url: str) -> Optional[str]:
+        """Async equivalent of ``get`` — runs L2 filesystem I/O in a thread
+        so it doesn't block the event loop."""
+        text = self._l1_get(url)
+        if text is not None:
+            return text
+
+        if self.fs_cache is not None:
+            text = await asyncio.to_thread(self.fs_cache.get, url)
+            if text is not None:
                 self._l1_put(url, text)
                 return text
 
@@ -240,16 +265,8 @@ class URLCache:
                 logger.debug(f"Evicted LRU cache entry: {oldest_url}")
             self._cache[url] = (response_text, datetime.now(timezone.utc))
 
-    def put(self, url: str, response_text: str, persist: bool = True) -> None:
-        """Insert or refresh a cache entry, evicting the LRU entry if at capacity.
-
-        Args:
-            url:           URL key.
-            response_text: Response body to cache.
-            persist:       If True and an L2 FilesystemCache is attached, also
-                           write to L2.  Pass False for user-specific or highly
-                           volatile pages that must not persist across restarts.
-        """
+    def _l1_put_entry(self, url: str, response_text: str) -> None:
+        """Insert or refresh L1 (shared by put/put_async)."""
         if url in self._cache:
             self._cache[url] = (response_text, datetime.now(timezone.utc))
             self._cache.move_to_end(url)
@@ -261,8 +278,30 @@ class URLCache:
             self._cache[url] = (response_text, datetime.now(timezone.utc))
             logger.debug(f"Cached response: {url}")
 
+    def put(self, url: str, response_text: str, persist: bool = True) -> None:
+        """Insert or refresh a cache entry, evicting the LRU entry if at capacity.
+
+        Args:
+            url:           URL key.
+            response_text: Response body to cache.
+            persist:       If True and an L2 FilesystemCache is attached, also
+                           write to L2.  Pass False for user-specific or highly
+                           volatile pages that must not persist across restarts.
+
+        Synchronous — does blocking disk I/O when persisting to L2. Prefer
+        ``put_async`` from coroutines so filesystem access doesn't stall the
+        event loop; this sync version remains for non-async callers.
+        """
+        self._l1_put_entry(url, response_text)
         if persist and self.fs_cache is not None:
             self.fs_cache.put(url, response_text)
+
+    async def put_async(self, url: str, response_text: str, persist: bool = True) -> None:
+        """Async equivalent of ``put`` — runs L2 filesystem I/O in a thread
+        so it doesn't block the event loop."""
+        self._l1_put_entry(url, response_text)
+        if persist and self.fs_cache is not None:
+            await asyncio.to_thread(self.fs_cache.put, url, response_text)
 
     def remove(self, url: str) -> None:
         """Remove a specific cache entry from both L1 and L2.
@@ -273,11 +312,22 @@ class URLCache:
         need permanent eviction (e.g. empty-result suppression) should call
         ``remove`` only after the fetch has completed and ``resolve_inflight``
         has already been called.
+
+        Synchronous — does blocking disk I/O when an L2 cache is attached.
+        Prefer ``remove_async`` from coroutines.
         """
         if url:
             self._cache.pop(url, None)
             if self.fs_cache is not None:
                 self.fs_cache.remove(url)
+
+    async def remove_async(self, url: str) -> None:
+        """Async equivalent of ``remove`` — runs L2 filesystem I/O in a thread
+        so it doesn't block the event loop."""
+        if url:
+            self._cache.pop(url, None)
+            if self.fs_cache is not None:
+                await asyncio.to_thread(self.fs_cache.remove, url)
 
     def clear(self) -> None:
         """Clear all cache entries and resolve any pending in-flight events."""

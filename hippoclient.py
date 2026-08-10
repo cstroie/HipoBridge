@@ -151,7 +151,7 @@ ANALYSIS_TYPES = {
 LAB_DOMAINS = [1, 2, 3, 5, 8, 9, 15, 19, 21, 22, 23, 24, 27, 39, 41]
 
 
-def evict_patient_cache(client: 'HippoClient', patient_id: str) -> None:
+async def evict_patient_cache(client: 'HippoClient', patient_id: str) -> None:
     """Force-refresh a patient's demographic, imaging/lab list, and Observation
     data by evicting every cache entry keyed off patient_id.
 
@@ -166,12 +166,12 @@ def evict_patient_cache(client: 'HippoClient', patient_id: str) -> None:
     # '&'/'#'/etc. would be evicted under a different key than it was stored
     # under, silently leaving the stale entry in place.
     safe_patient_id = quote(str(patient_id), safe="")
-    client.cache_remove(client.get_full_url(f"/Pacient/edit.asp?id={safe_patient_id}"))
-
     episode_url = f"/Pacient/analysesEpisod.asp?pacid={safe_patient_id}"
     imaging_domains = [v['domain'] for v in ANALYSIS_TYPES.values() if v['domain'] != 0]
-    for domain_id in imaging_domains + LAB_DOMAINS:
-        client.cache_remove(client.get_full_url(f"{episode_url}&strDomeniu={domain_id}&NrPePag=100"))
+    urls = [f"/Pacient/edit.asp?id={safe_patient_id}"] + [
+        f"{episode_url}&strDomeniu={domain_id}&NrPePag=100" for domain_id in imaging_domains + LAB_DOMAINS
+    ]
+    await asyncio.gather(*(client.cache_remove(client.get_full_url(u)) for u in urls))
 
     HippoClientObservationBundle.invalidate_cache(patient_id)
 
@@ -284,6 +284,15 @@ url_cache = URLCache(max_size=500, timeout=30 * 60)
 # Global semaphore: cap total concurrent outbound requests to Hipocrate
 _hipocrate_semaphore = asyncio.Semaphore(6)
 
+# A single "All Schedule" request (no lab_id) fans out to one fetch per known
+# lab_id (see HippoClientSchedule._fetch_and_parse_all_labs) — with 6 lab_ids
+# that can transiently claim the entire _hipocrate_semaphore capacity,
+# starving every other concurrent user's requests to the same backend for
+# that window. Cap the fan-out's own concurrency below the global limit so
+# it always leaves headroom for other requests, without touching the global
+# cap itself.
+_schedule_fanout_semaphore = asyncio.Semaphore(3)
+
 
 def _session_key(username: str, password: str) -> str:
     """username + a short hash of password.
@@ -351,6 +360,10 @@ class UserSessionManager:
             logger.info(f"Closing session for user {username}")
             await session.close()
         self._authenticated.pop(key, None)
+        # Popping the lock out of the dict doesn't affect any coroutine
+        # already holding a direct reference to it (asyncio.Lock is keyed by
+        # object identity) — a fresh lock is simply created on next login.
+        self._login_locks.pop(key, None)
         HippoClientWhoami.invalidate_cache(username)
 
     async def close_all_sessions(self):
@@ -359,7 +372,9 @@ class UserSessionManager:
         for session in self.user_sessions.values():
             if session and not session.closed:
                 await session.close()
+        self.user_sessions.clear()
         self._authenticated.clear()
+        self._login_locks.clear()
 
 
 # Global user session manager instance
@@ -460,7 +475,7 @@ class HippoClient:
         await user_session_manager.close_all_sessions()
 
 
-    def cache_get(self, url: str) -> Optional[str]:
+    async def cache_get(self, url: str) -> Optional[str]:
         """Get cached response for URL if exists and not expired.
 
         Args:
@@ -469,9 +484,9 @@ class HippoClient:
         Returns:
             Cached response text or None if not found or expired
         """
-        return self.url_cache.get(self.get_full_url(url))
+        return await self.url_cache.get_async(self.get_full_url(url))
 
-    def cache_put(self, url: str, response_text: str) -> None:
+    async def cache_put(self, url: str, response_text: str) -> None:
         """Add response to cache.
 
         Args:
@@ -480,15 +495,15 @@ class HippoClient:
         """
         full_url = self.get_full_url(url)
         persist = not any(p in full_url for p in _NO_PERSIST_PATTERNS)
-        self.url_cache.put(full_url, response_text, persist=persist)
+        await self.url_cache.put_async(full_url, response_text, persist=persist)
 
-    def cache_remove(self, url: str):
+    async def cache_remove(self, url: str):
         """Remove cached response for URL.
 
         Args:
             url: URL to remove from cache
         """
-        return self.url_cache.remove(url)
+        return await self.url_cache.remove_async(url)
 
     def cache_clear(self) -> None:
         """Clear all cache entries."""
@@ -658,22 +673,34 @@ class HippoClient:
 
         # For GET requests: check cache first, then deduplicate in-flight fetches
         if method == "GET":
-            cached_response = self.cache_get(url)
+            # L1 check and inflight claim must happen with no intervening
+            # await (see URLCache docstring) — otherwise concurrent requests
+            # for the same cold URL can all miss L1/L2 and all fetch upstream.
+            # So: check L1 synchronously, claim in-flight status synchronously,
+            # *then* fall through to the (possibly awaiting) L2 check.
+            cached_response = self.url_cache._l1_get(self.get_full_url(url))
             if cached_response is not None:
                 return cached_response, None
 
-            # If another coroutine is already fetching this URL, wait for it
             if self.url_cache.is_inflight(url):
                 logger.debug(f"Waiting for in-flight request: {url}")
                 await self.url_cache.wait_inflight(url)
                 # After the wait, the result should be cached
-                cached_response = self.cache_get(url)
+                cached_response = await self.cache_get(url)
                 if cached_response is not None:
                     return cached_response, None
                 # Fell through (fetch failed for the other caller) — try ourselves
 
-            # Mark URL as in-flight before fetching
+            # Mark URL as in-flight before fetching (and before the L2 await
+            # below, so no other coroutine can race past the is_inflight check)
             inflight_event = self.url_cache.mark_inflight(url)
+
+            # Now safe to await: any concurrent caller for this URL will see
+            # is_inflight() == True and wait rather than duplicate this L2 lookup.
+            cached_response = await self.cache_get(url)
+            if cached_response is not None:
+                self.url_cache.resolve_inflight(url)
+                return cached_response, None
 
         try:
             # Limit concurrent outbound requests to Hipocrate
@@ -703,7 +730,7 @@ class HippoClient:
 
             # Cache the response for GET requests and wake up any waiters
             if method == "GET":
-                self.cache_put(url, response_text)
+                await self.cache_put(url, response_text)
                 self.url_cache.resolve_inflight(url)
 
             return response_text, None
@@ -1654,13 +1681,17 @@ class HippoClientServiceRequestSearch(HippoClientServiceRequest):
             requests = []
             seen_ids = set()
             all_rows = soup.find_all('tr')
+            # Compiled once outside the per-row loop below (was recompiled on
+            # every row, of which there can be ~100 on a NrPePag=100 page).
+            _recoltari_re = re.compile(r'buletinRecoltari\.asp\?id=(\d+)')
+            _analize_re = re.compile(r'BuletinAnalize\.asp\?id=\d+&type=1')
             for row_idx, row in enumerate(all_rows):
                 cells = row.find_all('td')
                 if len(cells) != 8:
                     continue
 
                 # Cell 0 contains buletinRecoltari link (request ID)
-                recoltari_link = cells[0].find('a', href=re.compile(r'buletinRecoltari\.asp\?id=(\d+)'))
+                recoltari_link = cells[0].find('a', href=_recoltari_re)
                 if not recoltari_link:
                     continue
                 request_id = re.search(r'buletinRecoltari\.asp\?id=(\d+)', recoltari_link['href'])
@@ -1704,7 +1735,7 @@ class HippoClientServiceRequestSearch(HippoClientServiceRequest):
                 request.store("medic", cells[6].get_text(strip=True))
 
                 # Check for BuletinAnalize link (results available)
-                analize_link = cells[0].find('a', href=re.compile(r'BuletinAnalize\.asp\?id=\d+&type=1'))
+                analize_link = cells[0].find('a', href=_analize_re)
                 if analize_link:
                     result_id = re.search(r'BuletinAnalize\.asp\?id=(\d+)', analize_link['href'])
                     if result_id:
@@ -2110,7 +2141,7 @@ class HippoClientImagingStudy(HippoClient):
             all_empty = all(not s.get("result") for s in studies) if studies else True
             if all_empty:
                 url = _format_request_url(self.request_url, **kwargs)
-                self.cache_remove(self.get_full_url(url))
+                await self.cache_remove(self.get_full_url(url))
                 logger.debug(f"Evicted empty imaging study from cache: {url}")
         return parsed_data
 
@@ -2286,7 +2317,7 @@ class HippoClientDiagnosticReport(HippoClient):
             all_empty = all(not s.get("result") for s in studies) if studies else True
             if all_empty:
                 url = _format_request_url(self.request_url, **kwargs)
-                self.cache_remove(self.get_full_url(url))
+                await self.cache_remove(self.get_full_url(url))
                 logger.debug(f"Evicted empty diagnostic report from cache: {url}")
         return parsed_data
 
@@ -2593,7 +2624,7 @@ class HippoClientCheckout(HippoClient):
         if parsed_data.get("status") != "error":
             if not parsed_data.get("checkout.epicrisis"):
                 url = _format_request_url(self.request_url, **kwargs)
-                self.cache_remove(self.get_full_url(url))
+                await self.cache_remove(self.get_full_url(url))
                 logger.debug(f"Evicted empty checkout epicrisis from cache: {url}")
         return parsed_data
 
@@ -4564,9 +4595,9 @@ class HippoClientWhoami(HippoClient):
         # The menu page is the same URL for every user but its content is
         # user-specific — it must never be served from or left in the shared URL cache.
         menu_url = self.get_full_url(self.request_url)
-        self.cache_remove(menu_url)
+        await self.cache_remove(menu_url)
         parsed_data = await super().fetch_and_parse(*args, **kwargs)
-        self.cache_remove(menu_url)
+        await self.cache_remove(menu_url)
 
         if parsed_data.get("status") != "error":
             self._cache[cache_key] = (parsed_data, time.monotonic())
@@ -4691,13 +4722,17 @@ class HippoClientSchedule(HippoClient):
             limit=kwargs.get('limit'),
         )
         if kwargs.get('force'):
-            self.cache_remove(self.get_full_url(url))
+            await self.cache_remove(self.get_full_url(url))
         try:
             response_text, error_message = await self.get_page(url)
             if error_message:
                 data.set_error(error_message)
                 return data
-            parsed = self.parse_data(response_text, **kwargs)
+            # parse_data does a full BeautifulSoup pass over a NrPePag=100 page;
+            # _fetch_and_parse_all_labs fans this out to 6 labs concurrently via
+            # asyncio.gather, so running it inline here would block the event
+            # loop 6x back-to-back for every "All Schedule" request.
+            parsed = await asyncio.to_thread(self.parse_data, response_text, **kwargs)
             if parsed.get("status") == "error":
                 # get_page() caches the raw HTML unconditionally, before parsing
                 # ever runs — a transient bad response (e.g. missing tbl_listare,
@@ -4706,7 +4741,7 @@ class HippoClientSchedule(HippoClient):
                 # manually force-refreshes. Evict it now so the next request
                 # (no force needed) gets a fresh fetch instead of repeating the
                 # same failure for the rest of the cache TTL.
-                self.cache_remove(self.get_full_url(url))
+                await self.cache_remove(self.get_full_url(url))
             parsed.store_list("requests", self._apply_filters(
                 parsed.get("requests") or [],
                 section_name=kwargs.get('section_name'),
@@ -4741,9 +4776,16 @@ class HippoClientSchedule(HippoClient):
         }
         lab_ids = [lab_id for lab_id in self._LAB_ID_TO_MODALITY if lab_id not in skip_labs]
         sub_kwargs_list = [dict(kwargs, lab_id=lab_id) for lab_id in lab_ids]
+
+        async def _fetch_one(sub_kwargs):
+            # Throttle this request's own fan-out below the global Hipocrate
+            # semaphore so it can't claim the backend's entire capacity by
+            # itself (see _schedule_fanout_semaphore).
+            async with _schedule_fanout_semaphore:
+                return await HippoClientSchedule(self.service_url, self.request).fetch_and_parse(**sub_kwargs)
+
         results = await asyncio.gather(
-            *(HippoClientSchedule(self.service_url, self.request).fetch_and_parse(**sub_kwargs)
-              for sub_kwargs in sub_kwargs_list),
+            *(_fetch_one(sub_kwargs) for sub_kwargs in sub_kwargs_list),
             return_exceptions=True,
         )
 
@@ -4956,14 +4998,14 @@ class HippoClientSchedule(HippoClient):
         return self.fhir_response(parsed, **kwargs)
 
 
-def _invalidate_observation_bundle_from_cerere_cache(client: 'HippoClient', cerere_id: str) -> None:
+async def _invalidate_observation_bundle_from_cerere_cache(client: 'HippoClient', cerere_id: str) -> None:
     """Best-effort: if cerere.asp for this request is already cached, use it to
     find the patient ID and drop their ObservationBundle cache entry, so
     /fhir/Observation doesn't keep serving pre-write data after a report is
     written/validated. Cache-only lookup — never issues a live Hipocrate call,
     so a cache miss here just means the bundle keeps its normal TTL."""
     cerere_url = client.get_full_url(f"/PARA/NOM/Listare/cerere.asp?id={cerere_id}")
-    cached_html = client.url_cache.get(cerere_url)
+    cached_html = await client.url_cache.get_async(cerere_url)
     if not cached_html:
         return
     parsed = HippoClientCerere().parse_data(cached_html, id=cerere_id)
@@ -5095,11 +5137,11 @@ class HippoClientReportWrite(HippoClient):
 
         # Step 3 — evict caches so next read reflects the new text
         cerere_path = f"/PARA/NOM/Listare/cerere.asp?id={cerere_id}"
-        _invalidate_observation_bundle_from_cerere_cache(self, cerere_id)
+        await _invalidate_observation_bundle_from_cerere_cache(self, cerere_id)
         for suffix in ["&type=3&IdP=1", "&type=1&IdP=1"]:
-            self.cache_remove(
+            await self.cache_remove(
                 self.get_full_url(f"/PARA/Printabile/BuletinAnalize.asp?id={cerere_id}{suffix}"))
-        self.cache_remove(self.get_full_url(cerere_path))
+        await self.cache_remove(self.get_full_url(cerere_path))
 
         data.set_success()
         return data
@@ -5129,11 +5171,11 @@ class HippoClientReportValidate(HippoClient):
             return data
 
         cerere_path = f"/PARA/NOM/Listare/cerere.asp?id={cerere_id}"
-        _invalidate_observation_bundle_from_cerere_cache(self, cerere_id)
+        await _invalidate_observation_bundle_from_cerere_cache(self, cerere_id)
         for suffix in ["&type=3&IdP=1", "&type=1&IdP=1"]:
-            self.cache_remove(
+            await self.cache_remove(
                 self.get_full_url(f"/PARA/Printabile/BuletinAnalize.asp?id={cerere_id}{suffix}"))
-        self.cache_remove(self.get_full_url(cerere_path))
+        await self.cache_remove(self.get_full_url(cerere_path))
 
         data.set_success()
         return data
@@ -5232,9 +5274,9 @@ class HippoClientCererePerform(HippoClient):
         if patient_id:
             HippoClientObservationBundle.invalidate_cache(patient_id)
 
-        self.cache_remove(cerere_url)
+        await self.cache_remove(cerere_url)
         for suffix in ["&type=3&IdP=1", "&type=1&IdP=1"]:
-            self.cache_remove(
+            await self.cache_remove(
                 self.get_full_url(f"/PARA/Printabile/BuletinAnalize.asp?id={cerere_id}{suffix}"))
 
         data.set_success()

@@ -172,7 +172,7 @@ async def get_patient(request):
 
     client = HippoClientPatient(SERVICE_URL, request)
     if request.rel_url.query.get('refresh') == '1':
-        evict_patient_cache(client, id)
+        await evict_patient_cache(client, id)
 
     debug_resp = await web_debug_response(client, request, id=id)
     if debug_resp is not None:
@@ -192,7 +192,7 @@ async def get_fhir_patient(request):
 
     client = HippoClientPatient(SERVICE_URL, request)
     if request.rel_url.query.get('refresh') == '1':
-        evict_patient_cache(client, id)
+        await evict_patient_cache(client, id)
     response = await client.fetch_respond_fhir(id=id)
     return web_fhir_response(response)
 
@@ -212,7 +212,7 @@ async def search_request(request):
 
     client = HippoClientServiceRequestSearch(SERVICE_URL, request)
     if request.rel_url.query.get('refresh') == '1':
-        evict_patient_cache(client, patient_id)
+        await evict_patient_cache(client, patient_id)
     parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime)
     return web_json_response(parsed_data)
 
@@ -231,7 +231,7 @@ async def search_fhir_service_request(request):
 
     client = HippoClientServiceRequestSearch(SERVICE_URL, request)
     if request.rel_url.query.get('refresh') == '1':
-        evict_patient_cache(client, patient_id)
+        await evict_patient_cache(client, patient_id)
     parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime)
     response = client.fhir_bundle_response(parsed_data, http_request=request, patient_id=patient_id)
     return web_fhir_response(response)
@@ -531,7 +531,7 @@ async def get_fhir_observation(request):
     end_date   = request.rel_url.query.get('end_date')
     client = HippoClientObservationBundle(SERVICE_URL, request)
     if request.rel_url.query.get('refresh') == '1':
-        evict_patient_cache(client, patient_id)
+        await evict_patient_cache(client, patient_id)
     response = await client.fetch_respond_fhir(
         patient_id=patient_id,
         start_date=start_date,
@@ -550,7 +550,7 @@ async def get_observation(request):
     end_date   = request.rel_url.query.get('end_date')
     client = HippoClientObservationBundle(SERVICE_URL, request)
     if request.rel_url.query.get('refresh') == '1':
-        evict_patient_cache(client, patient_id)
+        await evict_patient_cache(client, patient_id)
     parsed = await client.fetch_and_parse(
         patient_id=patient_id,
         start_date=start_date,
@@ -1339,7 +1339,17 @@ if __name__ == "__main__":
              'clean shutdown; enables the hippobridge control script to find '
              'and signal this process'
     )
+    parser.add_argument(
+        '--dev', action='store_true',
+        help='Enable development mode (default: off, or $HB_DEV=1): currently '
+             'gates per-request hot-reload checks like the LLM prompt template '
+             'mtime check, which should not pay a stat() syscall per request '
+             'once prompts are stable in production'
+    )
     args = parser.parse_args()
+
+    import devmode
+    devmode.set_dev_mode(args.dev or os.environ.get('HB_DEV') == '1')
 
     if args.log_level:
         # Only the console handler's threshold changes — root logger and the

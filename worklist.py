@@ -895,18 +895,24 @@ class WorklistRefresher:
             return self._patient_cache[request_id]
 
         try:
-            cerere = self._client(HippoClientCerere)
-            cerere_data = await cerere.fetch_and_parse(id=request_id)
-            patient_id = cerere_data.get('patient.id')
-            if not patient_id:
-                return None
-
+            # cerere.asp and BuletinSolicitare.asp are both keyed only by
+            # request_id — independent fetches, so run them concurrently
+            # instead of paying two sequential round-trips.
+            #
             # BuletinSolicitare.asp's "Medic solicitant" is the physician who
             # actually ordered this exam — cerere.asp's strMedicId only ever
             # gives "Medic curant" (the attending physician), a different
             # person whenever the patient's regular doctor isn't the orderer.
+            cerere = self._client(HippoClientCerere)
             solicitare = self._client(HippoClientBuletinSolicitare)
-            solicitare_data = await solicitare.fetch_and_parse(id=request_id)
+            cerere_data, solicitare_data = await asyncio.gather(
+                cerere.fetch_and_parse(id=request_id),
+                solicitare.fetch_and_parse(id=request_id),
+            )
+            patient_id = cerere_data.get('patient.id')
+            if not patient_id:
+                return None
+
             physician_solicitant = (
                 solicitare_data.get('request.physician_solicitant') or
                 solicitare_data.get('request.physician_curant')

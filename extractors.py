@@ -25,6 +25,7 @@ The module is designed to work with BeautifulSoup for HTML parsing and includes
 robust error handling and logging for debugging purposes.
 """
 
+from functools import lru_cache
 from typing import Dict, Any, Optional, List
 from bs4 import BeautifulSoup, Comment
 import logging
@@ -34,6 +35,12 @@ from datetime import datetime
 from markdown import html_to_markdown
 
 logger = logging.getLogger('HippoExtractor')
+
+# extract_text_after_label/extract_ids_from_links are called per row/field
+# from table-parsing loops elsewhere with a small, repeated set of pattern
+# strings — cache the compiled Pattern so a 100-row page doesn't recompile
+# the same regex on every row.
+_compile_cached = lru_cache(maxsize=256)(re.compile)
 
 
 def parse_date_time(date_str: str) -> Optional[datetime]:
@@ -228,7 +235,7 @@ def extract_text_after_label(soup: BeautifulSoup, label_regex: str, element_tag:
         Extracted field content stripped of whitespace, or empty string if not found
     """
     try:
-        for label_element in soup.find_all(string=re.compile(label_regex, re.IGNORECASE)):
+        for label_element in soup.find_all(string=_compile_cached(label_regex, re.IGNORECASE)):
             if isinstance(label_element, Comment):
                 continue
             container_element = label_element.parent if element_tag is None else label_element.find_parent(element_tag)
@@ -283,7 +290,7 @@ def extract_ids_from_links(soup: BeautifulSoup, id_pattern: str = r'id=([^&"]+)'
         List of extracted ID strings (may be empty)
     """
     ids_list = []
-    for item in soup.find_all('a', href=re.compile(id_pattern)):
+    for item in soup.find_all('a', href=_compile_cached(id_pattern)):
         href = item.get('href', '')
         id_match = re.search(id_pattern, href)
         if id_match:

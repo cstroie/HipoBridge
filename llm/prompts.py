@@ -32,6 +32,8 @@ import os
 import re
 from datetime import date
 
+import devmode
+
 logger = logging.getLogger(__name__)
 
 # Matches markdown scaffolding (headers, list/emphasis markers, table pipes)
@@ -88,7 +90,12 @@ class _PromptRegistry(collections.abc.Mapping):
     kind's .md file from disk when it changes (mtime) so an edit made while
     the server is running takes effect on the next request, without a
     restart. Templates are still loaded eagerly at construction time so a
-    missing/empty file still fails loudly at import, as before."""
+    missing/empty file still fails loudly at import, as before.
+
+    The mtime check itself only runs in dev mode (see devmode.is_dev_mode())
+    — it's a stat() syscall on the request path, worth paying while actively
+    editing prompts but not on every production request once they're stable;
+    production restarts to pick up prompt changes."""
 
     def __init__(self, meta: dict[str, tuple[str, int]]):
         self._meta = meta
@@ -98,9 +105,13 @@ class _PromptRegistry(collections.abc.Mapping):
 
     def __getitem__(self, kind: str) -> tuple[str, str, int]:
         tier, max_tokens = self._meta[kind]  # KeyError for unknown kind
+        cached = self._cache.get(kind)
+
+        if cached is not None and not devmode.is_dev_mode():
+            return tier, cached[1], max_tokens
+
         path = os.path.join(_TEMPLATE_DIR, f"{kind}.md")
         mtime = os.path.getmtime(path)
-        cached = self._cache.get(kind)
         if cached is None or cached[0] != mtime:
             if cached is not None:
                 logger.info(f"Prompt template changed on disk, reloading: {path}")
