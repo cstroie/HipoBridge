@@ -111,8 +111,8 @@ class TestGitignoreOnlyTracksExamples(unittest.TestCase):
                           f"real (non-.example) *.cfg files must not be tracked in git: {non_example}")
 
     def test_expected_example_files_are_tracked(self):
-        expected = {'hippobridge.cfg.example', 'llm.cfg.example',
-                    'regions.cfg.example', 'worklist.cfg.example'}
+        expected = {'examples/hippobridge.cfg.example', 'examples/llm.cfg.example',
+                    'examples/regions.cfg.example', 'examples/worklist.cfg.example'}
         self.assertEqual(set(self.tracked), expected)
 
 

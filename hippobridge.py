@@ -19,8 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 FHIR R4 API bridge to Hipocrate: scrapes HTML on every request, no database.
 Routes: /api/* returns raw HippoData JSON; /fhir/* returns FHIR R4 resources.
-Config: hippobridge.cfg (gitignored; copy from hippobridge.cfg.example), layered
-over the in-code DEFAULT_CONFIG fallback.
+Config: hippobridge.cfg (gitignored; copy from examples/hippobridge.cfg.example),
+layered over the in-code DEFAULT_CONFIG fallback.
 """
 import asyncio
 import os
