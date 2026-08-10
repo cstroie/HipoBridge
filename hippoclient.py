@@ -5188,14 +5188,14 @@ class HippoClientReportWrite(HippoClient):
         rez_html, err = await self.make_authenticated_request(
             rez_url, "GET", None, self.username, self.password)
         if err or not rez_html:
-            data.store("message", err or "Empty response from Rezultate.asp")
+            data.set_error(err or "Empty response from Rezultate.asp")
             return data
 
         soup = BeautifulSoup(rez_html, "html.parser")
         field_el = soup.find(["textarea", "input"],
                              attrs={"name": re.compile(r"^v\d+$")})
         if not field_el:
-            data.store("message", "Could not locate result field in Rezultate form")
+            data.set_error("Could not locate result field in Rezultate form")
             return data
         field_code = field_el["name"][1:]  # strip leading 'v'
         logger.info(f"ReportWrite: field_code={field_code} url={rez_url}")
@@ -5220,7 +5220,7 @@ class HippoClientReportWrite(HippoClient):
             rez_url, "POST", post_data, self.username, self.password)
         logger.info(f"ReportWrite POST result: err={err!r} resp_len={len(post_resp) if post_resp else 0} resp={post_resp!r:.200}")
         if err:
-            data.store("message", err)
+            data.set_error(err)
             return data
 
         # Step 3 — evict caches so next read reflects the new text
@@ -5252,10 +5252,10 @@ class HippoClientReportValidate(HippoClient):
             self.get_full_url(f"/PARA/NOM/LISTARE/Ajax_Cerere.asp?{qs}"),
             "GET", None, self.username, self.password)
         if err:
-            data.store("message", err)
+            data.set_error(err)
             return data
         if resp and resp.strip():
-            data.store("message", resp.strip())
+            data.set_error(resp.strip())
             return data
 
         cerere_path = f"/PARA/NOM/Listare/cerere.asp?id={cerere_id}"
@@ -5338,13 +5338,13 @@ class HippoClientCererePerform(HippoClient):
         html, err = await self.make_authenticated_request(
             cerere_url, "GET", None, self.username, self.password)
         if err or not html:
-            data.store("message", err or "Empty response from cerere.asp")
+            data.set_error(err or "Empty response from cerere.asp")
             return data
 
         soup = BeautifulSoup(html, 'html.parser')
         form_data = self._extract_form_fields(soup)
         if not form_data:
-            data.store("message", "No form found in cerere.asp")
+            data.set_error("No form found in cerere.asp")
             return data
 
         form_data.update(overrides)
@@ -5355,7 +5355,7 @@ class HippoClientCererePerform(HippoClient):
             cerere_url, "POST", form_data, self.username, self.password)
         logger.info(f"{log_label} POST result: err={err!r} resp_len={len(post_resp) if post_resp else 0}")
         if err:
-            data.store("message", err)
+            data.set_error(err)
             return data
 
         patient_id = form_data.get('strPacientId')

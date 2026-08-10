@@ -29,6 +29,10 @@ from tests.llm_client import TestProviderSelection, TestPromptRegistry
 from tests.regions import TestLoadRegionRules
 from tests.config import TestHippobridgeLoadConfig, TestInitLlm, TestGitignoreOnlyTracksExamples
 from tests.hippoclient_parsing import TestParseBuletinHeader
+from tests.hippoclient_write import (
+    TestReportWriteErrors, TestReportValidateErrors, TestCererePerformErrors,
+    TestWebJsonResponseEndToEnd,
+)
 
 # Configuration
 BASE_URL = "http://localhost:44660"
@@ -71,6 +75,10 @@ TEST_GROUPS = {
         TestInitLlm,
         TestGitignoreOnlyTracksExamples,
         TestParseBuletinHeader,
+        TestReportWriteErrors,
+        TestReportValidateErrors,
+        TestCererePerformErrors,
+        TestWebJsonResponseEndToEnd,
     ],
     "root": [test_root_endpoint],
     "auth": [
@@ -120,6 +128,10 @@ TEST_GROUPS = {
     "regions": [TestLoadRegionRules],
     "config": [TestHippobridgeLoadConfig, TestInitLlm, TestGitignoreOnlyTracksExamples],
     "hippoclient_parsing": [TestParseBuletinHeader],
+    "hippoclient_write": [
+        TestReportWriteErrors, TestReportValidateErrors, TestCererePerformErrors,
+        TestWebJsonResponseEndToEnd,
+    ],
 }
 
 async def run_tests(test_list) -> None:
