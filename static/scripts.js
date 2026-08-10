@@ -3187,7 +3187,22 @@ document.addEventListener('DOMContentLoaded', function() {
         if (given)  return given;
         return 'N/A';
     }
-    
+
+    // Initials only (e.g. "J.D.") — for headings prepended to text sent to
+    // the LLM, so the model never sees the patient's full name.
+    function formatPatientInitials(nameArray) {
+        if (!nameArray) return 'N/A';
+        const arr = Array.isArray(nameArray) ? nameArray : [nameArray];
+        if (arr.length === 0) return 'N/A';
+        const name = arr[0];
+        const familyInitial = name.family ? name.family.trim()[0]?.toUpperCase() : '';
+        const givenInitials = name.given
+            ? name.given.map(g => g.trim()[0]?.toUpperCase()).filter(Boolean).join('.')
+            : '';
+        const parts = [givenInitials, familyInitial].filter(Boolean);
+        return parts.length ? parts.join('.') + '.' : 'N/A';
+    }
+
     // Enhanced gender formatting with icons
     function formatGender(gender) {
         if (!gender) return 'N/A';
@@ -3857,7 +3872,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const patientData = pendingAnalysesData?.patientData;
         const headerParts = [];
         if (patientData) {
-            const name = formatPatientName(patientData.name);
+            const name = formatPatientInitials(patientData.name);
             const gender = formatGender(patientData.gender);
             const age = calculateAge(patientData.birthDate);
             const demo = [name, gender, age].filter(v => v && v !== 'N/A').join(', ');
@@ -4074,7 +4089,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const headerParts = [];
         if (patientData) {
-            const name = formatPatientName(patientData.name);
+            const name = formatPatientInitials(patientData.name);
             const gender = formatGender(patientData.gender);
             const age = calculateAge(patientData.birthDate);
             const demo = [name, gender, age].filter(v => v && v !== 'N/A').join(', ');
