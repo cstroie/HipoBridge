@@ -913,6 +913,38 @@ async def post_ai_summarize(request):
 _STREAM_ERROR_SENTINEL = "\x1f"
 
 
+async def _finish_ai_stream_in_background(kind: str, cache_key: str, agen, parts: list) -> None:
+    """Keep draining an LLM stream after its client has disconnected mid-
+    generation, so the eventual result still gets cached — a page reload
+    (or an auto-probe like imaging_episode's) then serves it instantly
+    instead of re-running the same slow generation from scratch.
+
+    `agen` is the same async generator post_ai_summarize_stream was already
+    iterating (not a fresh call) — Python generators resume exactly where
+    they left off regardless of which coroutine drives them next, as long
+    as only one driver runs at a time, which holds here since the caller
+    stops iterating before handing off. `parts` is the pieces collected so
+    far; this appends to the same list.
+
+    Best-effort: if the generation itself fails/times out from here, or the
+    server restarts before this finishes, the result is simply never
+    cached — same as if this function didn't exist, not a new failure
+    mode."""
+    try:
+        async for piece in agen:
+            parts.append(piece)
+    except Exception as exc:
+        logger.debug(
+            f"AI summarization (stream) background completion failed ({kind}): "
+            f"{type(exc).__name__}: {exc}")
+        return
+    summary = strip_think_block(''.join(parts)).strip()
+    ai_cache.put(cache_key, summary)
+    logger.info(
+        f"AI summarization (stream) finished after client disconnect ({kind}) "
+        f"— cached for the next request")
+
+
 @require_auth
 async def post_ai_summarize_stream(request):
     """Streaming counterpart to post_ai_summarize, for the kinds where
@@ -976,10 +1008,32 @@ async def post_ai_summarize_stream(request):
             pass
 
     parts = []
+    agen = llm_summarize_stream(_ai_client, kind, text)
     try:
-        async for piece in llm_summarize_stream(_ai_client, kind, text):
+        async for piece in agen:
             parts.append(piece)
-            await response.write(piece.encode('utf-8'))
+            try:
+                await response.write(piece.encode('utf-8'))
+            except (ConnectionError, OSError) as exc:
+                # Client disconnected (tab closed, navigated away, or its own
+                # inactivity abort fired) — not a service failure. The
+                # generation itself is still running server-side (this is a
+                # slow model; abandoning it here would waste the work an
+                # instant before it would've finished) — hand the same
+                # async generator to a detached task that keeps draining it
+                # and caches the eventual result, so a reload (or the
+                # imaging_episode-style auto-probe) picks it up from cache
+                # instead of re-running the same slow generation. aiohttp
+                # cancels *this* request's task shortly after a connection
+                # loss (web_protocol.py's connection_lost), so the
+                # continuation must be a genuinely separate task, not just
+                # "keep looping here".
+                logger.debug(
+                    f"AI summarization (stream) client disconnected ({kind}); "
+                    f"continuing generation in the background so the result "
+                    f"still gets cached: {exc}")
+                asyncio.create_task(_finish_ai_stream_in_background(kind, cache_key, agen, parts))
+                return response
     except asyncio.TimeoutError:
         logger.warning(
             f"AI summarization (stream) timed out ({kind}, ~{len(text)} chars) — "
@@ -987,12 +1041,6 @@ async def post_ai_summarize_stream(request):
         await _write_stream_error(
             "AI summary timed out (the model took too long) — try again or raise "
             "the [llm] timeout")
-        return response
-    except (ConnectionError, OSError) as exc:
-        # Client disconnected (tab closed, navigated away, or its own
-        # inactivity abort fired) — not a service failure, just log at debug
-        # and don't bother trying to write anything back.
-        logger.debug(f"AI summarization (stream) client disconnected ({kind}): {exc}")
         return response
     except Exception as exc:
         logger.warning(f"AI summarization (stream) failed ({kind}): {type(exc).__name__}: {exc}")
