@@ -88,31 +88,33 @@ class TestInitLlm(unittest.TestCase):
 
 
 class TestGitignoreOnlyTracksExamples(unittest.TestCase):
-    """Guards the blanket `*.cfg` rule in .gitignore: every *.cfg file
-    tracked in git must actually be a *.cfg.example (the tracked reference),
-    never a real site-specific *.cfg. A future genuinely-trackable .cfg file
-    (e.g. a linter config) would otherwise be silently swallowed by the same
-    rule without anyone noticing."""
+    """Guards the root-anchored `/*.cfg` rule in .gitignore: every *.cfg file
+    tracked in git must live under examples/ (the tracked reference copy),
+    never in the project root (the real, site-specific, gitignored file). A
+    future genuinely-trackable root .cfg file (e.g. a linter config) would
+    otherwise be silently swallowed by a too-broad ignore rule without
+    anyone noticing — this also guards the inverse: that the rule isn't
+    accidentally narrowed to let a real root *.cfg slip into git."""
 
     def setUp(self):
         repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
         try:
             out = subprocess.run(
-                ['git', 'ls-files', '*.cfg', '*.cfg.example'],
+                ['git', 'ls-files', '*.cfg'],
                 cwd=repo_root, capture_output=True, text=True, timeout=10, check=True,
             )
         except (FileNotFoundError, subprocess.CalledProcessError) as exc:
             self.skipTest(f"git not available or not a repo: {exc}")
         self.tracked = [line for line in out.stdout.splitlines() if line]
 
-    def test_only_example_cfg_files_are_tracked(self):
-        non_example = [f for f in self.tracked if not f.endswith('.cfg.example')]
-        self.assertEqual(non_example, [],
-                          f"real (non-.example) *.cfg files must not be tracked in git: {non_example}")
+    def test_only_examples_directory_cfg_files_are_tracked(self):
+        outside_examples = [f for f in self.tracked if not f.startswith('examples/')]
+        self.assertEqual(outside_examples, [],
+                          f"real, site-specific *.cfg files must not be tracked in git: {outside_examples}")
 
     def test_expected_example_files_are_tracked(self):
-        expected = {'examples/hippobridge.cfg.example', 'examples/llm.cfg.example',
-                    'examples/regions.cfg.example', 'examples/worklist.cfg.example'}
+        expected = {'examples/hippobridge.cfg', 'examples/llm.cfg',
+                    'examples/regions.cfg', 'examples/worklist.cfg'}
         self.assertEqual(set(self.tracked), expected)
 
 

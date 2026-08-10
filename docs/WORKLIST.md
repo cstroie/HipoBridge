@@ -15,7 +15,7 @@ Devices query the worklist instead of having technicians type patient demographi
 ## Setup
 
 ```bash
-cp examples/worklist.cfg.example worklist.cfg
+cp examples/worklist.cfg worklist.cfg
 $EDITOR worklist.cfg          # fill in credentials and device sections
 python3 hippobridge.py         # MWL server starts automatically alongside the HTTP server
 ```

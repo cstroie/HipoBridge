@@ -189,7 +189,7 @@ def load_region_rules(config_path: str = 'regions.cfg'):
     else:
         logging.getLogger(__name__).warning(
             "%s not found — all region identification will return "
-            "'unknown'; copy examples/regions.cfg.example to regions.cfg", config_path)
+            "'unknown'; copy examples/regions.cfg to regions.cfg", config_path)
 
     def _section(name):
         return {k: [w.strip() for w in v.split(',')] for k, v in config[name].items()} if name in config else {}

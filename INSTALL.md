@@ -19,13 +19,13 @@ cd hippobridge
 
 ## Configuration
 
-Every config file follows the same pattern: only `examples/*.cfg.example` is tracked in git, fully documenting every option and its default. Copy it to `*.cfg` in the project root (gitignored) and edit:
+Every config file follows the same pattern: only `examples/*.cfg` is tracked in git, fully documenting every option and its default. Copy it to `*.cfg` in the project root (gitignored) and edit:
 
 ```bash
-cp examples/hippobridge.cfg.example hippobridge.cfg   # server, hipocrate, cache, logging, radiology
-cp examples/llm.cfg.example llm.cfg                    # AI provider config
-cp examples/regions.cfg.example regions.cfg            # imaging region keyword rules
-cp examples/worklist.cfg.example worklist.cfg          # DICOM MWL — see docs/WORKLIST.md
+cp examples/hippobridge.cfg hippobridge.cfg   # server, hipocrate, cache, logging, radiology
+cp examples/llm.cfg llm.cfg                    # AI provider config
+cp examples/regions.cfg regions.cfg            # imaging region keyword rules
+cp examples/worklist.cfg worklist.cfg          # DICOM MWL — see docs/WORKLIST.md
 ```
 
 `hippobridge.cfg` example:

@@ -2,7 +2,7 @@
 active at a time, each exposing three model tiers.
 
 Mirrors hippobridge.py's load_config(): in-code defaults -> llm.cfg (gitignored;
-copy from examples/llm.cfg.example). Deliberately a separate file/section
+copy from examples/llm.cfg). Deliberately a separate file/section
 namespace from hippobridge.cfg's own [server] so the two don't collide.
 
 configparser has no nesting, so each provider is a prefixed section

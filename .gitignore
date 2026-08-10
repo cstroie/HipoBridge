@@ -1,5 +1,5 @@
 .aider*
-*.cfg
+/*.cfg
 *.log
 *.pid
 *.out

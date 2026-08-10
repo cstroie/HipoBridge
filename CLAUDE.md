@@ -20,7 +20,7 @@ python3 hippobridge.py
 
 The server itself takes no fixed credentials — `@require_auth` reads Basic Auth from each incoming request and forwards it to Hipocrate per-request. `HYP_USER`/`HYP_PASS` are only needed by client/test scripts (`runtests.py`, `client.py`, `tests/*.py`) calling the server, and as a fallback for the worklist SCP if `worklist.cfg`'s `[worklist] username`/`password` aren't set. Test credentials are in `worklist.cfg`. Server runs on `http://127.0.0.1:44660`.
 
-Default: `http://0.0.0.0:44660`. Configure via `hippobridge.cfg` (gitignored — copy from `examples/hippobridge.cfg.example`, which documents every option):
+Default: `http://0.0.0.0:44660`. Configure via `hippobridge.cfg` (gitignored — copy from `examples/hippobridge.cfg`, which documents every option):
 
 ```ini
 [server]
@@ -29,7 +29,7 @@ port = 8080
 service_url = http://192.168.3.230/hipocrate
 ```
 
-Every subsystem follows the same pattern: `hippobridge.cfg` (server/hipocrate/cache/logging/radiology), `llm.cfg` (AI provider config), `regions.cfg` (imaging region keyword rules), `worklist.cfg` (DICOM MWL) are all gitignored — copy the matching `examples/*.cfg.example` and edit it.
+Every subsystem follows the same pattern: `hippobridge.cfg` (server/hipocrate/cache/logging/radiology), `llm.cfg` (AI provider config), `regions.cfg` (imaging region keyword rules), `worklist.cfg` (DICOM MWL) are all gitignored — copy the matching `examples/*.cfg` and edit it.
 
 CLI: `--port`, `--host`, `--service-url`, `--log-level DEBUG|INFO|WARNING|ERROR`, `--log-file PATH`, `--no-disk-cache`, `--no-worklist`, `--pidfile PATH`.
 
