@@ -64,7 +64,7 @@ from collections import OrderedDict
 
 from extractors import extract_id_from_link, extract_ids_from_links, extract_selected_from_dropdown, extract_text_after_label, extract_text_from_element, extract_value_from_input
 from extractors import parse_cnp, parse_date_time
-from urlcache import URLCache, FilesystemCache
+from urlcache import URLCache, FilesystemCache, ParseResultCache
 import asyncio
 
 # URLs whose content is user-specific or too volatile for long-term persistence.
@@ -290,6 +290,11 @@ def identify_study_type_and_region(desc: str) -> Tuple[str, str]:
 # Simple in-memory cache for HTTP responses (imported from urlcache module)
 url_cache = URLCache(max_size=500, timeout=30 * 60)
 
+# Cache of parse_data() results, keyed by (url, parser class) — see
+# ParseResultCache docstring. Same TTL as url_cache's L1 so a parsed result
+# never outlives the raw page it was derived from.
+parse_cache = ParseResultCache(max_size=300, timeout=url_cache.timeout)
+
 # Global semaphore: cap total concurrent outbound requests to Hipocrate
 _hipocrate_semaphore = asyncio.Semaphore(6)
 
@@ -505,6 +510,10 @@ class HippoClient:
         full_url = self.get_full_url(url)
         persist = not any(p in full_url for p in _NO_PERSIST_PATTERNS)
         await self.url_cache.put_async(full_url, response_text, persist=persist)
+        # A fresh fetch means any previously parsed result for this url is
+        # now stale (could be a different report, a newly filled result,
+        # etc.) — drop it so the next parse re-runs against the new content.
+        parse_cache.evict(full_url)
 
     async def cache_remove(self, url: str):
         """Remove cached response for URL.
@@ -512,7 +521,12 @@ class HippoClient:
         Args:
             url: URL to remove from cache
         """
-        return await self.url_cache.remove_async(url)
+        # Callers already pass a full URL here (get_full_url is idempotent
+        # on one, so this stays correct either way) — matches url_cache's
+        # own key space, so parse_cache stays in lockstep with it.
+        full_url = self.get_full_url(url)
+        parse_cache.evict(full_url)
+        return await self.url_cache.remove_async(full_url)
 
     def cache_clear(self) -> None:
         """Clear all cache entries."""
@@ -891,6 +905,24 @@ class HippoClient:
         """Override in subclasses to parse Hipocrate HTML into HippoData."""
         return HippoData(status="error", message="No data")
 
+    def _parse_data_cached(self, html_content: str, url: str, **kwargs) -> HippoData:
+        """parse_data(), memoized in parse_cache by (full url, this class).
+
+        Safe because every parse_data() implementation only reads kwargs
+        already embedded in `url` (see ParseResultCache docstring) — so for
+        a fixed url and parser class, the result is always the same until
+        the underlying page itself changes (which evicts this entry too,
+        see cache_put/cache_remove below).
+        """
+        full_url = self.get_full_url(url)
+        class_name = type(self).__name__
+        cached = parse_cache.get(full_url, class_name)
+        if cached is not None:
+            return cached
+        parsed = self.parse_data(html_content, **kwargs)
+        parse_cache.put(full_url, class_name, parsed)
+        return parsed
+
     def fhir_response(self, parsed_data: HippoData, **kwargs) -> FHIROperationOutcome:
         """Override in subclasses to convert HippoData to a FHIR resource."""
         return FHIROperationOutcome.from_error(
@@ -908,7 +940,7 @@ class HippoClient:
             if error_message:
                 data.set_error(error_message)
                 return data
-            return self.parse_data(response_text, **kwargs)
+            return self._parse_data_cached(response_text, url, **kwargs)
         except Exception as e:
             logger.error(f"fetch_and_parse failed: {e}")
             data.set_error(f"Data retrieval failed: {e}")
@@ -4740,8 +4772,15 @@ class HippoClientSchedule(HippoClient):
             # parse_data does a full BeautifulSoup pass over a NrPePag=100 page;
             # _fetch_and_parse_all_labs fans this out to 6 labs concurrently via
             # asyncio.gather, so running it inline here would block the event
-            # loop 6x back-to-back for every "All Schedule" request.
-            parsed = await asyncio.to_thread(self.parse_data, response_text, **kwargs)
+            # loop 6x back-to-back for every "All Schedule" request. Check the
+            # parse-result cache first so a repeat request for the same lab
+            # skips both the thread hop and the parse entirely.
+            full_url = self.get_full_url(url)
+            class_name = type(self).__name__
+            parsed = parse_cache.get(full_url, class_name)
+            if parsed is None:
+                parsed = await asyncio.to_thread(self.parse_data, response_text, **kwargs)
+                parse_cache.put(full_url, class_name, parsed)
             if parsed.get("status") == "error":
                 # get_page() caches the raw HTML unconditionally, before parsing
                 # ever runs — a transient bad response (e.g. missing tbl_listare,

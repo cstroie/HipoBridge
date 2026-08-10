@@ -16,13 +16,14 @@ invalidated together on explicit eviction.
 
 import asyncio
 from collections import OrderedDict
+import copy
 from datetime import datetime, timezone
 from hashlib import md5
 import json
 import logging
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 logger = logging.getLogger('URLCache')
 
@@ -371,3 +372,80 @@ class URLCache:
         event = self._inflight.get(url)
         if event:
             await event.wait()
+
+
+class ParseResultCache:
+    """In-memory cache for *parsed* page results, layered on top of URLCache.
+
+    A page fetched through URLCache still gets re-parsed (BeautifulSoup, regex
+    extraction, etc.) on every call even when the raw HTML was itself a cache
+    hit. This cache short-circuits that: keyed by (url, parser_class_name), it
+    skips parse_data() entirely when both the page and the parse of it are
+    still fresh.
+
+    Why (url, class_name) is a safe key: every HippoClient parse_data()
+    implementation only reads kwargs that are already embedded in the URL
+    used to fetch the page (id, lab_id, etc. are template placeholders
+    substituted by _format_request_url()/_build_url() before the request is
+    made) — so for a fixed url, parse_data's output depends only on which
+    parser class is doing the parsing, never on anything else. Two different
+    classes can legitimately parse the same url differently, hence class_name
+    is part of the key.
+
+    L1-only, deliberately: this cache exists purely to skip redundant CPU
+    work (parsing), not to reduce load on Hipocrate — that's the raw-page
+    URLCache/FilesystemCache's job (see module docstring). No persistence
+    across restarts is needed or attempted.
+
+    HippoData is a mutable dict subclass, and callers routinely mutate a
+    parse result after receiving it (.store()/.store_list() to add derived
+    fields, apply filters, etc.) — so both get() and put() deep-copy: put()
+    stores an isolated copy so a caller mutating the object it just parsed
+    can't corrupt the cached entry, and get() returns a fresh copy so each
+    hit can be mutated independently without affecting the next hit.
+
+    Entries are nested by url first so invalidating a url (raw page changed
+    or was evicted) drops every parser's cached result for it in one dict
+    delete, regardless of which classes had parsed it.
+    """
+
+    def __init__(self, max_size: int = 300, timeout: int = 1800):
+        self.max_size = max_size
+        self.timeout = timeout
+        # url -> {class_name: (deepcopy_of_result, utc_timestamp)}
+        self._cache: OrderedDict[str, dict] = OrderedDict()
+
+    def get(self, url: str, class_name: str) -> Optional[Any]:
+        entry = self._cache.get(url)
+        if entry is None:
+            return None
+        hit = entry.get(class_name)
+        if hit is None:
+            return None
+        value, ts = hit
+        age = (datetime.now(timezone.utc) - ts).total_seconds()
+        if age >= self.timeout:
+            del entry[class_name]
+            if not entry:
+                del self._cache[url]
+            return None
+        self._cache.move_to_end(url)
+        logger.debug(f"Parse cache hit: {class_name} / {url} (age {age:.1f}s)")
+        return copy.deepcopy(value)
+
+    def put(self, url: str, class_name: str, value: Any) -> None:
+        if url not in self._cache:
+            if len(self._cache) >= self.max_size:
+                evicted_url, _ = self._cache.popitem(last=False)
+                logger.debug(f"Evicted LRU parse cache entry: {evicted_url}")
+            self._cache[url] = {}
+        self._cache[url][class_name] = (copy.deepcopy(value), datetime.now(timezone.utc))
+        self._cache.move_to_end(url)
+        logger.debug(f"Parse cache stored: {class_name} / {url}")
+
+    def evict(self, url: str) -> None:
+        """Drop every parser's cached result for this url (raw page changed/evicted)."""
+        self._cache.pop(url, None)
+
+    def clear(self) -> None:
+        self._cache.clear()
