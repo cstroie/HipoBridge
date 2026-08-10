@@ -28,6 +28,7 @@ from tests.markdown import TestMarkdownConversion
 from tests.llm_client import TestProviderSelection, TestPromptRegistry
 from tests.regions import TestLoadRegionRules
 from tests.config import TestHippobridgeLoadConfig, TestInitLlm, TestGitignoreOnlyTracksExamples
+from tests.hippoclient_parsing import TestParseBuletinHeader
 
 # Configuration
 BASE_URL = "http://localhost:44660"
@@ -69,6 +70,7 @@ TEST_GROUPS = {
         TestHippobridgeLoadConfig,
         TestInitLlm,
         TestGitignoreOnlyTracksExamples,
+        TestParseBuletinHeader,
     ],
     "root": [test_root_endpoint],
     "auth": [
@@ -117,6 +119,7 @@ TEST_GROUPS = {
     ],
     "regions": [TestLoadRegionRules],
     "config": [TestHippobridgeLoadConfig, TestInitLlm, TestGitignoreOnlyTracksExamples],
+    "hippoclient_parsing": [TestParseBuletinHeader],
 }
 
 async def run_tests(test_list) -> None:

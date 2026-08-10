@@ -1803,7 +1803,12 @@ class HippoClientServiceRequestSearch(HippoClientServiceRequest):
                                         regions.append(region)
                                 if regions:
                                     request.store_list('regions', regions)
-                except Exception as e:
+                except (IndexError, AttributeError, TypeError) as e:
+                    # Narrowed from a blanket `except Exception`: everything in this
+                    # block is defensive HTML navigation (length checks before
+                    # indexing), so the realistic failure is an unexpected page
+                    # shape, not a logic bug — which should propagate, not be
+                    # swallowed as a per-request warning.
                     logger.warning(f"Error processing exam regions for request {request_id}: {e}")
 
                 # Filter by type
@@ -1962,11 +1967,22 @@ def _parse_buletin_header(soup, data: HippoData) -> None:
         m = re.search(pattern + r'(.*?)(?=' + '|'.join(re.escape(s) for s in (stop_labels or [])) + r'|$)', text, re.DOTALL)
         return m.group(1).strip() if m else None
 
-    try:
-        row1_cells = rows[1].find_all('td') if len(rows) > 1 else []
-        row2_cells = rows[2].find_all('td') if len(rows) > 2 else []
+    # Each field group below is parsed independently: BeautifulSoup/regex
+    # calls here are already defensively guarded (length checks, `if m:`
+    # before `.group()`), so the only realistic failure mode is an
+    # unexpected HTML shape (a missing cell, a non-Tag node) surfacing as
+    # IndexError/AttributeError/TypeError. Catching only those — instead of
+    # a single blanket `except Exception` around the whole function — means
+    # a genuine bug (e.g. a NameError from a future edit) propagates and
+    # gets noticed, and a malformed one group (say, the footer note) can't
+    # silently wipe out already-extracted patient name/CNP/gender/etc.
+    _EXPECTED_HTML_ERRORS = (IndexError, AttributeError, TypeError)
 
-        # Extract date and barcode from page header
+    row1_cells = rows[1].find_all('td') if len(rows) > 1 else []
+    row2_cells = rows[2].find_all('td') if len(rows) > 2 else []
+
+    # Date and barcode from page header
+    try:
         page_text = soup.get_text(' ')
         header_html = str(soup)
         date_m = re.search(r'Data si ora recoltarii setului de analize:\s*(.*?)(?:Data si ora|$)', page_text)
@@ -1979,20 +1995,31 @@ def _parse_buletin_header(soup, data: HippoData) -> None:
             barcode_m = re.search(r'Cod cerere:([A-Z0-9]+)', page_text)
         if barcode_m:
             data.store("request.barcode", barcode_m.group(1).strip())
+    except _EXPECTED_HTML_ERRORS as e:
+        logger.warning(f"Error parsing buletin header date/barcode: {e}")
 
-        if len(row2_cells) >= 3:
+    if len(row2_cells) >= 3:
+        # Patient name/CNP/birth_date/age (row2 cell 0)
+        try:
             cell0 = row2_cells[0].get_text(strip=True)
             name_m = re.search(r'NUME:(.*?)(?:CNP:|$)', cell0)
             if name_m:
                 data.store("patient.name", name_m.group(1).strip())
             cnp_m = re.search(r'CNP:(\d+)', cell0)
+            parsed = None
             if cnp_m:
                 cnp = cnp_m.group(1)
                 data.store("patient.cnp", cnp)
                 parsed = parse_cnp(cnp)
                 data.store("patient.birth_date", parsed.get("birth_date"))
                 data.store("patient.age", parsed.get("age"))
+        except _EXPECTED_HTML_ERRORS as e:
+            logger.warning(f"Error parsing buletin header patient identity: {e}")
+            cnp_m = None
+            parsed = None
 
+        # Patient id/urgency/gender (row2 cell 1)
+        try:
             cell1 = row2_cells[1].get_text(strip=True)
             pid_m = re.search(r'COD PACIENT:(\d+)', cell1)
             if pid_m:
@@ -2002,9 +2029,13 @@ def _parse_buletin_header(soup, data: HippoData) -> None:
             sex_m = re.search(r'SEX:\s*([MF])', cell1, re.IGNORECASE)
             if sex_m:
                 data.store("patient.gender", "male" if sex_m.group(1).upper() == "M" else "female")
-            elif cnp_m and parsed.get("valid"):
+            elif cnp_m and parsed and parsed.get("valid"):
                 data.store("patient.gender", parsed.get("gender"))
+        except _EXPECTED_HTML_ERRORS as e:
+            logger.warning(f"Error parsing buletin header patient id/urgency/gender: {e}")
 
+        # Section/ordering physician (row2 cell 2)
+        try:
             cell2 = row2_cells[2].get_text(strip=True)
             section_m = re.search(r'SECTIE:(.*?)(?:MEDIC:|$)', cell2)
             if section_m:
@@ -2012,16 +2043,19 @@ def _parse_buletin_header(soup, data: HippoData) -> None:
             medic_m = re.search(r'MEDIC:(.*?)$', cell2)
             if medic_m:
                 data.store("checkin.medic", medic_m.group(1).strip())
+        except _EXPECTED_HTML_ERRORS as e:
+            logger.warning(f"Error parsing buletin header section/medic: {e}")
 
-        # Clinical indication: "INFO SUPLIMENTAR: ..." footer note (p.NoteSubsol)
+    # Clinical indication: "INFO SUPLIMENTAR: ..." footer note (p.NoteSubsol)
+    try:
         for note_p in soup.find_all('p', class_='NoteSubsol'):
             note_text = note_p.get_text(' ', strip=True)
             info_m = re.match(r'INFO SUPLIMENTAR:\s*(.+)', note_text, re.IGNORECASE | re.DOTALL)
             if info_m:
                 data.store("request.clinical_comments", info_m.group(1))
                 break
-    except Exception as e:
-        logger.warning(f"Error parsing buletin header: {e}")
+    except _EXPECTED_HTML_ERRORS as e:
+        logger.warning(f"Error parsing buletin header clinical indication: {e}")
 
 
 def _parse_narrative_studies(soup: BeautifulSoup) -> list:
