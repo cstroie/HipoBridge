@@ -56,6 +56,7 @@ import html
 import json
 from datetime import date, datetime, timedelta
 import configparser
+from functools import lru_cache
 from urllib.parse import quote, unquote
 
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -216,6 +217,21 @@ HEADERS = {
 }
 
 
+# Study descriptions come from Hipocrate's fixed exam/analysis catalog — a
+# small, highly repetitive set of strings seen over and over across patients
+# and pages (per-row schedule/report parsing calls this hundreds of times per
+# request). Pure function of `desc` with no external mutable state (regions.cfg
+# is loaded once at import), so memoizing is safe and eliminates almost all
+# repeat keyword-scan work.
+_FLUORO_PREFIXES = (
+    'cistografi', 'uretro-cistografi', 'clisma', 'conductografi',
+    'defecografi', 'fluoroscopi', 'insuflatia', 'pielografi',
+    'reducerea', 'studii palatofaringiene', 'tranzitul baritat',
+)
+_FLUORO_CONTAINS = ('cistosonografi', 'urografi',)
+
+
+@lru_cache(maxsize=512)
 def identify_study_type_and_region(desc: str) -> Tuple[str, str]:
     """
     Identify the study type and anatomical region from the study description.
@@ -229,15 +245,8 @@ def identify_study_type_and_region(desc: str) -> Tuple[str, str]:
     """
     if not desc:
         return 'other', 'unknown'
-    
+
     desc_lower = desc.strip().lower()
-    
-    _FLUORO_PREFIXES = (
-        'cistografi', 'uretro-cistografi', 'clisma', 'conductografi',
-        'defecografi', 'fluoroscopi', 'insuflatia', 'pielografi',
-        'reducerea', 'studii palatofaringiene', 'tranzitul baritat',
-    )
-    _FLUORO_CONTAINS = ('cistosonografi', 'urografi',)
 
     # Check if it's an MRI study
     if 'rezonanta' in desc_lower:
