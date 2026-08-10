@@ -18,6 +18,7 @@ from tests.reports import test_diagnostic_report_endpoint_missing_id
 from tests.checkout import test_encounter_endpoint_missing_id, test_encounter_endpoint_known_id
 from tests.checkin import test_checkin_endpoint_missing_id, test_checkin_endpoint_known_id
 from tests.checkup import test_checkup_endpoint_missing_id, test_checkup_endpoint_known_id
+from tests.cerere import test_task_endpoint_missing_id, test_task_endpoint_known_id
 from tests.cnp import test_cnp_validation_endpoint, test_cnp_validation_missing_id
 from tests.worklist import (TestNameToDicom, TestBuildDatasets,
                              TestWorklistCache, TestWorklistSCP)
@@ -49,6 +50,8 @@ TEST_GROUPS = {
         test_checkin_endpoint_known_id,
         test_checkup_endpoint_missing_id,
         test_checkup_endpoint_known_id,
+        test_task_endpoint_missing_id,
+        test_task_endpoint_known_id,
         test_cnp_validation_endpoint,
         test_cnp_validation_missing_id,
         test_extract_text_after_label_basic,
@@ -77,6 +80,7 @@ TEST_GROUPS = {
     "checkout": [test_encounter_endpoint_missing_id, test_encounter_endpoint_known_id],
     "checkin": [test_checkin_endpoint_missing_id, test_checkin_endpoint_known_id],
     "checkup": [test_checkup_endpoint_missing_id, test_checkup_endpoint_known_id],
+    "cerere": [test_task_endpoint_missing_id, test_task_endpoint_known_id],
     "cnp": [
         test_cnp_validation_endpoint,
         test_cnp_validation_missing_id
