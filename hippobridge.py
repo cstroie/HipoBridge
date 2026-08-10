@@ -959,6 +959,22 @@ async def post_ai_summarize_stream(request):
         await response.write_eof()
         return response
 
+    async def _write_stream_error(message: str) -> None:
+        # The exception that got us here may itself have been a broken
+        # connection (client aborted/reset mid-stream) — in that case the
+        # transport is already closing, and this write (plus write_eof)
+        # would raise the *same* ConnectionError again, uncaught, producing
+        # a second unhandled traceback for what's really one client-side
+        # disconnect (confirmed live: "Cannot write to closing transport"
+        # raised twice for a single aborted request). Nothing useful can be
+        # delivered to a client that's already gone, so swallow it here.
+        try:
+            await response.write(
+                f"{_STREAM_ERROR_SENTINEL}ERROR{_STREAM_ERROR_SENTINEL}{message}".encode('utf-8'))
+            await response.write_eof()
+        except (ConnectionError, OSError):
+            pass
+
     parts = []
     try:
         async for piece in llm_summarize_stream(_ai_client, kind, text):
@@ -968,18 +984,19 @@ async def post_ai_summarize_stream(request):
         logger.warning(
             f"AI summarization (stream) timed out ({kind}, ~{len(text)} chars) — "
             f"the model is slower than the [llm] timeout; raise it or shorten the input")
-        await response.write(
-            f"{_STREAM_ERROR_SENTINEL}ERROR{_STREAM_ERROR_SENTINEL}AI summary timed "
-            f"out (the model took too long) — try again or raise the [llm] "
-            f"timeout".encode('utf-8'))
-        await response.write_eof()
+        await _write_stream_error(
+            "AI summary timed out (the model took too long) — try again or raise "
+            "the [llm] timeout")
+        return response
+    except (ConnectionError, OSError) as exc:
+        # Client disconnected (tab closed, navigated away, or its own
+        # inactivity abort fired) — not a service failure, just log at debug
+        # and don't bother trying to write anything back.
+        logger.debug(f"AI summarization (stream) client disconnected ({kind}): {exc}")
         return response
     except Exception as exc:
         logger.warning(f"AI summarization (stream) failed ({kind}): {type(exc).__name__}: {exc}")
-        await response.write(
-            f"{_STREAM_ERROR_SENTINEL}ERROR{_STREAM_ERROR_SENTINEL}AI summary "
-            f"service is unreachable".encode('utf-8'))
-        await response.write_eof()
+        await _write_stream_error("AI summary service is unreachable")
         return response
 
     summary = strip_think_block(''.join(parts)).strip()
