@@ -11,7 +11,7 @@ model with explicit config, and downloads new models from the catalog/HF
 with progress polling.
 
 Reuses the app's own provider config (llm.config) to find the server host,
-so it always points at whatever `local.cfg`/`llm.cfg` currently configure.
+so it always points at whatever `llm.cfg` currently configures.
 
 Usage:
     python3 lms.py list

@@ -38,13 +38,13 @@ Restart=on-failure
 RestartSec=5
 
 # systemd captures stdout/stderr itself — no need for hippobridge.out.
-# Application logs still go to hippobridge.log via --log-file / local.cfg.
+# Application logs still go to hippobridge.log via --log-file / hippobridge.cfg.
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=hippobridge
 
 # Hardening. ReadWritePaths covers the checkout (for hippobridge.log,
-# worklist.cfg/local.cfg edits); RuntimeDirectory above handles the pidfile
+# worklist.cfg/hippobridge.cfg edits); RuntimeDirectory above handles the pidfile
 # and PrivateTmp isolates the on-disk cache under /tmp from other services.
 NoNewPrivileges=true
 PrivateTmp=true

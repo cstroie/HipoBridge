@@ -19,7 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 FHIR R4 API bridge to Hipocrate: scrapes HTML on every request, no database.
 Routes: /api/* returns raw HippoData JSON; /fhir/* returns FHIR R4 resources.
-Config: hippobridge.cfg (defaults) overridden by local.cfg (not tracked by git).
+Config: hippobridge.cfg (gitignored; copy from hippobridge.cfg.example), layered
+over the in-code DEFAULT_CONFIG fallback.
 """
 import asyncio
 import os
@@ -1205,7 +1206,7 @@ async def post_cache_cleanup(request):
 
 
 def load_config():
-    """Load hippobridge.cfg then overlay local.cfg if present."""
+    """Load hippobridge.cfg, falling back to DEFAULT_CONFIG if absent."""
     config = configparser.ConfigParser()
     config.read_dict(DEFAULT_CONFIG)
 
@@ -1214,10 +1215,6 @@ def load_config():
         config.read('hippobridge.cfg')
     else:
         logger.info("hippobridge.cfg not found, using default configuration")
-
-    if os.path.exists('local.cfg'):
-        logger.info("Loading local.cfg configuration (overrides hippobridge.cfg)")
-        config.read('local.cfg')
 
     return config
 

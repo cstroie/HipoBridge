@@ -8,7 +8,7 @@ for the per-item "AI" buttons, accounting for cold-load (model-swap) delay.
 ## Final decision (2026-07-21)
 
 **Production model: `mistralai/ministral-3-3b` at `Q4_K_M` quantization**
-(`local.cfg`, `[provider:lmstudio]`, `default`/`medical` tiers). Fastest
+(`llm.cfg`, `[provider:lmstudio]`, `default`/`medical` tiers). Fastest
 warm-generation of the viable candidates, good fidelity across all four kinds
 (Round 6), fits a 4 GB card comfortably, no special handling required (unlike
 qwen3-4b's `/no_think` or the reasoning-leaking models). Smaller quantizations
@@ -22,7 +22,7 @@ that led to this decision.
 
 ## Setup
 
-- **Server**: LM Studio, `http://192.168.3.238:1234/v1` (per `local.cfg`).
+- **Server**: LM Studio, `http://192.168.3.238:1234/v1` (per `llm.cfg`).
 - **Tool**: `benchmark_llm.py` (streaming, measures warm TTFT / tokens-sec /
   total wall time + a separately-reported cold-load TTFT).
 - **Prompt**: `epicrisis` kind from `llm/prompts.py` (tier `default`,
@@ -244,7 +244,7 @@ gemma-4-e4b leaks chain-of-thought; gemma-3-4b is beaten by both.
 ## Deployment decision (Option A — applied)
 medgemma-4b-it is **permanently resident** on the model host for the xrayvision
 X-ray classifier, so HippoBridge pays **zero cold-load** for it. That flips its
-only weakness and makes it the pragmatic default. Applied in `local.cfg`:
+only weakness and makes it the pragmatic default. Applied in `llm.cfg`:
 `default` tier repointed from `LFM2-2.6B-Transcript` (which hallucinated) to
 `medgemma-4b-it`; `medical` was already medgemma. **Needs a HippoBridge restart.**
 

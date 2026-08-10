@@ -19,7 +19,16 @@ cd hippobridge
 
 ## Configuration
 
-Server defaults live in `hippobridge.cfg`; override them in `local.cfg` (not tracked by git):
+Every config file follows the same pattern: only `*.cfg.example` is tracked in git, fully documenting every option and its default. Copy it to `*.cfg` (gitignored) and edit:
+
+```bash
+cp hippobridge.cfg.example hippobridge.cfg   # server, hipocrate, cache, logging, radiology
+cp llm.cfg.example llm.cfg                   # AI provider config
+cp regions.cfg.example regions.cfg           # imaging region keyword rules
+cp worklist.cfg.example worklist.cfg         # DICOM MWL — see docs/WORKLIST.md
+```
+
+`hippobridge.cfg` example:
 
 ```ini
 [server]
@@ -53,7 +62,7 @@ python3 hippobridge.py --no-worklist        # skip DICOM MWL SCP even if worklis
 python3 hippobridge.py --pidfile hippobridge.pid  # write PID for ./hippobridge, remove on clean exit
 ```
 
-`--log-level`/`LOG_LEVEL` only controls the console; a configured log file (`--log-file` or `[logging] file` in `local.cfg`) always captures everything at `DEBUG`, so the console can stay quiet while the file keeps full detail.
+`--log-level`/`LOG_LEVEL` only controls the console; a configured log file (`--log-file` or `[logging] file` in `hippobridge.cfg`) always captures everything at `DEBUG`, so the console can stay quiet while the file keeps full detail.
 
 ## Running via ./hippobridge
 
@@ -105,7 +114,7 @@ Once confirmed, for each mode:
   reused as-is, untouched
 - `chown -R` the checkout to that account (this includes `.git` — a later
   `git pull` as your own login will need `sudo` too) and `chmod 600` any
-  `local.cfg`/`worklist.cfg`/`hippobridge.env` found (they hold credentials)
+  `hippobridge.cfg`/`llm.cfg`/`worklist.cfg`/`hippobridge.env` found (they hold credentials)
 - create `log/` under the checkout, owned by that account — logs (both the
   app's own `--log-file` output and, for OpenRC, `supervise-daemon`'s
   captured stdout/stderr) stay there rather than under `/var/log`

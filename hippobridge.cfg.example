@@ -1,15 +1,9 @@
 # HippoBridge Configuration File
 # Configuration settings for the HippoBridge FHIR API gateway
 #
-# This file contains the main configuration for the HippoBridge application.
-# You can override these settings by creating a local.cfg file with your custom values.
-#
-# Example local.cfg:
-# [server]
-# port = 8080
-# 
-# [hipocrate]
-# service_url = http://your-hipocrate-server/hipocrate
+# Copy this file to hippobridge.cfg and edit it — hippobridge.cfg is
+# gitignored, this .example file is the tracked reference for every
+# available option and its default value.
 
 [server]
 # Server configuration
@@ -36,11 +30,21 @@ dir =
 ttl = 604800
 max_age_days = 30
 
+[logging]
+# File logging is off by default (file empty). Console logging always runs
+# independently of this section (see --log-level / $LOG_LEVEL).
+# file: path to a log file; parent directories are created if needed.
+#       Always captures at DEBUG level regardless of the console's level.
+# max_bytes: rotate the log file once it reaches this size (default: 10 MiB)
+# backup_count: number of rotated backups to keep (default: 5)
+file =
+max_bytes = 10485760
+backup_count = 5
+
 [radiology]
 # Comma-separated list of HippoBridge usernames allowed to write radiology reports.
-# Override in local.cfg: allowed_radiologists = dr.popescu, dr.ionescu
+# e.g. allowed_radiologists = dr.popescu, dr.ionescu
 allowed_radiologists =
 
 # The /api/ai/extract endpoint's server URL and per-tier model names are
-# configured in llm.cfg (separate file, overridable via local.cfg there
-# too) — not here.
+# configured in llm.cfg (separate file) — not here.

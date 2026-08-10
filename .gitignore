@@ -1,6 +1,5 @@
 .aider*
-local.cfg
-worklist.cfg
+*.cfg
 *.log
 *.pid
 *.out

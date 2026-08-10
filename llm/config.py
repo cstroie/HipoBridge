@@ -1,14 +1,13 @@
 """Config for the LLM subsystem: one or more OpenAI-compatible providers, one
 active at a time, each exposing three model tiers.
 
-Mirrors hippobridge.py's load_config() layering exactly: defaults -> llm.cfg
--> local.cfg (later wins). Deliberately a separate file/section namespace
+Mirrors hippobridge.py's load_config(): in-code defaults -> llm.cfg (gitignored;
+copy from llm.cfg.example). Deliberately a separate file/section namespace
 from hippobridge.cfg's own [server] so the two don't collide.
 
 configparser has no nesting, so each provider is a prefixed section
 `[provider:<name>]` with `url`, `key` (empty = no auth) and one model name
-per tier. `[llm] provider = <name>` selects the active one; local.cfg
-overrides that key to switch providers without touching llm.cfg.
+per tier. `[llm] provider = <name>` selects the active one.
 
 Every call ships raw PHI (names, DOB, CNP) to the provider url — provider
 config must stay local/trusted. The `key` field enables remote providers;
@@ -51,8 +50,8 @@ LLM_DEFAULTS = {
 }
 
 
-def init_llm(config_path: str = "llm.cfg", local_path: str = "local.cfg") -> configparser.ConfigParser:
-    """Load llm.cfg then overlay local.cfg if present. Called at startup, not import time."""
+def init_llm(config_path: str = "llm.cfg") -> configparser.ConfigParser:
+    """Load llm.cfg, falling back to LLM_DEFAULTS if absent. Called at startup, not import time."""
     config = configparser.ConfigParser()
     config.read_dict(LLM_DEFAULTS)
 
@@ -61,10 +60,6 @@ def init_llm(config_path: str = "llm.cfg", local_path: str = "local.cfg") -> con
         config.read(config_path)
     else:
         logger.info(f"{config_path} not found, using default configuration")
-
-    if os.path.exists(local_path):
-        logger.info(f"Loading {local_path} configuration (overrides {config_path})")
-        config.read(local_path)
 
     return config
 

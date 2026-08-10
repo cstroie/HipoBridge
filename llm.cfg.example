@@ -6,8 +6,9 @@
 #   default — clinical-record executive summaries (report, epicrisis)
 #   medical — radiology triage, lab analysis, pre-exam brief
 #
-# Select the active provider with [llm] provider. Override any of this in
-# local.cfg (not tracked by git), e.g. to point at a LAN LM Studio server:
+# Select the active provider with [llm] provider. Add more [provider:<name>]
+# sections to define additional providers, e.g. to point at a LAN LM Studio
+# server:
 #
 #   [llm]
 #   provider = lmstudio
@@ -19,6 +20,9 @@
 #
 # Model names must match the provider's own aliases exactly
 # (check GET /v1/models on the server).
+#
+# Copy this file to llm.cfg and edit it — llm.cfg is gitignored, this
+# .example file is the tracked reference.
 
 [llm]
 provider = default

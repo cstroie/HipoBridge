@@ -29,7 +29,7 @@ class TestProviderSelection(unittest.TestCase):
         self.assertTrue(all(models[t] for t in TIERS))
 
     def test_local_override_switches_provider(self):
-        # Mirrors local.cfg adding a second provider and repointing [llm].
+        # Mirrors llm.cfg adding a second provider and repointing [llm].
         config = _config({
             "llm": {"provider": "lmstudio"},
             "provider:lmstudio": {

@@ -36,6 +36,10 @@ on_demand_refresh_seconds = 60
 username =
 password =
 
+# Log file for the DICOM MWL server's own log messages (separate from
+# hippobridge.cfg's [logging] file, which covers the HTTP server).
+log_file = log/worklist.log
+
 # ---------------------------------------------------------------------------
 # Device profiles — one [SECTION] per device or logical group.
 #
@@ -64,6 +68,8 @@ password =
 #                     "SPITALIZARE DE ZI"). Leave empty to include all wards.
 #   time_window_hours Exclude entries scheduled more than N hours from now.
 #                     0 = no limit (include the full fetch window).
+#   day_care          Filter by whether the entry is a day-care (spitalizare
+#                     de zi) case: yes / no / any (default: any = no filter).
 #
 # FETCH WINDOWS (days ahead, from yesterday)
 # ------------------------------------------
@@ -94,6 +100,7 @@ ae_title = MINDRAY_DAY
 modality = US
 wards = SPITALIZARE DE ZI
 time_window_hours = 24
+day_care = yes
 
 [XRAY_1]
 ae_title = XRAY_CR

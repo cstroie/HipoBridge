@@ -155,7 +155,7 @@ rm -rf "$INSTALL_DIR/$VENV_DIR"
 
 ## Remove the checkout entirely
 
-Careful — this also deletes \`local.cfg\`, \`worklist.cfg\`, logs, and any on-disk cache.
+Careful — this also deletes \`hippobridge.cfg\`, \`llm.cfg\`, \`regions.cfg\`, \`worklist.cfg\`, logs, and any on-disk cache.
 
 \`\`\`bash
 rm -rf "$INSTALL_DIR"
@@ -167,7 +167,7 @@ EOF
 
 # Restrict credential-bearing config files to the owner, if present.
 fix_config_perms() {
-    for f in local.cfg worklist.cfg hippobridge.env; do
+    for f in hippobridge.cfg llm.cfg worklist.cfg hippobridge.env; do
         if [[ -f "$f" ]]; then
             chmod 600 "$f"
         fi
@@ -192,7 +192,7 @@ echo "Plan for './install $MODE $SERVICE_USER':"
 echo "  - service account '$SERVICE_USER': $USER_STATUS"
 echo "  - $INSTALL_DIR (currently owned by $CURRENT_OWNER) will be chown -R'd to $SERVICE_USER:$SERVICE_USER — this affects git operations there too"
 echo "  - $VENV_DIR/ will be (re)built as $SERVICE_USER, not root"
-echo "  - local.cfg/worklist.cfg/hippobridge.env (if present) will be chmod 600"
+echo "  - hippobridge.cfg/llm.cfg/worklist.cfg/hippobridge.env (if present) will be chmod 600"
 if [[ "$MODE" == "systemd" ]]; then
     echo "  - /etc/systemd/system/hippobridge.service will be written (any existing file backed up first)"
 else

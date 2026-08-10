@@ -50,7 +50,7 @@ respawn_max=0
 # under the checkout's own log/ dir (not /var/log) so everything HippoBridge
 # writes stays in one place; ./install creates this directory and owns it by
 # hippobridge_user. Application logs still go to hippobridge.log via
-# --log-file / local.cfg, in the same directory.
+# --log-file / hippobridge.cfg, in the same directory.
 output_log="${hippobridge_home}/log/hippobridge.out"
 error_log="${hippobridge_home}/log/hippobridge.out"
 

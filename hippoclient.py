@@ -43,6 +43,7 @@ The module handles the complexities of web scraping medical data including:
 - Data validation and normalization
 """
 
+import os
 import aiohttp
 from aiohttp import web
 from yarl import URL
@@ -183,7 +184,12 @@ async def evict_patient_cache(client: 'HippoClient', patient_id: str) -> None:
 def load_region_rules():
     """Load region identification rules from regions.cfg file."""
     config = configparser.ConfigParser()
-    config.read('regions.cfg')
+    if os.path.exists('regions.cfg'):
+        config.read('regions.cfg')
+    else:
+        logging.getLogger(__name__).warning(
+            "regions.cfg not found — all region identification will return "
+            "'unknown'; copy regions.cfg.example to regions.cfg")
 
     def _section(name):
         return {k: [w.strip() for w in v.split(',')] for k, v in config[name].items()} if name in config else {}

@@ -20,7 +20,7 @@ python3 hippobridge.py
 
 The server itself takes no fixed credentials — `@require_auth` reads Basic Auth from each incoming request and forwards it to Hipocrate per-request. `HYP_USER`/`HYP_PASS` are only needed by client/test scripts (`runtests.py`, `client.py`, `tests/*.py`) calling the server, and as a fallback for the worklist SCP if `worklist.cfg`'s `[worklist] username`/`password` aren't set. Test credentials are in `worklist.cfg`. Server runs on `http://127.0.0.1:44660`.
 
-Default: `http://0.0.0.0:44660`. Override with `local.cfg` (not tracked by git):
+Default: `http://0.0.0.0:44660`. Configure via `hippobridge.cfg` (gitignored — copy from `hippobridge.cfg.example`, which documents every option):
 
 ```ini
 [server]
@@ -29,9 +29,11 @@ port = 8080
 service_url = http://192.168.3.230/hipocrate
 ```
 
+Every subsystem follows the same pattern: `hippobridge.cfg` (server/hipocrate/cache/logging/radiology), `llm.cfg` (AI provider config), `regions.cfg` (imaging region keyword rules), `worklist.cfg` (DICOM MWL) are all gitignored — copy the matching `*.cfg.example` and edit it.
+
 CLI: `--port`, `--host`, `--service-url`, `--log-level DEBUG|INFO|WARNING|ERROR`, `--log-file PATH`, `--no-disk-cache`, `--no-worklist`, `--pidfile PATH`.
 
-`--log-level`/`LOG_LEVEL` only sets the console handler's level (default INFO). A configured log file (`--log-file` or `[logging] file` in `local.cfg`) always logs at `DEBUG` regardless — the root logger itself is always `DEBUG` internally so file logging never misses anything even when the console is quieter.
+`--log-level`/`LOG_LEVEL` only sets the console handler's level (default INFO). A configured log file (`--log-file` or `[logging] file` in `hippobridge.cfg`) always logs at `DEBUG` regardless — the root logger itself is always `DEBUG` internally so file logging never misses anything even when the console is quieter.
 
 ## Restarting the server
 
