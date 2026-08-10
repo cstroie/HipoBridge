@@ -1461,7 +1461,21 @@ document.addEventListener('DOMContentLoaded', function() {
     // that the connection died silently (a stall with no TCP reset — apiFetch
     // itself has no timeout, since long-running Hipocrate scrapes elsewhere
     // legitimately need to run long). Scoped to just the AI summary requests.
-    const AI_SUMMARY_TIMEOUT_MS = 45000;
+    //
+    // Was 45000 (45s) — too short for this server: [llm] log lines show the
+    // configured model actually runs at ~2-3.5 tok/s, and imaging_episode/
+    // pre_exam prompts run up to ~2000 prompt tokens, so prefill alone
+    // (before the *first* streamed chunk arrives, which is what this timer
+    // actually gates for aiSummarizeStream — see armTimer()) can easily
+    // exceed 45s on its own, well before generation even starts. That was
+    // firing the abort mid-prefill on real (not stalled) requests — visible
+    // server-side as "ClientConnectionResetError: Cannot write to closing
+    // transport" — which also meant the result was never cached (ai_cache is
+    // only written after a stream completes), so the same slow request had
+    // to be repeated, and re-timed-out, on every retry. 120s comfortably
+    // covers observed prefill+first-token latency for the largest prompts
+    // while still catching a genuinely dead connection in reasonable time.
+    const AI_SUMMARY_TIMEOUT_MS = 120000;
     const AI_TIMEOUT_MESSAGE = 'AI summary timed out — the connection may have been lost. Please try again.';
 
     async function aiSummarize(kind, text, opts = {}) {
@@ -4144,6 +4158,31 @@ document.addEventListener('DOMContentLoaded', function() {
 
         toolbar.append(aiBtn, copyBtn);
         headerRow.append(heading, toolbar);
+
+        // Silently redisplay a previously generated synopsis (mirrors
+        // report/epicrisis/pre_exam/lab/per-study-imaging's opts.auto probe)
+        // — unlike those, deferred to this header scrolling into view rather
+        // than run at render time, since building the episode text requires
+        // fetching every study's report body (the same fetch getEpisodeText
+        // already defers to first click). Without this, a cached synopsis
+        // for the current episode never surfaces until the user clicks AI,
+        // which always regenerates (force:true) — see aiSummarizeStream.
+        const autoObserver = new IntersectionObserver(async (observed, obs) => {
+            if (!observed.some(e => e.isIntersecting)) return;
+            obs.disconnect();
+            let text;
+            try {
+                text = await getEpisodeText();
+            } catch (_) {
+                return; // silent — mirrors opts.auto's own failure handling
+            }
+            if (!text) return;
+            runAiSummary(aiBtn, 'imaging_episode',
+                () => headerRow.nextElementSibling, () => text,
+                { inline: true, intoAnchorParent: () => headerRow.parentElement, auto: true });
+        });
+        autoObserver.observe(headerRow);
+
         return headerRow;
     }
 
