@@ -33,6 +33,7 @@ from tests.hippoclient_write import (
     TestReportWriteErrors, TestReportValidateErrors, TestCererePerformErrors,
     TestWebJsonResponseEndToEnd,
 )
+from tests.hippobridge_handlers import TestServeSpec, TestGetCacheStats
 
 # Configuration
 BASE_URL = "http://localhost:44660"
@@ -79,6 +80,8 @@ TEST_GROUPS = {
         TestReportValidateErrors,
         TestCererePerformErrors,
         TestWebJsonResponseEndToEnd,
+        TestServeSpec,
+        TestGetCacheStats,
     ],
     "root": [test_root_endpoint],
     "auth": [
@@ -132,6 +135,7 @@ TEST_GROUPS = {
         TestReportWriteErrors, TestReportValidateErrors, TestCererePerformErrors,
         TestWebJsonResponseEndToEnd,
     ],
+    "hippobridge_handlers": [TestServeSpec, TestGetCacheStats],
 }
 
 async def run_tests(test_list) -> None:

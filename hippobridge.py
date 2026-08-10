@@ -23,6 +23,7 @@ Config: hippobridge.cfg (gitignored; copy from examples/hippobridge.cfg),
 layered over the in-code DEFAULT_CONFIG fallback.
 """
 import asyncio
+import copy
 import os
 import re
 import aiohttp
@@ -713,21 +714,39 @@ async def get_fhir_encounter(request):
     return web_fhir_response(await presentation_client.fetch_respond_fhir(id=id))
 
 
+def _load_spec_template() -> Dict[str, Any] | None:
+    """Read and parse static/spec.json once at import time.
+
+    The file is static (bundled with the app, never edited at runtime), so
+    re-reading and re-parsing it from disk on every /fhir/spec request was
+    pure blocking I/O for no benefit — load it once here instead; the route
+    handler below only patches a per-request deep copy's server URL."""
+    spec_path = os.path.join(os.path.dirname(__file__), 'static', 'spec.json')
+    try:
+        with open(spec_path, 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        logger.error(f"spec.json not found at {spec_path}")
+        return None
+    except json.JSONDecodeError as e:
+        logger.error(f"spec.json parse error: {e}")
+        return None
+
+
+_SPEC_TEMPLATE = _load_spec_template()
+
+
 async def serve_spec(request):
     """Serve spec.json as OpenAPI specification, updating the server URL dynamically."""
     logger.info("GET /fhir/spec endpoint accessed")
 
-    spec_path = os.path.join(os.path.dirname(__file__), 'static', 'spec.json')
-    try:
-        with open(spec_path, 'r') as f:
-            spec = json.load(f)
-        spec["servers"][0]["url"] = f"{request.scheme}://{request.host}"
-        return web.json_response(spec)
-    except FileNotFoundError:
-        return web_error_response("Specification file not found", 500)
-    except json.JSONDecodeError as e:
-        logger.error(f"spec.json parse error: {e}")
-        return web_error_response("Error parsing specification file", 500)
+    if _SPEC_TEMPLATE is None:
+        return web_error_response("Specification file not found or invalid", 500)
+    # Deep copy: servers[0] must not be shared/mutated across concurrent
+    # requests, which may see different scheme/host (e.g. behind a proxy).
+    spec = copy.deepcopy(_SPEC_TEMPLATE)
+    spec["servers"][0]["url"] = f"{request.scheme}://{request.host}"
+    return web.json_response(spec)
 
 
 async def serve_fhir_analysis_types(request):
@@ -1191,7 +1210,12 @@ async def get_cache_stats(request):
     """Return filesystem cache statistics as JSON."""
     if url_cache.fs_cache is None:
         return web.json_response({'enabled': False})
-    return web.json_response({'enabled': True, **url_cache.fs_cache.stats()})
+    # stats() walks every file in the cache dir (stat + read + json.loads
+    # each) — potentially thousands of files at the default 7-day TTL /
+    # 30-day max_age, so it must run off the event loop like cleanup()
+    # below does, or every concurrent request stalls for the scan.
+    stats = await asyncio.get_event_loop().run_in_executor(None, url_cache.fs_cache.stats)
+    return web.json_response({'enabled': True, **stats})
 
 
 @require_auth
