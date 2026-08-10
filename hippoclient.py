@@ -181,15 +181,15 @@ async def evict_patient_cache(client: 'HippoClient', patient_id: str) -> None:
 
 
 # Load region identification rules from config file
-def load_region_rules():
+def load_region_rules(config_path: str = 'regions.cfg'):
     """Load region identification rules from regions.cfg file."""
     config = configparser.ConfigParser()
-    if os.path.exists('regions.cfg'):
-        config.read('regions.cfg')
+    if os.path.exists(config_path):
+        config.read(config_path)
     else:
         logging.getLogger(__name__).warning(
-            "regions.cfg not found — all region identification will return "
-            "'unknown'; copy regions.cfg.example to regions.cfg")
+            "%s not found — all region identification will return "
+            "'unknown'; copy regions.cfg.example to regions.cfg", config_path)
 
     def _section(name):
         return {k: [w.strip() for w in v.split(',')] for k, v in config[name].items()} if name in config else {}

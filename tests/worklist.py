@@ -7,6 +7,8 @@ local logic only (name conversion, dataset building, cache, C-FIND
 matching) and one end-to-end C-ECHO/C-FIND against a locally started
 SCP with a pre-seeded cache.
 """
+import os
+import tempfile
 import threading
 import time
 import unittest
@@ -24,7 +26,7 @@ except ImportError:
 
 from worklist import (
     _name_to_dicom, _name_parts_to_dicom, _build_datasets, _MODALITY_CODE,
-    WorklistCache, WorklistServer, _HIPOCRATE_TO_FHIR,
+    WorklistCache, WorklistServer, _HIPOCRATE_TO_FHIR, _load_config,
 )
 
 
@@ -180,6 +182,134 @@ class TestBuildDatasets(unittest.TestCase):
         info = self._info(family_name='POPESCU IONESCU', given_name='ION GHEORGHE')
         ds_list = _build_datasets(self._entry(), info)
         self.assertEqual(str(ds_list[0].PatientName), 'POPESCU IONESCU^ION GHEORGHE')
+
+
+# ---------------------------------------------------------------------------
+# _load_config (worklist.cfg parsing)
+# ---------------------------------------------------------------------------
+
+class TestLoadConfig(unittest.TestCase):
+
+    def _write(self, content):
+        d = tempfile.TemporaryDirectory()
+        self.addCleanup(d.cleanup)
+        path = os.path.join(d.name, 'worklist.cfg')
+        with open(path, 'w') as f:
+            f.write(content)
+        return path
+
+    def test_server_defaults_when_worklist_section_absent(self):
+        path = self._write("[SOME_DEVICE]\nae_title = X\nmodality = CT\n")
+        server, _profiles = _load_config(path)
+        self.assertEqual(server['ae_title'], 'HIPPOBRIDGE')
+        self.assertEqual(server['port'], 11112)
+        self.assertEqual(server['on_demand_refresh_seconds'], 60.0)
+        self.assertEqual(server['accession_prefix'], '')
+        self.assertEqual(server['log_file'], 'log/worklist.log')
+
+    def test_server_section_overrides(self):
+        path = self._write(
+            "[worklist]\n"
+            "ae_title = MYAE\n"
+            "port = 12345\n"
+            "accession_prefix = HB-\n"
+            "log_file = custom.log\n"
+            "username = alice\n"
+            "password = secret\n"
+        )
+        server, _profiles = _load_config(path)
+        self.assertEqual(server['ae_title'], 'MYAE')
+        self.assertEqual(server['port'], 12345)
+        self.assertEqual(server['accession_prefix'], 'HB-')
+        self.assertEqual(server['log_file'], 'custom.log')
+        self.assertEqual(server['username'], 'alice')
+        self.assertEqual(server['password'], 'secret')
+
+    @patch.dict(os.environ, {'HYP_USER': 'envuser', 'HYP_PASS': 'envpass'})
+    def test_credentials_fall_back_to_environment(self):
+        path = self._write("[worklist]\nae_title = X\n")
+        server, _profiles = _load_config(path)
+        self.assertEqual(server['username'], 'envuser')
+        self.assertEqual(server['password'], 'envpass')
+
+    def test_worklist_section_excluded_from_device_profiles(self):
+        path = self._write("[worklist]\nae_title = X\n[DEV]\nae_title = DEV_AE\nmodality = CT\n")
+        _server, profiles = _load_config(path)
+        self.assertEqual([p['name'] for p in profiles], ['DEV'])
+
+    def test_section_without_ae_title_skipped(self):
+        path = self._write("[NO_AE]\nmodality = CT\n[DEV]\nae_title = DEV_AE\nmodality = CT\n")
+        _server, profiles = _load_config(path)
+        self.assertEqual([p['name'] for p in profiles], ['DEV'])
+
+    def test_ae_title_uppercased(self):
+        path = self._write("[DEV]\nae_title = lowercase_ae\nmodality = CT\n")
+        _server, profiles = _load_config(path)
+        self.assertEqual(profiles[0]['ae_title'], 'LOWERCASE_AE')
+
+    def test_modality_slug_resolved_to_dicom_code(self):
+        path = self._write("[DEV]\nae_title = X\nmodality = ct\n")
+        _server, profiles = _load_config(path)
+        self.assertEqual(profiles[0]['modality'], 'CT')
+
+    def test_modality_already_dicom_code_passthrough(self):
+        path = self._write("[DEV]\nae_title = X\nmodality = MR\n")
+        _server, profiles = _load_config(path)
+        self.assertEqual(profiles[0]['modality'], 'MR')
+
+    def test_unknown_modality_resolves_to_none_silently(self):
+        # Regression guard: a typo'd modality (neither a DICOM code nor a
+        # known slug) is not rejected or warned about — it silently becomes
+        # None, and the device would see the merged all-modality worklist.
+        path = self._write("[DEV]\nae_title = X\nmodality = xyzzy\n")
+        _server, profiles = _load_config(path)
+        self.assertIsNone(profiles[0]['modality'])
+
+    def test_wards_split_and_stripped(self):
+        path = self._write("[DEV]\nae_title = X\nwards = UPU, CPU , URGENTA\n")
+        _server, profiles = _load_config(path)
+        self.assertEqual(profiles[0]['wards'], ['UPU', 'CPU', 'URGENTA'])
+
+    def test_wards_empty_means_all(self):
+        path = self._write("[DEV]\nae_title = X\nwards = \n")
+        _server, profiles = _load_config(path)
+        self.assertEqual(profiles[0]['wards'], [])
+
+    def test_day_care_valid_values(self):
+        for value in ('yes', 'no', 'any'):
+            path = self._write(f"[DEV]\nae_title = X\nday_care = {value}\n")
+            _server, profiles = _load_config(path)
+            self.assertEqual(profiles[0]['day_care'], value)
+
+    def test_day_care_defaults_to_any_when_absent(self):
+        path = self._write("[DEV]\nae_title = X\n")
+        _server, profiles = _load_config(path)
+        self.assertEqual(profiles[0]['day_care'], 'any')
+
+    def test_day_care_invalid_value_falls_back_to_any(self):
+        # Regression guard: an invalid day_care value (typo, wrong case,
+        # stray whitespace not stripped by configparser) is not rejected —
+        # it silently becomes 'any' rather than erroring at startup.
+        path = self._write("[DEV]\nae_title = X\nday_care = Maybe\n")
+        _server, profiles = _load_config(path)
+        self.assertEqual(profiles[0]['day_care'], 'any')
+
+    def test_time_window_hours_parsed_as_float(self):
+        path = self._write("[DEV]\nae_title = X\ntime_window_hours = 48\n")
+        _server, profiles = _load_config(path)
+        self.assertEqual(profiles[0]['time_window_hours'], 48.0)
+
+    def test_time_window_hours_defaults_to_zero(self):
+        path = self._write("[DEV]\nae_title = X\n")
+        _server, profiles = _load_config(path)
+        self.assertEqual(profiles[0]['time_window_hours'], 0.0)
+
+    def test_missing_file_returns_defaults_and_no_profiles(self):
+        with tempfile.TemporaryDirectory() as d:
+            missing_path = os.path.join(d, 'does-not-exist.cfg')
+            server, profiles = _load_config(missing_path)
+        self.assertEqual(server['ae_title'], 'HIPPOBRIDGE')
+        self.assertEqual(profiles, [])
 
 
 # ---------------------------------------------------------------------------

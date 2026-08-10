@@ -1205,16 +1205,16 @@ async def post_cache_cleanup(request):
     return web.json_response({'enabled': True, **result})
 
 
-def load_config():
+def load_config(config_path: str = 'hippobridge.cfg'):
     """Load hippobridge.cfg, falling back to DEFAULT_CONFIG if absent."""
     config = configparser.ConfigParser()
     config.read_dict(DEFAULT_CONFIG)
 
-    if os.path.exists('hippobridge.cfg'):
-        logger.info("Loading hippobridge.cfg configuration")
-        config.read('hippobridge.cfg')
+    if os.path.exists(config_path):
+        logger.info(f"Loading {config_path} configuration")
+        config.read(config_path)
     else:
-        logger.info("hippobridge.cfg not found, using default configuration")
+        logger.info(f"{config_path} not found, using default configuration")
 
     return config
 
