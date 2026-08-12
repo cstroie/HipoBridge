@@ -3949,7 +3949,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const article = frag.querySelector('article');
         if (!article) { console.error('Failed to clone analysis card template'); return document.createElement('div'); }
 
-        article.className = `analysis-card ${analysisType}`;
+        article.className = `analysis-card tab-card ${analysisType}`;
         article.dataset.type = analysisType;
         article.dataset.serviceRequestId = serviceRequest.id;
         article.dataset.analysisType = analysisType;

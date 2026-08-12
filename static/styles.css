@@ -1554,10 +1554,18 @@ select {
 /* Analysis Cards */
 /* ── Analysis card ──────────────────────────────────────────────────────── */
 
-.analysis-card {
+/* Shared chrome for the three top-level tab-content cards (analysis,
+   report, AI summary) — background/border/radius only. Padding, shadow,
+   and any card-specific overrides (e.g. the AI card's amber border) stay
+   on the specific class. .epi-card-inner is excluded: it's an inner slot
+   of .epi-card, not a peer outer card. */
+.tab-card {
     background: var(--card-bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-xl);
+}
+
+.analysis-card {
     padding: var(--space-20) var(--space-22);
     box-shadow: var(--shadow-card);
     transition: border-color var(--transition-base);
@@ -1848,9 +1856,6 @@ select {
 
 /* Report card */
 .report-card {
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-xl);
     padding: var(--space-24) var(--space-32);
     max-width: 860px;
     margin-left: auto;
@@ -2446,11 +2451,13 @@ select {
 
 /* Quick Summary card — deliberately styled distinct from the validated
    record cards below: a visible amber "unverified" badge, never let this
-   be mistaken for schema-checked output. */
+   be mistaken for schema-checked output. .tab-card supplies the shared
+   background; border and border-radius stay overridden here on purpose —
+   do not remove them to "finish" the dedup, that would erase the
+   intentional visual distinction. */
 .ai-summary-card {
     max-width: 860px;
     margin: 0 auto var(--space-32);
-    background: var(--card-bg);
     border: 1px solid color-mix(in srgb, var(--warning, #d97706) 35%, var(--border));
     border-radius: var(--radius-lg);
     overflow: hidden;
