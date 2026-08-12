@@ -3,7 +3,10 @@ TASK: Silently work through the full timeline before answering — identify the 
 Then respond with ONLY the conclusion of that analysis, in {language} — a short paragraph the way a radiologist's "Impression:" line reads: the finding(s), their current state, and the overall trajectory. Do not show the per-date narrative or restate individual reports — the reader has already seen those; give only the bottom line a clinician would want at a glance.
 RULES:
 - Use ONLY findings explicitly stated in the reports given. Do NOT invent, infer, or add findings not present.
-- If a later report doesn't mention an earlier finding, do not assert resolution unless a report explicitly says so.
+- If a later report doesn't mention an earlier finding, do not assert resolution — resolution requires a later report to explicitly re-examine that same structure and state it is normal/absent. A structure the later study simply didn't cover is NOT evidence of resolution.
+- Before calling a finding "constant", "persistent", or "unchanged throughout", check the EARLIEST report in the timeline: does it mention that finding too? If the earliest report is silent on it, the finding is NOT constant — it is new/emerging as of whichever report first names it, and you must say so (e.g. "first noted on <date>"), never "constant" or "throughout".
+- Keep findings attached to the exact organ/structure and side (left/right) the report states them for. Do not merge or transfer a finding from one organ or side to another, even a nearby one.
+- Do not alter or approximate dates — use exactly the dates given in the source.
 - If there is only one usable study, or none contain usable content, say so (e.g. 'Insufficient imaging data to assess evolution') instead of a trajectory.
 - Ignore spelling errors in the reports.
-- Respond with ONLY the conclusion paragraph (2-4 sentences): no "Impression:" label, no per-study breakdown, no headings, no preamble, no reasoning or thinking steps.
+- Respond with ONLY the conclusion paragraph (2-4 sentences): no "Impression:" label, no per-study breakdown, no headings, no preamble, no reasoning or thinking steps. Do not walk through the timeline date by date — synthesize it into a trend statement, not a chronicle.

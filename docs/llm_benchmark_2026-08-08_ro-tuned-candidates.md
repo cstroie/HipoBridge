@@ -117,6 +117,12 @@ against a CUDA-enabled local build to see whether the same failure
 reproduces there too (which would confirm the runtime-bug theory
 conclusively).
 
+**Update 2026-08-11**: a newer build (`rogemma3-4b-instruct-v2`) now loads
+successfully, moving the crash one stage later (generation, not load) —
+see `llm_benchmark_2026-08-11_rogemma3-4b-v2.md` for the fix (reduced
+`context_length`) and the resulting quality benchmark, which recommends
+against using the model regardless.
+
 ## Key finding 1: both RoQwen models ignore `--language English`
 
 Neither model can be made to answer in English — every English-requested
@@ -250,9 +256,12 @@ two variables before drawing a firm conclusion about the fine-tuning
 approach itself.
 
 **Not currently recommended for promotion or a production trial.**
-`RoGemma3-4B-Instruct` remains untested pending either an LM Studio server
-update or further investigation into the `gemma3.rope.freq_base_swa`/load
-incompatibility — worth revisiting given the size confound above.
+`RoGemma3-4B-Instruct` was untested at the time of this round pending
+either an LM Studio server update or further investigation into the
+`gemma3.rope.freq_base_swa`/load incompatibility. **Update 2026-08-11**:
+now benchmarked (`llm_benchmark_2026-08-11_rogemma3-4b-v2.md`) — result is
+a clear **do not promote**, so the size-confound question above is now
+moot for this specific model.
 
 ## Evidence
 

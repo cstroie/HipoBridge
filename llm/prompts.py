@@ -72,7 +72,14 @@ PROMPT_META = {
     # Also cuts generation time roughly proportionally on this backend
     # (~2-3.5 tok/s measured), directly easing the timeout risk this kind
     # was most exposed to (largest max_tokens among the streaming kinds).
-    "imaging_episode": ("medical", 180),
+    # 180 -> 260 -> 320: real-case testing showed ~1/3 of outputs (multi-
+    # finding or non-English cases run longer per sentence) got cut off
+    # mid-sentence at 180. 260 fixed nearly all of them; a few dense,
+    # many-measurement series (e.g. a 6-study renal follow-up) still ran the
+    # model into date-by-date enumeration despite the prompt telling it to
+    # synthesize instead — 320 gives those a safety margin against a raw
+    # truncation cutoff, even though the model may still need this discussed.
+    "imaging_episode": ("medical", 320),
     "lab":             ("medical", 600),
     "pre_exam":        ("medical", 1300),
 }
@@ -176,7 +183,7 @@ def _language_directive(language: str) -> str:
 # about date context, the other about transport; independently editable.
 # imaging (40 tokens) is excluded — too short for streaming to buy anything.
 # lab (600 tokens) is included — long enough that perceived latency matters.
-# imaging_episode (Impression-only conclusion, 180 tokens — see PROMPT_META)
+# imaging_episode (Impression-only conclusion, 320 tokens — see PROMPT_META)
 # is included too: still ~1min+ on this backend, so streaming still helps.
 STREAMING_KINDS = frozenset({"report", "epicrisis", "pre_exam", "lab", "imaging_episode"})
 
