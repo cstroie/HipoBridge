@@ -4406,7 +4406,9 @@ dialog.report-editor-modal article > section {
        card content uses the available phone width instead of floating
        in a sea of margin */
     .report-header,
-    .epicrisis-header {
+    .epicrisis-header,
+    .episode-header,
+    .trends-header {
         margin-bottom: var(--space-16);
         flex-wrap: wrap;
     }
@@ -4421,9 +4423,15 @@ dialog.report-editor-modal article > section {
     }
 
     /* When the header wraps, keep the AI/copy pill pinned to the right
-       instead of it landing flush against the left edge on its own line */
+       instead of it landing flush against the left edge on its own line.
+       min-width:0 on the text side (added for episode-header/trends-header
+       alongside report-header/epicrisis-header) stops being load-bearing
+       once the row wraps — the heading gets the full row width on its own
+       line instead — but stays as a safety net just above this breakpoint. */
     .report-header .card-toolbar,
-    .epicrisis-header .card-toolbar {
+    .epicrisis-header .card-toolbar,
+    .episode-header .card-toolbar,
+    .trends-header .card-toolbar {
         margin-left: auto;
         align-self: flex-end;
     }
