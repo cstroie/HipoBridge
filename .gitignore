@@ -3,6 +3,7 @@
 *.log
 *.pid
 *.out
+*.bak
 hippobridge.env
 samples/*
 __pycache__
