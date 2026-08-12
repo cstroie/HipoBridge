@@ -637,6 +637,21 @@ small {
     padding: var(--space-32) var(--space-24) 4rem;
 }
 
+/* Every tab used to either fill .main-content's full 1200px (Imaging, Lab,
+   Epicrisis, Schedule, Profile) or narrow itself individually to 860px
+   (Report, AI, via their own .report-card/.ai-summary-card max-width) —
+   an inconsistent mix. Narrow all tabs the same way here instead, so the
+   860px reading column is the one behavior everywhere. .report-card and
+   .ai-summary-card keep their own (now-redundant but harmless) max-width
+   — 860px either way, so leaving them alone changes nothing and avoids
+   touching their more delicate rules (the AI card's inline variant drops
+   this via max-width:none regardless of where it's nested). */
+.tab-content {
+    max-width: 860px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
 /* Tab eyebrow (small uppercase label above heading) */
 .tab-eyebrow, .search-hero-label {
     font: 600 var(--font-size-11) 'Inter', sans-serif;
@@ -1004,8 +1019,14 @@ small {
 
 /* ── Patient panels ─────────────────────────────────────────────────────── */
 
+/* 500px minimum (not 360px) so this collapses to a single column within
+   the new 860px .tab-content cap instead of forcing two ~419px columns —
+   at that width the "Related Requests" panel's compact timeline rows
+   (name + URGENT + status badges on one line, never wraps by design)
+   started truncating patient names with an ellipsis that used to have
+   room to spare. */
 .patient-panels {
-    columns: 2 360px;
+    columns: 2 500px;
     column-gap: var(--space-22);
     margin-bottom: -22px;
 }
@@ -1348,12 +1369,19 @@ select {
 }
 .episode-header:first-child { margin-top: 0; }
 /* The border/margin above already separates the section — the nested
-   divider text itself stays bare so there's no double border. */
+   divider text itself stays bare so there's no double border. Also needs
+   the same min-width:0 fix as .report-header's text block: .card-toolbar
+   is deliberately flex-shrink:0 (pill buttons never squish), so without
+   this the heading can't shrink below its own min-content and the
+   toolbar gets pushed past the container's right edge on narrow widths
+   instead of the heading wrapping to make room. */
 .episode-header .episode-divider {
     column-span: initial;
     margin: 0;
     padding: 0;
     border: 0;
+    min-width: 0;
+    flex: 1 1 auto;
 }
 
 /* An AI synopsis card inserted directly into the multicol imaging/lab grid
@@ -1442,6 +1470,14 @@ select {
     justify-content: space-between;
     gap: var(--space-16);
     margin-bottom: var(--space-16);
+}
+/* Same fix as .report-header: without min-width:0 a flex child can't
+   shrink below its content's natural width, so on narrow viewports the
+   heading pushes .card-toolbar (fixed pill size) past the edge instead
+   of the heading text wrapping. */
+.trends-header > div:not(.card-toolbar) {
+    min-width: 0;
+    flex: 1 1 auto;
 }
 
 .trends-header h2 {
