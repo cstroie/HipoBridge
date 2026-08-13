@@ -133,6 +133,25 @@ class FilesystemCache:
         logger.info(f"FS cache cleanup: deleted {deleted} files ({freed} bytes)")
         return {'deleted': deleted, 'freed_bytes': freed}
 
+    def iter_entries(self):
+        """Yield (url, content) for every non-expired cache entry.
+
+        Blocking — same as cleanup()/stats() above, callers already offload
+        this to a thread. Used by hippobridge.py's startup search-index
+        backfill to find previously-cached checkout/imaging pages.
+        """
+        now = datetime.now(timezone.utc).timestamp()
+        for path in self._root.rglob('*.json'):
+            try:
+                data = json.loads(path.read_text(encoding='utf-8'))
+            except Exception:
+                continue
+            if data.get('expires_at', 0) < now:
+                continue
+            url, content = data.get('url'), data.get('content')
+            if url and content:
+                yield url, content
+
     def stats(self) -> dict:
         """Return aggregate statistics about the cache directory."""
         entries = 0

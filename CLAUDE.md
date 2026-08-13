@@ -31,7 +31,7 @@ service_url = http://192.168.3.230/hipocrate
 
 Every subsystem follows the same pattern: `hippobridge.cfg` (server/hipocrate/cache/logging/radiology), `llm.cfg` (AI provider config), `regions.cfg` (imaging region keyword rules), `worklist.cfg` (DICOM MWL) are all gitignored — copy the matching `examples/*.cfg` and edit it.
 
-CLI: `--port`, `--host`, `--service-url`, `--log-level DEBUG|INFO|WARNING|ERROR`, `--log-file PATH`, `--no-disk-cache`, `--no-worklist`, `--pidfile PATH`.
+CLI: `--port`, `--host`, `--service-url`, `--log-level DEBUG|INFO|WARNING|ERROR`, `--log-file PATH`, `--no-disk-cache`, `--no-worklist`, `--no-search-backfill`, `--pidfile PATH`.
 
 `--log-level`/`LOG_LEVEL` only sets the console handler's level (default INFO). A configured log file (`--log-file` or `[logging] file` in `hippobridge.cfg`) always logs at `DEBUG` regardless — the root logger itself is always `DEBUG` internally so file logging never misses anything even when the console is quieter.
 

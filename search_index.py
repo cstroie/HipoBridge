@@ -115,6 +115,13 @@ class SearchIndex:
         finally:
             con.close()
 
+    def _indexed_keys_sync(self) -> set:
+        con = self._connect()
+        try:
+            return {(k, s) for k, s in con.execute("SELECT kind, source_id FROM documents")}
+        finally:
+            con.close()
+
     def _cleanup_sync(self, max_age_days: int) -> dict:
         if max_age_days <= 0:
             return {'deleted': 0}
@@ -131,6 +138,21 @@ class SearchIndex:
         finally:
             con.close()
 
+    # ── sync public API (for callers already running off the event loop in
+    # their own background thread, e.g. the startup cache backfill below —
+    # avoids an extra executor hop on top of the one they're already in) ──
+
+    def index_document_sync(self, kind: str, source_id: str,
+                             cnp: Optional[str], name: Optional[str], text: Optional[str]) -> None:
+        """Synchronous counterpart to index_document(). No-op if text is empty."""
+        if not text or not text.strip():
+            return
+        self._index_document_sync(kind, source_id, cnp, name, text)
+
+    def indexed_keys_sync(self) -> set:
+        """Synchronous counterpart to indexed_keys()."""
+        return self._indexed_keys_sync()
+
     # ── async public API ──
 
     async def index_document(self, kind: str, source_id: str,
@@ -140,6 +162,10 @@ class SearchIndex:
             return
         await asyncio.get_event_loop().run_in_executor(
             None, self._index_document_sync, kind, source_id, cnp, name, text)
+
+    async def indexed_keys(self) -> set:
+        """Return the set of (kind, source_id) pairs already indexed."""
+        return await asyncio.get_event_loop().run_in_executor(None, self._indexed_keys_sync)
 
     async def search(self, query: str, limit: int = 25) -> list[dict]:
         """Return up to `limit` matching documents, ranked by FTS5 relevance."""

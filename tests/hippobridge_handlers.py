@@ -21,13 +21,17 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import asyncio
 import json
+import tempfile
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import hippobridge
+import hippoclient
+import search_index
 from hippobridge import serve_spec, get_cache_stats
+from hippodata import HippoData
 
 
 def _run(coro):
@@ -92,6 +96,93 @@ class TestGetCacheStats(unittest.TestCase):
             resp = _run(get_cache_stats.__wrapped__(_fake_request()))
         self.assertTrue(stub.stats_called)
         self.assertEqual(json.loads(resp.body), {"enabled": True, "entries": 3, "size_bytes": 42})
+
+
+class _StubFsCacheEntries:
+    """Minimal stand-in for urlcache.FilesystemCache — only iter_entries()
+    is used by _backfill_search_index_sync()."""
+    def __init__(self, entries):
+        self._entries = entries
+
+    def iter_entries(self):
+        yield from self._entries
+
+
+class TestBackfillSearchIndex(unittest.TestCase):
+    """_backfill_search_index_sync() scans cached pages for checkout/imaging
+    report text (see search_index.py's module docstring for why this hooks
+    hippoclient.py's parse_data() rather than a hippobridge.py route)."""
+
+    def setUp(self):
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.idx = search_index.SearchIndex(os.path.join(self._tmpdir.name, 'search_index.db'))
+
+    def tearDown(self):
+        self._tmpdir.cleanup()
+
+    def _co_data(self, epicrisis='Diagnostic: gastroenterita acuta, evolutie buna.'):
+        d = HippoData(status='success', message='')
+        d.store('checkout.epicrisis', epicrisis)
+        d.store('patient.cnp', 'CNP1')
+        d.store('patient.name', 'Name1')
+        return d
+
+    def _im_data(self, result='CT abdomen: fara modificari patologice.'):
+        d = HippoData(status='success', message='')
+        d.store_list('studies', [{'result': result}])
+        d.store('patient.cnp', 'CNP1')
+        d.store('patient.name', 'Name1')
+        return d
+
+    def test_indexes_checkout_and_imaging_skips_lab_and_unrelated(self):
+        fs = _StubFsCacheEntries([
+            ('http://x/gen_printabile/BiletExternare.asp?RelId=555&RelName=CO', '<html>co</html>'),
+            ('http://x/PARA/Printabile/BuletinAnalize.asp?id=777&type=3&IdP=1', '<html>im</html>'),
+            ('http://x/PARA/Printabile/BuletinAnalize.asp?id=888&type=1&IdP=1', '<html>lab, must skip</html>'),
+            ('http://x/files/search.asp?what=PA', '<html>unrelated, must skip</html>'),
+        ])
+        with patch.object(hippoclient.HippoClientCheckout, 'parse_data', return_value=self._co_data()), \
+             patch.object(hippoclient.HippoClientImagingStudy, 'parse_data', return_value=self._im_data()):
+            result = hippobridge._backfill_search_index_sync(fs, self.idx)
+
+        self.assertEqual(result, {'scanned': 4, 'indexed': 2})
+        self.assertEqual(len(_run(self.idx.search('gastroenterita'))), 1)
+        self.assertEqual(len(_run(self.idx.search('abdomen'))), 1)
+
+    def test_repeat_run_skips_already_indexed(self):
+        fs = _StubFsCacheEntries([
+            ('http://x/gen_printabile/BiletExternare.asp?RelId=555&RelName=CO', '<html>co</html>'),
+        ])
+        with patch.object(hippoclient.HippoClientCheckout, 'parse_data', return_value=self._co_data()):
+            first = hippobridge._backfill_search_index_sync(fs, self.idx)
+            second = hippobridge._backfill_search_index_sync(fs, self.idx)
+
+        self.assertEqual(first, {'scanned': 1, 'indexed': 1})
+        self.assertEqual(second, {'scanned': 1, 'indexed': 0})
+
+    def test_empty_epicrisis_is_not_indexed(self):
+        fs = _StubFsCacheEntries([
+            ('http://x/gen_printabile/BiletExternare.asp?RelId=999&RelName=CO', '<html>co</html>'),
+        ])
+        with patch.object(hippoclient.HippoClientCheckout, 'parse_data', return_value=self._co_data(epicrisis='')):
+            result = hippobridge._backfill_search_index_sync(fs, self.idx)
+        self.assertEqual(result, {'scanned': 1, 'indexed': 0})
+
+    def test_parse_failure_on_one_entry_does_not_abort_the_scan(self):
+        fs = _StubFsCacheEntries([
+            ('http://x/gen_printabile/BiletExternare.asp?RelId=1&RelName=CO', '<html>broken</html>'),
+            ('http://x/gen_printabile/BiletExternare.asp?RelId=2&RelName=CO', '<html>ok</html>'),
+        ])
+        with patch.object(hippoclient.HippoClientCheckout, 'parse_data',
+                           side_effect=[RuntimeError("malformed page"), self._co_data()]):
+            result = hippobridge._backfill_search_index_sync(fs, self.idx)
+        self.assertEqual(result, {'scanned': 2, 'indexed': 1})
+
+    def test_async_wrapper_noop_when_index_not_configured(self):
+        with patch.object(search_index, 'instance', None):
+            # Should not raise even though url_cache.fs_cache may be set —
+            # both must be configured.
+            _run(hippobridge._backfill_search_index())
 
 
 if __name__ == "__main__":

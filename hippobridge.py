@@ -28,7 +28,7 @@ import os
 import re
 import aiohttp
 from aiohttp import web
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import json
 import logging
 from logging.handlers import RotatingFileHandler
@@ -38,6 +38,7 @@ import configparser
 import base64
 import signal
 from hashlib import sha256
+from urllib.parse import urlparse, parse_qs
 
 from fhir import OperationOutcome, Resource
 
@@ -1269,6 +1270,68 @@ def load_config(config_path: str = 'hippobridge.cfg'):
 
 _wl_server = None   # set by init_app; used by on_cleanup for graceful DICOM shutdown
 
+def _url_param(url: str, name: str) -> Optional[str]:
+    return (parse_qs(urlparse(url).query).get(name) or [None])[0]
+
+def _backfill_search_index_sync(fs_cache: FilesystemCache, idx) -> dict:
+    """Blocking: scan every cached page for checkout/imaging report text and
+    index anything not already in the search index (see search_index.py).
+
+    Runs once at startup in a background thread (see init_app) so a large
+    cache never delays the server coming up — mainly useful the first time
+    this feature is enabled against an already-populated disk cache, but
+    cheap to repeat on every startup afterwards: already-indexed
+    (kind, source_id) pairs are skipped without re-parsing their HTML.
+
+    Client instances are constructed with request=None purely to call their
+    parse_data() (pure HTML parsing, no network/session use) — never
+    fetch_and_parse(), so no credentials or live Hipocrate access needed.
+    """
+    existing = idx.indexed_keys_sync()
+    checkout_client = HippoClientCheckout(SERVICE_URL, None)
+    imaging_client = HippoClientImagingStudy(SERVICE_URL, None)
+    scanned = 0
+    indexed = 0
+    for url, content in fs_cache.iter_entries():
+        scanned += 1
+        try:
+            if '/gen_printabile/BiletExternare.asp' in url:
+                rel_id = _url_param(url, 'RelId')
+                if not rel_id or ('epicrisis', rel_id) in existing:
+                    continue
+                data = checkout_client.parse_data(content, id=rel_id)
+                epicrisis = data.get('checkout.epicrisis')
+                if epicrisis:
+                    idx.index_document_sync('epicrisis', rel_id, data.get('patient.cnp'),
+                                             data.get('patient.name'), epicrisis)
+                    indexed += 1
+            elif '/PARA/Printabile/BuletinAnalize.asp' in url and _url_param(url, 'type') == '3':
+                study_id = _url_param(url, 'id')
+                if not study_id or ('imaging', study_id) in existing:
+                    continue
+                data = imaging_client.parse_data(content, id=study_id)
+                studies = data.get('studies') or []
+                text = "\n\n".join(s.get('result') for s in studies if s.get('result'))
+                if text:
+                    idx.index_document_sync('imaging', study_id, data.get('patient.cnp'),
+                                             data.get('patient.name'), text)
+                    indexed += 1
+        except Exception as exc:
+            logger.warning(f"Search index backfill: failed to parse cached page {url}: {exc}")
+    return {'scanned': scanned, 'indexed': indexed}
+
+async def _backfill_search_index():
+    """Async wrapper: offload the blocking scan above to a thread, once, at startup."""
+    if url_cache.fs_cache is None or search_index.instance is None:
+        return
+    try:
+        result = await asyncio.get_event_loop().run_in_executor(
+            None, _backfill_search_index_sync, url_cache.fs_cache, search_index.instance)
+        logger.info(f"Search index backfill: scanned {result['scanned']} cached pages, "
+                    f"indexed {result['indexed']} new documents")
+    except Exception as exc:
+        logger.warning(f"Search index backfill failed: {exc}")
+
 async def _periodic_cache_cleanup():
     """Background task: run FilesystemCache.cleanup() (and SearchIndex.cleanup(),
     if enabled) once at startup then every 24 h."""
@@ -1299,6 +1362,7 @@ async def on_cleanup(app):
         await _ai_client.close()
 
 async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
+                   no_search_backfill: bool = False,
                    port: int = None, host: str = None, service_url: str = None,
                    log_file: str = None):
     """Load config, wire up routes and lifecycle handlers, return the configured app."""
@@ -1351,6 +1415,10 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
             os.path.join(cache_dir, 'ai'), ttl=ai_cache.timeout, max_age_days=0)
         search_index.instance = search_index.SearchIndex(
             os.path.join(cache_dir, 'search_index.db'), max_age_days=cache_max_age)
+        if no_search_backfill:
+            logger.info("Search index cache backfill disabled (--no-search-backfill)")
+        else:
+            asyncio.get_event_loop().create_task(_backfill_search_index())
         asyncio.get_event_loop().create_task(_periodic_cache_cleanup())
     elif no_disk_cache and cache_dir:
         logger.info("Persistent filesystem cache disabled (--no-disk-cache)")
@@ -1455,6 +1523,13 @@ if __name__ == "__main__":
         help='Disable DICOM worklist SCP even if worklist.cfg is present'
     )
     parser.add_argument(
+        '--no-search-backfill', action='store_true',
+        help='Skip the startup scan of the on-disk cache for epicrisis/imaging '
+             'text to backfill into the search index (see search_index.py). '
+             'The scan is cheap on repeat runs (already-indexed pages are '
+             'skipped) — this is mainly for a very large cache on a slow disk.'
+    )
+    parser.add_argument(
         '--pidfile', metavar='PATH',
         help='Write the process PID to this file on startup and remove it on '
              'clean shutdown; enables the hippobridge control script to find '
@@ -1482,6 +1557,7 @@ if __name__ == "__main__":
         app = await init_app(
             no_disk_cache=args.no_disk_cache,
             no_worklist=args.no_worklist,
+            no_search_backfill=args.no_search_backfill,
             port=args.port,
             host=args.host,
             service_url=args.service_url,

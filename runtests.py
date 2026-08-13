@@ -33,7 +33,7 @@ from tests.hippoclient_write import (
     TestReportWriteErrors, TestReportValidateErrors, TestCererePerformErrors,
     TestWebJsonResponseEndToEnd,
 )
-from tests.hippobridge_handlers import TestServeSpec, TestGetCacheStats
+from tests.hippobridge_handlers import TestServeSpec, TestGetCacheStats, TestBackfillSearchIndex
 from tests.search_index import TestSearchIndex
 
 # Configuration
@@ -83,6 +83,7 @@ TEST_GROUPS = {
         TestWebJsonResponseEndToEnd,
         TestServeSpec,
         TestGetCacheStats,
+        TestBackfillSearchIndex,
         TestSearchIndex,
     ],
     "root": [test_root_endpoint],
@@ -137,7 +138,7 @@ TEST_GROUPS = {
         TestReportWriteErrors, TestReportValidateErrors, TestCererePerformErrors,
         TestWebJsonResponseEndToEnd,
     ],
-    "hippobridge_handlers": [TestServeSpec, TestGetCacheStats],
+    "hippobridge_handlers": [TestServeSpec, TestGetCacheStats, TestBackfillSearchIndex],
     "search_index": [TestSearchIndex],
 }
 

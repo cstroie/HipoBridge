@@ -783,6 +783,15 @@ small {
     margin-bottom: var(--space-14);
 }
 
+/* Search-tab's clinical text search panel: reuses .recent-searches/.recent-header/
+   .recent-list chrome, but also sandwiches a .search-input-box in between —
+   that class normally gets its spacing from the .search-input-row wrapper it's
+   paired with elsewhere, which this panel doesn't use, so it needs its own gap
+   here on both sides (header already supplies space above via margin-bottom). */
+#clinicalSearchPanel .search-input-box {
+    margin-bottom: var(--space-14);
+}
+
 .recent-heading-label {
     font: 600 var(--font-size-11) 'Inter', sans-serif;
     letter-spacing: 0.1em;
