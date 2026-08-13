@@ -481,8 +481,8 @@ document.addEventListener('DOMContentLoaded', function() {
             nav.classList.remove('active');
             nav.removeAttribute('aria-current');
         });
-        // Prefer .nav-btn over the patient-ctx-pill when both share data-tab
-        const activeNavItem = document.querySelector(`.nav-btn.nav-item[data-tab="${tabId}"]`)
+        // Prefer .btn-nav over the patient-ctx-pill when both share data-tab
+        const activeNavItem = document.querySelector(`.btn-nav.nav-item[data-tab="${tabId}"]`)
             || document.querySelector(`.nav-item[data-tab="${tabId}"]`);
         if (activeNavItem) {
             activeNavItem.classList.add('active');
@@ -1263,7 +1263,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         modal.addEventListener('cancel', () => modal.remove());
 
-        modal.querySelector('.user-logout-btn').addEventListener('click', async () => {
+        modal.querySelector('.btn-user-logout').addEventListener('click', async () => {
             try {
                 const resp = await apiFetch('/api/logout', { method: 'POST' });
                 if (!resp.ok) throw new Error(`Logout failed (${resp.status})`);
@@ -1627,7 +1627,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function wireAiCardCopy(card) {
-        const copyBtn = card.querySelector('.ai-copy-btn');
+        const copyBtn = card.querySelector('.btn-ai-copy');
         const body = card.querySelector('.ai-summary-body');
         if (copyBtn && body) {
             copyBtn.addEventListener('click', () => copyMarkdown(body, copyBtn, () => flashIcon(copyBtn)));
@@ -4163,7 +4163,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const copyBtn = document.createElement('button');
         copyBtn.type = 'button';
-        copyBtn.className = 'copy-md-btn';
+        copyBtn.className = 'btn-copy';
         copyBtn.setAttribute('aria-label', 'Copy current episode imaging as Markdown');
         copyBtn.title = 'Copy current episode imaging as Markdown';
         copyBtn.innerHTML = '<i class="fas fa-copy" aria-hidden="true"></i>';
@@ -4248,12 +4248,12 @@ document.addEventListener('DOMContentLoaded', function() {
         article.querySelector('.report-preview')?.replaceChildren();
         article.classList.remove('no-report');
         // Reset the copy button; re-revealed below only when a report exists
-        const cardCopyBtn = article.querySelector('.card-copy-btn');
+        const cardCopyBtn = article.querySelector('.btn-card-copy');
         if (cardCopyBtn) { cardCopyBtn.hidden = true; cardCopyBtn.onclick = null; }
         // Reset the AI triage button; re-revealed only for imaging reports.
         // Also drop any card left over from a prior render of this article
         // (fetchAndFillReport can re-run via the perform/write refresh path).
-        const cardAiBtn = article.querySelector('.card-ai-btn');
+        const cardAiBtn = article.querySelector('.btn-card-ai');
         if (cardAiBtn) { cardAiBtn.hidden = true; cardAiBtn._aiCard = null; }
         article.querySelector('.card-report-section .ai-summary-card')?.remove();
 
@@ -5223,7 +5223,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 + (meta.length ? `${meta.join(' · ')}  \n\n` : '')
                 + epicrisisText.trim() + '\n';
 
-            const btn    = card.querySelector('.epi-card-btn');
+            const btn    = card.querySelector('.btn-epi-card');
             const body   = card.querySelector('.epi-card-body');
             const chevron = card.querySelector('.epi-chevron');
 
@@ -5242,8 +5242,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (isOpen) chevron.className = 'fas fa-chevron-up epi-chevron';
 
             body.hidden = !isOpen;
-            const copyBtn = card.querySelector('.epi-copy-btn');
-            const aiBtn = card.querySelector('.epi-ai-btn');
+            const copyBtn = card.querySelector('.btn-epi-copy');
+            const aiBtn = card.querySelector('.btn-epi-ai');
             if (isSubstantiveText(epicrisisText)) {
                 card.querySelector('.epi-prose').innerHTML = marked.parse(epicrisisText.trim());
                 copyBtn.addEventListener('click', () => copyMarkdown(card, copyBtn, () => flashIcon(copyBtn)));
@@ -5410,7 +5410,7 @@ document.addEventListener('DOMContentLoaded', function() {
         modal.querySelector('.report-modal-close').addEventListener('click', () => modal.close());
         modal.querySelector('[data-close-modal]').addEventListener('click', () => modal.close());
         modal.addEventListener('close', () => document.body.removeChild(modal));
-        modal.querySelector('.modal-load-patient-btn').addEventListener('click', () => {
+        modal.querySelector('.btn-modal-load-patient').addEventListener('click', () => {
             modal.close();
             loadPatientFromRequest(requestId, patientName, triggerEl);
         });

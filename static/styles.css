@@ -522,7 +522,7 @@ small {
 }
 
 /* Shared button style for all nav buttons */
-.nav-btn {
+.btn-nav {
     display: inline-flex;
     align-items: center;
     gap: var(--space-8);
@@ -542,12 +542,12 @@ small {
     white-space: nowrap;
     transition: color var(--transition-fast), border-color var(--transition-fast);
 }
-.nav-btn:hover { color: var(--primary); }
-.nav-btn.active {
+.btn-nav:hover { color: var(--primary); }
+.btn-nav.active {
     color: var(--primary);
     border-bottom-color: var(--primary);
 }
-.nav-btn i { font-size: var(--font-size-11); }
+.btn-nav i { font-size: var(--font-size-11); }
 
 /* Vertical separator between global and patient nav */
 .nav-sep {
@@ -750,7 +750,7 @@ small {
 }
 .search-input-box input::placeholder { color: var(--muted); }
 
-.search-submit-btn {
+.btn-search-submit {
     flex-shrink: 0;
     font: 600 var(--font-size-sm) 'Inter', sans-serif;
     color: var(--on-accent);
@@ -764,7 +764,7 @@ small {
     align-items: center;
     gap: var(--space-8);
 }
-.search-submit-btn:hover { opacity: 0.88; }
+.btn-search-submit:hover { opacity: 0.88; }
 
 .search-hint {
     font: 400 var(--font-size-13) 'Inter', sans-serif;
@@ -878,7 +878,7 @@ small {
     flex-shrink: 0;
 }
 
-/* keep .btn-primary for any other uses, but search uses .search-submit-btn */
+/* keep .btn-primary for any other uses, but search uses .btn-search-submit */
 .btn-primary {
     display: inline-flex;
     align-items: center;
@@ -940,7 +940,7 @@ small {
     margin-bottom: 0;
     min-width: 0;
 }
-.patient-name-row .schedule-refresh-btn {
+.patient-name-row .btn-schedule-refresh {
     flex-shrink: 0;
 }
 
@@ -1715,24 +1715,24 @@ select {
    inside a pill toolbar — the toolbar itself supplies the border, and a
    1px separator divides the two buttons. */
 .card-toolbar .btn-ai,
-.card-toolbar .copy-md-btn {
+.card-toolbar .btn-copy {
     border: none;
     border-radius: 0;
     background: transparent;
 }
-.card-toolbar .btn-ai:not([hidden]) ~ .copy-md-btn:not([hidden]) {
+.card-toolbar .btn-ai:not([hidden]) ~ .btn-copy:not([hidden]) {
     border-left: 1px solid var(--border);
 }
 /* Unlike its bare 28px icon-only form elsewhere, the copy button always
    carries a "Copy" label when grouped in a toolbar — on desktop too, not
    just the mobile-stretched layouts below. */
-.card-toolbar .copy-md-btn {
+.card-toolbar .btn-copy {
     width: auto;
     height: auto;
     padding: var(--space-6) var(--space-12);
     gap: var(--space-6);
 }
-.card-toolbar .copy-md-btn::after {
+.card-toolbar .btn-copy::after {
     content: "Copy";
     font: 600 var(--font-size-13) 'Inter', sans-serif;
 }
@@ -1744,7 +1744,7 @@ select {
    700px media query below (not after) so the mobile override there
    still wins the cascade at narrow widths. */
 .card-toolbar .btn-ai,
-.card-toolbar .copy-md-btn {
+.card-toolbar .btn-copy {
     flex: 0 0 84px;
     justify-content: center;
 }
@@ -1766,7 +1766,7 @@ select {
 }
 
 /* Shared compact icon-only style for every "copy as Markdown" button */
-.copy-md-btn {
+.btn-copy {
     flex-shrink: 0;
     width: 28px;
     height: 28px;
@@ -1781,19 +1781,19 @@ select {
     cursor: pointer;
     transition: background var(--transition-base), color var(--transition-base);
 }
-.copy-md-btn:hover {
+.btn-copy:hover {
     color: var(--primary);
     background: color-mix(in srgb, var(--primary) 8%, transparent);
 }
-.copy-md-btn:focus-visible {
+.btn-copy:focus-visible {
     outline: none;
     box-shadow: var(--focus-ring);
 }
-.copy-md-btn[hidden] { display: none; }
+.btn-copy[hidden] { display: none; }
 
 /* AI card copy button — orange to match the AI accent (.btn-ai). */
-.copy-md-btn.ai-copy-btn { color: var(--warning, #d97706); }
-.copy-md-btn.ai-copy-btn:hover {
+.btn-copy.btn-ai-copy { color: var(--warning, #d97706); }
+.btn-copy.btn-ai-copy:hover {
     color: var(--warning, #d97706);
     background: color-mix(in srgb, var(--warning, #d97706) 12%, transparent);
 }
@@ -2624,7 +2624,7 @@ select {
     border-color: color-mix(in srgb, var(--urgent) 40%, var(--border));
 }
 
-/* Compact AI action button — matches the copy-md-btn family. */
+/* Compact AI action button — matches the btn-copy family. */
 .btn-ai {
     display: inline-flex;
     align-items: center;
@@ -3092,7 +3092,7 @@ select {
 }
 
 /* Keep the refresh button compact — never let it go full-width */
-.schedule-refresh-btn {
+.btn-schedule-refresh {
     margin-left: auto;
     white-space: nowrap;
     flex-shrink: 0;
@@ -3148,14 +3148,14 @@ select {
     flex: 1 1 200px;
 }
 
-.schedule-clear-filters-btn {
+.btn-schedule-clear-filters {
     white-space: nowrap;
     flex-shrink: 0;
 }
 
 /* .btn-secondary sets display:inline-flex unconditionally, which otherwise
    beats the native [hidden] default — force it hidden explicitly. */
-.schedule-clear-filters-btn[hidden] {
+.btn-schedule-clear-filters[hidden] {
     display: none;
 }
 
@@ -3216,7 +3216,7 @@ select {
     font-weight: var(--font-weight-semibold);
 }
 
-.epi-card-btn {
+.btn-epi-card {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -3230,7 +3230,7 @@ select {
     transition: background var(--transition-fast);
     flex-wrap: wrap;
 }
-.epi-card-btn:hover { background: color-mix(in srgb, var(--primary) 4%, transparent); }
+.btn-epi-card:hover { background: color-mix(in srgb, var(--primary) 4%, transparent); }
 
 .epi-btn-left {
     display: flex;
@@ -3300,7 +3300,7 @@ select {
    can wrap freely. Placed after the base rules above so it wins the
    cascade despite matching specificity. */
 @media (max-width: 700px) {
-    .epi-card-btn {
+    .btn-epi-card {
         display: grid;
         grid-template-columns: 1fr auto;
         grid-template-areas:
@@ -3317,7 +3317,7 @@ select {
 /* Body — hidden until open */
 .epi-card-body[hidden] { display: none; }
 .card-toolbar[hidden] { display: none; }
-.epi-copy-btn[hidden] { display: none; }
+.btn-epi-copy[hidden] { display: none; }
 
 .epi-card-inner {
     padding: var(--space-24);
@@ -3340,7 +3340,7 @@ select {
     margin: var(--space-16) 0 var(--space-12);
 }
 .epi-card-body>.card-toolbar .btn-ai,
-.epi-card-body>.card-toolbar .copy-md-btn {
+.epi-card-body>.card-toolbar .btn-copy {
     flex: 1;
     justify-content: center;
     padding: var(--space-10) var(--space-12);
@@ -4034,7 +4034,7 @@ dialog.report-editor-modal article > section {
        its own content and vertically centered instead of reaching the
        row's bottom edge — the active underline stopped ~20px short of
        it. Match the brand's explicit height so the stretch chain works
-       again down to .nav-btn (already align-self: stretch). */
+       again down to .btn-nav (already align-self: stretch). */
     #appNav {
         height: 60px;
         align-self: auto;
@@ -4051,7 +4051,7 @@ dialog.report-editor-modal article > section {
     }
 
     /* Patient tab buttons: spread evenly */
-    #navPatientGroup .nav-btn {
+    #navPatientGroup .btn-nav {
         flex: 1;
         justify-content: center;
         padding: 0;
@@ -4238,8 +4238,8 @@ dialog.report-editor-modal article > section {
 /* Very narrow: hide wordmark and collapse patient nav to icon-only */
 @media (max-width: 600px) {
     .brand-wordmark { display: none; }
-    #navPatientGroup .nav-btn span { display: none; }
-    #navPatientGroup .nav-btn i { font-size: var(--font-size-sm); }
+    #navPatientGroup .btn-nav span { display: none; }
+    #navPatientGroup .btn-nav i { font-size: var(--font-size-sm); }
 }
 
 @media (max-width: 480px) {
@@ -4252,14 +4252,14 @@ dialog.report-editor-modal article > section {
         width: 100%;
     }
     .card-toolbar .btn-ai,
-    .card-toolbar .copy-md-btn {
+    .card-toolbar .btn-copy {
         flex: 1;
         justify-content: center;
     }
     .card-toolbar .btn-ai {
         padding: var(--space-10) var(--space-12);
     }
-    .card-toolbar .copy-md-btn {
+    .card-toolbar .btn-copy {
         padding: var(--space-6);
     }
     /* Icon-only below this breakpoint — the text labels are what forces
@@ -4269,7 +4269,7 @@ dialog.report-editor-modal article > section {
     .card-toolbar .btn-ai span {
         display: none;
     }
-    .card-toolbar .copy-md-btn::after {
+    .card-toolbar .btn-copy::after {
         content: none;
     }
 
@@ -4337,7 +4337,7 @@ dialog.report-editor-modal article > section {
         padding: var(--space-10) var(--space-12);
     }
 
-    .search-submit-btn {
+    .btn-search-submit {
         justify-content: center;
         padding: var(--space-12) var(--space-14);
     }
@@ -4366,7 +4366,7 @@ dialog.report-editor-modal article > section {
 
     /* Refresh sits inline with the name on wider screens; on phones there's
        no room for both, so drop it to its own full-width row instead */
-    .patient-name-row .schedule-refresh-btn {
+    .patient-name-row .btn-schedule-refresh {
         flex-basis: 100%;
         justify-content: center;
         padding: var(--space-8) var(--space-16);
@@ -4453,13 +4453,13 @@ dialog.report-editor-modal article > section {
        the general .card-toolbar rule above) still centers each icon
        within this wider fixed box. */
     .report-header .card-toolbar .btn-ai,
-    .report-header .card-toolbar .copy-md-btn,
+    .report-header .card-toolbar .btn-copy,
     .epicrisis-header .card-toolbar .btn-ai,
-    .epicrisis-header .card-toolbar .copy-md-btn,
+    .epicrisis-header .card-toolbar .btn-copy,
     .episode-header .card-toolbar .btn-ai,
-    .episode-header .card-toolbar .copy-md-btn,
+    .episode-header .card-toolbar .btn-copy,
     .trends-header .card-toolbar .btn-ai,
-    .trends-header .card-toolbar .copy-md-btn {
+    .trends-header .card-toolbar .btn-copy {
         flex: 0 0 var(--space-48);
     }
 
@@ -4476,9 +4476,9 @@ dialog.report-editor-modal article > section {
     }
 
     /* Full-width buttons in main content — scoped so modal footers and
-       toolbar buttons (schedule-refresh-btn) are unaffected */
-    .main-content .btn-primary:not(.schedule-refresh-btn),
-    .main-content .btn-secondary:not(.schedule-refresh-btn) {
+       toolbar buttons (btn-schedule-refresh) are unaffected */
+    .main-content .btn-primary:not(.btn-schedule-refresh),
+    .main-content .btn-secondary:not(.btn-schedule-refresh) {
         width: 100%;
         justify-content: center;
     }
@@ -4511,7 +4511,7 @@ dialog.report-editor-modal article > section {
     }
     .schedule-filters-spacer { display: none; }
 
-    .schedule-clear-filters-btn {
+    .btn-schedule-clear-filters {
         margin-left: 0;
         width: 100%;
         justify-content: center;
