@@ -638,16 +638,16 @@ small {
 }
 
 /* Every tab used to either fill .main-content's full 1200px (Imaging, Lab,
-   Epicrisis, Schedule, Profile) or narrow itself individually to 860px
+   Epicrisis, Schedule, Profile) or narrow itself individually to 960px
    (Report, AI, via their own .report-card/.ai-summary-card max-width) —
    an inconsistent mix. Narrow all tabs the same way here instead, so the
-   860px reading column is the one behavior everywhere. .report-card and
+   960px reading column is the one behavior everywhere. .report-card and
    .ai-summary-card keep their own (now-redundant but harmless) max-width
-   — 860px either way, so leaving them alone changes nothing and avoids
+   — 960px either way, so leaving them alone changes nothing and avoids
    touching their more delicate rules (the AI card's inline variant drops
    this via max-width:none regardless of where it's nested). */
 .tab-content {
-    max-width: 860px;
+    max-width: 960px;
     margin-left: auto;
     margin-right: auto;
 }
@@ -1019,14 +1019,15 @@ small {
 
 /* ── Patient panels ─────────────────────────────────────────────────────── */
 
-/* 500px minimum (not 360px) so this collapses to a single column within
-   the new 860px .tab-content cap instead of forcing two ~419px columns —
-   at that width the "Related Requests" panel's compact timeline rows
+/* 460px minimum so two columns actually fit within the 960px .tab-content
+   cap (960 - 22px gap, halved ≈ 469px per column). A 500px floor used to
+   force this to a single column here — below it, at ~419px columns (the
+   old 860px cap), the "Related Requests" panel's compact timeline rows
    (name + URGENT + status badges on one line, never wraps by design)
-   started truncating patient names with an ellipsis that used to have
-   room to spare. */
+   started truncating patient names with an ellipsis. 469px leaves more
+   room than that did, but re-verify visually if names still truncate. */
 .patient-panels {
-    columns: 2 500px;
+    columns: 2 460px;
     column-gap: var(--space-22);
     margin-bottom: -22px;
 }
@@ -1876,7 +1877,7 @@ select {
     gap: var(--space-24);
     margin-bottom: var(--space-32);
     flex-wrap: nowrap;
-    max-width: 860px;
+    max-width: 960px;
     margin-left: auto;
     margin-right: auto;
 }
@@ -1893,7 +1894,7 @@ select {
 /* Report card */
 .report-card {
     padding: var(--space-24) var(--space-32);
-    max-width: 860px;
+    max-width: 960px;
     margin-left: auto;
     margin-right: auto;
     display: flex;
@@ -2492,7 +2493,7 @@ select {
    do not remove them to "finish" the dedup, that would erase the
    intentional visual distinction. */
 .ai-summary-card {
-    max-width: 860px;
+    max-width: 960px;
     margin: 0 auto var(--space-32);
     border: 1px solid color-mix(in srgb, var(--warning, #d97706) 35%, var(--border));
     border-radius: var(--radius-lg);
@@ -2643,7 +2644,7 @@ select {
 .btn-ai[hidden] { display: none; }
 
 .ai-empty-state, .ai-error-state {
-    max-width: 860px;
+    max-width: 960px;
     margin: 0 auto;
     padding: var(--space-24) var(--space-32);
     border-radius: var(--radius-lg);
@@ -2669,7 +2670,7 @@ select {
 .ai-error-state[hidden] { display: none; }
 
 .ai-results {
-    max-width: 860px;
+    max-width: 960px;
     margin: 0 auto;
     display: flex;
     flex-direction: column;
@@ -3164,7 +3165,7 @@ select {
 /* ── Epicrisis tab content area ──────────────────────────────────────── */
 #epicrisis-tab .epicrisis-header,
 #epicrisis-tab #epicrisisContent {
-    max-width: 860px;
+    max-width: 960px;
     margin-left: auto;
     margin-right: auto;
 }
