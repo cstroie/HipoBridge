@@ -10,7 +10,7 @@ old MD5(url) keying) alongside a natural `record_key` (patient code, request
 id, ...) so per-entity queries and `stats()` breakdowns don't require
 parsing the URL again.
 
-Connection lifecycle: unlike search_index.py's per-call connect/close (fine
+Connection lifecycle: unlike search.py's per-call connect/close (fine
 for its occasional document upserts), this cache is write-heavy — every L2
 miss on a live scrape writes an entry — so a single persistent connection in
 WAL mode is kept open for the process lifetime. WAL mode creates

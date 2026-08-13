@@ -382,7 +382,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         // Clinical text search (epicrisis/imaging report text already indexed
-        // server-side — see search_index.py). Debounced like the schedule
+        // server-side — see search.py). Debounced like the schedule
         // patient-name filter above.
         if (elements.clinicalSearchInput) {
             const debouncedClinicalSearch = debounce(runClinicalSearch, 400);
@@ -2793,7 +2793,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Full-text search over epicrisis/imaging report text already indexed by
-    // the server (GET /api/search/text — see search_index.py). Scoped to
+    // the server (GET /api/search/text — see search.py). Scoped to
     // patients already viewed through this HippoBridge instance, not a
     // Hipocrate-wide search (Hipocrate has no such API). Set once the server
     // reports the index isn't configured, so we stop calling on every keystroke.
@@ -2838,7 +2838,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 `fas ${CLINICAL_SEARCH_KIND_ICONS[r.kind] || 'fa-file'}`;
             li.querySelector('.recent-primary').textContent = r.patient_name || r.patient_cnp || 'Unknown patient';
             // Snippet's <mark> highlights come from the server's own FTS5
-            // snippet() call (search_index.py), not user input.
+            // snippet() call (search.py), not user input.
             li.querySelector('.recent-snippet').innerHTML = r.snippet || '';
 
             const loadBtn = li.querySelector('.recent-load');

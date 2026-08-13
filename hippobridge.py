@@ -50,7 +50,7 @@ from hippoclient import is_meaningful_text as _is_meaningful_text
 from urlcache import URLCache
 from sqlcache import SqliteCache, AiCacheView
 from hippodata import HippoData
-import search_index
+import search
 
 from extractors import parse_cnp
 from markdown import markdown_to_html
@@ -1235,9 +1235,9 @@ async def post_cache_cleanup(request):
 @require_auth
 async def search_text(request):
     """Free-text search over epicrisis/imaging report text already indexed by
-    this server (see search_index.py) — scoped to patients viewed here, not a
+    this server (see search.py) — scoped to patients viewed here, not a
     Hipocrate-wide search (Hipocrate has no such API; see docs/SITE_SURVEY.md)."""
-    if search_index.instance is None:
+    if search.instance is None:
         return web.json_response({'enabled': False})
     query = request.query.get('q', '').strip()
     if not query:
@@ -1252,7 +1252,7 @@ async def search_text(request):
     whoami_data = await HippoClientWhoami(SERVICE_URL, request).fetch_and_parse()
     if whoami_data.get("status") != "success":
         return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
-    results = await search_index.instance.search(query)
+    results = await search.instance.search(query)
     return web.json_response({'enabled': True, 'results': results})
 
 
@@ -1274,10 +1274,10 @@ _wl_server = None   # set by init_app; used by on_cleanup for graceful DICOM shu
 def _url_param(url: str, name: str) -> Optional[str]:
     return (parse_qs(urlparse(url).query).get(name) or [None])[0]
 
-def _backfill_search_index_sync(fs_cache: SqliteCache, idx) -> dict:
+def _backfill_search_sync(fs_cache: SqliteCache, idx) -> dict:
     """Blocking: scan cached pages written since the last backfill run for
     checkout/imaging report text, and index anything not already in the
-    search index (see search_index.py).
+    search index (see search.py).
 
     Runs in a background thread (see _periodic_cache_cleanup below) so a
     large cache never delays the server or blocks a request — mainly useful
@@ -1331,15 +1331,15 @@ def _backfill_search_index_sync(fs_cache: SqliteCache, idx) -> dict:
         idx.set_backfill_cursor_sync(newest_mtime)
     return {'scanned': scanned, 'indexed': indexed}
 
-async def _backfill_search_index():
+async def _backfill_search():
     """Async wrapper: offload the blocking scan above to a thread. Called
     from _periodic_cache_cleanup's loop (once at startup, then every 24h) —
     not a separate timer, since the cursor already makes repeat runs cheap."""
-    if url_cache.fs_cache is None or search_index.instance is None:
+    if url_cache.fs_cache is None or search.instance is None:
         return
     try:
         result = await asyncio.get_event_loop().run_in_executor(
-            None, _backfill_search_index_sync, url_cache.fs_cache, search_index.instance)
+            None, _backfill_search_sync, url_cache.fs_cache, search.instance)
         logger.info(f"Search index backfill: scanned {result['scanned']} cached pages, "
                     f"indexed {result['indexed']} new documents")
     except Exception as exc:
@@ -1350,7 +1350,7 @@ async def _periodic_cache_cleanup(no_search_backfill: bool = False):
     and the search-index cache backfill (unless disabled) once at startup
     then every 24 h. The backfill rides along on this same 24h cadence
     rather than getting its own timer — its persisted cursor (see
-    _backfill_search_index_sync) makes repeat runs cheap enough that a
+    _backfill_search_sync) makes repeat runs cheap enough that a
     separate schedule isn't worth the extra moving part."""
     while True:
         if url_cache.fs_cache is not None:
@@ -1361,14 +1361,14 @@ async def _periodic_cache_cleanup(no_search_backfill: bool = False):
                 logger.info(f"Periodic cache cleanup: {result['deleted']} entries deleted, {result['freed_bytes']} bytes freed")
             except Exception as exc:
                 logger.warning(f"Periodic cache cleanup failed: {exc}")
-        if search_index.instance is not None:
+        if search.instance is not None:
             try:
-                result = await search_index.instance.cleanup()
+                result = await search.instance.cleanup()
                 logger.info(f"Periodic search index cleanup: {result['deleted']} documents deleted")
             except Exception as exc:
                 logger.warning(f"Periodic search index cleanup failed: {exc}")
             if not no_search_backfill:
-                await _backfill_search_index()
+                await _backfill_search()
         await asyncio.sleep(86400)
 
 async def on_cleanup(app):
@@ -1437,8 +1437,8 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
         _sqlite_cache = SqliteCache(os.path.join(cache_dir, 'cache.db'), ttl=cache_ttl, max_age_days=cache_max_age)
         url_cache.fs_cache = _sqlite_cache
         ai_cache.fs_cache = AiCacheView(_sqlite_cache, ttl=ai_cache.timeout)
-        search_index.instance = search_index.SearchIndex(
-            os.path.join(cache_dir, 'search_index.db'), max_age_days=cache_max_age)
+        search.instance = search.SearchIndex(
+            os.path.join(cache_dir, 'search.db'), max_age_days=cache_max_age)
         if no_search_backfill:
             logger.info("Search index cache backfill disabled (--no-search-backfill)")
         asyncio.get_event_loop().create_task(_periodic_cache_cleanup(no_search_backfill=no_search_backfill))
@@ -1548,7 +1548,7 @@ if __name__ == "__main__":
         '--no-search-backfill', action='store_true',
         help='Skip the periodic (startup, then every 24h) scan of the on-disk '
              'cache for epicrisis/imaging text to backfill into the search '
-             'index (see search_index.py). Cheap on repeat runs — a '
+             'index (see search.py). Cheap on repeat runs — a '
              'persisted cursor limits each scan to files written since the '
              'last one — so this is mainly for a very large cache on first '
              'enable, on slow disk.'

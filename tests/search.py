@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for search_index.py — the local full-text index over epicrisis/
+"""Tests for search.py — the local full-text index over epicrisis/
 imaging report text (no server needed, no Hipocrate network calls).
 
 Plain (synchronous) unittest.TestCase, not IsolatedAsyncioTestCase — see
@@ -20,7 +20,7 @@ import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 
-from search_index import SearchIndex
+from search import SearchIndex
 
 
 def _run(coro):
@@ -34,7 +34,7 @@ class TestSearchIndex(unittest.TestCase):
 
     def setUp(self):
         self._tmpdir = tempfile.TemporaryDirectory()
-        self.db_path = os.path.join(self._tmpdir.name, 'search_index.db')
+        self.db_path = os.path.join(self._tmpdir.name, 'search.db')
         self.index = SearchIndex(self.db_path, max_age_days=30)
 
     def tearDown(self):

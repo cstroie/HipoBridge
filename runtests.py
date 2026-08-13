@@ -33,8 +33,8 @@ from tests.hippoclient_write import (
     TestReportWriteErrors, TestReportValidateErrors, TestCererePerformErrors,
     TestWebJsonResponseEndToEnd,
 )
-from tests.hippobridge_handlers import TestServeSpec, TestGetCacheStats, TestBackfillSearchIndex
-from tests.search_index import TestSearchIndex
+from tests.hippobridge_handlers import TestServeSpec, TestGetCacheStats, TestBackfillSearch
+from tests.search import TestSearchIndex
 from tests.sqlcache import (
     TestRoute, TestSqliteCacheRoundTrip, TestIterEntries, TestCleanup,
     TestStats, TestConcurrency, TestAiCache,
@@ -87,7 +87,7 @@ TEST_GROUPS = {
         TestWebJsonResponseEndToEnd,
         TestServeSpec,
         TestGetCacheStats,
-        TestBackfillSearchIndex,
+        TestBackfillSearch,
         TestSearchIndex,
         TestRoute, TestSqliteCacheRoundTrip, TestIterEntries, TestCleanup,
         TestStats, TestConcurrency, TestAiCache,
@@ -144,8 +144,8 @@ TEST_GROUPS = {
         TestReportWriteErrors, TestReportValidateErrors, TestCererePerformErrors,
         TestWebJsonResponseEndToEnd,
     ],
-    "hippobridge_handlers": [TestServeSpec, TestGetCacheStats, TestBackfillSearchIndex],
-    "search_index": [TestSearchIndex],
+    "hippobridge_handlers": [TestServeSpec, TestGetCacheStats, TestBackfillSearch],
+    "search": [TestSearchIndex],
     "sqlcache": [
         TestRoute, TestSqliteCacheRoundTrip, TestIterEntries, TestCleanup,
         TestStats, TestConcurrency, TestAiCache,

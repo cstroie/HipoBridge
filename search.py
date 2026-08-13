@@ -13,13 +13,13 @@ global, because the actual write hook lives in hippoclient.py's
 HippoClientCheckout/HippoClientImagingStudy.fetch_and_parse() overrides — the
 single choke point shared by both the /api/* and /fhir/* routes that
 construct those clients (the frontend only ever calls the /fhir/* ones).
-hippobridge.py just sets `search_index.instance` in init_app() and reads it
+hippobridge.py just sets `search.instance` in init_app() and reads it
 back for the /api/search/text route and periodic cleanup.
 
 SQLite FTS5, tokenized with unicode61 remove_diacritics 2 so a search for
 "cauza" also matches "cauzâ"/"cauză" as typed inconsistently in Romanian
 clinical text. All blocking sqlite3 calls run via run_in_executor, mirroring
-how urlcache.FilesystemCache is already kept off the event loop.
+how sqlcache.SqliteCache is already kept off the event loop.
 """
 
 import asyncio
@@ -178,7 +178,7 @@ class SearchIndex:
 
     def get_backfill_cursor_sync(self) -> float:
         """Newest cache-file mtime processed by the last cache backfill scan
-        (see hippobridge.py's _backfill_search_index_sync), 0.0 if never run.
+        (see hippobridge.py's _backfill_search_sync), 0.0 if never run.
         Lets a repeat scan walk only files written since then instead of the
         whole disk cache — see urlcache.FilesystemCache.iter_entries()."""
         return self._get_backfill_cursor_sync()

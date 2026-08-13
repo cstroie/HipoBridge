@@ -66,7 +66,7 @@ from collections import OrderedDict
 from extractors import extract_id_from_link, extract_ids_from_links, extract_selected_from_dropdown, extract_text_after_label, extract_text_from_element, extract_value_from_input
 from extractors import parse_cnp, parse_date_time
 from urlcache import URLCache, ParseResultCache
-import search_index
+import search
 import asyncio
 
 # URLs whose content is user-specific or too volatile for long-term persistence.
@@ -2232,9 +2232,9 @@ class HippoClientImagingStudy(HippoClient):
             else:
                 # Single choke point for both /api/study/{id} and
                 # /fhir/ImagingStudy/{id} (the route the frontend actually
-                # uses) — both construct this same client. See search_index.py.
+                # uses) — both construct this same client. See search.py.
                 text = "\n\n".join(s.get("result") for s in studies if s.get("result"))
-                search_index.schedule_index(
+                search.schedule_index(
                     "imaging", str(kwargs.get("id", "")),
                     parsed_data.get("patient.cnp"), parsed_data.get("patient.name"), text)
         return parsed_data
@@ -2724,8 +2724,8 @@ class HippoClientCheckout(HippoClient):
             else:
                 # Single choke point for both /api/checkout/{id} and
                 # /fhir/Encounter/{id}?type=checkout (the route the frontend
-                # actually uses) — both construct this same client. See search_index.py.
-                search_index.schedule_index(
+                # actually uses) — both construct this same client. See search.py.
+                search.schedule_index(
                     "epicrisis", str(kwargs.get("id", "")),
                     parsed_data.get("patient.cnp"), parsed_data.get("patient.name"), epicrisis)
         return parsed_data

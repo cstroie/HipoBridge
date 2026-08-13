@@ -29,7 +29,7 @@ from unittest.mock import patch
 
 import hippobridge
 import hippoclient
-import search_index
+import search
 from hippobridge import serve_spec, get_cache_stats
 from hippodata import HippoData
 
@@ -100,7 +100,7 @@ class TestGetCacheStats(unittest.TestCase):
 
 class _StubFsCacheEntries:
     """Minimal stand-in for urlcache.FilesystemCache — only iter_entries()
-    is used by _backfill_search_index_sync(). Entries are given increasing
+    is used by _backfill_search_sync(). Entries are given increasing
     mtimes (start, start+1, ...) in the order passed, mirroring real cache
     files getting fresher timestamps as they're written, so tests can
     exercise the since_mtime cursor without hardcoding real timestamps."""
@@ -113,14 +113,14 @@ class _StubFsCacheEntries:
                 yield url, content, mtime
 
 
-class TestBackfillSearchIndex(unittest.TestCase):
-    """_backfill_search_index_sync() scans cached pages for checkout/imaging
-    report text (see search_index.py's module docstring for why this hooks
+class TestBackfillSearch(unittest.TestCase):
+    """_backfill_search_sync() scans cached pages for checkout/imaging
+    report text (see search.py's module docstring for why this hooks
     hippoclient.py's parse_data() rather than a hippobridge.py route)."""
 
     def setUp(self):
         self._tmpdir = tempfile.TemporaryDirectory()
-        self.idx = search_index.SearchIndex(os.path.join(self._tmpdir.name, 'search_index.db'))
+        self.idx = search.SearchIndex(os.path.join(self._tmpdir.name, 'search.db'))
 
     def tearDown(self):
         self._tmpdir.cleanup()
@@ -148,7 +148,7 @@ class TestBackfillSearchIndex(unittest.TestCase):
         ])
         with patch.object(hippoclient.HippoClientCheckout, 'parse_data', return_value=self._co_data()), \
              patch.object(hippoclient.HippoClientImagingStudy, 'parse_data', return_value=self._im_data()):
-            result = hippobridge._backfill_search_index_sync(fs, self.idx)
+            result = hippobridge._backfill_search_sync(fs, self.idx)
 
         self.assertEqual(result, {'scanned': 4, 'indexed': 2})
         self.assertEqual(len(_run(self.idx.search('gastroenterita'))), 1)
@@ -159,8 +159,8 @@ class TestBackfillSearchIndex(unittest.TestCase):
             ('http://x/gen_printabile/BiletExternare.asp?RelId=555&RelName=CO', '<html>co</html>'),
         ])
         with patch.object(hippoclient.HippoClientCheckout, 'parse_data', return_value=self._co_data()):
-            first = hippobridge._backfill_search_index_sync(fs, self.idx)
-            second = hippobridge._backfill_search_index_sync(fs, self.idx)
+            first = hippobridge._backfill_search_sync(fs, self.idx)
+            second = hippobridge._backfill_search_sync(fs, self.idx)
 
         self.assertEqual(first, {'scanned': 1, 'indexed': 1})
         # Cursor advanced past this entry's mtime — iter_entries yields
@@ -177,13 +177,13 @@ class TestBackfillSearchIndex(unittest.TestCase):
             ('http://x/gen_printabile/BiletExternare.asp?RelId=555&RelName=CO', '<html>co</html>'),
         ], start=1.0)
         with patch.object(hippoclient.HippoClientCheckout, 'parse_data', return_value=self._co_data()):
-            hippobridge._backfill_search_index_sync(fs1, self.idx)
+            hippobridge._backfill_search_sync(fs1, self.idx)
 
         fs2 = _StubFsCacheEntries([
             ('http://x/gen_printabile/BiletExternare.asp?RelId=555&RelName=CO', '<html>co again</html>'),
         ], start=5.0)  # newer than the cursor left behind by fs1's run
         with patch.object(hippoclient.HippoClientCheckout, 'parse_data') as mock_parse:
-            result = hippobridge._backfill_search_index_sync(fs2, self.idx)
+            result = hippobridge._backfill_search_sync(fs2, self.idx)
 
         self.assertEqual(result, {'scanned': 1, 'indexed': 0})
         mock_parse.assert_not_called()
@@ -193,7 +193,7 @@ class TestBackfillSearchIndex(unittest.TestCase):
             ('http://x/gen_printabile/BiletExternare.asp?RelId=999&RelName=CO', '<html>co</html>'),
         ])
         with patch.object(hippoclient.HippoClientCheckout, 'parse_data', return_value=self._co_data(epicrisis='')):
-            result = hippobridge._backfill_search_index_sync(fs, self.idx)
+            result = hippobridge._backfill_search_sync(fs, self.idx)
         self.assertEqual(result, {'scanned': 1, 'indexed': 0})
 
     def test_parse_failure_on_one_entry_does_not_abort_the_scan(self):
@@ -203,14 +203,14 @@ class TestBackfillSearchIndex(unittest.TestCase):
         ])
         with patch.object(hippoclient.HippoClientCheckout, 'parse_data',
                            side_effect=[RuntimeError("malformed page"), self._co_data()]):
-            result = hippobridge._backfill_search_index_sync(fs, self.idx)
+            result = hippobridge._backfill_search_sync(fs, self.idx)
         self.assertEqual(result, {'scanned': 2, 'indexed': 1})
 
     def test_async_wrapper_noop_when_index_not_configured(self):
-        with patch.object(search_index, 'instance', None):
+        with patch.object(search, 'instance', None):
             # Should not raise even though url_cache.fs_cache may be set —
             # both must be configured.
-            _run(hippobridge._backfill_search_index())
+            _run(hippobridge._backfill_search())
 
 
 if __name__ == "__main__":
