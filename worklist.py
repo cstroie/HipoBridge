@@ -272,6 +272,21 @@ def _name_to_dicom(name: str) -> str:
     return f'{family}^{given}' if given else family
 
 
+def _physician_name_plain(name: str) -> str:
+    """Format a physician name as plain space-separated text ('Dr. Lastname Firstname')
+    instead of DICOM PN caret encoding.
+
+    GE Logiq's worklist console renders the PN caret syntax (e.g.
+    'OSSEBI^GUY BLANCHARD^^DR.') literally instead of reformatting it, so
+    ReferringPhysicianName/RequestingPhysician are sent as plain text here.
+    Source names are already 'Prefix Family Given' order (see _name_to_dicom),
+    so no reordering is needed — just normalise whitespace and title-case.
+    """
+    if not name:
+        return ''
+    return ' '.join(name.split()).title()
+
+
 def _name_parts_to_dicom(family_name: str, given_name: str) -> str:
     """Build DICOM PN 'Family^Given' from Hipocrate's own separate strNume/
     strPrenume fields, with no whitespace-splitting heuristics.
@@ -408,10 +423,17 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
     # 'physician' is populated during enrichment from BuletinSolicitare.asp's
     # "Medic solicitant" (the true orderer), falling back to cerere.asp's
     # "Medic curant" (attending physician) only if no distinct orderer exists.
-    referrer     = _name_to_dicom((patient_info or {}).get('physician') or entry.get('requested_by', ''))
+    referrer     = _physician_name_plain((patient_info or {}).get('physician') or entry.get('requested_by', ''))
     study_uid    = f'1.2.840.99999999.1.{request_id}' if request_id else generate_uid()
     accession    = f"{accession_prefix}{request_id}" if request_id else request_code
 
+    # Alergii (allergies) and Atentie (attention/caution) are both safety
+    # warnings on the Hipocrate patient chart — combined so GE's console
+    # surfaces them together in the MedicalAlerts field.
+    medical_alerts = ' | '.join(p for p in [
+        (patient_info or {}).get('allergies') or '',
+        (patient_info or {}).get('attention') or '',
+    ] if p)[:64]
     justification = ((patient_info or {}).get('justification') or '')[:64]
     section       = ((patient_info or {}).get('section') or '')[:64]
     phone         = ((patient_info or {}).get('phone') or '')[:64]
@@ -424,6 +446,9 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
     comments      = (patient_info or {}).get('comment') or ''
     if email:
         comments = f'Email: {email}' + (f'\n{comments}' if comments else '')
+    for extra in ((patient_info or {}).get('observations'), (patient_info or {}).get('anamnesis')):
+        if extra:
+            comments = f'{comments}\n{extra}' if comments else extra
     admission_id  = (patient_info or {}).get('admission_id') or hippo_id or request_id
 
     other_ids = None
@@ -454,12 +479,14 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
         if weight:
             ds.PatientWeight = weight
         ds.PatientComments = comments
+        ds.MedicalAlerts = medical_alerts
         ds.AdmissionID = admission_id
         if other_ids is not None:
             ds.OtherPatientIDsSequence = other_ids
 
         ds.AccessionNumber               = accession
         ds.ReferringPhysicianName        = referrer
+        ds.RequestingPhysician           = referrer
         ds.RequestedProcedureDescription = exam_name
         ds.RequestedProcedureID          = f'{request_id}-{idx}' if multi else request_id
         ds.StudyInstanceUID              = study_uid
@@ -952,6 +979,10 @@ class WorklistRefresher:
                 'email':         patient_data.get('patient.email'),
                 'weight':        patient_data.get('patient.weight'),
                 'height':        patient_data.get('patient.height'),
+                'allergies':     patient_data.get('patient.allergies'),
+                'attention':     patient_data.get('patient.attention'),
+                'observations':  patient_data.get('patient.observations'),
+                'anamnesis':     patient_data.get('patient.anamnesis'),
                 'comment':       cerere_data.get('request.clinical_indication') or cerere_data.get('request.diagnosis'),
                 'admission_id':  admission_id,
             }
