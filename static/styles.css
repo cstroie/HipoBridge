@@ -2616,7 +2616,7 @@ select {
 
 /* Inline variant for cards embedded inside another card (epicrisis,
    imaging, lab) — drops the centered max-width of the standalone version. */
-.ai-summary-card.ai-card--inline {
+.ai-summary-card.ai-card-inline {
     max-width: none;
     margin: 0 0 var(--space-16);
 }
@@ -3204,14 +3204,14 @@ select {
     overflow: hidden;
 }
 
-.epi-card--active {
+.epi-card-active {
     border-color: color-mix(in srgb, var(--success) 40%, var(--border));
     box-shadow: inset 3px 0 0 var(--success);
 }
 
-.epi-card--active .epi-dot { background: var(--success); }
+.epi-card-active .epi-dot { background: var(--success); }
 
-.epi-nights--active {
+.epi-nights-active {
     color: var(--success);
     font-weight: var(--font-weight-semibold);
 }
@@ -3346,7 +3346,7 @@ select {
     padding: var(--space-10) var(--space-12);
 }
 
-.epi-prose--empty {
+.epi-prose-empty {
     text-align: center;
 }
 .epi-empty {
@@ -3439,7 +3439,7 @@ dialog.modal article > header h2 {
 
 dialog.modal article > header h2 i { color: var(--primary); }
 
-dialog.modal .close {
+dialog.modal .close, dialog.report-modal .close {
     background: none;
     border: none;
     cursor: pointer;
@@ -3452,7 +3452,7 @@ dialog.modal .close {
     flex-shrink: 0;
 }
 
-dialog.modal .close:hover { color: var(--text); background: var(--hover-bg); }
+dialog.modal .close:hover, dialog.report-modal .close:hover { color: var(--text); background: var(--hover-bg); }
 
 dialog.modal article > div {
     flex: 1;
@@ -3564,21 +3564,6 @@ dialog.modal article > footer {
     color: var(--ink-2);
     margin: var(--space-2) 0 0;
 }
-
-.report-modal-close {
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: var(--text-light);
-    font-size: var(--font-size-lg);
-    padding: var(--space-4);
-    border-radius: var(--radius-sm);
-    line-height: 1;
-    transition: color var(--transition-fast), background var(--transition-fast);
-    flex-shrink: 0;
-}
-
-.report-modal-close:hover { color: var(--text); background: var(--hover-bg); }
 
 .report-modal-referrer {
     display: flex;

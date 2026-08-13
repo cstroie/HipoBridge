@@ -1622,7 +1622,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function makeAiCard(inline) {
         const card = document.getElementById('ai-card-template').content
             .firstElementChild.cloneNode(true);
-        if (inline) card.classList.add('ai-card--inline');
+        if (inline) card.classList.add('ai-card-inline');
         return card;
     }
 
@@ -5217,7 +5217,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const isOpen = index === 0;
             const card = document.importNode(document.getElementById('epi-card-template').content, true).firstElementChild;
             if (isOpen) card.classList.add('epi-card-open');
-            if (item.active) card.classList.add('epi-card--active');
+            if (item.active) card.classList.add('epi-card-active');
             card.id = `epicrisis-${item.checkoutId}`;
             card.dataset.markdown = `# ${heading}\n\n`
                 + (meta.length ? `${meta.join(' · ')}  \n\n` : '')
@@ -5236,7 +5236,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const icdBadge = card.querySelector('.epi-icd-badge');
             if (icd) { icdBadge.textContent = icd; } else { icdBadge.remove(); }
             const nightsSpan = card.querySelector('.epi-nights');
-            if (item.active) { nightsSpan.textContent = 'Ongoing'; nightsSpan.classList.add('epi-nights--active'); }
+            if (item.active) { nightsSpan.textContent = 'Ongoing'; nightsSpan.classList.add('epi-nights-active'); }
             else if (nights) { nightsSpan.textContent = nights; }
             else { nightsSpan.remove(); }
             if (isOpen) chevron.className = 'fas fa-chevron-up epi-chevron';
@@ -5258,7 +5258,7 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 const prose = card.querySelector('.epi-prose');
                 prose.innerHTML = '<p class="epi-empty">— no content —</p>';
-                prose.classList.add('epi-prose--empty');
+                prose.classList.add('epi-prose-empty');
                 card.querySelector('.card-toolbar').hidden = true;
             }
 
@@ -5407,8 +5407,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         // Wire up close / load buttons before showing
-        modal.querySelector('.report-modal-close').addEventListener('click', () => modal.close());
-        modal.querySelector('[data-close-modal]').addEventListener('click', () => modal.close());
+        modal.querySelectorAll('[data-close-modal], .close').forEach(btn => btn.addEventListener('click', () => modal.close()));
         modal.addEventListener('close', () => document.body.removeChild(modal));
         modal.querySelector('.btn-modal-load-patient').addEventListener('click', () => {
             modal.close();
