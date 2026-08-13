@@ -2303,9 +2303,9 @@ class HippoClientImagingStudy(HippoClient):
                 fhir_imaging_study["performer"] = [{"actor": {"display": performer_name}}]
 
             # Add referrer if requesting medic is available
-            if parsed_data.get("request.medic"):
+            if parsed_data.get("checkin.medic"):
                 fhir_imaging_study["referrer"] = {
-                    "display": parsed_data.get("request.medic")
+                    "display": parsed_data.get("checkin.medic")
                 }
 
             # Add series for each study
@@ -2602,7 +2602,7 @@ class HippoClientDiagnosticReport(HippoClient):
             extensions = []
 
             # Add requester information
-            requester = parsed_data.get("request.medic")
+            requester = parsed_data.get("checkin.medic")
             if requester:
                 extensions.append({
                     "url": f"{http_request.scheme}://{http_request.host}/fhir/StructureDefinition/diagnostic-report-requester" if http_request else "http://example.com/fhir/StructureDefinition/diagnostic-report-requester",
