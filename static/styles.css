@@ -4420,7 +4420,6 @@ dialog.report-editor-modal article > section {
     .episode-header,
     .trends-header {
         margin-bottom: var(--space-16);
-        flex-wrap: wrap;
     }
 
     .report-card {
@@ -4432,18 +4431,30 @@ dialog.report-editor-modal article > section {
         gap: var(--space-10);
     }
 
-    /* When the header wraps, keep the AI/copy pill pinned to the right
-       instead of it landing flush against the left edge on its own line.
-       min-width:0 on the text side (added for episode-header/trends-header
-       alongside report-header/epicrisis-header) stops being load-bearing
-       once the row wraps — the heading gets the full row width on its own
-       line instead — but stays as a safety net just above this breakpoint. */
+    /* Icon-only buttons (see .card-toolbar rules above) are compact enough
+       to sit beside the heading instead of dropping to their own row —
+       override the general mobile .card-toolbar treatment (width:100%,
+       buttons flex:1 to split that width) so these header toolbars stay a
+       small pill on the right instead. min-width:0 on the heading side
+       (.report-header/.epicrisis-header/.episode-header/.trends-header's
+       text block, set above/near each's base rule) is what actually lets
+       the heading shrink or wrap if the two still don't both fit. */
     .report-header .card-toolbar,
     .epicrisis-header .card-toolbar,
     .episode-header .card-toolbar,
     .trends-header .card-toolbar {
-        margin-left: auto;
-        align-self: flex-end;
+        width: auto;
+        flex-shrink: 0;
+    }
+    .report-header .card-toolbar .btn-ai,
+    .report-header .card-toolbar .copy-md-btn,
+    .epicrisis-header .card-toolbar .btn-ai,
+    .epicrisis-header .card-toolbar .copy-md-btn,
+    .episode-header .card-toolbar .btn-ai,
+    .episode-header .card-toolbar .copy-md-btn,
+    .trends-header .card-toolbar .btn-ai,
+    .trends-header .card-toolbar .copy-md-btn {
+        flex: 0 0 auto;
     }
 
     .stat-pill-label {
