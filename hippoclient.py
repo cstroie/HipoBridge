@@ -3605,6 +3605,15 @@ class HippoClientCerere(HippoClient):
             if ta:
                 data.store("request.clinical_indication", ta.get_text(strip=True))
 
+            # Reason for request / special indications (new textareas under the
+            # "Situatie clinica" section, not yet wired into the MWL output).
+            ta = soup.find('textarea', {'name': 'MotivSolicitare'})
+            if ta:
+                data.store("request.reason", ta.get_text(strip=True))
+            ta = soup.find('textarea', {'name': 'IndicatiiSpeciale'})
+            if ta:
+                data.store("request.special_indications", ta.get_text(strip=True))
+
             # Request code, laboratory, and status from the header div
             # The div contains nested <p> tags so we use get_text() not string=
             # "Cerere paraclinic ET6987 / Laborator : Ecografie / ... / Status : Terminata"
