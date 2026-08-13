@@ -5050,6 +5050,7 @@ class HippoClientSchedule(HippoClient):
                                      "display": req.get('payment_type')}],
                         ) if req.get('payment_type') else None,
                     ] if c] or None,
+                    quantityQuantity={"value": req.get('analysis_count')} if req.get('analysis_count') else None,
                     authoredOn=req.get('date_time'),
                     requester=FHIRReference(display=req.get('requested_by')) if req.get('requested_by') else None,
                     note=[{"text": req.get('section')}] if req.get('section') else None,

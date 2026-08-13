@@ -6054,6 +6054,21 @@ document.addEventListener('DOMContentLoaded', function() {
         regionLine._requesterEl = metaRequesterEl;
         regionLine._requesterSep = seps[1] || null;
 
+        // Analysis count ("Numar analize") — available immediately from the
+        // same listing fetch as everything else above (no lazy fetch needed
+        // for this one, unlike region/indication/true-orderer). Only shown
+        // above 1: most requests carry a single analysis, so a "1" badge on
+        // every row would be noise rather than signal.
+        const metaCountEl = row.querySelector('.timeline-meta-count');
+        const analysisCount = r.quantityQuantity?.value;
+        if (analysisCount && analysisCount > 1) {
+            metaCountEl.querySelector('span').textContent = `${analysisCount} analyses`;
+            metaCountEl.hidden = false;
+        } else {
+            metaCountEl.remove();
+            seps[2]?.remove();
+        }
+
         const codeBtn = row.querySelector('.timeline-code');
         codeBtn.textContent = requestCode;
         codeBtn.title = `View request details (${requestCode})`;
