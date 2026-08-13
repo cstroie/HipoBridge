@@ -1274,26 +1274,34 @@ def _url_param(url: str, name: str) -> Optional[str]:
     return (parse_qs(urlparse(url).query).get(name) or [None])[0]
 
 def _backfill_search_index_sync(fs_cache: FilesystemCache, idx) -> dict:
-    """Blocking: scan every cached page for checkout/imaging report text and
-    index anything not already in the search index (see search_index.py).
+    """Blocking: scan cached pages written since the last backfill run for
+    checkout/imaging report text, and index anything not already in the
+    search index (see search_index.py).
 
-    Runs once at startup in a background thread (see init_app) so a large
-    cache never delays the server coming up — mainly useful the first time
-    this feature is enabled against an already-populated disk cache, but
-    cheap to repeat on every startup afterwards: already-indexed
-    (kind, source_id) pairs are skipped without re-parsing their HTML.
+    Runs in a background thread (see _periodic_cache_cleanup below) so a
+    large cache never delays the server or blocks a request — mainly useful
+    the first time this feature is enabled against an already-populated
+    disk cache, but cheap to repeat regularly afterwards: the persisted
+    backfill cursor (idx.get/set_backfill_cursor_sync) means a repeat run
+    only walks files written since last time instead of the whole cache
+    dir, and already-indexed (kind, source_id) pairs are skipped without
+    re-parsing their HTML even among those.
 
     Client instances are constructed with request=None purely to call their
     parse_data() (pure HTML parsing, no network/session use) — never
     fetch_and_parse(), so no credentials or live Hipocrate access needed.
     """
     existing = idx.indexed_keys_sync()
+    cursor = idx.get_backfill_cursor_sync()
     checkout_client = HippoClientCheckout(SERVICE_URL, None)
     imaging_client = HippoClientImagingStudy(SERVICE_URL, None)
     scanned = 0
     indexed = 0
-    for url, content in fs_cache.iter_entries():
+    newest_mtime = cursor
+    for url, content, mtime in fs_cache.iter_entries(since_mtime=cursor):
         scanned += 1
+        if mtime > newest_mtime:
+            newest_mtime = mtime
         try:
             if '/gen_printabile/BiletExternare.asp' in url:
                 rel_id = _url_param(url, 'RelId')
@@ -1318,10 +1326,14 @@ def _backfill_search_index_sync(fs_cache: FilesystemCache, idx) -> dict:
                     indexed += 1
         except Exception as exc:
             logger.warning(f"Search index backfill: failed to parse cached page {url}: {exc}")
+    if newest_mtime > cursor:
+        idx.set_backfill_cursor_sync(newest_mtime)
     return {'scanned': scanned, 'indexed': indexed}
 
 async def _backfill_search_index():
-    """Async wrapper: offload the blocking scan above to a thread, once, at startup."""
+    """Async wrapper: offload the blocking scan above to a thread. Called
+    from _periodic_cache_cleanup's loop (once at startup, then every 24h) —
+    not a separate timer, since the cursor already makes repeat runs cheap."""
     if url_cache.fs_cache is None or search_index.instance is None:
         return
     try:
@@ -1332,9 +1344,13 @@ async def _backfill_search_index():
     except Exception as exc:
         logger.warning(f"Search index backfill failed: {exc}")
 
-async def _periodic_cache_cleanup():
-    """Background task: run FilesystemCache.cleanup() (and SearchIndex.cleanup(),
-    if enabled) once at startup then every 24 h."""
+async def _periodic_cache_cleanup(no_search_backfill: bool = False):
+    """Background task: run FilesystemCache.cleanup(), SearchIndex.cleanup(),
+    and the search-index cache backfill (unless disabled) once at startup
+    then every 24 h. The backfill rides along on this same 24h cadence
+    rather than getting its own timer — its persisted cursor (see
+    _backfill_search_index_sync) makes repeat runs cheap enough that a
+    separate schedule isn't worth the extra moving part."""
     while True:
         if url_cache.fs_cache is not None:
             try:
@@ -1350,6 +1366,8 @@ async def _periodic_cache_cleanup():
                 logger.info(f"Periodic search index cleanup: {result['deleted']} documents deleted")
             except Exception as exc:
                 logger.warning(f"Periodic search index cleanup failed: {exc}")
+            if not no_search_backfill:
+                await _backfill_search_index()
         await asyncio.sleep(86400)
 
 async def on_cleanup(app):
@@ -1417,9 +1435,7 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
             os.path.join(cache_dir, 'search_index.db'), max_age_days=cache_max_age)
         if no_search_backfill:
             logger.info("Search index cache backfill disabled (--no-search-backfill)")
-        else:
-            asyncio.get_event_loop().create_task(_backfill_search_index())
-        asyncio.get_event_loop().create_task(_periodic_cache_cleanup())
+        asyncio.get_event_loop().create_task(_periodic_cache_cleanup(no_search_backfill=no_search_backfill))
     elif no_disk_cache and cache_dir:
         logger.info("Persistent filesystem cache disabled (--no-disk-cache)")
     else:
@@ -1524,10 +1540,12 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         '--no-search-backfill', action='store_true',
-        help='Skip the startup scan of the on-disk cache for epicrisis/imaging '
-             'text to backfill into the search index (see search_index.py). '
-             'The scan is cheap on repeat runs (already-indexed pages are '
-             'skipped) — this is mainly for a very large cache on a slow disk.'
+        help='Skip the periodic (startup, then every 24h) scan of the on-disk '
+             'cache for epicrisis/imaging text to backfill into the search '
+             'index (see search_index.py). Cheap on repeat runs — a '
+             'persisted cursor limits each scan to files written since the '
+             'last one — so this is mainly for a very large cache on first '
+             'enable, on slow disk.'
     )
     parser.add_argument(
         '--pidfile', metavar='PATH',

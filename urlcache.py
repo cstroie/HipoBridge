@@ -133,16 +133,22 @@ class FilesystemCache:
         logger.info(f"FS cache cleanup: deleted {deleted} files ({freed} bytes)")
         return {'deleted': deleted, 'freed_bytes': freed}
 
-    def iter_entries(self):
-        """Yield (url, content) for every non-expired cache entry.
+    def iter_entries(self, since_mtime: float = 0.0):
+        """Yield (url, content, mtime) for every non-expired cache entry
+        written since since_mtime (default 0.0 — everything).
 
         Blocking — same as cleanup()/stats() above, callers already offload
-        this to a thread. Used by hippobridge.py's startup search-index
-        backfill to find previously-cached checkout/imaging pages.
+        this to a thread. Used by hippobridge.py's periodic search-index
+        backfill to find previously-cached checkout/imaging pages; the
+        since_mtime cursor (persisted by the caller) turns repeat runs from
+        "walk the whole cache dir" into "walk only what's new since last time".
         """
         now = datetime.now(timezone.utc).timestamp()
         for path in self._root.rglob('*.json'):
             try:
+                mtime = path.stat().st_mtime
+                if mtime <= since_mtime:
+                    continue
                 data = json.loads(path.read_text(encoding='utf-8'))
             except Exception:
                 continue
@@ -150,7 +156,7 @@ class FilesystemCache:
                 continue
             url, content = data.get('url'), data.get('content')
             if url and content:
-                yield url, content
+                yield url, content, mtime
 
     def stats(self) -> dict:
         """Return aggregate statistics about the cache directory."""

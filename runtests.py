@@ -35,6 +35,7 @@ from tests.hippoclient_write import (
 )
 from tests.hippobridge_handlers import TestServeSpec, TestGetCacheStats, TestBackfillSearchIndex
 from tests.search_index import TestSearchIndex
+from tests.urlcache import TestFilesystemCacheIterEntries
 
 # Configuration
 BASE_URL = "http://localhost:44660"
@@ -85,6 +86,7 @@ TEST_GROUPS = {
         TestGetCacheStats,
         TestBackfillSearchIndex,
         TestSearchIndex,
+        TestFilesystemCacheIterEntries,
     ],
     "root": [test_root_endpoint],
     "auth": [
@@ -140,6 +142,7 @@ TEST_GROUPS = {
     ],
     "hippobridge_handlers": [TestServeSpec, TestGetCacheStats, TestBackfillSearchIndex],
     "search_index": [TestSearchIndex],
+    "urlcache": [TestFilesystemCacheIterEntries],
 }
 
 async def run_tests(test_list) -> None:

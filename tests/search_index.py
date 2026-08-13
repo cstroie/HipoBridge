@@ -124,6 +124,16 @@ class TestSearchIndex(unittest.TestCase):
         result = _run(self.index.cleanup())
         self.assertEqual(result['deleted'], 1)
 
+    def test_backfill_cursor_defaults_to_zero(self):
+        self.assertEqual(self.index.get_backfill_cursor_sync(), 0.0)
+
+    def test_backfill_cursor_round_trip(self):
+        self.index.set_backfill_cursor_sync(12345.5)
+        self.assertEqual(self.index.get_backfill_cursor_sync(), 12345.5)
+        # Setting again should update in place, not error on the PK conflict.
+        self.index.set_backfill_cursor_sync(99999.0)
+        self.assertEqual(self.index.get_backfill_cursor_sync(), 99999.0)
+
 
 if __name__ == '__main__':
     unittest.main()

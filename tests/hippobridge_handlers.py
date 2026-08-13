@@ -100,12 +100,17 @@ class TestGetCacheStats(unittest.TestCase):
 
 class _StubFsCacheEntries:
     """Minimal stand-in for urlcache.FilesystemCache — only iter_entries()
-    is used by _backfill_search_index_sync()."""
-    def __init__(self, entries):
-        self._entries = entries
+    is used by _backfill_search_index_sync(). Entries are given increasing
+    mtimes (start, start+1, ...) in the order passed, mirroring real cache
+    files getting fresher timestamps as they're written, so tests can
+    exercise the since_mtime cursor without hardcoding real timestamps."""
+    def __init__(self, entries, start=1.0):
+        self._entries = [(url, content, start + i) for i, (url, content) in enumerate(entries)]
 
-    def iter_entries(self):
-        yield from self._entries
+    def iter_entries(self, since_mtime=0.0):
+        for url, content, mtime in self._entries:
+            if mtime > since_mtime:
+                yield url, content, mtime
 
 
 class TestBackfillSearchIndex(unittest.TestCase):
@@ -149,7 +154,7 @@ class TestBackfillSearchIndex(unittest.TestCase):
         self.assertEqual(len(_run(self.idx.search('gastroenterita'))), 1)
         self.assertEqual(len(_run(self.idx.search('abdomen'))), 1)
 
-    def test_repeat_run_skips_already_indexed(self):
+    def test_repeat_run_advances_cursor_so_theres_nothing_left_to_scan(self):
         fs = _StubFsCacheEntries([
             ('http://x/gen_printabile/BiletExternare.asp?RelId=555&RelName=CO', '<html>co</html>'),
         ])
@@ -158,7 +163,30 @@ class TestBackfillSearchIndex(unittest.TestCase):
             second = hippobridge._backfill_search_index_sync(fs, self.idx)
 
         self.assertEqual(first, {'scanned': 1, 'indexed': 1})
-        self.assertEqual(second, {'scanned': 1, 'indexed': 0})
+        # Cursor advanced past this entry's mtime — iter_entries yields
+        # nothing at all on the second pass, not just "skipped after scan".
+        self.assertEqual(second, {'scanned': 0, 'indexed': 0})
+
+    def test_already_indexed_entry_skipped_without_reparsing_even_if_rescanned(self):
+        # A file that's already indexed but shows up again with a newer
+        # mtime (e.g. Hipocrate re-served the same unchanged page) should
+        # still be scanned (the cursor doesn't filter it out) but must not
+        # be re-parsed/re-indexed — the existing-keys check should short-
+        # circuit before parse_data() is ever called.
+        fs1 = _StubFsCacheEntries([
+            ('http://x/gen_printabile/BiletExternare.asp?RelId=555&RelName=CO', '<html>co</html>'),
+        ], start=1.0)
+        with patch.object(hippoclient.HippoClientCheckout, 'parse_data', return_value=self._co_data()):
+            hippobridge._backfill_search_index_sync(fs1, self.idx)
+
+        fs2 = _StubFsCacheEntries([
+            ('http://x/gen_printabile/BiletExternare.asp?RelId=555&RelName=CO', '<html>co again</html>'),
+        ], start=5.0)  # newer than the cursor left behind by fs1's run
+        with patch.object(hippoclient.HippoClientCheckout, 'parse_data') as mock_parse:
+            result = hippobridge._backfill_search_index_sync(fs2, self.idx)
+
+        self.assertEqual(result, {'scanned': 1, 'indexed': 0})
+        mock_parse.assert_not_called()
 
     def test_empty_epicrisis_is_not_indexed(self):
         fs = _StubFsCacheEntries([

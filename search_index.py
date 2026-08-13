@@ -45,6 +45,10 @@ CREATE TABLE IF NOT EXISTS documents (
 CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
     text, tokenize="unicode61 remove_diacritics 2"
 );
+CREATE TABLE IF NOT EXISTS meta (
+    key TEXT PRIMARY KEY,
+    value TEXT
+);
 """
 
 # FTS5 query-syntax characters that would otherwise be interpreted as
@@ -122,6 +126,25 @@ class SearchIndex:
         finally:
             con.close()
 
+    def _get_backfill_cursor_sync(self) -> float:
+        con = self._connect()
+        try:
+            row = con.execute("SELECT value FROM meta WHERE key = 'backfill_cursor'").fetchone()
+            return float(row[0]) if row else 0.0
+        finally:
+            con.close()
+
+    def _set_backfill_cursor_sync(self, mtime: float) -> None:
+        con = self._connect()
+        try:
+            con.execute(
+                "INSERT INTO meta(key, value) VALUES ('backfill_cursor', ?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                (str(mtime),))
+            con.commit()
+        finally:
+            con.close()
+
     def _cleanup_sync(self, max_age_days: int) -> dict:
         if max_age_days <= 0:
             return {'deleted': 0}
@@ -152,6 +175,17 @@ class SearchIndex:
     def indexed_keys_sync(self) -> set:
         """Synchronous counterpart to indexed_keys()."""
         return self._indexed_keys_sync()
+
+    def get_backfill_cursor_sync(self) -> float:
+        """Newest cache-file mtime processed by the last cache backfill scan
+        (see hippobridge.py's _backfill_search_index_sync), 0.0 if never run.
+        Lets a repeat scan walk only files written since then instead of the
+        whole disk cache — see urlcache.FilesystemCache.iter_entries()."""
+        return self._get_backfill_cursor_sync()
+
+    def set_backfill_cursor_sync(self, mtime: float) -> None:
+        """Persist the backfill cursor (see get_backfill_cursor_sync)."""
+        self._set_backfill_cursor_sync(mtime)
 
     # ── async public API ──
 
