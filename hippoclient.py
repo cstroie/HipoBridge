@@ -65,7 +65,7 @@ from collections import OrderedDict
 
 from extractors import extract_id_from_link, extract_ids_from_links, extract_selected_from_dropdown, extract_text_after_label, extract_text_from_element, extract_value_from_input
 from extractors import parse_cnp, parse_date_time
-from urlcache import URLCache, FilesystemCache, ParseResultCache
+from urlcache import URLCache, ParseResultCache
 import search_index
 import asyncio
 
@@ -75,6 +75,8 @@ _NO_PERSIST_PATTERNS = (
     '/Template/menu.asp',      # whoami — user-specific content on a shared URL
     '/files/search.asp',       # patient search — ephemeral query results
     '/PARA/NOM/Listare/?id=',  # schedule listing — refreshed on demand
+    'Listare/Rezultate.asp?from=Popup',  # ReportWrite form probe — guid-salted, never a repeat hit
+    '/LISTARE/Ajax_Cerere.asp',          # ReportValidate — guid-salted, never a repeat hit
 )
 
 from markdown import html_to_markdown
@@ -684,9 +686,7 @@ class HippoClient:
                     async with self.session.post(url, headers=post_headers) as response:
                         response_text = await self.handle_response_encoding(response)
                         logger.debug(f"POST response status: {response.status}")
-            text = html.unescape(response_text)
-            text = re.sub(r'\r\n|\r', '\n', text)
-            text = re.sub(r'[ \t]+', ' ', text)
+            text = re.sub(r'\s+', ' ', html.unescape(response_text))
             return text
 
         # Verify the caller's own credentials are valid *before* touching the

@@ -1564,8 +1564,8 @@
     },
     "/api/cache/stats": {
       "get": {
-        "summary": "Filesystem cache statistics",
-        "description": "Returns entry count, total size, and age range of the on-disk HTTP cache. {\"enabled\": false} when no cache.dir is configured.",
+        "summary": "Disk cache statistics",
+        "description": "Returns entry count, total size, age range, and a by_table breakdown (entries per endpoint kind, e.g. cache_patient/cache_checkout/...) of the on-disk SQLite HTTP cache. {\"enabled\": false} when no cache.dir is configured.",
         "responses": {
           "200": {"description": "Cache statistics"},
           "401": {"description": "Authentication required"}
@@ -1574,8 +1574,8 @@
     },
     "/api/cache/cleanup": {
       "post": {
-        "summary": "Trigger a filesystem cache cleanup",
-        "description": "Deletes expired/oversized entries from the on-disk HTTP cache and returns counts. No-op ({\"enabled\": false}) when no cache.dir is configured.",
+        "summary": "Trigger a disk cache cleanup",
+        "description": "Deletes expired/oversized entries from the on-disk SQLite HTTP cache and returns counts. No-op ({\"enabled\": false}) when no cache.dir is configured.",
         "responses": {
           "200": {"description": "Cleanup result (deleted count, freed bytes)"},
           "401": {"description": "Authentication required"}

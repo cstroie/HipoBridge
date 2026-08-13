@@ -6,8 +6,11 @@ This module provides a two-tier cache for HTTP responses:
   L1 — URLCache: in-memory LRU with short TTL (default 30 min) and asyncio
        stampede prevention.  Fast, but lost on restart.
 
-  L2 — FilesystemCache: persistent on-disk cache with long TTL (default 7 days).
-       Survives restarts; optional (disabled when no cache directory is configured).
+  L2 — a persistent backing store, attached via the ``fs_cache`` attribute
+       (see sqlcache.py's SqliteCache).  Survives restarts; optional
+       (disabled when no cache directory is configured).  Duck-typed:
+       anything exposing get(url)/put(url, text)/remove(url) can be
+       attached, decoupling URLCache from any specific L2 implementation.
 
 When L2 is attached to URLCache, a cache miss in L1 is followed by an L2 lookup.
 A hit in L2 warms L1 so subsequent requests stay in memory.  Both tiers are
@@ -18,181 +21,10 @@ import asyncio
 from collections import OrderedDict
 import copy
 from datetime import datetime, timezone
-from hashlib import md5
-import json
 import logging
-import os
-from pathlib import Path
 from typing import Any, Optional
 
 logger = logging.getLogger('URLCache')
-
-
-class FilesystemCache:
-    """Persistent on-disk cache keyed by URL, stored as JSON files.
-
-    Directory layout: <root>/<ab>/<cd>/<md5hex>.json
-    where ab/cd are the first two byte pairs of the MD5 digest (hex).
-
-    Each file contains:
-        {"url": "...", "cached_at": <unix_ts>, "expires_at": <unix_ts>, "content": "..."}
-    """
-
-    def __init__(self, cache_dir: str, ttl: int = 7 * 86400, max_age_days: int = 30):
-        """
-        Args:
-            cache_dir:    Root directory for cache files.  Created on first use.
-            ttl:          Time-to-live in seconds (default: 7 days).
-            max_age_days: Hard upper bound on file age for cleanup(); files older
-                          than this are deleted even if not yet expired.  0 = no
-                          hard limit (default: 30).
-        """
-        self._root = Path(cache_dir)
-        self.ttl = ttl
-        self.max_age_days = max_age_days
-        self._root.mkdir(parents=True, exist_ok=True)
-        logger.info(f"FilesystemCache initialised at {self._root} (TTL {ttl}s, max_age {max_age_days}d)")
-
-    def _path(self, url: str) -> Path:
-        h = md5(url.encode()).hexdigest()
-        return self._root / h[:2] / h[2:4] / (h + '.json')
-
-    def get(self, url: str) -> Optional[str]:
-        """Return cached content for url, or None if absent or expired."""
-        path = self._path(url)
-        if not path.exists():
-            return None
-        try:
-            data = json.loads(path.read_text(encoding='utf-8'))
-            if data.get('expires_at', 0) < datetime.now(timezone.utc).timestamp():
-                path.unlink(missing_ok=True)
-                logger.debug(f"FS cache expired: {url}")
-                return None
-            logger.debug(f"FS cache hit: {url}")
-            return data.get('content')
-        except Exception as exc:
-            logger.warning(f"FS cache read error for {url}: {exc}")
-            return None
-
-    def put(self, url: str, text: str) -> None:
-        """Write url → text to the filesystem cache."""
-        path = self._path(url)
-        now = datetime.now(timezone.utc).timestamp()
-        data = {
-            'url': url,
-            'cached_at': now,
-            'expires_at': now + self.ttl,
-            'content': text,
-        }
-        try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
-            logger.debug(f"FS cache stored: {url}")
-        except Exception as exc:
-            logger.warning(f"FS cache write error for {url}: {exc}")
-
-    def remove(self, url: str) -> None:
-        """Delete the cache file for url (no-op if absent)."""
-        try:
-            self._path(url).unlink(missing_ok=True)
-        except Exception as exc:
-            logger.warning(f"FS cache remove error for {url}: {exc}")
-
-    def cleanup(self, max_age_days: Optional[int] = None) -> dict:
-        """Delete expired (and optionally aged-out) cache files.
-
-        Args:
-            max_age_days: Also delete files older than this many days regardless
-                          of their expires_at value.  None uses the instance
-                          default (self.max_age_days); 0 = no hard age cap.
-
-        Returns:
-            dict with keys 'deleted' (count) and 'freed_bytes' (approx).
-        """
-        if max_age_days is None:
-            max_age_days = self.max_age_days
-        now = datetime.now(timezone.utc).timestamp()
-        hard_cutoff = (now - max_age_days * 86400) if max_age_days else None
-        deleted = 0
-        freed = 0
-        for path in self._root.rglob('*.json'):
-            try:
-                stat = path.stat()
-                expired = False
-                try:
-                    data = json.loads(path.read_text(encoding='utf-8'))
-                    expired = data.get('expires_at', 0) < now
-                except Exception:
-                    expired = True  # unreadable → delete
-                if expired or (hard_cutoff and stat.st_mtime < hard_cutoff):
-                    freed += stat.st_size
-                    path.unlink(missing_ok=True)
-                    deleted += 1
-            except Exception as exc:
-                logger.warning(f"FS cache cleanup error on {path}: {exc}")
-        logger.info(f"FS cache cleanup: deleted {deleted} files ({freed} bytes)")
-        return {'deleted': deleted, 'freed_bytes': freed}
-
-    def iter_entries(self, since_mtime: float = 0.0):
-        """Yield (url, content, mtime) for every non-expired cache entry
-        written since since_mtime (default 0.0 — everything).
-
-        Blocking — same as cleanup()/stats() above, callers already offload
-        this to a thread. Used by hippobridge.py's periodic search-index
-        backfill to find previously-cached checkout/imaging pages; the
-        since_mtime cursor (persisted by the caller) turns repeat runs from
-        "walk the whole cache dir" into "walk only what's new since last time".
-        """
-        now = datetime.now(timezone.utc).timestamp()
-        for path in self._root.rglob('*.json'):
-            try:
-                mtime = path.stat().st_mtime
-                if mtime <= since_mtime:
-                    continue
-                data = json.loads(path.read_text(encoding='utf-8'))
-            except Exception:
-                continue
-            if data.get('expires_at', 0) < now:
-                continue
-            url, content = data.get('url'), data.get('content')
-            if url and content:
-                yield url, content, mtime
-
-    def stats(self) -> dict:
-        """Return aggregate statistics about the cache directory."""
-        entries = 0
-        size_bytes = 0
-        oldest: Optional[float] = None
-        newest: Optional[float] = None
-        expired = 0
-        now = datetime.now(timezone.utc).timestamp()
-        for path in self._root.rglob('*.json'):
-            try:
-                stat = path.stat()
-                entries += 1
-                size_bytes += stat.st_size
-                mtime = stat.st_mtime
-                if oldest is None or mtime < oldest:
-                    oldest = mtime
-                if newest is None or mtime > newest:
-                    newest = mtime
-                try:
-                    data = json.loads(path.read_text(encoding='utf-8'))
-                    if data.get('expires_at', 0) < now:
-                        expired += 1
-                except Exception:
-                    expired += 1
-            except Exception:
-                pass
-        return {
-            'entries': entries,
-            'expired': expired,
-            'size_bytes': size_bytes,
-            'oldest': datetime.fromtimestamp(oldest, tz=timezone.utc).isoformat() if oldest else None,
-            'newest': datetime.fromtimestamp(newest, tz=timezone.utc).isoformat() if newest else None,
-            'cache_dir': str(self._root),
-            'ttl_seconds': self.ttl,
-        }
 
 
 class URLCache:
@@ -202,9 +34,10 @@ class URLCache:
     coroutine, subsequent requests for the same URL wait for the in-flight result
     rather than issuing redundant upstream requests.
 
-    If a FilesystemCache is attached (via the fs_cache attribute), it is used as
-    an L2 backing store: misses in L1 fall through to L2, and writes to L1 are
-    optionally mirrored to L2 (controlled by the persist= parameter on put()).
+    If a duck-typed L2 backing store is attached (via the fs_cache attribute,
+    see sqlcache.py's SqliteCache), it's used as an L2 backing store: misses
+    in L1 fall through to L2, and writes to L1 are optionally mirrored to L2
+    (controlled by the persist= parameter on put()).
 
     Thread/coroutine safety: designed for asyncio (single-threaded event loop).
     is_inflight() and mark_inflight() must be called without an intervening
@@ -224,8 +57,8 @@ class URLCache:
         self._cache: OrderedDict[str, tuple[str, datetime]] = OrderedDict()
         # url → asyncio.Event set when the fetch completes
         self._inflight: dict[str, asyncio.Event] = {}
-        # Optional L2 filesystem backing store; set by init_app() after construction
-        self.fs_cache: Optional[FilesystemCache] = None
+        # Optional L2 backing store (duck-typed get/put/remove); set by init_app() after construction
+        self.fs_cache: Optional[Any] = None
 
     def _l1_get(self, url: str) -> Optional[str]:
         """Check L1 only; returns None on miss or expiry (does not touch L2)."""
@@ -419,7 +252,7 @@ class ParseResultCache:
 
     L1-only, deliberately: this cache exists purely to skip redundant CPU
     work (parsing), not to reduce load on Hipocrate — that's the raw-page
-    URLCache/FilesystemCache's job (see module docstring). No persistence
+    URLCache/SqliteCache's job (see module docstring). No persistence
     across restarts is needed or attempted.
 
     HippoData is a mutable dict subclass, and callers routinely mutate a

@@ -47,7 +47,8 @@ from hippoclient import HippoClient, HippoClientPatient, HippoClientPatientSearc
 from hippoclient import user_session_manager, url_cache
 from hippoclient import evict_patient_cache
 from hippoclient import is_meaningful_text as _is_meaningful_text
-from urlcache import FilesystemCache, URLCache
+from urlcache import URLCache
+from sqlcache import SqliteCache, AiCacheView
 from hippodata import HippoData
 import search_index
 
@@ -851,8 +852,9 @@ _ai_client = None  # llm.router.LLMClient, built once in init_app()
 # the same key, so a page reload can redisplay a prior summary without calling
 # the LLM again. No TTL-driven staleness here: the only way to get a fresh
 # summary for the same text is the explicit "regenerate" (force=True) request.
-# in_app() attaches a FilesystemCache (separate subdirectory from url_cache's)
-# so summaries also survive a restart, unless --no-disk-cache is set.
+# init_app() attaches an AiCacheView (backed by the same SqliteCache/cache.db
+# as url_cache, cache_ai table) so summaries also survive a restart, unless
+# --no-disk-cache is set.
 ai_cache = URLCache(max_size=1000, timeout=365 * 86400)
 
 
@@ -1209,20 +1211,19 @@ def web_fhir_response(data) -> web.Response:
 
 @require_auth
 async def get_cache_stats(request):
-    """Return filesystem cache statistics as JSON."""
+    """Return disk cache statistics as JSON, including a by_table breakdown."""
     if url_cache.fs_cache is None:
         return web.json_response({'enabled': False})
-    # stats() walks every file in the cache dir (stat + read + json.loads
-    # each) — potentially thousands of files at the default 7-day TTL /
-    # 30-day max_age, so it must run off the event loop like cleanup()
-    # below does, or every concurrent request stalls for the scan.
+    # stats() aggregates across every cache table with indexed SQL queries —
+    # still runs off the event loop like cleanup() below, since it's a
+    # blocking sqlite3 call and shouldn't stall concurrent requests.
     stats = await asyncio.get_event_loop().run_in_executor(None, url_cache.fs_cache.stats)
     return web.json_response({'enabled': True, **stats})
 
 
 @require_auth
 async def post_cache_cleanup(request):
-    """Trigger a filesystem cache cleanup and return deleted/freed counts."""
+    """Trigger a disk cache cleanup and return deleted/freed counts."""
     if url_cache.fs_cache is None:
         return web.json_response({'enabled': False, 'deleted': 0, 'freed_bytes': 0})
     result = await asyncio.get_event_loop().run_in_executor(
@@ -1273,7 +1274,7 @@ _wl_server = None   # set by init_app; used by on_cleanup for graceful DICOM shu
 def _url_param(url: str, name: str) -> Optional[str]:
     return (parse_qs(urlparse(url).query).get(name) or [None])[0]
 
-def _backfill_search_index_sync(fs_cache: FilesystemCache, idx) -> dict:
+def _backfill_search_index_sync(fs_cache: SqliteCache, idx) -> dict:
     """Blocking: scan cached pages written since the last backfill run for
     checkout/imaging report text, and index anything not already in the
     search index (see search_index.py).
@@ -1345,7 +1346,7 @@ async def _backfill_search_index():
         logger.warning(f"Search index backfill failed: {exc}")
 
 async def _periodic_cache_cleanup(no_search_backfill: bool = False):
-    """Background task: run FilesystemCache.cleanup(), SearchIndex.cleanup(),
+    """Background task: run SqliteCache.cleanup(), SearchIndex.cleanup(),
     and the search-index cache backfill (unless disabled) once at startup
     then every 24 h. The backfill rides along on this same 24h cadence
     rather than getting its own timer — its persisted cursor (see
@@ -1357,7 +1358,7 @@ async def _periodic_cache_cleanup(no_search_backfill: bool = False):
                 result = await asyncio.get_event_loop().run_in_executor(
                     None, url_cache.fs_cache.cleanup
                 )
-                logger.info(f"Periodic cache cleanup: {result['deleted']} files deleted, {result['freed_bytes']} bytes freed")
+                logger.info(f"Periodic cache cleanup: {result['deleted']} entries deleted, {result['freed_bytes']} bytes freed")
             except Exception as exc:
                 logger.warning(f"Periodic cache cleanup failed: {exc}")
         if search_index.instance is not None:
@@ -1428,9 +1429,14 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     if cache_dir and not no_disk_cache:
         cache_ttl = config.getint('cache', 'ttl')
         cache_max_age = config.getint('cache', 'max_age_days')
-        url_cache.fs_cache = FilesystemCache(cache_dir, ttl=cache_ttl, max_age_days=cache_max_age)
-        ai_cache.fs_cache = FilesystemCache(
-            os.path.join(cache_dir, 'ai'), ttl=ai_cache.timeout, max_age_days=0)
+        # One SqliteCache/one WAL connection against cache.db, shared by both
+        # url_cache (routes raw HTML across per-endpoint tables) and ai_cache
+        # (always hits cache_ai via the AiCacheView adapter) — two independent
+        # sqlite3.connect() pools writing WAL against the same file would be
+        # asking for trouble, so both tiers go through this single instance.
+        _sqlite_cache = SqliteCache(os.path.join(cache_dir, 'cache.db'), ttl=cache_ttl, max_age_days=cache_max_age)
+        url_cache.fs_cache = _sqlite_cache
+        ai_cache.fs_cache = AiCacheView(_sqlite_cache, ttl=ai_cache.timeout)
         search_index.instance = search_index.SearchIndex(
             os.path.join(cache_dir, 'search_index.db'), max_age_days=cache_max_age)
         if no_search_backfill:
