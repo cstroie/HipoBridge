@@ -5963,12 +5963,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Builds one schedule timeline row.
     function buildTimelineRow(r, { isLast, timeLabel }) {
         const authoredOn = r.authoredOn || '';
-        // Hipocrate returns names in ALL CAPS — title-case for display, same
-        // as formatPatientName() does for the Patient Profile tab.
-        const patientName = r.subject?.display ? toTitleCase(r.subject.display) : '';
+        const patientName = r.subject?.display || '';
         const requestCode = r.identifier?.[0]?.value || r.id || '';
         const section = r.note?.[0]?.text || '';
-        const requestedBy = r.requester?.display ? toTitleCase(r.requester.display) : '';
+        const requestedBy = r.requester?.display || '';
         const laboratory = r.code?.text || '';
         const modalitySlug  = r.category?.[0]?.coding?.[0]?.code || '';
         const paymentSlug   = r.category?.[1]?.coding?.[0]?.code || '';
@@ -6104,7 +6102,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     const regions = _extractRegions(data);
                     const noteIndication = (data?.note || []).find(n => n.category?.[0]?.text === 'clinical-indication')?.text || '';
                     const indication = _isMeaningfulText(noteIndication) ? noteIndication : '';
-                    const referrer = data?.requester?.display ? toTitleCase(data.requester.display) : '';
+                    const referrer = data?.requester?.display || '';
                     const cached = { regions, indication, referrer };
                     _examCache[id] = cached;
                     _applyExamLabel(el, cached);
