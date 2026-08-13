@@ -4262,6 +4262,16 @@ dialog.report-editor-modal article > section {
     .card-toolbar .copy-md-btn {
         padding: var(--space-6);
     }
+    /* Icon-only below this breakpoint — the text labels are what forces
+       the toolbar wide enough to fight section headings for space (see
+       .episode-header/.trends-header above). aria-label/title already
+       carry the accessible name, so this is a purely visual drop. */
+    .card-toolbar .btn-ai span {
+        display: none;
+    }
+    .card-toolbar .copy-md-btn::after {
+        content: none;
+    }
 
     dialog.report-modal {
         width: 96vw;
