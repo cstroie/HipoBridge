@@ -104,6 +104,11 @@ document.addEventListener('DOMContentLoaded', function() {
         loadingErrorDismiss: document.getElementById('loadingErrorDismiss'),
         // Recent searches
         recentSearchesList: document.getElementById('recentSearchesList'),
+        // Clinical text search (epicrisis/imaging report text)
+        clinicalSearchInput: document.getElementById('clinicalSearchInput'),
+        clinicalSearchResults: document.getElementById('clinicalSearchResults'),
+        clinicalSearchEmpty: document.getElementById('clinicalSearchEmpty'),
+        clinicalSearchDisabled: document.getElementById('clinicalSearchDisabled'),
         // Schedule tab elements
         scheduleStartDate: document.getElementById('scheduleStartDate'),
         scheduleEndDate: document.getElementById('scheduleEndDate'),
@@ -374,6 +379,14 @@ document.addEventListener('DOMContentLoaded', function() {
         // Clear recent searches
         if (elements.clearRecentBtn) {
             elements.clearRecentBtn.addEventListener('click', clearRecentSearches);
+        }
+
+        // Clinical text search (epicrisis/imaging report text already indexed
+        // server-side — see search_index.py). Debounced like the schedule
+        // patient-name filter above.
+        if (elements.clinicalSearchInput) {
+            const debouncedClinicalSearch = debounce(runClinicalSearch, 400);
+            elements.clinicalSearchInput.addEventListener('input', debouncedClinicalSearch);
         }
 
         // Stat pills that navigate to their tab
@@ -2778,7 +2791,70 @@ document.addEventListener('DOMContentLoaded', function() {
         localStorage.removeItem('recentSearches');
         loadRecentSearches();
     }
-    
+
+    // Full-text search over epicrisis/imaging report text already indexed by
+    // the server (GET /api/search/text — see search_index.py). Scoped to
+    // patients already viewed through this HippoBridge instance, not a
+    // Hipocrate-wide search (Hipocrate has no such API). Set once the server
+    // reports the index isn't configured, so we stop calling on every keystroke.
+    let clinicalSearchDisabledKnown = false;
+
+    async function runClinicalSearch() {
+        const query = elements.clinicalSearchInput?.value.trim() || '';
+        if (elements.clinicalSearchResults) elements.clinicalSearchResults.innerHTML = '';
+        if (elements.clinicalSearchEmpty) elements.clinicalSearchEmpty.hidden = true;
+        if (!query || clinicalSearchDisabledKnown) return;
+
+        let data;
+        try {
+            const resp = await apiFetch(`/api/search/text?q=${encodeURIComponent(query)}`);
+            data = await resp.json();
+        } catch (err) {
+            log('Clinical text search failed (silent):', err);
+            return;
+        }
+
+        if (!data.enabled) {
+            clinicalSearchDisabledKnown = true;
+            if (elements.clinicalSearchDisabled) elements.clinicalSearchDisabled.hidden = false;
+            return;
+        }
+
+        const results = data.results || [];
+        if (results.length === 0) {
+            if (elements.clinicalSearchEmpty) elements.clinicalSearchEmpty.hidden = false;
+            return;
+        }
+        renderClinicalSearchResults(results);
+    }
+
+    const CLINICAL_SEARCH_KIND_ICONS = { epicrisis: 'fa-file-medical', imaging: 'fa-x-ray' };
+
+    function renderClinicalSearchResults(results) {
+        const tmpl = document.getElementById('clinical-search-result-template');
+        results.forEach(r => {
+            const li = tmpl.content.cloneNode(true).querySelector('.recent-item');
+            li.querySelector('.recent-avatar i').className =
+                `fas ${CLINICAL_SEARCH_KIND_ICONS[r.kind] || 'fa-file'}`;
+            li.querySelector('.recent-primary').textContent = r.patient_name || r.patient_cnp || 'Unknown patient';
+            // Snippet's <mark> highlights come from the server's own FTS5
+            // snippet() call (search_index.py), not user input.
+            li.querySelector('.recent-snippet').innerHTML = r.snippet || '';
+
+            const loadBtn = li.querySelector('.recent-load');
+            const label = r.patient_name || r.patient_cnp || 'patient';
+            loadBtn.title = `Open ${label}`;
+            loadBtn.setAttribute('aria-label', `Open patient ${label}`);
+            loadBtn.addEventListener('click', () => {
+                elements.cnpInput.value = r.patient_cnp || r.patient_name;
+                elements.form.dispatchEvent(new Event('submit'));
+            });
+
+            elements.clinicalSearchResults.appendChild(li);
+        });
+    }
+
+
     function addToRecentSearches(searchTerm, patientData = null) {
         let recentSearches = JSON.parse(localStorage.getItem('recentSearches') || '[]');
         

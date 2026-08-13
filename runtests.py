@@ -34,6 +34,7 @@ from tests.hippoclient_write import (
     TestWebJsonResponseEndToEnd,
 )
 from tests.hippobridge_handlers import TestServeSpec, TestGetCacheStats
+from tests.search_index import TestSearchIndex
 
 # Configuration
 BASE_URL = "http://localhost:44660"
@@ -82,6 +83,7 @@ TEST_GROUPS = {
         TestWebJsonResponseEndToEnd,
         TestServeSpec,
         TestGetCacheStats,
+        TestSearchIndex,
     ],
     "root": [test_root_endpoint],
     "auth": [
@@ -136,6 +138,7 @@ TEST_GROUPS = {
         TestWebJsonResponseEndToEnd,
     ],
     "hippobridge_handlers": [TestServeSpec, TestGetCacheStats],
+    "search_index": [TestSearchIndex],
 }
 
 async def run_tests(test_list) -> None:

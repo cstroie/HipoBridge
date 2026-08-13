@@ -118,6 +118,23 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             <p class="recent-empty" id="recentEmpty" hidden>No recent searches yet</p>
                         </aside>
 
+                        <!-- Full-text search over epicrisis/imaging report text already
+                             indexed by this server (see search_index.py) — scoped to
+                             patients already viewed here, not a Hipocrate-wide search. -->
+                        <aside class="recent-searches" id="clinicalSearchPanel">
+                            <header class="recent-header">
+                                <span class="recent-heading-label">Search reports &amp; epicrisis text</span>
+                            </header>
+                            <div class="search-input-box">
+                                <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                                <input type="search" id="clinicalSearchInput" autocomplete="off"
+                                    placeholder="Search clinical text…" aria-label="Search clinical text">
+                            </div>
+                            <ul class="recent-list" id="clinicalSearchResults"></ul>
+                            <p class="recent-empty" id="clinicalSearchEmpty" hidden>No matches found</p>
+                            <p class="recent-empty" id="clinicalSearchDisabled" hidden>Full-text search is not available on this server</p>
+                        </aside>
+
                         <div class="error" id="error" role="alert" aria-live="polite"></div>
                     </div>
                 </section>
@@ -631,6 +648,21 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                     <div class="recent-text">
                         <span class="recent-primary"></span>
                         <span class="recent-secondary"></span>
+                    </div>
+                    <i class="fas fa-arrow-up-right-from-square recent-arrow" aria-hidden="true"></i>
+                </button>
+            </li>
+        </template>
+
+        <template id="clinical-search-result-template">
+            <li class="recent-item">
+                <button type="button" class="recent-load" title="Open this patient">
+                    <div class="recent-avatar">
+                        <i class="fas" aria-hidden="true"></i>
+                    </div>
+                    <div class="recent-text">
+                        <span class="recent-primary"></span>
+                        <span class="recent-secondary recent-snippet"></span>
                     </div>
                     <i class="fas fa-arrow-up-right-from-square recent-arrow" aria-hidden="true"></i>
                 </button>

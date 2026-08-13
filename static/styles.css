@@ -872,6 +872,12 @@ small {
     white-space: nowrap;
 }
 
+.recent-snippet mark {
+    background: color-mix(in srgb, var(--warning, #d97706) 25%, transparent);
+    color: inherit;
+    border-radius: var(--radius-sm);
+}
+
 .recent-arrow {
     color: var(--muted);
     font-size: var(--font-size-xs);

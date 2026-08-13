@@ -66,6 +66,7 @@ from collections import OrderedDict
 from extractors import extract_id_from_link, extract_ids_from_links, extract_selected_from_dropdown, extract_text_after_label, extract_text_from_element, extract_value_from_input
 from extractors import parse_cnp, parse_date_time
 from urlcache import URLCache, FilesystemCache, ParseResultCache
+import search_index
 import asyncio
 
 # URLs whose content is user-specific or too volatile for long-term persistence.
@@ -2224,6 +2225,14 @@ class HippoClientImagingStudy(HippoClient):
                 url = _format_request_url(self.request_url, **kwargs)
                 await self.cache_remove(self.get_full_url(url))
                 logger.debug(f"Evicted empty imaging study from cache: {url}")
+            else:
+                # Single choke point for both /api/study/{id} and
+                # /fhir/ImagingStudy/{id} (the route the frontend actually
+                # uses) — both construct this same client. See search_index.py.
+                text = "\n\n".join(s.get("result") for s in studies if s.get("result"))
+                search_index.schedule_index(
+                    "imaging", str(kwargs.get("id", "")),
+                    parsed_data.get("patient.cnp"), parsed_data.get("patient.name"), text)
         return parsed_data
 
     def fhir_response(self, parsed_data: HippoData, **kwargs) -> Union[FHIRImagingStudy, FHIROperationOutcome]:
@@ -2703,10 +2712,18 @@ class HippoClientCheckout(HippoClient):
         """
         parsed_data = await super().fetch_and_parse(*args, **kwargs)
         if parsed_data.get("status") != "error":
-            if not parsed_data.get("checkout.epicrisis"):
+            epicrisis = parsed_data.get("checkout.epicrisis")
+            if not epicrisis:
                 url = _format_request_url(self.request_url, **kwargs)
                 await self.cache_remove(self.get_full_url(url))
                 logger.debug(f"Evicted empty checkout epicrisis from cache: {url}")
+            else:
+                # Single choke point for both /api/checkout/{id} and
+                # /fhir/Encounter/{id}?type=checkout (the route the frontend
+                # actually uses) — both construct this same client. See search_index.py.
+                search_index.schedule_index(
+                    "epicrisis", str(kwargs.get("id", "")),
+                    parsed_data.get("patient.cnp"), parsed_data.get("patient.name"), epicrisis)
         return parsed_data
 
     def parse_data(self, html_content: str, **kwargs) -> HippoData:

@@ -25,7 +25,7 @@
 
 - [ ] Completr DICOM worklist round (query, select, execute, etc)
 
-- [ ] Free text seach in any epicrisis or reports to indentifi a (recent) patient
+- [X] Free text seach in any epicrisis or reports to indentifi a (recent) patient
 
 - [X] Propose a better model/template for Hipocrate 'Cereri' page
 

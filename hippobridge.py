@@ -48,6 +48,7 @@ from hippoclient import evict_patient_cache
 from hippoclient import is_meaningful_text as _is_meaningful_text
 from urlcache import FilesystemCache, URLCache
 from hippodata import HippoData
+import search_index
 
 from extractors import parse_cnp
 from markdown import markdown_to_html
@@ -1229,6 +1230,30 @@ async def post_cache_cleanup(request):
     return web.json_response({'enabled': True, **result})
 
 
+@require_auth
+async def search_text(request):
+    """Free-text search over epicrisis/imaging report text already indexed by
+    this server (see search_index.py) — scoped to patients viewed here, not a
+    Hipocrate-wide search (Hipocrate has no such API; see docs/SITE_SURVEY.md)."""
+    if search_index.instance is None:
+        return web.json_response({'enabled': False})
+    query = request.query.get('q', '').strip()
+    if not query:
+        return web_error_response("Search query is required")
+    # Unlike every other route, this one never forwards credentials to
+    # Hipocrate — there's nothing to scrape — so @require_auth's bare
+    # presence-of-a-header check is the only thing standing between a
+    # made-up Basic header and PHI already sitting in the index. Validate
+    # for real via the (cached, see docs/HIPOCRATE_USAGE.md) whoami call,
+    # same as every other route effectively does by having Hipocrate itself
+    # reject bad credentials.
+    whoami_data = await HippoClientWhoami(SERVICE_URL, request).fetch_and_parse()
+    if whoami_data.get("status") != "success":
+        return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
+    results = await search_index.instance.search(query)
+    return web.json_response({'enabled': True, 'results': results})
+
+
 def load_config(config_path: str = 'hippobridge.cfg'):
     """Load hippobridge.cfg, falling back to DEFAULT_CONFIG if absent."""
     config = configparser.ConfigParser()
@@ -1245,7 +1270,8 @@ def load_config(config_path: str = 'hippobridge.cfg'):
 _wl_server = None   # set by init_app; used by on_cleanup for graceful DICOM shutdown
 
 async def _periodic_cache_cleanup():
-    """Background task: run FilesystemCache.cleanup() once at startup then every 24 h."""
+    """Background task: run FilesystemCache.cleanup() (and SearchIndex.cleanup(),
+    if enabled) once at startup then every 24 h."""
     while True:
         if url_cache.fs_cache is not None:
             try:
@@ -1255,6 +1281,12 @@ async def _periodic_cache_cleanup():
                 logger.info(f"Periodic cache cleanup: {result['deleted']} files deleted, {result['freed_bytes']} bytes freed")
             except Exception as exc:
                 logger.warning(f"Periodic cache cleanup failed: {exc}")
+        if search_index.instance is not None:
+            try:
+                result = await search_index.instance.cleanup()
+                logger.info(f"Periodic search index cleanup: {result['deleted']} documents deleted")
+            except Exception as exc:
+                logger.warning(f"Periodic search index cleanup failed: {exc}")
         await asyncio.sleep(86400)
 
 async def on_cleanup(app):
@@ -1317,6 +1349,8 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
         url_cache.fs_cache = FilesystemCache(cache_dir, ttl=cache_ttl, max_age_days=cache_max_age)
         ai_cache.fs_cache = FilesystemCache(
             os.path.join(cache_dir, 'ai'), ttl=ai_cache.timeout, max_age_days=0)
+        search_index.instance = search_index.SearchIndex(
+            os.path.join(cache_dir, 'search_index.db'), max_age_days=cache_max_age)
         asyncio.get_event_loop().create_task(_periodic_cache_cleanup())
     elif no_disk_cache and cache_dir:
         logger.info("Persistent filesystem cache disabled (--no-disk-cache)")
@@ -1349,6 +1383,7 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     app.router.add_get('/api/debug', debug_passthrough)
     app.router.add_get('/api/cache/stats', get_cache_stats)
     app.router.add_post('/api/cache/cleanup', post_cache_cleanup)
+    app.router.add_get('/api/search/text', search_text)
     app.router.add_get('/fhir/Patient', search_fhir_patient)
     app.router.add_get('/fhir/Patient/{id}', get_fhir_patient)
     app.router.add_get('/fhir/ServiceRequest', search_fhir_service_request)
