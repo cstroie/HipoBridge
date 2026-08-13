@@ -51,3 +51,7 @@ python3 runtests.py extractors    # no server needed (also: markdown, hippodata,
 ## Architecture and gotchas
 
 See `docs/ARCHITECTURE.md` for the routing table, concurrency/caching model, per-module gotchas, scraper-specific notes, frontend rules, and dated design decisions.
+
+## Verifying frontend changes
+
+Playwright burns a lot of tokens (screenshots, page dumps). Never launch it implicitly to verify a frontend change — ask the user first, every time. Prefer cheaper verification first: grep-based before/after checks (class/id occurrence counts, no orphaned old names), CSS brace balance, `node --check` on JS. Reach for Playwright only when the user asks for it or explicitly agrees when you ask.
