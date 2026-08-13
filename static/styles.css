@@ -787,7 +787,12 @@ small {
    .recent-list chrome, but also sandwiches a .search-input-box in between —
    that class normally gets its spacing from the .search-input-row wrapper it's
    paired with elsewhere, which this panel doesn't use, so it needs its own gap
-   here on both sides (header already supplies space above via margin-bottom). */
+   here on both sides (header already supplies space above via margin-bottom).
+   .recent-searches itself has no margin, so the "Recent searches" aside above
+   it needs an explicit top margin here too, or the two panels sit flush. */
+#clinicalSearchPanel {
+    margin-top: var(--space-32);
+}
 #clinicalSearchPanel .search-input-box {
     margin-bottom: var(--space-14);
 }
