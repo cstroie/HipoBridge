@@ -13,7 +13,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Schedule tab state — declared early since the initial tab switch on
     // page load can call fetchScheduleFromInputs synchronously, before a
     // `let` declared later in this scope would be initialized (TDZ).
-    let activeScheduleStatusFilter = '';
+    // Multi-select: empty set means "All" (no filter), same as before when
+    // this was a single empty string.
+    let activeScheduleStatusFilter = new Set();
 
     // DOM Elements - Cache selectors for better performance
     const elements = {
@@ -481,13 +483,30 @@ document.addEventListener('DOMContentLoaded', function() {
             filterLabGrid(chip.dataset.filter || 'all');
         });
 
-        // Schedule status chips
+        // Schedule status chips — multi-select: clicking a status chip toggles
+        // it independently so e.g. "In lab" and "In progress" can both be
+        // active at once. "All" is a special case, mutually exclusive with
+        // every specific status: picking it clears the others, and picking
+        // any specific status turns "All" off. Selecting nothing is treated
+        // the same as "All" (no filter) — the chip is just re-activated to
+        // keep the UI from showing zero active chips.
         elements.scheduleStatusChips?.addEventListener('click', e => {
             const chip = e.target.closest('.chip');
             if (!chip) return;
-            elements.scheduleStatusChips.querySelectorAll('.chip').forEach(c => c.classList.remove('chip-active'));
-            chip.classList.add('chip-active');
-            activeScheduleStatusFilter = chip.dataset.status;
+            const allChip = elements.scheduleStatusChips.querySelector('.chip[data-status=""]');
+            if (chip === allChip) {
+                activeScheduleStatusFilter.clear();
+            } else if (activeScheduleStatusFilter.has(chip.dataset.status)) {
+                activeScheduleStatusFilter.delete(chip.dataset.status);
+            } else {
+                activeScheduleStatusFilter.add(chip.dataset.status);
+            }
+            const showAll = activeScheduleStatusFilter.size === 0;
+            elements.scheduleStatusChips.querySelectorAll('.chip').forEach(c => {
+                const active = c === allChip ? showAll : activeScheduleStatusFilter.has(c.dataset.status);
+                c.classList.toggle('chip-active', active);
+                c.setAttribute('aria-pressed', String(active));
+            });
             fetchScheduleFromInputs();
         });
     }
@@ -5829,7 +5848,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const patientText = elements.schedulePatientFilter?.value.trim() || null;
         const labId       = elements.scheduleLabFilter?.value || null;
         const sectionName = elements.scheduleSectionFilter?.value || null;
-        const status      = activeScheduleStatusFilter || null;
+        const status      = activeScheduleStatusFilter.size ? [...activeScheduleStatusFilter].join(',') : null;
         const limit       = elements.scheduleLimitSelect?.value || null;
         fetchSchedule(start, end, force, patientText, labId, sectionName, status, limit);
         updateScheduleClearFiltersVisibility();
@@ -5884,7 +5903,7 @@ document.addEventListener('DOMContentLoaded', function() {
             (elements.schedulePatientFilter?.value.trim()) ||
             (elements.scheduleLabFilter?.value) ||
             (elements.scheduleSectionFilter?.value) ||
-            activeScheduleStatusFilter
+            activeScheduleStatusFilter.size
         );
     }
 
@@ -5897,9 +5916,12 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.schedulePatientFilter) elements.schedulePatientFilter.value = '';
         if (elements.scheduleLabFilter) elements.scheduleLabFilter.value = '';
         if (elements.scheduleSectionFilter) elements.scheduleSectionFilter.value = '';
-        activeScheduleStatusFilter = '';
-        elements.scheduleStatusChips?.querySelectorAll('.chip').forEach(c => c.classList.remove('chip-active'));
-        elements.scheduleStatusChips?.querySelector('.chip[data-status=""]')?.classList.add('chip-active');
+        activeScheduleStatusFilter.clear();
+        elements.scheduleStatusChips?.querySelectorAll('.chip').forEach(c => {
+            const isAll = c.dataset.status === '';
+            c.classList.toggle('chip-active', isAll);
+            c.setAttribute('aria-pressed', String(isAll));
+        });
         fetchScheduleFromInputs();
     }
 

@@ -4879,13 +4879,19 @@ class HippoClientSchedule(HippoClient):
 
     def _apply_filters(self, requests: list, section_name=None, status=None) -> list:
         """Server-side filtering shared by /api/schedule and /fhir/Schedule so both
-        endpoints behave identically regardless of output format."""
+        endpoints behave identically regardless of output format.
+
+        status accepts a comma-separated list (e.g. "draft,active") so the
+        frontend's multi-select status chips (any combination of "In lab" +
+        "In progress" + ...) can be expressed as one request — a bare single
+        status still works unchanged, since splitting it on ',' is a no-op.
+        """
         section_name = (section_name or '').strip()
         if section_name:
             requests = [r for r in requests if (r.get('section') or '') == section_name]
-        status = (status or '').strip()
-        if status:
-            requests = [r for r in requests if self._derive_fhir_status(r) == status]
+        statuses = {s.strip() for s in (status or '').split(',') if s.strip()}
+        if statuses:
+            requests = [r for r in requests if self._derive_fhir_status(r) in statuses]
         return requests
 
     async def debug_page(self, **kwargs):

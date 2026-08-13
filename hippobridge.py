@@ -488,7 +488,11 @@ async def get_request_patient(request):
 
 @require_auth
 async def get_schedule(request):
-    """List imaging/lab requests. ?start_date=&end_date=&lab_id=&section_name=&status=&patient_text=&refresh=1"""
+    """List imaging/lab requests. ?start_date=&end_date=&lab_id=&section_name=&status=&patient_text=&refresh=1
+
+    status accepts a comma-separated list of FHIR ServiceRequest statuses
+    (e.g. status=draft,active) to match any of them — see
+    HippoClientSchedule._apply_filters."""
     start_date   = request.rel_url.query.get('start_date') or request.rel_url.query.get('date')
     end_date     = request.rel_url.query.get('end_date')
     lab_id       = request.rel_url.query.get('lab_id')
@@ -508,7 +512,11 @@ async def get_schedule(request):
 
 @require_auth
 async def get_fhir_schedule(request):
-    """FHIR Bundle of ServiceRequest resources for the worklist. ?start_date=&end_date=&lab_id=&section_name=&status=&patient_text=&refresh=1"""
+    """FHIR Bundle of ServiceRequest resources for the worklist. ?start_date=&end_date=&lab_id=&section_name=&status=&patient_text=&refresh=1
+
+    status accepts a comma-separated list of FHIR ServiceRequest statuses
+    (e.g. status=draft,active) to match any of them — see
+    HippoClientSchedule._apply_filters."""
     start_date   = request.rel_url.query.get('start_date') or request.rel_url.query.get('date')
     end_date     = request.rel_url.query.get('end_date')
     lab_id       = request.rel_url.query.get('lab_id')

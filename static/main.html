@@ -511,15 +511,16 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                     <!-- Filters row -->
                     <div class="schedule-filters">
 
-                        <!-- Status chips -->
+                        <!-- Status chips — multi-select (any combination of specific
+                             statuses, or "All"; see the click handler in scripts.js) -->
                         <div class="schedule-status-chips" id="scheduleStatusChips" role="group" aria-label="Filter by status">
-                            <button type="button" class="chip chip-active" data-status="" title="Show all statuses">All</button>
-                            <button type="button" class="chip" data-status="on-hold" title="Filter: Not sent to lab yet">Not sent</button>
-                            <button type="button" class="chip" data-status="draft" title="Filter: Sent to lab, awaiting exam">In lab</button>
-                            <button type="button" class="chip" data-status="active" title="Filter: Currently in progress">In progress</button>
-                            <button type="button" class="chip" data-status="completed" title="Filter: Completed">Completed</button>
-                            <button type="button" class="chip" data-status="ended" title="Filter: Finished">Finished</button>
-                            <button type="button" class="chip" data-status="revoked" title="Filter: Cancelled">Cancelled</button>
+                            <button type="button" class="chip chip-active" data-status="" aria-pressed="true" title="Show all statuses">All</button>
+                            <button type="button" class="chip" data-status="on-hold" aria-pressed="false" title="Filter: Not sent to lab yet">Not sent</button>
+                            <button type="button" class="chip" data-status="draft" aria-pressed="false" title="Filter: Sent to lab, awaiting exam">In lab</button>
+                            <button type="button" class="chip" data-status="active" aria-pressed="false" title="Filter: Currently in progress">In progress</button>
+                            <button type="button" class="chip" data-status="completed" aria-pressed="false" title="Filter: Completed">Completed</button>
+                            <button type="button" class="chip" data-status="ended" aria-pressed="false" title="Filter: Finished">Finished</button>
+                            <button type="button" class="chip" data-status="revoked" aria-pressed="false" title="Filter: Cancelled">Cancelled</button>
                         </div>
 
                         <div class="schedule-filters-spacer"></div>
