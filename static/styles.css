@@ -4446,6 +4446,12 @@ dialog.report-editor-modal article > section {
         width: auto;
         flex-shrink: 0;
     }
+    /* Fixed, equal, generous width (not auto) — auto-sizing let the AI
+       button (padding var(--space-10) var(--space-12)) and Copy button
+       (padding var(--space-6)) render at visibly different widths since
+       each sized to its own icon+padding. justify-content:center (from
+       the general .card-toolbar rule above) still centers each icon
+       within this wider fixed box. */
     .report-header .card-toolbar .btn-ai,
     .report-header .card-toolbar .copy-md-btn,
     .epicrisis-header .card-toolbar .btn-ai,
@@ -4454,7 +4460,7 @@ dialog.report-editor-modal article > section {
     .episode-header .card-toolbar .copy-md-btn,
     .trends-header .card-toolbar .btn-ai,
     .trends-header .card-toolbar .copy-md-btn {
-        flex: 0 0 auto;
+        flex: 0 0 var(--space-48);
     }
 
     .stat-pill-label {
