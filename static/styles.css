@@ -1044,6 +1044,15 @@ small {
     margin: 0 0 var(--space-20) 0;
 }
 
+.panel-heading-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-12);
+    margin-bottom: var(--space-20);
+}
+.panel-heading-row .panel-heading { margin-bottom: 0; }
+
 .info-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;

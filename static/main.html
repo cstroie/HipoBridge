@@ -198,6 +198,21 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             </dl>
                         </section>
 
+                        <!-- AI executive summary — reuses the 'report' AI kind/cache
+                             (same text, same server-side cache key) as the Report tab's
+                             own AI button, so generating it in either place fills both. -->
+                        <section class="patient-info-panel">
+                            <div class="panel-heading-row">
+                                <h2 class="panel-heading">AI Summary</h2>
+                                <div class="card-toolbar">
+                                    <button type="button" class="btn-ai" id="patientAiSummaryBtn" aria-label="Generate AI patient summary" title="Generate AI patient summary">
+                                        <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>Generate</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="patientAiSummaryAnchor"></div>
+                        </section>
+
                         <!-- QR codes for scanning -->
                         <section class="patient-info-panel" id="patientQrPanel" hidden>
                             <h2 class="panel-heading">QR Codes</h2>

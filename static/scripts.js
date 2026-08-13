@@ -82,6 +82,9 @@ document.addEventListener('DOMContentLoaded', function() {
         aiPreExamBtn: document.getElementById('aiPreExamBtn'),
         aiPreExamAnchor: document.getElementById('aiPreExamAnchor'),
         aiEmptyState: document.getElementById('aiEmptyState'),
+        // Patient profile "AI Summary" panel
+        patientAiSummaryBtn: document.getElementById('patientAiSummaryBtn'),
+        patientAiSummaryAnchor: document.getElementById('patientAiSummaryAnchor'),
         // Header elements
         quickSearch: document.getElementById('quickSearch'),
         quickSearchBtn: document.getElementById('quickSearchBtn'),
@@ -405,6 +408,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.aiLabBtn) elements.aiLabBtn.addEventListener('click', runLabSummary);
         wireAiButton(elements.aiPreExamBtn, 'pre_exam',
             () => elements.aiPreExamAnchor, () => getPatientClinicalText());
+        if (elements.patientAiSummaryBtn) {
+            elements.patientAiSummaryBtn.addEventListener('click', generatePatientAiSummary);
+        }
 
         // Schedule tab
         {
@@ -1416,7 +1422,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Drop any rendered AI cards from a previous patient. querySelectorAll
         // does not descend into <template> content, so the template card is safe.
         document.querySelectorAll('.ai-summary-card').forEach(card => card.remove());
-        for (const btn of [elements.aiReportBtn, elements.aiPreExamBtn, elements.aiLabBtn]) {
+        for (const btn of [elements.aiReportBtn, elements.aiPreExamBtn, elements.aiLabBtn, elements.patientAiSummaryBtn]) {
             if (btn) btn._aiCard = null;
         }
         labAiText = '';
@@ -1448,7 +1454,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 () => elements.reportCard, getPatientClinicalText, { auto: true });
             runAiSummary(elements.aiPreExamBtn, 'pre_exam',
                 () => elements.aiPreExamAnchor, getPatientClinicalText, { auto: true });
+            // Same 'report' kind/cache as aiReportBtn above — if the Report tab
+            // was already visited (or this button already clicked) this
+            // silently fills the profile panel's card too, no extra LLM call.
+            runAiSummary(elements.patientAiSummaryBtn, 'report',
+                () => null, getPatientClinicalText,
+                { auto: true, inline: true, intoAnchorParent: () => elements.patientAiSummaryAnchor });
         }
+    }
+
+    // Profile tab's "AI Summary" Generate button. Unlike aiReportBtn (only
+    // shown once loadReportLazily has already assembled the clinical text
+    // via the Report tab), this button is always visible and lazily triggers
+    // that same assembly itself on first click — the profile tab loads
+    // immediately on patient search, well before Report's lazy fetch runs.
+    async function generatePatientAiSummary() {
+        // loadReportLazily reports its own failures (showOverlayError) and
+        // leaves getPatientClinicalText() null; runAiSummary below then
+        // surfaces the "no content" toast on its own in that case.
+        if (!getPatientClinicalText()) await loadReportLazily();
+        runAiSummary(elements.patientAiSummaryBtn, 'report',
+            () => null, getPatientClinicalText,
+            { inline: true, intoAnchorParent: () => elements.patientAiSummaryAnchor });
     }
 
     // opts.force bypasses the server cache and regenerates. opts.checkOnly
