@@ -6035,17 +6035,24 @@ document.addEventListener('DOMContentLoaded', function() {
             metaSectionEl.remove();
             seps[0]?.remove();
         }
+        // Schedule rows now carry a requester straight from the "Cerut de"
+        // column (restored 2026-08-14) — but that's Medic curant (the
+        // attending physician), same as cerere.asp's own field. Show it
+        // immediately so there's no blank/hidden flash, but still stash the
+        // element refs unconditionally: the lazy BuletinSolicitare.asp fetch
+        // below is the only source for Medic solicitant (the true orderer,
+        // which differs from Medic curant whenever the patient's regular
+        // doctor isn't the one who placed this specific order) and should
+        // still overwrite this value with the more accurate one once it
+        // resolves.
         if (requestedBy) {
             metaRequesterEl.querySelector('span').textContent = requestedBy;
         } else {
-            // Schedule rows no longer carry a requester (Hipocrate dropped the
-            // column) — keep the slot hidden but in the DOM so the lazy exam-info
-            // fetch below can fill it in from cerere.asp/ImagingStudy once known.
             metaRequesterEl.hidden = true;
             if (seps[1]) seps[1].hidden = true;
-            regionLine._requesterEl = metaRequesterEl;
-            regionLine._requesterSep = seps[1] || null;
         }
+        regionLine._requesterEl = metaRequesterEl;
+        regionLine._requesterSep = seps[1] || null;
 
         const codeBtn = row.querySelector('.timeline-code');
         codeBtn.textContent = requestCode;

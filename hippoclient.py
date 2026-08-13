@@ -307,15 +307,6 @@ parse_cache = ParseResultCache(max_size=300, timeout=url_cache.timeout)
 # Global semaphore: cap total concurrent outbound requests to Hipocrate
 _hipocrate_semaphore = asyncio.Semaphore(6)
 
-# A single "All Schedule" request (no lab_id) fans out to one fetch per known
-# lab_id (see HippoClientSchedule._fetch_and_parse_all_labs) — with 6 lab_ids
-# that can transiently claim the entire _hipocrate_semaphore capacity,
-# starving every other concurrent user's requests to the same backend for
-# that window. Cap the fan-out's own concurrency below the global limit so
-# it always leaves headroom for other requests, without touching the global
-# cap itself.
-_schedule_fanout_semaphore = asyncio.Semaphore(3)
-
 
 def _session_key(username: str, password: str) -> str:
     """username + a short hash of password.
@@ -4765,9 +4756,9 @@ class HippoClientSchedule(HippoClient):
         'lab':   'Laboratory',
     }
 
-    # Hipocrate no longer renders a per-row laboratory/requester column (removed
-    # 2026-07); the modality is only knowable from the PARA_ID_Laborator filter
-    # used for the fetch. IDs from /gen_lib/filtre_ajax_dropdown.asp — do not guess.
+    # IDs from /gen_lib/filtre_ajax_dropdown.asp — do not guess. Used to filter
+    # a fetch by modality (frontend's lab dropdown) and as a fallback modality
+    # source when a row's own Laborator text (below) is missing/unrecognized.
     _LAB_ID_TO_MODALITY = {
         '26': 'ct',
         '28': 'eco',
@@ -4777,23 +4768,18 @@ class HippoClientSchedule(HippoClient):
         '50': 'fluoro',
     }
 
-    # (username, lab_id) pairs whose fan-out fetch recently came back without a
-    # tbl_listare table — most likely because that Hipocrate user isn't permitted
-    # to see that lab/module. Hipocrate doesn't expose an API that lists a user's
-    # accessible labs (the dropdown is populated by an undocumented ajax call we
-    # won't guess the shape of against a live system), so this is learned
-    # adaptively instead: skip a lab for a user after the first such failure,
-    # and retry it after the TTL in case permissions change.
-    _inaccessible_labs: Dict[Tuple[str, str], float] = {}
-    _INACCESSIBLE_LAB_TTL = 3600  # seconds
-    # A single tbl_listare failure can be a transient Hipocrate/session hiccup
-    # rather than a real permission gap (confirmed 2026-08-09: the raw-page
-    # cache used to retain such a bad response, so it kept "failing" until a
-    # manual refresh — now fixed by evicting on parse failure, see
-    # fetch_and_parse). Require a few consecutive failures before believing
-    # it's a genuine per-user access restriction and skip-listing the lab.
-    _lab_failure_streak: Dict[Tuple[str, str], int] = {}
-    _INACCESSIBLE_LAB_STREAK_THRESHOLD = 3
+    # Hipocrate's own "Laborator" column text (row detail cell, restored
+    # 2026-08-14 after being dropped 2026-07-28 — see docs/ARCHITECTURE.md)
+    # → internal modality slug. Confirmed live against one populated row per
+    # lab_id. Lowercased keys, matched against lowercased+stripped cell text.
+    _LABORATORY_LABEL_TO_MODALITY = {
+        'computer tomograf':                                 'ct',
+        'ecografie':                                          'eco',
+        'imagistica rezonanta magnetica':                     'irm',
+        'radiografie':                                         'radio',
+        'radiologie interventionala':                         'rads',
+        'radioscopii si radiografii/ecografii cu contrast':   'fluoro',
+    }
 
     def __init__(self, service_url=None, request=None):
         super().__init__(service_url=service_url, request=request)
@@ -4818,12 +4804,16 @@ class HippoClientSchedule(HippoClient):
         return url
 
     async def fetch_and_parse(self, **kwargs) -> HippoData:
-        # The page no longer states each request's modality (see _LAB_ID_TO_MODALITY);
-        # an unfiltered call has to fan out per known lab_id and merge, or every
-        # entry comes back with an empty/unknown modality.
-        if not kwargs.get('lab_id'):
-            return await self._fetch_and_parse_all_labs(**kwargs)
-
+        # Before 2026-08-14, Hipocrate's row detail table didn't state a
+        # request's modality at all — an unfiltered fetch had to fan out to
+        # each known PARA_ID_Laborator and merge, six concurrent fetches per
+        # "show everything" call. That column (Laborator) is back (see
+        # _LABORATORY_LABEL_TO_MODALITY / docs/ARCHITECTURE.md), so a single
+        # unfiltered fetch now returns every modality with a per-row label to
+        # derive it from — confirmed live to return the exact same rows as
+        # the union of all 6 filtered fetches. lab_id stays supported below
+        # purely as an optional server-side filter (the frontend's lab
+        # dropdown), not as a requirement for getting modality data back.
         data = HippoData(status="success", message="")
         url = self._build_url(
             kwargs.get('start_date') or kwargs.get('date'),
@@ -4839,12 +4829,8 @@ class HippoClientSchedule(HippoClient):
             if error_message:
                 data.set_error(error_message)
                 return data
-            # parse_data does a full BeautifulSoup pass over a NrPePag=100 page;
-            # _fetch_and_parse_all_labs fans this out to 6 labs concurrently via
-            # asyncio.gather, so running it inline here would block the event
-            # loop 6x back-to-back for every "All Schedule" request. Check the
-            # parse-result cache first so a repeat request for the same lab
-            # skips both the thread hop and the parse entirely.
+            # Check the parse-result cache first so a repeat request for the
+            # same filters skips both the thread hop and the parse entirely.
             full_url = self.get_full_url(url)
             class_name = type(self).__name__
             parsed = parse_cache.get(full_url, class_name)
@@ -4872,6 +4858,25 @@ class HippoClientSchedule(HippoClient):
             data.set_error(f"Data retrieval failed: {e}")
             return data
 
+    def _derive_fhir_status(self, req: dict) -> str:
+        """Map Hipocrate's raw status text to a FHIR ServiceRequest status,
+        with one refinement: staff only flip the request's own status text to
+        something completion-flavored once they get around to it, which can
+        lag well behind reality. 'Data Efectuarii' (performed_at, scraped
+        per-row since the 2026-08-14 column restoration) tells us the exam
+        was actually performed even while the request still just says
+        'Trimisa in laborator' (→ 'draft'). Promote that case to 'active' —
+        already a valid FHIR ServiceRequest status, and already labeled 'In
+        progress' in the frontend (SCHEDULE_STATUS_LABEL) — so a
+        performed-but-not-yet-marked-complete request doesn't look identical
+        to one nobody has touched yet.
+        """
+        status_key = (req.get('status') or '').lower()
+        fhir_status = self._FHIR_STATUS.get(status_key, 'unknown')
+        if fhir_status == 'draft' and req.get('performed_at'):
+            fhir_status = 'active'
+        return fhir_status
+
     def _apply_filters(self, requests: list, section_name=None, status=None) -> list:
         """Server-side filtering shared by /api/schedule and /fhir/Schedule so both
         endpoints behave identically regardless of output format."""
@@ -4880,75 +4885,8 @@ class HippoClientSchedule(HippoClient):
             requests = [r for r in requests if (r.get('section') or '') == section_name]
         status = (status or '').strip()
         if status:
-            requests = [r for r in requests
-                        if self._FHIR_STATUS.get((r.get('status') or '').lower(), 'unknown') == status]
+            requests = [r for r in requests if self._derive_fhir_status(r) == status]
         return requests
-
-    async def _fetch_and_parse_all_labs(self, **kwargs) -> HippoData:
-        """Merge one fetch per known PARA_ID_Laborator so each entry keeps its modality."""
-        now = time.time()
-        username = self.username or ''
-        skip_labs = {
-            lab_id for (user, lab_id), failed_at in self._inaccessible_labs.items()
-            if user == username and now - failed_at < self._INACCESSIBLE_LAB_TTL
-        }
-        lab_ids = [lab_id for lab_id in self._LAB_ID_TO_MODALITY if lab_id not in skip_labs]
-        sub_kwargs_list = [dict(kwargs, lab_id=lab_id) for lab_id in lab_ids]
-
-        async def _fetch_one(sub_kwargs):
-            # Throttle this request's own fan-out below the global Hipocrate
-            # semaphore so it can't claim the backend's entire capacity by
-            # itself (see _schedule_fanout_semaphore).
-            async with _schedule_fanout_semaphore:
-                return await HippoClientSchedule(self.service_url, self.request).fetch_and_parse(**sub_kwargs)
-
-        results = await asyncio.gather(
-            *(_fetch_one(sub_kwargs) for sub_kwargs in sub_kwargs_list),
-            return_exceptions=True,
-        )
-
-        merged = []
-        seen_ids = set()
-        for lab_id, result in zip(lab_ids, results):
-            if isinstance(result, Exception):
-                logger.error(f"fetch_and_parse (schedule, per-lab) failed: {result}")
-                continue
-            if result.get("status") == "error":
-                message = result.get('message') or ''
-                if 'tbl_listare table not found' in message:
-                    key = (username, lab_id)
-                    streak = self._lab_failure_streak.get(key, 0) + 1
-                    self._lab_failure_streak[key] = streak
-                    if streak >= self._INACCESSIBLE_LAB_STREAK_THRESHOLD:
-                        # Consistently failing, not just a one-off — most likely
-                        # this user lacks access to this lab/module. Stop fanning
-                        # out to it for a while instead of retrying (and
-                        # re-warning) on every future schedule fetch.
-                        self._inaccessible_labs[key] = now
-                logger.warning(f"fetch_and_parse (schedule, per-lab) error: {message}")
-                continue
-            # A successful fetch means any prior failures for this lab were
-            # transient, not a real access restriction — clear the streak so a
-            # single future blip doesn't nearly skip-list it again.
-            self._lab_failure_streak.pop((username, lab_id), None)
-            for req in result.get("requests") or []:
-                request_id = req.get('request_id')
-                if request_id and request_id in seen_ids:
-                    continue
-                if request_id:
-                    seen_ids.add(request_id)
-                merged.append(req)
-
-        merged.sort(key=lambda req: req.get('date_time') or '', reverse=True)
-
-        limit_raw = kwargs.get('limit')
-        if limit_raw and str(limit_raw).isdigit():
-            merged = merged[:int(limit_raw)]
-
-        data = HippoData(status="success", message="")
-        data.store_list("requests", merged)
-        data.store("total", len(merged))
-        return data
 
     async def debug_page(self, **kwargs):
         url = self._build_url(
@@ -4990,15 +4928,32 @@ class HippoClientSchedule(HippoClient):
                 # Inner table has a header row then a data row; take the last tr
                 detail_rows = cells[2].select('div.div_detalii table tr')
                 detail_cells = detail_rows[-1].find_all('td') if detail_rows else []
-                if len(detail_cells) >= 7:
+                if len(detail_cells) >= 5:
                     raw_dt = detail_cells[0].get_text(strip=True)
                     parsed_dt = parse_date_time(raw_dt)
                     iso_dt = parsed_dt.strftime('%Y-%m-%d %H:%M') if parsed_dt else raw_dt
-                    # Hipocrate dropped the "Solicitat de" and "Laborator" columns from
-                    # this table (2026-07) — modality can only be inferred from the
-                    # PARA_ID_Laborator filter the fetch was made with, if any.
-                    lab_id = kwargs.get('lab_id')
-                    modality = self._LAB_ID_TO_MODALITY.get(str(lab_id)) if lab_id else None
+
+                    # Columns 5-8 (Data Efectuarii / Cerut de / Laborator /
+                    # Numar analize) were dropped by Hipocrate on 2026-07-28
+                    # and restored 2026-08-14 (see docs/ARCHITECTURE.md) —
+                    # read them defensively (index-guarded) in case they
+                    # vanish again; the first 5 columns alone are still
+                    # enough for a usable row.
+                    performed_raw = detail_cells[5].get_text(strip=True) if len(detail_cells) > 5 else ''
+                    performed_dt = parse_date_time(performed_raw) if performed_raw and performed_raw != '-' else None
+                    requested_by = detail_cells[6].get_text(strip=True) if len(detail_cells) > 6 else ''
+                    laboratory_raw = detail_cells[7].get_text(strip=True) if len(detail_cells) > 7 else ''
+                    analysis_count_raw = detail_cells[8].get_text(strip=True) if len(detail_cells) > 8 else ''
+
+                    # Prefer the row's own Laborator text (now the primary
+                    # modality source); fall back to the fetch's lab_id filter
+                    # when it's blank/unrecognized or the column disappears
+                    # again — that was the *only* source before 2026-08-14.
+                    modality = self._LABORATORY_LABEL_TO_MODALITY.get(laboratory_raw.strip().lower())
+                    if not modality:
+                        lab_id = kwargs.get('lab_id')
+                        modality = self._LAB_ID_TO_MODALITY.get(str(lab_id)) if lab_id else None
+
                     requests.append({
                         'patient_name': patient_name,
                         'request_code': request_code,
@@ -5008,9 +4963,11 @@ class HippoClientSchedule(HippoClient):
                         'payment_type': detail_cells[2].get_text(strip=True),
                         'priority': detail_cells[3].get_text(strip=True),
                         'section': detail_cells[4].get_text(strip=True),
-                        'requested_by': '',
-                        'laboratory': self._MODALITY_DISPLAY.get(modality, ''),
+                        'performed_at': performed_dt.strftime('%Y-%m-%d %H:%M') if performed_dt else '',
+                        'requested_by': requested_by,
+                        'laboratory': self._MODALITY_DISPLAY.get(modality) or laboratory_raw,
                         'modality': modality,
+                        'analysis_count': int(analysis_count_raw) if analysis_count_raw.isdigit() else None,
                     })
 
             data.store_list("requests", requests)
@@ -5058,9 +5015,9 @@ class HippoClientSchedule(HippoClient):
                     severity="error"
                 )
 
-            # section/status filtering already applied upstream in fetch_and_parse/
-            # _fetch_and_parse_all_labs via _apply_filters, so both /api/schedule and
-            # /fhir/Schedule see identical, already-filtered rows here.
+            # section/status filtering already applied upstream in fetch_and_parse
+            # via _apply_filters, so both /api/schedule and /fhir/Schedule see
+            # identical, already-filtered rows here.
             requests = parsed_data.get("requests") or []
 
             bundle = FHIRBundle(type="searchset", total=len(requests))
@@ -5071,8 +5028,7 @@ class HippoClientSchedule(HippoClient):
             )
 
             for req in requests:
-                status_key = (req.get('status') or '').lower()
-                fhir_status = self._FHIR_STATUS.get(status_key, 'unknown')
+                fhir_status = self._derive_fhir_status(req)
                 priority = 'urgent' if (req.get('priority') or '').lower() not in ('normala', 'normal', '') else 'routine'
 
                 sr = FHIRServiceRequest(
