@@ -48,8 +48,6 @@ document.addEventListener('DOMContentLoaded', function() {
         historyList: document.getElementById('historyList'),
         historyLoading: document.getElementById('historyLoading'),
         historyEmpty: document.getElementById('historyEmpty'),
-        patientScheduleTimeline: document.getElementById('patientScheduleTimeline'),
-        patientScheduleEmpty: document.getElementById('patientScheduleEmpty'),
         presentationsCount: document.getElementById('presentationsCount'),
         checkinsCount: document.getElementById('checkinsCount'),
         checkoutsCount: document.getElementById('checkoutsCount'),
@@ -2894,7 +2892,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Hospitalisation history loads lazily; don't block the profile render
         loadHospitalisationHistory(patientData);
-        renderPatientScheduleCard(patientData);
 
         log('Patient data display completed');
     }
@@ -5860,10 +5857,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.scheduleTable) elements.scheduleTable.hidden = false;
     }
 
-    // Builds one schedule timeline row (shared by renderSchedule and the
-    // patient-profile "Related Requests" card). timeLabel is precomputed by
-    // the caller since the two contexts need different date/time logic (day
-    // grouping vs. always-show-full-date).
+    // Builds one schedule timeline row.
     function buildTimelineRow(r, { isLast, timeLabel }) {
         const authoredOn = r.authoredOn || '';
         const patientName = r.subject?.display || '';
@@ -5978,46 +5972,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Filters placeholder junk like ". .. ." that doctors sometimes type just to pass form validation
     function _isMeaningfulText(text) {
         return !!text && /[A-Za-z0-9À-ɏ]/.test(text);
-    }
-
-    function _normalizeScheduleName(s) {
-        return (s || '').toUpperCase().replace(/\s+/g, ' ').trim();
-    }
-
-    // "Related Requests" card on the patient profile: reuses whatever is
-    // already in scheduleEntries (populated by visiting the Schedule tab) —
-    // no dedicated fetch, so this is empty until the Schedule tab has loaded
-    // at least once this session. Matches on the patient's structured
-    // name (family + given), not the schedule row's scraped display string,
-    // since Hipocrate's own formatting/spacing is inconsistent between pages.
-    function renderPatientScheduleCard(patientData) {
-        const container = elements.patientScheduleTimeline;
-        const emptyEl = elements.patientScheduleEmpty;
-        if (!container) return;
-        container.innerHTML = '';
-
-        const family = patientData.name?.[0]?.family || '';
-        const given  = (patientData.name?.[0]?.given || []).join(' ');
-        const fullName = _normalizeScheduleName(`${family} ${given}`);
-
-        const matches = fullName
-            ? scheduleEntries.filter(r => _normalizeScheduleName(r.subject?.display) === fullName)
-            : [];
-
-        if (matches.length === 0) {
-            container.hidden = true;
-            if (emptyEl) emptyEl.hidden = false;
-            return;
-        }
-        if (emptyEl) emptyEl.hidden = true;
-        container.hidden = false;
-
-        matches.forEach((r, idx) => {
-            const authoredOn = r.authoredOn || '';
-            const [day, time] = authoredOn.includes(' ') ? authoredOn.split(' ') : [authoredOn, ''];
-            const timeLabel = time ? `${day} ${time}` : day;
-            container.appendChild(buildTimelineRow(r, { isLast: idx === matches.length - 1, timeLabel }));
-        });
     }
 
     // Intersection observer: one lazy fetch per row (BuletinSolicitare.asp, the
