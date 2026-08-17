@@ -1733,9 +1733,13 @@ select {
 .analysis-card > .card-toolbar {
     align-self: center;
 }
+/* flex-start, not center — .report-header's text block can be up to three
+   lines (eyebrow + title + subtitle), and centering the toolbar against
+   that whole block visually detaches it from the title it's paired with.
+   Top-aligned keeps it level with the eyebrow/title instead. */
 .report-header > .card-toolbar,
 .epicrisis-header > .card-toolbar {
-    align-self: center;
+    align-self: flex-start;
 }
 
 /* Both buttons lose their standalone border/background/radius when grouped

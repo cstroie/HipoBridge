@@ -584,6 +584,70 @@ document.addEventListener('DOMContentLoaded', function() {
     let dataGeneration = 0;
     let prefetchTimers = [];
 
+    // ── Schedule idle-prefetch ──────────────────────────────────────────
+    // Warms the ImagingStudy/DiagnosticReport cache for rows currently listed
+    // in the schedule, one request at a time, only while the user is idle.
+    // Any mouse/keyboard/scroll activity immediately postpones the next
+    // fetch — this must never compete with an interactive request for
+    // Hipocrate's attention.
+    let lastActivityTs = Date.now();
+    ['mousemove', 'mousedown', 'keydown', 'wheel', 'touchstart', 'scroll'].forEach(evt => {
+        window.addEventListener(evt, () => { lastActivityTs = Date.now(); }, { passive: true, capture: true });
+    });
+
+    const SCHEDULE_PREFETCH_IDLE_GATE = 1500; // ms of quiet required before touching Hipocrate
+    const SCHEDULE_PREFETCH_GAP = 1000;        // spacing between prefetch requests once idle
+    let scheduleGeneration = 0;
+    let schedulePrefetchQueue = [];
+    let schedulePrefetchTimer = null;
+    const scheduleFetchedIds = new Set(); // avoids re-warming rows already fetched this session
+
+    function stopSchedulePrefetch() {
+        if (schedulePrefetchTimer) { clearTimeout(schedulePrefetchTimer); schedulePrefetchTimer = null; }
+        schedulePrefetchQueue = [];
+    }
+
+    function queueSchedulePrefetchStep(gen, delay) {
+        schedulePrefetchTimer = setTimeout(() => schedulePrefetchStep(gen), delay);
+    }
+
+    function schedulePrefetchStep(gen) {
+        schedulePrefetchTimer = null;
+        if (gen !== scheduleGeneration || document.hidden) return; // schedule changed or tab backgrounded
+        const idleFor = Date.now() - lastActivityTs;
+        if (idleFor < SCHEDULE_PREFETCH_IDLE_GATE) {
+            queueSchedulePrefetchStep(gen, SCHEDULE_PREFETCH_IDLE_GATE - idleFor);
+            return;
+        }
+        const item = schedulePrefetchQueue.shift();
+        if (!item) return; // queue drained
+        if (scheduleFetchedIds.has(item.id)) {
+            schedulePrefetchStep(gen); // already warm, move on without waiting
+            return;
+        }
+        scheduleFetchedIds.add(item.id);
+        const endpoint = item.isImaging ? `/fhir/ImagingStudy/${item.id}` : `/fhir/DiagnosticReport/${item.id}`;
+        apiFetch(endpoint).catch(() => {}).finally(() => {
+            if (gen !== scheduleGeneration) return;
+            queueSchedulePrefetchStep(gen, SCHEDULE_PREFETCH_GAP);
+        });
+    }
+
+    // Only warm rows whose report is likely to actually exist — no point
+    // hitting Hipocrate for requests that haven't reached the lab yet.
+    const SCHEDULE_PREFETCH_STATUSES = new Set(['draft', 'active', 'completed', 'ended']);
+    const SCHEDULE_PREFETCH_IMAGING = new Set(['radio', 'ct', 'irm', 'eco', 'rads', 'fluoro']);
+
+    function startSchedulePrefetch(entries) {
+        scheduleGeneration++;
+        stopSchedulePrefetch();
+        const gen = scheduleGeneration;
+        schedulePrefetchQueue = entries
+            .filter(r => SCHEDULE_PREFETCH_STATUSES.has(r.status) && !scheduleFetchedIds.has(r.id))
+            .map(r => ({ id: r.id, isImaging: SCHEDULE_PREFETCH_IMAGING.has(r.category?.[0]?.coding?.[0]?.code || '') }));
+        if (schedulePrefetchQueue.length) queueSchedulePrefetchStep(gen, SCHEDULE_PREFETCH_IDLE_GATE);
+    }
+
     async function fetchServiceBundle() {
         if (cachedServiceRequests !== null) return cachedServiceRequests;
         const result = await fetchAnalysesData(pendingAnalysesData.patientCode);
@@ -5877,6 +5941,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!sectionName) populateSectionFilter(scheduleEntries);
             renderSchedule();
             if (elements.scheduleTable) elements.scheduleTable.dataset.loaded = '1';
+            startSchedulePrefetch(scheduleEntries);
         } catch (err) {
             showToast(`Failed to load schedule: ${err.message}`, 'error');
         } finally {

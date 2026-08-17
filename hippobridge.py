@@ -1137,6 +1137,22 @@ async def serve_web_page(request):
     return web.FileResponse(os.path.join(os.path.dirname(__file__), 'static', 'main.html'))
 
 
+@web.middleware
+async def no_cache_static_middleware(request, handler):
+    """Force revalidation on the SPA shell and its static assets. Mobile
+    browsers (no dev-tools "disable cache" option) otherwise keep serving a
+    stale styles.css/scripts.js/main.html indefinitely — aiohttp's static
+    handler sets Last-Modified but no Cache-Control, so heuristic caching
+    can go stale for a long time with nothing forcing a check. no-cache
+    (not no-store) still lets an unchanged file short-circuit via a 304, so
+    this doesn't force a full re-download on every load — just a mandatory
+    freshness check with the server first."""
+    response = await handler(request)
+    if request.path == '/' or request.path.startswith('/static/'):
+        response.headers['Cache-Control'] = 'no-cache'
+    return response
+
+
 def web_error_response(message: str, status_code: int = 400, details: Dict[str, Any] = None) -> web.Response:
     """Return a standardized JSON error response."""
     if status_code >= 500:
@@ -1455,7 +1471,7 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     else:
         logger.info("Persistent filesystem cache disabled (no cache.dir configured)")
 
-    app = web.Application()
+    app = web.Application(middlewares=[no_cache_static_middleware])
     app.router.add_get('/', serve_web_page)
     app.router.add_get('/api/patient', search_patient)
     app.router.add_get('/api/patient/{id}', get_patient)
