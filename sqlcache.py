@@ -266,7 +266,7 @@ class SqliteCache:
         by_table: dict = {}
         now = self._now()
         with self._lock:
-            for table in RAW_HTML_TABLES:
+            for table in RAW_HTML_TABLES + ['cache_ai']:
                 count, size, exp_count, tmin, tmax = self._con.execute(
                     f"""SELECT COUNT(*), COALESCE(SUM(LENGTH(content)), 0),
                                SUM(CASE WHEN expires_at < ? THEN 1 ELSE 0 END),

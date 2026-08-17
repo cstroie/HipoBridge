@@ -1525,12 +1525,12 @@ document.addEventListener('DOMContentLoaded', function() {
         labHasAbnormal = false;
     }
 
-    // Clinical-only text used by the Report and Pre-Exam summaries —
-    // deliberately excludes patient demographics (name/DOB/CNP), which the
-    // model tends to fabricate or garble when asked to restate them; the
-    // card is paired with the already-rendered, deterministic patient
-    // identity on the Report tab instead. Falls back to the full markdown
-    // if the clinical-only stash isn't populated (e.g. an older cached load).
+    // Clinical text used by the Report and Pre-Exam summaries — carries only
+    // the patientContextHeader() line (initials/age/sex/diagnosis, never
+    // name/DOB/CNP) plus admission/lab/imaging content; excludes the
+    // deterministic patient identity block rendered on the Report tab
+    // itself. Falls back to the full markdown if the clinical-only stash
+    // isn't populated (e.g. an older cached load).
     function getPatientClinicalText() {
         const clinical = elements.patientReportBlocks?.dataset.clinicalMarkdown;
         if (clinical && clinical.trim()) return clinical;
@@ -2319,8 +2319,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const secImaging = document.getElementById('reportSectionImaging');
             const imagingList = document.getElementById('reportImagingList');
             if (secImaging) secImaging.hidden = true;
-            const MOD_SHORT = { radio: 'XR', ct: 'CT', irm: 'MR', eco: 'US', rads: 'FL' };
-            const MOD_VAR   = { radio: '--mod-xr', ct: '--mod-ct', irm: '--mod-mr', eco: '--mod-us', rads: '--mod-fl' };
+            const MOD_SHORT = { radio: 'XR', ct: 'CT', irm: 'MR', eco: 'US', rads: 'FL', fluoro: 'FL' };
+            const MOD_VAR   = { radio: '--mod-xr', ct: '--mod-ct', irm: '--mod-mr', eco: '--mod-us', rads: '--mod-fl', fluoro: '--mod-fl' };
             // Hoisted so the markdown builder below can reference them
             let entries = [], reports = [], indications = [];
             if (imagingList && analysesData?.entry?.length) {
@@ -2714,11 +2714,6 @@ document.addEventListener('DOMContentLoaded', function() {
             // API endpoint) — send them as-is, no re-guessing. The admission
             // narrative(s) are HippoBridge's one remaining free-text blob with
             // no further structure, sent separately for server-side segmentation.
-            // clinicalMarkdown deliberately excludes patientMarkdown (name/DOB/
-            // CNP) — the Quick Summary feature reads real patient identity from
-            // already-rendered DOM fields instead of asking the model to guess
-            // it from raw text (confirmed live: an ungrounded small model will
-            // confidently fabricate age/sex rather than omit them).
             if (elements.patientReportBlocks) {
                 const typedBlocks = entries
                     .map((entry, idx) => ({ hint_type: 'imaging', text: reports[idx] }))
@@ -2727,7 +2722,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     typed_blocks: typedBlocks,
                     narrative: narrativeParts.join('\n\n'),
                 });
-                elements.patientReportBlocks.dataset.clinicalMarkdown = admissionsMd + labsMd + imagingMd;
+                elements.patientReportBlocks.dataset.clinicalMarkdown =
+                    patientContextHeader(patientData, latestDx) + admissionsMd + labsMd + imagingMd;
             }
 
             if (reportCard) reportCard.hidden = false;
@@ -2741,23 +2737,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     async function generatePatientMarkdown(patientData, primaryDiagnosis) {
         log('Generating patient report markdown');
-
-        const name = formatPatientName(patientData.name);
-        const age = calculateAge(patientData.birthDate);
-        const gender = formatGender(patientData.gender);
-        const dob = formatBirthDate(patientData.birthDate);
-        const cnp = extractCNP(patientData.identifier) || 'N/A';
-
-        let markdown = `# PATIENT CLINICAL REPORT\n\n`;
-        markdown += `## Patient\n\n`;
-        markdown += `**Name:** ${name}  \n`;
-        markdown += `**Age:** ${age}  \n`;
-        markdown += `**Sex:** ${gender}  \n`;
-        markdown += `**DOB:** ${dob}  \n`;
-        markdown += `**CNP:** ${cnp}  \n`;
-        if (primaryDiagnosis) markdown += `**Primary Diagnosis:** ${primaryDiagnosis}  \n`;
-        markdown += `\n`;
-
+        const markdown = `# PATIENT CLINICAL REPORT\n\n` + patientContextHeader(patientData, primaryDiagnosis);
         log('Patient report markdown generated successfully');
         return markdown;
     }
@@ -3384,6 +3364,27 @@ document.addEventListener('DOMContentLoaded', function() {
             : '';
         const parts = [givenInitials, familyInitial].filter(Boolean);
         return parts.length ? parts.join('.') + '.' : 'N/A';
+    }
+
+    // Shared "Initials | Age | Sex | Diagnosis" context line — no name/DOB/
+    // CNP — prepended to every tab-level AI|Copy toolbar's copied Markdown
+    // and AI input (Patient Report, Lab Trends, Imaging current episode,
+    // Hospitalization, and the Profile "AI Summary"/pre-exam text they all
+    // share via getPatientClinicalText()). `diagnosis` overrides the
+    // page-wide #patientDiagnosis text when a caller already has a more
+    // specific one on hand (e.g. the Report tab's own latestDx).
+    function patientContextLine(patientData, diagnosis) {
+        if (!patientData) return '';
+        const initials = formatPatientInitials(patientData.name);
+        const age = calculateAge(patientData.birthDate);
+        const gender = formatGender(patientData.gender);
+        const dx = diagnosis ?? elements.patientDiagnosis?.textContent?.trim();
+        return [initials, age, gender, dx].filter(v => v && v !== 'N/A').join(' | ');
+    }
+
+    function patientContextHeader(patientData, diagnosis) {
+        const line = patientContextLine(patientData, diagnosis);
+        return line ? `${line}\n\n` : '';
     }
 
     // Enhanced gender formatting with icons
@@ -4053,22 +4054,12 @@ document.addEventListener('DOMContentLoaded', function() {
         // Short context header — same reasoning as buildImagingCardHeader:
         // grounds lab.md's interpretation with who the analytes belong to.
         const patientData = pendingAnalysesData?.patientData;
-        const headerParts = [];
-        if (patientData) {
-            const name = formatPatientInitials(patientData.name);
-            const gender = formatGender(patientData.gender);
-            const age = calculateAge(patientData.birthDate);
-            const demo = [name, gender, age].filter(v => v && v !== 'N/A').join(', ');
-            if (demo) headerParts.push(`**Patient:** ${demo}`);
-        }
-        const diagnosis = elements.patientDiagnosis?.textContent?.trim();
-        if (diagnosis) headerParts.push(`**Diagnosis:** ${diagnosis}`);
-        const labHeader = headerParts.length ? headerParts.join('  \n') + '\n\n---\n\n' : '';
+        const labHeader = patientContextHeader(patientData);
         labAiText = labHasAbnormal ? labHeader + [header, ...rows].join('\n') : '';
         if (elements.copyLabBtn) {
             elements.copyLabBtn.hidden = !labHasAbnormal;
             elements.trendsContainer.dataset.markdown = labHasAbnormal
-                ? `# Lab Trends — Abnormal Analytes\n\n| ${header} |\n| ${header.split(' | ').map(() => '---').join(' | ')} |\n${rows.map(r => `| ${r} |`).join('\n')}`
+                ? labHeader + `# Lab Trends — Abnormal Analytes\n\n| ${header} |\n| ${header.split(' | ').map(() => '---').join(' | ')} |\n${rows.map(r => `| ${r} |`).join('\n')}`
                 : '';
         }
         if (elements.aiLabBtn) {
@@ -4270,17 +4261,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!kept.length) return '';
         kept.reverse(); // oldest → newest, as the prompt expects
 
-        const headerParts = [];
-        if (patientData) {
-            const name = formatPatientInitials(patientData.name);
-            const gender = formatGender(patientData.gender);
-            const age = calculateAge(patientData.birthDate);
-            const demo = [name, gender, age].filter(v => v && v !== 'N/A').join(', ');
-            if (demo) headerParts.push(`**Patient:** ${demo}`);
-        }
-        const diagnosis = elements.patientDiagnosis?.textContent?.trim();
-        if (diagnosis) headerParts.push(`**Diagnosis:** ${diagnosis}`);
-        const header = headerParts.length ? headerParts.join('  \n') + '\n\n---\n\n' : '';
+        const header = patientContextHeader(patientData);
 
         const blocks = kept.map(({ entry, parts: p }) => {
             const sr = entry.resource;
@@ -5358,7 +5339,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         // Accordion cards; combined markdown for Copy button
-        let markdown = '';
+        let markdown = patientContextHeader(patientData);
         valid.forEach((item, index) => {
             const enc = item.enc;
             // Ongoing admissions rarely have epicrisis text yet (it's normally only
