@@ -6161,6 +6161,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         regionLine._requesterEl = metaRequesterEl;
         regionLine._requesterSep = seps[1] || null;
+        regionLine._nameBtn = nameBtn;
+        regionLine._patientName = patientName;
 
         // Analysis count ("Numar analize") — available immediately from the
         // same listing fetch as everything else above (no lazy fetch needed
@@ -6224,6 +6226,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (_examCache[id]) {
                 _applyExamLabel(el, _examCache[id]);
                 if (_examCache[id].referrer) _applyReferrer(el, _examCache[id].referrer);
+                if (_examCache[id].age) _applyPatientAge(el, _examCache[id].age);
                 return;
             }
             apiFetch(`/fhir/ServiceRequest/${id}`)
@@ -6233,10 +6236,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     const noteIndication = (data?.note || []).find(n => n.category?.[0]?.text === 'clinical-indication')?.text || '';
                     const indication = _isMeaningfulText(noteIndication) ? noteIndication : '';
                     const referrer = data?.requester?.display || '';
-                    const cached = { regions, indication, referrer };
+                    const age = data?.subject?.display || '';
+                    const cached = { regions, indication, referrer, age };
                     _examCache[id] = cached;
                     _applyExamLabel(el, cached);
                     if (referrer) _applyReferrer(el, referrer);
+                    if (age) _applyPatientAge(el, age);
                 })
                 .catch(() => {});
         });
@@ -6265,6 +6270,12 @@ document.addEventListener('DOMContentLoaded', function() {
         requesterEl.querySelector('span').textContent = referrerName;
         requesterEl.hidden = false;
         if (el._requesterSep) el._requesterSep.hidden = false;
+    }
+
+    function _applyPatientAge(el, ageText) {
+        const nameBtn = el._nameBtn;
+        if (!nameBtn) return;
+        nameBtn.textContent = `${el._patientName}, ${ageText}`;
     }
 
     function _applyExamLabel(el, { regions, indication }) {

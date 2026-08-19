@@ -3954,6 +3954,12 @@ class HippoClientBuletinSolicitare(HippoClient):
             data.store("request.clinical_situation", self._field(table_html, 'Situatie clinica:'))
             data.store("request.diagnosis_referral", self._field(table_html, 'Diagnostic de trimitere:'))
 
+            cnp_raw = self._field(table_html, 'CNP:')
+            if cnp_raw:
+                parsed_cnp = parse_cnp(cnp_raw)
+                if parsed_cnp.get("valid"):
+                    data.store("patient.age", parsed_cnp["age"])
+
             # "Medic solicitant" (the true orderer) is a signature block: the name
             # comes BEFORE its own label, in the last <td colspan="2"> of the table.
             solicitant_m = re.search(
@@ -4017,6 +4023,10 @@ class HippoClientBuletinSolicitare(HippoClient):
                 fhir_sr["note"] = (fhir_sr.get("note") or []) + [
                     {"text": indication, "category": [{"text": "clinical-indication"}]}
                 ]
+
+            age = parsed_data.get("patient.age")
+            if age is not None:
+                fhir_sr["subject"] = FHIRReference(display=f"{age} ani")
 
             return fhir_sr
         except Exception as e:
