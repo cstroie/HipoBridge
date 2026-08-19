@@ -178,10 +178,45 @@ document.addEventListener('DOMContentLoaded', function() {
         const resp = await fetch(url, { ...options, headers });
         if (resp.status === 401) {
             clearCredentials();
+            stopScheduleAutoRefresh();
             showLoginDialog('Session expired or wrong credentials. Please sign in again.');
             throw new Error('Authentication required');
         }
         return resp;
+    }
+
+    // ── Schedule periodic auto-refresh ────────────────────────────────
+    // Once authenticated, keep the schedule current (and warm the
+    // idle-prefetch cache for new items) by refetching, starting at every
+    // 5 minutes and backing off by 1.2x each tick up to a 15-minute cap.
+    // A manual refresh resets the interval back to 5 minutes.
+    let scheduleAutoRefreshTimer = null;
+    let scheduleAutoRefreshInterval = 0;
+    const SCHEDULE_AUTO_REFRESH_INTERVAL_MIN = 5 * 60 * 1000;
+    const SCHEDULE_AUTO_REFRESH_INTERVAL_MAX = 15 * 60 * 1000;
+    const SCHEDULE_AUTO_REFRESH_BACKOFF = 1.2;
+
+    function scheduleNextAutoRefresh() {
+        scheduleAutoRefreshTimer = setTimeout(() => {
+            fetchScheduleFromInputs(true);
+            scheduleAutoRefreshInterval = Math.min(
+                scheduleAutoRefreshInterval * SCHEDULE_AUTO_REFRESH_BACKOFF,
+                SCHEDULE_AUTO_REFRESH_INTERVAL_MAX
+            );
+            scheduleNextAutoRefresh();
+        }, scheduleAutoRefreshInterval);
+    }
+
+    function startScheduleAutoRefresh(reset = false) {
+        if (scheduleAutoRefreshTimer && !reset) return;
+        clearTimeout(scheduleAutoRefreshTimer);
+        scheduleAutoRefreshInterval = SCHEDULE_AUTO_REFRESH_INTERVAL_MIN;
+        scheduleNextAutoRefresh();
+    }
+
+    function stopScheduleAutoRefresh() {
+        clearTimeout(scheduleAutoRefreshTimer);
+        scheduleAutoRefreshTimer = null;
     }
 
     // ── Login dialog ──────────────────────────────────────────────────
@@ -232,6 +267,7 @@ document.addEventListener('DOMContentLoaded', function() {
             loginDialog.close();
             // Trigger the initial schedule load now that we have credentials
             fetchScheduleFromInputs();
+            startScheduleAutoRefresh();
         } catch (err) {
             loginError.textContent = `Network error: ${err.message}`;
             loginError.hidden = false;
@@ -307,6 +343,7 @@ document.addEventListener('DOMContentLoaded', function() {
             showLoginDialog();
         } else {
             whoamiReady = fetchWhoami().catch(() => {});
+            startScheduleAutoRefresh();
         }
     }
     
@@ -440,7 +477,10 @@ document.addEventListener('DOMContentLoaded', function() {
             elements.loadingErrorDismiss.addEventListener('click', hideLoading);
         }
         if (elements.refreshScheduleBtn) {
-            elements.refreshScheduleBtn.addEventListener('click', () => fetchScheduleFromInputs(true));
+            elements.refreshScheduleBtn.addEventListener('click', () => {
+                fetchScheduleFromInputs(true);
+                if (scheduleAutoRefreshTimer) startScheduleAutoRefresh(true);
+            });
         }
         if (elements.refreshPatientBtn) {
             elements.refreshPatientBtn.addEventListener('click', refreshCurrentPatient);
