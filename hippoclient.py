@@ -3940,6 +3940,19 @@ class HippoClientBuletinSolicitare(HippoClient):
             months -= 1
         return f"{max(months, 0)} luni"
 
+    @staticmethod
+    def _format_age_from_varsta(varsta_text: str) -> str:
+        """Fallback for when CNP is missing/invalid: Hipocrate's own precomputed
+        "Varsta" text, e.g. "17 ANI si 4 LUNI si 26 ZILE" -> "17 ani", or
+        "0 ANI si 3 LUNI si 2 ZILE" -> "3 luni"."""
+        years_m = re.search(r'(\d+)\s*ANI', varsta_text, re.IGNORECASE)
+        years = int(years_m.group(1)) if years_m else 0
+        if years >= 1:
+            return f"{years} ani"
+        months_m = re.search(r'(\d+)\s*LUNI', varsta_text, re.IGNORECASE)
+        months = int(months_m.group(1)) if months_m else 0
+        return f"{months} luni"
+
     def parse_data(self, html_content: str, **kwargs) -> HippoData:
         data = HippoData(status="success", message="")
         try:
@@ -3966,10 +3979,13 @@ class HippoClientBuletinSolicitare(HippoClient):
             data.store("request.diagnosis_referral", self._field(table_html, 'Diagnostic de trimitere:'))
 
             cnp_raw = self._field(table_html, 'CNP:')
-            if cnp_raw:
-                parsed_cnp = parse_cnp(cnp_raw)
-                if parsed_cnp.get("valid"):
-                    data.store("patient.age", self._format_age(parsed_cnp["age"], parsed_cnp["birth_date"]))
+            parsed_cnp = parse_cnp(cnp_raw) if cnp_raw else {}
+            if parsed_cnp.get("valid"):
+                data.store("patient.age", self._format_age(parsed_cnp["age"], parsed_cnp["birth_date"]))
+            else:
+                varsta_raw = self._field(table_html, 'Varsta:')
+                if varsta_raw:
+                    data.store("patient.age", self._format_age_from_varsta(varsta_raw))
 
             # "Medic solicitant" (the true orderer) is a signature block: the name
             # comes BEFORE its own label, in the last <td colspan="2"> of the table.
