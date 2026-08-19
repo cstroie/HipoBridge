@@ -3929,6 +3929,17 @@ class HippoClientBuletinSolicitare(HippoClient):
         m = re.search(re.escape(label) + r'\s*<b>(.*?)</b>', table_html, re.DOTALL)
         return re.sub(r'<[^>]+>', ' ', m.group(1)).strip() if m else ''
 
+    @staticmethod
+    def _format_age(age_years: int, birth_date_str: str) -> str:
+        if age_years >= 1:
+            return f"{age_years} ani"
+        birth_date = datetime.strptime(birth_date_str, '%Y-%m-%d')
+        today = datetime.today()
+        months = (today.year - birth_date.year) * 12 + (today.month - birth_date.month)
+        if today.day < birth_date.day:
+            months -= 1
+        return f"{max(months, 0)} luni"
+
     def parse_data(self, html_content: str, **kwargs) -> HippoData:
         data = HippoData(status="success", message="")
         try:
@@ -3958,7 +3969,7 @@ class HippoClientBuletinSolicitare(HippoClient):
             if cnp_raw:
                 parsed_cnp = parse_cnp(cnp_raw)
                 if parsed_cnp.get("valid"):
-                    data.store("patient.age", parsed_cnp["age"])
+                    data.store("patient.age", self._format_age(parsed_cnp["age"], parsed_cnp["birth_date"]))
 
             # "Medic solicitant" (the true orderer) is a signature block: the name
             # comes BEFORE its own label, in the last <td colspan="2"> of the table.
@@ -4025,8 +4036,8 @@ class HippoClientBuletinSolicitare(HippoClient):
                 ]
 
             age = parsed_data.get("patient.age")
-            if age is not None:
-                fhir_sr["subject"] = FHIRReference(display=f"{age} ani")
+            if age:
+                fhir_sr["subject"] = FHIRReference(display=age)
 
             return fhir_sr
         except Exception as e:
