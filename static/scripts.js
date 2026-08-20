@@ -6275,7 +6275,12 @@ document.addEventListener('DOMContentLoaded', function() {
     function _applyPatientAge(el, ageText) {
         const nameBtn = el._nameBtn;
         if (!nameBtn) return;
-        nameBtn.textContent = `${el._patientName}, ${ageText}`;
+        nameBtn.textContent = '';
+        nameBtn.appendChild(document.createTextNode(el._patientName + ' · '));
+        const ageEl = document.createElement('span');
+        ageEl.className = 'timeline-card-patient-age';
+        ageEl.textContent = ageText;
+        nameBtn.appendChild(ageEl);
     }
 
     function _applyExamLabel(el, { regions, indication }) {
