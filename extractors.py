@@ -114,7 +114,7 @@ def parse_cnp(cnp: str) -> Dict[str, Any]:
             - gender: str - "male" or "female"
             - birth_date: str - ISO format date (YYYY-MM-DD)
             - age: int - patient age in years
-            - county_code: int - county code (1-52, 70-79 for diaspora, 90-99 for special)
+            - county_code: int - county code (1-47, 51, 52, 70, or 80-83)
             - county_name: str - full county name
             - serial: str - 3-digit serial number
             - control_digit: int - control digit (0-9)
@@ -144,10 +144,9 @@ def parse_cnp(cnp: str) -> Dict[str, Any]:
         37: "Vaslui", 38: "Vâlcea", 39: "Vrancea", 40: "București", 41: "București",
         42: "București", 43: "București", 44: "București", 45: "București", 46: "București",
         51: "Călărași", 52: "Giurgiu",
-        70: "Diaspora", 71: "Diaspora", 72: "Diaspora", 73: "Diaspora", 74: "Diaspora",
-        75: "Diaspora", 76: "Diaspora", 77: "Diaspora", 78: "Diaspora", 79: "Diaspora",
-        90: "Special", 91: "Special", 92: "Special", 93: "Special", 94: "Special",
-        95: "Special", 96: "Special", 97: "Special", 98: "Special", 99: "Special"
+        70: "Diaspora",
+        # 47 and 80-83 are valid per the county-code range below but this
+        # module has no confirmed name for them; falls through to "Unknown".
     }
 
     # Validate gender digit (1-8 are valid)
@@ -162,10 +161,13 @@ def parse_cnp(cnp: str) -> Dict[str, Any]:
     if day < 1 or day > 31:
         return {"valid": False}
 
-    # Validate county code (1-52, excluding 47-50, plus 70-79 for diaspora, 90-99 for special cases)
-    if not ((1 <= county_code <= 52 and not (47 <= county_code <= 50)) or
-            (70 <= county_code <= 79) or
-            (90 <= county_code <= 99)):
+    # Validate county code — per the official structure (OECD AEOI Romania TIN
+    # reference, https://www.oecd.org/content/dam/oecd/en/topics/policy-issue-focus/aeoi/romania-tin.pdf,
+    # page 2): 01-47, 51, 52, 70, or 80-83. Not 48-50, 71-79, or 90-99 as
+    # previously assumed here.
+    if not ((1 <= county_code <= 47) or
+            county_code in (51, 52, 70) or
+            (80 <= county_code <= 83)):
         return {"valid": False}
 
     # Validate date by trying to create a datetime object
