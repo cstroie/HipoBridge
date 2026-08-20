@@ -4489,14 +4489,27 @@ document.addEventListener('DOMContentLoaded', function() {
             // request itself (Justificare / Situatie clinica on
             // BuletinSolicitare.asp). Fall back to the same per-request fetch
             // the Schedule tab already uses for this (scheduleExamObserver).
-            if (imagingTypes.includes(type) && !article.querySelector('.card-indication-text')?.textContent) {
+            // Also the only source for the TRUE ordering physician ("Medic
+            // solicitant") — the referrer set above at populate-time comes
+            // from the listing's "medic" column, which is "Medic curant" (the
+            // attending physician), a different person whenever the patient's
+            // regular doctor isn't the one who placed this specific order.
+            if (imagingTypes.includes(type)) {
                 try {
                     const srResp = await apiFetch(`/fhir/ServiceRequest/${id}`);
                     if (srResp.ok) {
                         const srData = await srResp.json();
-                        const srIndication = (srData.note || [])
-                            .find(n => n.category?.[0]?.text === 'clinical-indication')?.text || '';
-                        if (_isMeaningfulText(srIndication)) setCardIndication(article, srIndication);
+                        if (!article.querySelector('.card-indication-text')?.textContent) {
+                            const srIndication = (srData.note || [])
+                                .find(n => n.category?.[0]?.text === 'clinical-indication')?.text || '';
+                            if (_isMeaningfulText(srIndication)) setCardIndication(article, srIndication);
+                        }
+                        const srReferrer = srData.requester?.display;
+                        if (referrerEl && _isMeaningfulText(srReferrer)) {
+                            referrerEl.textContent = srReferrer;
+                            const line = article.querySelector('.card-referrer-line');
+                            if (line) line.hidden = false;
+                        }
                     }
                 } catch (_) { /* best-effort */ }
             }
@@ -5661,20 +5674,33 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (indicationNote?.text) {
                     modal.querySelector('.modal-indication-text').textContent = indicationNote.text;
                     modal.querySelector('.report-modal-indication').hidden = false;
-                } else if (isImaging) {
+                }
+                if (isImaging) {
                     // ImagingStudy's own note (BuletinAnalize.asp's INFO SUPLIMENTAR) is
                     // often empty even when a clinical indication was recorded on the
                     // request itself (Justificare / Situatie clinica on
                     // BuletinSolicitare.asp) — same fallback as the Imaging tab card.
+                    // Also the only source for the TRUE ordering physician ("Medic
+                    // solicitant") — requesterName passed in from the schedule row
+                    // can still be the listing's "Medic curant" (attending
+                    // physician) if that row's own lazy correction (scheduleExamObserver)
+                    // hadn't resolved yet at the moment this modal was opened.
                     try {
                         const srResp = await apiFetch(`/fhir/ServiceRequest/${requestId}`);
                         if (srResp.ok) {
                             const srData = await srResp.json();
-                            const srIndication = (srData.note || [])
-                                .find(n => n.category?.[0]?.text === 'clinical-indication')?.text || '';
-                            if (_isMeaningfulText(srIndication)) {
-                                modal.querySelector('.modal-indication-text').textContent = srIndication;
-                                modal.querySelector('.report-modal-indication').hidden = false;
+                            if (!indicationNote?.text) {
+                                const srIndication = (srData.note || [])
+                                    .find(n => n.category?.[0]?.text === 'clinical-indication')?.text || '';
+                                if (_isMeaningfulText(srIndication)) {
+                                    modal.querySelector('.modal-indication-text').textContent = srIndication;
+                                    modal.querySelector('.report-modal-indication').hidden = false;
+                                }
+                            }
+                            const srReferrer = srData.requester?.display;
+                            if (_isMeaningfulText(srReferrer)) {
+                                modal.querySelector('.modal-requester').textContent = srReferrer;
+                                modal.querySelector('.report-modal-referrer').hidden = false;
                             }
                         }
                     } catch (_) { /* best-effort */ }
