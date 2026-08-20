@@ -3926,32 +3926,50 @@ class HippoClientBuletinSolicitare(HippoClient):
 
     @staticmethod
     def _field(table_html: str, label: str) -> str:
-        m = re.search(re.escape(label) + r'\s*<b>(.*?)</b>', table_html, re.DOTALL)
+        # [^<] rather than \s* so parenthetical filler between a label and its
+        # value (e.g. "Indicatii speciale (denumire detaliata...): <b>...")
+        # doesn't need to be spelled out verbatim — it still can't cross a tag
+        # boundary, so this remains anchored to the label's own <b>, not a
+        # neighbouring field's.
+        m = re.search(re.escape(label) + r'[^<]*<b>(.*?)</b>', table_html, re.DOTALL)
         return re.sub(r'<[^>]+>', ' ', m.group(1)).strip() if m else ''
+
+    @staticmethod
+    def _input_field(table_html: str, id_suffix: str) -> str:
+        """Value for an <input id="...{suffix}" ...> whose id prefix varies by
+        exam type (e.g. "EXECO_GR" vs some other department's "..._GR").
+        Prefers the printed "afisareInPrint" companion <p> (populated at
+        print time) and falls back to the live input's value attribute."""
+        m = re.search(r'id="[A-Za-z0-9]*' + re.escape(id_suffix) + r'_text"[^>]*>([^<]*)<', table_html)
+        text = m.group(1).strip() if m else ''
+        if text:
+            return text
+        m = re.search(r'id="[A-Za-z0-9]*' + re.escape(id_suffix) + r'"[^>]*\bvalue="([^"]*)"', table_html)
+        return m.group(1).strip() if m else ''
 
     @staticmethod
     def _format_age(age_years: int, birth_date_str: str) -> str:
         if age_years >= 1:
-            return f"{age_years} ani"
+            return f"{age_years}y"
         birth_date = datetime.strptime(birth_date_str, '%Y-%m-%d')
         today = datetime.today()
         months = (today.year - birth_date.year) * 12 + (today.month - birth_date.month)
         if today.day < birth_date.day:
             months -= 1
-        return f"{max(months, 0)} luni"
+        return f"{max(months, 0)}m"
 
     @staticmethod
     def _format_age_from_varsta(varsta_text: str) -> str:
         """Fallback for when CNP is missing/invalid: Hipocrate's own precomputed
-        "Varsta" text, e.g. "17 ANI si 4 LUNI si 26 ZILE" -> "17 ani", or
-        "0 ANI si 3 LUNI si 2 ZILE" -> "3 luni"."""
+        "Varsta" text, e.g. "17 ANI si 4 LUNI si 26 ZILE" -> "17y", or
+        "0 ANI si 3 LUNI si 2 ZILE" -> "3m"."""
         years_m = re.search(r'(\d+)\s*ANI', varsta_text, re.IGNORECASE)
         years = int(years_m.group(1)) if years_m else 0
         if years >= 1:
-            return f"{years} ani"
+            return f"{years}y"
         months_m = re.search(r'(\d+)\s*LUNI', varsta_text, re.IGNORECASE)
         months = int(months_m.group(1)) if months_m else 0
-        return f"{months} luni"
+        return f"{months}m"
 
     def parse_data(self, html_content: str, **kwargs) -> HippoData:
         data = HippoData(status="success", message="")
@@ -3973,14 +3991,50 @@ class HippoClientBuletinSolicitare(HippoClient):
 
             data.store("request.organ", self._field(table_html, 'Organ tinta / segment anatomic *'))
             data.store("request.section", self._field(table_html, 'Sectia:'))
-            data.store("request.physician_curant", self._field(table_html, 'Medic curant:'))
             data.store("request.justification", self._field(table_html, 'Justificare:'))
             data.store("request.clinical_situation", self._field(table_html, 'Situatie clinica:'))
             data.store("request.diagnosis_referral", self._field(table_html, 'Diagnostic de trimitere:'))
 
+            # Not every exam type has "Organ tinta / segment anatomic" (e.g. CT/MRI
+            # forms use "Investigatii" for the procedure name instead) — capture it
+            # separately so callers can fall back to it when request.organ is empty.
+            data.store("request.investigation", self._field(table_html, 'Investigatii:'))
+            data.store("request.priority", self._field(table_html, 'Prioritate:'))
+            data.store("request.admission_number", self._field(table_html, 'Nr. F.O.:'))
+            data.store("request.clinical_data", self._field(table_html, 'Date clinico-paraclinice,probleme diagnostice:'))
+            data.store("request.special_indications", self._field(table_html, 'Indicatii speciale'))
+            data.store("request.chapter", self._field(table_html, 'Capitol:'))
+            data.store("request.subchapter", self._field(table_html, 'Subcapitol:'))
+            data.store("request.guideline_decision", self._field(table_html, 'Decizie Ghid:'))
+            data.store("request.prior_imaging", self._input_field(table_html, '_examen_img'))
+
+            # "Medic curant:" sometimes carries TWO adjacent <b> tags with no
+            # separator: the first is the actual attending physician, the second
+            # is the ordering physician ("Medic solicitant") whose name got
+            # printed here instead of on its own signature line below — that
+            # line then prints with nothing in front of it (see the fallback
+            # a few lines down). _field() would only ever see the first <b>.
+            curant_m = re.search(r'Medic curant:\s*((?:<b>.*?</b>\s*)+)', table_html, re.DOTALL)
+            curant_names = [n for n in (re.sub(r'<[^>]+>', '', b).strip()
+                                         for b in re.findall(r'<b>(.*?)</b>', curant_m.group(1))) if n] if curant_m else []
+            data.store("request.physician_curant", curant_names[0] if curant_names else '')
+
+            data.store("patient.family_name", self._field(table_html, 'Nume:'))
+            data.store("patient.given_name", self._field(table_html, 'Prenume:'))
+            if data.get("patient.family_name") or data.get("patient.given_name"):
+                data.store("patient.name", f"{data.get('patient.family_name', '')} {data.get('patient.given_name', '')}".strip())
+            data.store("patient.phone", self._field(table_html, 'Telefon:'))
+            data.store("patient.weight", self._input_field(table_html, '_GR'))
+            data.store("patient.height", self._input_field(table_html, '_IE'))
+            pregnant_m = re.search(r'Sarcina:\s*([^<\s]+)', table_html)
+            data.store("patient.pregnant", pregnant_m.group(1).strip() if pregnant_m else '')
+
             cnp_raw = self._field(table_html, 'CNP:')
             parsed_cnp = parse_cnp(cnp_raw) if cnp_raw else {}
             if parsed_cnp.get("valid"):
+                data.store("patient.cnp", cnp_raw)
+                data.store("patient.gender", parsed_cnp.get("gender"))
+                data.store("patient.date", parsed_cnp.get("birth_date"))
                 data.store("patient.age", self._format_age(parsed_cnp["age"], parsed_cnp["birth_date"]))
             else:
                 varsta_raw = self._field(table_html, 'Varsta:')
@@ -3992,8 +4046,15 @@ class HippoClientBuletinSolicitare(HippoClient):
             solicitant_m = re.search(
                 r'<td colspan="2"><b>(.*?)</b>\s*<br/?>\s*<br/?>\s*Medic solicitant',
                 table_html, re.DOTALL)
-            data.store("request.physician_solicitant",
-                       re.sub(r'<[^>]+>', ' ', solicitant_m.group(1)).strip() if solicitant_m else '')
+            physician_solicitant = re.sub(r'<[^>]+>', ' ', solicitant_m.group(1)).strip() if solicitant_m else ''
+            if not physician_solicitant and len(curant_names) > 1:
+                physician_solicitant = curant_names[1]
+            data.store("request.physician_solicitant", physician_solicitant)
+
+            date_raw = self._field(table_html, 'Data solicitarii:')
+            if date_raw:
+                dt = parse_date_time(date_raw)
+                data.store("request.date_time", dt.isoformat() if dt else date_raw)
 
             return data
         except Exception as e:
@@ -4013,8 +4074,14 @@ class HippoClientBuletinSolicitare(HippoClient):
 
             fhir_sr = FHIRServiceRequest(id=request_id, status="active", intent="order")
 
+            identifiers = []
             if request_id:
-                fhir_sr["identifier"] = [{"value": request_id}]
+                identifiers.append({"value": request_id})
+            admission_number = parsed_data.get("request.admission_number")
+            if admission_number:
+                identifiers.append({"type": {"text": "F.O."}, "value": admission_number})
+            if identifiers:
+                fhir_sr["identifier"] = identifiers
 
             # Ordering physician takes priority — falls back to the attending
             # physician only when no distinct orderer was recorded.
@@ -4023,14 +4090,22 @@ class HippoClientBuletinSolicitare(HippoClient):
             if referrer:
                 fhir_sr["requester"] = FHIRReference(display=referrer)
 
+            priority_map = {"normala": "routine", "urgenta": "urgent"}
+            priority = priority_map.get((parsed_data.get("request.priority") or "").strip().lower())
+            if priority:
+                fhir_sr["priority"] = priority
+
             # Abstract the raw procedure name (e.g. "ULTRASONOGRAFIA ABDOMINALA
             # (INCLUSIV PELVIS)") down to a short region label ("Abdomen"), same
             # as ImagingStudy's series.bodySite — regions.cfg-driven, so this
             # matches what the schedule timeline showed before it was switched
-            # to this endpoint.
-            organ = parsed_data.get("request.organ")
-            if organ:
-                _, region = identify_study_type_and_region(organ)
+            # to this endpoint. "Organ tinta / segment anatomic" isn't on every
+            # exam type's form (CT/MRI forms use "Investigatii" instead), so
+            # fall back to that for the same lookup.
+            procedure_name = parsed_data.get("request.organ") or parsed_data.get("request.investigation")
+            if procedure_name:
+                fhir_sr["code"] = FHIRCodeableConcept(text=procedure_name)
+                _, region = identify_study_type_and_region(procedure_name)
                 if region and region != "unknown":
                     fhir_sr["bodySite"] = [FHIRCodeableConcept(text=region.replace("_", " ").title())]
 
@@ -4044,16 +4119,68 @@ class HippoClientBuletinSolicitare(HippoClient):
             indication = next((t for t in (
                 parsed_data.get("request.justification"),
                 parsed_data.get("request.clinical_situation"),
+                parsed_data.get("request.clinical_data"),
                 parsed_data.get("request.diagnosis_referral"),
+                parsed_data.get("request.special_indications"),
             ) if is_meaningful_text(t)), None)
             if indication:
                 fhir_sr["note"] = (fhir_sr.get("note") or []) + [
                     {"text": indication, "category": [{"text": "clinical-indication"}]}
                 ]
 
+            guideline_bits = [t for t in (
+                parsed_data.get("request.chapter"),
+                parsed_data.get("request.subchapter"),
+                parsed_data.get("request.guideline_decision"),
+            ) if is_meaningful_text(t)]
+            if guideline_bits:
+                fhir_sr["note"] = (fhir_sr.get("note") or []) + [
+                    {"text": " / ".join(guideline_bits), "category": [{"text": "guideline-decision"}]}
+                ]
+
+            prior_imaging = parsed_data.get("request.prior_imaging")
+            if is_meaningful_text(prior_imaging):
+                fhir_sr["note"] = (fhir_sr.get("note") or []) + [
+                    {"text": prior_imaging, "category": [{"text": "prior-imaging"}]}
+                ]
+
+            # `subject.display` stays age-only — the schedule frontend composes
+            # "NAME, N ani" itself from a name it already has plus this display
+            # text (see 4f66cb0), so changing the format here would break that.
+            # Everything else this form exposes about the patient goes on
+            # `subject.identifier`/`extension` instead, for consumers hitting
+            # this endpoint directly without a schedule row's name in hand.
             age = parsed_data.get("patient.age")
             if age:
                 fhir_sr["subject"] = FHIRReference(display=age)
+
+            cnp = parsed_data.get("patient.cnp")
+            if cnp and self.request:
+                # Same NamingSystem convention as HippoClientPatient's CNP identifier.
+                fhir_sr.setdefault("subject", FHIRReference())["identifier"] = {
+                    "use": "official",
+                    "system": f"{self.request.scheme}://{self.request.host}/fhir/NamingSystem/patient-cnp",
+                    "value": cnp,
+                }
+
+            extensions = []
+            for url, value in (
+                ("patientName", parsed_data.get("patient.name")),
+                ("patientGender", parsed_data.get("patient.gender")),
+                ("patientBirthDate", parsed_data.get("patient.date")),
+                ("patientPhone", parsed_data.get("patient.phone")),
+                ("patientWeight", parsed_data.get("patient.weight")),
+                ("patientHeight", parsed_data.get("patient.height")),
+                ("patientPregnant", parsed_data.get("patient.pregnant")),
+            ):
+                if value:
+                    extensions.append({"url": url, "valueString": value})
+            if extensions:
+                fhir_sr["extension"] = extensions
+
+            date_time = parsed_data.get("request.date_time")
+            if date_time:
+                fhir_sr["authoredOn"] = date_time
 
             return fhir_sr
         except Exception as e:
