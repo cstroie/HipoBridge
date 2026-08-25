@@ -56,6 +56,10 @@ logger = logging.getLogger('Pacs')
 _ENV_USER_KEYS = ('HYP_USER',)
 _ENV_PASS_KEYS = ('HYP_PASS',)
 
+# Confidence ranking used when a single query returns multiple matching
+# studies — the strongest classification found wins (see _query_pacs_sync).
+_OUTCOME_RANK = {'not_found': 0, 'error': 0, 'likely': 1, 'performed': 2}
+
 
 def _load_config(config) -> dict:
     """Read the [pacs] section of the already-parsed hippobridge.cfg.
@@ -160,12 +164,20 @@ class PacsChecker:
                     logger.warning("PACS C-ECHO failed — proceeding with C-FIND anyway")
                 for c in candidates:
                     ident = self._build_identifier(c['cnp'], c['modality'], since, until)
+                    # A query can return several matching studies (a PACS
+                    # that ignores the ModalitiesInStudy matching key, or a
+                    # patient with more than one study that day) — take the
+                    # strongest classification across all of them rather
+                    # than just the last response, so one wrong-modality
+                    # match can't mask a real one found earlier.
                     outcome, detail = 'not_found', {}
                     try:
                         for status, ds in assoc.send_c_find(
                                 ident, StudyRootQueryRetrieveInformationModelFind):
                             if status and status.Status in (0xFF00, 0xFF01) and ds is not None:
-                                outcome, detail = self._classify(ds)
+                                candidate_outcome, candidate_detail = self._classify(ds, c['modality'])
+                                if _OUTCOME_RANK[candidate_outcome] > _OUTCOME_RANK[outcome]:
+                                    outcome, detail = candidate_outcome, candidate_detail
                     except Exception as exc:
                         logger.warning("C-FIND failed for request %s: %s", c['request_id'], exc)
                         outcome = 'error'
@@ -195,11 +207,33 @@ class PacsChecker:
         return ds
 
     @staticmethod
-    def _classify(ds: 'Dataset') -> Tuple[str, dict]:
+    def _classify(ds: 'Dataset', requested_modality: str) -> Tuple[str, dict]:
         """ModalitiesInStudy and NumberOfStudyRelatedInstances are both
         OPTIONAL return keys per the DICOM Study Root C-FIND model — some
         PACS omit or don't populate them. An absent instance count must not
-        be read as "not performed"."""
+        be read as "not performed".
+
+        ModalitiesInStudy is also a matching key we send in the query, but
+        that alone isn't trustworthy: some PACS silently ignore optional
+        matching keys and return every study for the patient/date range
+        regardless of modality. A study can also legitimately carry several
+        modalities (e.g. ['CR', 'SR'] — an image series plus its structured
+        report) where only one of them is the one we actually asked about.
+        So cross-check the modality actually present in the response before
+        ever calling something "performed" — otherwise a patient scheduled
+        for an X-ray who instead had an ultrasound that same day would get
+        the X-ray request wrongly marked as done.
+        """
+        modalities_raw = getattr(ds, 'ModalitiesInStudy', None)
+        if modalities_raw not in (None, ''):
+            found_modalities = [modalities_raw] if isinstance(modalities_raw, str) else list(modalities_raw)
+            if requested_modality not in found_modalities:
+                return 'not_found', {
+                    'study_date': str(getattr(ds, 'StudyDate', '') or '') or None,
+                    'instances': None,
+                    'modalities_in_study': found_modalities,
+                }
+
         n = getattr(ds, 'NumberOfStudyRelatedInstances', None)
         detail = {
             'study_date': str(getattr(ds, 'StudyDate', '') or '') or None,

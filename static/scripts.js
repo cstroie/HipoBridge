@@ -5989,11 +5989,38 @@ document.addEventListener('DOMContentLoaded', function() {
             renderSchedule();
             if (elements.scheduleTable) elements.scheduleTable.dataset.loaded = '1';
             startSchedulePrefetch(scheduleEntries);
+            fetchAndApplyPacsStatus();
         } catch (err) {
             showToast(`Failed to load schedule: ${err.message}`, 'error');
         } finally {
             hideLoading();
         }
+    }
+
+    // PACS study-check (see pacs.py): a secondary, independent signal from
+    // Hipocrate's own performed_at — surfaced as a small checkmark badge on
+    // the modality avatar rather than a new pill, so it doesn't compete with
+    // the primary status. Failures here are non-critical (silent) since this
+    // is best-effort/supplementary, never the primary status source.
+    async function fetchAndApplyPacsStatus() {
+        try {
+            const resp = await apiFetch('/api/pacs/status');
+            if (!resp.ok) return;
+            const data = await resp.json();
+            if (!data.enabled) return;
+            applyPacsStatus(data.results || []);
+        } catch (err) { /* best-effort; ignore */ }
+    }
+
+    function applyPacsStatus(results) {
+        const container = elements.scheduleTimeline || elements.scheduleBody;
+        if (!container) return;
+        results.forEach(r => {
+            if (r.outcome !== 'performed' && r.outcome !== 'likely') return;
+            const row = container.querySelector(`[data-request-id="${CSS.escape(String(r.request_id))}"]`);
+            const badge = row?.querySelector('.pacs-confirmed-badge');
+            if (badge) badge.hidden = false;
+        });
     }
 
     function populateSectionFilter(entries) {
@@ -6112,6 +6139,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Row: time col + card
         const row = document.importNode(document.getElementById('timeline-row-template').content, true).firstElementChild;
         if (modalitySlug) row.dataset.modality = modalitySlug;
+        row.dataset.requestId = r.id;
 
         // Time column
         const timeEl = row.querySelector('.timeline-time');
@@ -6128,7 +6156,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const avatarEl = row.querySelector('.timeline-mod-avatar');
         if (avatar.cls) avatarEl.classList.add(avatar.cls);
+        // Preserve the PACS-confirmed badge (in the template markup) across
+        // this innerHTML overwrite — it starts hidden and is only revealed
+        // later by applyPacsStatus() once /api/pacs/status resolves.
+        const pacsBadge = avatarEl.querySelector('.pacs-confirmed-badge');
         avatarEl.innerHTML = modAvatarHTML(modalitySlug);
+        if (pacsBadge) avatarEl.appendChild(pacsBadge);
         avatarEl.title = MODALITY_INFO[modalitySlug]?.label || laboratory || modalitySlug;
 
         const nameBtn = row.querySelector('.timeline-card-patient');

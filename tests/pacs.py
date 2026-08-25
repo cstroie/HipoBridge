@@ -116,33 +116,75 @@ class TestClassify(unittest.TestCase):
 
     def test_performed_when_instances_positive(self):
         ds = Dataset()
+        ds.ModalitiesInStudy = 'CR'
         ds.NumberOfStudyRelatedInstances = '42'
         ds.StudyDate = '20260825'
-        outcome, detail = PacsChecker._classify(ds)
+        outcome, detail = PacsChecker._classify(ds, 'CR')
         self.assertEqual(outcome, 'performed')
         self.assertEqual(detail['instances'], 42)
         self.assertEqual(detail['study_date'], '20260825')
 
     def test_not_found_when_instances_zero(self):
         ds = Dataset()
+        ds.ModalitiesInStudy = 'CR'
         ds.NumberOfStudyRelatedInstances = '0'
-        outcome, _detail = PacsChecker._classify(ds)
+        outcome, _detail = PacsChecker._classify(ds, 'CR')
         self.assertEqual(outcome, 'not_found')
 
     def test_likely_when_instance_count_absent(self):
         ds = Dataset()
+        ds.ModalitiesInStudy = 'CR'
         # NumberOfStudyRelatedInstances intentionally not set — some PACS
         # never return this optional key.
-        outcome, detail = PacsChecker._classify(ds)
+        outcome, detail = PacsChecker._classify(ds, 'CR')
         self.assertEqual(outcome, 'likely')
         self.assertIsNone(detail['instances'])
 
     def test_likely_when_instance_count_blank(self):
         ds = Dataset()
+        ds.ModalitiesInStudy = 'CR'
         ds.NumberOfStudyRelatedInstances = ''
-        outcome, detail = PacsChecker._classify(ds)
+        outcome, detail = PacsChecker._classify(ds, 'CR')
         self.assertEqual(outcome, 'likely')
         self.assertIsNone(detail['instances'])
+
+    def test_not_found_when_modality_absent_from_single_value(self):
+        # A PACS that ignores our ModalitiesInStudy matching key and returns
+        # a study of an unrelated modality must not be trusted as "performed"
+        # for the modality we actually asked about.
+        ds = Dataset()
+        ds.ModalitiesInStudy = 'CT'
+        ds.NumberOfStudyRelatedInstances = '10'
+        outcome, detail = PacsChecker._classify(ds, 'US')
+        self.assertEqual(outcome, 'not_found')
+        self.assertEqual(detail['modalities_in_study'], ['CT'])
+
+    def test_not_found_when_modality_absent_from_multi_value(self):
+        # A study can legitimately carry several modalities (e.g. an image
+        # series plus its structured report, ['CR', 'SR']) — only count it
+        # if the requested modality is actually one of them.
+        ds = Dataset()
+        ds.ModalitiesInStudy = ['CT', 'SR']
+        ds.NumberOfStudyRelatedInstances = '784'
+        outcome, detail = PacsChecker._classify(ds, 'US')
+        self.assertEqual(outcome, 'not_found')
+        self.assertEqual(detail['modalities_in_study'], ['CT', 'SR'])
+
+    def test_performed_when_requested_modality_among_several(self):
+        ds = Dataset()
+        ds.ModalitiesInStudy = ['CR', 'SR']
+        ds.NumberOfStudyRelatedInstances = '14'
+        outcome, detail = PacsChecker._classify(ds, 'CR')
+        self.assertEqual(outcome, 'performed')
+        self.assertEqual(detail['instances'], 14)
+
+    def test_no_cross_check_when_modalities_in_study_absent(self):
+        # Some PACS don't echo ModalitiesInStudy back at all — fall back to
+        # trusting the outbound query filter alone in that case.
+        ds = Dataset()
+        ds.NumberOfStudyRelatedInstances = '5'
+        outcome, _detail = PacsChecker._classify(ds, 'US')
+        self.assertEqual(outcome, 'performed')
 
 
 if __name__ == '__main__':

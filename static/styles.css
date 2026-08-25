@@ -2993,6 +2993,7 @@ select {
 }
 
 .timeline-mod-avatar {
+    position: relative;
     width: 64px;
     height: 64px;
     flex-shrink: 0;
@@ -3006,6 +3007,26 @@ select {
 .timeline-mod-avatar.mod-mr  { color: var(--mod-mr); }
 .timeline-mod-avatar.mod-fl  { color: var(--mod-fl); }
 .timeline-mod-avatar.mod-lab { color: var(--mod-lab); }
+
+/* PACS study-check (see pacs.py): a secondary, independent "found in PACS"
+   signal, separate from the primary performed_at status — kept as a small
+   corner badge rather than a new pill so it doesn't compete for attention. */
+.pacs-confirmed-badge {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: var(--space-18);
+    height: var(--space-18);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--st-completed);
+    color: var(--card-bg);
+    box-shadow: 0 0 0 2px var(--card-bg);
+    font-size: 9px;
+}
+.pacs-confirmed-badge[hidden] { display: none; }
 
 .timeline-card-body {
     flex: 1;
