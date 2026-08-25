@@ -3015,16 +3015,16 @@ select {
     position: absolute;
     bottom: -2px;
     right: -2px;
-    width: var(--space-18);
-    height: var(--space-18);
+    width: var(--space-12);
+    height: var(--space-12);
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
+    border-radius: var(--radius-xs);
     background: var(--st-completed);
     color: var(--card-bg);
     box-shadow: 0 0 0 2px var(--card-bg);
-    font-size: 9px;
+    font-size: 7px;
 }
 .pacs-confirmed-badge[hidden] { display: none; }
 
