@@ -298,8 +298,12 @@ def main() -> None:
     p_swap.add_argument("--timeout", type=int, default=300, help="Load request timeout in seconds (default: 300)")
 
     args = parser.parse_args()
-    {"list": cmd_list, "unload": cmd_unload, "load": cmd_load, "swap": cmd_swap,
-     "download": cmd_download, "download-status": cmd_download_status}[args.command](args)
+    try:
+        {"list": cmd_list, "unload": cmd_unload, "load": cmd_load, "swap": cmd_swap,
+         "download": cmd_download, "download-status": cmd_download_status}[args.command](args)
+    except RuntimeError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
