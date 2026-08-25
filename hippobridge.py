@@ -55,6 +55,7 @@ import search
 from extractors import parse_cnp
 from markdown import markdown_to_html
 from worklist import start_worklist
+import pacs
 
 from llm.config import init_llm
 from llm.router import build_client
@@ -98,6 +99,20 @@ DEFAULT_CONFIG = {
         'file': '',
         'max_bytes': '10485760',
         'backup_count': '5',
+    },
+    'pacs': {
+        'host': '',
+        'port': '104',
+        'called_ae_title': '',
+        'calling_ae_title': 'HIPPOBRIDGE',
+        'poll_interval_seconds': '600',
+        'cold_start_lookback_hours': '8',
+        'max_queries_per_cycle': '200',
+        'acse_timeout': '10',
+        'network_timeout': '15',
+        'dimse_timeout': '15',
+        'username': '',
+        'password': '',
     },
 }
 
@@ -509,6 +524,24 @@ async def get_schedule(request):
                                                lab_id=lab_id, section_name=section_name, status=status,
                                                patient_text=patient_text, force=force)
     return web_json_response(parsed_data)
+
+@require_auth
+async def get_pacs_status(request):
+    """List the PACS study-check results known so far (in-memory, since last
+    poll cycle or manual refresh). Independent of Hipocrate's own
+    performed_at — see pacs.py."""
+    if _pacs_checker is None:
+        return web.json_response({'enabled': False, 'results': []})
+    return web.json_response({'enabled': True, 'results': _pacs_checker.status()})
+
+@require_auth
+async def post_pacs_refresh(request):
+    """Trigger an immediate (throttled) PACS study-check poll cycle, e.g.
+    when the frontend refreshes the schedule view."""
+    if _pacs_checker is None:
+        return web.json_response({'enabled': False, 'results': []})
+    results = await _pacs_checker.refresh_now()
+    return web.json_response({'enabled': True, 'results': results})
 
 @require_auth
 async def get_fhir_schedule(request):
@@ -1294,6 +1327,7 @@ def load_config(config_path: str = 'hippobridge.cfg'):
     return config
 
 _wl_server = None   # set by init_app; used by on_cleanup for graceful DICOM shutdown
+_pacs_checker = None   # set by init_app; used by on_cleanup to cancel the PACS poll task
 
 def _url_param(url: str, name: str) -> Optional[str]:
     return (parse_qs(urlparse(url).query).get(name) or [None])[0]
@@ -1400,11 +1434,14 @@ async def on_cleanup(app):
     logger.info("Application cleanup")
     if _wl_server is not None:
         await asyncio.get_event_loop().run_in_executor(None, _wl_server.shutdown)
+    if _pacs_checker is not None:
+        _pacs_checker.shutdown()
     await user_session_manager.close_all_sessions()
     if _ai_client is not None:
         await _ai_client.close()
 
 async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
+                   no_pacs: bool = False,
                    no_search_backfill: bool = False,
                    port: int = None, host: str = None, service_url: str = None,
                    log_file: str = None):
@@ -1491,6 +1528,8 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     app.router.add_post('/api/request/{id}/perform', post_study_perform)
     app.router.add_post('/api/request/{id}/cancel', post_request_cancel)
     app.router.add_get('/api/schedule', get_schedule)
+    app.router.add_get('/api/pacs/status', get_pacs_status)
+    app.router.add_post('/api/pacs/refresh', post_pacs_refresh)
     app.router.add_get('/fhir/Schedule', get_fhir_schedule)
     app.router.add_get('/api/whoami', get_whoami)
     app.router.add_post('/api/logout', post_logout)
@@ -1525,6 +1564,12 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
         logger.info("DICOM worklist disabled (--no-worklist)")
     else:
         _wl_server = start_worklist(SERVICE_URL)
+
+    global _pacs_checker
+    if no_pacs:
+        logger.info("PACS study-check disabled (--no-pacs)")
+    else:
+        _pacs_checker = pacs.start_pacs_checker(SERVICE_URL, config)
 
     return app
 
@@ -1569,6 +1614,10 @@ if __name__ == "__main__":
         help='Disable DICOM worklist SCP even if worklist.cfg is present'
     )
     parser.add_argument(
+        '--no-pacs', action='store_true',
+        help='Disable PACS study-performed C-FIND checker even if [pacs] host is configured'
+    )
+    parser.add_argument(
         '--no-search-backfill', action='store_true',
         help='Skip the periodic (startup, then every 24h) scan of the on-disk '
              'cache for epicrisis/imaging text to backfill into the search '
@@ -1605,6 +1654,7 @@ if __name__ == "__main__":
         app = await init_app(
             no_disk_cache=args.no_disk_cache,
             no_worklist=args.no_worklist,
+            no_pacs=args.no_pacs,
             no_search_backfill=args.no_search_backfill,
             port=args.port,
             host=args.host,
