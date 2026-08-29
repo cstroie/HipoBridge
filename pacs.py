@@ -49,7 +49,7 @@ try:
 except ImportError:
     DICOM_AVAILABLE = False
 
-from worklist import WorklistRefresher, WorklistCache, _MODALITY_CODE
+from worklist import WorklistRefresher, WorklistCache, _MODALITY_CODE, _MODALITY_SLUG_TO_LAB_ID
 from extractors import parse_cnp
 
 logger = logging.getLogger('Pacs')
@@ -107,7 +107,25 @@ class PacsChecker:
         now = datetime.now()
         since = self._last_query_time or (now - timedelta(hours=self._cfg['cold_start_lookback_hours']))
 
-        entries, _, _ = await self._refresher._fetch_schedule(lab_id=None)
+        # One fetch per known modality lab_id, not a single unfiltered
+        # fetch — confirmed live that Hipocrate's unfiltered listing
+        # (lab_id=None) silently omits CT rows entirely for this account/
+        # date range (12 CT requests present when filtered by lab_id=26,
+        # zero unfiltered, even at a much higher page size), contradicting
+        # worklist.py's own "unfiltered == union of all filtered fetches"
+        # assumption — that no longer holds, at least for CT. Looping per
+        # modality also gets each one its correct lookahead window for free
+        # (_LAB_ID_FETCH_DAYS: 7 days for CT/MRI, 3 for the rest) instead of
+        # the flat default used by an unfiltered call.
+        entries = []
+        seen_request_ids = set()
+        for lab_id in _MODALITY_SLUG_TO_LAB_ID.values():
+            lab_entries, _, _ = await self._refresher._fetch_schedule(lab_id=lab_id)
+            for entry in lab_entries:
+                request_id = entry.get('request_id')
+                if request_id and request_id not in seen_request_ids:
+                    seen_request_ids.add(request_id)
+                    entries.append(entry)
 
         candidates = []
         for entry in entries:
