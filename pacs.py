@@ -37,6 +37,7 @@ import asyncio
 import logging
 import os
 import threading
+from collections import Counter
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 
@@ -135,7 +136,21 @@ class PacsChecker:
             results = await asyncio.get_event_loop().run_in_executor(
                 None, self._query_pacs_sync, candidates, since, now)
             with self._lock:
+                for request_id, result in results.items():
+                    prior = self._status.get(request_id)
+                    if result.get('outcome') == 'performed' and (not prior or prior.get('outcome') != 'performed'):
+                        logger.info(
+                            "PACS confirmed request %s (CNP %s): %s performed, %s instances",
+                            request_id, result.get('cnp'), result.get('modality'), result.get('instances'),
+                        )
                 self._status.update(results)
+            outcomes = Counter(r['outcome'] for r in results.values())
+            logger.info(
+                "PACS poll cycle: %d candidates checked, outcomes=%s",
+                len(candidates), dict(outcomes),
+            )
+        else:
+            logger.debug("PACS poll cycle: no candidates to check")
 
         self._last_query_time = now
 
@@ -160,6 +175,8 @@ class PacsChecker:
             try:
                 if not assoc.send_c_echo():
                     logger.warning("PACS C-ECHO failed — proceeding with C-FIND anyway")
+                else:
+                    logger.debug("PACS association established, querying %d candidates", len(candidates))
                 for c in candidates:
                     ident = self._build_identifier(c['cnp'], c['modality'], since, until)
                     # A query can return several matching studies (a PACS
@@ -253,6 +270,7 @@ class PacsChecker:
         """Manual/frontend-triggered immediate check, throttled so rapid
         clicks can't hammer the PACS — a call already in flight just waits
         for it and returns its result instead of starting a second one."""
+        logger.info("PACS manual refresh triggered")
         async with self._refresh_lock:
             await self._poll_once()
         return self.status()
