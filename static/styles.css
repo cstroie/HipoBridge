@@ -3028,6 +3028,14 @@ select {
     font-size: 7px;
 }
 .pacs-confirmed-badge[hidden] { display: none; }
+/* Imaging tab cards (.mod-circle) have more breathing room around the
+   avatar than the compact schedule timeline row, so the badge can afford
+   to be proportionally a bit bigger there — same 64px avatar, larger mark. */
+.mod-circle .pacs-confirmed-badge {
+    width: var(--space-16);
+    height: var(--space-16);
+    font-size: 9px;
+}
 
 .timeline-card-body {
     flex: 1;
