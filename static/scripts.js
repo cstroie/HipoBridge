@@ -480,6 +480,7 @@ document.addEventListener('DOMContentLoaded', function() {
             elements.refreshScheduleBtn.addEventListener('click', () => {
                 fetchScheduleFromInputs(true);
                 if (scheduleAutoRefreshTimer) startScheduleAutoRefresh(true);
+                triggerPacsRefresh();
             });
         }
         if (elements.refreshPatientBtn) {
@@ -3799,12 +3800,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }, { rootMargin: '120px' });
 
         for (const card of cards) observer.observe(card);
-
-        // PACS study-check badge (see fetchAndApplyPacsStatus) — only
-        // imaging cards can ever match (lab modalities aren't in PACS), and
-        // only once per grid.id === 'imagingGrid' populate, not on every
-        // lab-grid render too.
-        if (grid?.id === 'imagingGrid') fetchAndApplyPacsStatus();
     }
 
     // ── Lab result table ────────────────────────────────────────────────────
@@ -4184,7 +4179,11 @@ document.addEventListener('DOMContentLoaded', function() {
             // identical pacsBadge handling for the schedule row avatar.
             const pacsBadge = circleEl.querySelector('.pacs-confirmed-badge');
             circleEl.innerHTML = modAvatarHTML(analysisType);
-            if (pacsBadge) circleEl.appendChild(pacsBadge);
+            if (pacsBadge) {
+                circleEl.appendChild(pacsBadge);
+                pacsBadge.dataset.requestId = serviceRequest.id;
+                pacsStatusObserver.observe(pacsBadge);
+            }
             if (circleAvatar.cls) circleEl.classList.add(circleAvatar.cls);
         }
 
@@ -6000,7 +5999,6 @@ document.addEventListener('DOMContentLoaded', function() {
             renderSchedule();
             if (elements.scheduleTable) elements.scheduleTable.dataset.loaded = '1';
             startSchedulePrefetch(scheduleEntries);
-            fetchAndApplyPacsStatus();
         } catch (err) {
             showToast(`Failed to load schedule: ${err.message}`, 'error');
         } finally {
@@ -6011,32 +6009,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // PACS study-check (see pacs.py): a secondary, independent signal from
     // Hipocrate's own performed_at — surfaced as a small checkmark badge on
     // the modality avatar rather than a new pill, so it doesn't compete with
-    // the primary status. Failures here are non-critical (silent) since this
-    // is best-effort/supplementary, never the primary status source.
-    async function fetchAndApplyPacsStatus() {
-        try {
-            const resp = await apiFetch('/api/pacs/status');
-            if (!resp.ok) return;
-            const data = await resp.json();
-            if (!data.enabled) return;
-            applyPacsStatus(data.results || []);
-        } catch (err) { /* best-effort; ignore */ }
-    }
-
-    function applyPacsStatus(results) {
-        // Matches both the schedule timeline (`data-request-id`, set in
-        // buildTimelineRow) and imaging cards (`data-service-request-id`,
-        // set in createAnalysisCard) — the same request can legitimately
-        // have a badge in both places at once (e.g. the profile's Related
-        // Requests panel also reuses buildTimelineRow), so update every
-        // match, not just the first.
-        results.forEach(r => {
-            if (r.outcome !== 'performed' && r.outcome !== 'likely') return;
-            const id = CSS.escape(String(r.request_id));
-            document.querySelectorAll(
-                `[data-request-id="${id}"] .pacs-confirmed-badge, [data-service-request-id="${id}"] .pacs-confirmed-badge`
-            ).forEach(badge => { badge.hidden = false; });
-        });
+    // the primary status. Lazy, per-row/card via GET /api/pacs/<id> (a pure
+    // in-memory lookup, no PACS I/O) instead of shipping the whole
+    // in-memory table on every schedule/imaging load — see
+    // pacsStatusObserver below, which triggers one fetch per element as it
+    // scrolls into view, same pattern as scheduleExamObserver. Failures are
+    // non-critical (silent): this is best-effort/supplementary, never the
+    // primary status source.
+    async function triggerPacsRefresh() {
+        try { await apiFetch('/api/pacs/refresh', { method: 'POST' }); }
+        catch (err) { /* best-effort; ignore */ }
     }
 
     function populateSectionFilter(entries) {
@@ -6155,7 +6137,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Row: time col + card
         const row = document.importNode(document.getElementById('timeline-row-template').content, true).firstElementChild;
         if (modalitySlug) row.dataset.modality = modalitySlug;
-        row.dataset.requestId = r.id;
 
         // Time column
         const timeEl = row.querySelector('.timeline-time');
@@ -6174,10 +6155,14 @@ document.addEventListener('DOMContentLoaded', function() {
         if (avatar.cls) avatarEl.classList.add(avatar.cls);
         // Preserve the PACS-confirmed badge (in the template markup) across
         // this innerHTML overwrite — it starts hidden and is only revealed
-        // later by applyPacsStatus() once /api/pacs/status resolves.
+        // once pacsStatusObserver's lazy per-row check resolves.
         const pacsBadge = avatarEl.querySelector('.pacs-confirmed-badge');
         avatarEl.innerHTML = modAvatarHTML(modalitySlug);
-        if (pacsBadge) avatarEl.appendChild(pacsBadge);
+        if (pacsBadge) {
+            avatarEl.appendChild(pacsBadge);
+            pacsBadge.dataset.requestId = r.id;
+            pacsStatusObserver.observe(pacsBadge);
+        }
         avatarEl.title = MODALITY_INFO[modalitySlug]?.label || laboratory || modalitySlug;
 
         const nameBtn = row.querySelector('.timeline-card-patient');
@@ -6317,6 +6302,36 @@ document.addEventListener('DOMContentLoaded', function() {
                     _applyExamLabel(el, cached);
                     if (referrer) _applyReferrer(el, referrer);
                     if (age) _applyPatientAge(el, age);
+                })
+                .catch(() => {});
+        });
+    }, { rootMargin: '200px' });
+
+    // Lazy PACS study-check lookup (see pacs.py / triggerPacsRefresh above):
+    // one GET /api/pacs/<id> per badge as it scrolls into view, same
+    // one-shot-per-element shape as scheduleExamObserver. The badge element
+    // itself (not its container) is observed and carries the id, since the
+    // schedule row and the imaging card use different container attribute
+    // names (data-request-id vs data-service-request-id) but both badges
+    // get the same data-request-id set directly on them.
+    const _pacsStatusCache = {};
+    const pacsStatusObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (!entry.isIntersecting) return;
+            const badge = entry.target;
+            pacsStatusObserver.unobserve(badge);
+            const id = badge.dataset.requestId;
+            if (!id) return;
+            const apply = (data) => {
+                if (data?.outcome === 'performed' || data?.outcome === 'likely') badge.hidden = false;
+            };
+            if (_pacsStatusCache[id]) { apply(_pacsStatusCache[id]); return; }
+            apiFetch(`/api/pacs/${id}`)
+                .then(r => r.ok ? r.json() : null)
+                .then(data => {
+                    if (!data || !data.enabled) return;
+                    _pacsStatusCache[id] = data;
+                    apply(data);
                 })
                 .catch(() => {});
         });

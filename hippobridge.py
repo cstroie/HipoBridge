@@ -544,6 +544,18 @@ async def post_pacs_refresh(request):
     return web.json_response({'enabled': True, 'results': results})
 
 @require_auth
+async def get_pacs_request_status(request):
+    """Look up the PACS study-check outcome for one request_id — lazy,
+    per-row enrichment (see fetchAndApplyPacsStatus/pacsStatusObserver in
+    scripts.js) instead of shipping the whole in-memory table, which grows
+    long and can go stale on a busy schedule. Pure in-memory dict lookup,
+    no PACS I/O — cheap enough to call per visible row/card."""
+    request_id = request.match_info['id']
+    if _pacs_checker is None:
+        return web.json_response({'enabled': False, 'outcome': 'unknown'})
+    return web.json_response({'enabled': True, **_pacs_checker.status_for(request_id)})
+
+@require_auth
 async def get_fhir_schedule(request):
     """FHIR Bundle of ServiceRequest resources for the worklist. ?start_date=&end_date=&lab_id=&section_name=&status=&patient_text=&refresh=1
 
@@ -1530,6 +1542,7 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     app.router.add_get('/api/schedule', get_schedule)
     app.router.add_get('/api/pacs/status', get_pacs_status)
     app.router.add_post('/api/pacs/refresh', post_pacs_refresh)
+    app.router.add_get('/api/pacs/{id}', get_pacs_request_status)
     app.router.add_get('/fhir/Schedule', get_fhir_schedule)
     app.router.add_get('/api/whoami', get_whoami)
     app.router.add_post('/api/logout', post_logout)

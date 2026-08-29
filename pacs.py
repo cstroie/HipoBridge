@@ -268,6 +268,18 @@ class PacsChecker:
         with self._lock:
             return [{'request_id': rid, **v} for rid, v in self._status.items()]
 
+    def status_for(self, request_id: str) -> dict:
+        """Single-request lookup for lazy per-row enrichment — avoids
+        shipping the whole (potentially long, partly stale) table just to
+        answer "is this one exam in PACS yet". `outcome: 'unknown'` means
+        this request hasn't been reached by a poll cycle yet, distinct from
+        `'not_found'` (checked, no matching study)."""
+        with self._lock:
+            entry = self._status.get(request_id)
+        if entry is None:
+            return {'outcome': 'unknown'}
+        return dict(entry)
+
 
 def start_pacs_checker(service_url: str, config) -> Optional[PacsChecker]:
     """Start the PACS checker if [pacs] host is configured. Returns the

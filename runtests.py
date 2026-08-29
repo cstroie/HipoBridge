@@ -23,7 +23,7 @@ from tests.cnp import test_cnp_validation_endpoint, test_cnp_validation_missing_
 from tests.worklist import (TestNameToDicom, TestBuildDatasets,
                              TestWorklistCache, TestWorklistSCP, TestLoadConfig)
 from tests.pacs import (TestLoadConfig as TestPacsLoadConfig, TestCnpPreFilter,
-                         TestBuildIdentifier, TestClassify)
+                         TestBuildIdentifier, TestClassify, TestStatusFor)
 from tests.extractors import test_extract_text_after_label_basic, test_extract_text_after_label_with_element_tag, test_extract_text_after_label_with_stop_at, test_extract_text_after_label_not_found, test_extract_text_after_label_case_insensitive, test_extract_text_with_bold_tag, test_extract_text_with_bold_and_underline_tags, test_extract_text_with_whitespace, test_extract_id_from_link_basic, test_extract_id_from_link_with_custom_pattern, test_extract_id_from_link_no_href, test_extract_id_from_link_no_match, test_extract_ids_from_links_basic, test_extract_ids_from_links_with_custom_pattern, test_extract_ids_from_links_no_matches
 from tests.hipo_data import TestHippoData
 from tests.markdown import TestMarkdownConversion
@@ -135,7 +135,7 @@ TEST_GROUPS = {
     "hippodata": [TestHippoData],
     "markdown": [TestMarkdownConversion],
     "worklist": [TestNameToDicom, TestBuildDatasets, TestWorklistCache, TestWorklistSCP, TestLoadConfig],
-    "pacs": [TestPacsLoadConfig, TestCnpPreFilter, TestBuildIdentifier, TestClassify],
+    "pacs": [TestPacsLoadConfig, TestCnpPreFilter, TestBuildIdentifier, TestClassify, TestStatusFor],
     "llm": [
         TestProviderSelection,
         TestPromptRegistry,

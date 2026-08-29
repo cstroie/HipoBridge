@@ -94,6 +94,30 @@ class TestCnpPreFilter(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Single-request lookup (lazy per-row enrichment)
+# ---------------------------------------------------------------------------
+
+class TestStatusFor(unittest.TestCase):
+
+    def test_unknown_when_never_checked(self):
+        checker = PacsChecker({}, None)
+        self.assertEqual(checker.status_for('999999'), {'outcome': 'unknown'})
+
+    def test_returns_found_entry(self):
+        checker = PacsChecker({}, None)
+        checker._status['123'] = {'outcome': 'performed', 'instances': 3}
+        result = checker.status_for('123')
+        self.assertEqual(result['outcome'], 'performed')
+        self.assertEqual(result['instances'], 3)
+
+    def test_not_found_distinct_from_unknown(self):
+        checker = PacsChecker({}, None)
+        checker._status['456'] = {'outcome': 'not_found'}
+        self.assertEqual(checker.status_for('456')['outcome'], 'not_found')
+        self.assertEqual(checker.status_for('789')['outcome'], 'unknown')
+
+
+# ---------------------------------------------------------------------------
 # Identifier construction / result classification (DICOM-dependent)
 # ---------------------------------------------------------------------------
 
