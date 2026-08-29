@@ -4182,7 +4182,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (pacsBadge) {
                 circleEl.appendChild(pacsBadge);
                 pacsBadge.dataset.requestId = serviceRequest.id;
-                pacsStatusObserver.observe(pacsBadge);
+                pacsStatusObserver.observe(circleEl);
             }
             if (circleAvatar.cls) circleEl.classList.add(circleAvatar.cls);
         }
@@ -6161,7 +6161,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (pacsBadge) {
             avatarEl.appendChild(pacsBadge);
             pacsBadge.dataset.requestId = r.id;
-            pacsStatusObserver.observe(pacsBadge);
+            pacsStatusObserver.observe(avatarEl);
         }
         avatarEl.title = MODALITY_INFO[modalitySlug]?.label || laboratory || modalitySlug;
 
@@ -6318,10 +6318,18 @@ document.addEventListener('DOMContentLoaded', function() {
     const pacsStatusObserver = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             if (!entry.isIntersecting) return;
-            const badge = entry.target;
-            pacsStatusObserver.unobserve(badge);
-            const id = badge.dataset.requestId;
-            if (!id) return;
+            // The container (avatar/circle), not the badge itself — the
+            // badge starts `hidden` (display:none), and a display:none
+            // element has no layout box, so it can never register as
+            // intersecting the viewport no matter how the page scrolls.
+            // Observing the always-visible container avoids that
+            // chicken-and-egg deadlock (needing to be visible to trigger
+            // the fetch that makes it visible).
+            const container = entry.target;
+            pacsStatusObserver.unobserve(container);
+            const badge = container.querySelector('.pacs-confirmed-badge');
+            const id = badge?.dataset.requestId;
+            if (!badge || !id) return;
             const apply = (data) => {
                 if (data?.outcome === 'performed' || data?.outcome === 'likely') badge.hidden = false;
             };
