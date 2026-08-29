@@ -3022,10 +3022,16 @@ select {
     align-items: center;
     justify-content: center;
     border-radius: var(--radius-xs);
-    background: var(--st-completed);
-    color: var(--card-bg);
+    /* No explicit `color` here — inherits the modality color from the
+       avatar/circle ancestor (.mod-circle.mod-xr etc.), so `currentColor`
+       below picks that up for the background, matching the card's own
+       icon color instead of a fixed "completed" green. */
+    background: currentColor;
     box-shadow: 0 0 0 2px var(--card-bg);
     font-size: 7px;
+}
+.pacs-confirmed-badge i {
+    color: var(--card-bg);
 }
 .pacs-confirmed-badge[hidden] { display: none; }
 /* Imaging tab cards (.mod-circle) have more breathing room around the
