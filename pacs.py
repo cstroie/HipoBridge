@@ -117,8 +117,6 @@ class PacsChecker:
                 prior = self._status.get(request_id)
             if prior and prior.get('outcome') == 'performed':
                 continue  # a study once found never un-happens
-            if entry.get('performed_at'):
-                continue  # Hipocrate already confirms it — no need to ask PACS
             modality = _MODALITY_CODE.get((entry.get('modality') or '').lower())
             if not modality:
                 continue
