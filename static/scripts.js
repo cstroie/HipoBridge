@@ -3799,6 +3799,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }, { rootMargin: '120px' });
 
         for (const card of cards) observer.observe(card);
+
+        // PACS study-check badge (see fetchAndApplyPacsStatus) — only
+        // imaging cards can ever match (lab modalities aren't in PACS), and
+        // only once per grid.id === 'imagingGrid' populate, not on every
+        // lab-grid render too.
+        if (grid?.id === 'imagingGrid') fetchAndApplyPacsStatus();
     }
 
     // ── Lab result table ────────────────────────────────────────────────────
@@ -4173,7 +4179,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const circleEl = article.querySelector('.mod-circle');
         if (circleEl) {
             const circleAvatar = MODALITY_AVATAR[analysisType] || { icon: 'fa-question', cls: '' };
+            // Preserve the PACS-confirmed badge (in the template markup)
+            // across this innerHTML overwrite — see buildTimelineRow's
+            // identical pacsBadge handling for the schedule row avatar.
+            const pacsBadge = circleEl.querySelector('.pacs-confirmed-badge');
             circleEl.innerHTML = modAvatarHTML(analysisType);
+            if (pacsBadge) circleEl.appendChild(pacsBadge);
             if (circleAvatar.cls) circleEl.classList.add(circleAvatar.cls);
         }
 
@@ -6013,13 +6024,18 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function applyPacsStatus(results) {
-        const container = elements.scheduleTimeline || elements.scheduleBody;
-        if (!container) return;
+        // Matches both the schedule timeline (`data-request-id`, set in
+        // buildTimelineRow) and imaging cards (`data-service-request-id`,
+        // set in createAnalysisCard) — the same request can legitimately
+        // have a badge in both places at once (e.g. the profile's Related
+        // Requests panel also reuses buildTimelineRow), so update every
+        // match, not just the first.
         results.forEach(r => {
             if (r.outcome !== 'performed' && r.outcome !== 'likely') return;
-            const row = container.querySelector(`[data-request-id="${CSS.escape(String(r.request_id))}"]`);
-            const badge = row?.querySelector('.pacs-confirmed-badge');
-            if (badge) badge.hidden = false;
+            const id = CSS.escape(String(r.request_id));
+            document.querySelectorAll(
+                `[data-request-id="${id}"] .pacs-confirmed-badge, [data-service-request-id="${id}"] .pacs-confirmed-badge`
+            ).forEach(badge => { badge.hidden = false; });
         });
     }
 

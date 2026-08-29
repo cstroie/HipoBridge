@@ -1651,6 +1651,7 @@ select {
 
 /* Modality circle */
 .mod-circle {
+    position: relative;
     width: 64px;
     height: 64px;
     flex-shrink: 0;
