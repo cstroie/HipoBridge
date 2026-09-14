@@ -1533,6 +1533,53 @@ document.addEventListener('DOMContentLoaded', function() {
         ok ? done() : showToast('Failed to copy to clipboard', 'error');
     }
 
+    // YYMMDD from an ISO date/datetime string, parsed as plain text (no
+    // Date object) to avoid the UTC-lag issue on date-only values.
+    function formatIdDate(iso) {
+        const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
+        return m ? m[1].slice(2) + m[2] + m[3] : '';
+    }
+
+    // Lowercase, hyphen-joined, diacritics stripped (e.g. "Ștefan" → "stefan")
+    // — one slug segment per space-separated word.
+    function slugifyNamePart(s) {
+        return (s || '')
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .trim()
+            .split(/\s+/)
+            .filter(Boolean)
+            .join('-');
+    }
+
+    // DokuLLM ID stub: YYMMDD-family-given... — examDateIso is the exam's
+    // own date (ServiceRequest.authoredOn), not today's date.
+    function buildExamIdStub(patientData, examDateIso) {
+        const dateStr = formatIdDate(examDateIso);
+        const nameArr = Array.isArray(patientData?.name) ? patientData.name : (patientData?.name ? [patientData.name] : []);
+        const n = nameArr[0];
+        const family = slugifyNamePart(n?.family);
+        const given = slugifyNamePart((n?.given || []).join(' '));
+        return [dateStr, family, given].filter(Boolean).join('-');
+    }
+
+    // "Full Name | Sex | Age | indication | Examination (CT Cerebral nativ)"
+    // stub for an imaging card — indication left blank (not omitted) if absent.
+    function buildExamStub(article) {
+        const patientData = pendingAnalysesData?.patientData;
+        const fullName = formatPatientName(patientData?.name);
+        const sex = formatGender(patientData?.gender);
+        const ageRaw = calculateAge(patientData?.birthDate);
+        const age = ageRaw !== 'N/A' ? ageRaw : '';
+        const indication = article.querySelector('.card-indication-text')?.textContent
+            ?.replace(/^\s*·\s*/, '').trim() || '';
+        const examType = article.querySelector('.type-text')?.textContent || '';
+        const region = article.querySelector('.card-regions')?.textContent
+            ?.replace(/^\s*·\s*/, '').trim() || '';
+        const exam = [examType, region].filter(Boolean).join(' ');
+        return [fullName, sex, age, indication, `Examination (${exam})`].join(' | ');
+    }
+
     async function copyMarkdown(markdownEl, btn, flashFn) {
         const markdown = markdownEl?.dataset.markdown;
         if (!markdown) {
@@ -4224,7 +4271,15 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const typeText = article.querySelector('.type-text');
-        if (typeText) typeText.textContent = analysisText || modality.label;
+        if (typeText) {
+            typeText.textContent = analysisText || modality.label;
+            typeText.style.cursor = 'pointer';
+            typeText.title = 'Click to copy DokuLLM ID';
+            typeText.addEventListener('click', (e) => {
+                e.stopPropagation();
+                copyTextToClipboard(buildExamIdStub(pendingAnalysesData?.patientData, serviceRequest.authoredOn));
+            });
+        }
 
         const reportId = article.querySelector('.report-id');
         if (reportId) {
@@ -4252,6 +4307,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const regionsEl = article.querySelector('.card-regions');
         if (regionsEl && regions.length > 0) {
             regionsEl.textContent = ` · ${regions.join(', ')}`;
+        }
+        if (regionsEl) {
+            regionsEl.style.cursor = 'pointer';
+            regionsEl.title = 'Click to copy patient/exam stub';
+            regionsEl.addEventListener('click', (e) => {
+                e.stopPropagation();
+                copyTextToClipboard(buildExamStub(article));
+            });
         }
 
         // Urgent: red border only
