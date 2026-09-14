@@ -28,6 +28,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Patient tab elements
         patientId: document.getElementById('patientId'),
         patientName: document.getElementById('patientName'),
+        patientNameInfo: document.getElementById('patientNameInfo'),
+        patientAgeInfo: document.getElementById('patientAgeInfo'),
         patientCnp: document.getElementById('patientCnp'),
         patientGender: document.getElementById('patientGender'),
         patientDiagnosis: document.getElementById('patientDiagnosis'),
@@ -453,10 +455,14 @@ document.addEventListener('DOMContentLoaded', function() {
             elements.copyLabBtn.addEventListener('click', copyLabMarkdown);
         }
 
-        // Profile tab: click CNP to copy it to the clipboard
+        // Profile tab: click CNP / Name to copy them to the clipboard
         if (elements.patientCnp) {
             elements.patientCnp.style.cursor = 'pointer';
             elements.patientCnp.addEventListener('click', () => copyTextToClipboard(elements.patientCnp.textContent));
+        }
+        if (elements.patientNameInfo) {
+            elements.patientNameInfo.style.cursor = 'pointer';
+            elements.patientNameInfo.addEventListener('click', () => copyTextToClipboard(elements.patientNameInfo.textContent));
         }
 
         // AI summary buttons (report header, lab trends, pre-exam tab).
@@ -1252,6 +1258,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Clear patient data with null checks
         if (elements.patientId) elements.patientId.innerHTML = '';
         if (elements.patientName) elements.patientName.textContent = '';
+        if (elements.patientNameInfo) elements.patientNameInfo.textContent = '';
+        if (elements.patientAgeInfo) elements.patientAgeInfo.textContent = '';
         if (elements.patientCnp) elements.patientCnp.textContent = '';
         if (elements.patientGender) elements.patientGender.innerHTML = '';
         if (elements.patientDiagnosis) { elements.patientDiagnosis.textContent = ''; elements.patientDiagnosis.hidden = true; }
@@ -3289,6 +3297,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Patient Name
         const name = formatPatientName(patientData.name);
         if (elements.patientName) elements.patientName.textContent = name;
+        if (elements.patientNameInfo) elements.patientNameInfo.textContent = name || '—';
         log('Patient name set to:', name);
 
         // Show who is loaded in the nav: "FAMILY G." instead of "Patient Profile"
@@ -3301,6 +3310,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Meta badges: ID · gender + age · diagnosis
         const age = calculateAge(patientData.birthDate);
+        if (elements.patientAgeInfo) elements.patientAgeInfo.textContent = age !== 'N/A' ? age : '—';
         if (elements.patientId) {
             const pid = patientData.id || '';
             const patHippoUrl = (patientData.extension || []).find(e => e.url === 'hipocrateUrl')?.valueUri;
