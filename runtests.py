@@ -33,7 +33,7 @@ from tests.config import TestHippobridgeLoadConfig, TestInitLlm, TestGitignoreOn
 from tests.hippoclient_parsing import TestParseBuletinHeader
 from tests.hippoclient_write import (
     TestReportWriteErrors, TestReportValidateErrors, TestCererePerformErrors,
-    TestWebJsonResponseEndToEnd,
+    TestWebJsonResponseEndToEnd, TestTextToReportHtml,
 )
 from tests.hippobridge_handlers import TestServeSpec, TestGetCacheStats, TestBackfillSearch
 from tests.search import TestSearchIndex
@@ -87,6 +87,7 @@ TEST_GROUPS = {
         TestReportValidateErrors,
         TestCererePerformErrors,
         TestWebJsonResponseEndToEnd,
+        TestTextToReportHtml,
         TestServeSpec,
         TestGetCacheStats,
         TestBackfillSearch,
@@ -145,7 +146,7 @@ TEST_GROUPS = {
     "hippoclient_parsing": [TestParseBuletinHeader],
     "hippoclient_write": [
         TestReportWriteErrors, TestReportValidateErrors, TestCererePerformErrors,
-        TestWebJsonResponseEndToEnd,
+        TestWebJsonResponseEndToEnd, TestTextToReportHtml,
     ],
     "hippobridge_handlers": [TestServeSpec, TestGetCacheStats, TestBackfillSearch],
     "search": [TestSearchIndex],

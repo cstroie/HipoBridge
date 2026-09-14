@@ -28,6 +28,7 @@ from unittest.mock import AsyncMock
 
 from hippoclient import (
     HippoClientReportWrite, HippoClientReportValidate, HippoClientCererePerform,
+    _text_to_report_html, _markdown_to_html, _dokuwiki_heading_to_bold,
 )
 from hippobridge import web_json_response
 
@@ -43,6 +44,37 @@ def _client(cls):
     c.set_credentials("user", "pass")
     c.session = object()  # bypass get_user_session(); never dereferenced once make_authenticated_request is mocked
     return c
+
+
+class TestTextToReportHtml(unittest.TestCase):
+    """_text_to_report_html() / _markdown_to_html() / _dokuwiki_heading_to_bold():
+    the markdown/DokuWiki → HTML conversion posted to Hipocrate's literal-HTML
+    Rezultate.asp field (see the docstrings for why <br> and bold-not-<h#>)."""
+
+    def test_markdown_bold(self):
+        self.assertEqual(_markdown_to_html('a **bold** word'), 'a <b>bold</b> word')
+
+    def test_markdown_italic(self):
+        self.assertEqual(_markdown_to_html('a *italic* word'), 'a <i>italic</i> word')
+
+    def test_dokuwiki_italic(self):
+        self.assertEqual(_markdown_to_html('a //italic// word'), 'a <i>italic</i> word')
+
+    def test_dokuwiki_heading_to_bold(self):
+        self.assertEqual(_dokuwiki_heading_to_bold('==== Findings ===='), '**Findings**')
+        self.assertEqual(_dokuwiki_heading_to_bold('== Findings =='), '**Findings**')
+
+    def test_dokuwiki_heading_ignores_non_heading_lines(self):
+        self.assertEqual(_dokuwiki_heading_to_bold('plain text'), 'plain text')
+        self.assertEqual(_dokuwiki_heading_to_bold('= not a heading ='), '= not a heading =')
+
+    def test_text_to_report_html_end_to_end(self):
+        text = 'First **bold**\nSecond //italic//\n==== Findings ===='
+        expected = 'First <b>bold</b><br>Second <i>italic</i><br><b>Findings</b>'
+        self.assertEqual(_text_to_report_html(text), expected)
+
+    def test_text_to_report_html_empty(self):
+        self.assertEqual(_text_to_report_html('   \n  '), '')
 
 
 class TestReportWriteErrors(unittest.TestCase):

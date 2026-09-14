@@ -5260,10 +5260,11 @@ async def _invalidate_observation_bundle_from_cerere_cache(client: 'HippoClient'
 
 
 def _markdown_to_html(text: str) -> str:
-    """Convert markdown bold/italic to HTML tags.
+    """Convert markdown/DokuWiki bold+italic to HTML tags.
 
-    **bold** → <b>bold</b>
-    *italic* → <i>italic</i>
+    **bold** → <b>bold</b>      (markdown and DokuWiki share this syntax)
+    *italic* → <i>italic</i>    (markdown)
+    //italic// → <i>italic</i>  (DokuWiki)
     Properly handles escaping of HTML special characters in text.
     """
     import html as html_module
@@ -5281,21 +5282,35 @@ def _markdown_to_html(text: str) -> str:
     # had no markup group, so group(2) raised IndexError on any *italic*-only text.
     text = re.sub(r'(\*\*)(.+?)\1', replace_markdown, text)
     text = re.sub(r'(?<!\*)(\*)(?!\*)(.+?)(?<!\*)\*(?!\*)', replace_markdown, text)
+    # DokuWiki italic: //text// — the asterisk patterns above never touch
+    # '/', so there's no ambiguity running this after them.
+    text = re.sub(r'//(.+?)//', lambda m: f'<i>{html_module.escape(m.group(1))}</i>', text)
 
     # Escape remaining unescaped text (for < > & etc that aren't in tags)
     return text
 
 
+def _dokuwiki_heading_to_bold(line: str) -> str:
+    """A whole-line DokuWiki heading (`==== Heading ====`, 2-6 '=' on each
+    side, any of the 6 levels) becomes a bold line — this HTML sink has no
+    structural heading tag of its own (see _text_to_report_html), so a
+    heading is rendered as emphasis rather than dropped or left as literal
+    '=' characters. Non-heading lines pass through unchanged.
+    """
+    m = re.match(r'^\s*(={2,6})\s*(.+?)\s*\1\s*$', line)
+    return f'**{m.group(2)}**' if m else line
+
+
 def _text_to_report_html(text: str) -> str:
-    """Convert markdown report text to HTML for Hipocrate's Rezultate.asp
-    result field.
+    """Convert markdown/DokuWiki report text to HTML for Hipocrate's
+    Rezultate.asp result field.
 
     Confirmed 2026-08-09 (report #1729398): the field is a literal HTML
     sink — whatever string is posted is stored verbatim in the Rezultat
     <td>, with no interpretation of its own (raw '\\n' is stripped entirely
-    with no substitute whitespace, and markdown syntax is stored as literal
-    text). So real HTML must be sent for line breaks and emphasis to render
-    at all.
+    with no substitute whitespace, and markdown/DokuWiki syntax is stored as
+    literal text). So real HTML must be sent for line breaks and emphasis to
+    render at all.
 
     There's no single canonical "Hipocrate format" to mimic — real
     human-authored reports checked the same day show two different shapes
@@ -5307,14 +5322,18 @@ def _text_to_report_html(text: str) -> str:
     either way, <br> is used here as the simpler of the two: no asymmetric
     "first paragraph" special case, and the read side must already handle
     <br>-only reports since real ones use that shape.
-    Input:  "First **bold**\\nSecond *italic*\\nThird"
-    Output: "First <b>bold</b><br>Second <i>italic</i><br>Third"
+
+    DokuWiki headings are converted to bold rather than a heading tag —
+    same "no structural heading in this sink" reasoning as the <br> choice
+    above.
+    Input:  "First **bold**\\nSecond //italic//\\n==== Findings ===="
+    Output: "First <b>bold</b><br>Second <i>italic</i><br><b>Findings</b>"
     """
     text = text.strip()
     if not text:
         return ''
     lines = text.split('\n')
-    return '<br>'.join(_markdown_to_html(line) for line in lines)
+    return '<br>'.join(_markdown_to_html(_dokuwiki_heading_to_bold(line)) for line in lines)
 
 
 class HippoClientReportWrite(HippoClient):
