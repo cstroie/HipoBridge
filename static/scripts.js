@@ -453,6 +453,12 @@ document.addEventListener('DOMContentLoaded', function() {
             elements.copyLabBtn.addEventListener('click', copyLabMarkdown);
         }
 
+        // Profile tab: click CNP to copy it to the clipboard
+        if (elements.patientCnp) {
+            elements.patientCnp.style.cursor = 'pointer';
+            elements.patientCnp.addEventListener('click', () => copyTextToClipboard(elements.patientCnp.textContent));
+        }
+
         // AI summary buttons (report header, lab trends, pre-exam tab).
         // Per-card buttons (epicrisis, imaging) are wired at render time.
         wireAiButton(elements.aiReportBtn, 'report',
@@ -1499,6 +1505,26 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    async function copyTextToClipboard(text) {
+        if (!text || text === '—') {
+            showToast('No content to copy', 'warning');
+            return;
+        }
+        const done = () => showToast('Copied to clipboard', 'success');
+        if (navigator.clipboard?.writeText) {
+            try { await navigator.clipboard.writeText(text); done(); return; }
+            catch (_) { /* fall through */ }
+        }
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+        document.body.appendChild(ta);
+        ta.focus(); ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        ok ? done() : showToast('Failed to copy to clipboard', 'error');
+    }
+
     async function copyMarkdown(markdownEl, btn, flashFn) {
         const markdown = markdownEl?.dataset.markdown;
         if (!markdown) {
