@@ -6422,7 +6422,7 @@ document.addEventListener('DOMContentLoaded', function() {
         regionLine.textContent = laboratory;
         regionLine.dataset.requestId = r.id;
         regionLine.dataset.modality = laboratory;
-        regionLine.dataset.paymentSlug = paymentSlug || '';
+        regionLine.dataset.section = section || '';
 
         // Meta line: hide unused parts
         const metaSectionEl  = row.querySelector('.timeline-meta-section');
@@ -6532,11 +6532,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 })
                 .catch(() => ({ regions: [], indication: '', referrer: '', age: '' }));
 
-            // ER (payment type "Urgenta") rows also get their triage level
-            // looked up (FUPU.asp, via /api/request/{id}/triage — server-side
-            // because it needs a patient lookup + presentation id first).
-            // Skipped for non-emergency rows to avoid a wasted round trip.
-            const triagePromise = el.dataset.paymentSlug === 'urgenta'
+            // UPU (ER department) rows also get their triage level looked up
+            // (FUPU.asp, via /api/request/{id}/triage — server-side because
+            // it needs a patient lookup + presentation id first). Section is
+            // a more reliable ER signal than the payment-type badge (an ER
+            // patient can still be billed under a non-Urgenta payment type).
+            // Skipped for non-UPU rows to avoid a wasted round trip.
+            const triagePromise = (el.dataset.section || '').toUpperCase() === 'UPU'
                 ? apiFetch(`/api/request/${id}/triage`)
                     .then(r => r.ok ? r.json() : null)
                     .then(data => data?.triage_priority || '')

@@ -536,10 +536,12 @@ async def get_request_patient(request):
 @require_auth
 async def get_request_triage(request):
     """Look up the patient's ER triage level for a request, for the Schedule
-    page's per-row 'Emergency' rows. Only meaningful for UPU orders (cerere.asp's
-    payment_type == 'Urgenta'); best-effort — many have no saved FUPU sheet yet.
+    page's per-row UPU rows. Only meaningful for UPU (ER) orders — identified
+    by cerere.asp's own "Sectia" department field, more reliable than the
+    payment-type flag (an ER patient can still be billed under a non-Urgenta
+    payment type). Best-effort — many have no saved FUPU sheet yet.
 
-    Fetches cerere.asp (payment_type + patient id), then the patient page (for
+    Fetches cerere.asp (section + patient id), then the patient page (for
     HippoClientPatient's "presentation" id list — the FUPU record id, a
     different id namespace than request_id/patient_id), then the most recent
     FUPU.asp. Returns {"status": "success", "triage_priority": str|None,
@@ -555,7 +557,7 @@ async def get_request_triage(request):
 
     triage_priority = None
     triage_priority_code = None
-    if (cerere_data.get('request.payment_type') or '').strip().lower() == 'urgenta':
+    if (cerere_data.get('request.section') or '').strip().upper() == 'UPU':
         patient_id = cerere_data.get('patient.id')
         if patient_id:
             patient_client = HippoClientPatient(SERVICE_URL, request)
