@@ -81,7 +81,16 @@ PROMPT_META = {
     # truncation cutoff, even though the model may still need this discussed.
     "imaging_episode": ("medical", 320),
     "lab":             ("medical", 600),
-    "pre_exam":        ("medical", 450),
+    "pre_exam_brief":  ("medical", 450),
+    # 80 -> 160: real output got cut off mid-sentence at 80 — a single dense
+    # sentence packing diagnosis + reason for exam + a watch-item, especially
+    # once translated, routinely ran past that. Still short enough that
+    # streaming buys nothing (kept out of STREAMING_KINDS below).
+    "pre_exam_oneliner":  ("medical", 160),
+    # 500 -> 700: 4 sections (S/O/A/P) each with several bullets ran past
+    # 500, same truncation pattern as pre_exam_oneliner above.
+    "pre_exam_soap":      ("medical", 700),
+    "pre_exam_executive": ("medical", 300),
 }
 
 
@@ -145,11 +154,14 @@ PROMPTS = _PromptRegistry(PROMPT_META)
 
 
 # Kinds that aggregate or narrate events across time, where knowing "today"
-# helps the model judge recency/ongoing-ness (e.g. pre_exam's "recent course").
-# Excludes imaging (single point-in-time report, no timeline) and lab (each
-# row is already explicitly timestamped) — those have no use for it and it
-# would just be unused prompt weight on already-lean, short-output kinds.
-DATE_AWARE_KINDS = frozenset({"report", "epicrisis", "pre_exam"})
+# helps the model judge recency/ongoing-ness (e.g. pre_exam_brief's "recent
+# course", pre_exam_executive's "Current status" bullet, pre_exam_soap's
+# Assessment). Excludes imaging (single point-in-time report, no timeline),
+# lab (each row is already explicitly timestamped), and pre_exam_oneliner
+# (single sentence, no date content in the format at all) — those have no
+# use for it and it would just be unused prompt weight on already-lean,
+# short-output kinds.
+DATE_AWARE_KINDS = frozenset({"report", "epicrisis", "pre_exam_brief", "pre_exam_soap", "pre_exam_executive"})
 
 
 def _date_directive(today: str | None = None) -> str:
@@ -185,7 +197,11 @@ def _language_directive(language: str) -> str:
 # lab (600 tokens) is included — long enough that perceived latency matters.
 # imaging_episode (Impression-only conclusion, 320 tokens — see PROMPT_META)
 # is included too: still ~1min+ on this backend, so streaming still helps.
-STREAMING_KINDS = frozenset({"report", "epicrisis", "pre_exam", "lab", "imaging_episode"})
+# pre_exam_oneliner (80 tokens) is excluded for the same reason as imaging.
+STREAMING_KINDS = frozenset({
+    "report", "epicrisis", "pre_exam_brief", "lab", "imaging_episode",
+    "pre_exam_soap", "pre_exam_executive",
+})
 
 
 def _build_messages(client, kind: str, text: str) -> list[dict]:
@@ -200,7 +216,7 @@ def _build_messages(client, kind: str, text: str) -> list[dict]:
     _tier, task_prompt, _max_tokens = PROMPTS[kind]
     language = getattr(client, "language", "English") or "English"
     # Kind files may reference the concrete language name via a literal
-    # "{language}" placeholder (e.g. pre_exam.md's opening sentence) — a
+    # "{language}" placeholder (e.g. pre_exam_brief.md's opening sentence) — a
     # targeted replace, not str.format(), so a prompt with unrelated literal
     # braces (none today, but not guaranteed forever) can't break this.
     system_content = task_prompt.replace("{language}", language)

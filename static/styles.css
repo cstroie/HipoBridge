@@ -1722,9 +1722,9 @@ select {
     border-radius: var(--radius-full);
     overflow: hidden;
 }
-/* aiPreExamBtn is the toolbar's only child (no copy button next to it) —
-   don't render an empty pill outline when JS hides the button */
-.card-toolbar:has(> :only-child[hidden]) {
+/* Don't render an empty pill outline when every child button is hidden
+   (e.g. the pre-exam toolbar before a patient's clinical text is loaded) */
+.card-toolbar:not(:has(> :not([hidden]))) {
     display: none;
 }
 /* Now a sibling of <header> rather than nested inside the title row — on
@@ -1781,20 +1781,29 @@ select {
     justify-content: center;
 }
 
-/* The pre-exam "Generate" button is the AI tab's sole call to action (no
-   copy button next to it, nothing else on the page competes for
-   attention) — invert it to a solid filled pill instead of the quiet
-   transparent-in-toolbar look every other AI/copy button gets, so it
-   reads as the primary action rather than a secondary icon button. */
-#aiPreExamBtn {
+/* The pre-exam toolbar buttons are the AI tab's sole call to action (no
+   copy button next to them, nothing else on the page competes for
+   attention) — invert them to a solid filled pill instead of the quiet
+   transparent-in-toolbar look every other AI/copy button gets, so they
+   read as the primary action rather than secondary icon buttons. */
+#aiPreExamToolbar .btn-ai {
     background: var(--warning, #d97706);
     color: var(--on-accent);
     flex-basis: auto;
     min-width: 84px;
     padding: var(--space-8) var(--space-16);
 }
-#aiPreExamBtn:hover {
+#aiPreExamToolbar .btn-ai + .btn-ai {
+    border-left: 1px solid color-mix(in srgb, var(--on-accent) 30%, transparent);
+}
+#aiPreExamToolbar .btn-ai:hover {
     background: color-mix(in srgb, var(--warning, #d97706) 85%, black);
+}
+/* Now a standalone row below the header (not inside .report-header's flex
+   row), so it needs its own gap above #aiPreExamAnchor/#aiEmptyState. */
+#aiPreExamToolbar {
+    margin-bottom: var(--space-24);
+    flex-wrap: wrap;
 }
 
 /* Shared compact icon-only style for every "copy as Markdown" button */

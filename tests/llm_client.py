@@ -57,7 +57,10 @@ class TestProviderSelection(unittest.TestCase):
 
 class TestPromptRegistry(unittest.TestCase):
     def test_kinds_map_to_valid_tiers(self):
-        self.assertEqual(set(PROMPTS), {"report", "epicrisis", "imaging", "imaging_episode", "lab", "pre_exam"})
+        self.assertEqual(set(PROMPTS), {
+            "report", "epicrisis", "imaging", "imaging_episode", "lab",
+            "pre_exam_brief", "pre_exam_oneliner", "pre_exam_soap", "pre_exam_executive",
+        })
         for kind, (tier, system, max_tokens) in PROMPTS.items():
             self.assertIn(tier, TIERS, f"{kind} uses unknown tier {tier}")
             self.assertTrue(system.strip(), f"{kind} has an empty prompt")
@@ -68,12 +71,14 @@ class TestPromptRegistry(unittest.TestCase):
         self.assertEqual(PROMPTS["epicrisis"][0], "default")
         self.assertEqual(PROMPTS["imaging"][0], "medical")
         self.assertEqual(PROMPTS["lab"][0], "medical")
-        self.assertEqual(PROMPTS["pre_exam"][0], "medical")
+        self.assertEqual(PROMPTS["pre_exam_brief"][0], "medical")
 
     def test_date_aware_kinds(self):
         # Timeline/narrative kinds get a "today" anchor; a single point-in-time
         # report (imaging) and an already-per-row-timestamped one (lab) don't.
-        self.assertEqual(DATE_AWARE_KINDS, {"report", "epicrisis", "pre_exam"})
+        self.assertEqual(DATE_AWARE_KINDS, {
+            "report", "epicrisis", "pre_exam_brief", "pre_exam_soap", "pre_exam_executive",
+        })
         self.assertNotIn("imaging", DATE_AWARE_KINDS)
         self.assertNotIn("lab", DATE_AWARE_KINDS)
 

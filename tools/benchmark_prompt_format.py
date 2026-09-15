@@ -54,7 +54,7 @@ KIND_FILES = {
     "imaging":  ("/tmp/imaging_report.txt", "/tmp/reference_imaging.txt"),
     "lab":      ("/tmp/lab_panel_abn.txt", "/tmp/reference_lab.txt"),
     "report":   ("/tmp/biliary_atresia_case_trim.txt", "/tmp/reference_report.txt"),
-    "pre_exam": ("/tmp/biliary_atresia_case_trim.txt", "/tmp/reference_pre_exam.txt"),
+    "pre_exam_brief": ("/tmp/biliary_atresia_case_trim.txt", "/tmp/reference_pre_exam.txt"),
 }
 
 # Substrings of transient failures caused by another project evicting the

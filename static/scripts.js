@@ -83,7 +83,7 @@ document.addEventListener('DOMContentLoaded', function() {
         aiLabBtn: document.getElementById('aiLabBtn'),
         copyLabBtn: document.getElementById('copyLabBtn'),
         // AI tab elements
-        aiPreExamBtn: document.getElementById('aiPreExamBtn'),
+        aiPreExamToolbar: document.getElementById('aiPreExamToolbar'),
         aiPreExamAnchor: document.getElementById('aiPreExamAnchor'),
         aiEmptyState: document.getElementById('aiEmptyState'),
         // Patient profile "AI Summary" panel
@@ -310,6 +310,29 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let whoamiReady = Promise.resolve();
 
+    // Pre-exam toolbar: each button sends the same clinical text
+    // (getPatientClinicalText()) under a different `kind`, so the
+    // radiologist can generate multiple prompt styles for the same record.
+    // Only 'pre_exam_brief' has a working prompt today — the rest are
+    // scaffolded ahead of their prompts landing in llm/prompts/ (drafts
+    // collected in llm/prompts/drafts/ in the meantime); clicking one of
+    // those surfaces the backend's existing "unknown summary kind" error
+    // until its PROMPT_META entry + <kind>.md exist. Icons are chosen from
+    // the existing self-hosted Font Awesome subset (static/fontawesome.css)
+    // — adding a new glyph needs a separate subsetting step.
+    // Declared here (ahead of initApp() below) rather than near
+    // buildAiPreExamToolbar() further down: it's a `const`, not a hoisted
+    // `function`, and initApp() runs synchronously as soon as this script
+    // executes — a `const` declared after that call site is still in its
+    // temporal dead zone when buildAiPreExamToolbar() (called from inside
+    // initApp() -> initEventListeners()) tries to read it.
+    const PRE_EXAM_TOOLBAR = [
+        { kind: 'pre_exam_brief',     label: 'Brief',             icon: 'fa-wand-magic-sparkles' },
+        { kind: 'pre_exam_oneliner',  label: 'One-liner',         icon: 'fa-bolt' },
+        { kind: 'pre_exam_soap',      label: 'SOAP',              icon: 'fa-file-medical' },
+        { kind: 'pre_exam_executive', label: 'Executive summary', icon: 'fa-notes-medical' },
+    ];
+
     // Initialize application
     initApp();
     
@@ -470,8 +493,7 @@ document.addEventListener('DOMContentLoaded', function() {
         wireAiButton(elements.aiReportBtn, 'report',
             () => elements.reportCard, () => getPatientClinicalText());
         if (elements.aiLabBtn) elements.aiLabBtn.addEventListener('click', runLabSummary);
-        wireAiButton(elements.aiPreExamBtn, 'pre_exam',
-            () => elements.aiPreExamAnchor, () => getPatientClinicalText());
+        elements.aiPreExamBtns = buildAiPreExamToolbar();
         if (elements.patientAiSummaryBtn) {
             elements.patientAiSummaryBtn.addEventListener('click', generatePatientAiSummary);
         }
@@ -1635,12 +1657,12 @@ document.addEventListener('DOMContentLoaded', function() {
     function resetAiTab() {
         if (elements.aiEmptyState) elements.aiEmptyState.hidden = false;
         if (elements.aiReportBtn) elements.aiReportBtn.hidden = true;
-        if (elements.aiPreExamBtn) elements.aiPreExamBtn.hidden = true;
+        for (const btn of elements.aiPreExamBtns || []) btn.hidden = true;
         if (elements.aiLabBtn) elements.aiLabBtn.hidden = true;
         // Drop any rendered AI cards from a previous patient. querySelectorAll
         // does not descend into <template> content, so the template card is safe.
         document.querySelectorAll('.ai-summary-card').forEach(card => card.remove());
-        for (const btn of [elements.aiReportBtn, elements.aiPreExamBtn, elements.aiLabBtn, elements.patientAiSummaryBtn]) {
+        for (const btn of [elements.aiReportBtn, ...(elements.aiPreExamBtns || []), elements.aiLabBtn, elements.patientAiSummaryBtn]) {
             if (btn) btn._aiCard = null;
         }
         labAiText = '';
@@ -1665,13 +1687,15 @@ document.addEventListener('DOMContentLoaded', function() {
         const hasContent = !!getPatientClinicalText();
         if (elements.aiEmptyState) elements.aiEmptyState.hidden = hasContent;
         if (elements.aiReportBtn) elements.aiReportBtn.hidden = !hasContent;
-        if (elements.aiPreExamBtn) elements.aiPreExamBtn.hidden = !hasContent;
+        for (const btn of elements.aiPreExamBtns || []) btn.hidden = !hasContent;
         if (hasContent) {
             // Silently redisplay a previously generated summary for this patient, if any.
             runAiSummary(elements.aiReportBtn, 'report',
                 () => elements.reportCard, getPatientClinicalText, { auto: true });
-            runAiSummary(elements.aiPreExamBtn, 'pre_exam',
-                () => elements.aiPreExamAnchor, getPatientClinicalText, { auto: true });
+            for (const btn of elements.aiPreExamBtns || []) {
+                runAiSummary(btn, btn.dataset.kind,
+                    () => elements.aiPreExamAnchor, getPatientClinicalText, { auto: true });
+            }
             // Same 'report' kind/cache as aiReportBtn above — if the Report tab
             // was already visited (or this button already clicked) this
             // silently fills the profile panel's card too, no extra LLM call.
@@ -1707,7 +1731,7 @@ document.addEventListener('DOMContentLoaded', function() {
     //
     // Was 45000 (45s) — too short for this server: [llm] log lines show the
     // configured model actually runs at ~2-3.5 tok/s, and imaging_episode/
-    // pre_exam prompts run up to ~2000 prompt tokens, so prefill alone
+    // pre_exam_brief prompts run up to ~2000 prompt tokens, so prefill alone
     // (before the *first* streamed chunk arrives, which is what this timer
     // actually gates for aiSummarizeStream — see armTimer()) can easily
     // exceed 45s on its own, well before generation even starts. That was
@@ -1749,10 +1773,13 @@ document.addEventListener('DOMContentLoaded', function() {
         return data.summary || '';
     }
 
-    // Kinds served by /api/ai/summarize/stream (report/epicrisis/pre_exam/lab —
+    // Kinds served by /api/ai/summarize/stream (report/epicrisis/pre_exam_brief/lab —
     // the ones long enough that perceived latency matters; imaging stays on
     // the plain aiSummarize() endpoint above, too short to benefit).
-    const STREAMING_KINDS = new Set(['report', 'epicrisis', 'pre_exam', 'lab', 'imaging_episode']);
+    const STREAMING_KINDS = new Set([
+        'report', 'epicrisis', 'pre_exam_brief', 'lab', 'imaging_episode',
+        'pre_exam_soap', 'pre_exam_executive',
+    ]);
 
     // Rare sentinel (ASCII Unit Separator) the server uses to signal a
     // mid-stream failure it can no longer report via HTTP status, since the
@@ -1948,7 +1975,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const body = card.querySelector('.ai-summary-body');
                 card.classList.remove('ai-card-error');
                 body.classList.remove('ai-summary-loading');
-                const header = kind === 'pre_exam' ? buildPreExamHeader() : '';
+                const header = kind.startsWith('pre_exam_') ? buildPreExamHeader() : '';
                 const shown = header + (cached || '_(empty response)_');
                 body.innerHTML = marked.parse(stripOuterFence(shown));
                 body.dataset.markdown = shown;
@@ -1986,14 +2013,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     body.textContent = full;
                 });
                 body.classList.remove('ai-summary-streaming');
-                const header = kind === 'pre_exam' ? buildPreExamHeader() : '';
+                const header = kind.startsWith('pre_exam_') ? buildPreExamHeader() : '';
                 const shown = header + (full || '_(empty response)_');
                 body.innerHTML = marked.parse(stripOuterFence(shown));
                 body.dataset.markdown = shown;
             } else {
                 const summary = await aiSummarize(kind, text, { force: true });
                 body.classList.remove('ai-summary-loading');
-                const header = kind === 'pre_exam' ? buildPreExamHeader() : '';
+                const header = kind.startsWith('pre_exam_') ? buildPreExamHeader() : '';
                 const shown = header + (summary || '_(empty response)_');
                 body.innerHTML = marked.parse(stripOuterFence(shown));
                 body.dataset.markdown = shown;
@@ -2012,6 +2039,31 @@ document.addEventListener('DOMContentLoaded', function() {
     function wireAiButton(button, kind, getAnchor, getText, opts = {}) {
         if (!button) return;
         button.addEventListener('click', () => runAiSummary(button, kind, getAnchor, getText, opts));
+    }
+
+    // Builds one button per PRE_EXAM_TOOLBAR entry into elements.aiPreExamToolbar
+    // (mirrors buildImagingEpisodeHeader's manual document.createElement
+    // pattern — no <template> needed since these buttons carry no ids).
+    // Returns the created buttons so callers can toggle/reset them as a group.
+    function buildAiPreExamToolbar() {
+        if (!elements.aiPreExamToolbar) return [];
+        return PRE_EXAM_TOOLBAR.map(cfg => {
+            const btn = document.createElement('button');
+            btn.className = 'btn-ai';
+            btn.hidden = true;
+            btn.dataset.kind = cfg.kind;
+            btn.setAttribute('aria-label', `Generate ${cfg.label}`);
+            btn.title = `Generate ${cfg.label}`;
+            const icon = document.createElement('i');
+            icon.className = `fas ${cfg.icon}`;
+            icon.setAttribute('aria-hidden', 'true');
+            const span = document.createElement('span');
+            span.textContent = cfg.label;
+            btn.append(icon, span);
+            elements.aiPreExamToolbar.appendChild(btn);
+            wireAiButton(btn, cfg.kind, () => elements.aiPreExamAnchor, () => getPatientClinicalText());
+            return btn;
+        });
     }
 
     // Lab Trends button — sends only the pathological rows to the model. When
@@ -2296,7 +2348,44 @@ document.addEventListener('DOMContentLoaded', function() {
         log('Epicrisis markdown generated successfully');
         return markdown;
     }
-       
+
+    // ── Clinical-text size budget for the on-site LLM ─────────────────────
+    // The assembled clinical text (admissions + labs + imaging) is sent
+    // verbatim as the AI tab's "report"/"pre_exam_brief" input, sharing an ~8k
+    // token context window with the system prompt and the model's own
+    // output. Nothing tokenizes client-side, so this is a conservative
+    // chars-per-token approximation (Romanian medical text with diacritics
+    // tokenizes worse than plain English), not an exact count. This budget
+    // only trims the copy sent to the LLM — the full, untrimmed markdown
+    // still goes into the Report tab's own display/copy button.
+    const CLINICAL_TEXT_TOKEN_BUDGET = 8000;
+    // Reserve: largest system prompt among clinicalMarkdown's consumers
+    // (pre_exam_brief.md, ~1350 tokens) + its max_tokens (450, see
+    // llm/prompts.py PROMPT_META) + the date/language directives appended
+    // at call time + a safety margin. Bump this if either grows a lot.
+    const CLINICAL_TEXT_RESERVED_TOKENS = 2200;
+    const CLINICAL_TEXT_CHARS_PER_TOKEN = 3.5;
+    const CLINICAL_TEXT_CHAR_BUDGET =
+        (CLINICAL_TEXT_TOKEN_BUDGET - CLINICAL_TEXT_RESERVED_TOKENS) * CLINICAL_TEXT_CHARS_PER_TOKEN;
+
+    // Greedily keeps candidates in priority order (lower `priority` = more
+    // important, considered first) until the char budget runs out, then
+    // re-joins the survivors in their original array order — so a
+    // lower-priority block never displaces a higher-priority one, but nothing
+    // gets cut mid-sentence: each candidate is included whole or not at all.
+    function fitClinicalTextToBudget(candidates, budgetChars) {
+        const byPriority = [...candidates].sort((a, b) => a.priority - b.priority);
+        const kept = new Set();
+        let used = 0;
+        for (const c of byPriority) {
+            if (!c.text) continue;
+            if (used + c.text.length > budgetChars) continue;
+            kept.add(c);
+            used += c.text.length;
+        }
+        return candidates.filter(c => kept.has(c)).map(c => c.text).join('');
+    }
+
     async function displayPatientReport(patientData, analysesData) {
         log('Displaying patient report data');
 
@@ -2563,8 +2652,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // §4 Recent labs (compact) ───────────────────────────────────
             // Distinct from the dedicated Lab tab's fuller trend table: a
             // short "## Recent Labs" section for the report/epicrisis/
-            // pre_exam clinical text, which previously never saw any lab
-            // data at all (pre_exam's own prompt already claims to use
+            // pre_exam_brief clinical text, which previously never saw any lab
+            // data at all (pre_exam_brief's own prompt already claims to use
             // "labs" — this fulfils that). Scoped to the current/last
             // hospitalization period (not a fixed lookback window) — only
             // modified (out-of-range) analytes, last value per analyte,
@@ -2784,29 +2873,37 @@ document.addEventListener('DOMContentLoaded', function() {
                 return `## ${label}\n\n_${period}_\n\n${body}\n\n`;
             }
 
-            let admissionsMd = '';
+            // primaryAdmissionMd/secondaryAdmissionMd are kept separate (rather
+            // than one combined string) so the budgeted clinicalMarkdown below
+            // can drop the lower-priority secondary block on its own; admissionsMd
+            // (both concatenated) still feeds the full, unbudgeted Report tab display.
+            let primaryAdmissionMd = '', secondaryAdmissionMd = '';
             if (activeAdm) {
-                admissionsMd += admissionMarkdown('Current Admission', activeAdm.enc, true);
+                primaryAdmissionMd = admissionMarkdown('Current Admission', activeAdm.enc, true);
                 const sparse = buildCheckinText(activeAdm.enc).length < SPARSE_THRESHOLD;
                 if (sparse && lastDischarge)
-                    admissionsMd += admissionMarkdown('Last Admission', lastDischarge.enc, false);
+                    secondaryAdmissionMd = admissionMarkdown('Last Admission', lastDischarge.enc, false);
             } else if (lastDischarge) {
-                admissionsMd += admissionMarkdown('Last Admission', lastDischarge.enc, false);
+                primaryAdmissionMd = admissionMarkdown('Last Admission', lastDischarge.enc, false);
             }
+            const admissionsMd = primaryAdmissionMd + secondaryAdmissionMd;
 
-            let imagingMd = '';
-            if (reports.some(Boolean)) {
-                imagingMd = '## Recent Imaging\n\n';
-                entries.forEach((entry, idx) => {
-                    if (!reports[idx]) return; // indication-only, no report to summarise
-                    const sr   = entry.resource;
-                    const mod  = sr.code?.coding?.[0]?.code || '';
-                    const desc = sr.code?.coding?.[0]?.display || MODALITY_INFO[mod]?.label || mod;
-                    const date = sr.authoredOn ? formatDate(sr.authoredOn) : '';
-                    const code = sr.identifier?.[0]?.value || sr.id || '';
-                    imagingMd += `### ${desc}  ·  ${date}${code ? '  #' + code : ''}\n\n${reports[idx]}\n\n`;
-                });
-            }
+            // One block per reported entry (most-recent first, same order as
+            // `entries`) — kept separate, rather than one joined string, so the
+            // budgeted clinicalMarkdown below can drop the oldest ones first;
+            // imagingMd (all of them joined) still feeds the full, unbudgeted
+            // Report tab display.
+            const imagingBlocks = [];
+            entries.forEach((entry, idx) => {
+                if (!reports[idx]) return; // indication-only, no report to summarise
+                const sr   = entry.resource;
+                const mod  = sr.code?.coding?.[0]?.code || '';
+                const desc = sr.code?.coding?.[0]?.display || MODALITY_INFO[mod]?.label || mod;
+                const date = sr.authoredOn ? formatDate(sr.authoredOn) : '';
+                const code = sr.identifier?.[0]?.value || sr.id || '';
+                imagingBlocks.push(`### ${desc}  ·  ${date}${code ? '  #' + code : ''}\n\n${reports[idx]}\n\n`);
+            });
+            const imagingMd = imagingBlocks.length ? '## Recent Imaging\n\n' + imagingBlocks.join('') : '';
 
             // ── Hospitalisation timeline (mirrors the #reportTimeline rows above) ──
             function buildTimelineMarkdown(encs) {
@@ -2844,8 +2941,24 @@ document.addEventListener('DOMContentLoaded', function() {
                     typed_blocks: typedBlocks,
                     narrative: narrativeParts.join('\n\n'),
                 });
+                // Priority order (lower = kept first when the text is over
+                // budget): most-recent imaging, then the primary admission
+                // narrative, then the 2nd-most-recent imaging, then labs, then
+                // the remaining older imaging, then the secondary/sparse
+                // admission block. See fitClinicalTextToBudget above.
+                const imagingCandidates = imagingBlocks.map((text, idx) => ({
+                    text: (idx === 0 ? '## Recent Imaging\n\n' : '') + text,
+                    priority: idx === 0 ? 0 : idx === 1 ? 2 : 4 + (idx - 2),
+                }));
+                const clinicalCandidates = [
+                    { text: primaryAdmissionMd, priority: 1 },
+                    { text: secondaryAdmissionMd, priority: 7 },
+                    { text: labsMd, priority: 3 },
+                    ...imagingCandidates,
+                ];
                 elements.patientReportBlocks.dataset.clinicalMarkdown =
-                    patientContextHeader(patientData, latestDx) + admissionsMd + labsMd + imagingMd;
+                    patientContextHeader(patientData, latestDx) +
+                    fitClinicalTextToBudget(clinicalCandidates, CLINICAL_TEXT_CHAR_BUDGET);
             }
 
             if (reportCard) reportCard.hidden = false;
@@ -4496,7 +4609,7 @@ document.addEventListener('DOMContentLoaded', function() {
         headerRow.append(heading, toolbar);
 
         // Silently redisplay a previously generated synopsis (mirrors
-        // report/epicrisis/pre_exam/lab/per-study-imaging's opts.auto probe)
+        // report/epicrisis/pre_exam_brief/lab/per-study-imaging's opts.auto probe)
         // — unlike those, deferred to this header scrolling into view rather
         // than run at render time, since building the episode text requires
         // fetching every study's report body (the same fetch getEpisodeText
@@ -4767,7 +4880,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         () => cardAiBtn.dataset.aiText || '',
                         { inline: true });
                 // Silently redisplay a previously generated summary for this
-                // report, if any (mirrors lab/epicrisis/report/pre_exam).
+                // report, if any (mirrors lab/epicrisis/report/pre_exam_brief).
                 runAiSummary(
                     cardAiBtn, 'imaging',
                     () => article.querySelector('.report-body'),
@@ -5369,9 +5482,27 @@ document.addEventListener('DOMContentLoaded', function() {
         return data;
     }
 
+    // Some scraped epicrisis text repeats a whole paragraph verbatim (e.g. a
+    // paste-over during editing at the source, or the same note appearing
+    // twice in note[]) — drop exact repeats, keeping the first occurrence,
+    // so the model doesn't see (and burn budget on) the same content twice.
+    function dedupeParagraphs(text) {
+        const seen = new Set();
+        return text
+            .split(/\n{2,}/)
+            .filter(p => {
+                const key = p.trim();
+                if (!key) return true; // keep blank/whitespace-only segments as-is
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            })
+            .join('\n\n');
+    }
+
     function extractEpicrisisText(encounterData) {
         if (!encounterData.note || !Array.isArray(encounterData.note)) return '';
-        return encounterData.note.map(note => note.text || '').join('\n\n');
+        return dedupeParagraphs(encounterData.note.map(note => note.text || '').join('\n\n'));
     }
 
     // Returns true if text has meaningful content beyond markdown markers and punctuation.

@@ -921,7 +921,7 @@ async def post_ai_summarize(request):
     configured LLM provider (llm.cfg) — same auth gate as every other /api/*
     route.
 
-    Body: {"kind": "report|epicrisis|imaging|lab|pre_exam", "text": "...",
+    Body: {"kind": "report|epicrisis|imaging|lab|pre_exam_brief", "text": "...",
     "force": bool, "check_only": bool}. Each kind maps to a (model tier,
     prompt) in llm/prompts.py. These are deliberately weak-guarantee aids: no
     schema, no validation — the frontend presents them as unverified
@@ -1025,11 +1025,11 @@ async def _finish_ai_stream_in_background(kind: str, cache_key: str, agen, parts
 @require_auth
 async def post_ai_summarize_stream(request):
     """Streaming counterpart to post_ai_summarize, for the kinds where
-    perceived latency matters most: report, epicrisis, pre_exam (up to ~900
+    perceived latency matters most: report, epicrisis, pre_exam_brief (up to ~900
     tokens / ~100s on a 4B model), and lab (400 tokens). imaging (40 tokens)
     stays on the non-streaming endpoint — streaming buys it nothing.
 
-    Body: {"kind": "report|epicrisis|pre_exam|lab", "text": "...", "force": bool}.
+    Body: {"kind": "report|epicrisis|pre_exam_brief|lab", "text": "...", "force": bool}.
     Same auth/cache/validation gates as post_ai_summarize, and the same
     ai_cache keyed by (kind, sha256(text)) — a result cached by either
     endpoint is visible to both. On a cache hit the full cached text is
