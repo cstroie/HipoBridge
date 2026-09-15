@@ -1696,10 +1696,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 runAiSummary(btn, btn.dataset.kind,
                     () => elements.aiPreExamAnchor, getPatientClinicalText, { auto: true });
             }
-            // Same 'report' kind/cache as aiReportBtn above — if the Report tab
-            // was already visited (or this button already clicked) this
-            // silently fills the profile panel's card too, no extra LLM call.
-            runAiSummary(elements.patientAiSummaryBtn, 'report',
+            // Silently redisplay a previously generated one-liner for this
+            // patient, if any — same 'pre_exam_oneliner' kind/cache as the
+            // pre-exam toolbar buttons, but rendered inline in the profile card.
+            runAiSummary(elements.patientAiSummaryBtn, 'pre_exam_oneliner',
                 () => null, getPatientClinicalText,
                 { auto: true, inline: true, intoAnchorParent: () => elements.patientAiSummaryAnchor });
         }
@@ -1715,7 +1715,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // leaves getPatientClinicalText() null; runAiSummary below then
         // surfaces the "no content" toast on its own in that case.
         if (!getPatientClinicalText()) await loadReportLazily();
-        runAiSummary(elements.patientAiSummaryBtn, 'report',
+        runAiSummary(elements.patientAiSummaryBtn, 'pre_exam_oneliner',
             () => null, getPatientClinicalText,
             { inline: true, intoAnchorParent: () => elements.patientAiSummaryAnchor });
     }
