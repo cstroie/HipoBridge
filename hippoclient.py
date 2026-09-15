@@ -3921,6 +3921,16 @@ class HippoClientFUPU(HippoClient):
     except RefID_FUPU_Editabil, which is a fixed id.
     """
 
+    # Romanian triage-level codes → English (the nearest ESI/CTAS-style terms;
+    # base FHIR has no dedicated ED-triage-acuity CodeSystem to defer to).
+    _TRIAGE_PRIORITY_EN = {
+        '30': 'Resuscitation',
+        '31': 'Critical',
+        '32': 'Urgent',
+        '33': 'Non-urgent',
+        '34': 'Routine',
+    }
+
     def __init__(self, service_url=None, request=None):
         super().__init__(service_url=service_url, request=request)
         self.request_url = "/gen_printabile/FUPU.asp?id={id}&tip=1"
@@ -3968,7 +3978,7 @@ class HippoClientFUPU(HippoClient):
 
             code, text = self._checkbox_group_choice(soup, '30-Resuscit.')
             data.store("fupu.triage_priority_code", code)
-            data.store("fupu.triage_priority", text)
+            data.store("fupu.triage_priority", self._TRIAGE_PRIORITY_EN.get(code, text))
 
             code, text = self._checkbox_group_choice(soup, '13-SAJ')
             data.store("fupu.arrival_mode_code", code)
