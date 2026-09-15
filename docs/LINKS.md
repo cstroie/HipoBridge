@@ -245,6 +245,7 @@ Perform/cancel evict `cerere.asp` and `BuletinAnalize.asp` caches for that reque
 | Appointments list | `/gen_apps/` |
 | User info | `/gen_administrare/listare/cont.asp?id={id}&ses=1` |
 | Emergency Department Sheet (FUPU / Foaie UPU) | `/gen_printabile/FUPU.asp?id={presentation_id}#pg={page}` — full ED clinical record: triage, vitals, anamnesis, systematic exam, meds, discharge; up to 8 pages + medications page |
+| Presentation (live/editable form) | `/files/presentation.asp?id={presentation_id}` — editable ER presentation form; carries `EmergencyStatusCode` ("Stare pacient" triage cod 0-4) not present in `FisaPrezentare.asp`; only its URL pattern is currently mined (for presentation IDs), page content itself is unparsed |
 | Medical Letter (ScrisoareMedicala / Anexa 43) | `/gen_printabile/ScrisoareMedicala.asp?relname=PR&id={presentation_id}` — referral/discharge letter to GP or outpatient specialist; includes diagnosis, labs, imaging, treatment, prescriptions, follow-up; valid 6 months |
 | Checkup from presentation (back-link) | `/files/checkup.asp?presid={presentation_id}&cuid={checkup_id}` — same as `/files/checkup.asp?cuid={id}`; `presid` is navigation context only, no extra data |
 | Procedures per consultation | `/files/procedures.asp?cuid={checkup_id}` — section procedure groups + procedures recorded against a specific checkup; appears empty if none added |
