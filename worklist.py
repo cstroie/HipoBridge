@@ -38,8 +38,8 @@ except ImportError:
     DICOM_AVAILABLE = False
 
 from hippoclient import (HippoClientSchedule, HippoClientCerere, HippoClientBuletinSolicitare,
-                          HippoClientPatient, HippoClientCheckin, identify_study_type_and_region,
-                          is_meaningful_text)
+                          HippoClientPatient, HippoClientCheckin, HippoClientFUPU,
+                          identify_study_type_and_region, is_meaningful_text)
 from extractors import parse_cnp
 
 logger = logging.getLogger('Worklist')
@@ -447,6 +447,9 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
     comments      = (patient_info or {}).get('comment') or ''
     if email:
         comments = f'Email: {email}' + (f'\n{comments}' if comments else '')
+    triage = (patient_info or {}).get('triage_priority') or ''
+    if triage:
+        comments = f'Triaj UPU: {triage}' + (f'\n{comments}' if comments else '')
     for extra in ((patient_info or {}).get('observations'), (patient_info or {}).get('anamnesis')):
         if extra:
             comments = f'{comments}\n{extra}' if comments else extra
@@ -963,6 +966,24 @@ class WorklistRefresher:
                 if checkin_data.get('status') != 'error':
                     admission_id = checkin_data.get('checkin.id') or latest_checkin_id
 
+            # For UPU (ER) orders, look up the patient's ER triage level from
+            # FUPU.asp — cerere.asp's "payment_type" is Hipocrate's own flag for
+            # an emergency-department order ("Urgenta" vs the routine payment
+            # types), and HippoClientPatient's "presentation" list gives the
+            # FUPU record id(s) (distinct from request_id/admission_id — its
+            # own id namespace). Best-effort: many UPU orders have no FUPU
+            # sheet yet, or it 404s if not yet saved.
+            triage_priority = None
+            if (cerere_data.get('request.payment_type') or '').strip().lower() == 'urgenta':
+                presentation_ids = patient_data.get('presentation')
+                if presentation_ids:
+                    presentation_id = (max(presentation_ids, key=lambda pid: int(pid))
+                                        if isinstance(presentation_ids, list) else presentation_ids)
+                    fupu_client = self._client(HippoClientFUPU)
+                    fupu_data = await fupu_client.fetch_and_parse(id=presentation_id)
+                    if fupu_data.get('status') != 'error':
+                        triage_priority = fupu_data.get('fupu.triage_priority')
+
             # BuletinSolicitare.asp's own clinical fields ("Date clinico-paraclinice",
             # "Diagnostic de trimitere", "Indicatii speciale") often carry the actual
             # reason for the exam (e.g. trauma circumstances) in more detail than
@@ -1007,6 +1028,7 @@ class WorklistRefresher:
                 'observations':  patient_data.get('patient.observations'),
                 'anamnesis':     patient_data.get('patient.anamnesis'),
                 'comment':       comment,
+                'triage_priority': triage_priority,
                 'admission_id':  admission_id,
             }
             self._patient_cache[request_id] = info

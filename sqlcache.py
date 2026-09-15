@@ -64,6 +64,7 @@ _ROUTES: list[tuple['re.Pattern[str]', Union[str, Callable[[dict], str]], Callab
     (re.compile(r'/files/checkup\.asp'), 'cache_checkup', lambda q: q.get('cuid', [None])[0]),
     (re.compile(r'/PARA/NOM/Listare/cerere\.asp'), 'cache_cerere', lambda q: q.get('id', [None])[0]),
     (re.compile(r'/gen_printabile/FisaPrezentare\.asp'), 'cache_presentation', lambda q: q.get('id', [None])[0]),
+    (re.compile(r'/gen_printabile/FUPU\.asp'), 'cache_fupu', lambda q: q.get('id', [None])[0]),
     (re.compile(r'/PARA/Printabile/BuletinAnalize\.asp'), _buletin_table, lambda q: q.get('id', [None])[0]),
     (re.compile(r'/PARA/Printabile/buletinRecoltari\.asp'), 'cache_report_buletin', lambda q: q.get('id', [None])[0]),
     (re.compile(r'/PARA/Printabile/BuletinSolicitare\.asp'), 'cache_solicitare', lambda q: q.get('id', [None])[0]),
@@ -73,7 +74,7 @@ _ROUTES: list[tuple['re.Pattern[str]', Union[str, Callable[[dict], str]], Callab
 # used by cleanup()/iter_entries()/stats() to iterate "all tables".
 RAW_HTML_TABLES = [
     'cache_patient', 'cache_episode', 'cache_checkout', 'cache_checkin',
-    'cache_checkup', 'cache_cerere', 'cache_presentation',
+    'cache_checkup', 'cache_cerere', 'cache_presentation', 'cache_fupu',
     'cache_report_buletin', 'cache_imaging_buletin', 'cache_solicitare',
     _FALLBACK_TABLE,
 ]
