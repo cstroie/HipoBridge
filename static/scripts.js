@@ -5196,12 +5196,8 @@ document.addEventListener('DOMContentLoaded', function() {
         document.body.appendChild(modal);
         modal.showModal();
 
-        const now = new Date();
         const idEl = modal.querySelector('.editor-report-id');
         if (idEl) idEl.textContent = `#${cerereId}`;
-        const dateEl = modal.querySelector('.editor-report-date');
-        if (dateEl) dateEl.textContent =
-            `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
         // Build one textarea per editable analysis
         const editable = analyses.filter(a => a.editable);

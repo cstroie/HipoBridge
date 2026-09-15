@@ -3859,12 +3859,6 @@ dialog.report-modal[open]::backdrop {
 
 dialog.report-editor-modal { width: min(680px, 96vw); }
 
-dialog.report-editor-modal article > header p.editor-report-date {
-    margin: 0;
-    font-size: var(--font-size-sm);
-    color: var(--text-light);
-}
-
 dialog.report-editor-modal article > section {
     padding: var(--space-16) var(--space-24);
     overflow-y: auto;
