@@ -6646,7 +6646,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // schedule row itself — Urgent/Non-urgent/Routine are the common case
     // and would just be noise on every UPU row. Colors are still defined
     // for all 5 above, for whenever the rest need showing too.
-    const _TRIAGE_ALERT_LEVELS = new Set(['Resuscitation', 'Critical']);
+    const _TRIAGE_ALERT_LEVELS = new Set(['Resuscitation', 'Critical', 'Urgent']);
 
     // Appends the ER triage level straight onto the "UPU" section badge
     // (e.g. "UPU: Critical"), colored by severity.
