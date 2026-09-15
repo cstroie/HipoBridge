@@ -3097,8 +3097,13 @@ select {
 
 .timeline-triage {
     font-weight: 700;
-    color: var(--danger);
 }
+
+.timeline-triage.triage-red    { color: var(--danger); }
+.timeline-triage.triage-yellow { color: var(--warning); }
+.timeline-triage.triage-green  { color: var(--success); }
+.timeline-triage.triage-blue   { color: var(--info); }
+.timeline-triage.triage-gray   { color: var(--ink-3); }
 
 .timeline-card-meta {
     font: 500 var(--font-size-xs) 'Inter', sans-serif;
