@@ -377,8 +377,11 @@ async def get_fhir_imaging_study(request):
 
     if parsed_data.get("status") != "error":
         # Priority: buletinRecoltari.asp's "Comentariile medicului" first, then
-        # cerere.asp's Justificare, then cerere.asp's clinical-situation diagnosis
-        # (falling back to buletinRecoltari.asp's DIAGNOSTIC field) as a last resort.
+        # cerere.asp's Justificare, then BuletinSolicitare.asp's own clinical
+        # fields (Date clinico-paraclinice / Diagnostic de trimitere / Indicatii
+        # speciale — often the richest source, e.g. trauma circumstances), then
+        # cerere.asp's clinical-situation diagnosis (falling back to
+        # buletinRecoltari.asp's DIAGNOSTIC field) as a last resort.
         sr_client = HippoClientServiceRequest(SERVICE_URL, request)
         sr_data = await sr_client.fetch_and_parse(id=id)
         comment = sr_data.get("request.comment")
@@ -391,9 +394,19 @@ async def get_fhir_imaging_study(request):
             if _is_meaningful_text(justification):
                 parsed_data.store("request.justification", justification)
             else:
-                diagnosis = cerere_data.get("request.diagnosis") or sr_data.get("request.diagnosis")
-                if diagnosis:
-                    parsed_data.store("checkin.diagnosis", diagnosis)
+                solicitare_client = HippoClientBuletinSolicitare(SERVICE_URL, request)
+                solicitare_data = await solicitare_client.fetch_and_parse(id=id)
+                solicitare_indication = next((t for t in (
+                    solicitare_data.get("request.clinical_data"),
+                    solicitare_data.get("request.diagnosis_referral"),
+                    solicitare_data.get("request.special_indications"),
+                ) if _is_meaningful_text(t)), None)
+                if solicitare_indication:
+                    parsed_data.store("request.justification", solicitare_indication)
+                else:
+                    diagnosis = cerere_data.get("request.diagnosis") or sr_data.get("request.diagnosis")
+                    if diagnosis:
+                        parsed_data.store("checkin.diagnosis", diagnosis)
 
     response = client.fhir_response(parsed_data, id=id, http_request=request)
     return web_fhir_response(response)

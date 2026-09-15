@@ -38,7 +38,8 @@ except ImportError:
     DICOM_AVAILABLE = False
 
 from hippoclient import (HippoClientSchedule, HippoClientCerere, HippoClientBuletinSolicitare,
-                          HippoClientPatient, HippoClientCheckin, identify_study_type_and_region)
+                          HippoClientPatient, HippoClientCheckin, identify_study_type_and_region,
+                          is_meaningful_text)
 from extractors import parse_cnp
 
 logger = logging.getLogger('Worklist')
@@ -962,6 +963,28 @@ class WorklistRefresher:
                 if checkin_data.get('status') != 'error':
                     admission_id = checkin_data.get('checkin.id') or latest_checkin_id
 
+            # BuletinSolicitare.asp's own clinical fields ("Date clinico-paraclinice",
+            # "Diagnostic de trimitere", "Indicatii speciale") often carry the actual
+            # reason for the exam (e.g. trauma circumstances) in more detail than
+            # cerere.asp's fields — surfaced here so it reaches the radiologist via
+            # DICOM PatientComments/ReasonForTheRequestedProcedure, not just discarded
+            # after being fetched for physician_solicitant above.
+            solicitare_indication = next((t for t in (
+                solicitare_data.get('request.clinical_data'),
+                solicitare_data.get('request.diagnosis_referral'),
+                solicitare_data.get('request.special_indications'),
+            ) if is_meaningful_text(t)), None)
+            justification = next((t for t in (
+                cerere_data.get('request.justification'),
+                solicitare_data.get('request.justification'),
+                solicitare_data.get('request.clinical_situation'),
+            ) if is_meaningful_text(t)), None)
+            comment = next((t for t in (
+                solicitare_indication,
+                cerere_data.get('request.clinical_indication'),
+                cerere_data.get('request.diagnosis'),
+            ) if is_meaningful_text(t)), None)
+
             info = {
                 'id':            patient_id,
                 'cnp':           patient_data.get('patient.cnp'),
@@ -972,7 +995,7 @@ class WorklistRefresher:
                 'sex':           patient_data.get('patient.sex'),
                 'exams':         cerere_data.get('exams') or [],
                 'physician':     physician_solicitant or cerere_data.get('request.physician'),
-                'justification': cerere_data.get('request.justification'),
+                'justification': justification,
                 'section':       cerere_data.get('request.section'),
                 'phone':         patient_data.get('patient.phone'),
                 'address':       patient_data.get('patient.address'),
@@ -983,7 +1006,7 @@ class WorklistRefresher:
                 'attention':     patient_data.get('patient.attention'),
                 'observations':  patient_data.get('patient.observations'),
                 'anamnesis':     patient_data.get('patient.anamnesis'),
-                'comment':       cerere_data.get('request.clinical_indication') or cerere_data.get('request.diagnosis'),
+                'comment':       comment,
                 'admission_id':  admission_id,
             }
             self._patient_cache[request_id] = info
