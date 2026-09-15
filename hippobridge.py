@@ -43,7 +43,7 @@ from urllib.parse import urlparse, parse_qs
 from fhir import OperationOutcome, Resource
 
 from hippoclient import ANALYSIS_TYPES
-from hippoclient import HippoClient, HippoClientPatient, HippoClientPatientSearch, HippoClientImagingStudy, HippoClientDiagnosticReport, HippoClientServiceRequest, HippoClientServiceRequestSearch, HippoClientCheckout, HippoClientCheckin, HippoClientCheckup, HippoClientSchedule, HippoClientCerere, HippoClientBuletinSolicitare, HippoClientPresentation, HippoClientObservationBundle, HippoClientWhoami, HippoClientReportWrite, HippoClientReportValidate, HippoClientCererePerform
+from hippoclient import HippoClient, HippoClientPatient, HippoClientPatientSearch, HippoClientImagingStudy, HippoClientDiagnosticReport, HippoClientServiceRequest, HippoClientServiceRequestSearch, HippoClientCheckout, HippoClientCheckin, HippoClientCheckup, HippoClientSchedule, HippoClientCerere, HippoClientBuletinSolicitare, HippoClientPresentation, HippoClientObservationBundle, HippoClientWhoami, HippoClientReportWrite, HippoClientReportValidate, HippoClientCererePerform, HippoClientFUPU
 from hippoclient import user_session_manager, url_cache
 from hippoclient import evict_patient_cache
 from hippoclient import is_meaningful_text as _is_meaningful_text
@@ -481,6 +481,25 @@ async def get_checkup(request):
         return web_error_response("Checkup ID is required")
     logger.info(f"Retrieving checkup with ID: {id}")
     client = HippoClientCheckup(SERVICE_URL, request)
+    debug_resp = await web_debug_response(client, request, id=id)
+    if debug_resp is not None:
+        return debug_resp
+    parsed_data = await client.fetch_and_parse(id=id)
+    return web_json_response(parsed_data)
+
+@require_auth
+async def get_fupu(request):
+    """Retrieve the ER intake/triage sheet (FUPU.asp) by ID. Returns raw HippoData JSON.
+
+    Backed by HippoClientFUPU — currently just the triage-priority checkbox
+    group and a few core header fields (record number, date, arrival mode,
+    presentation reason); see that class for what's not parsed yet.
+    """
+    id = request.match_info.get('id')
+    if not id:
+        return web_error_response("FUPU ID is required")
+    logger.info(f"Retrieving FUPU with ID: {id}")
+    client = HippoClientFUPU(SERVICE_URL, request)
     debug_resp = await web_debug_response(client, request, id=id)
     if debug_resp is not None:
         return debug_resp
@@ -1546,6 +1565,7 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     app.router.add_get('/api/checkup/{id}', get_checkup)
     app.router.add_get('/api/presentation/{id}', get_presentation)
     app.router.add_get('/api/specimen/{id}', get_specimen)
+    app.router.add_get('/api/fupu/{id}', get_fupu)
     app.router.add_get('/api/cnp', serve_validate_cnp)
     app.router.add_get('/api/request/{id}/patient', get_request_patient)
     app.router.add_post('/api/request/{id}/report', post_study_report)

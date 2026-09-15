@@ -3909,6 +3909,95 @@ class HippoClientCerere(HippoClient):
         return self.fhir_response(parsed, id=id, **kwargs)
 
 
+class HippoClientFUPU(HippoClient):
+    """Parses the ER intake/triage sheet (FUPU.asp, "Foaie UPU") — a multi-page
+    printable form. Only the triage-priority checkbox group and a handful of
+    core identifying fields are captured for now (page 1's header block); the
+    free-text anamnesis/exam-findings/GCS/medication pages are not parsed.
+
+    Most fields on this form have no stable id — they're plain disabled
+    checkboxes and readonly <input>s laid out next to their (untranslated)
+    label text, so lookups here are text-anchored rather than id-anchored,
+    except RefID_FUPU_Editabil, which is a fixed id.
+    """
+
+    def __init__(self, service_url=None, request=None):
+        super().__init__(service_url=service_url, request=request)
+        self.request_url = "/gen_printabile/FUPU.asp?id={id}&tip=1"
+
+    @staticmethod
+    def _checkbox_group_choice(soup: BeautifulSoup, first_option_text: str):
+        """Given the group's first option's own label text (e.g. "30-Resuscit."),
+        locate that checkbox group's containing <td> and return (code, text)
+        for whichever checkbox in it is checked, or (None, None) if none is —
+        these are mutually-exclusive radio-style groups implemented as
+        disabled checkboxes, one per <td>."""
+        marker = soup.find(string=lambda s: s and first_option_text in s)
+        td = marker.find_parent('td') if marker else None
+        if not td:
+            return None, None
+        for inp in td.find_all('input', {'type': 'checkbox'}):
+            if inp.get('checked') is None:
+                continue
+            label = inp.find_next_sibling(string=True) or ''
+            m = re.match(r'\s*(\d+)-\s*(.+)', label)
+            return (m.group(1), m.group(2).strip()) if m else (None, label.strip() or None)
+        return None, None
+
+    def parse_data(self, html_content: str, **kwargs) -> HippoData:
+        data = HippoData(status="success", message="")
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+
+            if not self.is_expected_page(soup, 'FOAIE UPU'):
+                data.set_error(f"Unexpected page for FUPU: {self.get_title(soup)}")
+                logger.warning(f"{data['message']}: {self.get_error(soup)}")
+                return data
+
+            data.store("fupu.id", kwargs.get('id'))
+
+            ref_input = soup.find(id='RefID_FUPU_Editabil')
+            if ref_input:
+                data.store("fupu.record_number", (ref_input.get('value') or '').strip())
+                # The DATA box's own readonly input is a later sibling of the
+                # record-number input, wrapped in the next AliniereDreapta span.
+                date_span = ref_input.find_next_sibling('span', class_='AliniereDreapta')
+                date_input = date_span.find('input') if date_span else None
+                if date_input:
+                    data.store("fupu.date", (date_input.get('value') or '').strip())
+
+            code, text = self._checkbox_group_choice(soup, '30-Resuscit.')
+            data.store("fupu.triage_priority_code", code)
+            data.store("fupu.triage_priority", text)
+
+            code, text = self._checkbox_group_choice(soup, '13-SAJ')
+            data.store("fupu.arrival_mode_code", code)
+            data.store("fupu.arrival_mode", text)
+
+            code, text = self._checkbox_group_choice(soup, '17-Domiciliu')
+            data.store("fupu.arrival_source_code", code)
+            data.store("fupu.arrival_source", text)
+
+            # "Motivul prezentarii:" prints into a <b class="afisareInPrint">
+            # companion (populated at print time); fall back to the live
+            # textarea's own text for an unprinted/freshly-saved record.
+            motiv_label = soup.find(string=lambda s: s and 'Motivul prezentarii' in s)
+            if motiv_label:
+                b = motiv_label.find_next('b', class_='afisareInPrint')
+                reason = b.get_text(strip=True) if b else ''
+                if not reason:
+                    ta = soup.find('textarea', id='PG1MotivPR')
+                    reason = ta.get_text(strip=True) if ta else ''
+                if reason:
+                    data.store("fupu.presentation_reason", reason)
+
+            return data
+        except Exception as e:
+            logger.error(f"Error parsing FUPU data: {e}")
+            data.set_error(str(e))
+            return data
+
+
 class HippoClientBuletinSolicitare(HippoClient):
     """Parses the request/order form (BuletinSolicitare.asp) — one lightweight fetch
     (plain table, no <select> reload) that gives region, indication and, crucially,
