@@ -6632,9 +6632,15 @@ document.addEventListener('DOMContentLoaded', function() {
         nameBtn.appendChild(ageEl);
     }
 
+    // Only the two most severe triage levels are worth surfacing on the
+    // schedule row itself — Urgent/Non-urgent/Routine are the common case
+    // and would just be noise on every UPU row.
+    const _TRIAGE_ALERT_LEVELS = new Set(['Resuscitation', 'Critical']);
+
     // Appends the ER triage level straight onto the "UPU" section badge
-    // (e.g. "UPU: Urgent") rather than as a separate label elsewhere.
+    // (e.g. "UPU: Critical") rather than as a separate label elsewhere.
     function _applyTriage(el, triageText) {
+        if (!_TRIAGE_ALERT_LEVELS.has(triageText)) return;
         const sectionEl = el._sectionEl;
         if (!sectionEl) return;
         const span = sectionEl.querySelector('span');
