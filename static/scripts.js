@@ -6430,6 +6430,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const seps = row.querySelectorAll('.timeline-meta-sep');
         if (section) {
             metaSectionEl.querySelector('span').textContent = section;
+            regionLine._sectionEl = metaSectionEl;
         } else {
             metaSectionEl.remove();
             seps[0]?.remove();
@@ -6518,6 +6519,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 _applyExamLabel(el, _examCache[id]);
                 if (_examCache[id].referrer) _applyReferrer(el, _examCache[id].referrer);
                 if (_examCache[id].age) _applyPatientAge(el, _examCache[id].age);
+                if (_examCache[id].triage) _applyTriage(el, _examCache[id].triage);
                 return;
             }
             const examPromise = apiFetch(`/fhir/ServiceRequest/${id}`)
@@ -6551,6 +6553,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 _applyExamLabel(el, cached);
                 if (cached.referrer) _applyReferrer(el, cached.referrer);
                 if (cached.age) _applyPatientAge(el, cached.age);
+                if (triage) _applyTriage(el, triage);
             });
         });
     }, { rootMargin: '200px' });
@@ -6629,7 +6632,18 @@ document.addEventListener('DOMContentLoaded', function() {
         nameBtn.appendChild(ageEl);
     }
 
-    function _applyExamLabel(el, { regions, indication, triage }) {
+    // Appends the ER triage level straight onto the "UPU" section badge
+    // (e.g. "UPU: Urgent") rather than as a separate label elsewhere.
+    function _applyTriage(el, triageText) {
+        const sectionEl = el._sectionEl;
+        if (!sectionEl) return;
+        const span = sectionEl.querySelector('span');
+        if (!span) return;
+        span.textContent = `${el.dataset.section}: ${triageText}`;
+        span.classList.add('timeline-triage');
+    }
+
+    function _applyExamLabel(el, { regions, indication }) {
         el.innerHTML = '';
         const modality = el.dataset.modality || '';
         const regionText = regions.length
@@ -6638,15 +6652,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (regionText) {
             el.appendChild(document.createTextNode(regionText));
         }
-        if (triage) {
-            if (regionText) el.append(' · ');
-            const strong = document.createElement('strong');
-            strong.className = 'timeline-triage';
-            strong.textContent = `Triaj: ${triage}`;
-            el.appendChild(strong);
-        }
         if (indication) {
-            if (regionText || triage) el.append(' · ');
+            if (regionText) el.append(' · ');
             const em = document.createElement('em');
             em.className = 'timeline-indication';
             em.textContent = indication;
