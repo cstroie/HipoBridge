@@ -81,7 +81,7 @@ PROMPT_META = {
     # truncation cutoff, even though the model may still need this discussed.
     "imaging_episode": ("medical", 320),
     "lab":             ("medical", 600),
-    "pre_exam":        ("medical", 1300),
+    "pre_exam":        ("medical", 450),
 }
 
 
