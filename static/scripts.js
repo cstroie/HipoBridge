@@ -6422,6 +6422,7 @@ document.addEventListener('DOMContentLoaded', function() {
         regionLine.textContent = laboratory;
         regionLine.dataset.requestId = r.id;
         regionLine.dataset.modality = laboratory;
+        regionLine.dataset.paymentSlug = paymentSlug || '';
 
         // Meta line: hide unused parts
         const metaSectionEl  = row.querySelector('.timeline-meta-section');
@@ -6519,7 +6520,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (_examCache[id].age) _applyPatientAge(el, _examCache[id].age);
                 return;
             }
-            apiFetch(`/fhir/ServiceRequest/${id}`)
+            const examPromise = apiFetch(`/fhir/ServiceRequest/${id}`)
                 .then(r => r.ok ? r.json() : null)
                 .then(data => {
                     const regions = _extractRegions(data);
@@ -6527,13 +6528,28 @@ document.addEventListener('DOMContentLoaded', function() {
                     const indication = _isMeaningfulText(noteIndication) ? noteIndication : '';
                     const referrer = data?.requester?.display || '';
                     const age = data?.subject?.display || '';
-                    const cached = { regions, indication, referrer, age };
-                    _examCache[id] = cached;
-                    _applyExamLabel(el, cached);
-                    if (referrer) _applyReferrer(el, referrer);
-                    if (age) _applyPatientAge(el, age);
+                    return { regions, indication, referrer, age };
                 })
-                .catch(() => {});
+                .catch(() => ({ regions: [], indication: '', referrer: '', age: '' }));
+
+            // ER (payment type "Urgenta") rows also get their triage level
+            // looked up (FUPU.asp, via /api/request/{id}/triage — server-side
+            // because it needs a patient lookup + presentation id first).
+            // Skipped for non-emergency rows to avoid a wasted round trip.
+            const triagePromise = el.dataset.paymentSlug === 'urgenta'
+                ? apiFetch(`/api/request/${id}/triage`)
+                    .then(r => r.ok ? r.json() : null)
+                    .then(data => data?.triage_priority || '')
+                    .catch(() => '')
+                : Promise.resolve('');
+
+            Promise.all([examPromise, triagePromise]).then(([cached, triage]) => {
+                cached.triage = triage;
+                _examCache[id] = cached;
+                _applyExamLabel(el, cached);
+                if (cached.referrer) _applyReferrer(el, cached.referrer);
+                if (cached.age) _applyPatientAge(el, cached.age);
+            });
         });
     }, { rootMargin: '200px' });
 
@@ -6611,7 +6627,7 @@ document.addEventListener('DOMContentLoaded', function() {
         nameBtn.appendChild(ageEl);
     }
 
-    function _applyExamLabel(el, { regions, indication }) {
+    function _applyExamLabel(el, { regions, indication, triage }) {
         el.innerHTML = '';
         const modality = el.dataset.modality || '';
         const regionText = regions.length
@@ -6620,8 +6636,15 @@ document.addEventListener('DOMContentLoaded', function() {
         if (regionText) {
             el.appendChild(document.createTextNode(regionText));
         }
-        if (indication) {
+        if (triage) {
             if (regionText) el.append(' · ');
+            const strong = document.createElement('strong');
+            strong.className = 'timeline-triage';
+            strong.textContent = `Triaj: ${triage}`;
+            el.appendChild(strong);
+        }
+        if (indication) {
+            if (regionText || triage) el.append(' · ');
             const em = document.createElement('em');
             em.className = 'timeline-indication';
             em.textContent = indication;

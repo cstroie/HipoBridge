@@ -3095,6 +3095,11 @@ select {
     color: var(--ink-3);
 }
 
+.timeline-triage {
+    font-weight: 700;
+    color: var(--danger);
+}
+
 .timeline-card-meta {
     font: 500 var(--font-size-xs) 'Inter', sans-serif;
     color: color-mix(in srgb, var(--ink-3) 70%, transparent);

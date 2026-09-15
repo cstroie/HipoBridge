@@ -534,6 +534,49 @@ async def get_request_patient(request):
     return web_json_response(parsed_data)
 
 @require_auth
+async def get_request_triage(request):
+    """Look up the patient's ER triage level for a request, for the Schedule
+    page's per-row 'Emergency' rows. Only meaningful for UPU orders (cerere.asp's
+    payment_type == 'Urgenta'); best-effort — many have no saved FUPU sheet yet.
+
+    Fetches cerere.asp (payment_type + patient id), then the patient page (for
+    HippoClientPatient's "presentation" id list — the FUPU record id, a
+    different id namespace than request_id/patient_id), then the most recent
+    FUPU.asp. Returns {"status": "success", "triage_priority": str|None,
+    "triage_priority_code": str|None}.
+    """
+    id = request.match_info.get('id')
+    if not id:
+        return web_error_response("Request ID is required")
+    cerere_client = HippoClientCerere(SERVICE_URL, request)
+    cerere_data = await cerere_client.fetch_and_parse(id=id)
+    if cerere_data.get('status') == 'error':
+        return web_json_response(cerere_data)
+
+    triage_priority = None
+    triage_priority_code = None
+    if (cerere_data.get('request.payment_type') or '').strip().lower() == 'urgenta':
+        patient_id = cerere_data.get('patient.id')
+        if patient_id:
+            patient_client = HippoClientPatient(SERVICE_URL, request)
+            patient_data = await patient_client.fetch_and_parse(id=patient_id)
+            presentation_ids = patient_data.get('presentation')
+            if presentation_ids:
+                presentation_id = (max(presentation_ids, key=lambda pid: int(pid))
+                                    if isinstance(presentation_ids, list) else presentation_ids)
+                fupu_client = HippoClientFUPU(SERVICE_URL, request)
+                fupu_data = await fupu_client.fetch_and_parse(id=presentation_id)
+                if fupu_data.get('status') != 'error':
+                    triage_priority = fupu_data.get('fupu.triage_priority')
+                    triage_priority_code = fupu_data.get('fupu.triage_priority_code')
+
+    return web_json_response({
+        "status": "success",
+        "triage_priority": triage_priority,
+        "triage_priority_code": triage_priority_code,
+    })
+
+@require_auth
 async def get_schedule(request):
     """List imaging/lab requests. ?start_date=&end_date=&lab_id=&section_name=&status=&patient_text=&refresh=1
 
@@ -1568,6 +1611,7 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     app.router.add_get('/api/fupu/{id}', get_fupu)
     app.router.add_get('/api/cnp', serve_validate_cnp)
     app.router.add_get('/api/request/{id}/patient', get_request_patient)
+    app.router.add_get('/api/request/{id}/triage', get_request_triage)
     app.router.add_post('/api/request/{id}/report', post_study_report)
     app.router.add_post('/api/request/{id}/validate', post_report_validate)
     app.router.add_post('/api/request/{id}/perform', post_study_perform)
