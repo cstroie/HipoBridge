@@ -327,10 +327,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // temporal dead zone when buildAiPreExamToolbar() (called from inside
     // initApp() -> initEventListeners()) tries to read it.
     const PRE_EXAM_TOOLBAR = [
-        { kind: 'pre_exam_brief',     label: 'Brief',             icon: 'fa-wand-magic-sparkles' },
         { kind: 'pre_exam_oneliner',  label: 'One-liner',         icon: 'fa-bolt' },
-        { kind: 'pre_exam_soap',      label: 'SOAP',              icon: 'fa-file-medical' },
+        { kind: 'pre_exam_brief',     label: 'Brief',             icon: 'fa-wand-magic-sparkles' },
         { kind: 'pre_exam_executive', label: 'Executive summary', icon: 'fa-notes-medical' },
+        { kind: 'pre_exam_soap',      label: 'SOAP',              icon: 'fa-file-medical' },
     ];
 
     // Initialize application
@@ -868,6 +868,16 @@ document.addEventListener('DOMContentLoaded', function() {
         showLoading(`Assembling clinical report for ${name}…`);
         try {
             setLoadingStep('Compiling diagnoses, admissions and imaging history…');
+            // pendingReportData.analysesData starts as an empty stub and is
+            // normally backfilled by the background schedulePrefetch imaging
+            // fetch — but landing here (Report/AI tab) before that prefetch
+            // finishes would otherwise build the clinical text, and its AI
+            // cache key, from zero imaging entries. fetchServiceBundle is
+            // memoized, so this is a no-op once the prefetch has already run.
+            if (pendingAnalysesData) {
+                const result = await fetchServiceBundle();
+                pendingReportData.analysesData = result.data || { resourceType: 'Bundle', entry: [] };
+            }
             await loadAndDisplayReport(pendingReportData.patientData, pendingReportData.analysesData);
             hideLoading();
         } catch (err) {
@@ -1975,7 +1985,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const body = card.querySelector('.ai-summary-body');
                 card.classList.remove('ai-card-error');
                 body.classList.remove('ai-summary-loading');
-                const header = kind.startsWith('pre_exam_') ? buildPreExamHeader() : '';
+                const header = kind.startsWith('pre_exam_') && kind !== 'pre_exam_oneliner' ? buildPreExamHeader() : '';
                 const shown = header + (cached || '_(empty response)_');
                 body.innerHTML = marked.parse(stripOuterFence(shown));
                 body.dataset.markdown = shown;
@@ -2013,14 +2023,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     body.textContent = full;
                 });
                 body.classList.remove('ai-summary-streaming');
-                const header = kind.startsWith('pre_exam_') ? buildPreExamHeader() : '';
+                const header = kind.startsWith('pre_exam_') && kind !== 'pre_exam_oneliner' ? buildPreExamHeader() : '';
                 const shown = header + (full || '_(empty response)_');
                 body.innerHTML = marked.parse(stripOuterFence(shown));
                 body.dataset.markdown = shown;
             } else {
                 const summary = await aiSummarize(kind, text, { force: true });
                 body.classList.remove('ai-summary-loading');
-                const header = kind.startsWith('pre_exam_') ? buildPreExamHeader() : '';
+                const header = kind.startsWith('pre_exam_') && kind !== 'pre_exam_oneliner' ? buildPreExamHeader() : '';
                 const shown = header + (summary || '_(empty response)_');
                 body.innerHTML = marked.parse(stripOuterFence(shown));
                 body.dataset.markdown = shown;
