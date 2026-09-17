@@ -1358,7 +1358,15 @@ document.addEventListener('DOMContentLoaded', function() {
             delete elements.patientReportMarkdown.dataset.markdown;
             delete elements.patientReportMarkdown.dataset.loaded;
         }
-        if (elements.patientReportBlocks) delete elements.patientReportBlocks.dataset.blocks;
+        if (elements.patientReportBlocks) {
+            delete elements.patientReportBlocks.dataset.blocks;
+            // getPatientClinicalText() reads this first — left stale, it makes
+            // the AI tab briefly (or indefinitely, if the tab is opened before
+            // loadReportLazily() finishes) see the *previous* patient's text
+            // as "content available" and auto-probe the cache under their
+            // hash, redisplaying their AI card as if it belonged here.
+            delete elements.patientReportBlocks.dataset.clinicalMarkdown;
+        }
         const reportCard = elements.reportCard;
         if (reportCard) reportCard.hidden = true;
 
