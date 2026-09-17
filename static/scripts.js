@@ -1585,8 +1585,8 @@ document.addEventListener('DOMContentLoaded', function() {
         return [dateStr, family, given].filter(Boolean).join('-');
     }
 
-    // "Full Name | Sex | Age | indication | Examination (CT Cerebral nativ)"
-    // stub for an imaging card — indication left blank (not omitted) if absent.
+    // "Full Name | Sex | Age | indication | CT Cerebral nativ" stub for an
+    // imaging card — indication left blank (not omitted) if absent.
     function buildExamStub(article) {
         const patientData = pendingAnalysesData?.patientData;
         const fullName = formatPatientName(patientData?.name);
@@ -1599,7 +1599,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const region = article.querySelector('.card-regions')?.textContent
             ?.replace(/^\s*·\s*/, '').trim() || '';
         const exam = [examType, region].filter(Boolean).join(' ');
-        return [fullName, sex, age, indication, `Examination (${exam})`].join(' | ');
+        return [fullName, sex, age, indication, exam].join(' | ');
     }
 
     async function copyMarkdown(markdownEl, btn, flashFn) {
@@ -4421,10 +4421,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (regionsEl && regions.length > 0) {
             regionsEl.textContent = ` · ${regions.join(', ')}`;
         }
-        if (regionsEl) {
-            regionsEl.style.cursor = 'pointer';
-            regionsEl.title = 'Click to copy patient/exam stub';
-            regionsEl.addEventListener('click', (e) => {
+        // Patient/exam stub click target: bound to the whole title line, not
+        // just .card-regions — that span is empty (zero-width, unclickable)
+        // whenever bodySite couldn't be resolved, which silently killed this
+        // for any exam without a mapped region. typeText's own listener
+        // (above) stops propagation, so clicking the modality name still
+        // copies the DokuLLM ID; clicking anywhere else in the title —
+        // region or indication text — copies the patient stub.
+        const titleEl = article.querySelector('.card-title');
+        if (titleEl) {
+            titleEl.style.cursor = 'pointer';
+            titleEl.title = 'Click to copy patient/exam stub';
+            titleEl.addEventListener('click', (e) => {
                 e.stopPropagation();
                 copyTextToClipboard(buildExamStub(article));
             });
