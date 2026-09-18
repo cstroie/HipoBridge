@@ -11,3 +11,4 @@ _testing_
 log/
 .python/
 UNINSTALL.md
+docs/vendor/*.pdf
