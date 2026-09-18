@@ -926,7 +926,7 @@ class HippoClient:
         """Override in subclasses to parse Hipocrate HTML into HippoData."""
         return HippoData(status="error", message="No data")
 
-    def _parse_data_cached(self, html_content: str, url: str, **kwargs) -> HippoData:
+    async def _parse_data_cached(self, html_content: str, url: str, **kwargs) -> HippoData:
         """parse_data(), memoized in parse_cache by (full url, this class).
 
         Safe because every parse_data() implementation only reads kwargs
@@ -934,13 +934,22 @@ class HippoClient:
         a fixed url and parser class, the result is always the same until
         the underlying page itself changes (which evicts this entry too,
         see cache_put/cache_remove below).
+
+        parse_data() is BeautifulSoup + regex over the full page HTML — CPU-
+        bound, not I/O, so it doesn't suspend on its own and would otherwise
+        run synchronously on the event loop, blocking every other coroutine
+        (other requests, worklist/PACS refreshes) for however long a large
+        page takes to parse. Offloaded to a thread via asyncio.to_thread,
+        same as HippoClientSchedule.fetch_and_parse already did before this
+        became the shared path — only on an actual cache miss, so the common
+        warm-cache case stays a plain dict lookup with no thread-hop.
         """
         full_url = self.get_full_url(url)
         class_name = type(self).__name__
         cached = parse_cache.get(full_url, class_name)
         if cached is not None:
             return cached
-        parsed = self.parse_data(html_content, **kwargs)
+        parsed = await asyncio.to_thread(self.parse_data, html_content, **kwargs)
         parse_cache.put(full_url, class_name, parsed)
         return parsed
 
@@ -961,7 +970,7 @@ class HippoClient:
             if error_message:
                 data.set_error(error_message)
                 return data
-            return self._parse_data_cached(response_text, url, **kwargs)
+            return await self._parse_data_cached(response_text, url, **kwargs)
         except Exception as e:
             logger.error(f"fetch_and_parse failed: {e}")
             data.set_error(f"Data retrieval failed: {e}")
@@ -5106,14 +5115,7 @@ class HippoClientSchedule(HippoClient):
             if error_message:
                 data.set_error(error_message)
                 return data
-            # Check the parse-result cache first so a repeat request for the
-            # same filters skips both the thread hop and the parse entirely.
-            full_url = self.get_full_url(url)
-            class_name = type(self).__name__
-            parsed = parse_cache.get(full_url, class_name)
-            if parsed is None:
-                parsed = await asyncio.to_thread(self.parse_data, response_text, **kwargs)
-                parse_cache.put(full_url, class_name, parsed)
+            parsed = await self._parse_data_cached(response_text, url, **kwargs)
             if parsed.get("status") == "error":
                 # get_page() caches the raw HTML unconditionally, before parsing
                 # ever runs — a transient bad response (e.g. missing tbl_listare,
