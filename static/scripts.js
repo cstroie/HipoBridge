@@ -1729,10 +1729,39 @@ document.addEventListener('DOMContentLoaded', function() {
     // that same assembly itself on first click — the profile tab loads
     // immediately on patient search, well before Report's lazy fetch runs.
     async function generatePatientAiSummary() {
-        // loadReportLazily reports its own failures (showOverlayError) and
-        // leaves getPatientClinicalText() null; runAiSummary below then
-        // surfaces the "no content" toast on its own in that case.
-        if (!getPatientClinicalText()) await loadReportLazily();
+        const button = elements.patientAiSummaryBtn;
+        if (!getPatientClinicalText()) {
+            // This is the one AI-tab path where "collecting the data to send"
+            // is a real, potentially slow network step (loadReportLazily
+            // fetches/assembles the Report tab's clinical text on first use)
+            // rather than an instant DOM read — show a placeholder so the
+            // click isn't silent until it resolves.
+            let card;
+            if (button) {
+                card = button._aiCard;
+                if (!card || !card.isConnected) {
+                    card = makeAiCard(true);
+                    wireAiCardCopy(card);
+                    button._aiCard = card;
+                }
+                placeAiCard(card, null, () => elements.patientAiSummaryAnchor);
+                const body = card.querySelector('.ai-summary-body');
+                card.classList.remove('ai-card-error');
+                body.classList.add('ai-summary-loading');
+                body.textContent = 'Preparing data…';
+                button.disabled = true;
+            }
+            await loadReportLazily();
+            // loadReportLazily reports its own failures (showOverlayError) and
+            // leaves getPatientClinicalText() null; runAiSummary below then
+            // surfaces the "no content" toast on its own in that case — but it
+            // only does that if button.disabled/the card are reset first,
+            // since a failed getText() short-circuits before touching either.
+            if (button && !getPatientClinicalText()) {
+                card?.remove();
+                button.disabled = false;
+            }
+        }
         runAiSummary(elements.patientAiSummaryBtn, 'pre_exam_oneliner',
             () => null, getPatientClinicalText,
             { inline: true, intoAnchorParent: () => elements.patientAiSummaryAnchor });
@@ -1742,7 +1771,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // skips generation entirely — returns null if nothing is cached yet,
     // instead of calling the LLM. Server caches by (kind, sha256(text)), so
     // the same text always redisplays the same summary until forced.
-    // Bounds how long the UI can sit on "Waiting for data…" with no signal
+    // Bounds how long the UI can sit on "Waiting for AI response…" with no signal
     // that the connection died silently (a stall with no TCP reset — apiFetch
     // itself has no timeout, since long-running Hipocrate scrapes elsewhere
     // legitimately need to run long). Scoped to just the AI summary requests.
@@ -2008,7 +2037,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const body = card.querySelector('.ai-summary-body');
         card.classList.remove('ai-card-error');
         body.classList.add('ai-summary-loading');
-        body.textContent = 'Waiting for data…';
+        body.textContent = 'Waiting for AI response…';
         button.disabled = true;
         try {
             if (STREAMING_KINDS.has(kind)) {
