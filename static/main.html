@@ -326,20 +326,16 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                                 <h2 id="trends-heading">Lab Trends</h2>
                                 <p id="trendsSubtitle" class="trends-subtitle"></p>
                             </div>
-                            <div class="card-toolbar-group">
-                                <div class="card-toolbar">
-                                    <button class="btn-ai" id="aiLabBtn" hidden aria-label="AI lab analysis" title="AI lab analysis">
-                                        <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>AI</span>
-                                    </button>
-                                    <button class="btn-copy" id="copyLabBtn" hidden aria-label="Copy lab trends as Markdown" title="Copy lab trends as Markdown">
-                                        <i class="fas fa-copy" aria-hidden="true"></i>
-                                    </button>
-                                </div>
-                                <div class="card-toolbar">
-                                    <button class="btn-ai" id="contrastSafetyBtn" hidden aria-label="AI contrast safety check" title="AI contrast safety check">
-                                        <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>Contrast</span>
-                                    </button>
-                                </div>
+                            <div class="card-toolbar">
+                                <button class="btn-ai" id="aiLabBtn" hidden aria-label="AI lab analysis" title="AI lab analysis">
+                                    <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>AI</span>
+                                </button>
+                                <button class="btn-ai" id="contrastSafetyBtn" hidden aria-label="AI contrast safety check" title="AI contrast safety check">
+                                    <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>Contrast</span>
+                                </button>
+                                <button class="btn-copy" id="copyLabBtn" hidden aria-label="Copy lab trends as Markdown" title="Copy lab trends as Markdown">
+                                    <i class="fas fa-copy" aria-hidden="true"></i>
+                                </button>
                             </div>
                         </header>
                         <div id="trendsContainer" class="trends-container" aria-live="polite"></div>
@@ -750,11 +746,6 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                                         <span class="modal-indication-label">Indication:</span>
                                         <em class="modal-indication-text"></em>
                                     </p>
-                                    <div class="card-toolbar report-modal-triage-toolbar" hidden>
-                                        <button type="button" class="btn-ai modal-ai-triage-btn" aria-label="AI ER presentation summary" title="AI ER presentation summary">
-                                            <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>AI: ER Triage</span>
-                                        </button>
-                                    </div>
                                 </hgroup>
                             </div>
                             <button class="close" data-close-modal aria-label="Close modal" title="Close"><i class="fas fa-times"></i></button>
@@ -764,10 +755,13 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                     <p class="report-modal-error" hidden></p>
                     <div class="report-modal-validate-toggles" hidden></div>
                     <footer class="report-modal-footer">
+                        <button type="button" class="btn-ai modal-ai-triage-btn" hidden aria-label="AI ER presentation summary" title="AI ER presentation summary">
+                            <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>AI: ER Triage</span>
+                        </button>
                         <button class="btn-secondary" data-close-modal aria-label="Close" title="Close"><i class="fas fa-times"></i> <span>Close</span></button>
                         <div class="action-group" hidden>
-                            <button class="btn-perform-exam" aria-label="Mark as performed" title="Mark as performed"><i class="fas fa-check-circle"></i> <span>Perform</span></button>
                             <button class="btn-cancel-request" aria-label="Cancel request" title="Cancel request"><i class="fas fa-ban"></i> <span>Cancel</span></button>
+                            <button class="btn-perform-exam" aria-label="Mark as performed" title="Mark as performed"><i class="fas fa-check-circle"></i> <span>Perform</span></button>
                         </div>
                         <button class="btn-edit-report" hidden aria-label="Edit report" title="Edit report"><i class="fas fa-pen"></i> <span>Edit</span></button>
                         <button class="btn-primary btn-modal-load-patient" aria-label="Load patient" title="Load patient"><i class="fas fa-user-injured"></i> <span>Load Patient</span></button>

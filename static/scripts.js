@@ -5957,9 +5957,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // eager fetch here would be a wasted round trip most of the time.
         if ((section || '').toUpperCase() === 'UPU') {
             const triageBtn = modal.querySelector('.modal-ai-triage-btn');
-            const triageToolbar = modal.querySelector('.report-modal-triage-toolbar');
-            if (triageBtn && triageToolbar) {
-                triageToolbar.hidden = false;
+            if (triageBtn) {
+                triageBtn.hidden = false;
                 let triageTextPromise = null;
                 const getTriageText = () => triageTextPromise ||= apiFetch(`/api/request/${requestId}/triage`)
                     .then(r => r.ok ? r.json() : null)
@@ -5974,9 +5973,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         showToast('Failed to load ER triage data for AI summary', 'error');
                         return;
                     }
+                    // Prepended into .report-modal-body (not inserted as a
+                    // sibling before it) so the card inherits that
+                    // container's own padding instead of sitting flush
+                    // against the modal's edges with no margin.
                     runAiSummary(triageBtn, 'er_triage',
-                        () => modal.querySelector('.report-modal-body'), () => text,
-                        { inline: true });
+                        () => null, () => text,
+                        { inline: true, intoAnchorParent: () => modal.querySelector('.report-modal-body') });
                 });
             }
         }

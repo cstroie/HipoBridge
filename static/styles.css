@@ -1502,18 +1502,9 @@ select {
    shrink below its content's natural width, so on narrow viewports the
    heading pushes .card-toolbar (fixed pill size) past the edge instead
    of the heading text wrapping. */
-.trends-header > div:not(.card-toolbar):not(.card-toolbar-group) {
+.trends-header > div:not(.card-toolbar) {
     min-width: 0;
     flex: 1 1 auto;
-}
-/* Groups the Lab AI/Copy pill and the separate Contrast Safety pill so
-   .trends-header's justify-content:space-between still treats the header
-   as just two children (title, toolbars) instead of spreading three
-   flex items apart. */
-.card-toolbar-group {
-    display: flex;
-    flex-shrink: 0;
-    gap: var(--space-8);
 }
 
 .trends-header h2 {
@@ -1761,7 +1752,8 @@ select {
     border-radius: 0;
     background: transparent;
 }
-.card-toolbar .btn-ai:not([hidden]) ~ .btn-copy:not([hidden]) {
+.card-toolbar .btn-ai:not([hidden]) ~ .btn-copy:not([hidden]),
+.card-toolbar .btn-ai:not([hidden]) ~ .btn-ai:not([hidden]) {
     border-left: 1px solid var(--border);
 }
 /* Unlike its bare 28px icon-only form elsewhere, the copy button always
@@ -3733,6 +3725,14 @@ dialog.modal article > footer {
     gap: var(--space-8);
     flex-shrink: 0;
 }
+/* Pins the AI action to the footer's left edge, away from the workflow
+   button cluster — a different category of action (an AI-generated aid,
+   not a state change), so it shouldn't read as part of that group. When
+   hidden (non-UPU requests, the common case) the auto margin never
+   applies and the remaining buttons fall back to the plain flex-end row. */
+.report-modal-footer .modal-ai-triage-btn:not([hidden]) {
+    margin-right: auto;
+}
 
 @keyframes modal-pop {
     from { opacity: 0; transform: translateY(12px) scale(0.985); }
@@ -4308,7 +4308,8 @@ dialog.report-editor-modal article > section {
     .report-modal-footer .btn-primary,
     .report-modal-footer .btn-secondary,
     .report-modal-footer .action-group,
-    .report-modal-footer .btn-edit-report {
+    .report-modal-footer .btn-edit-report,
+    .report-modal-footer .modal-ai-triage-btn {
         width: 100%;
         justify-content: center;
     }
