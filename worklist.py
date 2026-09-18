@@ -421,9 +421,10 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
     dt_str       = entry.get('date_time', '')
     modality     = _MODALITY_CODE.get(entry.get('modality') or '', 'OT')
     # Hipocrate's schedule page no longer lists the requester per row (2026-07);
-    # 'physician' is populated during enrichment from BuletinSolicitare.asp's
-    # "Medic solicitant" (the true orderer), falling back to cerere.asp's
-    # "Medic curant" (attending physician) only if no distinct orderer exists.
+    # 'physician' is populated during enrichment from cerere.asp's "Medic
+    # curant" (attending physician) first — confirmed live that
+    # BuletinSolicitare.asp's "Medic solicitant" can be whichever staff
+    # member registered the order, not a clinically meaningful referrer.
     referrer     = _physician_name_plain((patient_info or {}).get('physician') or entry.get('requested_by', ''))
     study_uid    = f'1.2.840.99999999.1.{request_id}' if request_id else generate_uid()
     accession    = f"{accession_prefix}{request_id}" if request_id else request_code
@@ -947,10 +948,12 @@ class WorklistRefresher:
             # request_id — independent fetches, so run them concurrently
             # instead of paying two sequential round-trips.
             #
-            # BuletinSolicitare.asp's "Medic solicitant" is the physician who
-            # actually ordered this exam — cerere.asp's strMedicId only ever
-            # gives "Medic curant" (the attending physician), a different
-            # person whenever the patient's regular doctor isn't the orderer.
+            # cerere.asp's strMedicId ("Medic curant", the attending physician)
+            # is preferred for the worklist's referring/requesting physician —
+            # confirmed live (request 1761733) that BuletinSolicitare.asp's
+            # "Medic solicitant" can be the registering staff member who typed
+            # the order in, not a clinically meaningful referrer, so it's kept
+            # only as a fallback when Medic curant is missing.
             cerere = self._client(HippoClientCerere)
             solicitare = self._client(HippoClientBuletinSolicitare)
             cerere_data, solicitare_data = await asyncio.gather(
@@ -961,9 +964,10 @@ class WorklistRefresher:
             if not patient_id:
                 return None
 
-            physician_solicitant = (
-                solicitare_data.get('request.physician_solicitant') or
-                solicitare_data.get('request.physician_curant')
+            physician = (
+                cerere_data.get('request.physician') or
+                solicitare_data.get('request.physician_curant') or
+                solicitare_data.get('request.physician_solicitant')
             )
 
             patient_client = self._client(HippoClientPatient)
@@ -1004,7 +1008,7 @@ class WorklistRefresher:
                 'birth_date':    patient_data.get('patient.birth_date'),
                 'sex':           patient_data.get('patient.sex'),
                 'exams':         cerere_data.get('exams') or [],
-                'physician':     physician_solicitant or cerere_data.get('request.physician'),
+                'physician':     physician,
                 'justification': justification,
                 'section':       cerere_data.get('request.section'),
                 'phone':         patient_data.get('patient.phone'),
