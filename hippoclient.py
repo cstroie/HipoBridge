@@ -4082,8 +4082,18 @@ class HippoClientTriage(HippoClient):
 
         # Most recent presentation — a different id namespace than
         # request_id/patient_id — is the one with the highest numeric id.
-        presentation_id = (max(presentation_ids, key=lambda pid: int(pid))
-                            if isinstance(presentation_ids, list) else presentation_ids)
+        # A non-numeric entry (malformed scrape) degrades to "no triage data"
+        # like every other missing-data branch here, rather than a raw
+        # ValueError bubbling out of this request as an unhandled 500.
+        if isinstance(presentation_ids, list):
+            try:
+                presentation_id = max(presentation_ids, key=lambda pid: int(pid))
+            except (TypeError, ValueError):
+                logger.warning("Non-numeric presentation id(s) for patient %s: %r",
+                                patient_id, presentation_ids)
+                return data
+        else:
+            presentation_id = presentation_ids
         fupu_client = HippoClientFUPU(self.service_url, self.request)
         fupu_data = await fupu_client.fetch_and_parse(id=presentation_id)
         if fupu_data.get('status') != 'error':

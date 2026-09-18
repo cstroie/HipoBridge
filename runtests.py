@@ -35,6 +35,7 @@ from tests.hippoclient_write import (
     TestReportWriteErrors, TestReportValidateErrors, TestCererePerformErrors,
     TestWebJsonResponseEndToEnd, TestTextToReportHtml,
 )
+from tests.hippoclient_triage import TestTriageResolution
 from tests.hippobridge_handlers import TestServeSpec, TestGetCacheStats, TestBackfillSearch
 from tests.search import TestSearchIndex
 from tests.sqlcache import (
@@ -88,6 +89,7 @@ TEST_GROUPS = {
         TestCererePerformErrors,
         TestWebJsonResponseEndToEnd,
         TestTextToReportHtml,
+        TestTriageResolution,
         TestServeSpec,
         TestGetCacheStats,
         TestBackfillSearch,
@@ -148,6 +150,7 @@ TEST_GROUPS = {
         TestReportWriteErrors, TestReportValidateErrors, TestCererePerformErrors,
         TestWebJsonResponseEndToEnd, TestTextToReportHtml,
     ],
+    "hippoclient_triage": [TestTriageResolution],
     "hippobridge_handlers": [TestServeSpec, TestGetCacheStats, TestBackfillSearch],
     "search": [TestSearchIndex],
     "sqlcache": [
