@@ -4083,7 +4083,9 @@ class HippoClientFUPU(HippoClient):
 
 
 class HippoClientTriage(HippoClient):
-    """Resolves a request's ER triage level (Schedule page's per-row UPU rows).
+    """Resolves a request's ER presentation/triage data (Schedule page's
+    per-row UPU rows, and the er_triage AI-summary prompt — see
+    llm/prompts/er_triage.md for what it does with these fields).
 
     Not a single-page scraper: chains cerere.asp (section + patient id) →
     patient page (for the FUPU/presentation id list) → the most recent
@@ -4093,10 +4095,24 @@ class HippoClientTriage(HippoClient):
     Best-effort — many requests have no saved FUPU sheet yet.
     """
 
+    # fupu.* key -> flat key on this class's own result. triage_priority/
+    # triage_priority_code came first (the only fields the Schedule page's
+    # triage badge needs) and keep their non-prefixed names for backward
+    # compatibility; the rest were added later for er_triage's fuller input.
+    _FUPU_FIELDS = {
+        "fupu.triage_priority": "triage_priority",
+        "fupu.triage_priority_code": "triage_priority_code",
+        "fupu.record_number": "record_number",
+        "fupu.date": "date",
+        "fupu.arrival_mode": "arrival_mode",
+        "fupu.arrival_source": "arrival_source",
+        "fupu.presentation_reason": "presentation_reason",
+    }
+
     async def fetch_and_parse(self, id=None, **kwargs) -> HippoData:
         data = HippoData(status="success", message="")
-        data.store("triage_priority", None)
-        data.store("triage_priority_code", None)
+        for flat_key in self._FUPU_FIELDS.values():
+            data.store(flat_key, None)
 
         cerere_client = HippoClientCerere(self.service_url, self.request)
         cerere_data = await cerere_client.fetch_and_parse(id=id)
@@ -4133,8 +4149,8 @@ class HippoClientTriage(HippoClient):
         fupu_client = HippoClientFUPU(self.service_url, self.request)
         fupu_data = await fupu_client.fetch_and_parse(id=presentation_id)
         if fupu_data.get('status') != 'error':
-            data.store("triage_priority", fupu_data.get('fupu.triage_priority'))
-            data.store("triage_priority_code", fupu_data.get('fupu.triage_priority_code'))
+            for fupu_key, flat_key in self._FUPU_FIELDS.items():
+                data.store(flat_key, fupu_data.get(fupu_key))
         return data
 
 

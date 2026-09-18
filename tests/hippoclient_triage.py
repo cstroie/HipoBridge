@@ -55,12 +55,14 @@ def _patient_data(presentation=None):
     return data
 
 
-def _fupu_data(priority=None, code=None, status="success"):
+def _fupu_data(priority=None, code=None, status="success", **extra_fields):
     data = HippoData(status=status, message="")
     if priority is not None:
         data.store("fupu.triage_priority", priority)
     if code is not None:
         data.store("fupu.triage_priority_code", code)
+    for key, value in extra_fields.items():
+        data.store(f"fupu.{key}", value)
     return data
 
 
@@ -74,6 +76,7 @@ class TestTriageResolution(unittest.TestCase):
         self.assertEqual(data.get('status'), 'success')
         self.assertIsNone(data.get('triage_priority'))
         self.assertIsNone(data.get('triage_priority_code'))
+        self.assertIsNone(data.get('presentation_reason'))
         patient_mock.assert_not_called()
         fupu_mock.assert_not_called()
 
@@ -147,6 +150,29 @@ class TestTriageResolution(unittest.TestCase):
             data = _run(_client().fetch_and_parse(id='111'))
         self.assertEqual(data.get('status'), 'success')
         self.assertIsNone(data.get('triage_priority'))
+
+    def test_full_fupu_fields_are_passed_through_flattened(self):
+        """er_triage's prompt input needs more than the priority badge —
+        record_number/date/arrival_mode/arrival_source/presentation_reason
+        must all come through under their flat (non-fupu.-prefixed) names."""
+        with patch.object(HippoClientCerere, 'fetch_and_parse',
+                           AsyncMock(return_value=_cerere_data(section='UPU', patient_id='P1'))), \
+             patch.object(HippoClientPatient, 'fetch_and_parse',
+                           AsyncMock(return_value=_patient_data(presentation='555'))), \
+             patch.object(HippoClientFUPU, 'fetch_and_parse',
+                           AsyncMock(return_value=_fupu_data(
+                               priority='Urgent', code='32',
+                               record_number='12345', date='2026-09-15',
+                               arrival_mode='Ambulance', arrival_source='Home',
+                               presentation_reason='Sudden abdominal pain'))):
+            data = _run(_client().fetch_and_parse(id='111'))
+        self.assertEqual(data.get('triage_priority'), 'Urgent')
+        self.assertEqual(data.get('triage_priority_code'), '32')
+        self.assertEqual(data.get('record_number'), '12345')
+        self.assertEqual(data.get('date'), '2026-09-15')
+        self.assertEqual(data.get('arrival_mode'), 'Ambulance')
+        self.assertEqual(data.get('arrival_source'), 'Home')
+        self.assertEqual(data.get('presentation_reason'), 'Sudden abdominal pain')
 
     def test_non_numeric_presentation_id_degrades_instead_of_raising(self):
         """The edge case this class previously had no guard against: a
