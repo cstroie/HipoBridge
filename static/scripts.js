@@ -1672,6 +1672,22 @@ document.addEventListener('DOMContentLoaded', function() {
     let labAiText = '';
     let labHasAbnormal = false;
 
+    // Renal-function extract for the contrast_safety AI prompt
+    // (llm/prompts/contrast_safety.md), rebuilt alongside labAiText in
+    // renderTrends() — but unconditional on abnormality, unlike labAiText:
+    // a normal creatinine/eGFR is exactly what that check wants to see, not
+    // something to hide because nothing is flagged H/L. No button wired to
+    // this yet — see buildContrastSafetyText() below.
+    let renalLabAiText = '';
+
+    // Analyte names counted as "renal function" — matched case-insensitively
+    // against the Hipocrate-supplied analyte name text. There's no
+    // controlled vocabulary to key off (analyte names come straight through
+    // from obs.code?.text in renderTrends), so this is a substring match
+    // over the Romanian/English terms actually seen in lab panels: creatinine
+    // and estimated/measured glomerular filtration rate.
+    const RENAL_ANALYTE_RE = /creatinin|e-?gfr|\brfg\b|filtrare glomerular|clearance.*creatin/i;
+
     function resetAiTab() {
         if (elements.aiEmptyState) elements.aiEmptyState.hidden = false;
         if (elements.aiReportBtn) elements.aiReportBtn.hidden = true;
@@ -1685,6 +1701,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         labAiText = '';
         labHasAbnormal = false;
+        renalLabAiText = '';
     }
 
     // Clinical text used by the Report and Pre-Exam summaries — carries only
@@ -1697,6 +1714,21 @@ document.addEventListener('DOMContentLoaded', function() {
         const clinical = elements.patientReportBlocks?.dataset.clinicalMarkdown;
         if (clinical && clinical.trim()) return clinical;
         return elements.patientReportMarkdown?.dataset.markdown || null;
+    }
+
+    // Assembles the 'contrast_safety' AI prompt's two-section input (see
+    // llm/prompts/contrast_safety.md): the renal-analyte extract built in
+    // renderTrends() (renalLabAiText — empty until the Lab Trends tab has
+    // loaded for this patient) plus the same clinical record text the
+    // report/pre-exam prompts use. No button wired to this yet.
+    function buildContrastSafetyText() {
+        const clinical = getPatientClinicalText();
+        if (!renalLabAiText && !clinical) return '';
+        const patientData = pendingAnalysesData?.patientData;
+        const header = patientContextHeader(patientData);
+        const renalSection = `### Renal function\n${renalLabAiText || 'No renal function analytes on file.'}`;
+        const clinicalSection = `### Clinical record\n${clinical || 'No clinical record available.'}`;
+        return header + renalSection + '\n\n' + clinicalSection;
     }
 
     // Toggle the availability of the singleton AI buttons when patient
@@ -4320,7 +4352,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const colSet = new Set(colDates);
         const abnormalAnalytes = analytes.filter(a => a.measurements.some(
             m => colSet.has(m.date?.slice(0, 10)) && isAbnormal(m, a)));
-        const rows = abnormalAnalytes.map(a => {
+        // Shared by labAiText (abnormal-only) and renalLabAiText (renal
+        // analytes, any value) below — same row shape, different filter.
+        const serializeAnalyteRows = (list) => list.map(a => {
             const byDate = {};
             for (const m of a.measurements) byDate[m.date?.slice(0, 10) || ''] = m;
             const interval = a.ref
@@ -4334,12 +4368,17 @@ document.addEventListener('DOMContentLoaded', function() {
             const name = `${a.section ? a.section + ' — ' : ''}${a.name}${a.unit ? ' [' + a.unit + ']' : ''}`;
             return [name, interval, ...cells].join(' | ');
         });
+        const rows = serializeAnalyteRows(abnormalAnalytes);
         labHasAbnormal = abnormalAnalytes.length > 0;
         // Short context header — same reasoning as buildImagingCardHeader:
         // grounds lab.md's interpretation with who the analytes belong to.
         const patientData = pendingAnalysesData?.patientData;
         const labHeader = patientContextHeader(patientData);
         labAiText = labHasAbnormal ? labHeader + [header, ...rows].join('\n') : '';
+
+        const renalAnalytes = analytes.filter(a => RENAL_ANALYTE_RE.test(a.name));
+        const renalRows = serializeAnalyteRows(renalAnalytes);
+        renalLabAiText = renalRows.length ? [header, ...renalRows].join('\n') : '';
         if (elements.copyLabBtn) {
             elements.copyLabBtn.hidden = !labHasAbnormal;
             elements.trendsContainer.dataset.markdown = labHasAbnormal
