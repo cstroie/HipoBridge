@@ -189,7 +189,7 @@ def _language_directive(language: str) -> str:
     )
 
 
-# Kinds served by the streaming endpoint (POST /api/ai/summarize/stream).
+# Kinds served by POST /api/ai/summarize with stream:true in the body.
 # Separate from DATE_AWARE_KINDS even though currently overlapping — one is
 # about date context, the other about transport; independently editable.
 # imaging (40 tokens) is excluded — too short for streaming to buy anything.

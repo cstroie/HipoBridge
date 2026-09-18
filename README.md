@@ -77,8 +77,7 @@ POST /api/request/{id}/perform  — mark exam as performed (sets DataEfectuarii 
 POST /api/request/{id}/cancel   — cancel a request (replays cerere.asp's own Anulează action); radiologists only
 POST /api/request/{id}/report   — write/update report HTML for an analysis; radiologists only
 POST /api/request/{id}/validate — toggle validation state for a report; radiologists only
-POST /api/ai/summarize          — AI summary for a report/epicrisis/imaging/lab/pre-exam text block
-POST /api/ai/summarize/stream   — same, streamed via SSE
+POST /api/ai/summarize          — AI summary for a report/epicrisis/imaging/lab/pre-exam text block; stream:true streams the response as plain text chunks instead of JSON
 ```
 
 ### Radiology report workflow

@@ -967,15 +967,21 @@ async def post_ai_summarize(request):
     route.
 
     Body: {"kind": "report|epicrisis|imaging|lab|pre_exam_brief", "text": "...",
-    "force": bool, "check_only": bool}. Each kind maps to a (model tier,
-    prompt) in llm/prompts.py. These are deliberately weak-guarantee aids: no
-    schema, no validation — the frontend presents them as unverified
-    ("AI-generated — verify against source").
+    "force": bool, "check_only": bool, "stream": bool}. Each kind maps to a
+    (model tier, prompt) in llm/prompts.py. These are deliberately
+    weak-guarantee aids: no schema, no validation — the frontend presents
+    them as unverified ("AI-generated — verify against source").
 
     Results are cached (in-memory + disk) keyed by (kind, sha256(text)), so
     the same input never re-hits the LLM unless force=True. check_only=True
     skips generation entirely and just reports whether a cached summary
-    exists — used on page load to silently redisplay a prior summary."""
+    exists — used on page load to silently redisplay a prior summary
+    (never combined with stream=True by any caller).
+
+    stream=True switches to a chunked text/plain response instead of a JSON
+    body, for the kinds where perceived latency matters (llm.prompts's
+    STREAMING_KINDS) — see _post_ai_summarize_stream below. kind must be in
+    STREAMING_KINDS or the request is rejected before any LLM call."""
     if _ai_client is None:
         return web_error_response("AI summaries are not configured", 503)
     try:
@@ -987,10 +993,16 @@ async def post_ai_summarize(request):
     text = data.get('text', '')
     force = bool(data.get('force'))
     check_only = bool(data.get('check_only'))
+    stream = bool(data.get('stream'))
     if kind not in LLM_PROMPTS:
         return web_error_response(f"unknown summary kind: {kind!r}")
     if not isinstance(text, str) or not text.strip():
         return web_error_response("'text' field must be a non-empty string")
+
+    if stream:
+        if kind not in STREAMING_KINDS:
+            return web_error_response(f"kind {kind!r} does not support streaming")
+        return await _post_ai_summarize_stream(request, kind, text, force)
 
     cache_key = _ai_cache_key(kind, text)
     if not force:
@@ -1041,7 +1053,7 @@ async def _finish_ai_stream_in_background(kind: str, cache_key: str, agen, parts
     (or an auto-probe like imaging_episode's) then serves it instantly
     instead of re-running the same slow generation from scratch.
 
-    `agen` is the same async generator post_ai_summarize_stream was already
+    `agen` is the same async generator _post_ai_summarize_stream was already
     iterating (not a fresh call) — Python generators resume exactly where
     they left off regardless of which coroutine drives them next, as long
     as only one driver runs at a time, which holds here since the caller
@@ -1067,34 +1079,15 @@ async def _finish_ai_stream_in_background(kind: str, cache_key: str, agen, parts
         f"— cached for the next request")
 
 
-@require_auth
-async def post_ai_summarize_stream(request):
-    """Streaming counterpart to post_ai_summarize, for the kinds where
-    perceived latency matters most: report, epicrisis, pre_exam_brief (up to ~900
-    tokens / ~100s on a 4B model), lab (400 tokens), and the rest of the AI
-    tab's kinds (see llm.prompts.STREAMING_KINDS). imaging (40 tokens) stays
-    on the non-streaming endpoint — streaming buys it nothing.
+async def _post_ai_summarize_stream(request, kind: str, text: str, force: bool):
+    """Streaming branch of post_ai_summarize (stream=True in the body),
+    reached only after that function has already validated kind/text and
+    confirmed kind is in STREAMING_KINDS.
 
-    Body: {"kind": "report|epicrisis|pre_exam_brief|lab", "text": "...", "force": bool}.
-    Same auth/cache/validation gates as post_ai_summarize, and the same
-    ai_cache keyed by (kind, sha256(text)) — a result cached by either
-    endpoint is visible to both. On a cache hit the full cached text is
-    written as a single chunk (no fake delay). On error, see
-    _STREAM_ERROR_SENTINEL above."""
-    if _ai_client is None:
-        return web_error_response("AI summaries are not configured", 503)
-    try:
-        data = await request.json()
-    except json.JSONDecodeError:
-        return web_error_response("Invalid JSON data")
-
-    kind = data.get('kind', '')
-    text = data.get('text', '')
-    force = bool(data.get('force'))
-    if kind not in STREAMING_KINDS:
-        return web_error_response(f"kind {kind!r} does not support streaming")
-    if not isinstance(text, str) or not text.strip():
-        return web_error_response("'text' field must be a non-empty string")
+    Same cache (ai_cache, keyed by (kind, sha256(text))) as the plain JSON
+    path — a result cached by either path is visible to both. On a cache
+    hit the full cached text is written as a single chunk (no fake delay).
+    On error, see _STREAM_ERROR_SENTINEL above."""
     if not has_meaningful_content(text):
         return web_error_response(
             "not enough clinical content to summarize (input is empty or "
@@ -1617,7 +1610,6 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     app.router.add_get('/fhir/ValueSet/cnp', serve_validate_cnp)
     app.router.add_post('/fhir/md2html', serve_md2html)
     app.router.add_post('/api/ai/summarize', post_ai_summarize)
-    app.router.add_post('/api/ai/summarize/stream', post_ai_summarize_stream)
     app.router.add_get('/fhir/CodeSystem/analysis-types', serve_fhir_analysis_types)
     app.router.add_get('/fhir/spec', serve_spec)
     app.router.add_get('/fhir/Metadata', serve_fhir_metadata)

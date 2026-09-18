@@ -1791,8 +1791,8 @@ document.addEventListener('DOMContentLoaded', function() {
         return data.summary || '';
     }
 
-    // Kinds served by /api/ai/summarize/stream — every AI-tab kind except
-    // imaging, which stays on the plain aiSummarize() endpoint above (too
+    // Kinds served by /api/ai/summarize with stream:true — every AI-tab kind
+    // except imaging, which stays on the plain JSON response above (too
     // short to benefit). Must mirror llm/prompts.py's STREAMING_KINDS.
     const STREAMING_KINDS = new Set([
         'report', 'epicrisis', 'pre_exam_brief', 'lab', 'imaging_episode',
@@ -1805,11 +1805,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // match hippobridge.py's _STREAM_ERROR_SENTINEL exactly.
     const STREAM_ERROR_SENTINEL = '\x1f';
 
-    // Streaming counterpart to aiSummarize(): POSTs to /api/ai/summarize/stream
-    // and calls onChunk(piece) as text arrives. Always force:true (mirrors
-    // runAiSummary's manual-click path, the only caller) — the silent
-    // cache-probe path never streams. Throws on error, same contract as
-    // aiSummarize(), so callers need no special-casing.
+    // Streaming counterpart to aiSummarize(): POSTs to /api/ai/summarize with
+    // stream:true and calls onChunk(piece) as text arrives. Always force:true
+    // (mirrors runAiSummary's manual-click path, the only caller) — the
+    // silent cache-probe path never streams. Throws on error, same contract
+    // as aiSummarize(), so callers need no special-casing.
     async function aiSummarizeStream(kind, text, onChunk) {
         // Inactivity timeout, not a flat cap — reset on every chunk, so a
         // slow-but-progressing generation isn't cut off, only a genuine
@@ -1825,10 +1825,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
         let resp;
         try {
-            resp = await apiFetch('/api/ai/summarize/stream', {
+            resp = await apiFetch('/api/ai/summarize', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ kind, text, force: true }),
+                body: JSON.stringify({ kind, text, force: true, stream: true }),
                 signal: controller.signal,
             });
         } catch (err) {
