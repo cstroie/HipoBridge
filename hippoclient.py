@@ -403,6 +403,29 @@ def is_meaningful_text(text):
     return bool(text) and bool(_MEANINGFUL_TEXT_RE.search(text))
 
 
+def resolve_clinical_indication(cerere_data=None, solicitare_data=None):
+    """Best available physician-provided clinical indication, in priority order.
+
+    cerere.asp's own Justificare first, then BuletinSolicitare.asp's fields —
+    Situatie clinica and cerere's Diagnostic ahead of Date clinico-paraclinice /
+    Diagnostic de trimitere / Indicatii speciale, since "Diagnostic de trimitere"
+    is frequently reimbursement/admin boilerplate (e.g. an ICD billing code line)
+    rather than real clinical text, and would otherwise beat genuinely useful
+    fields just for being non-empty. Shared by worklist.py's DICOM enrichment
+    and HippoClientBuletinSolicitare.fhir_response's Schedule-page indication.
+    """
+    candidates = (
+        (cerere_data or {}).get('request.justification'),
+        (solicitare_data or {}).get('request.justification'),
+        (solicitare_data or {}).get('request.clinical_situation'),
+        (cerere_data or {}).get('request.diagnosis'),
+        (solicitare_data or {}).get('request.clinical_data'),
+        (solicitare_data or {}).get('request.diagnosis_referral'),
+        (solicitare_data or {}).get('request.special_indications'),
+    )
+    return next((t for t in candidates if is_meaningful_text(t)), None)
+
+
 def _format_request_url(template: str, **kwargs) -> str:
     """Format a Hipocrate request-URL template, percent-encoding every
     interpolated value first.
@@ -4212,16 +4235,7 @@ class HippoClientBuletinSolicitare(HippoClient):
             if section:
                 fhir_sr["note"] = [{"text": section}]
 
-            # Placeholder junk (e.g. "-", ". .. .") is common when a field is left
-            # unfilled — a plain truthiness check would let it win over a real
-            # value further down the priority list, so filter for meaningful text.
-            indication = next((t for t in (
-                parsed_data.get("request.justification"),
-                parsed_data.get("request.clinical_situation"),
-                parsed_data.get("request.clinical_data"),
-                parsed_data.get("request.diagnosis_referral"),
-                parsed_data.get("request.special_indications"),
-            ) if is_meaningful_text(t)), None)
+            indication = resolve_clinical_indication(solicitare_data=parsed_data)
             if indication:
                 fhir_sr["note"] = (fhir_sr.get("note") or []) + [
                     {"text": indication, "category": [{"text": "clinical-indication"}]}

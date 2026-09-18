@@ -39,7 +39,7 @@ except ImportError:
 
 from hippoclient import (HippoClientSchedule, HippoClientCerere, HippoClientBuletinSolicitare,
                           HippoClientPatient, HippoClientCheckin, identify_study_type_and_region,
-                          is_meaningful_text)
+                          resolve_clinical_indication)
 from extractors import parse_cnp
 
 logger = logging.getLogger('Worklist')
@@ -963,27 +963,17 @@ class WorklistRefresher:
                 if checkin_data.get('status') != 'error':
                     admission_id = checkin_data.get('checkin.id') or latest_checkin_id
 
-            # BuletinSolicitare.asp's own clinical fields ("Date clinico-paraclinice",
-            # "Diagnostic de trimitere", "Indicatii speciale") often carry the actual
-            # reason for the exam (e.g. trauma circumstances) in more detail than
-            # cerere.asp's fields — surfaced here so it reaches the radiologist via
-            # DICOM PatientComments/ReasonForTheRequestedProcedure, not just discarded
-            # after being fetched for physician_solicitant above.
-            solicitare_indication = next((t for t in (
-                solicitare_data.get('request.clinical_data'),
-                solicitare_data.get('request.diagnosis_referral'),
-                solicitare_data.get('request.special_indications'),
-            ) if is_meaningful_text(t)), None)
-            justification = next((t for t in (
-                cerere_data.get('request.justification'),
-                solicitare_data.get('request.justification'),
-                solicitare_data.get('request.clinical_situation'),
-            ) if is_meaningful_text(t)), None)
-            comment = next((t for t in (
-                solicitare_indication,
-                cerere_data.get('request.clinical_indication'),
-                cerere_data.get('request.diagnosis'),
-            ) if is_meaningful_text(t)), None)
+            # Same priority chain feeds both ReasonForTheRequestedProcedure and
+            # PatientComments/CommentsOnTheScheduledProcedureStep, and matches
+            # what the Schedule page shows (HippoClientBuletinSolicitare.fhir_response) —
+            # previously these used two independently-ordered chains, and the
+            # PatientComments one ranked BuletinSolicitare's "Diagnostic de
+            # trimitere" (often reimbursement/admin boilerplate, e.g. an ICD
+            # billing code line) above genuinely useful fields just for being
+            # non-empty.
+            indication = resolve_clinical_indication(cerere_data, solicitare_data)
+            justification = indication
+            comment = indication
 
             info = {
                 'id':            patient_id,
