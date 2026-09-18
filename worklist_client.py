@@ -109,6 +109,7 @@ def _build_records(results: list) -> list:
             'procedure_description': str(sps.ScheduledProcedureStepDescription),
             'procedure_id':          str(sps.ScheduledProcedureStepID),
             'priority':              str(getattr(ds, 'RequestedProcedurePriority', '')),
+            'patient_comments':      str(getattr(ds, 'PatientComments', '')),
         })
     return records
 
@@ -125,6 +126,9 @@ def _render_table(records: list) -> None:
               f"{scheduled:<15} {r['ward']:<16} "
               f"{r['referring_physician']:<24} "
               f"{r['procedure_description']}")
+        if r['patient_comments']:
+            for line in r['patient_comments'].splitlines():
+                print(f"{'':<28} {'':<15} {'':<12} {'':<4} {'':<15} {'':<16} {'':<24} └─ {line}")
 
 
 def main() -> int:
