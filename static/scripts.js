@@ -1857,7 +1857,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // short to benefit). Must mirror llm/prompts.py's STREAMING_KINDS.
     const STREAMING_KINDS = new Set([
         'report', 'epicrisis', 'pre_exam_brief', 'lab', 'imaging_episode',
-        'pre_exam_soap', 'pre_exam_executive', 'pre_exam_oneliner',
+        'pre_exam_soap', 'pre_exam_executive', 'pre_exam_oneliner', 'er_triage',
     ]);
 
     // Rare sentinel (ASCII Unit Separator) the server uses to signal a
@@ -5864,7 +5864,25 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let scheduleEntries = [];
 
-    async function showRequestModal(requestId, requestCode, patientName, modality, triggerEl, requesterName) {
+    // Formats GET /api/request/{id}/triage's JSON (HippoClientTriage's
+    // flattened FUPU fields) into the key: value input llm/prompts/
+    // er_triage.md expects. Returns '' (not an error) for a non-UPU
+    // request, one with no saved FUPU sheet, or a failed fetch (data is
+    // null) — runAiSummary already handles empty text as "nothing to
+    // summarize" without a special case here.
+    function formatErTriageText(data) {
+        if (!data) return '';
+        const lines = [];
+        if (data.record_number) lines.push(`Record #: ${data.record_number}`);
+        if (data.date) lines.push(`Date: ${data.date}`);
+        if (data.arrival_mode) lines.push(`Arrival mode: ${data.arrival_mode}`);
+        if (data.arrival_source) lines.push(`Arrival source: ${data.arrival_source}`);
+        if (data.triage_priority) lines.push(`Triage priority: ${data.triage_priority}`);
+        if (data.presentation_reason) lines.push(`Presentation reason: ${data.presentation_reason}`);
+        return lines.join('\n');
+    }
+
+    async function showRequestModal(requestId, requestCode, patientName, modality, triggerEl, requesterName, section) {
         const tmpl = document.getElementById('schedule-request-modal-template');
         if (!tmpl) return;
         const modal = tmpl.content.cloneNode(true).querySelector('dialog');
@@ -5884,6 +5902,38 @@ document.addEventListener('DOMContentLoaded', function() {
         if (requesterName) {
             modal.querySelector('.modal-requester').textContent = requesterName;
             modal.querySelector('.report-modal-referrer').hidden = false;
+        }
+
+        // ER (UPU) requests only — er_triage summarizes the FUPU intake
+        // sheet (llm/prompts/er_triage.md), which only exists for ER
+        // presentations. Fetched lazily on first click, same
+        // memoize-a-promise pattern as buildImagingEpisodeHeader's
+        // getEpisodeText — most modal opens are never clicked into, so an
+        // eager fetch here would be a wasted round trip most of the time.
+        if ((section || '').toUpperCase() === 'UPU') {
+            const triageBtn = modal.querySelector('.modal-ai-triage-btn');
+            const triageToolbar = modal.querySelector('.report-modal-triage-toolbar');
+            if (triageBtn && triageToolbar) {
+                triageToolbar.hidden = false;
+                let triageTextPromise = null;
+                const getTriageText = () => triageTextPromise ||= apiFetch(`/api/request/${requestId}/triage`)
+                    .then(r => r.ok ? r.json() : null)
+                    .then(formatErTriageText);
+                triageBtn.addEventListener('click', async () => {
+                    triageBtn.disabled = true;
+                    let text;
+                    try {
+                        text = await getTriageText();
+                    } catch (err) {
+                        triageBtn.disabled = false;
+                        showToast('Failed to load ER triage data for AI summary', 'error');
+                        return;
+                    }
+                    runAiSummary(triageBtn, 'er_triage',
+                        () => modal.querySelector('.report-modal-body'), () => text,
+                        { inline: true });
+                });
+            }
         }
 
         const bodyDiv = modal.querySelector('.report-modal-body');
@@ -6564,7 +6614,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const codeBtn = row.querySelector('.timeline-code');
         codeBtn.textContent = requestCode;
         codeBtn.title = `View request details (${requestCode})`;
-        codeBtn.addEventListener('click', () => showRequestModal(r.id, requestCode, patientName, modalitySlug, codeBtn, requestedBy));
+        codeBtn.addEventListener('click', () => showRequestModal(r.id, requestCode, patientName, modalitySlug, codeBtn, requestedBy, section));
         const numericIdEl = row.querySelector('.timeline-numeric-id');
         if (hipocrateUrl) {
             const idLink = document.createElement('a');
