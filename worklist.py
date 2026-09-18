@@ -38,7 +38,7 @@ except ImportError:
     DICOM_AVAILABLE = False
 
 from hippoclient import (HippoClientSchedule, HippoClientCerere, HippoClientBuletinSolicitare,
-                          HippoClientPatient, HippoClientCheckin, identify_study_type_and_region,
+                          HippoClientPatient, identify_study_type_and_region,
                           resolve_clinical_indication)
 from extractors import parse_cnp
 
@@ -954,7 +954,49 @@ class WorklistRefresher:
         c.set_credentials(self._username, self._password)
         return c
 
-    async def _enrich(self, request_id: str) -> Optional[dict]:
+    async def _fetch_patient(self, patient_id: str,
+                              patient_data_cache: Dict[str, Optional[Tuple[dict, Optional[str]]]],
+                              patient_locks: Dict[str, asyncio.Lock]) -> Optional[Tuple[dict, Optional[str]]]:
+        """Fetch patient.asp + derive admission_id for one patient_id, memoized per refresh cycle.
+
+        Repeat/multi-exam requests can put more than one active request_id
+        against the same patient on the same day; without this, each one
+        would re-enrich the same patient independently. The lock (rather
+        than a plain dict check) also dedups two request_ids for the same
+        patient landing in the same sem-bounded batch, so only one of them
+        actually awaits the fetch.
+        """
+        if patient_id in patient_data_cache:
+            return patient_data_cache[patient_id]
+
+        lock = patient_locks.setdefault(patient_id, asyncio.Lock())
+        async with lock:
+            if patient_id in patient_data_cache:
+                return patient_data_cache[patient_id]
+
+            patient_client = self._client(HippoClientPatient)
+            patient_data = await patient_client.fetch_and_parse(id=patient_id)
+            if patient_data.get('status') == 'error':
+                patient_data_cache[patient_id] = None
+                return None
+
+            # Use the patient's most recent admission (highest checkin id) as
+            # AdmissionID when one exists; falls back to the Hipocrate patient
+            # id in _build_datasets otherwise. No separate checkin.asp fetch:
+            # HippoClientCheckin.parse_data() just echoes the id it was called
+            # with back as 'checkin.id' (hippoclient.py), so fetching it would
+            # only confirm the page loads — not worth a whole extra round-trip
+            # per newly-enriched patient for a low-stakes worklist display field.
+            checkin_ids = patient_data.get('checkin') or []
+            admission_id = max(checkin_ids, key=lambda cid: int(cid)) if checkin_ids else None
+
+            result = (patient_data, admission_id)
+            patient_data_cache[patient_id] = result
+            return result
+
+    async def _enrich(self, request_id: str,
+                       patient_data_cache: Dict[str, Optional[Tuple[dict, Optional[str]]]],
+                       patient_locks: Dict[str, asyncio.Lock]) -> Optional[dict]:
         """Fetch patient demographics for one request_id. Returns cached result if known."""
         if request_id in self._patient_cache:
             return self._patient_cache[request_id]
@@ -986,22 +1028,10 @@ class WorklistRefresher:
                 solicitare_data.get('request.physician_solicitant')
             )
 
-            patient_client = self._client(HippoClientPatient)
-            patient_data = await patient_client.fetch_and_parse(id=patient_id)
-            if patient_data.get('status') == 'error':
+            fetched = await self._fetch_patient(patient_id, patient_data_cache, patient_locks)
+            if fetched is None:
                 return None
-
-            # Use the patient's most recent admission (highest checkin id) as
-            # AdmissionID when one exists; falls back to the Hipocrate patient
-            # id in _build_datasets otherwise.
-            admission_id = None
-            checkin_ids = patient_data.get('checkin') or []
-            if checkin_ids:
-                latest_checkin_id = max(checkin_ids, key=lambda cid: int(cid))
-                checkin_client = self._client(HippoClientCheckin)
-                checkin_data = await checkin_client.fetch_and_parse(id=latest_checkin_id)
-                if checkin_data.get('status') != 'error':
-                    admission_id = checkin_data.get('checkin.id') or latest_checkin_id
+            patient_data, admission_id = fetched
 
             # Same priority chain feeds both ReasonForTheRequestedProcedure and
             # PatientComments/CommentsOnTheScheduledProcedureStep, and matches
@@ -1118,13 +1148,22 @@ class WorklistRefresher:
         # Only enrich active entries.
         active = [e for e in entries if e.get('_fhir_status') in _ACTIVE_FHIR_STATUSES]
 
-        # Bounded concurrency: 2 patients at a time = max 4 Hipocrate calls,
-        # leaving capacity for normal web traffic through the global semaphore.
-        sem = asyncio.Semaphore(2)
+        # Bounded concurrency: 3 patients at a time = max 6 Hipocrate calls
+        # (cerere+solicitare in parallel per patient), matching the global
+        # per-process cap on concurrent Hipocrate requests (_hipocrate_semaphore
+        # in hippoclient.py) — worklist refresh can use the whole budget for a
+        # burst without risking unbounded pile-up, since that global semaphore
+        # still queues anything beyond it.
+        sem = asyncio.Semaphore(3)
+
+        # Per-cycle memo so two active request_ids for the same patient (e.g.
+        # repeat/multi-exam same day) only fetch+parse patient.asp once.
+        patient_data_cache: Dict[str, Optional[Tuple[dict, Optional[str]]]] = {}
+        patient_locks: Dict[str, asyncio.Lock] = {}
 
         async def _bounded(entry):
             async with sem:
-                return await self._enrich(entry.get('request_id', ''))
+                return await self._enrich(entry.get('request_id', ''), patient_data_cache, patient_locks)
 
         infos = await asyncio.gather(*[_bounded(e) for e in active], return_exceptions=True)
         patient_map = {}
