@@ -111,6 +111,8 @@ def _build_records(results: list) -> list:
             'priority':              str(getattr(ds, 'RequestedProcedurePriority', '')),
             'patient_comments':      str(getattr(ds, 'PatientComments', '')),
             'residence':             str(getattr(ds, 'PatientInstitutionResidence', '')),
+            'allergies':             str(getattr(ds, 'Allergies', '')),
+            'additional_history':    str(getattr(ds, 'AdditionalPatientHistory', '')),
         })
     return records
 
@@ -128,9 +130,14 @@ def _render_table(records: list) -> None:
               f"{r['referring_physician']:<24} "
               f"{r['residence']:<11} "
               f"{r['procedure_description']}")
-        if r['patient_comments']:
-            for line in r['patient_comments'].splitlines():
-                print(f"{'':<28} {'':<15} {'':<12} {'':<4} {'':<15} {'':<16} {'':<24} {'':<11} └─ {line}")
+        _indent = f"{'':<28} {'':<15} {'':<12} {'':<4} {'':<15} {'':<16} {'':<24} {'':<11} └─ "
+        for line in r['patient_comments'].splitlines():
+            print(f"{_indent}{line}")
+        if r['allergies']:
+            print(f"{_indent}Allergies: {r['allergies']}")
+        if r['additional_history']:
+            for line in r['additional_history'].splitlines():
+                print(f"{_indent}History: {line}")
 
 
 def main() -> int:

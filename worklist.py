@@ -436,6 +436,10 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
         (patient_info or {}).get('allergies') or '',
         (patient_info or {}).get('attention') or '',
     ] if p)[:64]
+    # Allergies (0010,2110) is a separate displayed field on some consoles
+    # (e.g. the Aplio a550) — allergies alone, not combined with Atentie like
+    # MedicalAlerts above.
+    allergies     = ((patient_info or {}).get('allergies') or '')[:64]
     justification = ((patient_info or {}).get('justification') or '')[:64]
     section       = ((patient_info or {}).get('section') or '')[:64]
     phone         = ((patient_info or {}).get('phone') or '')[:64]
@@ -448,9 +452,14 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
     comments      = (patient_info or {}).get('comment') or ''
     if email:
         comments = f'Email: {email}' + (f'\n{comments}' if comments else '')
-    for extra in ((patient_info or {}).get('observations'), (patient_info or {}).get('anamnesis')):
-        if extra:
-            comments = f'{comments}\n{extra}' if comments else extra
+    # observations/anamnesis go to AdditionalPatientHistory (0010,21B0)
+    # instead of being folded into PatientComments — a separate displayed
+    # field on the a550, so the clinical indication in PatientComments stays
+    # uncluttered.
+    additional_history = '\n'.join(p for p in (
+        (patient_info or {}).get('observations'),
+        (patient_info or {}).get('anamnesis'),
+    ) if p)
     admission_id  = (patient_info or {}).get('admission_id') or hippo_id or request_id
 
     # Per the Aplio a550's DICOM conformance statement (2G985-039EN*A, MWM SCU
@@ -502,6 +511,8 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
         ds.PatientComments = comments
         ds.PatientInstitutionResidence = institution_residence
         ds.MedicalAlerts = medical_alerts
+        ds.Allergies = allergies
+        ds.AdditionalPatientHistory = additional_history
         ds.AdmissionID = admission_id
         if other_ids is not None:
             ds.OtherPatientIDsSequence = other_ids
