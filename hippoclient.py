@@ -304,8 +304,14 @@ url_cache = URLCache(max_size=500, timeout=30 * 60)
 # never outlives the raw page it was derived from.
 parse_cache = ParseResultCache(max_size=300, timeout=url_cache.timeout)
 
-# Global semaphore: cap total concurrent outbound requests to Hipocrate
-_hipocrate_semaphore = asyncio.Semaphore(6)
+# Global semaphore: cap total concurrent outbound requests to Hipocrate.
+# Raised from 6 to 12 — worklist.py's enrichment (sem=3 patients x 2
+# concurrent fetches) and pacs.py's per-modality schedule gather (6
+# concurrent) can each alone claim the old cap of 6, which left no headroom
+# for live /api/* or /fhir/* traffic during a background refresh burst. 12
+# keeps one of those bursts from starving user-facing requests while still
+# bounding total load on Hipocrate.
+_hipocrate_semaphore = asyncio.Semaphore(12)
 
 
 def _session_key(username: str, password: str) -> str:
