@@ -90,6 +90,17 @@ PROMPT_META = {
     # 500, same truncation pattern as pre_exam_oneliner above.
     "pre_exam_soap":      ("medical", 700),
     "pre_exam_executive": ("medical", 300),
+    # Prompts only — neither kind has a data source or AI-tab button wired up
+    # yet (see er_triage.md/contrast_safety.md for what input each expects):
+    # er_triage needs the FUPU presentation fields (record/date/arrival/
+    # triage_priority/presentation_reason) surfaced past get_request_triage's
+    # current triage_priority-only response; contrast_safety needs a renal-
+    # analyte extract (same shape as lab.md's abnormal-rows table, but
+    # unconditional on abnormality) alongside the existing clinical-text feed.
+    # Sized like pre_exam_oneliner (160): both are short, single-paragraph
+    # outputs.
+    "er_triage":       ("medical", 160),
+    "contrast_safety": ("medical", 220),
 }
 
 
