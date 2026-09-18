@@ -110,13 +110,14 @@ def _build_records(results: list) -> list:
             'procedure_id':          str(sps.ScheduledProcedureStepID),
             'priority':              str(getattr(ds, 'RequestedProcedurePriority', '')),
             'patient_comments':      str(getattr(ds, 'PatientComments', '')),
+            'insurance':             str(getattr(ds, 'InsurancePlanIdentification', '')),
         })
     return records
 
 
 def _render_table(records: list) -> None:
     header = (f"{'Patient':<28} {'PatientID':<15} {'Accession':<12} {'Mod':<4} "
-              f"{'Scheduled':<15} {'Ward':<16} {'Referring physician':<24} Procedure")
+              f"{'Scheduled':<15} {'Ward':<16} {'Referring physician':<24} {'Insurance':<11} Procedure")
     print(header)
     print('-' * len(header))
     for r in records:
@@ -125,10 +126,11 @@ def _render_table(records: list) -> None:
               f"{r['accession_number']:<12} {r['modality']:<4} "
               f"{scheduled:<15} {r['ward']:<16} "
               f"{r['referring_physician']:<24} "
+              f"{r['insurance']:<11} "
               f"{r['procedure_description']}")
         if r['patient_comments']:
             for line in r['patient_comments'].splitlines():
-                print(f"{'':<28} {'':<15} {'':<12} {'':<4} {'':<15} {'':<16} {'':<24} └─ {line}")
+                print(f"{'':<28} {'':<15} {'':<12} {'':<4} {'':<15} {'':<16} {'':<24} {'':<11} └─ {line}")
 
 
 def main() -> int:

@@ -452,6 +452,20 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
             comments = f'{comments}\n{extra}' if comments else extra
     admission_id  = (patient_info or {}).get('admission_id') or hippo_id or request_id
 
+    # Aplio a550's "Insurance" field is fed from InsurancePlanIdentification
+    # (0010,1050, retired but still a plain LO the console reads) — reused here
+    # to show the care setting instead, since that's what the field is labeled
+    # on-screen. UPU (ER) checked directly, same as FUPU triage lookup — more
+    # reliable than payment_type's "Urgenta", since an ER patient can still be
+    # billed under a different payment type.
+    payment_type = (entry.get('payment_type') or '').lower()
+    if (entry.get('section') or '').upper() == 'UPU':
+        care_type = 'Emergency'
+    elif 'spitalizare de zi' in payment_type:
+        care_type = 'Day care'
+    else:
+        care_type = 'Inpatient'
+
     other_ids = None
     if hippo_id:
         other_id = Dataset()
@@ -480,6 +494,7 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
         if weight:
             ds.PatientWeight = weight
         ds.PatientComments = comments
+        ds.InsurancePlanIdentification = care_type
         ds.MedicalAlerts = medical_alerts
         ds.AdmissionID = admission_id
         if other_ids is not None:
