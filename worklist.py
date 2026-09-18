@@ -516,6 +516,11 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
         ds.AdmissionID = admission_id
         if other_ids is not None:
             ds.OtherPatientIDsSequence = other_ids
+        if hippo_id:
+            # Plain OtherPatientIDs (0010,1000) alongside the sequence form
+            # above — the Aplio a550's conformance statement lists this one,
+            # not OtherPatientIDsSequence (0010,1002), as a displayed field.
+            ds.OtherPatientIDs = hippo_id
 
         ds.AccessionNumber               = accession
         ds.ReferringPhysicianName        = referrer

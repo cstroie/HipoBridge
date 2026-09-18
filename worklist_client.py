@@ -113,6 +113,7 @@ def _build_records(results: list) -> list:
             'residence':             str(getattr(ds, 'PatientInstitutionResidence', '')),
             'allergies':             str(getattr(ds, 'Allergies', '')),
             'additional_history':    str(getattr(ds, 'AdditionalPatientHistory', '')),
+            'other_patient_id':      str(getattr(ds, 'OtherPatientIDs', '')),
         })
     return records
 
@@ -138,6 +139,8 @@ def _render_table(records: list) -> None:
         if r['additional_history']:
             for line in r['additional_history'].splitlines():
                 print(f"{_indent}History: {line}")
+        if r['other_patient_id']:
+            print(f"{_indent}Other Patient ID: {r['other_patient_id']}")
 
 
 def main() -> int:
