@@ -84,8 +84,7 @@ PROMPT_META = {
     "pre_exam_brief":  ("medical", 450),
     # 80 -> 160: real output got cut off mid-sentence at 80 — a single dense
     # sentence packing diagnosis + reason for exam + a watch-item, especially
-    # once translated, routinely ran past that. Still short enough that
-    # streaming buys nothing (kept out of STREAMING_KINDS below).
+    # once translated, routinely ran past that.
     "pre_exam_oneliner":  ("medical", 160),
     # 500 -> 700: 4 sections (S/O/A/P) each with several bullets ran past
     # 500, same truncation pattern as pre_exam_oneliner above.
@@ -197,10 +196,11 @@ def _language_directive(language: str) -> str:
 # lab (600 tokens) is included — long enough that perceived latency matters.
 # imaging_episode (Impression-only conclusion, 320 tokens — see PROMPT_META)
 # is included too: still ~1min+ on this backend, so streaming still helps.
-# pre_exam_oneliner (80 tokens) is excluded for the same reason as imaging.
+# pre_exam_oneliner is included so every AI-tab button shares the streaming
+# path, even though at 160 tokens it's the shortest of the streaming kinds.
 STREAMING_KINDS = frozenset({
     "report", "epicrisis", "pre_exam_brief", "lab", "imaging_episode",
-    "pre_exam_soap", "pre_exam_executive",
+    "pre_exam_soap", "pre_exam_executive", "pre_exam_oneliner",
 })
 
 

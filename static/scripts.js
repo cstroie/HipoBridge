@@ -1791,12 +1791,12 @@ document.addEventListener('DOMContentLoaded', function() {
         return data.summary || '';
     }
 
-    // Kinds served by /api/ai/summarize/stream (report/epicrisis/pre_exam_brief/lab —
-    // the ones long enough that perceived latency matters; imaging stays on
-    // the plain aiSummarize() endpoint above, too short to benefit).
+    // Kinds served by /api/ai/summarize/stream — every AI-tab kind except
+    // imaging, which stays on the plain aiSummarize() endpoint above (too
+    // short to benefit). Must mirror llm/prompts.py's STREAMING_KINDS.
     const STREAMING_KINDS = new Set([
         'report', 'epicrisis', 'pre_exam_brief', 'lab', 'imaging_episode',
-        'pre_exam_soap', 'pre_exam_executive',
+        'pre_exam_soap', 'pre_exam_executive', 'pre_exam_oneliner',
     ]);
 
     // Rare sentinel (ASCII Unit Separator) the server uses to signal a
