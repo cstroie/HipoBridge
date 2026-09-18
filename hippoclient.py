@@ -4046,6 +4046,52 @@ class HippoClientFUPU(HippoClient):
             return data
 
 
+class HippoClientTriage(HippoClient):
+    """Resolves a request's ER triage level (Schedule page's per-row UPU rows).
+
+    Not a single-page scraper: chains cerere.asp (section + patient id) →
+    patient page (for the FUPU/presentation id list) → the most recent
+    FUPU.asp. Only meaningful for UPU (ER) orders — identified by cerere.asp's
+    own "Sectia" department field, more reliable than the payment-type flag
+    (an ER patient can still be billed under a non-Urgenta payment type).
+    Best-effort — many requests have no saved FUPU sheet yet.
+    """
+
+    async def fetch_and_parse(self, id=None, **kwargs) -> HippoData:
+        data = HippoData(status="success", message="")
+        data.store("triage_priority", None)
+        data.store("triage_priority_code", None)
+
+        cerere_client = HippoClientCerere(self.service_url, self.request)
+        cerere_data = await cerere_client.fetch_and_parse(id=id)
+        if cerere_data.get('status') == 'error':
+            return cerere_data
+
+        if (cerere_data.get('request.section') or '').strip().upper() != 'UPU':
+            return data
+
+        patient_id = cerere_data.get('patient.id')
+        if not patient_id:
+            return data
+
+        patient_client = HippoClientPatient(self.service_url, self.request)
+        patient_data = await patient_client.fetch_and_parse(id=patient_id)
+        presentation_ids = patient_data.get('presentation')
+        if not presentation_ids:
+            return data
+
+        # Most recent presentation — a different id namespace than
+        # request_id/patient_id — is the one with the highest numeric id.
+        presentation_id = (max(presentation_ids, key=lambda pid: int(pid))
+                            if isinstance(presentation_ids, list) else presentation_ids)
+        fupu_client = HippoClientFUPU(self.service_url, self.request)
+        fupu_data = await fupu_client.fetch_and_parse(id=presentation_id)
+        if fupu_data.get('status') != 'error':
+            data.store("triage_priority", fupu_data.get('fupu.triage_priority'))
+            data.store("triage_priority_code", fupu_data.get('fupu.triage_priority_code'))
+        return data
+
+
 class HippoClientBuletinSolicitare(HippoClient):
     """Parses the request/order form (BuletinSolicitare.asp) — one lightweight fetch
     (plain table, no <select> reload) that gives region, indication and, crucially,

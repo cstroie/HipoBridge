@@ -43,7 +43,7 @@ from urllib.parse import urlparse, parse_qs
 from fhir import OperationOutcome, Resource
 
 from hippoclient import ANALYSIS_TYPES
-from hippoclient import HippoClient, HippoClientPatient, HippoClientPatientSearch, HippoClientImagingStudy, HippoClientDiagnosticReport, HippoClientServiceRequest, HippoClientServiceRequestSearch, HippoClientCheckout, HippoClientCheckin, HippoClientCheckup, HippoClientSchedule, HippoClientCerere, HippoClientBuletinSolicitare, HippoClientPresentation, HippoClientObservationBundle, HippoClientWhoami, HippoClientReportWrite, HippoClientReportValidate, HippoClientCererePerform, HippoClientFUPU
+from hippoclient import HippoClient, HippoClientPatient, HippoClientPatientSearch, HippoClientImagingStudy, HippoClientDiagnosticReport, HippoClientServiceRequest, HippoClientServiceRequestSearch, HippoClientCheckout, HippoClientCheckin, HippoClientCheckup, HippoClientSchedule, HippoClientCerere, HippoClientBuletinSolicitare, HippoClientPresentation, HippoClientObservationBundle, HippoClientWhoami, HippoClientReportWrite, HippoClientReportValidate, HippoClientCererePerform, HippoClientFUPU, HippoClientTriage
 from hippoclient import user_session_manager, url_cache
 from hippoclient import evict_patient_cache
 from hippoclient import is_meaningful_text as _is_meaningful_text
@@ -536,47 +536,15 @@ async def get_request_patient(request):
 @require_auth
 async def get_request_triage(request):
     """Look up the patient's ER triage level for a request, for the Schedule
-    page's per-row UPU rows. Only meaningful for UPU (ER) orders — identified
-    by cerere.asp's own "Sectia" department field, more reliable than the
-    payment-type flag (an ER patient can still be billed under a non-Urgenta
-    payment type). Best-effort — many have no saved FUPU sheet yet.
-
-    Fetches cerere.asp (section + patient id), then the patient page (for
-    HippoClientPatient's "presentation" id list — the FUPU record id, a
-    different id namespace than request_id/patient_id), then the most recent
-    FUPU.asp. Returns {"status": "success", "triage_priority": str|None,
-    "triage_priority_code": str|None}.
+    page's per-row UPU rows. See HippoClientTriage for the resolution chain
+    (cerere.asp -> patient page -> most recent FUPU.asp) and the UPU-section
+    business rule gating it.
     """
     id = request.match_info.get('id')
     if not id:
         return web_error_response("Request ID is required")
-    cerere_client = HippoClientCerere(SERVICE_URL, request)
-    cerere_data = await cerere_client.fetch_and_parse(id=id)
-    if cerere_data.get('status') == 'error':
-        return web_json_response(cerere_data)
-
-    triage_priority = None
-    triage_priority_code = None
-    if (cerere_data.get('request.section') or '').strip().upper() == 'UPU':
-        patient_id = cerere_data.get('patient.id')
-        if patient_id:
-            patient_client = HippoClientPatient(SERVICE_URL, request)
-            patient_data = await patient_client.fetch_and_parse(id=patient_id)
-            presentation_ids = patient_data.get('presentation')
-            if presentation_ids:
-                presentation_id = (max(presentation_ids, key=lambda pid: int(pid))
-                                    if isinstance(presentation_ids, list) else presentation_ids)
-                fupu_client = HippoClientFUPU(SERVICE_URL, request)
-                fupu_data = await fupu_client.fetch_and_parse(id=presentation_id)
-                if fupu_data.get('status') != 'error':
-                    triage_priority = fupu_data.get('fupu.triage_priority')
-                    triage_priority_code = fupu_data.get('fupu.triage_priority_code')
-
-    return web_json_response({
-        "status": "success",
-        "triage_priority": triage_priority,
-        "triage_priority_code": triage_priority_code,
-    })
+    client = HippoClientTriage(SERVICE_URL, request)
+    return web_json_response(await client.fetch_and_parse(id=id))
 
 @require_auth
 async def get_schedule(request):
