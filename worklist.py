@@ -473,6 +473,7 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
     insurance_code = Dataset()
     insurance_code.CodeValue = _CARE_TYPE_CODE[care_type]
     insurance_code.CodingSchemeDesignator = '99HIPPOBRIDGE'
+    insurance_code.CodingSchemeVersion = '1'
     insurance_code.CodeMeaning = care_type
     insurance_plan_sequence = Sequence([insurance_code])
 
@@ -505,6 +506,7 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
             ds.PatientWeight = weight
         ds.PatientComments = comments
         ds.PatientInsurancePlanCodeSequence = insurance_plan_sequence
+        ds.InsurancePlanIdentification = care_type
         ds.MedicalAlerts = medical_alerts
         ds.AdmissionID = admission_id
         if other_ids is not None:
