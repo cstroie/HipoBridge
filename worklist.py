@@ -452,12 +452,16 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
             comments = f'{comments}\n{extra}' if comments else extra
     admission_id  = (patient_info or {}).get('admission_id') or hippo_id or request_id
 
-    # Aplio a550's "Insurance" field is fed from InsurancePlanIdentification
-    # (0010,1050, retired but still a plain LO the console reads) — reused here
-    # to show the care setting instead, since that's what the field is labeled
+    # Aplio a550's "Insurance" field is fed from PatientInsurancePlanCodeSequence
+    # (0010,0050) — InsurancePlanIdentification (0010,1050) was tried first
+    # (the plainer, retired LO attribute) but the console showed nothing for
+    # it, so the coded sequence is what it actually reads. Repurposed to show
+    # the care setting instead, since that's what the field is labeled
     # on-screen. UPU (ER) checked directly, same as FUPU triage lookup — more
     # reliable than payment_type's "Urgenta", since an ER patient can still be
-    # billed under a different payment type.
+    # billed under a different payment type. No real coding scheme applies
+    # here, so a local one is used ("99HIPPOBRIDGE", the DICOM convention for
+    # a locally-defined scheme, prefixed "99").
     payment_type = (entry.get('payment_type') or '').lower()
     if (entry.get('section') or '').upper() == 'UPU':
         care_type = 'Emergency'
@@ -465,6 +469,12 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
         care_type = 'Day care'
     else:
         care_type = 'Inpatient'
+    _CARE_TYPE_CODE = {'Inpatient': 'IN', 'Day care': 'DC', 'Emergency': 'EM'}
+    insurance_code = Dataset()
+    insurance_code.CodeValue = _CARE_TYPE_CODE[care_type]
+    insurance_code.CodingSchemeDesignator = '99HIPPOBRIDGE'
+    insurance_code.CodeMeaning = care_type
+    insurance_plan_sequence = Sequence([insurance_code])
 
     other_ids = None
     if hippo_id:
@@ -494,7 +504,7 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
         if weight:
             ds.PatientWeight = weight
         ds.PatientComments = comments
-        ds.InsurancePlanIdentification = care_type
+        ds.PatientInsurancePlanCodeSequence = insurance_plan_sequence
         ds.MedicalAlerts = medical_alerts
         ds.AdmissionID = admission_id
         if other_ids is not None:

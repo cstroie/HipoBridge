@@ -110,7 +110,8 @@ def _build_records(results: list) -> list:
             'procedure_id':          str(sps.ScheduledProcedureStepID),
             'priority':              str(getattr(ds, 'RequestedProcedurePriority', '')),
             'patient_comments':      str(getattr(ds, 'PatientComments', '')),
-            'insurance':             str(getattr(ds, 'InsurancePlanIdentification', '')),
+            'insurance':             (ds.PatientInsurancePlanCodeSequence[0].CodeMeaning
+                                       if getattr(ds, 'PatientInsurancePlanCodeSequence', None) else ''),
         })
     return records
 
