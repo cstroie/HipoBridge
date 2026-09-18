@@ -452,30 +452,24 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
             comments = f'{comments}\n{extra}' if comments else extra
     admission_id  = (patient_info or {}).get('admission_id') or hippo_id or request_id
 
-    # Aplio a550's "Insurance" field is fed from PatientInsurancePlanCodeSequence
-    # (0010,0050) — InsurancePlanIdentification (0010,1050) was tried first
-    # (the plainer, retired LO attribute) but the console showed nothing for
-    # it, so the coded sequence is what it actually reads. Repurposed to show
-    # the care setting instead, since that's what the field is labeled
-    # on-screen. UPU (ER) checked directly, same as FUPU triage lookup — more
-    # reliable than payment_type's "Urgenta", since an ER patient can still be
-    # billed under a different payment type. No real coding scheme applies
-    # here, so a local one is used ("99HIPPOBRIDGE", the DICOM convention for
-    # a locally-defined scheme, prefixed "99").
+    # Per the Aplio a550's DICOM conformance statement (2G985-039EN*A, MWM SCU
+    # AE Worklist Request Identifier table): PatientInsurancePlanCodeSequence
+    # (0010,0050) is a Return key only, never a Displayed key on that table —
+    # confirmed empty on the real console regardless of format tried (coded
+    # sequence, forced plain-text VR). InsurancePlanIdentification (0010,1050)
+    # isn't in the device's supported-attribute table at all. The one
+    # DICOM-driven categorical status the console actually displays is
+    # PatientInstitutionResidence (0038,0400), documented there as showing
+    # "In Patient"/"Out Patient" on an *exact* match against the literal
+    # strings "Inpatient"/"Outpatient" — no third state, so Day care and
+    # Emergency both fold into Outpatient (ambulatory/non-admitted), leaving
+    # Inpatient for genuine admissions. UPU checked directly, same as FUPU
+    # triage lookup — more reliable than payment_type's "Urgenta", since an
+    # ER patient can still be billed under a different payment type.
     payment_type = (entry.get('payment_type') or '').lower()
-    if (entry.get('section') or '').upper() == 'UPU':
-        care_type = 'Emergency'
-    elif 'spitalizare de zi' in payment_type:
-        care_type = 'Day care'
-    else:
-        care_type = 'Inpatient'
-    _CARE_TYPE_CODE = {'Inpatient': 'IN', 'Day care': 'DC', 'Emergency': 'EM'}
-    insurance_code = Dataset()
-    insurance_code.CodeValue = _CARE_TYPE_CODE[care_type]
-    insurance_code.CodingSchemeDesignator = '99HIPPOBRIDGE'
-    insurance_code.CodingSchemeVersion = '1'
-    insurance_code.CodeMeaning = care_type
-    insurance_plan_sequence = Sequence([insurance_code])
+    is_upu = (entry.get('section') or '').upper() == 'UPU'
+    is_day_care = 'spitalizare de zi' in payment_type
+    institution_residence = 'Outpatient' if (is_upu or is_day_care) else 'Inpatient'
 
     other_ids = None
     if hippo_id:
@@ -505,8 +499,7 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
         if weight:
             ds.PatientWeight = weight
         ds.PatientComments = comments
-        ds.PatientInsurancePlanCodeSequence = insurance_plan_sequence
-        ds.InsurancePlanIdentification = care_type
+        ds.PatientInstitutionResidence = institution_residence
         ds.MedicalAlerts = medical_alerts
         ds.AdmissionID = admission_id
         if other_ids is not None:
