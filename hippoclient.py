@@ -402,11 +402,36 @@ user_session_manager = UserSessionManager()
 
 
 _MEANINGFUL_TEXT_RE = re.compile(r'[A-Za-z0-9À-ɏ]')
+_REPEATED_CHAR_RE = re.compile(r'(.)\1{3,}')  # same char 4+ times in a row: "aaaa", "----"
+_MEANINGFUL_TEXT_MIN_LEN = 3
+_PLACEHOLDER_VALUES = frozenset((
+    'na', 'n/a', 'nu', 'nil', 'none', 'null', 'test', 'testare', 'xxx', 'asdf',
+))
 
 
 def is_meaningful_text(text):
-    """True if text has at least one letter/digit — filters placeholder junk like ". .. .". """
-    return bool(text) and bool(_MEANINGFUL_TEXT_RE.search(text))
+    """True if text looks like real physician-entered content rather than
+    placeholder junk (". .. .", single letters, "aaaaaaa", "-----", "test").
+
+    Requires: at least one letter/digit, a minimum length, no single character
+    repeated more than 3 times in a row, not entirely one repeated
+    letter/digit (e.g. "a.a.a.a"), and not a known placeholder token.
+    """
+    if not text:
+        return False
+    stripped = text.strip()
+    if len(stripped) < _MEANINGFUL_TEXT_MIN_LEN:
+        return False
+    if not _MEANINGFUL_TEXT_RE.search(stripped):
+        return False
+    if _REPEATED_CHAR_RE.search(stripped):
+        return False
+    alnum_chars = [c.lower() for c in stripped if c.isalnum()]
+    if len(alnum_chars) >= _MEANINGFUL_TEXT_MIN_LEN and len(set(alnum_chars)) == 1:
+        return False
+    if stripped.lower() in _PLACEHOLDER_VALUES:
+        return False
+    return True
 
 
 def resolve_clinical_indication(cerere_data=None, solicitare_data=None):

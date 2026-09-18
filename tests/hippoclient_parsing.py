@@ -14,7 +14,7 @@ from bs4 import BeautifulSoup
 
 import hippoclient
 from hippodata import HippoData
-from hippoclient import _parse_buletin_header
+from hippoclient import _parse_buletin_header, is_meaningful_text
 
 
 def _make_soup():
@@ -95,6 +95,46 @@ class TestParseBuletinHeader(unittest.TestCase):
                 _parse_buletin_header(_make_soup(), HippoData())
         finally:
             hippoclient.parse_cnp = orig_parse_cnp
+
+
+class TestIsMeaningfulText(unittest.TestCase):
+    """Regression guard for junk clinical-indication values that were
+    slipping through as "meaningful" (e.g. request #1761786's clinical
+    info of just 'A'), since is_meaningful_text() is the sole gate for
+    worklist DICOM fields, FHIR clinical-indication notes, and prior-
+    imaging text filtering."""
+
+    def test_rejects_empty_and_none(self):
+        self.assertFalse(is_meaningful_text(None))
+        self.assertFalse(is_meaningful_text(""))
+        self.assertFalse(is_meaningful_text("   "))
+
+    def test_rejects_single_character(self):
+        self.assertFalse(is_meaningful_text("A"))
+        self.assertFalse(is_meaningful_text("."))
+
+    def test_rejects_too_short(self):
+        self.assertFalse(is_meaningful_text("AB"))
+
+    def test_rejects_punctuation_only(self):
+        self.assertFalse(is_meaningful_text(". .. ."))
+
+    def test_rejects_repeated_character_run(self):
+        self.assertFalse(is_meaningful_text("aaaaaaa"))
+        self.assertFalse(is_meaningful_text("----"))
+
+    def test_rejects_single_char_with_separators(self):
+        self.assertFalse(is_meaningful_text("a.a.a.a"))
+        self.assertFalse(is_meaningful_text("A A A"))
+
+    def test_rejects_known_placeholder_tokens(self):
+        for token in ("na", "N/A", "nu", "test", "xxx"):
+            self.assertFalse(is_meaningful_text(token), token)
+
+    def test_accepts_real_clinical_text(self):
+        self.assertTrue(is_meaningful_text("Durere abdominala"))
+        self.assertTrue(is_meaningful_text("R10.4"))
+        self.assertTrue(is_meaningful_text("TCC"))
 
 
 if __name__ == "__main__":
