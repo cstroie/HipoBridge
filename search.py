@@ -27,6 +27,7 @@ import logging
 import re
 import sqlite3
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
 
@@ -76,23 +77,28 @@ class SearchIndex:
 
     # ── blocking implementations (run off the event loop by the async wrappers) ──
 
+    def _index_document_conn(self, con: sqlite3.Connection, kind: str, source_id: str,
+                              cnp: Optional[str], name: Optional[str], text: str) -> None:
+        """Upsert one document on an already-open connection. Caller commits."""
+        cur = con.execute(
+            """INSERT INTO documents(kind, source_id, patient_cnp, patient_name, updated_at)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(kind, source_id) DO UPDATE SET
+                   patient_cnp=excluded.patient_cnp,
+                   patient_name=excluded.patient_name,
+                   updated_at=excluded.updated_at
+               RETURNING id""",
+            (kind, source_id, cnp, name, time.time()),
+        )
+        doc_id = cur.fetchone()[0]
+        con.execute("DELETE FROM documents_fts WHERE rowid = ?", (doc_id,))
+        con.execute("INSERT INTO documents_fts(rowid, text) VALUES (?, ?)", (doc_id, text))
+
     def _index_document_sync(self, kind: str, source_id: str,
                               cnp: Optional[str], name: Optional[str], text: str) -> None:
         con = self._connect()
         try:
-            cur = con.execute(
-                """INSERT INTO documents(kind, source_id, patient_cnp, patient_name, updated_at)
-                   VALUES (?, ?, ?, ?, ?)
-                   ON CONFLICT(kind, source_id) DO UPDATE SET
-                       patient_cnp=excluded.patient_cnp,
-                       patient_name=excluded.patient_name,
-                       updated_at=excluded.updated_at
-                   RETURNING id""",
-                (kind, source_id, cnp, name, time.time()),
-            )
-            doc_id = cur.fetchone()[0]
-            con.execute("DELETE FROM documents_fts WHERE rowid = ?", (doc_id,))
-            con.execute("INSERT INTO documents_fts(rowid, text) VALUES (?, ?)", (doc_id, text))
+            self._index_document_conn(con, kind, source_id, cnp, name, text)
             con.commit()
         finally:
             con.close()
@@ -175,6 +181,35 @@ class SearchIndex:
     def indexed_keys_sync(self) -> set:
         """Synchronous counterpart to indexed_keys()."""
         return self._indexed_keys_sync()
+
+    @contextmanager
+    def batch_writer(self):
+        """One connection/transaction for a whole batch of index_document_sync
+        calls, instead of a fresh connection + commit per document.
+
+        Meant for hippobridge.py's _backfill_search_sync, which can index
+        hundreds of newly-cached documents in one pass — the live
+        schedule_index()/index_document() fire-and-forget path (one document
+        per scrape) still goes through the per-call connection, which is
+        the right granularity there.
+
+        Yields a callable with the same signature as index_document_sync().
+        Commits once when the block exits, including on error — upserts are
+        idempotent (ON CONFLICT DO UPDATE) and the backfill cursor is only
+        advanced after the whole scan finishes, so losing an in-progress
+        batch to a crash just means it's safely redone on the next run.
+        """
+        con = self._connect()
+        try:
+            def _index(kind: str, source_id: str, cnp: Optional[str], name: Optional[str],
+                        text: Optional[str]) -> None:
+                if not text or not text.strip():
+                    return
+                self._index_document_conn(con, kind, source_id, cnp, name, text)
+            yield _index
+        finally:
+            con.commit()
+            con.close()
 
     def get_backfill_cursor_sync(self) -> float:
         """Newest cache-file mtime processed by the last cache backfill scan

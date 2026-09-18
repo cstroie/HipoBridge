@@ -117,15 +117,26 @@ class PacsChecker:
         # modality also gets each one its correct lookahead window for free
         # (_LAB_ID_FETCH_DAYS: 7 days for CT/MRI, 3 for the rest) instead of
         # the flat default used by an unfiltered call.
+        # Independent per-modality fetches — run concurrently instead of
+        # paying 6 sequential round-trips (bounded by hippoclient's own
+        # global Hipocrate semaphore, so this doesn't overrun anything).
+        per_modality = await asyncio.gather(*[
+            self._refresher._fetch_schedule(lab_id=lab_id)
+            for lab_id in _MODALITY_SLUG_TO_LAB_ID.values()
+        ])
         entries = []
         seen_request_ids = set()
-        for lab_id in _MODALITY_SLUG_TO_LAB_ID.values():
-            lab_entries, _, _ = await self._refresher._fetch_schedule(lab_id=lab_id)
+        for lab_entries, _, _ in per_modality:
             for entry in lab_entries:
                 request_id = entry.get('request_id')
                 if request_id and request_id not in seen_request_ids:
                     seen_request_ids.add(request_id)
                     entries.append(entry)
+
+        # Shared per-cycle memo so a patient with two active requests across
+        # different modalities (or entries) only gets patient.asp fetched once.
+        patient_data_cache: Dict[str, object] = {}
+        patient_locks: Dict[str, asyncio.Lock] = {}
 
         candidates = []
         for entry in entries:
@@ -140,7 +151,7 @@ class PacsChecker:
             if not modality:
                 continue
 
-            info = await self._refresher._enrich(request_id)
+            info = await self._refresher._enrich(request_id, patient_data_cache, patient_locks)
             cnp = info and info.get('cnp')
             if not cnp or not parse_cnp(cnp).get('valid'):
                 logger.debug("Skipping request %s: no valid CNP", request_id)

@@ -955,8 +955,8 @@ class WorklistRefresher:
         return c
 
     async def _fetch_patient(self, patient_id: str,
-                              patient_data_cache: Dict[str, Optional[Tuple[dict, Optional[str]]]],
-                              patient_locks: Dict[str, asyncio.Lock]) -> Optional[Tuple[dict, Optional[str]]]:
+                              patient_data_cache: Optional[Dict[str, Optional[Tuple[dict, Optional[str]]]]] = None,
+                              patient_locks: Optional[Dict[str, asyncio.Lock]] = None) -> Optional[Tuple[dict, Optional[str]]]:
         """Fetch patient.asp + derive admission_id for one patient_id, memoized per refresh cycle.
 
         Repeat/multi-exam requests can put more than one active request_id
@@ -965,7 +965,16 @@ class WorklistRefresher:
         than a plain dict check) also dedups two request_ids for the same
         patient landing in the same sem-bounded batch, so only one of them
         actually awaits the fetch.
+
+        patient_data_cache/patient_locks default to a fresh dict per call
+        (no cross-call dedup) so callers outside a worklist refresh cycle
+        (e.g. pacs.py's per-candidate enrichment) can still call this safely
+        without wiring up cycle-scoped state themselves.
         """
+        if patient_data_cache is None:
+            patient_data_cache = {}
+        if patient_locks is None:
+            patient_locks = {}
         if patient_id in patient_data_cache:
             return patient_data_cache[patient_id]
 
@@ -995,9 +1004,15 @@ class WorklistRefresher:
             return result
 
     async def _enrich(self, request_id: str,
-                       patient_data_cache: Dict[str, Optional[Tuple[dict, Optional[str]]]],
-                       patient_locks: Dict[str, asyncio.Lock]) -> Optional[dict]:
-        """Fetch patient demographics for one request_id. Returns cached result if known."""
+                       patient_data_cache: Optional[Dict[str, Optional[Tuple[dict, Optional[str]]]]] = None,
+                       patient_locks: Optional[Dict[str, asyncio.Lock]] = None) -> Optional[dict]:
+        """Fetch patient demographics for one request_id. Returns cached result if known.
+
+        patient_data_cache/patient_locks are optional so callers outside a
+        worklist refresh cycle (pacs.py) can call this directly; pass them
+        through explicitly to get cross-request_id patient dedup within a
+        batch (see _fetch_patient).
+        """
         if request_id in self._patient_cache:
             return self._patient_cache[request_id]
 

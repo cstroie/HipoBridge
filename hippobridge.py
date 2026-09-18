@@ -1446,34 +1446,39 @@ def _backfill_search_sync(fs_cache: SqliteCache, idx) -> dict:
     scanned = 0
     indexed = 0
     newest_mtime = cursor
-    for url, content, mtime in fs_cache.iter_entries(since_mtime=cursor):
-        scanned += 1
-        if mtime > newest_mtime:
-            newest_mtime = mtime
-        try:
-            if '/gen_printabile/BiletExternare.asp' in url:
-                rel_id = _url_param(url, 'RelId')
-                if not rel_id or ('epicrisis', rel_id) in existing:
-                    continue
-                data = checkout_client.parse_data(content, id=rel_id)
-                epicrisis = data.get('checkout.epicrisis')
-                if epicrisis:
-                    idx.index_document_sync('epicrisis', rel_id, data.get('patient.cnp'),
-                                             data.get('patient.name'), epicrisis)
-                    indexed += 1
-            elif '/PARA/Printabile/BuletinAnalize.asp' in url and _url_param(url, 'type') == '3':
-                study_id = _url_param(url, 'id')
-                if not study_id or ('imaging', study_id) in existing:
-                    continue
-                data = imaging_client.parse_data(content, id=study_id)
-                studies = data.get('studies') or []
-                text = "\n\n".join(s.get('result') for s in studies if s.get('result'))
-                if text:
-                    idx.index_document_sync('imaging', study_id, data.get('patient.cnp'),
-                                             data.get('patient.name'), text)
-                    indexed += 1
-        except Exception as exc:
-            logger.warning(f"Search index backfill: failed to parse cached page {url}: {exc}")
+    # One connection/transaction for the whole scan instead of a fresh
+    # connect + commit per document (search.py:batch_writer) — this loop can
+    # index hundreds of documents in one pass on a first run against an
+    # already-populated disk cache.
+    with idx.batch_writer() as index:
+        for url, content, mtime in fs_cache.iter_entries(since_mtime=cursor):
+            scanned += 1
+            if mtime > newest_mtime:
+                newest_mtime = mtime
+            try:
+                if '/gen_printabile/BiletExternare.asp' in url:
+                    rel_id = _url_param(url, 'RelId')
+                    if not rel_id or ('epicrisis', rel_id) in existing:
+                        continue
+                    data = checkout_client.parse_data(content, id=rel_id)
+                    epicrisis = data.get('checkout.epicrisis')
+                    if epicrisis:
+                        index('epicrisis', rel_id, data.get('patient.cnp'),
+                              data.get('patient.name'), epicrisis)
+                        indexed += 1
+                elif '/PARA/Printabile/BuletinAnalize.asp' in url and _url_param(url, 'type') == '3':
+                    study_id = _url_param(url, 'id')
+                    if not study_id or ('imaging', study_id) in existing:
+                        continue
+                    data = imaging_client.parse_data(content, id=study_id)
+                    studies = data.get('studies') or []
+                    text = "\n\n".join(s.get('result') for s in studies if s.get('result'))
+                    if text:
+                        index('imaging', study_id, data.get('patient.cnp'),
+                              data.get('patient.name'), text)
+                        indexed += 1
+            except Exception as exc:
+                logger.warning(f"Search index backfill: failed to parse cached page {url}: {exc}")
     if newest_mtime > cursor:
         idx.set_backfill_cursor_sync(newest_mtime)
     return {'scanned': scanned, 'indexed': indexed}
