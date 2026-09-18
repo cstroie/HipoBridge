@@ -37,7 +37,7 @@ try:
 except ImportError:
     DICOM_AVAILABLE = False
 
-from hippoclient import (HippoClientSchedule, HippoClientCerere, HippoClientBuletinSolicitare,
+from hippoclient import (HippoClientSchedule, HippoClientCerere,
                           HippoClientPatient, identify_study_type_and_region,
                           resolve_clinical_indication)
 from extractors import parse_cnp
@@ -1017,31 +1017,22 @@ class WorklistRefresher:
             return self._patient_cache[request_id]
 
         try:
-            # cerere.asp and BuletinSolicitare.asp are both keyed only by
-            # request_id — independent fetches, so run them concurrently
-            # instead of paying two sequential round-trips.
-            #
-            # cerere.asp's strMedicId ("Medic curant", the attending physician)
-            # is preferred for the worklist's referring/requesting physician —
-            # confirmed live (request 1761733) that BuletinSolicitare.asp's
-            # "Medic solicitant" can be the registering staff member who typed
-            # the order in, not a clinically meaningful referrer, so it's kept
-            # only as a fallback when Medic curant is missing.
+            # BuletinSolicitare.asp used to be fetched alongside cerere.asp for
+            # a distinct "Medic solicitant" (ordering physician) and clinical-
+            # indication fallbacks, but cerere.asp's own strMedicId ("Medic
+            # curant") is checked first anyway and is virtually always
+            # populated, and its Justificare/SituatieClinicaId/MotivSolicitare/
+            # DiagnosticIntPres/IndicatiiSpeciale fields cover the same
+            # fallback tiers — so the second round-trip was rarely buying
+            # anything. The one accepted gap: if Medic curant is ever blank,
+            # there's no ordering-physician fallback left.
             cerere = self._client(HippoClientCerere)
-            solicitare = self._client(HippoClientBuletinSolicitare)
-            cerere_data, solicitare_data = await asyncio.gather(
-                cerere.fetch_and_parse(id=request_id),
-                solicitare.fetch_and_parse(id=request_id),
-            )
+            cerere_data = await cerere.fetch_and_parse(id=request_id)
             patient_id = cerere_data.get('patient.id')
             if not patient_id:
                 return None
 
-            physician = (
-                cerere_data.get('request.physician') or
-                solicitare_data.get('request.physician_curant') or
-                solicitare_data.get('request.physician_solicitant')
-            )
+            physician = cerere_data.get('request.physician')
 
             fetched = await self._fetch_patient(patient_id, patient_data_cache, patient_locks)
             if fetched is None:
@@ -1056,7 +1047,7 @@ class WorklistRefresher:
             # trimitere" (often reimbursement/admin boilerplate, e.g. an ICD
             # billing code line) above genuinely useful fields just for being
             # non-empty.
-            indication = resolve_clinical_indication(cerere_data, solicitare_data)
+            indication = resolve_clinical_indication(cerere_data)
             justification = indication
             comment = indication
 
@@ -1163,12 +1154,11 @@ class WorklistRefresher:
         # Only enrich active entries.
         active = [e for e in entries if e.get('_fhir_status') in _ACTIVE_FHIR_STATUSES]
 
-        # Bounded concurrency: 3 patients at a time = max 6 Hipocrate calls
-        # (cerere+solicitare in parallel per patient), matching the global
-        # per-process cap on concurrent Hipocrate requests (_hipocrate_semaphore
-        # in hippoclient.py) — worklist refresh can use the whole budget for a
-        # burst without risking unbounded pile-up, since that global semaphore
-        # still queues anything beyond it.
+        # Bounded concurrency: 3 patients at a time in flight, each a
+        # cerere.asp call plus (on cache miss) a patient.asp call — well under
+        # the global per-process cap on concurrent Hipocrate requests
+        # (_hipocrate_semaphore in hippoclient.py), which still queues
+        # anything beyond it, so this just avoids an unbounded burst.
         sem = asyncio.Semaphore(3)
 
         # Per-cycle memo so two active request_ids for the same patient (e.g.

@@ -437,21 +437,26 @@ def is_meaningful_text(text):
 def resolve_clinical_indication(cerere_data=None, solicitare_data=None):
     """Best available physician-provided clinical indication, in priority order.
 
-    cerere.asp's own Justificare first, then BuletinSolicitare.asp's fields —
-    Situatie clinica and cerere's Diagnostic ahead of Date clinico-paraclinice /
-    Diagnostic de trimitere / Indicatii speciale, since "Diagnostic de trimitere"
-    is frequently reimbursement/admin boilerplate (e.g. an ICD billing code line)
-    rather than real clinical text, and would otherwise beat genuinely useful
-    fields just for being non-empty. Shared by worklist.py's DICOM enrichment
-    and HippoClientBuletinSolicitare.fhir_response's Schedule-page indication.
+    cerere.asp's own Justificare and Situatie clinica come first — worklist.py
+    passes cerere_data alone (no BuletinSolicitare.asp fetch, since cerere.asp
+    exposes the same underlying fields), so each tier below pairs a cerere.asp
+    field with its BuletinSolicitare.asp equivalent for the one remaining
+    caller (HippoClientBuletinSolicitare.fhir_response) that passes only
+    solicitare_data. "Diagnostic de trimitere"/"Diagnostic internare-prezentare"
+    rank last since they're frequently reimbursement/admin boilerplate (e.g. an
+    ICD billing code line) rather than real clinical text, and would otherwise
+    beat genuinely useful fields just for being non-empty.
     """
     candidates = (
         (cerere_data or {}).get('request.justification'),
         (solicitare_data or {}).get('request.justification'),
-        (solicitare_data or {}).get('request.clinical_situation'),
         (cerere_data or {}).get('request.diagnosis'),
+        (solicitare_data or {}).get('request.clinical_situation'),
+        (cerere_data or {}).get('request.reason'),
         (solicitare_data or {}).get('request.clinical_data'),
+        (cerere_data or {}).get('request.diagnosis_referral'),
         (solicitare_data or {}).get('request.diagnosis_referral'),
+        (cerere_data or {}).get('request.special_indications'),
         (solicitare_data or {}).get('request.special_indications'),
     )
     return next((t for t in candidates if is_meaningful_text(t)), None)
@@ -3646,6 +3651,11 @@ class HippoClientCerere(HippoClient):
             # Clinical situation (SIUI field — closest to a diagnosis on this form)
             data.store("request.diagnosis", self._select_text(soup, 'SituatieClinicaId'))
 
+            # Presentation/admission diagnosis (SIUI field, low-priority fallback —
+            # like BuletinSolicitare.asp's "Diagnostic de trimitere", often just an
+            # ICD billing code rather than real clinical text).
+            data.store("request.diagnosis_referral", self._select_text(soup, 'DiagnosticIntPres'))
+
             # Justification (text input named "Justificare")
             data.store("request.justification", extract_value_from_input(soup, name='Justificare'))
 
@@ -3659,8 +3669,9 @@ class HippoClientCerere(HippoClient):
             if ta:
                 data.store("request.clinical_indication", ta.get_text(strip=True))
 
-            # Reason for request / special indications (new textareas under the
-            # "Situatie clinica" section, not yet wired into the MWL output).
+            # Reason for request / special indications (textareas under the
+            # "Situatie clinica" section) — low-priority fallbacks in
+            # resolve_clinical_indication().
             ta = soup.find('textarea', {'name': 'MotivSolicitare'})
             if ta:
                 data.store("request.reason", ta.get_text(strip=True))
