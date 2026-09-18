@@ -1744,7 +1744,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     wireAiCardCopy(card);
                     button._aiCard = card;
                 }
-                placeAiCard(card, null, () => elements.patientAiSummaryAnchor);
+                placeAiCard(card, null, elements.patientAiSummaryAnchor);
                 const body = card.querySelector('.ai-summary-body');
                 card.classList.remove('ai-card-error');
                 body.classList.add('ai-summary-loading');
