@@ -207,12 +207,13 @@ def _language_directive(language: str) -> str:
 # lab (600 tokens) is included — long enough that perceived latency matters.
 # imaging_episode (Impression-only conclusion, 320 tokens — see PROMPT_META)
 # is included too: still ~1min+ on this backend, so streaming still helps.
-# pre_exam_oneliner/er_triage are included so every AI-tab button shares the
-# streaming path, even though at 160 tokens each is among the shortest of
-# the streaming kinds.
+# pre_exam_oneliner/er_triage/contrast_safety are included so every AI-tab
+# button shares the streaming path, even though each is among the shortest
+# of the streaming kinds (160-220 tokens).
 STREAMING_KINDS = frozenset({
     "report", "epicrisis", "pre_exam_brief", "lab", "imaging_episode",
     "pre_exam_soap", "pre_exam_executive", "pre_exam_oneliner", "er_triage",
+    "contrast_safety",
 })
 
 

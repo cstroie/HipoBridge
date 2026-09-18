@@ -1502,9 +1502,18 @@ select {
    shrink below its content's natural width, so on narrow viewports the
    heading pushes .card-toolbar (fixed pill size) past the edge instead
    of the heading text wrapping. */
-.trends-header > div:not(.card-toolbar) {
+.trends-header > div:not(.card-toolbar):not(.card-toolbar-group) {
     min-width: 0;
     flex: 1 1 auto;
+}
+/* Groups the Lab AI/Copy pill and the separate Contrast Safety pill so
+   .trends-header's justify-content:space-between still treats the header
+   as just two children (title, toolbars) instead of spreading three
+   flex items apart. */
+.card-toolbar-group {
+    display: flex;
+    flex-shrink: 0;
+    gap: var(--space-8);
 }
 
 .trends-header h2 {

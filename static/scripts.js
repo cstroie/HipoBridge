@@ -82,6 +82,7 @@ document.addEventListener('DOMContentLoaded', function() {
         aiReportBtn: document.getElementById('aiReportBtn'),
         aiLabBtn: document.getElementById('aiLabBtn'),
         copyLabBtn: document.getElementById('copyLabBtn'),
+        contrastSafetyBtn: document.getElementById('contrastSafetyBtn'),
         // AI tab elements
         aiPreExamToolbar: document.getElementById('aiPreExamToolbar'),
         aiPreExamAnchor: document.getElementById('aiPreExamAnchor'),
@@ -493,6 +494,7 @@ document.addEventListener('DOMContentLoaded', function() {
         wireAiButton(elements.aiReportBtn, 'report',
             () => elements.reportCard, () => getPatientClinicalText());
         if (elements.aiLabBtn) elements.aiLabBtn.addEventListener('click', runLabSummary);
+        if (elements.contrastSafetyBtn) elements.contrastSafetyBtn.addEventListener('click', runContrastSafetyCheck);
         elements.aiPreExamBtns = buildAiPreExamToolbar();
         if (elements.patientAiSummaryBtn) {
             elements.patientAiSummaryBtn.addEventListener('click', generatePatientAiSummary);
@@ -1693,10 +1695,11 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.aiReportBtn) elements.aiReportBtn.hidden = true;
         for (const btn of elements.aiPreExamBtns || []) btn.hidden = true;
         if (elements.aiLabBtn) elements.aiLabBtn.hidden = true;
+        if (elements.contrastSafetyBtn) elements.contrastSafetyBtn.hidden = true;
         // Drop any rendered AI cards from a previous patient. querySelectorAll
         // does not descend into <template> content, so the template card is safe.
         document.querySelectorAll('.ai-summary-card').forEach(card => card.remove());
-        for (const btn of [elements.aiReportBtn, ...(elements.aiPreExamBtns || []), elements.aiLabBtn, elements.patientAiSummaryBtn]) {
+        for (const btn of [elements.aiReportBtn, ...(elements.aiPreExamBtns || []), elements.aiLabBtn, elements.contrastSafetyBtn, elements.patientAiSummaryBtn]) {
             if (btn) btn._aiCard = null;
         }
         labAiText = '';
@@ -1755,6 +1758,31 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Shows a "Preparing data…" placeholder on an AI singleton button while
+    // an async prep step (e.g. loadReportLazily) runs, so a click isn't
+    // silent until it resolves — used by AI actions whose getText() depends
+    // on data that isn't guaranteed to be loaded yet. Returns the card (or
+    // undefined if `button` is falsy); the caller awaits its own prep step,
+    // then removes the card and re-enables the button if the data still
+    // isn't there (runAiSummary's own empty-text toast covers that case,
+    // but only once the placeholder/disabled state are cleared first).
+    function showAiPreparingPlaceholder(button, anchor, intoParent) {
+        if (!button) return;
+        let card = button._aiCard;
+        if (!card || !card.isConnected) {
+            card = makeAiCard(true);
+            wireAiCardCopy(card);
+            button._aiCard = card;
+        }
+        placeAiCard(card, anchor, intoParent);
+        const body = card.querySelector('.ai-summary-body');
+        card.classList.remove('ai-card-error');
+        body.classList.add('ai-summary-loading');
+        body.textContent = 'Preparing data…';
+        button.disabled = true;
+        return card;
+    }
+
     // Profile tab's "AI Summary" Generate button. Unlike aiReportBtn (only
     // shown once loadReportLazily has already assembled the clinical text
     // via the Report tab), this button is always visible and lazily triggers
@@ -1763,26 +1791,7 @@ document.addEventListener('DOMContentLoaded', function() {
     async function generatePatientAiSummary() {
         const button = elements.patientAiSummaryBtn;
         if (!getPatientClinicalText()) {
-            // This is the one AI-tab path where "collecting the data to send"
-            // is a real, potentially slow network step (loadReportLazily
-            // fetches/assembles the Report tab's clinical text on first use)
-            // rather than an instant DOM read — show a placeholder so the
-            // click isn't silent until it resolves.
-            let card;
-            if (button) {
-                card = button._aiCard;
-                if (!card || !card.isConnected) {
-                    card = makeAiCard(true);
-                    wireAiCardCopy(card);
-                    button._aiCard = card;
-                }
-                placeAiCard(card, null, elements.patientAiSummaryAnchor);
-                const body = card.querySelector('.ai-summary-body');
-                card.classList.remove('ai-card-error');
-                body.classList.add('ai-summary-loading');
-                body.textContent = 'Preparing data…';
-                button.disabled = true;
-            }
+            const card = showAiPreparingPlaceholder(button, null, elements.patientAiSummaryAnchor);
             await loadReportLazily();
             // loadReportLazily reports its own failures (showOverlayError) and
             // leaves getPatientClinicalText() null; runAiSummary below then
@@ -1797,6 +1806,29 @@ document.addEventListener('DOMContentLoaded', function() {
         runAiSummary(elements.patientAiSummaryBtn, 'pre_exam_oneliner',
             () => null, getPatientClinicalText,
             { inline: true, intoAnchorParent: () => elements.patientAiSummaryAnchor });
+    }
+
+    // Lab Trends tab's "Contrast" button (contrast_safety AI prompt — see
+    // llm/prompts/contrast_safety.md and buildContrastSafetyText above).
+    // Unlike runLabSummary, this needs the patient's clinical record too
+    // (for allergy/contrast-reaction flags), which may not be loaded yet if
+    // the radiologist opened the Lab tab before the Report tab ever ran —
+    // same lazy-load-with-placeholder need as generatePatientAiSummary.
+    async function runContrastSafetyCheck() {
+        const button = elements.contrastSafetyBtn;
+        if (!button) return;
+        const anchor = () => elements.trendsContainer?.firstChild || null;
+        if (!getPatientClinicalText()) {
+            const card = showAiPreparingPlaceholder(button, anchor(), elements.trendsContainer);
+            await loadReportLazily();
+            if (!getPatientClinicalText()) {
+                card?.remove();
+                button.disabled = false;
+            }
+        }
+        runAiSummary(button, 'contrast_safety',
+            anchor, buildContrastSafetyText,
+            { intoAnchorParent: () => elements.trendsContainer, inline: true });
     }
 
     // opts.force bypasses the server cache and regenerates. opts.checkOnly
@@ -1858,6 +1890,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const STREAMING_KINDS = new Set([
         'report', 'epicrisis', 'pre_exam_brief', 'lab', 'imaging_episode',
         'pre_exam_soap', 'pre_exam_executive', 'pre_exam_oneliner', 'er_triage',
+        'contrast_safety',
     ]);
 
     // Rare sentinel (ASCII Unit Separator) the server uses to signal a
@@ -4394,6 +4427,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     () => elements.trendsContainer?.firstChild || null, () => labAiText,
                     { intoAnchorParent: () => elements.trendsContainer, inline: true, auto: true });
             }
+        }
+        if (elements.contrastSafetyBtn) {
+            elements.contrastSafetyBtn.hidden = false;
+            elements.contrastSafetyBtn._aiCard = null;
+            // Auto-probe only — never triggers loadReportLazily on its own
+            // (unlike a real click via runContrastSafetyCheck): if the
+            // clinical record hasn't loaded yet, buildContrastSafetyText()
+            // still returns a valid (renal-only) text, just one that's very
+            // unlikely to already be cached, so this is a harmless no-op.
+            runAiSummary(elements.contrastSafetyBtn, 'contrast_safety',
+                () => elements.trendsContainer?.firstChild || null, buildContrastSafetyText,
+                { intoAnchorParent: () => elements.trendsContainer, inline: true, auto: true });
         }
     }
 
