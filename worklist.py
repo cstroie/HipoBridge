@@ -559,6 +559,88 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
 
 
 # ---------------------------------------------------------------------------
+# TEMPORARY: fake worklist for the "TEST" device profile (AE title TEST).
+# Every displayed/known field carries a value naming itself, so it's obvious on
+# the device screen which DICOM tag lands in which UI field. Remove after use.
+# ---------------------------------------------------------------------------
+
+def _build_test_datasets(modality: str) -> List['Dataset']:
+    """Three fake patients with every known worklist field filled in."""
+    now = datetime.now()
+    modality = (modality or 'US').upper()
+    residences = ('Inpatient', 'Outpatient', 'Inpatient')
+    priorities = ('ROUTINE', 'STAT', 'ROUTINE')
+    names = ('TEST^ALPHA^ONE', 'TEST^BRAVO^TWO', 'TEST^CHARLIE^THREE')
+    datasets = []
+    for n in (1, 2, 3):
+        t = lambda label: f'T{n}-{label}'
+        ds = Dataset()
+        ds.SpecificCharacterSet = 'ISO_IR 100'
+        ds.PatientName = names[n - 1]
+        ds.PatientID = f'TESTID00{n}'
+        ds.PatientBirthDate = f'{1960 + n * 10}0{n}1{n}'
+        ds.PatientBirthTime = f'0{n}3000'
+        ds.PatientSex = ('F', 'M', 'O')[n - 1]
+        ds.PatientAge = f'0{20 + n * 10}Y'
+        ds.PatientSize = str(1.5 + n / 10)
+        ds.PatientWeight = str(50 + n * 10)
+        ds.PatientAddress = t('ADDRESS')
+        ds.PatientTelephoneNumbers = t('PHONE')
+        ds.OtherPatientIDs = t('OTHERIDS')
+        ds.OtherPatientNames = t('OTHER^NAME')
+        ds.PatientBirthName = t('BIRTH^NAME')
+        ds.PatientMotherBirthName = t('MOTHER^NAME')
+        ds.MedicalRecordLocator = t('MEDRECLOC')
+        ds.MilitaryRank = t('MILRANK')
+        ds.BranchOfService = t('BRANCH')
+        ds.CountryOfResidence = t('COUNTRY')
+        ds.RegionOfResidence = t('REGION')
+        ds.EthnicGroup = t('ETHNIC')
+        ds.Occupation = t('OCCUPATION')
+        ds.PatientReligiousPreference = t('RELIGION')
+        ds.PatientComments = t('PATIENT-COMMENTS') + '\n' + t('COMMENTS-LINE2')
+        ds.ConfidentialityConstraintOnPatientDataDescription = t('CONFIDENTIAL')
+        ds.PatientInstitutionResidence = residences[n - 1]
+        ds.MedicalAlerts = t('MEDICAL-ALERTS')
+        ds.Allergies = t('ALLERGIES')
+        ds.SmokingStatus = ('YES', 'NO', 'UNKNOWN')[n - 1]
+        ds.AdditionalPatientHistory = t('ADDITIONAL-HISTORY') + '\n' + t('HISTORY-LINE2')
+        ds.PregnancyStatus = n
+        ds.LastMenstrualDate = f'2026010{n}'
+        ds.SpecialNeeds = t('SPECIAL-NEEDS')
+        ds.PatientState = t('PATIENT-STATE')
+        ds.AdmissionID = f'T{n}-ADMID'
+        ds.AdmittingDiagnosesDescription = t('ADMITTING-DIAG')
+        ds.AccessionNumber = f'TEST{n}'
+        ds.ReferringPhysicianName = f'REFERRING^T{n}'
+        ds.RequestingPhysician = f'REQUESTING^T{n}'
+        ds.RequestedProcedureDescription = t('REQ-PROC-DESC')
+        ds.RequestedProcedureID = f'TESTRP{n}'
+        ds.RequestedProcedureComments = t('REQ-PROC-COMMENTS')
+        ds.ImagingServiceRequestComments = t('IMG-SVC-COMMENTS')
+        ds.StudyInstanceUID = f'1.2.840.99999999.9.{n}'
+        ds.StudyDescription = t('STUDY-DESC')
+        ds.RequestedProcedurePriority = priorities[n - 1]
+        ds.ReasonForTheRequestedProcedure = t('REASON')
+        ds.InstitutionalDepartmentName = t('DEPARTMENT')
+        ds.OperatorsName = f'OPERATOR^T{n}'
+        sps = Dataset()
+        start = now + timedelta(minutes=15 * n)
+        sps.ScheduledProcedureStepStartDate = start.strftime('%Y%m%d')
+        sps.ScheduledProcedureStepStartTime = start.strftime('%H%M%S')
+        sps.Modality = modality
+        sps.ScheduledPerformingPhysicianName = f'PERFORMING^T{n}'
+        sps.ScheduledProcedureStepDescription = f'T{n}-SPS-DESC-{modality}'
+        sps.ScheduledProcedureStepID = f'TESTSPS{n}'
+        sps.ScheduledStationAETitle = ''
+        sps.ScheduledProcedureStepStatus = 'SCHEDULED'
+        sps.CommentsOnTheScheduledProcedureStep = t('SPS-COMMENTS')
+        ds.ScheduledProcedureStepSequence = Sequence([sps])
+        datasets.append(ds)
+    return datasets
+
+
+# ---------------------------------------------------------------------------
 # Thread-safe cache
 # ---------------------------------------------------------------------------
 
@@ -833,6 +915,21 @@ class WorklistServer:
                 calling_ae, calling_ae,
             )
             yield 0xA700, Dataset()   # C-FIND Failure — Refused: Out of Resources
+            return
+
+        # TEMPORARY: the TEST profile serves fake patients in whatever
+        # modality the device asks for (default US), bypassing Hipocrate.
+        if profile['name'].upper() == 'TEST':
+            sps_req = getattr(identifier, 'ScheduledProcedureStepSequence', None)
+            req_mod = str(getattr(sps_req[0], 'Modality', '') or '').strip() if sps_req else ''
+            modality = 'US' if req_mod in ('', '*') else req_mod
+            count = 0
+            for ds in _build_test_datasets(modality):
+                ds.ScheduledProcedureStepSequence[0].ScheduledStationAETitle = calling_ae
+                if self._matches_cfind(ds, identifier):
+                    yield 0xFF00, ds
+                    count += 1
+            logger.info("TEST profile: %d entries for modality %s", count, modality)
             return
 
         lab_ids = self._lab_ids_for_profile(profile)

@@ -77,7 +77,7 @@ def _find_profile(profiles: list, name: str) -> dict:
     return {'name': name, 'ae_title': needle, 'modality': None, 'wards': [], 'time_window_hours': 0.0}
 
 
-def _build_identifier(patient_name: str, date: str) -> 'Dataset':
+def _build_identifier(patient_name: str, date: str, modality: str = '') -> 'Dataset':
     identifier = Dataset()
     identifier.QueryRetrieveLevel = 'WORKLIST'
     identifier.PatientName        = patient_name or ''
@@ -85,7 +85,7 @@ def _build_identifier(patient_name: str, date: str) -> 'Dataset':
     identifier.AccessionNumber    = ''
     sps = Dataset()
     sps.ScheduledProcedureStepStartDate = date or ''
-    sps.Modality                        = ''
+    sps.Modality                        = modality or ''
     identifier.ScheduledProcedureStepSequence = Sequence([sps])
     return identifier
 
@@ -114,6 +114,12 @@ def _build_records(results: list) -> list:
             'allergies':             str(getattr(ds, 'Allergies', '')),
             'additional_history':    str(getattr(ds, 'AdditionalPatientHistory', '')),
             'other_patient_id':      str(getattr(ds, 'OtherPatientIDs', '')),
+            'medical_alerts':        str(getattr(ds, 'MedicalAlerts', '')),
+            'admitting_diagnosis':   str(getattr(ds, 'AdmittingDiagnosesDescription', '')),
+            'special_needs':         str(getattr(ds, 'SpecialNeeds', '')),
+            'patient_state':         str(getattr(ds, 'PatientState', '')),
+            'reason':                str(getattr(ds, 'ReasonForTheRequestedProcedure', '')),
+            'sps_comments':          str(getattr(sps, 'CommentsOnTheScheduledProcedureStep', '')),
         })
     return records
 
@@ -141,6 +147,11 @@ def _render_table(records: list) -> None:
                 print(f"{_indent}History: {line}")
         if r['other_patient_id']:
             print(f"{_indent}Other Patient ID: {r['other_patient_id']}")
+        for label, key in (('Medical alerts', 'medical_alerts'), ('Admitting diagnosis', 'admitting_diagnosis'),
+                           ('Special needs', 'special_needs'), ('Patient state', 'patient_state'),
+                           ('Reason', 'reason'), ('SPS comments', 'sps_comments')):
+            if r[key]:
+                print(f"{_indent}{label}: {r[key]}")
 
 
 def main() -> int:
@@ -153,6 +164,7 @@ def main() -> int:
     parser.add_argument('--host', default='127.0.0.1', help="MWL server host")
     parser.add_argument('--profile', help="Device profile name or AE title (skips the interactive picker)")
     parser.add_argument('--date', default='', help="ScheduledProcedureStepStartDate filter: YYYYMMDD or YYYYMMDD-YYYYMMDD")
+    parser.add_argument('--modality', default='', help="Modality to request, e.g. CT, US (the TEST profile serves fake patients in this modality)")
     parser.add_argument('--patient-name', default='', help="PatientName wildcard filter, e.g. POPESCU*")
     parser.add_argument('--format', choices=['table', 'json', 'yaml'], default='table',
                         help="Output format. json/yaml print only the result records to stdout "
@@ -199,7 +211,7 @@ def main() -> int:
     echo_ok = bool(echo_status) and echo_status.Status == 0x0000
     status(f"C-ECHO: {'OK' if echo_ok else f'FAILED (status={echo_status})'}")
 
-    identifier = _build_identifier(args.patient_name, args.date)
+    identifier = _build_identifier(args.patient_name, args.date, args.modality)
     results = list(assoc.send_c_find(identifier, ModalityWorklistInformationFind))
     assoc.release()
 
