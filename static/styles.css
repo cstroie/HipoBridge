@@ -4699,6 +4699,18 @@ dialog.report-editor-modal article > section {
     .exam-fields { grid-template-columns: 1fr; gap: 0; }
     .exam-fields dd { margin-bottom: var(--space-4); }
 }
+@media (max-width: 600px) {
+    .exam-list-header { flex-wrap: wrap; }
+    .exam-list-heading { flex: 1 1 100%; }
+    .exam-list-tools { flex: 1 1 100%; }
+    /* Fill the collapsed row: buttons share the width and center their
+       content (the desktop pill locks each to a fixed 84px, left-aligned) */
+    .exam-list-tools .btn-ai,
+    .exam-list-tools .btn-copy {
+        flex: 1 1 0;
+        justify-content: center;
+    }
+}
 @media print {
     body.print-exam-list {
         background: #fff;
