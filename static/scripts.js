@@ -6399,7 +6399,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const study = await _mdJson(`/api/study/${c.id}?justification=0`);
             const text = study ? _mdReportText(study) : '';
             if (!text) continue;
-            return { date: _mdIso(c.date_time),
+            return { id: c.id, code: c.barcode || '', date: _mdIso(c.date_time),
                      region: (c.regions || []).filter(Boolean).join(', '), text,
                      summary: study.summary || '' };
         }
@@ -6981,10 +6981,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!line) return;
         line.replaceChildren();
         if (!prev) { line.hidden = true; return; }
-        const head = document.createElement('span');
+        // The heading opens that exam's report modal, like the card's own
+        // request code does.
+        const head = document.createElement('button');
+        head.type = 'button';
         head.className = 'timeline-prev-head';
+        head.title = 'Open this exam';
         const when = prev.date ? formatDate(prev.date.replace(' ', 'T')) : '';
         head.textContent = ['Prev', el.dataset.modality, when, prev.region].filter(Boolean).join(' · ');
+        head.addEventListener('click', e => {
+            e.stopPropagation();
+            showRequestModal(prev.id, prev.code, el._patientName, el._req?.modality || '', head, '', '');
+        });
         line.appendChild(head);
         if (prev.summary) {
             const em = document.createElement('em');
