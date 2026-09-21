@@ -756,7 +756,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (schedulePrefetchQueue.length) queueSchedulePrefetchStep(gen, SCHEDULE_PREFETCH_IDLE_GATE);
     }
 
-    async function fetchServiceBundle() {
+    async function fetchRequestList() {
         if (cachedServiceRequests !== null) return cachedServiceRequests;
         const result = await fetchAnalysesData(pendingAnalysesData.patientCode);
         cachedServiceRequests = result;
@@ -791,7 +791,7 @@ document.addEventListener('DOMContentLoaded', function() {
     async function prefetchImaging(patientCode, gen) {
         if (gen !== dataGeneration) return;
         try {
-            const result = await fetchServiceBundle(); // memoized; also warms Laboratory
+            const result = await fetchRequestList(); // memoized; also warms Laboratory
             if (gen !== dataGeneration) return;
             if (pendingReportData) {
                 pendingReportData.analysesData = result.data || { requests: [] };
@@ -804,7 +804,7 @@ document.addEventListener('DOMContentLoaded', function() {
     async function prefetchLaboratory(patientData, gen) {
         if (gen !== dataGeneration) return;
         try {
-            await fetchServiceBundle(); // shares cachedServiceRequests with imaging
+            await fetchRequestList(); // shares cachedServiceRequests with imaging
             if (gen !== dataGeneration) return;
             const sd = new Date(); sd.setDate(sd.getDate() - 90);
             await apiFetch(`/api/observation?patient=${encodeURIComponent(patientData.id)}&start_date=${localDateStr(sd)}`);
@@ -846,7 +846,7 @@ document.addEventListener('DOMContentLoaded', function() {
         showLoading(`Loading imaging studies for ${patientLabel}…`);
         try {
             setLoadingStep('Querying Hipocrate for imaging requests…');
-            const result = await fetchServiceBundle();
+            const result = await fetchRequestList();
             const bundle = result.data || { requests: [] };
             const IMAGING = ['radio', 'ct', 'irm', 'eco', 'rads'];
             const entries = (bundle.requests || []).filter(e => IMAGING.includes(e.type));
@@ -874,7 +874,7 @@ document.addEventListener('DOMContentLoaded', function() {
         showLoading(`Loading lab results for ${patientLabel}…`);
         try {
             setLoadingStep('Querying Hipocrate for lab requests…');
-            const result = await fetchServiceBundle();
+            const result = await fetchRequestList();
             const bundle = result.data || { requests: [] };
             const LAB = ['lab'];
             const entries = (bundle.requests || []).filter(e => LAB.includes(e.type));
@@ -905,10 +905,10 @@ document.addEventListener('DOMContentLoaded', function() {
             // normally backfilled by the background schedulePrefetch imaging
             // fetch — but landing here (Report/AI tab) before that prefetch
             // finishes would otherwise build the clinical text, and its AI
-            // cache key, from zero imaging entries. fetchServiceBundle is
+            // cache key, from zero imaging entries. fetchRequestList is
             // memoized, so this is a no-op once the prefetch has already run.
             if (pendingAnalysesData) {
-                const result = await fetchServiceBundle();
+                const result = await fetchRequestList();
                 pendingReportData.analysesData = result.data || { requests: [] };
             }
             await loadAndDisplayReport(pendingReportData.patientData, pendingReportData.analysesData);
@@ -1627,7 +1627,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // DokuLLM ID stub: YYMMDD-family-given... — examDateIso is the exam's
-    // own date (ServiceRequest.authoredOn), not today's date.
+    // own date (the request's date_time), not today's date.
     function buildExamIdStub(patientData, examDateIso) {
         const dateStr = formatIdDate(examDateIso);
         const family = slugifyNamePart(patientData?.family_name);
@@ -4122,7 +4122,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Build a concise Markdown table (Test | Value | Reference) from the same
-    // presentedForm entries buildLabTable renders, grouped by section. The
+    // report forms buildLabTable renders, grouped by section. The
     // reference cell already carries the measurement unit.
     function buildLabMarkdown(forms) {
         const cell = s => (s || '').replace(/\s*\n+\s*/g, ' ').replace(/\|/g, '\\|').trim();
@@ -4518,7 +4518,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         // Patient/exam stub click target: bound to the whole title line, not
         // just .card-regions — that span is empty (zero-width, unclickable)
-        // whenever bodySite couldn't be resolved, which silently killed this
+        // whenever the regions list couldn't be resolved, which silently killed this
         // for any exam without a mapped region. typeText's own listener
         // (above) stops propagation, so clicking the modality name still
         // copies the DokuLLM ID; clicking anywhere else in the title —
