@@ -565,6 +565,63 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
 # the device screen which DICOM tag lands in which UI field. Remove after use.
 # ---------------------------------------------------------------------------
 
+# Every other worklist-relevant standard attribute (MWL IOD modules: patient,
+# visit, requested procedure, imaging service request, scheduled step), filled
+# by VR so a device's support can be discovered blindly.
+_TEST_EXTRA_KEYWORDS = (
+    'IssuerOfPatientID', 'TypeOfPatientID', 'PatientBodyMassIndex', 'ResponsiblePerson',
+    'ResponsibleOrganization', 'PatientSpeciesDescription', 'IssuerOfAdmissionID',
+    'ServiceEpisodeID', 'ServiceEpisodeDescription', 'VisitStatusID', 'StudyStatusID',
+    'StudyPriorityID', 'ScheduledStudyLocation', 'ScheduledStudyLocationAETitle',
+    'RequestedProcedureLocation', 'PatientTransportArrangements', 'ConfidentialityCode',
+    'ReportingPriority', 'NamesOfIntendedRecipientsOfResults',
+    'PlacerOrderNumberImagingServiceRequest', 'FillerOrderNumberImagingServiceRequest',
+    'OrderEnteredBy', 'OrderEntererLocation', 'OrderCallbackPhoneNumber',
+    'IssueDateOfImagingServiceRequest', 'IssueTimeOfImagingServiceRequest',
+    'ReasonForTheImagingServiceRequest', 'InstitutionName', 'InstitutionAddress', 'StationName',
+    'PerformingPhysicianName', 'NameOfPhysiciansReadingStudy', 'PhysiciansOfRecord',
+    'StudyID', 'StudyDate', 'StudyTime', 'PatientInsurancePlanCodeSequence',
+    'PatientPrimaryLanguageCodeSequence', 'AdmittingDiagnosesCodeSequence',
+    'RequestedProcedureCodeSequence', 'PatientSizeCodeSequence',
+)
+_TEST_EXTRA_SPS_KEYWORDS = (
+    'ScheduledProcedureStepEndDate', 'ScheduledProcedureStepEndTime', 'ScheduledStationName',
+    'ScheduledProcedureStepLocation', 'PreMedication', 'ScheduledProtocolCodeSequence',
+)
+_TEST_CS_VALUES = {'TypeOfPatientID': 'TEXT', 'VisitStatusID': 'CREATED',
+                   'StudyStatusID': 'CREATED', 'StudyPriorityID': 'MED'}
+_TEST_VR_MAX = {'LO': 64, 'SH': 16, 'ST': 1024, 'LT': 10240, 'PN': 64, 'AE': 16}
+
+
+def _test_fill(ds: 'Dataset', keywords, n: int) -> None:
+    """Set each keyword not already present, with a value derived from its VR."""
+    from pydicom.datadict import dictionary_VR, tag_for_keyword
+    for kw in keywords:
+        tag = tag_for_keyword(kw)
+        if tag is None or tag in ds:
+            continue
+        vr = dictionary_VR(tag)
+        label = f'T{n}-{kw.upper()}'
+        if vr == 'SQ':
+            item = Dataset()
+            item.CodeValue = label[:16]
+            item.CodingSchemeDesignator = 'TEST'
+            item.CodeMeaning = f'{label}-MEANING'[:64]
+            setattr(ds, kw, Sequence([item]))
+        elif vr == 'CS':
+            setattr(ds, kw, _TEST_CS_VALUES.get(kw, 'TEST'))
+        elif vr == 'DA':
+            setattr(ds, kw, f'2026010{n}')
+        elif vr == 'TM':
+            setattr(ds, kw, f'1{n}3000')
+        elif vr in ('DS', 'IS'):
+            setattr(ds, kw, str(20 + n))
+        elif vr == 'PN':
+            setattr(ds, kw, f'T{n}^{kw.upper()}'[:64])
+        elif vr in _TEST_VR_MAX:
+            setattr(ds, kw, label[:_TEST_VR_MAX[vr]])
+
+
 def _build_test_datasets(modality: str) -> List['Dataset']:
     """Three fake patients with every known worklist field filled in."""
     now = datetime.now()
@@ -599,7 +656,21 @@ def _build_test_datasets(modality: str) -> List['Dataset']:
         ds.EthnicGroup = t('ETHNIC')
         ds.Occupation = t('OCCUPATION')
         ds.PatientReligiousPreference = t('RELIGION')
-        ds.PatientComments = t('PATIENT-COMMENTS') + '\n' + t('COMMENTS-LINE2')
+        # Aplio a550 splits PatientComments into [Insurance] / [Patient Comment]
+        # (conformance Table 8.1-7): "Insurance=<info><LF><comment>".
+        ds.PatientComments = f"Insurance={t('INSURANCE')}\n" + t('PATIENT-COMMENTS') + '\n' + t('COMMENTS-LINE2')
+        # Blind guesses for the console's "Additional Information" / "Insurance".
+        ds.VisitComments = t('VISIT-COMMENTS')
+        ds.StudyComments = t('STUDY-COMMENTS')
+        ds.ReasonForStudy = t('REASON-FOR-STUDY')
+        ds.RequestingService = t('REQ-SERVICE')
+        ds.CurrentPatientLocation = t('CURRENT-LOCATION')
+        ds.RouteOfAdmissions = t('ROUTE-OF-ADM')
+        ds.AdmittingDate = '2026010' + str(n)
+        ds.ReferringPhysicianAddress = t('REFERRER-ADDRESS')
+        ds.ReferringPhysicianTelephoneNumbers = f'T{n}-REFPHONE'
+        ds.InsurancePlanIdentification = t('INSURANCE-PLAN-ID')
+        ds.RequestedContrastAgent = t('CONTRAST')
         ds.ConfidentialityConstraintOnPatientDataDescription = t('CONFIDENTIAL')
         ds.PatientInstitutionResidence = residences[n - 1]
         ds.MedicalAlerts = t('MEDICAL-ALERTS')
@@ -636,6 +707,12 @@ def _build_test_datasets(modality: str) -> List['Dataset']:
         sps.ScheduledStationAETitle = ''
         sps.ScheduledProcedureStepStatus = 'SCHEDULED'
         sps.CommentsOnTheScheduledProcedureStep = t('SPS-COMMENTS')
+        _test_fill(sps, _TEST_EXTRA_SPS_KEYWORDS, n)
+        _test_fill(ds, _TEST_EXTRA_KEYWORDS, n)
+        other = Dataset()
+        other.PatientID = f'T{n}-OTHERIDSEQ'
+        other.IssuerOfPatientID = 'TEST'
+        ds.OtherPatientIDsSequence = Sequence([other])
         ds.ScheduledProcedureStepSequence = Sequence([sps])
         datasets.append(ds)
     return datasets
