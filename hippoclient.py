@@ -3699,6 +3699,29 @@ class HippoClientCerere(HippoClient):
             if exams:
                 data.store_list("exams", exams)
 
+            # Patient's recent requests — the link strip cerere.asp renders by
+            # default: <a href="Cerere.asp?id=N"><b>EX6451</b>-10/09</a>. Date
+            # has no year. The current request is the one with a #d9fad7
+            # background; a trailing "*" / red colour marks a flagged one.
+            previous = []
+            for a in soup.find_all('a', href=re.compile(r'^Cerere\.asp\?id=\d+$', re.I)):
+                b = a.find('b')
+                m = re.search(r'id=(\d+)', a['href'])
+                if not b or not m:
+                    continue
+                style = (a.get('style') or '').replace(' ', '').lower()
+                rest = a.get_text(strip=True)[len(b.get_text(strip=True)):].lstrip('-')
+                entry = {
+                    'id': m.group(1),
+                    'code': b.get_text(strip=True),
+                    'day_month': rest.rstrip('*').strip(),
+                    'current': 'background-color:#d9fad7' in style,
+                    'flagged': rest.endswith('*') or 'color:red' in style,
+                }
+                previous.append(entry)
+            if previous:
+                data.store_list("request.previous", previous)
+
             # Radiology analyses — collect all Tip=1 validate calls and bi=1 edit calls
             # fn_validate_cerere('label', value, anl_id, id_grup, Tip=1)
             #   value=1 → not yet validated; value=0 → already validated

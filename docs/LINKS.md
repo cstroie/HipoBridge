@@ -44,7 +44,7 @@ Type codes: `radio`, `eco`, `ct`, `irm`, `rads`, `lab`, `rads`, `apa`.
 
 | HippoBridge endpoint | Hipocrate URL |
 |---|---|
-| `GET /api/request/{id}` | `/PARA/Printabile/BuletinSolicitare.asp?id={id}&type=63&IdP=70` |
+| `GET /api/request/{id}` | `/PARA/Printabile/BuletinSolicitare.asp?id={id}&type=63&IdP=70` (plus `request.previous` from `cerere.asp`, `id`, `code`, `day_month` only; full entries on `/patient` below) |
 | `GET /fhir/ServiceRequest/{id}` | same |
 
 Region, indication, and the true ordering physician ("Medic solicitant").
@@ -194,7 +194,7 @@ FHIR ServiceRequest status mapping:
 |---|---|
 | `GET /api/request/{id}/patient` | `/PARA/NOM/Listare/cerere.asp?id={id}` |
 
-Full request edit form. Returns patient name, CNP, demographics (derived from CNP), request date/time, priority, payment type, ordering physician, ward/section, clinical diagnosis, clinical indication, justification, request code, laboratory name, and exam list (when present). Also resolves the numeric `patient.id` — used by the Schedule tab to load a patient record. Returns an access-denied error for labs the authenticated user cannot view (e.g. Ecografie); use `/api/request/{id}` (BuletinSolicitare) as fallback for patient demographics in that case.
+Full request edit form. Returns patient name, CNP, demographics (derived from CNP), request date/time, priority, payment type, ordering physician, ward/section, clinical diagnosis, clinical indication, justification, request code, laboratory name, exam list (when present), and `request.previous` (the patient's recent-request link strip: `id`, `code`, `day_month` without year, `current`, `flagged`). Also resolves the numeric `patient.id` — used by the Schedule tab to load a patient record. Returns an access-denied error for labs the authenticated user cannot view (e.g. Ecografie); use `/api/request/{id}` (BuletinSolicitare) as fallback for patient demographics in that case.
 
 ---
 

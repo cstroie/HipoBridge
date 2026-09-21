@@ -274,6 +274,14 @@ async def get_request(request):
         return debug_resp
 
     parsed_data = await client.fetch_and_parse(id=id)
+    if parsed_data.get("status") != "error":
+        # Recent-requests strip only exists on cerere.asp. Best-effort: a
+        # Cerere failure (e.g. lab the user can't open) must not fail this route.
+        cerere_data = await HippoClientCerere(SERVICE_URL, request).fetch_and_parse(id=id)
+        previous = cerere_data.get("request.previous")
+        if previous:
+            parsed_data.store_list("request.previous", [
+                {k: e[k] for k in ("id", "code", "day_month")} for e in previous])
     return web_json_response(parsed_data)
 
 @require_auth
