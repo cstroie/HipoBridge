@@ -4309,6 +4309,15 @@ dialog.report-editor-modal article > section {
     .card-toolbar #scheduleMdPrintBtn::after {
         content: none;
     }
+    /* A toolbar with a single button next to a heading (the Profile "AI
+       Summary" panel) keeps its compact icon-only size, right-aligned by
+       the row's space-between, instead of stretching to the full width. */
+    .panel-heading-row .card-toolbar {
+        width: auto;
+    }
+    .panel-heading-row .card-toolbar .btn-ai {
+        flex: 0 0 auto;
+    }
 
     dialog.report-modal {
         width: 96vw;
@@ -4437,6 +4446,8 @@ dialog.report-editor-modal article > section {
 
     .patient-stats-strip {
         display: flex;
+        flex: 1 1 100%;
+        width: 100%;
         flex-wrap: wrap;
         justify-content: center;
         gap: var(--space-16) var(--space-8);
