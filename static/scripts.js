@@ -6910,18 +6910,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (_examCache[id].referrer) _applyReferrer(el, _examCache[id].referrer);
                 if (_examCache[id].age) _applyPatientAge(el, _examCache[id].age);
                 if (_examCache[id].triage) _applyTriage(el, _examCache[id].triage);
-                const cachedPrev = _examCache[id].prev;
-                if (!_prevRelevant(el._req)) {
-                    _applyPrevLine(el, null);
-                } else if (!_examCache[id].prevChecked) {
-                    // Not looked up yet (the row wasn't relevant when first seen)
-                    _loadPrevLine(el, _examCache[id]);
-                } else {
-                    // A summary still being generated for a row that was redrawn:
-                    // follow the same job so this new element updates too.
-                    if (cachedPrev?.pending) _autoSummarizePrev(cachedPrev, () => _applyPrevLine(el, cachedPrev));
-                    _applyPrevLine(el, cachedPrev);
-                }
+                _showCardLine(el, _examCache[id]);
                 return;
             }
             const examPromise = apiFetch(`/api/request/${id}`)
@@ -6960,7 +6949,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (cached.referrer) _applyReferrer(el, cached.referrer);
                 if (cached.age) _applyPatientAge(el, cached.age);
                 if (triage) _applyTriage(el, triage);
-                _loadPrevLine(el, cached);
+                _showCardLine(el, cached);
             });
         });
     }, { rootMargin: '200px' });
@@ -6989,9 +6978,46 @@ document.addEventListener('DOMContentLoaded', function() {
         return !_PREV_FINISHED_STATUSES.has(req?.status_code);
     }
 
+    // Fourth card line: the previous same-modality exam while the request is
+    // in flight, the request's own report once it is finished. Looked up once
+    // per row (prevChecked / ownChecked), then just re-shown on redraws.
+    function _showCardLine(el, cached) {
+        const key = _prevRelevant(el._req) ? 'prev' : 'own';
+        if (!cached[key + 'Checked']) {
+            (key === 'prev' ? _loadPrevLine : _loadOwnLine)(el, cached);
+            return;
+        }
+        const v = cached[key];
+        // A summary still being generated for a row that was redrawn: follow
+        // the same job so this new element updates too.
+        if (v?.pending) _autoSummarizePrev(v, () => _applyPrevLine(el, v));
+        _applyPrevLine(el, v);
+    }
+
+    // Finished request: its own report's AI summary (cached one, else queued)
+    function _loadOwnLine(el, cached) {
+        const req = el._req;
+        cached.ownChecked = true;
+        if (!_mdTypedModalities.has(_mdModalityGroup(req?.modality || ''))) return;
+        _enqueuePrev(async () => {
+            try {
+                const study = await _mdJson(`/api/study/${req.request_id}?justification=0`);
+                const text = study ? _mdReportText(study) : '';
+                cached.own = text ? {
+                    id: req.request_id, code: req.request_code || '', own: true,
+                    date: _mdIso(req.date_time), region: '', text, summary: study.summary || '',
+                } : null;
+            } catch (_) { cached.own = null; }
+            const own = cached.own;
+            if (own && !own.summary && _isMeaningfulText(own.text)) {
+                _autoSummarizePrev(own, () => _applyPrevLine(el, own));
+            }
+            _applyPrevLine(el, own);
+        });
+    }
+
     function _loadPrevLine(el, cached) {
         const req = el._req;
-        if (!_prevRelevant(req)) return;
         cached.prevChecked = true;
         const modality = _mdModalityGroup(req?.modality || '');
         if (!cached.hasPrev || !cached.patientId || !_mdTypedModalities.has(modality)) {
@@ -7046,7 +7072,9 @@ document.addEventListener('DOMContentLoaded', function() {
         head.className = 'timeline-prev-head';
         head.title = 'Open this exam';
         const when = prev.date ? formatDate(prev.date.replace(' ', 'T')) : '';
-        head.textContent = ['Prev', el.dataset.modality, when, prev.region].filter(Boolean).join(' · ');
+        head.textContent = prev.own
+            ? 'Report'
+            : ['Prev', el.dataset.modality, when, prev.region].filter(Boolean).join(' · ');
         head.addEventListener('click', e => {
             e.stopPropagation();
             showRequestModal(prev.id, prev.code, el._patientName, el._req?.modality || '', head, '', '');
