@@ -3092,6 +3092,30 @@ select {
     margin-top: var(--space-4);
 }
 
+.timeline-card-prev {
+    margin-top: var(--space-4);
+    font: 500 var(--font-size-13) 'Inter', sans-serif;
+    color: var(--ink-3);
+    line-height: 1.35;
+}
+.timeline-card-prev[hidden] { display: none; }
+.timeline-prev-head { font-weight: 600; color: var(--ink-2); }
+/* With an AI summary the whole line (heading + italic summary) is clamped to
+   three lines until tapped */
+.timeline-prev-text { font-style: italic; }
+.timeline-card-prev:has(.timeline-prev-text) {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    cursor: pointer;
+}
+.timeline-card-prev.expanded:has(.timeline-prev-text) {
+    display: block;
+    -webkit-line-clamp: unset;
+}
+.timeline-prev-summarize { font-size: inherit; }
+
 .timeline-indication {
     font-style: italic;
     color: var(--ink-3);
@@ -4293,6 +4317,7 @@ dialog.report-editor-modal article > section {
     .timeline-card-patient { flex: 1; min-width: 0; }
     .timeline-status-badge { grid-area: badge; align-self: start; }
     .timeline-card-region { grid-area: region; margin-top: 0; }
+    .timeline-card-prev { grid-column: 2 / -1; margin-top: 0; }
     /* Not part of the template above, so it auto-places into an implicit
        3rd row — just needs to span every column to read full-width */
     .timeline-card-meta { grid-column: 1 / -1; }

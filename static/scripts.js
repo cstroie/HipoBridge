@@ -6243,6 +6243,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // An open exam list stays visible during a refresh and is rebuilt
         // in place from the new entries.
         const listOpen = !!elements.scheduleMdPanel && !elements.scheduleMdPanel.hidden;
+        if (force) _mdPatientLists.clear(); // a refresh may bring new exams
         const params = new URLSearchParams();
         if (startDate)   params.set('start_date', startDate);
         if (endDate)     params.set('end_date', endDate);
@@ -6381,6 +6382,30 @@ document.addEventListener('DOMContentLoaded', function() {
         return _mdPatientLists.get(key);
     }
 
+    // Newest earlier exam of the same modality that actually has report text
+    // (exams without one, e.g. partial/unwritten reports, are skipped), with
+    // its cached AI summary when the server has one. Shared by the exam list
+    // and the schedule cards. Returns {date, region, text, summary} or null.
+    async function _findPreviousExam(requestId, dateTime, modality, patientId) {
+        const list = await _mdPatientList(patientId, modality);
+        const cur = _mdIso(dateTime);
+        const candidates = list
+            .filter(e => e.id !== requestId
+                && _mdModalityGroup(e.type) === modality
+                && _mdIso(e.date_time) < cur)
+            .sort((a, b) => _mdIso(b.date_time).localeCompare(_mdIso(a.date_time)))
+            .slice(0, 5);
+        for (const c of candidates) {
+            const study = await _mdJson(`/api/study/${c.id}?justification=0`);
+            const text = study ? _mdReportText(study) : '';
+            if (!text) continue;
+            return { date: _mdIso(c.date_time),
+                     region: (c.regions || []).filter(Boolean).join(', '), text,
+                     summary: study.summary || '' };
+        }
+        return null;
+    }
+
     async function _mdRowData(r) {
         const out = { name: r.patient_name || '', ward: r.section || '',
                       modalityLabel: r.laboratory || '', sex: '', age: '', diagnosis: '',
@@ -6409,25 +6434,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const firstTime = Array.isArray(strip) && strip.length === 1
                 && String(strip[0].id) === String(r.request_id);
             if (p.id && modality && !firstTime) {
-                const list = await _mdPatientList(p.id, modality);
-                const cur = _mdIso(r.date_time);
-                const candidates = list
-                    .filter(e => e.id !== r.request_id
-                        && _mdModalityGroup(e.type) === modality
-                        && _mdIso(e.date_time) < cur)
-                    .sort((a, b) => _mdIso(b.date_time).localeCompare(_mdIso(a.date_time)))
-                    .slice(0, 5);
-                // Newest earlier exam that actually has report text; exams
-                // without one (e.g. partial/unwritten reports) are skipped.
-                for (const c of candidates) {
-                    const study = await _mdJson(`/api/study/${c.id}?justification=0`);
-                    const text = study ? _mdReportText(study) : '';
-                    if (!text) continue;
-                    out.prev = { date: _mdIso(c.date_time),
-                                 region: (c.regions || []).filter(Boolean).join(', '), text,
-                                 summary: study.summary || '' };
-                    break;
-                }
+                out.prev = await _findPreviousExam(r.request_id, r.date_time, modality, p.id);
             }
         } catch (_) { out.failed = true; }
         return out;
@@ -6823,6 +6830,8 @@ document.addEventListener('DOMContentLoaded', function() {
         regionLine._requesterSep = seps[1] || null;
         regionLine._nameBtn = nameBtn;
         regionLine._patientName = patientName;
+        regionLine._prevLine = row.querySelector('.timeline-card-prev');
+        regionLine._req = r;
 
         // Analysis count ("Numar analize") — available immediately from the
         // same listing fetch as everything else above (no lazy fetch needed
@@ -6888,6 +6897,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (_examCache[id].referrer) _applyReferrer(el, _examCache[id].referrer);
                 if (_examCache[id].age) _applyPatientAge(el, _examCache[id].age);
                 if (_examCache[id].triage) _applyTriage(el, _examCache[id].triage);
+                _applyPrevLine(el, _examCache[id].prev);
                 return;
             }
             const examPromise = apiFetch(`/api/request/${id}`)
@@ -6898,7 +6908,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     const indication = _isMeaningfulText(rq.indication) ? rq.indication : '';
                     const referrer = rq.requester || '';
                     const age = data?.patient?.age || '';
-                    return { regions, indication, referrer, age };
+                    // Worth looking for a previous exam only when the recent-
+                    // requests strip lists something besides this request.
+                    const strip = rq.previous;
+                    const hasPrev = Array.isArray(strip) && strip.some(e => String(e.id) !== String(id));
+                    return { regions, indication, referrer, age, patientId: data?.patient?.id || '', hasPrev };
                 })
                 .catch(() => ({ regions: [], indication: '', referrer: '', age: '' }));
 
@@ -6922,9 +6936,87 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (cached.referrer) _applyReferrer(el, cached.referrer);
                 if (cached.age) _applyPatientAge(el, cached.age);
                 if (triage) _applyTriage(el, triage);
+                _loadPrevLine(el, cached);
             });
         });
     }, { rootMargin: '200px' });
+
+    // ── Previous exam (same modality) on the schedule card ──
+    // Looked up lazily per row, after the row's own request fetch tells us the
+    // patient and that earlier requests exist. Imaging modalities only (the
+    // lab list isn't type-filterable), two lookups in flight at a time.
+    const _prevQueue = [];
+    let _prevActive = 0;
+    function _enqueuePrev(task) {
+        _prevQueue.push(task);
+        (function pump() {
+            while (_prevActive < 2 && _prevQueue.length) {
+                const next = _prevQueue.shift();
+                _prevActive++;
+                next().finally(() => { _prevActive--; pump(); });
+            }
+        })();
+    }
+
+    function _loadPrevLine(el, cached) {
+        const req = el._req;
+        const modality = _mdModalityGroup(req?.modality || '');
+        if (!cached.hasPrev || !cached.patientId || !_mdTypedModalities.has(modality)) {
+            cached.prev = null;
+            return;
+        }
+        _enqueuePrev(async () => {
+            try {
+                cached.prev = await _findPreviousExam(req.request_id, req.date_time, modality, cached.patientId);
+            } catch (_) { cached.prev = null; }
+            _applyPrevLine(el, cached.prev);
+        });
+    }
+
+    // Fourth card line: "Prev CT · 12 Jun 2026 · abdomen" + the AI summary
+    // (italic, clamped, tap to expand), or a Summarize link when there is a
+    // report but no summary yet. Hidden when there is no previous exam.
+    function _applyPrevLine(el, prev) {
+        const line = el._prevLine;
+        if (!line) return;
+        line.replaceChildren();
+        if (!prev) { line.hidden = true; return; }
+        const head = document.createElement('span');
+        head.className = 'timeline-prev-head';
+        const when = prev.date ? formatDate(prev.date.replace(' ', 'T')) : '';
+        head.textContent = ['Prev', el.dataset.modality, when, prev.region].filter(Boolean).join(' · ');
+        line.appendChild(head);
+        if (prev.summary) {
+            const em = document.createElement('em');
+            em.className = 'timeline-prev-text';
+            em.textContent = prev.summary;
+            line.append(' — ', em);
+            line.classList.remove('expanded');
+            line.onclick = () => line.classList.toggle('expanded');
+        } else {
+            line.onclick = null;
+            line.append(' — ');
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn-link timeline-prev-summarize';
+            btn.textContent = 'Summarize';
+            btn.addEventListener('click', async e => {
+                e.stopPropagation();
+                btn.disabled = true;
+                btn.textContent = 'Summarizing…';
+                try {
+                    prev.summary = await aiSummarize('imaging', prev.text);
+                    _applyPrevLine(el, prev);
+                } catch (err) {
+                    btn.disabled = false;
+                    btn.textContent = 'Summarize';
+                    showToast(`AI summary failed: ${err.message || err}`, 'error');
+                }
+            });
+            line.appendChild(btn);
+        }
+        line.hidden = false;
+    }
 
     // Lazy PACS study-check lookup (see pacs.py / triggerPacsRefresh above):
     // one GET /api/pacs/<id> per badge as it scrolls into view, same
