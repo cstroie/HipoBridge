@@ -343,7 +343,7 @@ document.addEventListener('DOMContentLoaded', function() {
     ];
 
     // Generation counter for the on-demand schedule exam list; must be declared
-    // before initApp() runs (fetchSchedule -> hideScheduleMarkdown uses it).
+    // before initApp() runs (fetchSchedule -> buildScheduleMarkdown uses it).
     let scheduleMdRun = 0;
     const scheduleMdState = { rows: [], els: [] };
 
@@ -533,7 +533,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
         if (elements.scheduleMdBtn) {
-            elements.scheduleMdBtn.addEventListener('click', buildScheduleMarkdown);
+            elements.scheduleMdBtn.addEventListener('click', () => buildScheduleMarkdown());
         }
         if (elements.scheduleMdAiBtn) {
             elements.scheduleMdAiBtn.addEventListener('click', summarizeScheduleMdReports);
@@ -6374,7 +6374,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function fetchSchedule(startDate, endDate, force = false, patientText = null, labId = null, sectionName = null, status = null, limit = null) {
         if (!elements.scheduleBody) return;
-        hideScheduleMarkdown();
+        // An open exam list stays visible during a refresh and is rebuilt
+        // in place from the new entries.
+        const listOpen = !!elements.scheduleMdPanel && !elements.scheduleMdPanel.hidden;
         const params = new URLSearchParams();
         if (startDate)   params.set('start_date', startDate);
         if (endDate)     params.set('end_date', endDate);
@@ -6397,6 +6399,7 @@ document.addEventListener('DOMContentLoaded', function() {
             renderSchedule();
             if (elements.scheduleTable) elements.scheduleTable.dataset.loaded = '1';
             startSchedulePrefetch(scheduleEntries);
+            if (listOpen) buildScheduleMarkdown(true);
         } catch (err) {
             showToast(`Failed to load schedule: ${err.message}`, 'error');
         } finally {
@@ -6732,19 +6735,25 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    async function buildScheduleMarkdown() {
+    // silent: rebuild after a schedule refresh — no loading overlay or scroll,
+    // and the current list stays until the new one is ready.
+    async function buildScheduleMarkdown(silent = false) {
         const entries = scheduleEntries.slice();
-        if (!entries.length) { showToast('No schedule entries to list', 'warning'); return; }
+        if (!entries.length) {
+            if (silent) hideScheduleMarkdown();
+            else showToast('No schedule entries to list', 'warning');
+            return;
+        }
         const run = ++scheduleMdRun;
         const btn = elements.scheduleMdBtn;
         btn.disabled = true;
         _mdPatientLists.clear();
         let done = 0;
-        showLoading('Building exam list…');
+        if (!silent) showLoading('Building exam list…');
         try {
             const results = await limitedMap(entries, 4, async r => {
                 const d = await _mdRowData(r);
-                if (run === scheduleMdRun) setLoadingStep(`${++done}/${entries.length}`);
+                if (run === scheduleMdRun && !silent) setLoadingStep(`${++done}/${entries.length}`);
                 return d;
             });
             if (run !== scheduleMdRun) return;
@@ -6758,12 +6767,12 @@ document.addEventListener('DOMContentLoaded', function() {
             elements.scheduleMdSub.textContent = subtitle;
             _mdRefreshMarkdown();
             elements.scheduleMdPanel.hidden = false;
-            elements.scheduleMdPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            if (!silent) elements.scheduleMdPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
             _mdApplyCachedSummaries(run).catch(() => {});
         } catch (err) {
             showToast(`Failed to build exam list: ${err.message}`, 'error');
         } finally {
-            hideLoading();
+            if (!silent) hideLoading();
             btn.disabled = false;
         }
     }
