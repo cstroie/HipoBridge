@@ -6387,12 +6387,47 @@ document.addEventListener('DOMContentLoaded', function() {
         catch (err) { /* best-effort; ignore */ }
     }
 
+    function wardFamily(section) {
+        // Extract base ward name by stripping trailing Roman numeral (I-X).
+        // E.g. 'CHIRURGIE I' -> 'CHIRURGIE', 'UPU' -> 'UPU'.
+        return section.replace(/\s+(X{0,3}(IX|IV|V?I{0,3}))$/i, '');
+    }
+
     function populateSectionFilter(entries) {
         if (!elements.scheduleSectionFilter) return;
         const sections = [...new Set(entries.map(r => r.note?.[0]?.text || '').filter(Boolean))].sort();
         const current = elements.scheduleSectionFilter.value;
         elements.scheduleSectionFilter.innerHTML = '<option value="">All wards</option>';
+
+        // Group sections by family name to synthesize combined entries.
+        const familyMap = new Map(); // family -> Set of real sections
         sections.forEach(s => {
+            const family = wardFamily(s);
+            if (!familyMap.has(family)) {
+                familyMap.set(family, new Set());
+            }
+            familyMap.get(family).add(s);
+        });
+
+        // Build final option list: real sections + synthetic family entries
+        // (where family has 2+ members and the family name itself is not already real).
+        const optionValues = new Set();
+        const toRender = [];
+
+        sections.forEach(s => {
+            optionValues.add(s);
+            toRender.push(s);
+        });
+
+        // Add synthetic family entries where needed.
+        familyMap.forEach((members, family) => {
+            if (members.size >= 2 && !optionValues.has(family)) {
+                toRender.push(family);
+            }
+        });
+
+        // Sort the final list and render.
+        toRender.sort().forEach(s => {
             const opt = document.createElement('option');
             opt.value = s;
             opt.textContent = s;

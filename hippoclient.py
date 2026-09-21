@@ -5267,6 +5267,17 @@ class HippoClientSchedule(HippoClient):
             fhir_status = 'active'
         return fhir_status
 
+    @staticmethod
+    def _ward_family(section: str) -> str:
+        """Extract the base ward name by stripping a trailing Roman numeral suffix.
+        E.g. 'CHIRURGIE I' -> 'CHIRURGIE', 'UPU' -> 'UPU' (unchanged).
+        Used to group numbered ward variants (I, II, III, ..., IX, X) together
+        for filtering.
+        """
+        import re
+        # Match trailing space + Roman numeral (I-X, case-insensitive)
+        return re.sub(r'\s+(X{0,3}(IX|IV|V?I{0,3}))$', '', section, flags=re.IGNORECASE)
+
     def _apply_filters(self, requests: list, section_name=None, status=None) -> list:
         """Server-side filtering shared by /api/schedule and /fhir/Schedule so both
         endpoints behave identically regardless of output format.
@@ -5275,10 +5286,17 @@ class HippoClientSchedule(HippoClient):
         frontend's multi-select status chips (any combination of "In lab" +
         "In progress" + ...) can be expressed as one request — a bare single
         status still works unchanged, since splitting it on ',' is a no-op.
+
+        section_name can be an exact ward name (e.g. 'CHIRURGIE I') matching only
+        that ward, or a ward family name (e.g. 'CHIRURGIE') synthesized by the
+        frontend when 2+ variants exist, which matches all variants.
         """
         section_name = (section_name or '').strip()
         if section_name:
-            requests = [r for r in requests if (r.get('section') or '') == section_name]
+            requests = [r for r in requests if (
+                (r.get('section') or '') == section_name or
+                self._ward_family(r.get('section') or '') == section_name
+            )]
         statuses = {s.strip() for s in (status or '').split(',') if s.strip()}
         if statuses:
             requests = [r for r in requests if self._derive_fhir_status(r) in statuses]
