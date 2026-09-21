@@ -562,16 +562,22 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                     </div>
 
                     <!-- On-demand markdown list of the displayed exams (built by #scheduleMdBtn) -->
-                    <section id="scheduleMdPanel" class="ai-summary-card tab-card" hidden>
-                        <div class="ai-summary-header">
-                            <span class="ai-summary-badge" id="scheduleMdTitle">Exam list</span>
-                            <div class="card-toolbar">
+                    <section id="scheduleMdPanel" class="exam-list" hidden>
+                        <header class="exam-list-header">
+                            <div class="exam-list-heading">
+                                <h2 class="exam-list-title" id="scheduleMdTitle">Exam list</h2>
+                                <p class="exam-list-sub" id="scheduleMdSub"></p>
+                            </div>
+                            <div class="card-toolbar exam-list-tools">
+                                <button type="button" class="btn-copy" id="scheduleMdPrintBtn" aria-label="Print exam list" title="Print exam list">
+                                    <i class="fas fa-print" aria-hidden="true"></i>
+                                </button>
                                 <button type="button" class="btn-copy" id="scheduleMdCopyBtn" aria-label="Copy exam list as Markdown" title="Copy exam list as Markdown">
                                     <i class="fas fa-copy" aria-hidden="true"></i>
                                 </button>
                             </div>
-                        </div>
-                        <div class="ai-summary-body markdown-content" id="scheduleMdBody"></div>
+                        </header>
+                        <div class="exam-list-body" id="scheduleMdBody"></div>
                     </section>
                 </section>
 

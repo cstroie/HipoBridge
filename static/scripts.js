@@ -122,6 +122,8 @@ document.addEventListener('DOMContentLoaded', function() {
         scheduleMdPanel: document.getElementById('scheduleMdPanel'),
         scheduleMdBody: document.getElementById('scheduleMdBody'),
         scheduleMdTitle: document.getElementById('scheduleMdTitle'),
+        scheduleMdSub: document.getElementById('scheduleMdSub'),
+        scheduleMdPrintBtn: document.getElementById('scheduleMdPrintBtn'),
         scheduleMdCopyBtn: document.getElementById('scheduleMdCopyBtn'),
         schedulePatientFilter: document.getElementById('schedulePatientFilter'),
         scheduleLabFilter:     document.getElementById('scheduleLabFilter'),
@@ -530,6 +532,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         if (elements.scheduleMdBtn) {
             elements.scheduleMdBtn.addEventListener('click', buildScheduleMarkdown);
+        }
+        if (elements.scheduleMdPrintBtn) {
+            elements.scheduleMdPrintBtn.addEventListener('click', () => {
+                document.body.classList.add('print-exam-list');
+                window.print();
+            });
+            window.addEventListener('afterprint', () => document.body.classList.remove('print-exam-list'));
         }
         if (elements.scheduleMdCopyBtn) {
             elements.scheduleMdCopyBtn.addEventListener('click', () =>
@@ -6532,22 +6541,99 @@ document.addEventListener('DOMContentLoaded', function() {
         return out;
     }
 
-    function _mdEntryBlock(d) {
+    function _mdFallbackRow(r) {
+        return { name: r.subject?.display || '', ward: r.note?.[0]?.text || '',
+                 modalityLabel: r.code?.text || '', sex: '', age: '', diagnosis: '',
+                 indication: '', prev: null, failed: true };
+    }
+
+    // Presentation-neutral view of one row, shared by the markdown and DOM
+    // renderers so both always show the same fields.
+    function _mdView(d) {
         const who = [d.sex, d.age && `${d.age} y`].filter(Boolean).join(', ');
-        const head = `### ${d.name || '(unnamed)'}${who ? ' — ' + who : ''}${d.ward ? ' · ' + d.ward : ''}`;
-        const lines = [head, ''];
-        lines.push(`**Exam:** ${d.modalityLabel}`);
-        if (d.diagnosis) lines.push(`**Diagnosis:** ${d.diagnosis}`);
-        if (d.indication && d.indication.trim().toLowerCase() !== d.diagnosis.trim().toLowerCase()) lines.push(`**Indication:** ${d.indication}`);
+        const fields = [];
+        if (d.diagnosis) fields.push(['Diagnosis', d.diagnosis]);
+        if (d.indication && d.indication.trim().toLowerCase() !== d.diagnosis.trim().toLowerCase()) {
+            fields.push(['Indication', d.indication]);
+        }
+        return {
+            name: d.name || '(unnamed)',
+            meta: [who, d.ward, d.modalityLabel].filter(Boolean).join(' · '),
+            fields,
+            prevLabel: `Previous ${d.modalityLabel}`,
+            prevWhen: d.prev ? [d.prev.date, d.prev.region].filter(Boolean).join(' · ') : '',
+            prevText: d.prev?.text || '',
+            prevNote: d.prev ? 'No report text' : 'None found',
+            showPrev: !d.failed || !!d.prev,
+        };
+    }
+
+    function _mdEntryMarkdown(d) {
+        const v = _mdView(d);
+        const lines = [`### ${v.name}`];
+        if (v.meta) lines.push(`_${v.meta}_`);
+        lines.push('');
+        v.fields.forEach(([k, val]) => lines.push(`**${k}:** ${val}`));
         if (d.failed) lines.push('_(details unavailable)_');
-        if (d.prev) {
-            lines.push(`**Previous ${d.modalityLabel}:** ${[d.prev.date, d.prev.region].filter(Boolean).join(' · ')}`);
-            if (d.prev.text) lines.push('', d.prev.text.split('\n').map(l => '> ' + l).join('\n'));
-            else lines.push('_(no report text)_');
-        } else if (!d.failed) {
-            lines.push(`**Previous ${d.modalityLabel}:** none found`);
+        if (v.showPrev) {
+            lines.push(`**${v.prevLabel}:** ${v.prevWhen || v.prevNote}`);
+            if (v.prevText) lines.push('', v.prevText.split('\n').map(l => '> ' + l).join('\n'));
         }
         return lines.join('\n');
+    }
+
+    function _mdEntryEl(d) {
+        const v = _mdView(d);
+        const el = (tag, cls, text) => {
+            const n = document.createElement(tag);
+            if (cls) n.className = cls;
+            if (text != null) n.textContent = text;
+            return n;
+        };
+        const art = el('article', 'exam-entry');
+        const head = el('header', 'exam-entry-head');
+        head.append(el('h3', 'exam-name', v.name));
+        if (v.meta) head.append(el('p', 'exam-meta', v.meta));
+        art.append(head);
+
+        if (v.fields.length) {
+            const dl = el('dl', 'exam-fields');
+            v.fields.forEach(([k, val]) => dl.append(el('dt', null, k), el('dd', null, val)));
+            art.append(dl);
+        }
+        if (d.failed) art.append(el('p', 'exam-note', 'Details unavailable'));
+
+        if (v.showPrev) {
+            const prev = el('section', 'exam-prev');
+            const ph = el('div', 'exam-prev-head');
+            ph.append(el('span', 'exam-prev-label', v.prevLabel));
+            if (v.prevWhen) ph.append(el('span', 'exam-prev-when', v.prevWhen));
+            prev.append(ph);
+            if (v.prevText) {
+                const body = el('div', 'exam-prev-text');
+                body.innerHTML = marked.parse(v.prevText.replace(/\n{2,}/g, '\n'));
+                prev.append(body);
+            } else {
+                prev.append(el('p', 'exam-note', v.prevNote));
+            }
+            art.append(prev);
+        }
+        return art;
+    }
+
+    function _mdSubtitle(count) {
+        const ward = elements.scheduleSectionFilter?.value || '';
+        const lab = elements.scheduleLabFilter;
+        const modality = lab?.value ? lab.options[lab.selectedIndex].text : '';
+        const from = elements.scheduleStartDate?.value || '', to = elements.scheduleEndDate?.value || '';
+        const period = from && to && from !== to ? `${from} – ${to}` : (from || to);
+        return [
+            `${count} exam${count !== 1 ? 's' : ''}`,
+            ward && `Ward: ${ward}`,
+            modality && `Modality: ${modality}`,
+            period && `Period: ${period}`,
+            `Generated ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`,
+        ].filter(Boolean).join(' · ');
     }
 
     async function buildScheduleMarkdown() {
@@ -6560,17 +6646,18 @@ document.addEventListener('DOMContentLoaded', function() {
         let done = 0;
         showLoading('Building exam list…');
         try {
-            const rows = await limitedMap(entries, 4, async r => {
+            const results = await limitedMap(entries, 4, async r => {
                 const d = await _mdRowData(r);
                 if (run === scheduleMdRun) setLoadingStep(`${++done}/${entries.length}`);
                 return d;
             });
             if (run !== scheduleMdRun) return;
-            const md = rows.map((d, i) => _mdEntryBlock(d || { name: entries[i].subject?.display || '', failed: true,
-                                                              modalityLabel: entries[i].code?.text || '' })).join('\n\n---\n\n');
-            elements.scheduleMdBody.innerHTML = marked.parse(md);
-            elements.scheduleMdPanel.dataset.markdown = md;
-            elements.scheduleMdTitle.textContent = `Exam list · ${entries.length} exam${entries.length !== 1 ? 's' : ''}`;
+            const rows = results.map((d, i) => d || _mdFallbackRow(entries[i]));
+            const subtitle = _mdSubtitle(rows.length);
+            elements.scheduleMdBody.replaceChildren(...rows.map(_mdEntryEl));
+            elements.scheduleMdSub.textContent = subtitle;
+            elements.scheduleMdPanel.dataset.markdown =
+                `# Exam list\n\n_${subtitle}_\n\n` + rows.map(_mdEntryMarkdown).join('\n\n---\n\n');
             elements.scheduleMdPanel.hidden = false;
             elements.scheduleMdPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
         } catch (err) {
