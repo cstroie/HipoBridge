@@ -807,7 +807,7 @@ document.addEventListener('DOMContentLoaded', function() {
             await fetchServiceBundle(); // shares cachedServiceRequests with imaging
             if (gen !== dataGeneration) return;
             const sd = new Date(); sd.setDate(sd.getDate() - 90);
-            await apiFetch(`/fhir/Observation?patient=${encodeURIComponent(patientData.id)}&start_date=${localDateStr(sd)}`);
+            await apiFetch(`/api/observation?patient=${encodeURIComponent(patientData.id)}&start_date=${localDateStr(sd)}`);
         } catch (err) {
             log('Prefetch laboratory failed (silent):', err);
         }
@@ -2804,12 +2804,11 @@ document.addEventListener('DOMContentLoaded', function() {
             // the H/L flag + colour already say "abnormal"; the exact normal
             // range is one tap away in the dedicated Lab tab.
             function isAbnormalObservation(obs) {
-                const flag = obs.interpretation?.[0]?.text;
-                if (flag === 'H' || flag === 'L') return true;
-                const v = obs.valueQuantity?.value;
+                if (obs.flag === 'H' || obs.flag === 'L') return true;
+                const v = obs.value;
                 if (v == null) return false;
-                const low = obs.referenceRange?.[0]?.low?.value;
-                const high = obs.referenceRange?.[0]?.high?.value;
+                const low = obs.low;
+                const high = obs.high;
                 return (low != null && v < low) || (high != null && v > high);
             }
 
@@ -2822,10 +2821,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 // overwrite the other as "the latest" for that name.
                 const latestNumeric = new Map();
                 for (const obs of observations) {
-                    const name = obs.code?.text;
-                    const date = obs.effectiveDateTime || '';
-                    const section = obs.category?.[0]?.text || '';
-                    if (!name || !date || obs.valueQuantity?.value == null) continue;
+                    const name = obs.analyte;
+                    const date = obs.date || '';
+                    const section = obs.section || '';
+                    if (!name || !date || obs.value == null) continue;
                     const key = `${section} ${name}`;
                     const prev = latestNumeric.get(key);
                     if (!prev || date > prev.date) latestNumeric.set(key, { obs, date, section });
@@ -2833,12 +2832,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 const items = [];
                 for (const { obs, date, section } of latestNumeric.values()) {
                     if (!isAbnormalObservation(obs)) continue;
-                    const v = obs.valueQuantity.value;
-                    const unit = obs.valueQuantity.unit || '';
-                    const flag = obs.interpretation?.[0]?.text
-                        || (obs.referenceRange?.[0]?.low?.value != null && v < obs.referenceRange[0].low.value ? 'L'
-                            : obs.referenceRange?.[0]?.high?.value != null && v > obs.referenceRange[0].high.value ? 'H' : '');
-                    items.push({ name: obs.code.text, date, section, value: `${v}${unit ? ' ' + unit : ''}`, flag });
+                    const v = obs.value;
+                    const unit = obs.unit || '';
+                    const flag = obs.flag
+                        || (obs.low != null && v < obs.low ? 'L'
+                            : obs.high != null && v > obs.high ? 'H' : '');
+                    items.push({ name: obs.analyte, date, section, value: `${v}${unit ? ' ' + unit : ''}`, flag });
                 }
                 // Section, then most-recent date first within each section.
                 items.sort((a, b) => a.section.localeCompare(b.section) || b.date.localeCompare(a.date));
@@ -2921,10 +2920,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (periodStart) {
                     const params = new URLSearchParams({ patient: pid, start_date: localDateStr(new Date(periodStart)) });
                     if (periodEnd) params.set('end_date', localDateStr(new Date(periodEnd)));
-                    const labResp = await apiFetch(`/fhir/Observation?${params}`);
+                    const labResp = await apiFetch(`/api/observation?${params}`);
                     if (labResp.ok) {
-                        const labBundle = await labResp.json();
-                        labItems = collectLabItems((labBundle.entry || []).map(e => e.resource).filter(Boolean));
+                        const labData = await labResp.json();
+                        labItems = collectLabItems(labData.observations || []);
                         labsMd = labItemsToMarkdown(labItems);
                     }
                 }
@@ -4246,26 +4245,26 @@ document.addEventListener('DOMContentLoaded', function() {
         // merge their measurements into one row.
         const byAnalyte = {};
         for (const obs of observations) {
-            const name = obs.code?.text;
+            const name = obs.analyte;
             if (!name) continue;
-            const section = obs.category?.[0]?.text || '';
+            const section = obs.section || '';
             const key = `${section}::${name}`;
             if (!byAnalyte[key]) {
                 byAnalyte[key] = {
                     name,
                     section,
-                    unit: obs.valueQuantity?.unit || '',
-                    low:  obs.referenceRange?.[0]?.low?.value  ?? null,
-                    high: obs.referenceRange?.[0]?.high?.value ?? null,
-                    ref:  obs.referenceRange?.[0]?.text || '',
+                    unit: obs.unit || '',
+                    low:  obs.low  ?? null,
+                    high: obs.high ?? null,
+                    ref:  obs.reference || '',
                     measurements: [],
                 };
             }
             byAnalyte[key].measurements.push({
-                date: obs.effectiveDateTime || '',
-                v:    obs.valueQuantity?.value ?? null,
-                text: obs.valueString || null,
-                flag: obs.interpretation?.[0]?.text || null,
+                date: obs.date || '',
+                v:    obs.value ?? null,
+                text: obs.value_text || null,
+                flag: obs.flag || null,
             });
         }
 
@@ -4285,7 +4284,7 @@ document.addEventListener('DOMContentLoaded', function() {
         analytes.sort((a, b) => a.section.localeCompare(b.section) || a.name.localeCompare(b.name));
 
         // All unique dates (oldest first) for column headers
-        const allDates = [...new Set(observations.map(o => o.effectiveDateTime?.slice(0, 10)).filter(Boolean))].sort();
+        const allDates = [...new Set(observations.map(o => o.date?.slice(0, 10)).filter(Boolean))].sort();
         const colDates = allDates.slice(-5);  // cap table at 5 most recent dates
 
         // Build one table per section — mirrors the Recent Labs report section's
@@ -4479,11 +4478,11 @@ document.addEventListener('DOMContentLoaded', function() {
         sd.setDate(sd.getDate() - 90);
         const startDate = localDateStr(sd);
         try {
-            const resp = await apiFetch(`/fhir/Observation?patient=${encodeURIComponent(patientId)}&start_date=${startDate}`);
+            const resp = await apiFetch(`/api/observation?patient=${encodeURIComponent(patientId)}&start_date=${startDate}`);
             if (!resp.ok) return;
-            const bundle = await resp.json();
-            if (bundle.resourceType !== 'Bundle' || !bundle.entry?.length) return;
-            renderTrends(bundle.entry.map(e => e.resource).filter(Boolean));
+            const data = await resp.json();
+            if (!data.observations?.length) return;
+            renderTrends(data.observations);
         } catch (e) {
             console.warn('Trends load failed:', e);
             showToast('Failed to load trends', 'warning');
