@@ -2451,15 +2451,10 @@ document.addEventListener('DOMContentLoaded', function() {
             epicrisisData.push({
                 checkoutId: checkoutIds[idx],
                 diagnosis: extractDiagnosisText(encounterData),
-                admissionDate: encounterData.period?.start || null,
-                dischargeDate: encounterData.period?.end   || null,
-                attender: (() => {
-                    const p = encounterData.participant?.find(p =>
-                        p.type?.some(t => t.coding?.some(c => c.code === 'ATND'))
-                    );
-                    return p?.individual?.display || null;
-                })(),
-                service: encounterData.serviceType?.display || null,
+                admissionDate: encounterData.start || null,
+                dischargeDate: encounterData.end   || null,
+                attender: encounterData.attender || null,
+                service: encounterData.service || null,
                 epicrisisText,
             });
         });
@@ -2610,9 +2605,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 const parts = [];
                 const dx = extractDiagnosisText(enc);
                 if (dx) parts.push(dx);
-                (enc.note || []).forEach(n => {
-                    if (!n.text) return;
-                    const clean = n.text
+                (enc.notes || []).forEach(text => {
+                    if (!text) return;
+                    const clean = text
                         .replace(/^\[Exam general\]\s*/i, '')
                         .replace(/^\[Exam local\]\s*/i, '')
                         .trim();
@@ -2624,10 +2619,10 @@ document.addEventListener('DOMContentLoaded', function() {
             function fillAdmissionBlock(secId, periodId, textId, enc, isActive) {
                 const sec = document.getElementById(secId);
                 if (!sec) return;
-                const start = enc.period?.start ? formatDate(enc.period.start) : '';
-                const end   = enc.period?.end   ? formatDate(enc.period.end)   : '';
-                const ms    = (enc.period?.start && enc.period?.end)
-                    ? new Date(enc.period.end) - new Date(enc.period.start) : 0;
+                const start = enc.start ? formatDate(enc.start) : '';
+                const end   = enc.end   ? formatDate(enc.end)   : '';
+                const ms    = (enc.start && enc.end)
+                    ? new Date(enc.end) - new Date(enc.start) : 0;
                 const nights = ms > 0 ? Math.round(ms / 86400000) : 0;
                 const periodEl = document.getElementById(periodId);
                 if (periodEl) {
@@ -2911,7 +2906,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 // an ongoing admission or cluster has no end yet. Only a closed
                 // discharge has a natural end date.
                 const periodStart = boundaryDate;
-                const periodEnd = boundarySource === 'discharge' ? lastDischarge?.enc.period?.end : undefined;
+                const periodEnd = boundarySource === 'discharge' ? lastDischarge?.enc.end : undefined;
                 if (periodStart) {
                     const params = new URLSearchParams({ patient: pid, start_date: localDateStr(new Date(periodStart)) });
                     if (periodEnd) params.set('end_date', localDateStr(new Date(periodEnd)));
@@ -2944,12 +2939,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 timelineEl.innerHTML = '';
                 encounters.forEach((item, idx) => {
                     const enc   = item.enc;
-                    const start = enc.period?.start ? formatDate(enc.period.start) : '';
-                    const end   = enc.period?.end   ? formatDate(enc.period.end)   : '';
+                    const start = enc.start ? formatDate(enc.start) : '';
+                    const end   = enc.end   ? formatDate(enc.end)   : '';
                     if (!start && !end) return; // skip entries with no date
                     const rawDx = extractDiagnosisText(enc) || '';
                     const dx    = rawDx === '-' ? '' : rawDx;
-                    const service = enc.serviceType?.display || enc.location?.slice(-1)[0]?.location?.display || '';
+                    const service = enc.service || enc.wards?.slice(-1)[0] || '';
                     const epicText = extractEpicrisisText(enc);
 
                     const row = document.createElement('div');
@@ -2989,10 +2984,10 @@ document.addEventListener('DOMContentLoaded', function() {
             const narrativeParts = [];
 
             function admissionMarkdown(label, enc, isActive) {
-                const start = enc.period?.start ? formatDate(enc.period.start) : '';
-                const end   = enc.period?.end   ? formatDate(enc.period.end)   : '';
-                const ms    = (enc.period?.start && enc.period?.end)
-                    ? new Date(enc.period.end) - new Date(enc.period.start) : 0;
+                const start = enc.start ? formatDate(enc.start) : '';
+                const end   = enc.end   ? formatDate(enc.end)   : '';
+                const ms    = (enc.start && enc.end)
+                    ? new Date(enc.end) - new Date(enc.start) : 0;
                 const nights = ms > 0 ? Math.round(ms / 86400000) : 0;
                 const period = isActive
                     ? `${start} → present (ongoing)`
@@ -3046,12 +3041,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 const lines = [];
                 encs.forEach(item => {
                     const enc   = item.enc;
-                    const start = enc.period?.start ? formatDate(enc.period.start) : '';
-                    const end   = enc.period?.end   ? formatDate(enc.period.end)   : '';
+                    const start = enc.start ? formatDate(enc.start) : '';
+                    const end   = enc.end   ? formatDate(enc.end)   : '';
                     if (!start && !end) return;
                     const rawDx = extractDiagnosisText(enc) || '';
                     const dx    = rawDx === '-' ? '' : rawDx;
-                    const service = enc.serviceType?.display || enc.location?.slice(-1)[0]?.location?.display || '';
+                    const service = enc.service || enc.wards?.slice(-1)[0] || '';
                     const range = end ? `${start}→${end}` : start;
                     const label = [service, dx].filter(Boolean).join(' — ');
                     lines.push(`- **${range}**${label ? ' — ' + label : ''}`);
@@ -3120,7 +3115,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return cache.encounters[checkoutId];
         }
 
-        const response = await apiFetch(`/fhir/Encounter/${checkoutId}?type=checkout`);
+        const response = await apiFetch(`/api/checkout/${checkoutId}`);
 
         // 404 means this checkout simply isn't viewable via this scrape path
         // (e.g. superseded record) — a normal empty state, not a failure.
@@ -3130,7 +3125,8 @@ document.addEventListener('DOMContentLoaded', function() {
             throw new Error(`HTTP ${response.status}`);
         }
 
-        const encounterData = await response.json();
+        const encounterData = (await response.json()).encounter || null;
+        if (!encounterData) return null;
         cachePut(cache.encounters, checkoutId, encounterData);
         log(`Encounter data fetched successfully for checkout ${checkoutId}:`, encounterData);
         return encounterData;
@@ -3141,7 +3137,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (cache.encounters[checkinId]) {
             return cache.encounters[checkinId];
         }
-        const response = await apiFetch(`/fhir/Encounter/${checkinId}?type=checkin`);
+        const response = await apiFetch(`/api/checkin/${checkinId}`);
         // 404 means this checkin simply isn't viewable via this scrape path
         // (e.g. superseded record) — a normal empty state, not a failure.
         if (response.status === 404) return null;
@@ -3149,7 +3145,8 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error(`Error fetching encounter data for checkin ${checkinId}:`, response.status);
             throw new Error(`HTTP ${response.status}`);
         }
-        const encounterData = await response.json();
+        const encounterData = (await response.json()).encounter || null;
+        if (!encounterData) return null;
         cachePut(cache.encounters, checkinId, encounterData);
         log(`Encounter data fetched successfully for checkin ${checkinId}:`, encounterData);
         return encounterData;
@@ -3475,12 +3472,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const encItems = encounters.filter(Boolean).map(enc => ({
                 type: 'inpatient',
                 enc,
-                sortKey: enc.period?.end || enc.period?.start || '',
-                start: enc.period?.start || '',
-                end: enc.period?.end || '',
+                sortKey: enc.end || enc.start || '',
+                start: enc.start || '',
+                end: enc.end || '',
                 label: extractDiagnosisText(enc) || 'No diagnosis recorded',
-                section: enc.location?.[0]?.location?.display || '',
-                medic: enc.participant?.[0]?.individual?.display || '',
+                section: enc.wards?.[0] || '',
+                medic: enc.medic || '',
                 extra: '',
             }));
 
@@ -3488,22 +3485,22 @@ document.addEventListener('DOMContentLoaded', function() {
             const activeItems = activeEncounters.filter(Boolean).map(enc => ({
                 type: 'inpatient',
                 enc,
-                sortKey: enc.period?.start || '',
-                start: enc.period?.start || '',
+                sortKey: enc.start || '',
+                start: enc.start || '',
                 end: '',
                 label: extractDiagnosisText(enc) || 'No diagnosis recorded',
-                section: enc.location?.[0]?.location?.display || '',
-                medic: enc.participant?.[0]?.individual?.display || '',
+                section: enc.wards?.[0] || '',
+                medic: enc.medic || '',
                 extra: '',
             }));
 
             const presItems = presentations.filter(Boolean).map(enc => {
-                const start = enc.period?.start || '';
-                const section = enc.location?.[0]?.location?.display || '';
-                const reason = enc.reasonCode?.[0]?.text || '';
-                const notes = enc.note || [];
-                const decision = notes[0]?.text || '';
-                const consultType = notes[1]?.text || '';
+                const start = enc.start || '';
+                const section = enc.wards?.[0] || '';
+                const reason = enc.reason || '';
+                const notes = enc.notes || [];
+                const decision = notes[0] || '';
+                const consultType = notes[1] || '';
                 const label = reason || consultType || 'Outpatient visit';
                 return {
                     type: 'outpatient',
@@ -3513,7 +3510,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     end: '',
                     label,
                     section,
-                    medic: enc.participant?.[0]?.individual?.display || '',
+                    medic: enc.medic || '',
                     extra: decision,
                 };
             });
@@ -5444,19 +5441,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     try {
                         const type = checkoutIdSet.has(id) ? 'checkout' : 'checkin';
                         if (cache.encounters[id]) return cache.encounters[id];
-                        const r = await apiFetch(`/fhir/Encounter/${id}?type=${type}`);
+                        const r = await apiFetch(`/api/${type}/${id}`);
                         if (!r.ok) return null;
-                        const data = await r.json();
-                        cachePut(cache.encounters, id, data);
+                        const data = (await r.json()).encounter || null;
+                        if (data) cachePut(cache.encounters, id, data);
                         return data;
                     } catch { return null; }
                 });
             encounters = enc
-                .map((e, i) => e && e.resourceType === 'Encounter' ? { enc: e, id: allIds[i] } : null)
+                .map((e, i) => e ? { enc: e, id: allIds[i] } : null)
                 .filter(Boolean)
                 .sort((a, b) => {
-                    const da = a.enc.period?.end || a.enc.period?.start || '';
-                    const db = b.enc.period?.end || b.enc.period?.start || '';
+                    const da = a.enc.end || a.enc.start || '';
+                    const db = b.enc.end || b.enc.start || '';
                     return db > da ? 1 : -1;
                 });
         }
@@ -5469,16 +5466,16 @@ document.addEventListener('DOMContentLoaded', function() {
         const latestCheckoutEnd = encounters
             .filter(e => e.enc.status !== 'in-progress')
             .reduce((latest, e) => {
-                const end = e.enc.period?.end || e.enc.period?.start || '';
+                const end = e.enc.end || e.enc.start || '';
                 return end > latest ? end : latest;
             }, '');
         const activeAdm = encounters.find(e =>
             e.enc.status === 'in-progress' &&
-            (!latestCheckoutEnd || (e.enc.period?.start || '') > latestCheckoutEnd));
+            (!latestCheckoutEnd || (e.enc.start || '') > latestCheckoutEnd));
         const lastDischarge = encounters.find(e => e.enc.status !== 'in-progress' && isSubstantiveText(extractEpicrisisText(e.enc)));
 
         if (activeAdm) {
-            return { boundaryDate: activeAdm.enc.period?.start || null, source: 'admission', activeAdm, lastDischarge, encounters };
+            return { boundaryDate: activeAdm.enc.start || null, source: 'admission', activeAdm, lastDischarge, encounters };
         }
 
         if (lastDischarge) {
@@ -5487,13 +5484,13 @@ document.addEventListener('DOMContentLoaded', function() {
             // past it — otherwise an old discharge would wrongly pull in
             // everything since as "current" for a patient who's since come
             // back for something unrelated.
-            const dischargeDays = isoDateToUTCDays(lastDischarge.enc.period?.end || lastDischarge.enc.period?.start || '');
+            const dischargeDays = isoDateToUTCDays(lastDischarge.enc.end || lastDischarge.enc.start || '');
             const staleRelativeToActivity = dates.some(d => {
                 const days = isoDateToUTCDays(d);
                 return dischargeDays != null && days != null && (days - dischargeDays) > EPISODE_GAP_DAYS;
             });
             if (!staleRelativeToActivity) {
-                return { boundaryDate: lastDischarge.enc.period?.start || null, source: 'discharge', activeAdm, lastDischarge, encounters };
+                return { boundaryDate: lastDischarge.enc.start || null, source: 'discharge', activeAdm, lastDischarge, encounters };
             }
         }
 
@@ -5521,13 +5518,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function fetchPresentation(id) {
         if (cache.encounters[id]) return cache.encounters[id];
-        const response = await apiFetch(`/fhir/Encounter/${id}?type=presentation`);
+        const response = await apiFetch(`/api/presentation/${id}`);
         // 404 means this presentation simply isn't viewable via this scrape path
         // (e.g. it became an inpatient admission) — a normal empty state, not a failure.
         if (response.status === 404) return null;
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data = await response.json();
-        if (data.resourceType !== 'Encounter') return null;
+        const data = (await response.json()).encounter || null;
+        if (!data) return null;
         cachePut(cache.encounters, id, data);
         return data;
     }
@@ -5551,8 +5548,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function extractEpicrisisText(encounterData) {
-        if (!encounterData.note || !Array.isArray(encounterData.note)) return '';
-        return dedupeParagraphs(encounterData.note.map(note => note.text || '').join('\n\n'));
+        if (!encounterData.notes || !Array.isArray(encounterData.notes)) return '';
+        return dedupeParagraphs(encounterData.notes.join('\n\n'));
     }
 
     // Returns true if text has meaningful content beyond markdown markers and punctuation.
@@ -5561,17 +5558,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // 72-hour (revised) diagnosis and secondary-diagnosis/comorbidity list from
-    // a checkin encounter's diagnosis[] array — populated by fhir_response()
-    // alongside the admission diagnosis (role codes 'working' and 'CC').
+    // a checkin encounter summary (`working`, `secondary`) — see
+    // _encounter_summary() in hippobridge.py.
     function extract72hDiagnosisText(enc) {
-        return (enc.diagnosis || []).find(d => d.use?.coding?.some(c => c.code === 'working'))
-            ?.condition?.display || null;
+        return enc.working || null;
     }
     function extractSecondaryDiagnoses(enc) {
-        return (enc.diagnosis || [])
-            .filter(d => d.use?.coding?.some(c => c.code === 'CC'))
-            .map(d => d.condition?.display)
-            .filter(Boolean);
+        return enc.secondary || [];
     }
 
     // Diagnosis + exam-note text for a checkin encounter, used as the display
@@ -5585,9 +5578,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (dx72h) parts.push(`**72h diagnosis:** ${dx72h}`);
         const secondary = extractSecondaryDiagnoses(enc);
         if (secondary.length) parts.push(`**Secondary diagnoses:** ${secondary.join(', ')}`);
-        (enc.note || []).forEach(n => {
-            if (!n.text) return;
-            const clean = n.text.replace(/^\[Exam general\]\s*/i, '').replace(/^\[Exam local\]\s*/i, '').trim();
+        (enc.notes || []).forEach(text => {
+            if (!text) return;
+            const clean = text.replace(/^\[Exam general\]\s*/i, '').replace(/^\[Exam local\]\s*/i, '').trim();
             if (clean) parts.push(clean);
         });
         return parts.join('\n\n');
@@ -5636,8 +5629,8 @@ document.addEventListener('DOMContentLoaded', function() {
             .map((enc, i) => enc && extractEpicrisisText(enc) ? { enc, checkoutId: checkoutIds[i], active: false } : null)
             .filter(Boolean)
             .sort((a, b) => {
-                const da = a.enc.period?.end || '';
-                const db = b.enc.period?.end || '';
+                const da = a.enc.end || '';
+                const db = b.enc.end || '';
                 return db > da ? 1 : -1;
             });
 
@@ -5647,14 +5640,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const latestCheckoutEnd = checkoutEncounters
             .filter(Boolean)
             .reduce((latest, enc) => {
-                const end = enc.period?.end || enc.period?.start || '';
+                const end = enc.end || enc.start || '';
                 return end > latest ? end : latest;
             }, '');
         const activeEnc = checkinEncounters
             .map((enc, i) => enc ? { enc, checkinId: checkinIds[i] } : null)
             .filter(item => item && item.enc.status === 'in-progress' &&
-                (!latestCheckoutEnd || (item.enc.period?.start || '') > latestCheckoutEnd))
-            .sort((a, b) => (b.enc.period?.start || '').localeCompare(a.enc.period?.start || ''))[0];
+                (!latestCheckoutEnd || (item.enc.start || '') > latestCheckoutEnd))
+            .sort((a, b) => (b.enc.start || '').localeCompare(a.enc.start || ''))[0];
 
         // Ongoing admission always shown first, ahead of past discharges — with
         // diagnosis/exam text as a fallback body when epicrisis hasn't been
@@ -5690,13 +5683,11 @@ document.addEventListener('DOMContentLoaded', function() {
             // current admission still shows up instead of being silently dropped.
             const epicrisisText = extractEpicrisisText(enc) || item.fallbackBody || '';
             const icd = extractDiagnosisText(enc) || '';
-            const admission = enc.period?.start ? formatDate(enc.period.start) : '';
-            const discharge = enc.period?.end ? formatDate(enc.period.end) : '';
-            const service = enc.serviceType?.display || '';
-            const ward = enc.location?.slice(-1)[0]?.location?.display || '';
-            const attender = enc.participant?.find(p =>
-                p.type?.some(t => t.coding?.some(c => c.code === 'ATND'))
-            )?.individual?.display || '';
+            const admission = enc.start ? formatDate(enc.start) : '';
+            const discharge = enc.end ? formatDate(enc.end) : '';
+            const service = enc.service || '';
+            const ward = enc.wards?.slice(-1)[0] || '';
+            const attender = enc.attender || '';
 
             // Night count (only meaningful once discharged)
             let nights = '';
@@ -7132,13 +7123,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Helper function to extract diagnosis text
     function extractDiagnosisText(encounterData) {
-        if (!encounterData.diagnosis || encounterData.diagnosis.length === 0) return null;
-        const dd = encounterData.diagnosis.find(d =>
-            d.use?.coding?.some(c => c.code === 'DD')
-        );
-        return dd?.condition?.display
-            || encounterData.diagnosis[0]?.condition?.display
-            || null;
+        return encounterData.diagnosis || null;
     }
 
 });

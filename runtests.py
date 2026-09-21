@@ -37,7 +37,7 @@ from tests.hippoclient_write import (
 )
 from tests.hippoclient_triage import TestTriageResolution
 from tests.hippoclient_schedule import TestWardFamily, TestApplyFiltersSection, TestAnnotateRow
-from tests.hippobridge_handlers import TestServeSpec, TestGetCacheStats, TestBackfillSearch
+from tests.hippobridge_handlers import TestServeSpec, TestGetCacheStats, TestBackfillSearch, TestEncounterSummary
 from tests.search import TestSearchIndex
 from tests.sqlcache import (
     TestRoute, TestSqliteCacheRoundTrip, TestIterEntries, TestCleanup,
@@ -150,7 +150,7 @@ TEST_GROUPS = {
     ],
     "hippoclient_triage": [TestTriageResolution],
     "hippoclient_schedule": [TestWardFamily, TestApplyFiltersSection, TestAnnotateRow],
-    "hippobridge_handlers": [TestServeSpec, TestGetCacheStats, TestBackfillSearch],
+    "hippobridge_handlers": [TestServeSpec, TestGetCacheStats, TestBackfillSearch, TestEncounterSummary],
     "search": [TestSearchIndex],
     "sqlcache": [
         TestRoute, TestSqliteCacheRoundTrip, TestIterEntries, TestCleanup,

@@ -213,5 +213,56 @@ class TestBackfillSearch(unittest.TestCase):
             _run(hippobridge._backfill_search())
 
 
+class TestEncounterSummary(unittest.TestCase):
+    """_encounter_summary(): flat view of a FHIR Encounter dict for /api."""
+
+    def _enc(self):
+        role = lambda code: {"coding": [{"code": code}]}
+        return {
+            "resourceType": "Encounter", "status": "in-progress",
+            "class": {"code": "EMER"},
+            "period": {"start": "2026-05-07T11:35:00", "end": "2026-05-09T10:00:00"},
+            "serviceType": {"display": "Pediatrie"},
+            "location": [{"location": {"display": "URGENTA"}}, {"location": {"display": "PEDIATRIE 3"}}],
+            "participant": [
+                {"type": [role("PPRF")], "individual": {"display": "DR. A"}},
+                {"type": [role("ATND")], "individual": {"display": "DR. B"}},
+            ],
+            "diagnosis": [
+                {"condition": {"display": "AD dx"}, "use": role("AD")},
+                {"condition": {"display": "DD dx"}, "use": role("DD")},
+                {"condition": {"display": "72h dx"}, "use": role("working")},
+                {"condition": {"display": "Comorb"}, "use": role("CC")},
+            ],
+            "reasonCode": [{"text": "cefalee"}],
+            "note": [{"text": "epicriza"}, {}],
+            "hospitalization": {"dischargeDisposition": {"coding": [{"code": "home"}]}},
+        }
+
+    def test_full_summary(self):
+        s = hippobridge._encounter_summary(self._enc())
+        self.assertEqual(s["status"], "in-progress")
+        self.assertEqual(s["class"], "EMER")
+        self.assertEqual((s["start"], s["end"]), ("2026-05-07T11:35:00", "2026-05-09T10:00:00"))
+        self.assertEqual(s["service"], "Pediatrie")
+        self.assertEqual(s["wards"], ["URGENTA", "PEDIATRIE 3"])
+        self.assertEqual(s["medic"], "DR. A")
+        self.assertEqual(s["attender"], "DR. B")
+        self.assertEqual(s["diagnosis"], "DD dx")
+        self.assertEqual(s["working"], "72h dx")
+        self.assertEqual(s["secondary"], ["Comorb"])
+        self.assertEqual(s["reason"], "cefalee")
+        self.assertEqual(s["notes"], ["epicriza", ""])
+        self.assertEqual(s["disposition"], "home")
+
+    def test_diagnosis_falls_back_to_first_and_empty_is_none(self):
+        enc = {"diagnosis": [{"condition": {"display": "first"}, "use": {"coding": [{"code": "AD"}]}}]}
+        self.assertEqual(hippobridge._encounter_summary(enc)["diagnosis"], "first")
+        empty = hippobridge._encounter_summary({})
+        self.assertIsNone(empty["diagnosis"])
+        self.assertEqual((empty["wards"], empty["notes"], empty["secondary"]), ([], [], []))
+        self.assertEqual((empty["medic"], empty["reason"]), ("", ""))
+
+
 if __name__ == "__main__":
     unittest.main()

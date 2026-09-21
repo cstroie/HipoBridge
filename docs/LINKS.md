@@ -78,7 +78,7 @@ Clinical indication (`INFO SUPLIMENTAR`) is parsed as `note[category=clinical-in
 
 | HippoBridge endpoint | Hipocrate URL |
 |---|---|
-| `GET /api/checkout/{id}` | `/gen_printabile/BiletExternare.asp?RelId={id}&RelName=CO` |
+| `GET /api/checkout/{id}` | `/gen_printabile/BiletExternare.asp?RelId={id}&RelName=CO` (response also carries an `encounter` summary — status, start/end, wards, medic, attender, diagnosis/working/secondary, reason, notes, disposition — derived from the FHIR mapping) |
 | `GET /fhir/Encounter/{id}` | `/gen_printabile/BiletExternare.asp?RelId={id}&RelName=CO` |
 
 Encounter IDs are 15-digit numbers (e.g. `260100000619759`).
@@ -117,7 +117,7 @@ GET /api/checkup/421200002270746?debug=page
 
 | HippoBridge endpoint | Hipocrate URL |
 |---|---|
-| `GET /api/checkin/{id}` | `/files/checkin.asp?id={id}` |
+| `GET /api/checkin/{id}` | `/files/checkin.asp?id={id}` (response also carries an `encounter` summary — status, start/end, wards, medic, attender, diagnosis/working/secondary, reason, notes, disposition — derived from the FHIR mapping) |
 
 Returns: patient name/CNP, presentation date/urgency/section, diagnosis, DRG/72H diagnoses, secondary diagnoses, ward transfers, exam (general/local).
 
@@ -137,7 +137,7 @@ Returns: patient name/CNP, presentation date/urgency/section, admission info, IC
 
 | HippoBridge endpoint | Hipocrate URL |
 |---|---|
-| `GET /api/presentation/{id}` | `/gen_printabile/FisaPrezentare.asp?relname=PR&id={id}` |
+| `GET /api/presentation/{id}` | `/gen_printabile/FisaPrezentare.asp?relname=PR&id={id}` (response also carries an `encounter` summary — status, start/end, wards, medic, attender, diagnosis/working/secondary, reason, notes, disposition — derived from the FHIR mapping) |
 | `GET /fhir/Encounter/{id}?type=presentation` | same |
 
 Printable outpatient/ER presentation form (decision, section, reason, notes). Also part of the `Encounter` auto-detect fallback chain (Checkout → Checkin → Presentation) when `?type=` is omitted.

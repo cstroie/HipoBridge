@@ -439,9 +439,62 @@ async def get_fhir_diagnostic_report(request):
     return web_fhir_response(response)
 
 
+def _encounter_summary(enc: Dict[str, Any]) -> Dict[str, Any]:
+    """Flat view of a FHIR Encounter dict for /api consumers, derived from the
+    same resource /fhir/Encounter serves so the two can never disagree:
+
+      status, class ('EMER'/'AMB'…), start/end (period), service, wards
+      (location displays, first → last), medic (first participant), attender
+      (ATND participant), diagnosis (discharge diagnosis 'DD', else the first
+      one), working (72h diagnosis), secondary (comorbidities 'CC'), reason,
+      notes (note texts, in order), disposition (discharge disposition code).
+    """
+    period = enc.get("period") or {}
+    diagnoses = enc.get("diagnosis") or []
+
+    def displays(code):
+        return [(d.get("condition") or {}).get("display") for d in diagnoses
+                if any(c.get("code") == code for c in ((d.get("use") or {}).get("coding") or []))]
+
+    dd = displays("DD")
+    first_dx = (diagnoses[0].get("condition") or {}).get("display") if diagnoses else None
+    working = displays("working")
+    participants = enc.get("participant") or []
+    attender = next((p for p in participants
+                     if any(c.get("code") == "ATND" for t in (p.get("type") or []) for c in (t.get("coding") or []))), None)
+    disposition = (((enc.get("hospitalization") or {}).get("dischargeDisposition") or {}).get("coding") or [{}])[0]
+    return {
+        "status": enc.get("status"),
+        "class": (enc.get("class") or {}).get("code"),
+        "start": period.get("start"),
+        "end": period.get("end"),
+        "service": (enc.get("serviceType") or {}).get("display"),
+        "wards": [(l.get("location") or {}).get("display") or "" for l in (enc.get("location") or [])],
+        "medic": ((participants[0].get("individual") or {}).get("display") if participants else None) or "",
+        "attender": ((attender or {}).get("individual") or {}).get("display"),
+        "diagnosis": (dd[0] if dd else None) or first_dx or None,
+        "working": (working[0] if working else None) or None,
+        "secondary": [d for d in displays("CC") if d],
+        "reason": ((enc.get("reasonCode") or [{}])[0]).get("text") or "",
+        "notes": [n.get("text") or "" for n in (enc.get("note") or [])],
+        "disposition": disposition.get("code"),
+    }
+
+
+async def _encounter_api_response(client, request, id) -> web.Response:
+    """Raw HippoData for an encounter-type page plus an `encounter` summary
+    (see _encounter_summary), built from the client's own FHIR mapping."""
+    parsed_data = await client.fetch_and_parse(id=id)
+    if parsed_data.get("status") == "success":
+        fhir = client.fhir_response(parsed_data, id=id)
+        if isinstance(fhir, Resource) and fhir.data.get("resourceType") == "Encounter":
+            parsed_data["encounter"] = _encounter_summary(fhir.to_dict())
+    return web_json_response(parsed_data)
+
 @require_auth
 async def get_checkout(request):
-    """Retrieve discharge summary by ID. Returns raw HippoData JSON."""
+    """Retrieve discharge summary by ID. Returns raw HippoData JSON plus an
+    `encounter` summary (see _encounter_summary)."""
     id = request.match_info.get('id')
     if not id:
         return web_error_response("Checkout ID is required")
@@ -453,12 +506,12 @@ async def get_checkout(request):
     if debug_resp is not None:
         return debug_resp
 
-    parsed_data = await client.fetch_and_parse(id=id)
-    return web_json_response(parsed_data)
+    return await _encounter_api_response(client, request, id)
 
 @require_auth
 async def get_checkin(request):
-    """Retrieve admission record by ID. Returns raw HippoData JSON."""
+    """Retrieve admission record by ID. Returns raw HippoData JSON plus an
+    `encounter` summary (see _encounter_summary)."""
     id = request.match_info.get('id')
     if not id:
         return web_error_response("Checkin ID is required")
@@ -467,8 +520,7 @@ async def get_checkin(request):
     debug_resp = await web_debug_response(client, request, id=id)
     if debug_resp is not None:
         return debug_resp
-    parsed_data = await client.fetch_and_parse(id=id)
-    return web_json_response(parsed_data)
+    return await _encounter_api_response(client, request, id)
 
 @require_auth
 async def get_checkup(request):
@@ -505,7 +557,10 @@ async def get_fupu(request):
 
 @require_auth
 async def get_presentation(request):
-    """Retrieve outpatient/ER presentation by ID. Returns raw HippoData JSON."""
+    """Retrieve outpatient/ER presentation by ID. Returns raw HippoData JSON
+    plus an `encounter` summary (see _encounter_summary). A page that can't be
+    read (e.g. the visit became an inpatient admission) is a 404, like
+    /fhir/Encounter?type=presentation."""
     id = request.match_info.get('id')
     if not id:
         return web_error_response("Presentation ID is required")
@@ -514,8 +569,10 @@ async def get_presentation(request):
     debug_resp = await web_debug_response(client, request, id=id)
     if debug_resp is not None:
         return debug_resp
-    parsed_data = await client.fetch_and_parse(id=id)
-    return web_json_response(parsed_data)
+    response = await _encounter_api_response(client, request, id)
+    if response.status >= 500:
+        return web_error_response("Presentation not available", 404)
+    return response
 
 @require_auth
 async def get_request_patient(request):
