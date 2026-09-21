@@ -6388,9 +6388,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function wardFamily(section) {
-        // Extract base ward name by stripping trailing Roman numeral (I-X).
-        // E.g. 'CHIRURGIE I' -> 'CHIRURGIE', 'UPU' -> 'UPU'.
-        return section.replace(/\s+(X{0,3}(IX|IV|V?I{0,3}))$/i, '');
+        // First word of the ward name; must match HippoClientSchedule._ward_family.
+        return section.trim().split(/\s+/)[0];
     }
 
     function populateSectionFilter(entries) {

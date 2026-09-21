@@ -5269,14 +5269,13 @@ class HippoClientSchedule(HippoClient):
 
     @staticmethod
     def _ward_family(section: str) -> str:
-        """Extract the base ward name by stripping a trailing Roman numeral suffix.
-        E.g. 'CHIRURGIE I' -> 'CHIRURGIE', 'UPU' -> 'UPU' (unchanged).
-        Used to group numbered ward variants (I, II, III, ..., IX, X) together
-        for filtering.
+        """Ward family = first word of the ward name ('PEDIATRIE NEUROLOGIE' ->
+        'PEDIATRIE', 'CHIRURGIE I' -> 'CHIRURGIE', 'UPU' -> 'UPU'). Lets the
+        Schedule ward filter offer one entry covering every ward that shares
+        a first word.
         """
-        import re
-        # Match trailing space + Roman numeral (I-X, case-insensitive)
-        return re.sub(r'\s+(X{0,3}(IX|IV|V?I{0,3}))$', '', section, flags=re.IGNORECASE)
+        parts = section.split(None, 1)
+        return parts[0] if parts else section
 
     def _apply_filters(self, requests: list, section_name=None, status=None) -> list:
         """Server-side filtering shared by /api/schedule and /fhir/Schedule so both
