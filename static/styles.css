@@ -3256,6 +3256,18 @@ select {
 .btn-schedule-clear-filters {
     white-space: nowrap;
     flex-shrink: 0;
+    /* A quiet, dashed "reset" control — set apart from the solid Build /
+       Refresh buttons beside it; turns danger-red on hover since it discards
+       the current filter selection. */
+    background: transparent;
+    border-style: dashed;
+    color: var(--muted);
+}
+.btn-schedule-clear-filters:hover {
+    background: transparent;
+    border-style: solid;
+    border-color: var(--danger);
+    color: var(--danger);
 }
 
 /* .btn-secondary sets display:inline-flex unconditionally, which otherwise
@@ -4620,6 +4632,43 @@ dialog.report-editor-modal article > section {
         width: 100%;
         justify-content: center;
         padding: var(--space-8) var(--space-16);
+    }
+}
+
+/* Schedule search row: the patient filter gets the whole first line; the two
+   dates and the limit select share the line under it as one block. Placed
+   after the 480px block so it also overrides that block's "every filter
+   control full-width" rule. */
+@media (max-width: 640px) {
+    #schedulePatientFilter { flex: 1 1 100%; }
+    .schedule-actions .schedule-date-input,
+    #scheduleLimitSelect {
+        flex: 1 1 104px;
+        width: auto;
+        min-width: 0;
+    }
+    /* Scope row: ward + modality share the first line; the button group
+       (Build / Refresh / Clear) takes the whole line under them and its
+       buttons split that width, instead of the 480px rule's stacked column. */
+    #scheduleSectionFilter,
+    #scheduleLabFilter {
+        flex: 1 1 140px;
+        width: auto;
+        min-width: 0;
+    }
+    .schedule-actions-btns {
+        flex: 1 1 100%;
+        flex-direction: row;
+        align-items: center;
+        width: 100%;
+        margin-left: 0;
+    }
+    .schedule-actions-btns > .btn-secondary,
+    #scheduleMdBtn,
+    #refreshScheduleBtn {
+        flex: 1 1 auto;
+        width: auto;
+        justify-content: center;
     }
 }
 
