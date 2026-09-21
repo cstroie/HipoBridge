@@ -751,8 +751,8 @@ document.addEventListener('DOMContentLoaded', function() {
         stopSchedulePrefetch();
         const gen = scheduleGeneration;
         schedulePrefetchQueue = entries
-            .filter(r => SCHEDULE_PREFETCH_STATUSES.has(r.status) && !scheduleFetchedIds.has(r.id))
-            .map(r => ({ id: r.id, isImaging: SCHEDULE_PREFETCH_IMAGING.has(r.category?.[0]?.coding?.[0]?.code || '') }));
+            .filter(r => SCHEDULE_PREFETCH_STATUSES.has(r.status_code) && !scheduleFetchedIds.has(r.request_id))
+            .map(r => ({ id: r.request_id, isImaging: SCHEDULE_PREFETCH_IMAGING.has(r.modality || '') }));
         if (schedulePrefetchQueue.length) queueSchedulePrefetchStep(gen, SCHEDULE_PREFETCH_IDLE_GATE);
     }
 
@@ -6386,14 +6386,14 @@ document.addEventListener('DOMContentLoaded', function() {
         if (sectionName) params.set('section_name', sectionName);
         if (status)      params.set('status', status);
         if (limit)       params.set('limit', limit);
-        const url = `/fhir/Schedule${params.toString() ? '?' + params.toString() : ''}`;
+        const url = `/api/schedule${params.toString() ? '?' + params.toString() : ''}`;
         if (elements.noSchedule) elements.noSchedule.style.display = 'none';
         showLoading('Loading schedule…');
         try {
             const resp = await apiFetch(url);
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const bundle = await resp.json();
-            scheduleEntries = (bundle.entry || []).map(e => e.resource);
+            scheduleEntries = bundle.requests || [];
             // Repopulate section dropdown only when not currently filtered by section
             if (!sectionName) populateSectionFilter(scheduleEntries);
             renderSchedule();
@@ -6429,7 +6429,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function populateSectionFilter(entries) {
         if (!elements.scheduleSectionFilter) return;
-        const sections = [...new Set(entries.map(r => r.note?.[0]?.text || '').filter(Boolean))].sort();
+        const sections = [...new Set(entries.map(r => r.section || '').filter(Boolean))].sort();
         const current = elements.scheduleSectionFilter.value;
         elements.scheduleSectionFilter.innerHTML = '<option value="">All wards</option>';
 
@@ -6518,22 +6518,22 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     async function _mdRowData(r) {
-        const out = { name: r.subject?.display || '', ward: r.note?.[0]?.text || '',
-                      modalityLabel: r.code?.text || '', sex: '', age: '', diagnosis: '',
+        const out = { name: r.patient_name || '', ward: r.section || '',
+                      modalityLabel: r.laboratory || '', sex: '', age: '', diagnosis: '',
                       indication: '', prev: null, failed: false };
-        const modality = _mdModalityGroup(r.category?.[0]?.coding?.[0]?.code || '');
+        const modality = _mdModalityGroup(r.modality || '');
         try {
-            const cached = _examCache[r.id];
+            const cached = _examCache[r.request_id];
             let [cerere, sr] = await Promise.all([
-                _mdJson(`/api/request/${r.id}/patient`),
-                cached ? null : _mdJson(`/api/request/${r.id}`),
+                _mdJson(`/api/request/${r.request_id}/patient`),
+                cached ? null : _mdJson(`/api/request/${r.request_id}`),
             ]);
             let p = cerere?.patient || {}, rq = cerere?.request || {};
             if (!p.id) {
                 // cerere.asp is denied for labs the user can't open (e.g. CT):
                 // take demographics from BuletinSolicitare, and the patient id
                 // from a CNP search.
-                sr = sr || await _mdJson(`/api/request/${r.id}`);
+                sr = sr || await _mdJson(`/api/request/${r.request_id}`);
                 const sp = sr?.patient || {};
                 p = { gender: sp.gender, age: String(sp.age || '').replace(/\D+$/, ''), cnp: sp.cnp };
                 rq = { diagnosis_referral: sr?.request?.diagnosis_referral };
@@ -6552,12 +6552,12 @@ document.addEventListener('DOMContentLoaded', function() {
             // treat as a first-time patient and skip the full history lookup.
             const strip = rq.previous;
             const firstTime = Array.isArray(strip) && strip.length === 1
-                && strip[0].current && String(strip[0].id) === String(r.id);
+                && strip[0].current && String(strip[0].id) === String(r.request_id);
             if (p.id && modality && !firstTime) {
                 const list = await _mdPatientList(p.id, modality);
-                const cur = _mdIso(r.authoredOn);
+                const cur = _mdIso(r.date_time);
                 const candidates = list
-                    .filter(e => e.id !== r.id
+                    .filter(e => e.id !== r.request_id
                         && _mdModalityGroup(e.type) === modality
                         && _mdIso(e.date_time) < cur)
                     .sort((a, b) => _mdIso(b.date_time).localeCompare(_mdIso(a.date_time)))
@@ -6579,8 +6579,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function _mdFallbackRow(r) {
-        return { name: r.subject?.display || '', ward: r.note?.[0]?.text || '',
-                 modalityLabel: r.code?.text || '', sex: '', age: '', diagnosis: '',
+        return { name: r.patient_name || '', ward: r.section || '',
+                 modalityLabel: r.laboratory || '', sex: '', age: '', diagnosis: '',
                  indication: '', prev: null, failed: true };
     }
 
@@ -6840,7 +6840,7 @@ document.addEventListener('DOMContentLoaded', function() {
         let currentDay = null;
 
         visibleEntries.forEach((r, idx) => {
-            const authoredOn = r.authoredOn || '';
+            const authoredOn = r.date_time || '';
             const hasTime = authoredOn.includes(' ');
             const day = hasTime ? authoredOn.split(' ')[0] : authoredOn;
             const time = hasTime ? authoredOn.split(' ')[1] : '';
@@ -6864,17 +6864,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Builds one schedule timeline row.
     function buildTimelineRow(r, { isLast, timeLabel }) {
-        const authoredOn = r.authoredOn || '';
-        const patientName = r.subject?.display || '';
-        const requestCode = r.identifier?.[0]?.value || r.id || '';
-        const section = r.note?.[0]?.text || '';
-        const requestedBy = r.requester?.display || '';
-        const laboratory = r.code?.text || '';
-        const modalitySlug  = r.category?.[0]?.coding?.[0]?.code || '';
-        const paymentSlug   = r.category?.[1]?.coding?.[0]?.code || '';
-        const status = r.status || '';
+        const authoredOn = r.date_time || '';
+        const patientName = r.patient_name || '';
+        const requestCode = r.request_code || r.request_id || '';
+        const section = r.section || '';
+        const requestedBy = r.requested_by || '';
+        const laboratory = r.laboratory || '';
+        const modalitySlug  = r.modality || '';
+        const paymentSlug   = r.payment_code || '';
+        const status = r.status_code || '';
         const statusClass = SCHEDULE_STATUS_CLASS[status] || '';
-        const isUrgent = r.priority === 'urgent';
+        const isUrgent = r.priority_code === 'urgent';
         const avatar = MODALITY_AVATAR[modalitySlug] || { icon: 'fa-question', cls: '' };
 
         // Row: time col + card
@@ -6903,7 +6903,7 @@ document.addEventListener('DOMContentLoaded', function() {
         avatarEl.innerHTML = modAvatarHTML(modalitySlug);
         if (pacsBadge) {
             avatarEl.appendChild(pacsBadge);
-            pacsBadge.dataset.requestId = r.id;
+            pacsBadge.dataset.requestId = r.request_id;
             pacsStatusObserver.observe(avatarEl);
         }
         avatarEl.title = MODALITY_INFO[modalitySlug]?.label || laboratory || modalitySlug;
@@ -6911,7 +6911,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const nameBtn = row.querySelector('.timeline-card-patient');
         nameBtn.textContent = patientName;
         nameBtn.title = `Load patient record for ${patientName}`;
-        nameBtn.addEventListener('click', () => loadPatientFromRequest(r.id, patientName, nameBtn));
+        nameBtn.addEventListener('click', () => loadPatientFromRequest(r.request_id, patientName, nameBtn));
 
         const urgBadge = row.querySelector('.urgent-badge');
         if (isUrgent) { urgBadge.hidden = false; } else { urgBadge.remove(); }
@@ -6933,7 +6933,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const regionLine = row.querySelector('.timeline-card-region');
         regionLine.textContent = laboratory;
-        regionLine.dataset.requestId = r.id;
+        regionLine.dataset.requestId = r.request_id;
         regionLine.dataset.modality = laboratory;
         regionLine.dataset.section = section || '';
 
@@ -6975,7 +6975,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // above 1: most requests carry a single analysis, so a "1" badge on
         // every row would be noise rather than signal.
         const metaCountEl = row.querySelector('.timeline-meta-count');
-        const analysisCount = r.quantityQuantity?.value;
+        const analysisCount = r.analysis_count;
         if (analysisCount && analysisCount > 1) {
             metaCountEl.querySelector('span').textContent = `${analysisCount} analyses`;
             metaCountEl.hidden = false;
@@ -6987,17 +6987,17 @@ document.addEventListener('DOMContentLoaded', function() {
         const codeBtn = row.querySelector('.timeline-code');
         codeBtn.textContent = requestCode;
         codeBtn.title = `View request details (${requestCode})`;
-        codeBtn.addEventListener('click', () => showRequestModal(r.id, requestCode, patientName, modalitySlug, codeBtn, requestedBy, section));
+        codeBtn.addEventListener('click', () => showRequestModal(r.request_id, requestCode, patientName, modalitySlug, codeBtn, requestedBy, section));
         const numericIdEl = row.querySelector('.timeline-numeric-id');
         if (hipocrateUrl) {
             const idLink = document.createElement('a');
-            idLink.href = `${hipocrateUrl}/PARA/NOM/Listare/cerere.asp?id=${r.id}`;
+            idLink.href = `${hipocrateUrl}/PARA/NOM/Listare/cerere.asp?id=${r.request_id}`;
             idLink.target = '_blank';
             idLink.rel = 'noopener noreferrer';
-            idLink.textContent = `#${r.id}`;
+            idLink.textContent = `#${r.request_id}`;
             numericIdEl.appendChild(idLink);
         } else {
-            numericIdEl.textContent = `#${r.id}`;
+            numericIdEl.textContent = `#${r.request_id}`;
         }
 
         const statusBadge = row.querySelector('.timeline-status-badge');
@@ -7208,9 +7208,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const total     = scheduleEntries.length;
-        const urgent    = scheduleEntries.filter(r => r.priority === 'urgent').length;
-        const inLab     = scheduleEntries.filter(r => ['draft', 'active'].includes(r.status)).length;
-        const completed = scheduleEntries.filter(r => ['completed', 'ended'].includes(r.status)).length;
+        const urgent    = scheduleEntries.filter(r => r.priority_code === 'urgent').length;
+        const inLab     = scheduleEntries.filter(r => ['draft', 'active'].includes(r.status_code)).length;
+        const completed = scheduleEntries.filter(r => ['completed', 'ended'].includes(r.status_code)).length;
 
         const metricDefs = [
             { label: 'Exams',     value: total,     color: 'var(--primary, #4338ca)' },
@@ -7237,7 +7237,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.scheduleModBars && total > 0) {
             const modalityCounts = {};
             scheduleEntries.forEach(r => {
-                const slug = r.category?.[0]?.coding?.[0]?.code || 'other';
+                const slug = r.modality || 'other';
                 modalityCounts[slug] = (modalityCounts[slug] || 0) + 1;
             });
 

@@ -529,11 +529,12 @@ async def get_request_triage(request):
 
 @require_auth
 async def get_schedule(request):
-    """List imaging/lab requests. ?start_date=&end_date=&lab_id=&section_name=&status=&patient_text=&refresh=1
+    """List imaging/lab requests. ?start_date=&end_date=&lab_id=&section_name=&status=&patient_text=&limit=&refresh=1
 
     status accepts a comma-separated list of FHIR ServiceRequest statuses
     (e.g. status=draft,active) to match any of them — see
-    HippoClientSchedule._apply_filters."""
+    HippoClientSchedule._apply_filters. Each row also carries the derived
+    status_code (that same FHIR status) and priority_code ('urgent'|'routine')."""
     start_date   = request.rel_url.query.get('start_date') or request.rel_url.query.get('date')
     end_date     = request.rel_url.query.get('end_date')
     lab_id       = request.rel_url.query.get('lab_id')
@@ -541,14 +542,16 @@ async def get_schedule(request):
     status       = request.rel_url.query.get('status')
     patient_text = request.rel_url.query.get('patient_text')
     force        = request.rel_url.query.get('refresh') == '1'
+    limit_raw    = request.rel_url.query.get('limit')
+    limit        = int(limit_raw) if limit_raw and limit_raw.isdigit() else None
     client = HippoClientSchedule(SERVICE_URL, request)
     debug_resp = await web_debug_response(client, request, start_date=start_date, end_date=end_date,
-                                          lab_id=lab_id, patient_text=patient_text)
+                                          lab_id=lab_id, patient_text=patient_text, limit=limit)
     if debug_resp is not None:
         return debug_resp
     parsed_data = await client.fetch_and_parse(start_date=start_date, end_date=end_date,
                                                lab_id=lab_id, section_name=section_name, status=status,
-                                               patient_text=patient_text, force=force)
+                                               patient_text=patient_text, force=force, limit=limit)
     return web_json_response(parsed_data)
 
 @require_auth

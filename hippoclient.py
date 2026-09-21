@@ -5105,6 +5105,8 @@ class HippoClientSchedule(HippoClient):
                 section_name=kwargs.get('section_name'),
                 status=kwargs.get('status'),
             ))
+            for req in parsed.get("requests") or []:
+                self._annotate_row(req)
             parsed.store("total", len(parsed.get("requests") or []))
             return parsed
         except Exception as e:
@@ -5130,6 +5132,20 @@ class HippoClientSchedule(HippoClient):
         if fhir_status == 'draft' and req.get('performed_at'):
             fhir_status = 'active'
         return fhir_status
+
+    def _annotate_row(self, req: dict) -> dict:
+        """Add the derived codes the /api/schedule consumers (frontend) read
+        instead of re-deriving them from Hipocrate's raw text: status_code
+        (FHIR ServiceRequest status), priority_code, payment_code."""
+        req['status_code'] = self._derive_fhir_status(req)
+        req['priority_code'] = self._priority_code(req)
+        req['payment_code'] = self._PAYMENT_SLUG.get((req.get('payment_type') or '').lower(), 'other')
+        return req
+
+    @staticmethod
+    def _priority_code(req: dict) -> str:
+        """'urgent' unless Hipocrate's priority text is blank/normal."""
+        return 'urgent' if (req.get('priority') or '').lower() not in ('normala', 'normal', '') else 'routine'
 
     @staticmethod
     def _ward_family(section: str) -> str:
@@ -5171,6 +5187,7 @@ class HippoClientSchedule(HippoClient):
             kwargs.get('end_date'),
             lab_id=kwargs.get('lab_id'),
             patient_text=kwargs.get('patient_text'),
+            limit=kwargs.get('limit'),
         )
         try:
             response_text, error_message = await self.get_page(url)
@@ -5306,7 +5323,7 @@ class HippoClientSchedule(HippoClient):
 
             for req in requests:
                 fhir_status = self._derive_fhir_status(req)
-                priority = 'urgent' if (req.get('priority') or '').lower() not in ('normala', 'normal', '') else 'routine'
+                priority = self._priority_code(req)
 
                 sr = FHIRServiceRequest(
                     id=req.get('request_id'),

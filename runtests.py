@@ -35,7 +35,7 @@ from tests.hippoclient_write import (
     TestWebJsonResponseEndToEnd, TestTextToReportHtml,
 )
 from tests.hippoclient_triage import TestTriageResolution
-from tests.hippoclient_schedule import TestWardFamily, TestApplyFiltersSection
+from tests.hippoclient_schedule import TestWardFamily, TestApplyFiltersSection, TestAnnotateRow
 from tests.hippobridge_handlers import TestServeSpec, TestGetCacheStats, TestBackfillSearch
 from tests.search import TestSearchIndex
 from tests.sqlcache import (
@@ -147,7 +147,7 @@ TEST_GROUPS = {
         TestWebJsonResponseEndToEnd, TestTextToReportHtml,
     ],
     "hippoclient_triage": [TestTriageResolution],
-    "hippoclient_schedule": [TestWardFamily, TestApplyFiltersSection],
+    "hippoclient_schedule": [TestWardFamily, TestApplyFiltersSection, TestAnnotateRow],
     "hippobridge_handlers": [TestServeSpec, TestGetCacheStats, TestBackfillSearch],
     "search": [TestSearchIndex],
     "sqlcache": [

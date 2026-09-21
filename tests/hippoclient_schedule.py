@@ -54,5 +54,30 @@ class TestApplyFiltersSection(unittest.TestCase):
         self.assertEqual(len(self.client._apply_filters(self.requests, section_name='')), 6)
 
 
+class TestAnnotateRow(unittest.TestCase):
+    def setUp(self):
+        self.client = HippoClientSchedule("http://test.invalid", None)
+
+    def test_status_priority_payment_codes(self):
+        r = self.client._annotate_row({
+            'status': 'Cerere Completata', 'priority': 'Urgenta',
+            'payment_type': 'Spitalizare de zi'})
+        self.assertEqual(r['status_code'], 'completed')
+        self.assertEqual(r['priority_code'], 'urgent')
+        self.assertEqual(r['payment_code'], 'spitalizare-zi')
+
+    def test_defaults(self):
+        r = self.client._annotate_row({'status': 'x', 'priority': 'Normala', 'payment_type': ''})
+        self.assertEqual(r['status_code'], 'unknown')
+        self.assertEqual(r['priority_code'], 'routine')
+        self.assertEqual(r['payment_code'], 'other')
+
+    def test_performed_promotes_sent_to_lab_to_active(self):
+        sent = {'status': 'Trimisa in laborator', 'performed_at': ''}
+        done = {'status': 'Trimisa in laborator', 'performed_at': '2026-09-21 10:00'}
+        self.assertEqual(self.client._annotate_row(sent)['status_code'], 'draft')
+        self.assertEqual(self.client._annotate_row(done)['status_code'], 'active')
+
+
 if __name__ == "__main__":
     unittest.main()
