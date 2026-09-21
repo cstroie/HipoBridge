@@ -842,7 +842,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!pendingAnalysesData || elements.imagingGrid?.dataset.loaded) return;
         elements.imagingGrid.dataset.loaded = '1';
         const { patientData } = pendingAnalysesData;
-        const patientLabel = formatPatientName(patientData.name);
+        const patientLabel = formatPatientName(patientData);
         showLoading(`Loading imaging studies for ${patientLabel}…`);
         try {
             setLoadingStep('Querying Hipocrate for imaging requests…');
@@ -870,7 +870,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!pendingAnalysesData || elements.labGrid?.dataset.loaded) return;
         elements.labGrid.dataset.loaded = '1';
         const { patientData } = pendingAnalysesData;
-        const patientLabel = formatPatientName(patientData.name);
+        const patientLabel = formatPatientName(patientData);
         showLoading(`Loading lab results for ${patientLabel}…`);
         try {
             setLoadingStep('Querying Hipocrate for lab requests…');
@@ -897,7 +897,7 @@ document.addEventListener('DOMContentLoaded', function() {
     async function loadReportLazily() {
         if (!pendingReportData || elements.patientReportMarkdown?.dataset.loaded) return;
         elements.patientReportMarkdown.dataset.loaded = '1';
-        const name = pendingReportData.patientData?.name?.[0]?.text || 'patient';
+        const name = pendingReportData.patientData?.name || 'patient';
         showLoading(`Assembling clinical report for ${name}…`);
         try {
             setLoadingStep('Compiling diagnoses, admissions and imaging history…');
@@ -923,7 +923,7 @@ document.addEventListener('DOMContentLoaded', function() {
     async function loadEpicrisisLazily() {
         if (!pendingEpicrisisData || elements.epicrisisContent?.dataset.loaded) return;
         elements.epicrisisContent.dataset.loaded = '1';
-        const name = pendingEpicrisisData?.name?.[0]?.text || 'patient';
+        const name = pendingEpicrisisData?.name || 'patient';
         showLoading(`Loading hospitalization records for ${name}…`);
         try {
             setLoadingStep('Fetching hospitalization episodes from Hipocrate…');
@@ -983,10 +983,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     hideLoading();
                     const chosen = await showPatientSelection(searchResult.candidates);
                     if (!chosen) return; // user dismissed
-                    showLoading(`Loading record for ${chosen.name?.[0]?.text || chosen.id}…`);
+                    showLoading(`Loading record for ${chosen.name || chosen.id}…`);
                     setLoadingStep('Fetching full patient record from Hipocrate…');
-                    const r = await apiFetch(`/fhir/Patient/${chosen.id}`);
-                    searchResult.patientData = r.ok ? await r.json() : chosen;
+                    const r = await apiFetch(`/api/patient/${chosen.id}`);
+                    searchResult.patientData = r.ok ? patientFromApi(await r.json()) : patientFromApi({ patient: chosen });
                     searchResult.patientCode = chosen.id;
                     addToRecentSearches(cnp, searchResult.patientData);
                 } else {
@@ -1003,7 +1003,7 @@ document.addEventListener('DOMContentLoaded', function() {
             log('Patient data retrieved:', patientData);
             log('Patient code:', patientCode);
 
-            const patientName = patientData.name?.[0]?.text || patientCode;
+            const patientName = patientData.name || patientCode;
             setLoadingStep(`Building profile for ${patientName}…`);
             log('Displaying patient data...');
             await displayPatientData(patientData);
@@ -1050,9 +1050,9 @@ document.addEventListener('DOMContentLoaded', function() {
             btn.innerHTML = '<i class="fas fa-sync-alt fa-spin" aria-hidden="true"></i><span>Refreshing…</span>';
         }
         try {
-            const r = await apiFetch(`/fhir/Patient/${patientCode}?refresh=1`);
+            const r = await apiFetch(`/api/patient/${patientCode}?refresh=1`);
             if (!r.ok) throw new Error(`Server error: ${r.status}`);
-            const patientData = await r.json();
+            const patientData = patientFromApi(await r.json());
 
             displayPatientData(patientData);
 
@@ -1116,7 +1116,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     async function performPatientSearch(identifier) {
         try {
-            const searchResponse = await apiFetch(`/fhir/Patient?q=${encodeURIComponent(identifier)}`);
+            const searchResponse = await apiFetch(`/api/patient?q=${encodeURIComponent(identifier)}`);
             
             if (!searchResponse.ok) {
                 if (searchResponse.status === 401) {
@@ -1142,20 +1142,21 @@ document.addEventListener('DOMContentLoaded', function() {
             let patientCode = null;
             let patientData = null;
             
-            if (searchData.resourceType === "Patient") {
-                patientCode = searchData.id;
-                patientData = searchData;
-            } else if (searchData.resourceType === "Bundle" && searchData.entry && searchData.entry.length > 0) {
-                if (searchData.entry.length === 1) {
-                    patientCode = searchData.entry[0].resource.id;
-                    const r = await apiFetch(`/fhir/Patient/${patientCode}`);
-                    patientData = r.ok ? await r.json() : searchData.entry[0].resource;
+            if (searchData.patient) {
+                // Single match: the full record (with its encounter id lists)
+                patientData = patientFromApi(searchData);
+                patientCode = patientData.id;
+            } else if (searchData.patients && searchData.patients.length > 0) {
+                if (searchData.patients.length === 1) {
+                    patientCode = searchData.patients[0].id;
+                    const r = await apiFetch(`/api/patient/${patientCode}`);
+                    patientData = r.ok ? patientFromApi(await r.json()) : patientFromApi({ patient: searchData.patients[0] });
                 } else {
                     // Multiple matches — let the user choose
                     return {
                         success: false,
                         needsSelection: true,
-                        candidates: searchData.entry.map(e => e.resource)
+                        candidates: searchData.patients
                     };
                 }
             } else {
@@ -1203,11 +1204,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const dismiss = (result) => { dlg.close(); dlg.remove(); resolve(result); };
 
             candidates.forEach(patient => {
-                const nameObj = Array.isArray(patient.name) ? patient.name[0] : patient.name;
-                const name = nameObj?.text || [nameObj?.family, ...(nameObj?.given || [])].filter(Boolean).join(' ') || patient.id;
-                const cnp = extractCNP(patient.identifier);
-                const dob = formatBirthDate(patient.birthDate);
-                const gender = patient.gender ? (patient.gender === 'male' ? 'M' : 'F') : null;
+                const name = patient.name || patient.id;
+                const cnp = patient.cnp || null;
+                const dob = formatBirthDate(patient.birth_date);
+                const sex = patient.sex || patient.gender;
+                const gender = sex ? (sex === 'male' ? 'M' : 'F') : null;
                 const meta = [cnp, dob, gender].filter(Boolean).join(' · ');
                 const btn = document.createElement('button');
                 btn.className = 'btn-secondary';
@@ -1629,10 +1630,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // own date (ServiceRequest.authoredOn), not today's date.
     function buildExamIdStub(patientData, examDateIso) {
         const dateStr = formatIdDate(examDateIso);
-        const nameArr = Array.isArray(patientData?.name) ? patientData.name : (patientData?.name ? [patientData.name] : []);
-        const n = nameArr[0];
-        const family = slugifyNamePart(n?.family);
-        const given = slugifyNamePart((n?.given || []).join(' '));
+        const family = slugifyNamePart(patientData?.family_name);
+        const given = slugifyNamePart(patientData?.given_name);
         return [dateStr, family, given].filter(Boolean).join('-');
     }
 
@@ -1640,9 +1639,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // imaging card — indication left blank (not omitted) if absent.
     function buildExamStub(article) {
         const patientData = pendingAnalysesData?.patientData;
-        const fullName = formatPatientName(patientData?.name);
-        const sex = formatGender(patientData?.gender);
-        const ageRaw = calculateAge(patientData?.birthDate);
+        const fullName = formatPatientName(patientData);
+        const sex = formatGender(patientData?.sex);
+        const ageRaw = calculateAge(patientData?.birth_date);
         const age = ageRaw !== 'N/A' ? ageRaw : '';
         const indication = article.querySelector('.card-indication-text')?.textContent
             ?.replace(/^\s*·\s*/, '').trim() || '';
@@ -2082,10 +2081,10 @@ document.addEventListener('DOMContentLoaded', function() {
     function buildPreExamHeader() {
         const patientData = pendingAnalysesData?.patientData;
         if (!patientData) return '';
-        const name = formatPatientName(patientData.name);
-        const age = calculateAge(patientData.birthDate);
-        const gender = formatGender(patientData.gender);
-        const dob = formatBirthDate(patientData.birthDate);
+        const name = formatPatientName(patientData);
+        const age = calculateAge(patientData.birth_date);
+        const gender = formatGender(patientData.sex);
+        const dob = formatBirthDate(patientData.birth_date);
         const parts = [];
         if (name && name !== 'N/A') parts.push(`**${name}**`);
         const demo = [gender, age].filter(v => v && v !== 'N/A').join(', ');
@@ -2537,11 +2536,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
         try {
             // ── §1 Patient identity ──────────────────────────────────────
-            const name     = formatPatientName(patientData.name);
-            const age      = calculateAge(patientData.birthDate);
-            const gender   = formatGender(patientData.gender);
-            const dob      = formatBirthDate(patientData.birthDate);
-            const cnp      = extractCNP(patientData.identifier) || '';
+            const name     = formatPatientName(patientData);
+            const age      = calculateAge(patientData.birth_date);
+            const gender   = formatGender(patientData.sex);
+            const dob      = formatBirthDate(patientData.birth_date);
+            const cnp      = patientData.cnp || '';
             const pid      = patientData.id || '';
 
             const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
@@ -2561,7 +2560,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             setText('reportCNP', cnp);
 
-            const patHippoUrl = (patientData.extension || []).find(e => e.url === 'hipocrateUrl')?.valueUri;
+            const patHippoUrl = patientHipocrateUrl(patientData);
             const pidWrap = document.getElementById('reportPatientIdWrap');
             if (pidWrap) {
                 pidWrap.innerHTML = '';
@@ -2577,9 +2576,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
 
-            const ext = patientData.extension || [];
-            const weight = (ext.find(e => e.url?.endsWith('body-weight')) || {}).valueString || '';
-            const height = (ext.find(e => e.url?.endsWith('height'))      || {}).valueString || '';
+            const weight = patientData.weight || '';
+            const height = patientData.height || '';
             const weightWrap = document.getElementById('reportWeightWrap');
             const heightWrap = document.getElementById('reportHeightWrap');
             if (weight && weightWrap) { document.getElementById('reportWeight').textContent = weight + ' kg'; weightWrap.hidden = false; }
@@ -3298,7 +3296,7 @@ document.addEventListener('DOMContentLoaded', function() {
             term: searchTerm,
             timestamp: new Date().toISOString(),
             patientId: patientData?.id || null,
-            patientName: patientData ? formatPatientName(patientData.name) : null,
+            patientName: patientData ? formatPatientName(patientData) : null,
             type: identifySearchType(searchTerm)
         };
         
@@ -3414,7 +3412,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function displayPatientData(patientData) {
         log('Displaying patient data:', patientData);
 
-        const name = formatPatientName(patientData.name);
+        const name = formatPatientName(patientData);
         if (name) setPageTitle(name);
 
         // Enhanced patient information display with better formatting
@@ -3592,25 +3590,24 @@ document.addEventListener('DOMContentLoaded', function() {
         log('Displaying patient basic info:', patientData);
         
         // Patient Name
-        const name = formatPatientName(patientData.name);
+        const name = formatPatientName(patientData);
         if (elements.patientName) elements.patientName.textContent = name;
         if (elements.patientNameInfo) elements.patientNameInfo.textContent = name || '—';
         log('Patient name set to:', name);
 
         // Show who is loaded in the nav: "FAMILY G." instead of "Patient Profile"
         if (elements.navPatientLabel) {
-            const n = Array.isArray(patientData.name) ? patientData.name[0] : patientData.name;
-            const family = n?.family || '';
-            const givenInitial = n?.given?.[0] ? ` ${n.given[0][0]}.` : '';
+            const family = patientData.family_name || '';
+            const givenInitial = patientData.given_name ? ` ${patientData.given_name.trim()[0]}.` : '';
             elements.navPatientLabel.textContent = family ? `${family}${givenInitial}` : 'Patient Profile';
         }
         
         // Meta badges: ID · gender + age · diagnosis
-        const age = calculateAge(patientData.birthDate);
+        const age = calculateAge(patientData.birth_date);
         if (elements.patientAgeInfo) elements.patientAgeInfo.textContent = age !== 'N/A' ? age : '—';
         if (elements.patientId) {
             const pid = patientData.id || '';
-            const patHippoUrl = (patientData.extension || []).find(e => e.url === 'hipocrateUrl')?.valueUri;
+            const patHippoUrl = patientHipocrateUrl(patientData);
             elements.patientId.innerHTML = '';
             if (pid && patHippoUrl) {
                 const a = document.createElement('a');
@@ -3625,8 +3622,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         // Gender icon + age in one badge
-        const genderIcon = patientData.gender === 'female' ? 'fa-venus' : patientData.gender === 'male' ? 'fa-mars' : null;
-        const genderLabel = formatGender(patientData.gender);
+        const genderIcon = patientData.sex === 'female' ? 'fa-venus' : patientData.sex === 'male' ? 'fa-mars' : null;
+        const genderLabel = formatGender(patientData.sex);
         const ageLabel = age !== 'N/A' ? age : null;
         if (elements.patientGender) {
             elements.patientGender.innerHTML = '';
@@ -3644,32 +3641,32 @@ document.addEventListener('DOMContentLoaded', function() {
         log('Age set to:', age);
         
         // Personal info fields
-        const cnp = extractCNP(patientData.identifier);
-        const cnpValid = isCnpValid(patientData.identifier);
+        const cnp = patientData.cnp || null;
+        // Presumed valid unless the backend explicitly flags it invalid
+        // (checksum/date/county-code failure — see extractors.py parse_cnp).
+        const cnpValid = patientData.cnp_valid !== false;
         if (elements.patientCnp) {
             elements.patientCnp.textContent = cnp || '—';
             elements.patientCnp.classList.toggle('cnp-invalid', !!cnp && !cnpValid);
             elements.patientCnp.title = (cnp && !cnpValid) ? 'This CNP failed validation (checksum/date/county code) — verify with the patient record' : '';
         }
-        if (elements.patientBirthDate) elements.patientBirthDate.textContent = formatBirthDate(patientData.birthDate) || '—';
+        if (elements.patientBirthDate) elements.patientBirthDate.textContent = formatBirthDate(patientData.birth_date) || '—';
 
-        const contactInfo = extractContactInfo(patientData.telecom);
+        const contactInfo = { phone: formatPhoneNumber(patientData.phone), email: patientData.email || null };
         if (elements.patientPhone) elements.patientPhone.textContent = contactInfo.phone || '—';
         if (elements.patientEmail) elements.patientEmail.textContent = contactInfo.email || '—';
         if (elements.patientAddress) {
-            const addr = patientData.address?.[0];
-            const text = addr?.text || '';
-            const district = addr?.district || '';
+            const text = patientData.address || '';
+            const district = patientData.county || '';
             const display = district && !text.includes(district) ? `${text}, ${district}` : text;
             elements.patientAddress.textContent = display || '—';
         }
         log('CNP:', cnp, 'Phone:', contactInfo.phone, 'Email:', contactInfo.email);
 
         // QR codes
-        const nameObj   = Array.isArray(patientData.name) ? patientData.name[0] : patientData.name;
-        const lastName  = nameObj?.family || '';
-        const firstName = nameObj?.given?.[0] || '';
-        const birthDate = patientData.birthDate || '';
+        const lastName  = patientData.family_name || '';
+        const firstName = (patientData.given_name || '').split(/\s+/)[0] || '';
+        const birthDate = patientData.birth_date || '';
         renderQr(elements.qrLastName,  lastName);
         renderQr(elements.qrFirstName, firstName);
         renderQr(elements.qrCnp,       cnp || '');
@@ -3711,13 +3708,29 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function formatPatientName(nameArray) {
-        if (!nameArray) return 'N/A';
-        const arr = Array.isArray(nameArray) ? nameArray : [nameArray];
-        if (arr.length === 0) return 'N/A';
-        const name = arr[0];
-        const family = name.family ? toTitleCase(name.family) : '';
-        const given  = name.given  ? toTitleCase(name.given.join(' ')) : '';
+    // Patient record from /api/patient/{id} (or a single-match /api/patient?q=):
+    // the `patient` object (name, family_name, given_name, cnp, cnp_valid, sex,
+    // birth_date, phone, email, address, city, county, weight, height, …) plus
+    // the encounter id lists flattened in. This is the shape every patientData
+    // consumer below reads.
+    function patientFromApi(d) {
+        return {
+            ...(d?.patient || {}),
+            presentation_ids: d?.presentation || [],
+            checkin_ids: d?.checkin || [],
+            checkout_ids: d?.checkout || [],
+        };
+    }
+
+    // Link to the patient's page in Hipocrate ('' until the base URL is known).
+    function patientHipocrateUrl(p) {
+        return hipocrateUrl && p?.id ? `${hipocrateUrl}/Pacient/edit.asp?id=${encodeURIComponent(p.id)}` : '';
+    }
+
+    function formatPatientName(p) {
+        if (!p) return 'N/A';
+        const family = p.family_name ? toTitleCase(p.family_name) : '';
+        const given  = p.given_name  ? toTitleCase(p.given_name) : '';
 
         if (family && given) return `${family}, ${given}`;
         if (family) return family;
@@ -3727,14 +3740,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initials only (e.g. "J.D.") — for headings prepended to text sent to
     // the LLM, so the model never sees the patient's full name.
-    function formatPatientInitials(nameArray) {
-        if (!nameArray) return 'N/A';
-        const arr = Array.isArray(nameArray) ? nameArray : [nameArray];
-        if (arr.length === 0) return 'N/A';
-        const name = arr[0];
-        const familyInitial = name.family ? name.family.trim()[0]?.toUpperCase() : '';
-        const givenInitials = name.given
-            ? name.given.map(g => g.trim()[0]?.toUpperCase()).filter(Boolean).join('.')
+    function formatPatientInitials(p) {
+        if (!p) return 'N/A';
+        const familyInitial = p.family_name ? p.family_name.trim()[0]?.toUpperCase() : '';
+        const givenInitials = p.given_name
+            ? p.given_name.split(/\s+/).map(g => g.trim()[0]?.toUpperCase()).filter(Boolean).join('.')
             : '';
         const parts = [givenInitials, familyInitial].filter(Boolean);
         return parts.length ? parts.join('.') + '.' : 'N/A';
@@ -3749,9 +3759,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // specific one on hand (e.g. the Report tab's own latestDx).
     function patientContextLine(patientData, diagnosis) {
         if (!patientData) return '';
-        const initials = formatPatientInitials(patientData.name);
-        const age = calculateAge(patientData.birthDate);
-        const gender = formatGender(patientData.gender);
+        const initials = formatPatientInitials(patientData);
+        const age = calculateAge(patientData.birth_date);
+        const gender = formatGender(patientData.sex);
         const dx = diagnosis ?? elements.patientDiagnosis?.textContent?.trim();
         return [initials, age, gender, dx].filter(v => v && v !== 'N/A').join(' | ');
     }
@@ -3781,48 +3791,6 @@ document.addEventListener('DOMContentLoaded', function() {
         return formatDate(birthDate);
     }
     
-    // Enhanced CNP extraction
-    function extractCNP(identifierArray) {
-        if (!identifierArray || !Array.isArray(identifierArray)) {
-            return null;
-        }
-        
-        const cnpIdentifier = identifierArray.find(id => 
-            id.system && id.system.includes('cnp')
-        );
-        
-        return cnpIdentifier ? cnpIdentifier.value : null;
-    }
-
-    // CNP is presumed valid unless the backend explicitly flags it invalid
-    // (checksum/date/county-code failure — see extractors.py parse_cnp).
-    function isCnpValid(identifierArray) {
-        if (!identifierArray || !Array.isArray(identifierArray)) {
-            return true;
-        }
-        const cnpIdentifier = identifierArray.find(id => id.system && id.system.includes('cnp'));
-        if (!cnpIdentifier) return true;
-        const ext = (cnpIdentifier.extension || []).find(e => e.url && e.url.includes('cnp-valid'));
-        return ext ? ext.valueBoolean !== false : true;
-    }
-
-    // Enhanced contact info extraction
-    function extractContactInfo(telecomArray) {
-        const result = { phone: null, email: null };
-        
-        if (!telecomArray || !Array.isArray(telecomArray)) {
-            return result;
-        }
-        
-        const phone = telecomArray.find(t => t.system === 'phone');
-        const email = telecomArray.find(t => t.system === 'email');
-        
-        result.phone = phone ? formatPhoneNumber(phone.value) : null;
-        result.email = email ? email.value : null;
-        
-        return result;
-    }
-    
     // Enhanced phone number formatting
     function formatPhoneNumber(phoneNumber) {
         if (!phoneNumber) return null;
@@ -3842,41 +3810,15 @@ document.addEventListener('DOMContentLoaded', function() {
         return phoneNumber;
     }
     
-    // Enhanced medical statistics extraction
+    // Medical statistics from the patient's encounter id lists
     function extractMedicalStats(patientData) {
-        const stats = {
-            encounters: 0,
-            admissions: 0,
-            discharges: 0,
-            checkoutIds: []
+        const checkoutIds = extractCheckoutIds(patientData);
+        return {
+            encounters: extractPresentationIds(patientData).length,
+            admissions: extractCheckinIds(patientData).length,
+            discharges: checkoutIds.length,
+            checkoutIds,
         };
-        
-        if (patientData.extension && Array.isArray(patientData.extension)) {
-            const encounterExt = patientData.extension.find(ext =>
-                ext.url && ext.url.includes('presentation-ids')
-            );
-            const admissionExt = patientData.extension.find(ext =>
-                ext.url && ext.url.includes('checkin-ids')
-            );
-            const checkoutExt = patientData.extension.find(ext => 
-                ext.url && ext.url.includes('checkout-ids')
-            );
-            
-            if (encounterExt && encounterExt.valueString) {
-                stats.encounters = encounterExt.valueString.split(',').filter(id => id.trim()).length;
-            }
-            
-            if (admissionExt && admissionExt.valueString) {
-                stats.admissions = admissionExt.valueString.split(',').filter(id => id.trim()).length;
-            }
-            
-            if (checkoutExt && checkoutExt.valueString) {
-                stats.checkoutIds = checkoutExt.valueString.split(',').filter(id => id.trim());
-                stats.discharges = stats.checkoutIds.length;
-            }
-        }
-        
-        return stats;
     }
     
     // Enhanced medical stats display
@@ -4627,8 +4569,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const parts = [];
         const patientData = pendingAnalysesData?.patientData;
         if (patientData) {
-            const age = calculateAge(patientData.birthDate);
-            const gender = formatGender(patientData.gender);
+            const age = calculateAge(patientData.birth_date);
+            const gender = formatGender(patientData.sex);
             const demo = [gender, age].filter(v => v && v !== 'N/A').join(', ');
             if (demo) parts.push(`**Patient:** ${demo}`);
         }
@@ -5597,26 +5539,10 @@ document.addEventListener('DOMContentLoaded', function() {
         return episodeBoundaryPromise;
     }
 
-    function extractCheckoutIds(patientData) {
-        if (!patientData.extension) return [];
-        const checkoutExt = patientData.extension.find(ext => ext.url && ext.url.includes('checkout-ids'));
-        if (!checkoutExt || !checkoutExt.valueString) return [];
-        return checkoutExt.valueString.split(',').filter(id => id.trim());
-    }
-
-    function extractCheckinIds(patientData) {
-        if (!patientData.extension) return [];
-        const checkinExt = patientData.extension.find(ext => ext.url && ext.url.includes('checkin-ids'));
-        if (!checkinExt || !checkinExt.valueString) return [];
-        return checkinExt.valueString.split(',').filter(id => id.trim());
-    }
-
-    function extractPresentationIds(patientData) {
-        if (!patientData.extension) return [];
-        const ext = patientData.extension.find(e => e.url && e.url.includes('presentation-ids'));
-        if (!ext || !ext.valueString) return [];
-        return ext.valueString.split(',').filter(id => id.trim());
-    }
+    const _idList = ids => (ids || []).filter(id => String(id).trim());
+    function extractCheckoutIds(patientData) { return _idList(patientData.checkout_ids); }
+    function extractCheckinIds(patientData) { return _idList(patientData.checkin_ids); }
+    function extractPresentationIds(patientData) { return _idList(patientData.presentation_ids); }
 
     async function fetchPresentation(id) {
         if (cache.encounters[id]) return cache.encounters[id];
