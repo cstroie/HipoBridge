@@ -53,7 +53,6 @@ from hippodata import HippoData
 import search
 
 from extractors import parse_cnp
-from markdown import markdown_to_html
 from worklist import start_worklist
 import pacs
 
@@ -283,8 +282,6 @@ async def get_fhir_service_request(request):
 
     Backed by BuletinSolicitare.asp (see HippoClientBuletinSolicitare) — region,
     indication, and the true ordering physician ("Medic solicitant").
-    See also /fhir/Task/{id} (cerere.asp — workflow state) and
-    /fhir/Specimen/{id} (buletinRecoltari.asp — lab/imaging handoff paperwork).
     """
     id = request.match_info.get('id')
     if not id:
@@ -294,58 +291,6 @@ async def get_fhir_service_request(request):
     client = HippoClientBuletinSolicitare(SERVICE_URL, request)
     response = await client.fetch_respond_fhir(id=id)
     return web_fhir_response(response)
-
-@require_auth
-async def get_fhir_task(request):
-    """Retrieve the request's workflow state by ID. Returns FHIR Task resource.
-
-    Backed by cerere.asp (see HippoClientCerere) — status, execution period,
-    itemized exams, and report output. Task.focus references the corresponding
-    ServiceRequest (BuletinSolicitare.asp).
-    """
-    id = request.match_info.get('id')
-    if not id:
-        return web_fhir_response("Request ID is required")
-    logger.info(f"Retrieving task (cerere) with ID: {id}")
-
-    client = HippoClientCerere(SERVICE_URL, request)
-    response = await client.fetch_respond_fhir(id=id)
-    return web_fhir_response(response)
-
-@require_auth
-async def get_specimen(request):
-    """Retrieve the lab/imaging handoff paperwork by ID. Returns raw HippoData JSON."""
-    id = request.match_info.get('id')
-    if not id:
-        return web_error_response("Request ID is required")
-    logger.info(f"Retrieving specimen (buletinRecoltari) with ID: {id}")
-
-    client = HippoClientServiceRequest(SERVICE_URL, request)
-
-    debug_resp = await web_debug_response(client, request, id=id)
-    if debug_resp is not None:
-        return debug_resp
-
-    parsed_data = await client.fetch_and_parse(id=id)
-    return web_json_response(parsed_data)
-
-@require_auth
-async def get_fhir_specimen(request):
-    """Retrieve the lab/imaging handoff paperwork by ID. Returns FHIR Specimen resource.
-
-    Backed by buletinRecoltari.asp (see HippoClientServiceRequest) — a stretch of
-    the Specimen resource (imaging orders have no physical specimen), kept for
-    the residual fields (comment, registration) not available elsewhere.
-    """
-    id = request.match_info.get('id')
-    if not id:
-        return web_fhir_response("Request ID is required")
-    logger.info(f"Retrieving specimen (buletinRecoltari) with ID: {id}")
-
-    client = HippoClientServiceRequest(SERVICE_URL, request)
-    response = await client.fetch_respond_fhir(id=id)
-    return web_fhir_response(response)
-
 
 @require_auth
 async def get_study(request):
@@ -747,23 +692,6 @@ async def post_logout(request):
     username, password = request['auth_credentials']
     await user_session_manager.close_user_session(username, password)
     return web_json_response(HippoData(status="success", message=""))
-
-@require_auth
-async def debug_passthrough(request):
-    """Fetch any Hipocrate path for debugging. ?path=/files/checkup.asp?cuid=..."""
-    path = request.query.get('path', '')
-    if not path:
-        return web.Response(text='Missing ?path=', status=400)
-    # Must stay relative to SERVICE_URL — get_full_url() treats anything
-    # starting with "http" as an absolute URL and fetches it as-is, which
-    # would turn this debug tool into an open SSRF to any host.
-    if '://' in path:
-        return web.Response(text='path must be relative to the Hipocrate service (no scheme/host)', status=400)
-    client = HippoClient(SERVICE_URL, request)
-    html, err = await client.get_page(path)
-    if err:
-        return web.Response(text=f'Error: {err}', status=500)
-    return web.Response(text=html, content_type='text/html')
 
 @require_auth
 async def get_fhir_encounter(request):
@@ -1170,24 +1098,6 @@ async def _post_ai_summarize_stream(request, kind: str, text: str, force: bool):
     return response
 
 
-async def serve_md2html(request):
-    """Convert markdown text to HTML. Accepts JSON body with 'text' field."""
-    try:
-        data = await request.json()
-        markdown_text = data.get('text', '')
-        if not isinstance(markdown_text, str):
-            return web_error_response("'text' field must be a string")
-        html_content = markdown_to_html(markdown_text)
-        return web_json_response({
-            "status": "success",
-            "html": html_content
-        })
-    except json.JSONDecodeError:
-        return web_error_response("Invalid JSON data")
-    except Exception as e:
-        return web_error_response("Markdown conversion failed", 500, {"exception": str(e)})
-
-
 @require_auth
 async def serve_validate_cnp(request):
     """Validate a Romanian CNP and return parsed demographic data."""
@@ -1577,7 +1487,6 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     app.router.add_get('/api/checkin/{id}', get_checkin)
     app.router.add_get('/api/checkup/{id}', get_checkup)
     app.router.add_get('/api/presentation/{id}', get_presentation)
-    app.router.add_get('/api/specimen/{id}', get_specimen)
     app.router.add_get('/api/fupu/{id}', get_fupu)
     app.router.add_get('/api/cnp', serve_validate_cnp)
     app.router.add_get('/api/request/{id}/patient', get_request_patient)
@@ -1593,7 +1502,6 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     app.router.add_get('/fhir/Schedule', get_fhir_schedule)
     app.router.add_get('/api/whoami', get_whoami)
     app.router.add_post('/api/logout', post_logout)
-    app.router.add_get('/api/debug', debug_passthrough)
     app.router.add_get('/api/cache/stats', get_cache_stats)
     app.router.add_post('/api/cache/cleanup', post_cache_cleanup)
     app.router.add_get('/api/search/text', search_text)
@@ -1601,15 +1509,12 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     app.router.add_get('/fhir/Patient/{id}', get_fhir_patient)
     app.router.add_get('/fhir/ServiceRequest', search_fhir_service_request)
     app.router.add_get('/fhir/ServiceRequest/{id}', get_fhir_service_request)
-    app.router.add_get('/fhir/Task/{id}', get_fhir_task)
-    app.router.add_get('/fhir/Specimen/{id}', get_fhir_specimen)
     app.router.add_get('/fhir/ImagingStudy/{id}', get_fhir_imaging_study)
     app.router.add_get('/fhir/DiagnosticReport/{id}', get_fhir_diagnostic_report)
     app.router.add_get('/fhir/Encounter/{id}', get_fhir_encounter)
     app.router.add_get('/api/observation', get_observation)
     app.router.add_get('/fhir/Observation', get_fhir_observation)
     app.router.add_get('/fhir/ValueSet/cnp', serve_validate_cnp)
-    app.router.add_post('/fhir/md2html', serve_md2html)
     app.router.add_post('/api/ai/summarize', post_ai_summarize)
     app.router.add_get('/fhir/CodeSystem/analysis-types', serve_fhir_analysis_types)
     app.router.add_get('/fhir/spec', serve_spec)

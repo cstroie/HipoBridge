@@ -145,91 +145,6 @@
         }
       }
     },
-    "/fhir/md2html": {
-      "post": {
-        "summary": "Convert markdown to HTML",
-        "description": "Convert simple markdown text to basic HTML for display in web interface",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "text": {
-                    "type": "string",
-                    "description": "Markdown text to convert"
-                  }
-                },
-                "required": [
-                  "text"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "HTML conversion result",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "status": {
-                      "type": "string",
-                      "example": "success"
-                    },
-                    "html": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid JSON data",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "status": {
-                      "type": "string",
-                      "example": "error"
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Invalid JSON data"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Conversion error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "status": {
-                      "type": "string",
-                      "example": "error"
-                    },
-                    "message": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/fhir/Patient": {
       "get": {
         "summary": "Search for patients",
@@ -1181,20 +1096,6 @@
         }
       }
     },
-    "/api/debug": {
-      "get": {
-        "summary": "Raw Hipocrate HTML passthrough",
-        "description": "Fetch any Hipocrate path and return the raw HTML. Useful for inspecting pages before writing a parser.",
-        "parameters": [
-          {"name": "path", "in": "query", "required": true, "description": "Hipocrate path to fetch (e.g. /Pacient/history.asp?pacid=123)", "schema": {"type": "string"}}
-        ],
-        "responses": {
-          "200": {"description": "Raw HTML from Hipocrate"},
-          "400": {"description": "Missing path parameter"},
-          "401": {"description": "Authentication required"}
-        }
-      }
-    },
     "/fhir/CodeSystem/analysis-types": {
       "get": {
         "summary": "Get analysis types",
@@ -1381,21 +1282,6 @@
         }
       }
     },
-    "/api/specimen/{id}": {
-      "get": {
-        "summary": "Get lab/imaging handoff paperwork (raw JSON)",
-        "description": "Same as /fhir/Specimen/{id} but returns raw HippoData JSON. Backed by buletinRecoltari.asp.",
-        "parameters": [
-          {"name": "id", "in": "path", "required": true, "description": "Request ID", "schema": {"type": "string"}},
-          {"name": "debug", "in": "query", "required": false, "description": "Pass 'page' to get raw Hipocrate HTML", "schema": {"type": "string"}}
-        ],
-        "responses": {
-          "200": {"description": "Raw specimen (buletinRecoltari) data"},
-          "400": {"description": "Missing request ID"},
-          "401": {"description": "Authentication required"}
-        }
-      }
-    },
     "/api/cnp": {
       "get": {
         "summary": "Validate CNP (raw JSON)",
@@ -1406,34 +1292,6 @@
         "responses": {
           "200": {"description": "CNP validation result with detailed information"},
           "400": {"description": "Missing CNP"},
-          "401": {"description": "Authentication required"}
-        }
-      }
-    },
-    "/fhir/Specimen/{id}": {
-      "get": {
-        "summary": "Get lab/imaging handoff paperwork",
-        "description": "Retrieve the lab/imaging handoff paperwork by ID as FHIR Specimen resource. Backed by buletinRecoltari.asp — a stretch of the Specimen resource (imaging orders have no physical specimen), kept for fields (comment, registration) not available elsewhere.",
-        "parameters": [
-          {"name": "id", "in": "path", "required": true, "description": "Request ID", "schema": {"type": "string"}}
-        ],
-        "responses": {
-          "200": {"description": "Specimen as FHIR Specimen resource"},
-          "400": {"description": "Missing request ID"},
-          "401": {"description": "Authentication required"}
-        }
-      }
-    },
-    "/fhir/Task/{id}": {
-      "get": {
-        "summary": "Get request workflow state",
-        "description": "Retrieve the request's workflow state by ID as FHIR Task resource. Backed by cerere.asp — status, execution period, itemized exams, and report output. Task.focus references the corresponding ServiceRequest (BuletinSolicitare.asp).",
-        "parameters": [
-          {"name": "id", "in": "path", "required": true, "description": "Request ID", "schema": {"type": "string"}}
-        ],
-        "responses": {
-          "200": {"description": "Task as FHIR Task resource"},
-          "400": {"description": "Missing request ID"},
           "401": {"description": "Authentication required"}
         }
       }

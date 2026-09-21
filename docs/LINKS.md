@@ -47,18 +47,7 @@ Type codes: `radio`, `eco`, `ct`, `irm`, `rads`, `lab`, `rads`, `apa`.
 | `GET /api/request/{id}` | `/PARA/Printabile/BuletinSolicitare.asp?id={id}&type=63&IdP=70` |
 | `GET /fhir/ServiceRequest/{id}` | same |
 
-Region, indication, and the true ordering physician ("Medic solicitant"). See also `/fhir/Task/{id}` (cerere.asp — workflow state) and Specimen below (buletinRecoltari.asp — lab/imaging handoff paperwork).
-
----
-
-## Specimen (lab/imaging handoff paperwork)
-
-| HippoBridge endpoint | Hipocrate URL |
-|---|---|
-| `GET /api/specimen/{id}` | `/PARA/Printabile/buletinRecoltari.asp?id={id}` |
-| `GET /fhir/Specimen/{id}` | same |
-
-A stretch of the Specimen resource — imaging orders have no physical specimen — kept for residual fields (comment, registration) not available elsewhere.
+Region, indication, and the true ordering physician ("Medic solicitant").
 
 ---
 
@@ -104,7 +93,6 @@ Encounter IDs are 15-digit numbers (e.g. `260100000619759`).
 | `GET /fhir/spec` | OpenAPI spec (spec.json) |
 | `GET /fhir/CodeSystem/analysis-types` | Analysis type codes and domain mappings |
 | `GET /fhir/ValueSet/cnp?id={cnp}` / `GET /api/cnp?id={cnp}` | Validate and parse a Romanian CNP (same handler, mounted on both paths) |
-| `POST /fhir/md2html` | Convert markdown to HTML (body: markdown text) |
 
 ---
 
@@ -122,16 +110,6 @@ GET /api/checkout/260100000619759?debug=page
 GET /api/checkin/652001?debug=page
 GET /api/checkup/421200002270746?debug=page
 ```
-
-**2. Arbitrary Hipocrate path passthrough** — fetch any Hipocrate URL not yet proxied:
-
-```
-GET /api/debug?path=/Pacient/history.asp?pacid=421200000667904
-GET /api/debug?path=/files/checkin.asp?id=652001
-GET /api/debug?path=/files/checkup.asp?cuid=421200002270746
-```
-
-Returns the raw Hipocrate HTML. Useful for inspecting pages before writing a parser.
 
 ---
 
@@ -215,7 +193,6 @@ FHIR ServiceRequest status mapping:
 | HippoBridge endpoint | Hipocrate URL |
 |---|---|
 | `GET /api/request/{id}/patient` | `/PARA/NOM/Listare/cerere.asp?id={id}` |
-| `GET /fhir/Task/{id}` | `/PARA/NOM/Listare/cerere.asp?id={id}` |
 
 Full request edit form. Returns patient name, CNP, demographics (derived from CNP), request date/time, priority, payment type, ordering physician, ward/section, clinical diagnosis, clinical indication, justification, request code, laboratory name, and exam list (when present). Also resolves the numeric `patient.id` — used by the Schedule tab to load a patient record. Returns an access-denied error for labs the authenticated user cannot view (e.g. Ecografie); use `/api/request/{id}` (BuletinSolicitare) as fallback for patient demographics in that case.
 

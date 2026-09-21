@@ -377,60 +377,6 @@ async def get_analyses(session: aiohttp.ClientSession, patient_id: str,
     return True
 
 
-async def get_task(session: aiohttp.ClientSession, task_id: str) -> bool:
-    """Retrieve and display a request's workflow state (FHIR Task) by ID."""
-    print(f"Retrieving task: {task_id}")
-    data, ok = await _get(session, f"/fhir/Task/{_seg(task_id)}")
-    if not ok:
-        print(f"Task retrieval failed: {data.get('message', '')}")
-        return False
-
-    print("\n--- Task ---")
-    print(f"ID: {data.get('id', 'N/A')}")
-    if data.get("status"):
-        print(f"Status: {data['status']}")
-    period = data.get("executionPeriod", {})
-    if period.get("start"):
-        print(f"Started: {period['start']}")
-    if period.get("end"):
-        print(f"Ended: {period['end']}")
-    focus = data.get("focus", {})
-    if focus.get("reference"):
-        print(f"ServiceRequest: {focus['reference']}")
-    for note in data.get("note", []):
-        if note.get("text"):
-            print(f"Note: {note['text']}")
-    print("------------")
-    return True
-
-
-async def get_specimen(session: aiohttp.ClientSession, specimen_id: str) -> bool:
-    """Retrieve and display the lab/imaging handoff paperwork (FHIR Specimen) by ID."""
-    print(f"Retrieving specimen: {specimen_id}")
-    data, ok = await _get(session, f"/fhir/Specimen/{_seg(specimen_id)}")
-    if not ok:
-        print(f"Specimen retrieval failed: {data.get('message', '')}")
-        return False
-
-    print("\n--- Specimen ---")
-    print(f"ID: {data.get('id', 'N/A')}")
-    if data.get("status"):
-        print(f"Status: {data['status']}")
-    subject = data.get("subject", {})
-    if subject.get("reference"):
-        print(f"Patient: {subject['reference']}")
-    if data.get("type", {}).get("text"):
-        print(f"Laboratory: {data['type']['text']}")
-    collection = data.get("collection", {})
-    if collection.get("collectedDateTime"):
-        print(f"Collected: {collection['collectedDateTime']}")
-    for coll_note in data.get("note", []):
-        if coll_note.get("text"):
-            print(f"Note: {coll_note['text']}")
-    print("----------------")
-    return True
-
-
 async def get_observations(session: aiohttp.ClientSession, patient_id: str,
                             start_date: str = None, end_date: str = None) -> bool:
     """Retrieve and display aggregated lab Observations for a patient."""
@@ -567,8 +513,6 @@ async def main() -> int:
     parser.add_argument("--analysis-type",  "-t", help="Analysis type filter (radio, ct, irm, eco, rads, lab)")
     parser.add_argument("--datetime-filter","-d", help="Date/time filter ISO (YYYY-MM-DDTHH:MM:SS)")
     parser.add_argument("--cnp",            "-c", help="CNP to validate")
-    parser.add_argument("--task",           "-k", help="Task (cerere) ID to retrieve workflow state for")
-    parser.add_argument("--specimen",       "-x", help="Specimen ID to retrieve handoff paperwork for")
     parser.add_argument("--observations",   "-O", help="Patient ID to retrieve aggregated lab observations for")
     parser.add_argument("--start-date", help="Start date filter for --observations (YYYY-MM-DD)")
     parser.add_argument("--end-date",   help="End date filter for --observations (YYYY-MM-DD)")
@@ -582,8 +526,8 @@ async def main() -> int:
     password = args.password or os.getenv("HYP_PASS")
 
     if not any([args.search, args.patient, args.report, args.imaging_study,
-                args.checkout, args.analyses, args.cnp, args.task,
-                args.specimen, args.observations, args.whoami]):
+                args.checkout, args.analyses, args.cnp,
+                args.observations, args.whoami]):
         print("Error: at least one operation flag is required")
         parser.print_help()
         return 1
@@ -605,8 +549,6 @@ async def main() -> int:
             (args.analyses,      lambda: get_analyses(session, args.analyses,
                                                        args.analysis_type, args.datetime_filter)),
             (args.cnp,           lambda: validate_cnp(session, args.cnp)),
-            (args.task,          lambda: get_task(session, args.task)),
-            (args.specimen,      lambda: get_specimen(session, args.specimen)),
             (args.observations,  lambda: get_observations(session, args.observations,
                                                            args.start_date, args.end_date)),
             (args.whoami,        lambda: get_whoami(session)),

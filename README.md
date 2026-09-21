@@ -34,7 +34,7 @@ Most resources have two routes:
 | `GET /api/<resource>` | Raw `HippoData` JSON (internal/debug) |
 | `GET /fhir/<Resource>` | FHIR R4 JSON |
 
-Exceptions: `/fhir/Metadata`, `/fhir/spec`, `/fhir/CodeSystem/analysis-types`, and `/fhir/md2html` are meta/utility endpoints, not resources, so there's nothing to pair them with.
+Exceptions: `/fhir/Metadata`, `/fhir/spec`, and `/fhir/CodeSystem/analysis-types` are meta/utility endpoints, not resources, so there's nothing to pair them with.
 
 Add `?debug=page` to any `/api/*` single-resource endpoint to get the raw Hipocrate HTML.
 
@@ -45,8 +45,6 @@ GET  /fhir/Patient?q={search_term}
 GET  /fhir/Patient/{id}
 GET  /fhir/ServiceRequest?patient={id}[&type={code}][&region={region}][&dt={iso_datetime}]
 GET  /fhir/ServiceRequest/{id}               — BuletinSolicitare.asp (region, indication, ordering physician)
-GET  /fhir/Task/{id}                         — cerere.asp (workflow state: status, execution period, itemized exams, report)
-GET  /fhir/Specimen/{id}                     — buletinRecoltari.asp (lab/imaging handoff paperwork; stretch of the resource, no physical specimen)
 GET  /fhir/DiagnosticReport/{id}
 GET  /fhir/ImagingStudy/{id}
 GET  /fhir/Encounter/{id}[?type=checkout|checkin|checkup|presentation]
@@ -54,7 +52,6 @@ GET  /fhir/Observation?patient={id}[&start_date=&end_date=&refresh=1]  — aggre
 GET  /fhir/Schedule[?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD&lab_id=N&section_name=S&patient_text=T&refresh=1]
 GET  /fhir/ValueSet/cnp?id={cnp}
 GET  /fhir/CodeSystem/analysis-types
-POST /fhir/md2html
 GET  /fhir/Metadata
 GET  /fhir/spec
 ```
@@ -66,9 +63,7 @@ GET  /api/schedule[?start_date=&end_date=&lab_id=&section_name=&patient_text=&re
 GET  /api/request/{id}/patient  — full request details from cerere.asp (patient name, CNP, priority, clinical indication, physician, section, report text, performed date, validate toggles)
 GET  /api/checkin/{id}          — admission record (checkin.asp)
 GET  /api/checkup/{id}          — emergency consultation (checkup.asp)
-GET  /api/debug?path=...        — raw Hipocrate HTML passthrough for any path
 GET  /api/whoami                — logged-in user info; includes can_write_reports flag
-GET  /api/specimen/{id}         — raw counterpart of /fhir/Specimen/{id}
 GET  /api/cnp?id={cnp}          — raw counterpart of /fhir/ValueSet/cnp (same handler, mounted twice)
 POST /api/logout                — close the caller's Hipocrate session
 GET  /api/cache/stats           — URLCache size/hit stats
@@ -124,7 +119,6 @@ cp examples/worklist.cfg worklist.cfg   # fill in credentials and device section
 ```bash
 python3 runtests.py               # all groups
 python3 runtests.py extractors    # offline
-python3 runtests.py markdown      # offline
 python3 runtests.py hippodata     # offline
 python3 runtests.py worklist      # offline
 python3 runtests.py llm           # offline

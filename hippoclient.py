@@ -92,8 +92,6 @@ from fhir import DiagnosticReport as FHIRDiagnosticReport
 from fhir import Encounter as FHIREncounter
 from fhir import Bundle as FHIRBundle
 from fhir import Observation as FHIRObservation
-from fhir import Task as FHIRTask
-from fhir import Specimen as FHIRSpecimen
 
 # Import HippoData class
 from hippodata import HippoData
@@ -1583,69 +1581,6 @@ class HippoClientServiceRequest(HippoClient):
             logger.error(f"Error parsing service request data: {e}")
             data.set_error(str(e))
             return data
-
-    def fhir_response(self, parsed_data: HippoData, **kwargs) -> Union[FHIRSpecimen, FHIROperationOutcome]:
-        """Convert parsed buletinRecoltari HippoData to a FHIR Specimen resource.
-
-        buletinRecoltari.asp ("Recoltari" = collections) is the lab/imaging
-        department's own handoff paperwork accompanying the request — closest
-        standard match is Specimen, though it's a stretch for imaging orders
-        that have no physical specimen. It's used here only as a request
-        (`Specimen.request`) reference alongside the real order
-        (BuletinSolicitare.asp / HippoClientBuletinSolicitare, /fhir/ServiceRequest).
-        """
-        request_id = kwargs.get('id', '')
-
-        try:
-            if parsed_data.get("status") == "error":
-                return FHIROperationOutcome.from_error(
-                    message=parsed_data.get("message", "Error in parsed service request data"),
-                    code="processing",
-                    severity="error"
-                )
-
-            fhir_specimen = FHIRSpecimen(id=request_id, status="available")
-
-            patient_id = parsed_data.get("patient.id")
-            subject = FHIRReference(reference=f"Patient/{patient_id}")
-            patient_name = parsed_data.get("patient.name")
-            if patient_name:
-                subject["display"] = patient_name
-            fhir_specimen["subject"] = subject
-
-            if request_id:
-                fhir_specimen["request"] = [FHIRReference(reference=f"ServiceRequest/{request_id}")]
-
-            request_code = parsed_data.get("request.code")
-            if request_code:
-                fhir_specimen["accessionIdentifier"] = {"value": request_code}
-
-            laboratory = parsed_data.get("request.laboratory")
-            if laboratory:
-                fhir_specimen["type"] = FHIRCodeableConcept(text=laboratory)
-
-            registered_by = parsed_data.get("request.registered_by")
-            request_date_time = parsed_data.get("request.date_time")
-            collection = {}
-            if request_date_time:
-                parsed_dt = parse_date_time(request_date_time)
-                collection["collectedDateTime"] = parsed_dt.isoformat() if parsed_dt else request_date_time
-            if registered_by:
-                collection["collector"] = FHIRReference(display=registered_by)
-            if collection:
-                fhir_specimen["collection"] = collection
-
-            # Physician comment (Comentariile medicului) — tagged clinical-indication
-            # so it doubles as a fallback source when cerere.asp's Justificare is
-            # empty or unreachable (e.g. lab-level permission restrictions).
-            comment = parsed_data.get("request.comment")
-            if comment:
-                fhir_specimen["note"] = [{"text": comment, "category": [{"text": "clinical-indication"}]}]
-
-            return fhir_specimen
-        except Exception as e:
-            logger.error(f"Error converting service request data: {e}")
-            return FHIROperationOutcome.from_exception(e, code="exception")
 
 
 class HippoClientServiceRequestSearch(HippoClientServiceRequest):
@@ -3868,119 +3803,6 @@ class HippoClientCerere(HippoClient):
             logger.error(f"Error parsing cerere data: {e}")
             data.set_error(str(e))
             return data
-
-    def fhir_response(self, parsed_data: HippoData, id=None, **kwargs) -> Union[FHIRTask, FHIROperationOutcome]:
-        """Convert parsed cerere data to a FHIR Task — cerere.asp is the internal
-        workflow record (perform/report/validate act on it directly), not the
-        order itself. The order lives in BuletinSolicitare.asp (see
-        HippoClientBuletinSolicitare, /fhir/ServiceRequest), which Task.focus
-        references.
-        """
-        request_id = id or parsed_data.get("request.id", "")
-        try:
-            if parsed_data.get("status") == "error":
-                return FHIROperationOutcome.from_error(
-                    message=parsed_data.get("message", "Error parsing cerere data"),
-                    code="processing",
-                    severity="error"
-                )
-
-            report = parsed_data.get("report") or []
-            performed_at = parsed_data.get("performed_at")
-            if report and all(r.get('validated') for r in report):
-                status = "completed"
-            elif performed_at:
-                status = "in-progress"
-            else:
-                status = "requested"
-
-            priority_text = (parsed_data.get("request.priority") or "").lower()
-            fhir_task = FHIRTask(
-                id=request_id,
-                status=status,
-                intent="filler-order",
-                priority="urgent" if "urgent" in priority_text else "routine",
-                focus=FHIRReference(reference=f"ServiceRequest/{request_id}") if request_id else None,
-            )
-
-            # Subject (patient) — Task's field is literally named "for"
-            patient_id = parsed_data.get("patient.id")
-            patient_for = FHIRReference(reference=f"Patient/{patient_id}")
-            patient_name = parsed_data.get("patient.name")
-            if patient_name:
-                patient_for["display"] = patient_name
-            fhir_task["for"] = patient_for
-
-            identifiers = [{"value": request_id}] if request_id else []
-            req_code = parsed_data.get("request.code")
-            if req_code:
-                identifiers.append({"value": req_code})
-            if identifiers:
-                fhir_task["identifier"] = identifiers
-
-            # Authored / execution period
-            date_time = parsed_data.get("request.date_time")
-            start = None
-            if date_time:
-                dt = parse_date_time(date_time)
-                start = dt.isoformat() if dt else date_time
-                fhir_task["authoredOn"] = start
-            if start or performed_at:
-                period = {}
-                if start:
-                    period["start"] = start
-                if performed_at:
-                    period["end"] = performed_at
-                fhir_task["executionPeriod"] = period
-
-            # Requester — the attending physician handing this off to the department
-            # (NOT necessarily who ordered this exam; see ServiceRequest.requester
-            # from BuletinSolicitare's "Medic solicitant" for that).
-            physician = parsed_data.get("request.physician")
-            if physician:
-                fhir_task["requester"] = FHIRReference(display=physician)
-
-            # Ordered exams (itemized) — cerere.asp's own list, distinct from and
-            # more granular than BuletinSolicitare's single "Organ tinta" field.
-            exams = parsed_data.get("exams") or []
-            if isinstance(exams, str):
-                exams = [exams]
-            if exams:
-                fhir_task["input"] = [
-                    {"type": FHIRCodeableConcept(text="exam"), "valueString": e} for e in exams
-                ]
-
-            # Report/result text per analysis, once written
-            outputs = [
-                {"type": FHIRCodeableConcept(text=r.get('label') or 'result'), "valueString": r['text']}
-                for r in report if r.get('text')
-            ]
-            if outputs:
-                fhir_task["output"] = outputs
-
-            # Notes: section, laboratory, clinical indication (Info suplimentare —
-            # unique to cerere.asp, not available anywhere else)
-            notes = []
-            section = parsed_data.get("request.section")
-            if section:
-                notes.append({"text": section})
-            laboratory = parsed_data.get("request.laboratory")
-            if laboratory:
-                notes.append({"text": laboratory})
-            clinical = parsed_data.get("request.clinical_indication")
-            if clinical:
-                notes.append({"text": clinical})
-            if notes:
-                fhir_task["note"] = notes
-
-            return fhir_task
-        except Exception as e:
-            logger.error(f"Error converting cerere data to FHIR: {e}")
-            return FHIROperationOutcome.from_exception(e, code="exception")
-
-    async def fetch_respond_fhir(self, id=None, **kwargs) -> Union[FHIRServiceRequest, FHIROperationOutcome]:
-        parsed = await self.fetch_and_parse(id=id)
-        return self.fhir_response(parsed, id=id, **kwargs)
 
 
 class HippoClientFUPU(HippoClient):

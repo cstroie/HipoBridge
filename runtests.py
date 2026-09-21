@@ -18,7 +18,6 @@ from tests.reports import test_diagnostic_report_endpoint_missing_id
 from tests.checkout import test_encounter_endpoint_missing_id, test_encounter_endpoint_known_id
 from tests.checkin import test_checkin_endpoint_missing_id, test_checkin_endpoint_known_id
 from tests.checkup import test_checkup_endpoint_missing_id, test_checkup_endpoint_known_id
-from tests.cerere import test_task_endpoint_missing_id, test_task_endpoint_known_id
 from tests.cnp import test_cnp_validation_endpoint, test_cnp_validation_missing_id
 from tests.worklist import (TestNameToDicom, TestBuildDatasets,
                              TestWorklistCache, TestWorklistSCP, TestLoadConfig)
@@ -26,7 +25,6 @@ from tests.pacs import (TestLoadConfig as TestPacsLoadConfig, TestCnpPreFilter,
                          TestBuildIdentifier, TestClassify, TestStatusFor)
 from tests.extractors import test_extract_text_after_label_basic, test_extract_text_after_label_with_element_tag, test_extract_text_after_label_with_stop_at, test_extract_text_after_label_not_found, test_extract_text_after_label_case_insensitive, test_extract_text_with_bold_tag, test_extract_text_with_bold_and_underline_tags, test_extract_text_with_whitespace, test_extract_id_from_link_basic, test_extract_id_from_link_with_custom_pattern, test_extract_id_from_link_no_href, test_extract_id_from_link_no_match, test_extract_ids_from_links_basic, test_extract_ids_from_links_with_custom_pattern, test_extract_ids_from_links_no_matches
 from tests.hipo_data import TestHippoData
-from tests.markdown import TestMarkdownConversion
 from tests.llm_client import TestProviderSelection, TestPromptRegistry
 from tests.regions import TestLoadRegionRules
 from tests.config import TestHippobridgeLoadConfig, TestInitLlm, TestGitignoreOnlyTracksExamples
@@ -67,8 +65,6 @@ TEST_GROUPS = {
         test_checkin_endpoint_known_id,
         test_checkup_endpoint_missing_id,
         test_checkup_endpoint_known_id,
-        test_task_endpoint_missing_id,
-        test_task_endpoint_known_id,
         test_cnp_validation_endpoint,
         test_cnp_validation_missing_id,
         test_extract_text_after_label_basic,
@@ -77,7 +73,6 @@ TEST_GROUPS = {
         test_extract_text_after_label_not_found,
         test_extract_text_after_label_case_insensitive,
         TestHippoData,
-        TestMarkdownConversion,
         TestProviderSelection,
         TestPromptRegistry,
         TestLoadRegionRules,
@@ -114,7 +109,6 @@ TEST_GROUPS = {
     "checkout": [test_encounter_endpoint_missing_id, test_encounter_endpoint_known_id],
     "checkin": [test_checkin_endpoint_missing_id, test_checkin_endpoint_known_id],
     "checkup": [test_checkup_endpoint_missing_id, test_checkup_endpoint_known_id],
-    "cerere": [test_task_endpoint_missing_id, test_task_endpoint_known_id],
     "cnp": [
         test_cnp_validation_endpoint,
         test_cnp_validation_missing_id
@@ -137,7 +131,6 @@ TEST_GROUPS = {
         test_extract_ids_from_links_no_matches
     ],
     "hippodata": [TestHippoData],
-    "markdown": [TestMarkdownConversion],
     "worklist": [TestNameToDicom, TestBuildDatasets, TestWorklistCache, TestWorklistSCP, TestLoadConfig],
     "pacs": [TestPacsLoadConfig, TestCnpPreFilter, TestBuildIdentifier, TestClassify, TestStatusFor],
     "llm": [

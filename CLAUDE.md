@@ -45,7 +45,7 @@ For a background/boot-time service, `hippobridge.service` is a systemd unit temp
 
 ```bash
 python3 runtests.py               # all tests
-python3 runtests.py extractors    # no server needed (also: markdown, hippodata, worklist, pacs, llm)
+python3 runtests.py extractors    # no server needed (also: hippodata, worklist, pacs, llm)
 ```
 
 ## Architecture and gotchas
