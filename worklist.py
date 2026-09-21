@@ -171,6 +171,7 @@ def _load_config(config_path: str) -> Tuple[dict, List[dict]]:
             'wards':             wards,
             'time_window_hours': time_window,
             'day_care':          day_care,
+            'test':              config.getboolean(section, 'test', fallback=False),
         })
 
     return server, profiles
@@ -917,9 +918,9 @@ class WorklistServer:
             yield 0xA700, Dataset()   # C-FIND Failure — Refused: Out of Resources
             return
 
-        # TEMPORARY: the TEST profile serves fake patients in whatever
+        # TEMPORARY: the TEST profile (or any profile with `test = yes`) serves fake patients in whatever
         # modality the device asks for (default US), bypassing Hipocrate.
-        if profile['name'].upper() == 'TEST':
+        if profile['name'].upper() == 'TEST' or profile.get('test'):
             sps_req = getattr(identifier, 'ScheduledProcedureStepSequence', None)
             req_mod = str(getattr(sps_req[0], 'Modality', '') or '').strip() if sps_req else ''
             modality = 'US' if req_mod in ('', '*') else req_mod
