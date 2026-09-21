@@ -6911,10 +6911,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (_examCache[id].age) _applyPatientAge(el, _examCache[id].age);
                 if (_examCache[id].triage) _applyTriage(el, _examCache[id].triage);
                 const cachedPrev = _examCache[id].prev;
-                // A summary still being generated for a row that was redrawn:
-                // follow the same job so this new element updates too.
-                if (cachedPrev?.pending) _autoSummarizePrev(cachedPrev, () => _applyPrevLine(el, cachedPrev));
-                _applyPrevLine(el, cachedPrev);
+                if (!_prevRelevant(el._req)) {
+                    _applyPrevLine(el, null);
+                } else if (!_examCache[id].prevChecked) {
+                    // Not looked up yet (the row wasn't relevant when first seen)
+                    _loadPrevLine(el, _examCache[id]);
+                } else {
+                    // A summary still being generated for a row that was redrawn:
+                    // follow the same job so this new element updates too.
+                    if (cachedPrev?.pending) _autoSummarizePrev(cachedPrev, () => _applyPrevLine(el, cachedPrev));
+                    _applyPrevLine(el, cachedPrev);
+                }
                 return;
             }
             const examPromise = apiFetch(`/api/request/${id}`)
@@ -6975,8 +6982,17 @@ document.addEventListener('DOMContentLoaded', function() {
         })();
     }
 
+    // The previous exam matters while the request is still in flight; once it
+    // is finished (completed/ended) there is no special need for it.
+    const _PREV_FINISHED_STATUSES = new Set(['completed', 'ended']);
+    function _prevRelevant(req) {
+        return !_PREV_FINISHED_STATUSES.has(req?.status_code);
+    }
+
     function _loadPrevLine(el, cached) {
         const req = el._req;
+        if (!_prevRelevant(req)) return;
+        cached.prevChecked = true;
         const modality = _mdModalityGroup(req?.modality || '');
         if (!cached.hasPrev || !cached.patientId || !_mdTypedModalities.has(modality)) {
             cached.prev = null;
