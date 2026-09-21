@@ -4656,6 +4656,14 @@ dialog.report-editor-modal article > section {
 .exam-prev-text > :first-child { margin-top: 0; }
 .exam-prev-text > :last-child { margin-bottom: 0; }
 .exam-prev-text p { margin: 0 0 var(--space-4); }
+.exam-ai-tag {
+    font-size: var(--font-size-11);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--warning, #d97706);
+}
+.exam-prev-ai { font-weight: 500; }
 .exam-note {
     margin-top: var(--space-6);
     margin-bottom: 0;

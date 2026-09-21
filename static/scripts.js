@@ -124,6 +124,7 @@ document.addEventListener('DOMContentLoaded', function() {
         scheduleMdTitle: document.getElementById('scheduleMdTitle'),
         scheduleMdSub: document.getElementById('scheduleMdSub'),
         scheduleMdPrintBtn: document.getElementById('scheduleMdPrintBtn'),
+        scheduleMdAiBtn: document.getElementById('scheduleMdAiBtn'),
         scheduleMdCopyBtn: document.getElementById('scheduleMdCopyBtn'),
         schedulePatientFilter: document.getElementById('schedulePatientFilter'),
         scheduleLabFilter:     document.getElementById('scheduleLabFilter'),
@@ -344,6 +345,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Generation counter for the on-demand schedule exam list; must be declared
     // before initApp() runs (fetchSchedule -> hideScheduleMarkdown uses it).
     let scheduleMdRun = 0;
+    const scheduleMdState = { rows: [], els: [] };
 
     // Initialize application
     initApp();
@@ -532,6 +534,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         if (elements.scheduleMdBtn) {
             elements.scheduleMdBtn.addEventListener('click', buildScheduleMarkdown);
+        }
+        if (elements.scheduleMdAiBtn) {
+            elements.scheduleMdAiBtn.addEventListener('click', summarizeScheduleMdReports);
         }
         if (elements.scheduleMdPrintBtn) {
             elements.scheduleMdPrintBtn.addEventListener('click', () => {
@@ -6563,6 +6568,7 @@ document.addEventListener('DOMContentLoaded', function() {
             prevLabel: `Previous ${d.modalityLabel}`,
             prevWhen: d.prev ? [d.prev.date, d.prev.region].filter(Boolean).join(' · ') : '',
             prevText: d.prev?.text || '',
+            prevSummary: d.prev?.summary || '',
             prevNote: d.prev ? 'No report text' : 'None found',
             showPrev: !d.failed || !!d.prev,
         };
@@ -6577,7 +6583,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (d.failed) lines.push('_(details unavailable)_');
         if (v.showPrev) {
             lines.push(`**${v.prevLabel}:** ${v.prevWhen || v.prevNote}`);
-            if (v.prevText) lines.push('', v.prevText.split('\n').map(l => '> ' + l).join('\n'));
+            if (v.prevSummary) lines.push(`**AI summary:** ${v.prevSummary}`);
+            else if (v.prevText) lines.push('', v.prevText.split('\n').map(l => '> ' + l).join('\n'));
         }
         return lines.join('\n');
     }
@@ -6609,7 +6616,10 @@ document.addEventListener('DOMContentLoaded', function() {
             ph.append(el('span', 'exam-prev-label', v.prevLabel));
             if (v.prevWhen) ph.append(el('span', 'exam-prev-when', v.prevWhen));
             prev.append(ph);
-            if (v.prevText) {
+            if (v.prevSummary) {
+                ph.append(el('span', 'exam-ai-tag', 'AI summary'));
+                prev.append(el('div', 'exam-prev-text exam-prev-ai', v.prevSummary));
+            } else if (v.prevText) {
                 const body = el('div', 'exam-prev-text');
                 body.innerHTML = marked.parse(v.prevText.replace(/\n{2,}/g, '\n'));
                 prev.append(body);
@@ -6636,6 +6646,49 @@ document.addEventListener('DOMContentLoaded', function() {
         ].filter(Boolean).join(' · ');
     }
 
+    function _mdRefreshMarkdown() {
+        elements.scheduleMdPanel.dataset.markdown =
+            `# Exam list\n\n_${scheduleMdState.subtitle}_\n\n` +
+            scheduleMdState.rows.map(_mdEntryMarkdown).join('\n\n---\n\n');
+    }
+
+    // Replaces each previous-exam report with its AI summary, one request at
+    // a time, reusing the "imaging" prompt (server-cached per report text).
+    async function summarizeScheduleMdReports() {
+        const { rows, els } = scheduleMdState;
+        const todo = rows.map((d, i) => i).filter(i => rows[i].prev?.text && !rows[i].prev.summary);
+        if (!todo.length) { showToast('No previous reports to summarize', 'warning'); return; }
+        const run = scheduleMdRun;
+        const btn = elements.scheduleMdAiBtn;
+        const label = btn.querySelector('span');
+        const orig = label.textContent;
+        btn.disabled = true;
+        let n = 0, failed = 0;
+        try {
+            for (const i of todo) {
+                if (run !== scheduleMdRun) return;
+                label.textContent = `${++n}/${todo.length}`;
+                try {
+                    const summary = await aiSummarize('imaging', rows[i].prev.text);
+                    if (run !== scheduleMdRun) return;
+                    if (summary) {
+                        rows[i].prev.summary = summary;
+                        const fresh = _mdEntryEl(rows[i]);
+                        els[i].replaceWith(fresh);
+                        els[i] = fresh;
+                    }
+                } catch (err) {
+                    failed++;
+                }
+            }
+            _mdRefreshMarkdown();
+            if (failed) showToast(`${failed} summar${failed === 1 ? 'y' : 'ies'} failed`, 'warning');
+        } finally {
+            label.textContent = orig;
+            btn.disabled = false;
+        }
+    }
+
     async function buildScheduleMarkdown() {
         const entries = scheduleEntries.slice();
         if (!entries.length) { showToast('No schedule entries to list', 'warning'); return; }
@@ -6654,10 +6707,12 @@ document.addEventListener('DOMContentLoaded', function() {
             if (run !== scheduleMdRun) return;
             const rows = results.map((d, i) => d || _mdFallbackRow(entries[i]));
             const subtitle = _mdSubtitle(rows.length);
-            elements.scheduleMdBody.replaceChildren(...rows.map(_mdEntryEl));
+            scheduleMdState.subtitle = subtitle;
+            scheduleMdState.rows = rows;
+            scheduleMdState.els = rows.map(_mdEntryEl);
+            elements.scheduleMdBody.replaceChildren(...scheduleMdState.els);
             elements.scheduleMdSub.textContent = subtitle;
-            elements.scheduleMdPanel.dataset.markdown =
-                `# Exam list\n\n_${subtitle}_\n\n` + rows.map(_mdEntryMarkdown).join('\n\n---\n\n');
+            _mdRefreshMarkdown();
             elements.scheduleMdPanel.hidden = false;
             elements.scheduleMdPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
         } catch (err) {
