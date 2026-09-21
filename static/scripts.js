@@ -6561,14 +6561,17 @@ document.addEventListener('DOMContentLoaded', function() {
                         && _mdModalityGroup(e.type) === modality
                         && _mdIso(e.date_time) < cur)
                     .sort((a, b) => _mdIso(b.date_time).localeCompare(_mdIso(a.date_time)))
-                    .slice(0, 3);
+                    .slice(0, 5);
+                // Newest earlier exam that actually has report text; exams
+                // without one (e.g. partial/unwritten reports) are skipped.
                 for (const c of candidates) {
                     const study = await _mdJson(`/api/study/${c.id}`);
                     const text = study ? _mdReportText(study) : '';
-                    const info = { date: _mdIso(c.date_time), region: (c.regions || []).filter(Boolean).join(', '), text,
-                                   summary: study?.summary || '' };
-                    if (!out.prev) out.prev = info;
-                    if (text) { out.prev = info; break; }
+                    if (!text) continue;
+                    out.prev = { date: _mdIso(c.date_time),
+                                 region: (c.regions || []).filter(Boolean).join(', '), text,
+                                 summary: study.summary || '' };
+                    break;
                 }
             }
         } catch (_) { out.failed = true; }
@@ -6599,7 +6602,6 @@ document.addEventListener('DOMContentLoaded', function() {
             prevWhen: d.prev ? [d.prev.date, d.prev.region].filter(Boolean).join(' · ') : '',
             prevText: d.prev?.text || '',
             prevSummary: d.prev?.summary || '',
-            prevNote: 'No report text',
             showPrev: !!d.prev,
         };
     }
@@ -6612,7 +6614,7 @@ document.addEventListener('DOMContentLoaded', function() {
         v.fields.forEach(([k, val]) => lines.push(`**${k}:** ${val}`));
         if (d.failed) lines.push('_(details unavailable)_');
         if (v.showPrev) {
-            lines.push(`**${v.prevLabel}:** ${v.prevWhen || v.prevNote}`);
+            lines.push(`**${v.prevLabel}:** ${v.prevWhen}`);
             if (v.prevSummary) lines.push(`**AI summary:** ${v.prevSummary}`);
             else if (v.prevText) lines.push('', v.prevText.split('\n').map(l => '> ' + l).join('\n'));
         }
@@ -6651,12 +6653,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (v.prevSummary) {
                 ph.append(el('span', 'exam-ai-tag', 'AI summary'));
                 prev.append(el('div', 'exam-prev-text exam-prev-ai', v.prevSummary));
-            } else if (v.prevText) {
+            } else {
                 const body = el('div', 'exam-prev-text');
                 body.innerHTML = marked.parse(v.prevText.replace(/\n{2,}/g, '\n'));
                 prev.append(body);
-            } else {
-                prev.append(el('p', 'exam-note', v.prevNote));
             }
             art.append(prev);
         }
