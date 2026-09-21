@@ -15,7 +15,8 @@ from bs4 import BeautifulSoup
 import hippoclient
 from hippodata import HippoData
 from hippoclient import (_parse_buletin_header, is_meaningful_text,
-                         HippoClientBuletinSolicitare, HippoClientCerere)
+                         HippoClientBuletinSolicitare, HippoClientCerere,
+                         HippoClientDiagnosticReport)
 
 
 def _make_soup():
@@ -229,6 +230,26 @@ class TestSolicitareDerivedFields(unittest.TestCase):
         self.assertFalse(d.get("request.indication"))
         self.assertFalse(d.get("request.requester"))
         self.assertFalse(d.get("request.region"))
+
+
+class TestDiagnosticReportFlags(unittest.TestCase):
+    """Lab rows carry the H/L/N flag computed against their reference range."""
+
+    HTML = (
+        '<html><head><title>HIPOCRATE - BULETIN ANALIZE MEDICALE</title></head><body><table>'
+        '<tr><td>SECTIE</td></tr>'
+        '<tr><td>WBC</td><td>20.5</td><td>4.5 - 13.5</td></tr>'
+        '<tr><td>HGB</td><td>12.0</td><td>11.0 - 15.0</td></tr>'
+        '<tr><td>Observatii</td><td>fara modificari</td><td></td></tr>'
+        '</table></body></html>'
+    )
+
+    def test_flags_on_studies(self):
+        data = HippoClientDiagnosticReport().parse_data(self.HTML, id='1')
+        by = {st['title']: st for st in data.get("studies", [])}
+        self.assertEqual(by['WBC'].get('flag'), 'H')
+        self.assertEqual(by['HGB'].get('flag'), 'N')
+        self.assertNotIn('flag', by['Observatii'])
 
 
 if __name__ == "__main__":

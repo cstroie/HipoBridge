@@ -55,7 +55,7 @@ Region, indication, and the true ordering physician ("Medic solicitant"). `/api/
 
 | HippoBridge endpoint | Hipocrate URL |
 |---|---|
-| `GET /api/study/{id}` | `/PARA/Printabile/BuletinAnalize.asp?id={id}&type=3&IdP=1` |
+| `GET /api/study/{id}` | `/PARA/Printabile/BuletinAnalize.asp?id={id}&type=3&IdP=1` (plus up to 3 cached pages to merge the clinical indication into `request.justification`; `?justification=0` skips them) |
 | `GET /fhir/ImagingStudy/{id}` | `/PARA/Printabile/BuletinAnalize.asp?id={id}&type=3&IdP=1` |
 
 Result text is in `studies[].result` (raw API) or `note[].text` (FHIR).  
@@ -69,7 +69,7 @@ Clinical indication (`INFO SUPLIMENTAR`) is parsed as `note[category=clinical-in
 
 | HippoBridge endpoint | Hipocrate URL |
 |---|---|
-| `GET /api/report/{id}` | `/PARA/Printabile/BuletinAnalize.asp?id={id}&type=1&IdP=1` |
+| `GET /api/report/{id}` | `/PARA/Printabile/BuletinAnalize.asp?id={id}&type=1&IdP=1` (each `studies[]` row carries its H/L/N `flag` when numeric) |
 | `GET /fhir/DiagnosticReport/{id}` | `/PARA/Printabile/BuletinAnalize.asp?id={id}&type=1&IdP=1` |
 
 ---

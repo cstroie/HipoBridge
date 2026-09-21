@@ -2519,6 +2519,13 @@ class HippoClientDiagnosticReport(HippoClient):
             if not studies:
                 studies = _parse_narrative_studies(soup)
 
+            # H/L/N flag per numeric result vs. its reference range, so
+            # consumers (lab tables) don't re-derive it.
+            for study in studies:
+                flag = _parse_observation_value(study.get("result", ""), study.get("reference", ""))[4]
+                if flag:
+                    study["flag"] = flag
+
             data.store_list("studies", studies)
 
             return data

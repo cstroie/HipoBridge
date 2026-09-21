@@ -319,9 +319,49 @@ async def _cached_imaging_summary(parsed_data) -> Optional[str]:
         return None
     return await ai_cache.get_async(_ai_cache_key('imaging', text))
 
+async def _enrich_imaging_justification(parsed_data, id, request) -> None:
+    """Fill request.justification (or, last resort, checkin.diagnosis) on an
+    imaging study from the request's other pages. Priority: buletinRecoltari.asp's
+    "Comentariile medicului" first, then cerere.asp's Justificare, then
+    BuletinSolicitare.asp's own clinical fields (Date clinico-paraclinice /
+    Diagnostic de trimitere / Indicatii speciale — often the richest source,
+    e.g. trauma circumstances), then cerere.asp's clinical-situation diagnosis
+    (falling back to buletinRecoltari.asp's DIAGNOSTIC field) as a last
+    resort. Shared by /api/study and /fhir/ImagingStudy; mutates parsed_data
+    (callers hold their own copy, not the parse-cache entry).
+    """
+    sr_client = HippoClientServiceRequest(SERVICE_URL, request)
+    sr_data = await sr_client.fetch_and_parse(id=id)
+    comment = sr_data.get("request.comment")
+    if _is_meaningful_text(comment):
+        parsed_data.store("request.justification", comment)
+        return
+    cerere_client = HippoClientCerere(SERVICE_URL, request)
+    cerere_data = await cerere_client.fetch_and_parse(id=id)
+    justification = cerere_data.get("request.justification")
+    if _is_meaningful_text(justification):
+        parsed_data.store("request.justification", justification)
+        return
+    solicitare_client = HippoClientBuletinSolicitare(SERVICE_URL, request)
+    solicitare_data = await solicitare_client.fetch_and_parse(id=id)
+    solicitare_indication = next((t for t in (
+        solicitare_data.get("request.clinical_data"),
+        solicitare_data.get("request.diagnosis_referral"),
+        solicitare_data.get("request.special_indications"),
+    ) if _is_meaningful_text(t)), None)
+    if solicitare_indication:
+        parsed_data.store("request.justification", solicitare_indication)
+        return
+    diagnosis = cerere_data.get("request.diagnosis") or sr_data.get("request.diagnosis")
+    if diagnosis:
+        parsed_data.store("checkin.diagnosis", diagnosis)
+
 @require_auth
 async def get_study(request):
-    """Retrieve imaging study by ID. Returns raw HippoData JSON."""
+    """Retrieve imaging study by ID. Returns raw HippoData JSON, with the
+    request's clinical indication merged in as request.justification (see
+    _enrich_imaging_justification; ?justification=0 skips it) and a cached AI
+    summary as `summary` when one exists."""
     id = request.match_info.get('id')
     if not id:
         return web_error_response("Imaging study ID is required")
@@ -335,10 +375,12 @@ async def get_study(request):
 
     parsed_data = await client.fetch_and_parse(id=id)
     if parsed_data.get("status") == "success":
+        # ?justification=0 skips the (cached, but up to 3) extra page fetches
+        # for callers that only want the report text, e.g. previous exams.
+        if request.query.get('justification') != '0':
+            await _enrich_imaging_justification(parsed_data, id, request)
         summary = await _cached_imaging_summary(parsed_data)
         if summary:
-            # parsed_data is shared via parse_cache: don't stamp it in place.
-            parsed_data = copy.copy(parsed_data)
             parsed_data["summary"] = summary
     return web_json_response(parsed_data)
 
@@ -354,37 +396,7 @@ async def get_fhir_imaging_study(request):
     parsed_data = await client.fetch_and_parse(id=id)
 
     if parsed_data.get("status") != "error":
-        # Priority: buletinRecoltari.asp's "Comentariile medicului" first, then
-        # cerere.asp's Justificare, then BuletinSolicitare.asp's own clinical
-        # fields (Date clinico-paraclinice / Diagnostic de trimitere / Indicatii
-        # speciale — often the richest source, e.g. trauma circumstances), then
-        # cerere.asp's clinical-situation diagnosis (falling back to
-        # buletinRecoltari.asp's DIAGNOSTIC field) as a last resort.
-        sr_client = HippoClientServiceRequest(SERVICE_URL, request)
-        sr_data = await sr_client.fetch_and_parse(id=id)
-        comment = sr_data.get("request.comment")
-        if _is_meaningful_text(comment):
-            parsed_data.store("request.justification", comment)
-        else:
-            cerere_client = HippoClientCerere(SERVICE_URL, request)
-            cerere_data = await cerere_client.fetch_and_parse(id=id)
-            justification = cerere_data.get("request.justification")
-            if _is_meaningful_text(justification):
-                parsed_data.store("request.justification", justification)
-            else:
-                solicitare_client = HippoClientBuletinSolicitare(SERVICE_URL, request)
-                solicitare_data = await solicitare_client.fetch_and_parse(id=id)
-                solicitare_indication = next((t for t in (
-                    solicitare_data.get("request.clinical_data"),
-                    solicitare_data.get("request.diagnosis_referral"),
-                    solicitare_data.get("request.special_indications"),
-                ) if _is_meaningful_text(t)), None)
-                if solicitare_indication:
-                    parsed_data.store("request.justification", solicitare_indication)
-                else:
-                    diagnosis = cerere_data.get("request.diagnosis") or sr_data.get("request.diagnosis")
-                    if diagnosis:
-                        parsed_data.store("checkin.diagnosis", diagnosis)
+        await _enrich_imaging_justification(parsed_data, id, request)
 
     response = client.fhir_response(parsed_data, id=id, http_request=request)
     if isinstance(response, Resource) and response.data.get("resourceType") == "ImagingStudy":

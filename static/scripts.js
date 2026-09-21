@@ -734,7 +734,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         scheduleFetchedIds.add(item.id);
-        const endpoint = item.isImaging ? `/fhir/ImagingStudy/${item.id}` : `/fhir/DiagnosticReport/${item.id}`;
+        const endpoint = item.isImaging ? `/api/study/${item.id}` : `/api/report/${item.id}`;
         apiFetch(endpoint).catch(() => {}).finally(() => {
             if (gen !== scheduleGeneration) return;
             queueSchedulePrefetchStep(gen, SCHEDULE_PREFETCH_GAP);
@@ -2329,6 +2329,36 @@ document.addEventListener('DOMContentLoaded', function() {
         return markdown;
     }
     
+    // View of a report from /api/study/{id} (imaging) or /api/report/{id} (lab
+    // and other): header facts (date, requester, indication, examiner) plus the
+    // reported content — `results` [{title, text}] per reported study for
+    // imaging, `forms` (rows for buildLabTable/buildLabMarkdown) otherwise.
+    // `indication` is the request's clinical indication as merged server-side.
+    function reportFromApi(d, isImaging) {
+        const studies = d?.studies || [];
+        const reported = studies.filter(s => s.result);
+        const v = { date: '', requester: '', indication: '', examiner: '', results: [], forms: [] };
+        if (isImaging) {
+            v.date = d?.request?.date_time || '';
+            v.requester = d?.checkin?.medic || '';
+            v.indication = d?.request?.justification || '';
+            // Signing physician; falls back to the requester server-side-style
+            // when no validator is recorded, so callers only show it once a
+            // report actually exists.
+            v.examiner = studies[0]?.validator || d?.checkin?.medic || '';
+            v.results = reported.map(s => ({ title: s.title || '', text: s.result }));
+        } else {
+            v.date = d?.study?.date_time || d?.request?.date_time || d?.checkin?.date_time || '';
+            v.indication = d?.request?.clinical_comments || '';
+            v.forms = reported.map(s => ({
+                contentType: 'text/markdown', title: s.title || '', data: s.result,
+                type: s.type || '', region: s.region || '', reference: s.reference || '',
+                section: s.section || '', flag: s.flag,
+            }));
+        }
+        return v;
+    }
+
     // Helper function to get report content for a service request
     const IMAGING_TYPES = ['radio', 'ct', 'irm', 'eco', 'rads'];
     async function getReportContent(serviceRequestId, analysisType) {
@@ -2340,8 +2370,8 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             const isImaging = IMAGING_TYPES.includes(analysisType);
             const endpoint = isImaging
-                ? `/fhir/ImagingStudy/${serviceRequestId}`
-                : `/fhir/DiagnosticReport/${serviceRequestId}`;
+                ? `/api/study/${serviceRequestId}`
+                : `/api/report/${serviceRequestId}`;
             const reportResponse = await apiFetch(endpoint);
 
             if (!reportResponse.ok) {
@@ -2349,25 +2379,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 return null;
             }
 
-            const reportData = await reportResponse.json();
+            const report = reportFromApi(await reportResponse.json(), isImaging);
             let content = null;
-            if (reportData.note && reportData.note.length > 0) {
-                content = reportData.note.map(n => n.text).filter(Boolean).join('\n\n').trim();
-            } else if (reportData.conclusion) {
-                content = reportData.conclusion;
-            } else if (reportData.presentedForm && reportData.presentedForm.length > 0) {
-                const forms = reportData.presentedForm;
+            if (isImaging) {
+                content = [report.indication, ...report.results.map(r => r.text)]
+                    .filter(Boolean).join('\n\n').trim();
+            } else if (report.forms.length > 0) {
+                const forms = report.forms;
                 const multiStudy = forms.length > 1;
                 content = forms
                     .filter(f => f.data)
                     .map(f => multiStudy && f.title ? `##### ${f.title}\n\n${f.data}` : f.data)
                     .join('\n\n---\n\n')
-                    .trim();
-            } else if (reportData.result && reportData.result.length > 0) {
-                content = reportData.result
-                    .filter(r => r.display)
-                    .map(r => r.display)
-                    .join('\n\n')
                     .trim();
             }
 
@@ -2387,38 +2410,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // into the report text.
     async function getImagingReportParts(serviceRequestId) {
         try {
-            const resp = await apiFetch(`/fhir/ImagingStudy/${serviceRequestId}`);
+            const resp = await apiFetch(`/api/study/${serviceRequestId}`);
             if (!resp.ok) return { indication: '', body: '' };
-            const data = await resp.json();
-            const notes = data.note || [];
-            const isIndication = n => n.category?.[0]?.text === 'clinical-indication';
-            const join = arr => arr.map(n => n.text).filter(Boolean).join('\n\n').trim();
-            const indication = join(notes.filter(isIndication));
-            // Report body: non-indication notes, then the same fallback chain
-            // getReportContent uses, so studies that carry findings via
-            // conclusion/presentedForm/result don't silently vanish.
-            let body = join(notes.filter(n => !isIndication(n)));
-            if (!body && data.conclusion) {
-                body = data.conclusion;
-            } else if (!body && data.presentedForm?.length) {
-                const forms = data.presentedForm;
-                const multi = forms.length > 1;
-                body = forms
-                    .filter(f => f.data)
-                    .map(f => multi && f.title ? `##### ${f.title}\n\n${f.data}` : f.data)
-                    .join('\n\n---\n\n')
-                    .trim();
-            } else if (!body && data.result?.length) {
-                body = data.result.filter(r => r.display).map(r => r.display).join('\n\n').trim();
-            }
-            // Signing/reporting physician — same fields the analyses-tab card
-            // uses (resultsInterpreter, falling back to performer.actor).
-            // Only meaningful once a report actually exists: without one,
-            // performer falls back server-side to the requesting physician,
-            // which would misattribute the (nonexistent) report.
-            const physician = body
-                ? (data.resultsInterpreter?.[0]?.display || data.performer?.[0]?.actor?.display || '')
-                : '';
+            const report = reportFromApi(await resp.json(), true);
+            const indication = report.indication.trim();
+            const body = report.results.map(r => r.text).filter(Boolean).join('\n\n').trim();
+            // Signing/reporting physician. Only meaningful once a report
+            // actually exists: without one, the examiner falls back to the
+            // requesting physician, which would misattribute the
+            // (nonexistent) report.
+            const physician = body ? report.examiner : '';
             return { indication, body, physician };
         } catch (error) {
             console.error(`Error fetching imaging report parts for ${serviceRequestId}:`, error);
@@ -3858,8 +3859,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Function to view imaging study
     async function viewImagingStudy(studyId, reportId) {
         try {
-            // Fetch imaging study data using FHIR API
-            const studyResponse = await apiFetch(`/fhir/ImagingStudy/${studyId}`);
+            const studyResponse = await apiFetch(`/api/study/${studyId}`);
             
             if (!studyResponse.ok) {
                 const msg = studyResponse.status === 401
@@ -3927,37 +3927,39 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function populateStudyInfo(studyInfo, studyData) {
-        if (studyData.started)
-            addStudyInfoRow(studyInfo, 'fa-calendar', 'Started', formatDateWithTime(studyData.started));
-        if (studyData.modality?.length > 0)
-            addStudyInfoRow(studyInfo, 'fa-stethoscope', 'Modality', studyData.modality[0].display || studyData.modality[0].code || 'N/A');
-        if (studyData.description)
-            addStudyInfoRow(studyInfo, 'fa-file-medical', 'Description', studyData.description);
-        if (studyData.performer?.length > 0)
-            addStudyInfoRow(studyInfo, 'fa-user-md', 'Performer', studyData.performer[0].actor?.display || 'N/A');
-        if (studyData.referrer)
-            addStudyInfoRow(studyInfo, 'fa-user-check', 'Referrer', studyData.referrer.display || 'N/A');
-        if (studyData.reason?.length > 0)
-            addStudyInfoRow(studyInfo, 'fa-question-circle', 'Reason', studyData.reason[0].text || 'N/A');
-        const notes = studyData.note || [];
-        const indication = notes.find(n => n.category?.[0]?.text === 'clinical-indication');
-        if (indication?.text)
-            addStudyInfoRow(studyInfo, 'fa-notes-medical', 'Justificare', indication.text);
-        const otherNote = notes.find(n => n !== indication);
-        if (otherNote?.text)
-            addStudyInfoRow(studyInfo, 'fa-sticky-note', 'Note', otherNote.text);
+        const studies = studyData.studies || [];
+        const first = studies[0] || {};
+        const requester = studyData.checkin?.medic;
+        if (studyData.request?.date_time)
+            addStudyInfoRow(studyInfo, 'fa-calendar', 'Started', formatDateWithTime(studyData.request.date_time));
+        if (first.type)
+            addStudyInfoRow(studyInfo, 'fa-stethoscope', 'Modality', MODALITY_INFO[first.type]?.label || first.type);
+        if (first.title)
+            addStudyInfoRow(studyInfo, 'fa-file-medical', 'Description', first.title);
+        if (first.validator || requester)
+            addStudyInfoRow(studyInfo, 'fa-user-md', 'Performer', first.validator || requester);
+        if (requester)
+            addStudyInfoRow(studyInfo, 'fa-user-check', 'Referrer', requester);
+        if (studyData.checkin?.diagnosis)
+            addStudyInfoRow(studyInfo, 'fa-question-circle', 'Reason', studyData.checkin.diagnosis);
+        if (studyData.request?.justification)
+            addStudyInfoRow(studyInfo, 'fa-notes-medical', 'Justificare', studyData.request.justification);
+        const reported = studies.find(st => st.result);
+        if (reported)
+            addStudyInfoRow(studyInfo, 'fa-sticky-note', 'Note', reported.result);
     }
     
     function populateSeriesList(seriesList, studyData) {
-        if (!studyData.series || studyData.series.length === 0) return;
+        const studies = studyData.studies || [];
+        if (studies.length === 0) return;
         const tmpl = document.getElementById('series-item-template');
-        studyData.series.forEach((series, index) => {
+        studies.forEach((study, index) => {
             const li = tmpl.content.cloneNode(true).querySelector('li');
-            li.querySelector('.series-label').textContent = `Series ${series.number || index + 1}:`;
-            li.querySelector('.series-desc').textContent = series.description || 'N/A';
+            li.querySelector('.series-label').textContent = `Series ${index + 1}:`;
+            li.querySelector('.series-desc').textContent = study.title || 'N/A';
             const modalitySpan = li.querySelector('.series-modality');
-            if (series.modality) {
-                modalitySpan.textContent = ` (Modality: ${series.modality.display || series.modality.code || 'N/A'})`;
+            if (study.type) {
+                modalitySpan.textContent = ` (Modality: ${MODALITY_INFO[study.type]?.label || study.type})`;
             }
             seriesList.appendChild(li);
         });
@@ -4577,14 +4579,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const indication = article.querySelector('.card-indication-text')?.textContent
             ?.replace(/^\s*·\s*/, '').trim();
         if (indication) parts.push(`**Indication:** ${indication}`);
-        const when = data.started ? formatDateWithTime(data.started) : '';
+        const when = data.date ? formatDateWithTime(data.date) : '';
         if (when && when !== 'Unknown') parts.push(`**Date/time:** ${when}`);
-        // Prefer the card's own known type/region — set from the ServiceRequest
-        // and reliably correct — over data.modality, which for a DiagnosticReport
-        // often comes back as a generic "Other" even for a plain CT/MRI/etc.
+        // The card's own known type/region — set from the request row and
+        // reliably correct.
         const examType = article.querySelector('.type-text')?.textContent
-            || MODALITY_INFO[type]?.label
-            || data.modality?.[0]?.display;
+            || MODALITY_INFO[type]?.label;
         const region = article.querySelector('.card-regions')?.textContent
             ?.replace(/^\s*·\s*/, '').trim();
         const exam = [examType, region].filter(Boolean).join(' · ');
@@ -4742,8 +4742,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const type = article.dataset.analysisType;
         const imagingTypes = ['radio', 'ct', 'irm', 'eco', 'rads'];
         const endpoint = imagingTypes.includes(type)
-            ? `/fhir/ImagingStudy/${id}`
-            : `/fhir/DiagnosticReport/${id}`;
+            ? `/api/study/${id}`
+            : `/api/report/${id}`;
 
         // Resolve whoami up front — this function can fire from the
         // IntersectionObserver right after page load, racing the in-flight
@@ -4783,23 +4783,21 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             const resp = await apiFetch(endpoint);
             if (!resp.ok) throw new Error(resp.status);
-            const data = await resp.json();
+            const data = reportFromApi(await resp.json(), imagingTypes.includes(type));
 
             // Ordering physician from referrer (if not already set from ServiceRequest)
             const referrerEl = article.querySelector('.card-referrer');
-            if (referrerEl && !referrerEl.textContent && data.referrer?.display) {
-                referrerEl.textContent = data.referrer.display;
+            if (referrerEl && !referrerEl.textContent && data.requester) {
+                referrerEl.textContent = data.requester;
                 const line = article.querySelector('.card-referrer-line');
                 if (line) line.hidden = false;
             }
 
-            // Clinical indication note(s) → show inline next to physician
-            const allNotes = data.note || [];
-            const indicationNotes = allNotes.filter(n => n.category?.[0]?.text === 'clinical-indication');
-            const resultNotes = allNotes.filter(n => n.category?.[0]?.text !== 'clinical-indication');
-            if (indicationNotes.length > 0) {
+            // Clinical indication → show inline next to physician
+            const resultNotes = data.results;
+            if (data.indication) {
                 const existing = article.querySelector('.card-indication-text');
-                if (!existing?.textContent) setCardIndication(article, indicationNotes[0].text);
+                if (!existing?.textContent) setCardIndication(article, data.indication);
             }
 
             // ImagingStudy's own note (BuletinAnalize.asp's INFO SUPLIMENTAR) is
@@ -4832,10 +4830,9 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             // Report text
-            const forms = data.presentedForm || [];
+            const forms = data.forms;
             const hasReport = forms.length > 0
-                || resultNotes.some(n => n.text)
-                || Boolean(data.conclusion);
+                || resultNotes.some(n => n.text);
             hasReportFromStudy = hasReport;
 
             // Store raw text so the editor modal can pre-populate
@@ -4843,7 +4840,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 const rawParts = forms.length > 0
                     ? forms.filter(f => f.data && !f.reference).map(f => f.data)
                     : resultNotes.filter(n => n.text).map(n => n.text);
-                if (rawParts.length === 0 && data.conclusion) rawParts.push(data.conclusion);
                 article.dataset.reportText = rawParts.join('\n\n');
             }
 
@@ -4851,8 +4847,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // performer falls back to the requesting physician server-side and
             // showing it here would misattribute the (nonexistent) report
             if (hasReport) {
-                const physician = data.resultsInterpreter?.[0]?.display
-                    || data.performer?.[0]?.actor?.display || '';
+                const physician = data.examiner;
                 const medicEl = article.querySelector('.card-medic');
                 if (medicEl && physician) medicEl.textContent = physician;
                 // Only show signature footer when a physician is present
@@ -4909,14 +4904,12 @@ document.addEventListener('DOMContentLoaded', function() {
                             .trim();
                     }
                 } else if (notes.length > 0) {
-                    const series = data.series || [];
-                    const showTitles = series.length >= notes.length;
-                    notes.forEach((note, i) => {
+                    notes.forEach(note => {
                         if (!note.text) return;
-                        if (showTitles && series[i]?.description) {
+                        if (note.title) {
                             const titleEl = document.createElement('p');
                             titleEl.className = 'series-result-title';
-                            titleEl.textContent = series[i].description;
+                            titleEl.textContent = note.title;
                             reportPreview.appendChild(titleEl);
                         }
                         const div = document.createElement('div');
@@ -4928,18 +4921,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         reportPreview.appendChild(div);
                     });
                     copyMd = notes
-                        .map((note, i) => {
+                        .map(note => {
                             if (!note.text) return '';
-                            const t = (showTitles && series[i]?.description) ? `##### ${series[i].description}\n\n` : '';
+                            const t = note.title ? `##### ${note.title}\n\n` : '';
                             return t + note.text.trim();
                         })
                         .filter(Boolean)
                         .join('\n\n');
-                } else if (data.conclusion) {
-                    const div = document.createElement('div');
-                    div.innerHTML = marked.parse(data.conclusion);
-                    reportPreview.appendChild(div);
-                    copyMd = data.conclusion.trim();
                 } else {
                     article.classList.add('no-report');
                 }
@@ -4983,19 +4971,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     { inline: true, auto: true });
                 //enqueueAiWarm('imaging', copyMd, dataGeneration);
                 }
-
-            // ImagingStudy link
-            const imagingStudyLink = article.querySelector('.imaging-study-link');
-            if (imagingStudyLink && data.imagingStudy) {
-                const studyId = data.imagingStudy.reference.split('/')[1];
-                const linkTmpl = document.getElementById('imaging-study-link-template');
-                if (linkTmpl) {
-                    const a = linkTmpl.content.cloneNode(true).querySelector('a');
-                    a.querySelector('.study-ref-id').textContent = `#${studyId}`;
-                    a.addEventListener('click', e => { e.preventDefault(); viewImagingStudy(studyId, id); });
-                    imagingStudyLink.appendChild(a);
-                }
-            }
         } catch (_) {
             article.classList.add('no-report');
         } finally {
@@ -5878,13 +5853,11 @@ document.addEventListener('DOMContentLoaded', function() {
         triggerEl.textContent = '…';
         triggerEl.disabled = true;
 
-        function renderReportContent(reportData, isImaging) {
+        function renderReportContent(report, isImaging) {
             bodyDiv.innerHTML = '';
             bodyDiv.classList.remove('report-empty');
-            const forms = reportData.presentedForm || [];
-            const allNotes = reportData.note || [];
-            const resultNotes = allNotes.filter(n => n.category?.[0]?.text !== 'clinical-indication');
-            const series = reportData.series || [];
+            const forms = report.forms;
+            const resultNotes = report.results;
 
             if (forms.length > 0) {
                 const allLab = forms.every(f => f.type === 'lab' || f.reference !== undefined);
@@ -5917,13 +5890,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 // refreshActionState's merge pass below matches by title text, and
                 // without one here it couldn't tell this investigation was already
                 // rendered, appending a duplicate copy underneath.
-                const showTitles = series.length >= resultNotes.length;
-                resultNotes.forEach((note, i) => {
+                resultNotes.forEach(note => {
                     if (!note.text) return;
-                    if (showTitles && series[i]?.description) {
+                    if (note.title) {
                         const titleEl = document.createElement('p');
                         titleEl.className = 'series-result-title';
-                        titleEl.textContent = series[i].description;
+                        titleEl.textContent = note.title;
                         bodyDiv.appendChild(titleEl);
                     }
                     const div = document.createElement('div');
@@ -5932,8 +5904,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     div.innerHTML = marked.parse(normalised).trim();
                     bodyDiv.appendChild(div);
                 });
-            } else if (reportData.conclusion) {
-                bodyDiv.innerHTML = marked.parse(reportData.conclusion);
             } else {
                 bodyDiv.classList.add('report-empty');
             }
@@ -5964,20 +5934,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
         async function loadAndRenderReport() {
             const endpoint = isImaging
-                ? `/fhir/ImagingStudy/${requestId}`
-                : `/fhir/DiagnosticReport/${requestId}`;
+                ? `/api/study/${requestId}`
+                : `/api/report/${requestId}`;
 
             const repResp = await apiFetch(endpoint);
             if (repResp.ok) {
-                const reportData = await repResp.json();
+                const reportData = reportFromApi(await repResp.json(), isImaging);
 
                 // Date in subtitle
-                const date = reportData.started || reportData.effectiveDateTime || reportData.authoredOn;
+                const date = reportData.date;
                 if (date) modal.querySelector('.modal-date').textContent = formatDateWithTime(date);
 
                 // Requester fallback from report data if not passed from schedule row
                 if (!requesterName) {
-                    const requester = reportData.referrer?.display;
+                    const requester = reportData.requester;
                     if (requester) {
                         modal.querySelector('.modal-requester').textContent = requester;
                         modal.querySelector('.report-modal-referrer').hidden = false;
@@ -5985,10 +5955,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
 
                 // Indication line in header
-                const allNotes = reportData.note || [];
-                const indicationNote = allNotes.find(n => n.category?.[0]?.text === 'clinical-indication');
-                if (indicationNote?.text) {
-                    modal.querySelector('.modal-indication-text').textContent = indicationNote.text;
+                const indicationText = reportData.indication;
+                if (indicationText) {
+                    modal.querySelector('.modal-indication-text').textContent = indicationText;
                     modal.querySelector('.report-modal-indication').hidden = false;
                 }
                 if (isImaging) {
@@ -6005,7 +5974,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         const srResp = await apiFetch(`/api/request/${requestId}`);
                         if (srResp.ok) {
                             const srData = (await srResp.json()).request || {};
-                            if (!indicationNote?.text) {
+                            if (!indicationText) {
                                 const srIndication = srData.indication || '';
                                 if (_isMeaningfulText(srIndication)) {
                                     modal.querySelector('.modal-indication-text').textContent = srIndication;
@@ -6026,8 +5995,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 // back to the requesting physician server-side, so showing it
                 // here would misattribute a report that doesn't exist yet
                 // (same guard the Imaging tab cards use, scripts.js:2995-3006).
-                const examiner = reportData.resultsInterpreter?.[0]?.display
-                    || reportData.performer?.[0]?.actor?.display;
+                const examiner = reportData.examiner;
 
                 renderReportContent(reportData, isImaging);
                 const hasReport = !bodyDiv.classList.contains('report-empty');
@@ -6246,11 +6214,10 @@ document.addEventListener('DOMContentLoaded', function() {
         triggerEl.textContent = '…';
         triggerEl.disabled = true;
         try {
-            const resp = await apiFetch(`/fhir/ImagingStudy/${requestId}`);
+            const resp = await apiFetch(`/api/study/${requestId}?justification=0`);
             if (resp.ok) {
                 const json = await resp.json();
-                const ref = json.subject?.reference || '';
-                const patientId = ref.startsWith('Patient/') ? ref.slice(8) : null;
+                const patientId = json.patient?.id || null;
                 if (patientId) {
                     elements.cnpInput.value = patientId;
                     triggerEl.textContent = originalText;
@@ -6471,7 +6438,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Newest earlier exam that actually has report text; exams
                 // without one (e.g. partial/unwritten reports) are skipped.
                 for (const c of candidates) {
-                    const study = await _mdJson(`/api/study/${c.id}`);
+                    const study = await _mdJson(`/api/study/${c.id}?justification=0`);
                     const text = study ? _mdReportText(study) : '';
                     if (!text) continue;
                     out.prev = { date: _mdIso(c.date_time),
