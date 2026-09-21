@@ -3229,8 +3229,9 @@ select {
 }
 
 .schedule-filter-select {
-    min-width: 0;
-    width: 120px;
+    min-width: 120px;
+    width: auto;
+    max-width: 100%;
 }
 
 .schedule-date-input {
