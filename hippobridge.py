@@ -265,7 +265,11 @@ async def search_fhir_service_request(request):
 async def get_request(request):
     """Retrieve the request/order form by ID. Returns raw HippoData JSON.
 
-    Backed by BuletinSolicitare.asp — see HippoClientBuletinSolicitare.
+    Backed by BuletinSolicitare.asp — see HippoClientBuletinSolicitare — plus,
+    best-effort, a few fields only cerere.asp has: patient.id, performed_at,
+    cancelled and request.previous (id/code/day_month). They are simply absent
+    when cerere.asp can't be read (e.g. a lab the user can't open); the full
+    cerere data is at /api/request/{id}/patient.
     """
     id = request.match_info.get('id')
     if not id:
@@ -280,13 +284,15 @@ async def get_request(request):
 
     parsed_data = await client.fetch_and_parse(id=id)
     if parsed_data.get("status") != "error":
-        # Recent-requests strip only exists on cerere.asp. Best-effort: a
-        # Cerere failure (e.g. lab the user can't open) must not fail this route.
         cerere_data = await HippoClientCerere(SERVICE_URL, request).fetch_and_parse(id=id)
-        previous = cerere_data.get("request.previous")
-        if previous:
-            parsed_data.store_list("request.previous", [
-                {k: e[k] for k in ("id", "code", "day_month")} for e in previous])
+        if cerere_data.get("status") != "error":
+            for key in ("patient.id", "performed_at"):
+                parsed_data.store(key, cerere_data.get(key))
+            parsed_data["cancelled"] = bool(cerere_data.get("cancelled"))
+            previous = cerere_data.get("request.previous")
+            if previous:
+                parsed_data.store_list("request.previous", [
+                    {k: e[k] for k in ("id", "code", "day_month")} for e in previous])
     return web_json_response(parsed_data)
 
 @require_auth

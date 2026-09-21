@@ -6388,35 +6388,26 @@ document.addEventListener('DOMContentLoaded', function() {
         const modality = _mdModalityGroup(r.modality || '');
         try {
             const cached = _examCache[r.request_id];
-            let [cerere, sr] = await Promise.all([
-                _mdJson(`/api/request/${r.request_id}/patient`),
-                cached ? null : _mdJson(`/api/request/${r.request_id}`),
-            ]);
-            let p = cerere?.patient || {}, rq = cerere?.request || {};
-            if (!p.id) {
-                // cerere.asp is denied for labs the user can't open (e.g. CT):
-                // take demographics from BuletinSolicitare, and the patient id
-                // from a CNP search.
-                sr = sr || await _mdJson(`/api/request/${r.request_id}`);
-                const sp = sr?.patient || {};
-                p = { gender: sp.gender, age: String(sp.age || '').replace(/\D+$/, ''), cnp: sp.cnp };
-                rq = { diagnosis_referral: sr?.request?.diagnosis_referral };
-                if (p.cnp) {
-                    const found = await _mdJson(`/api/patient?q=${encodeURIComponent(p.cnp)}`);
-                    p.id = found?.patient?.id;
-                }
+            // One request: the order form plus (when cerere.asp is readable)
+            // patient.id and the recent-requests strip.
+            const sr = await _mdJson(`/api/request/${r.request_id}`);
+            const p = { ...(sr?.patient || {}) }, rq = sr?.request || {};
+            if (!p.id && p.cnp) {
+                // cerere.asp is denied for labs the user can't open (e.g. CT),
+                // so no patient id came back: find it by CNP.
+                const found = await _mdJson(`/api/patient?q=${encodeURIComponent(p.cnp)}`);
+                p.id = found?.patient?.id;
             }
             out.sex = p.gender || '';
-            out.age = p.age != null && p.age !== '' ? String(p.age) : '';
-            out.diagnosis = rq.diagnosis || rq.diagnosis_referral || '';
-            let ind = cached ? cached.indication : _mdSolicitareIndication(sr);
-            if (!_isMeaningfulText(ind)) ind = rq.clinical_indication || rq.justification || '';
+            out.age = String(p.age || '').replace(/\D+$/, '');
+            out.diagnosis = [rq.clinical_situation, rq.diagnosis_referral].find(_isMeaningfulText) || '';
+            const ind = cached ? cached.indication : _mdSolicitareIndication(sr);
             out.indication = _isMeaningfulText(ind) ? ind : '';
-            // cerere.asp's recent-requests strip: if it lists only this request,
-            // treat as a first-time patient and skip the full history lookup.
+            // The recent-requests strip: if it lists only this request, treat
+            // as a first-time patient and skip the full history lookup.
             const strip = rq.previous;
             const firstTime = Array.isArray(strip) && strip.length === 1
-                && strip[0].current && String(strip[0].id) === String(r.request_id);
+                && String(strip[0].id) === String(r.request_id);
             if (p.id && modality && !firstTime) {
                 const list = await _mdPatientList(p.id, modality);
                 const cur = _mdIso(r.date_time);

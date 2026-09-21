@@ -4686,7 +4686,7 @@ dialog.report-editor-modal article > section {
     letter-spacing: 0.04em;
     color: var(--warning, #d97706);
 }
-.exam-prev-ai { font-weight: 500; }
+.exam-prev-ai { font-weight: 500; font-style: italic; }
 .exam-note {
     margin-top: var(--space-6);
     margin-bottom: 0;
