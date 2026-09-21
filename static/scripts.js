@@ -2003,28 +2003,41 @@ document.addEventListener('DOMContentLoaded', function() {
     // stale patient's queued jobs are dropped via the dataGeneration check.
     let aiWarmQueue = [];
     let aiWarmRunning = false;
+    let aiWarmPausedUntil = 0;
     const AI_WARM_GAP_MS = 4000;
+    const AI_WARM_PAUSE_MS = 5 * 60 * 1000;
 
-    function enqueueAiWarm(kind, text, gen) {
+    // gen: the dataGeneration the job belongs to (dropped if the patient
+    // changed meanwhile), or null for a job that isn't tied to a patient (the
+    // schedule's previous-exam summaries). onDone(summary) fires when the job
+    // finishes; summary is null when it was skipped, dropped or failed.
+    function enqueueAiWarm(kind, text, gen, onDone) {
         if (!text) return;
-        aiWarmQueue.push({ kind, text, gen });
+        if (Date.now() < aiWarmPausedUntil) { onDone?.(null); return; }
+        aiWarmQueue.push({ kind, text, gen, onDone });
         if (!aiWarmRunning) processAiWarmQueue();
     }
 
     async function processAiWarmQueue() {
         aiWarmRunning = true;
         while (aiWarmQueue.length) {
+            // Nobody is looking at the page: don't spend LLM time on it
+            while (document.hidden) await new Promise(r => setTimeout(r, 3000));
             const job = aiWarmQueue.shift();
-            if (job.gen === dataGeneration) {
+            if (job.gen == null || job.gen === dataGeneration) {
                 try {
-                    await aiSummarize(job.kind, job.text);
+                    job.onDone?.(await aiSummarize(job.kind, job.text));
                 } catch (err) {
-                    // Likely misconfigured/unreachable — stop trying for this session
+                    // Likely misconfigured/unreachable — stop trying for a while
                     // rather than burning through the rest of the queue on failures.
                     log('Background AI warm failed, pausing warm queue (silent):', err);
-                    aiWarmQueue = [];
+                    aiWarmPausedUntil = Date.now() + AI_WARM_PAUSE_MS;
+                    job.onDone?.(null);
+                    aiWarmQueue.splice(0).forEach(j => j.onDone?.(null));
                     break;
                 }
+            } else {
+                job.onDone?.(null);
             }
             if (aiWarmQueue.length) await new Promise(r => setTimeout(r, AI_WARM_GAP_MS));
         }
@@ -6897,7 +6910,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (_examCache[id].referrer) _applyReferrer(el, _examCache[id].referrer);
                 if (_examCache[id].age) _applyPatientAge(el, _examCache[id].age);
                 if (_examCache[id].triage) _applyTriage(el, _examCache[id].triage);
-                _applyPrevLine(el, _examCache[id].prev);
+                const cachedPrev = _examCache[id].prev;
+                // A summary still being generated for a row that was redrawn:
+                // follow the same job so this new element updates too.
+                if (cachedPrev?.pending) _autoSummarizePrev(cachedPrev, () => _applyPrevLine(el, cachedPrev));
+                _applyPrevLine(el, cachedPrev);
                 return;
             }
             const examPromise = apiFetch(`/api/request/${id}`)
@@ -6969,7 +6986,32 @@ document.addEventListener('DOMContentLoaded', function() {
             try {
                 cached.prev = await _findPreviousExam(req.request_id, req.date_time, modality, cached.patientId);
             } catch (_) { cached.prev = null; }
-            _applyPrevLine(el, cached.prev);
+            const prev = cached.prev;
+            if (prev && !prev.summary && _isMeaningfulText(prev.text)) {
+                _autoSummarizePrev(prev, () => _applyPrevLine(el, prev));
+            }
+            _applyPrevLine(el, prev);
+        });
+    }
+
+    // Generates the missing AI summary of a previous exam in the background,
+    // through the shared one-at-a-time warm queue (4 s apart, paused while
+    // the tab is hidden or the LLM is failing). Rows whose previous exam has
+    // the same report text share one job. `refresh` re-renders the line.
+    const _prevSummaryWaiters = new Map(); // report text -> [(summary) => void]
+    function _autoSummarizePrev(prev, refresh) {
+        prev.pending = true;
+        const settle = summary => {
+            prev.pending = false;
+            if (summary) prev.summary = summary;
+            refresh();
+        };
+        const waiters = _prevSummaryWaiters.get(prev.text);
+        if (waiters) { waiters.push(settle); return; }
+        _prevSummaryWaiters.set(prev.text, [settle]);
+        enqueueAiWarm('imaging', prev.text, null, summary => {
+            _prevSummaryWaiters.get(prev.text)?.forEach(fn => fn(summary));
+            _prevSummaryWaiters.delete(prev.text);
         });
     }
 
@@ -6994,7 +7036,13 @@ document.addEventListener('DOMContentLoaded', function() {
             showRequestModal(prev.id, prev.code, el._patientName, el._req?.modality || '', head, '', '');
         });
         line.appendChild(head);
-        if (prev.summary) {
+        if (prev.pending) {
+            line.onclick = null;
+            const wait = document.createElement('span');
+            wait.className = 'timeline-prev-pending';
+            wait.textContent = 'summarizing…';
+            line.append(' — ', wait);
+        } else if (prev.summary) {
             const em = document.createElement('em');
             em.className = 'timeline-prev-text';
             em.textContent = prev.summary;
