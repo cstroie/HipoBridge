@@ -6499,13 +6499,19 @@ document.addEventListener('DOMContentLoaded', function() {
         return r.ok ? r.json() : null;
     }
 
+    // Modalities with their own Hipocrate domain: /api/request?type= then makes
+    // one upstream call instead of fetching every imaging and lab domain.
+    const _mdTypedModalities = new Set(['radio', 'ct', 'irm', 'eco', 'rads']);
     const _mdPatientLists = new Map();
-    function _mdPatientList(pid) {
-        if (!_mdPatientLists.has(pid)) {
-            _mdPatientLists.set(pid, _mdJson(`/api/request?patient=${encodeURIComponent(pid)}`)
+    function _mdPatientList(pid, modality) {
+        const type = _mdTypedModalities.has(modality) ? modality : '';
+        const key = `${pid}|${type}`;
+        if (!_mdPatientLists.has(key)) {
+            _mdPatientLists.set(key, _mdJson(`/api/request?patient=${encodeURIComponent(pid)}`
+                + (type ? `&type=${type}` : ''))
                 .then(b => b?.requests || []).catch(() => []));
         }
-        return _mdPatientLists.get(pid);
+        return _mdPatientLists.get(key);
     }
 
     async function _mdRowData(r) {
@@ -6515,19 +6521,37 @@ document.addEventListener('DOMContentLoaded', function() {
         const modality = _mdModalityGroup(r.category?.[0]?.coding?.[0]?.code || '');
         try {
             const cached = _examCache[r.id];
-            const [cerere, sr] = await Promise.all([
+            let [cerere, sr] = await Promise.all([
                 _mdJson(`/api/request/${r.id}/patient`),
                 cached ? null : _mdJson(`/api/request/${r.id}`),
             ]);
-            const p = cerere?.patient || {}, rq = cerere?.request || {};
+            let p = cerere?.patient || {}, rq = cerere?.request || {};
+            if (!p.id) {
+                // cerere.asp is denied for labs the user can't open (e.g. CT):
+                // take demographics from BuletinSolicitare, and the patient id
+                // from a CNP search.
+                sr = sr || await _mdJson(`/api/request/${r.id}`);
+                const sp = sr?.patient || {};
+                p = { gender: sp.gender, age: String(sp.age || '').replace(/\D+$/, ''), cnp: sp.cnp };
+                rq = { diagnosis_referral: sr?.request?.diagnosis_referral };
+                if (p.cnp) {
+                    const found = await _mdJson(`/api/patient?q=${encodeURIComponent(p.cnp)}`);
+                    p.id = found?.patient?.id;
+                }
+            }
             out.sex = p.gender || '';
             out.age = p.age != null && p.age !== '' ? String(p.age) : '';
             out.diagnosis = rq.diagnosis || rq.diagnosis_referral || '';
             let ind = cached ? cached.indication : _mdSolicitareIndication(sr);
             if (!_isMeaningfulText(ind)) ind = rq.clinical_indication || rq.justification || '';
             out.indication = _isMeaningfulText(ind) ? ind : '';
-            if (p.id && modality) {
-                const list = await _mdPatientList(p.id);
+            // cerere.asp's recent-requests strip: if it lists only this request,
+            // treat as a first-time patient and skip the full history lookup.
+            const strip = rq.previous;
+            const firstTime = Array.isArray(strip) && strip.length === 1
+                && strip[0].current && String(strip[0].id) === String(r.id);
+            if (p.id && modality && !firstTime) {
+                const list = await _mdPatientList(p.id, modality);
                 const cur = _mdIso(r.authoredOn);
                 const candidates = list
                     .filter(e => e.id !== r.id

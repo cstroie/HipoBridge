@@ -302,6 +302,10 @@ url_cache = URLCache(max_size=500, timeout=30 * 60)
 # never outlives the raw page it was derived from.
 parse_cache = ParseResultCache(max_size=300, timeout=url_cache.timeout)
 
+# Hipocrate's per-lab rights denial ("you don't have enough rights to view a
+# request from laboratory X"). Depends on who is asking, so never cached.
+_ACCESS_DENIED_MARKER = "Nu aveti suficiente drepturi"
+
 # Global semaphore: cap total concurrent outbound requests to Hipocrate.
 # 12 was too heavy on Hipocrate, so it is capped at 6. Trade-off: a single
 # background burst (worklist enrichment: 3 patients x 2 fetches; pacs.py
@@ -806,7 +810,15 @@ class HippoClient:
 
             # Cache the response for GET requests and wake up any waiters
             if method == "GET":
-                await self.cache_put(url, response_text)
+                if _ACCESS_DENIED_MARKER in response_text:
+                    # A per-user rights denial must not enter the shared,
+                    # user-blind cache — it would be served to accounts that do
+                    # have access (confirmed: XRayVision's denied cerere.asp
+                    # fetch blocked stroie.costin for the 7-day TTL). Also drop
+                    # any parse result memoized from an earlier denial.
+                    parse_cache.evict(self.get_full_url(url))
+                else:
+                    await self.cache_put(url, response_text)
                 self.url_cache.resolve_inflight(url)
 
             return response_text, None
