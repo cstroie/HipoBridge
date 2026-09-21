@@ -339,6 +339,10 @@ document.addEventListener('DOMContentLoaded', function() {
         { kind: 'pre_exam_soap',      label: 'SOAP',              icon: 'fa-file-medical' },
     ];
 
+    // Generation counter for the on-demand schedule exam list; must be declared
+    // before initApp() runs (fetchSchedule -> hideScheduleMarkdown uses it).
+    let scheduleMdRun = 0;
+
     // Initialize application
     initApp();
     
@@ -6453,8 +6457,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Built only when the "Exam list" button is clicked: per row, cerere
     // (sex/age/diagnosis/patient id), the request form (indication), and the
     // patient's last earlier exam of the same modality with its report text.
-    let scheduleMdRun = 0;
-
     function hideScheduleMarkdown() {
         scheduleMdRun++;
         if (elements.scheduleMdPanel) {
