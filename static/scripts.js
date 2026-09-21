@@ -6484,13 +6484,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const _mdIso = s => (s || '').replace('T', ' ').slice(0, 16);
 
     function _mdReportText(study) {
-        const forms = (study.presentedForm || []).map(f => (f.data || '').trim()).filter(Boolean);
-        if (forms.length) return forms.join('\n\n');
-        const notes = (study.note || [])
-            .filter(n => n.category?.[0]?.text !== 'clinical-indication')
-            .map(n => (n.text || '').trim()).filter(Boolean);
-        if (notes.length) return notes.join('\n\n');
-        return (study.conclusion || '').trim();
+        return (study.studies || []).map(s => (s.result || '').trim()).filter(Boolean).join('\n\n');
+    }
+
+    // Best clinical indication from /api/request/{id} — same priority as the
+    // server's resolve_clinical_indication() for BuletinSolicitare data.
+    function _mdSolicitareIndication(sr) {
+        const rq = sr?.request || {};
+        return [rq.justification, rq.clinical_situation, rq.clinical_data,
+                rq.diagnosis_referral, rq.special_indications].find(_isMeaningfulText) || '';
     }
 
     async function _mdJson(url) {
@@ -6501,8 +6503,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const _mdPatientLists = new Map();
     function _mdPatientList(pid) {
         if (!_mdPatientLists.has(pid)) {
-            _mdPatientLists.set(pid, _mdJson(`/fhir/ServiceRequest?patient=${encodeURIComponent(pid)}`)
-                .then(b => (b?.entry || []).map(e => e.resource)).catch(() => []));
+            _mdPatientLists.set(pid, _mdJson(`/api/request?patient=${encodeURIComponent(pid)}`)
+                .then(b => b?.requests || []).catch(() => []));
         }
         return _mdPatientLists.get(pid);
     }
@@ -6516,14 +6518,13 @@ document.addEventListener('DOMContentLoaded', function() {
             const cached = _examCache[r.id];
             const [cerere, sr] = await Promise.all([
                 _mdJson(`/api/request/${r.id}/patient`),
-                cached ? null : _mdJson(`/fhir/ServiceRequest/${r.id}`),
+                cached ? null : _mdJson(`/api/request/${r.id}`),
             ]);
             const p = cerere?.patient || {}, rq = cerere?.request || {};
             out.sex = p.gender || '';
             out.age = p.age != null && p.age !== '' ? String(p.age) : '';
             out.diagnosis = rq.diagnosis || rq.diagnosis_referral || '';
-            let ind = cached ? cached.indication
-                : (sr?.note || []).find(n => n.category?.[0]?.text === 'clinical-indication')?.text || '';
+            let ind = cached ? cached.indication : _mdSolicitareIndication(sr);
             if (!_isMeaningfulText(ind)) ind = rq.clinical_indication || rq.justification || '';
             out.indication = _isMeaningfulText(ind) ? ind : '';
             if (p.id && modality) {
@@ -6531,14 +6532,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 const cur = _mdIso(r.authoredOn);
                 const candidates = list
                     .filter(e => e.id !== r.id
-                        && _mdModalityGroup(e.code?.coding?.[0]?.code) === modality
-                        && _mdIso(e.authoredOn) < cur)
-                    .sort((a, b) => _mdIso(b.authoredOn).localeCompare(_mdIso(a.authoredOn)))
+                        && _mdModalityGroup(e.type) === modality
+                        && _mdIso(e.date_time) < cur)
+                    .sort((a, b) => _mdIso(b.date_time).localeCompare(_mdIso(a.date_time)))
                     .slice(0, 3);
                 for (const c of candidates) {
-                    const study = await _mdJson(`/fhir/ImagingStudy/${c.id}`);
+                    const study = await _mdJson(`/api/study/${c.id}`);
                     const text = study ? _mdReportText(study) : '';
-                    const info = { date: _mdIso(c.authoredOn), region: (c.bodySite || []).map(b => b.text).filter(Boolean).join(', '), text };
+                    const info = { date: _mdIso(c.date_time), region: (c.regions || []).filter(Boolean).join(', '), text };
                     if (!out.prev) out.prev = info;
                     if (text) { out.prev = info; break; }
                 }
