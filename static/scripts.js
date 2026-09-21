@@ -6654,6 +6654,26 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Replaces each previous-exam report with its AI summary, one request at
     // a time, reusing the "imaging" prompt (server-cached per report text).
+    function _mdApplySummary(i, summary) {
+        const { rows, els } = scheduleMdState;
+        rows[i].prev.summary = summary;
+        const fresh = _mdEntryEl(rows[i]);
+        els[i].replaceWith(fresh);
+        els[i] = fresh;
+    }
+
+    // Fills in summaries the server already has cached (check_only: no LLM
+    // call, null when absent) so a rebuilt list keeps its AI summaries.
+    async function _mdApplyCachedSummaries(run) {
+        const { rows } = scheduleMdState;
+        const idx = rows.map((d, i) => i).filter(i => rows[i].prev?.text);
+        await limitedMap(idx, 4, async i => {
+            const summary = await aiSummarize('imaging', rows[i].prev.text, { checkOnly: true });
+            if (summary && run === scheduleMdRun) _mdApplySummary(i, summary);
+        });
+        if (run === scheduleMdRun) _mdRefreshMarkdown();
+    }
+
     async function summarizeScheduleMdReports() {
         const { rows, els } = scheduleMdState;
         const todo = rows.map((d, i) => i).filter(i => rows[i].prev?.text && !rows[i].prev.summary);
@@ -6671,12 +6691,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 try {
                     const summary = await aiSummarize('imaging', rows[i].prev.text);
                     if (run !== scheduleMdRun) return;
-                    if (summary) {
-                        rows[i].prev.summary = summary;
-                        const fresh = _mdEntryEl(rows[i]);
-                        els[i].replaceWith(fresh);
-                        els[i] = fresh;
-                    }
+                    if (summary) _mdApplySummary(i, summary);
                 } catch (err) {
                     failed++;
                 }
@@ -6715,6 +6730,7 @@ document.addEventListener('DOMContentLoaded', function() {
             _mdRefreshMarkdown();
             elements.scheduleMdPanel.hidden = false;
             elements.scheduleMdPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            _mdApplyCachedSummaries(run).catch(() => {});
         } catch (err) {
             showToast(`Failed to build exam list: ${err.message}`, 'error');
         } finally {
