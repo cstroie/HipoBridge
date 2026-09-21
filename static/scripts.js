@@ -6721,6 +6721,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             if (run !== scheduleMdRun) return;
             const rows = results.map((d, i) => d || _mdFallbackRow(entries[i]));
+            rows.sort((x, y) => (x.name || '').localeCompare(y.name || '', undefined, { sensitivity: 'base' }));
             const subtitle = _mdSubtitle(rows.length);
             scheduleMdState.subtitle = subtitle;
             scheduleMdState.rows = rows;
