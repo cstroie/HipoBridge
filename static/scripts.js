@@ -119,6 +119,7 @@ document.addEventListener('DOMContentLoaded', function() {
         scheduleEndDate: document.getElementById('scheduleEndDate'),
         refreshScheduleBtn: document.getElementById('refreshScheduleBtn'),
         scheduleMdBtn: document.getElementById('scheduleMdBtn'),
+        scheduleMdHint: document.getElementById('scheduleMdHint'),
         scheduleMdPanel: document.getElementById('scheduleMdPanel'),
         scheduleMdBody: document.getElementById('scheduleMdBody'),
         scheduleMdTitle: document.getElementById('scheduleMdTitle'),
@@ -6563,7 +6564,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         return {
             name: d.name || '(unnamed)',
-            meta: [who, d.ward, d.modalityLabel].filter(Boolean).join(' · '),
+            who,
+            meta: [d.ward, d.modalityLabel].filter(Boolean).join(' · '),
             fields,
             prevLabel: `Previous ${d.modalityLabel}`,
             prevWhen: d.prev ? [d.prev.date, d.prev.region].filter(Boolean).join(' · ') : '',
@@ -6576,7 +6578,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function _mdEntryMarkdown(d) {
         const v = _mdView(d);
-        const lines = [`### ${v.name}`];
+        const lines = [`### ${v.name}${v.who ? ` _${v.who}_` : ''}`];
         if (v.meta) lines.push(`_${v.meta}_`);
         lines.push('');
         v.fields.forEach(([k, val]) => lines.push(`**${k}:** ${val}`));
@@ -6599,7 +6601,9 @@ document.addEventListener('DOMContentLoaded', function() {
         };
         const art = el('article', 'exam-entry');
         const head = el('header', 'exam-entry-head');
-        head.append(el('h3', 'exam-name', v.name));
+        const h = el('h3', 'exam-name', v.name);
+        if (v.who) h.append(el('span', 'exam-who', v.who));
+        head.append(h);
         if (v.meta) head.append(el('p', 'exam-meta', v.meta));
         art.append(head);
 
@@ -6770,6 +6774,13 @@ document.addEventListener('DOMContentLoaded', function() {
     function renderSchedule() {
         const container = elements.scheduleTimeline || elements.scheduleBody;
         if (!container) return;
+
+        if (elements.scheduleMdHint) {
+            const n = scheduleEntries.length;
+            elements.scheduleMdHint.textContent = n
+                ? `Lists the ${n} displayed exam${n === 1 ? '' : 's'} with diagnosis and previous report`
+                : 'No exams to list';
+        }
 
         container.innerHTML = '';
 

@@ -1769,6 +1769,7 @@ select {
     content: "Copy";
     font: 600 var(--font-size-13) 'Inter', sans-serif;
 }
+.card-toolbar #scheduleMdPrintBtn::after { content: "Print"; }
 /* "AI" is shorter than "Copy" — without a shared, capped width the two
    segments each size to their own content and the pill reads lopsided
    (worse still if either button is an inline-flex item free to grow).
@@ -3183,6 +3184,22 @@ select {
     margin-bottom: var(--space-8);
 }
 
+.schedule-footer-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    flex-wrap: wrap;
+    margin-top: var(--space-16);
+    padding-top: var(--space-16);
+    border-top: 1px solid var(--border);
+}
+.schedule-footer-actions .btn-schedule-refresh { margin-left: 0; }
+.schedule-footer-hint {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--text-light);
+}
+
 /* Keep the refresh button compact — never let it go full-width */
 .btn-schedule-refresh {
     margin-left: auto;
@@ -4293,6 +4310,9 @@ dialog.report-editor-modal article > section {
     .card-toolbar .btn-copy::after {
         content: none;
     }
+    .card-toolbar #scheduleMdPrintBtn::after {
+        content: none;
+    }
 
     dialog.report-modal {
         width: 96vw;
@@ -4601,6 +4621,12 @@ dialog.report-editor-modal article > section {
     margin-right: var(--space-6);
     color: var(--primary);
     font-variant-numeric: tabular-nums;
+}
+.exam-who {
+    margin-left: var(--space-8);
+    font: 500 var(--font-size-sm) 'Inter', sans-serif;
+    letter-spacing: 0;
+    color: var(--text-light);
 }
 .exam-meta {
     margin: 2px 0 0 calc(2ch + var(--space-6));
