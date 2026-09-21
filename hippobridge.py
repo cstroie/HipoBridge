@@ -300,6 +300,20 @@ async def get_fhir_service_request(request):
     response = await client.fetch_respond_fhir(id=id)
     return web_fhir_response(response)
 
+async def _cached_imaging_summary(parsed_data) -> Optional[str]:
+    """AI summary already in ai_cache for this study's report text, else None.
+
+    Same key the exam list uses when it summarises a previous exam
+    (kind "imaging", non-empty studies[].result joined by a blank line), so
+    a hit here means the client needs no separate check_only call. Never
+    generates — cache lookup only.
+    """
+    text = '\n\n'.join(t for t in (
+        (st.get("result") or '').strip() for st in (parsed_data.get("studies") or [])) if t)
+    if not text:
+        return None
+    return await ai_cache.get_async(_ai_cache_key('imaging', text))
+
 @require_auth
 async def get_study(request):
     """Retrieve imaging study by ID. Returns raw HippoData JSON."""
@@ -315,6 +329,12 @@ async def get_study(request):
         return debug_resp
 
     parsed_data = await client.fetch_and_parse(id=id)
+    if parsed_data.get("status") == "success":
+        summary = await _cached_imaging_summary(parsed_data)
+        if summary:
+            # parsed_data is shared via parse_cache: don't stamp it in place.
+            parsed_data = copy.copy(parsed_data)
+            parsed_data["summary"] = summary
     return web_json_response(parsed_data)
 
 @require_auth
@@ -362,6 +382,13 @@ async def get_fhir_imaging_study(request):
                         parsed_data.store("checkin.diagnosis", diagnosis)
 
     response = client.fhir_response(parsed_data, id=id, http_request=request)
+    if isinstance(response, Resource) and response.data.get("resourceType") == "ImagingStudy":
+        summary = await _cached_imaging_summary(parsed_data)
+        if summary:
+            response.data.setdefault("extension", []).append({
+                "url": f"{request.scheme}://{request.host}/fhir/StructureDefinition/ai-summary",
+                "valueString": summary,
+            })
     return web_fhir_response(response)
 
 

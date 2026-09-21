@@ -6565,7 +6565,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 for (const c of candidates) {
                     const study = await _mdJson(`/api/study/${c.id}`);
                     const text = study ? _mdReportText(study) : '';
-                    const info = { date: _mdIso(c.date_time), region: (c.regions || []).filter(Boolean).join(', '), text };
+                    const info = { date: _mdIso(c.date_time), region: (c.regions || []).filter(Boolean).join(', '), text,
+                                   summary: study?.summary || '' };
                     if (!out.prev) out.prev = info;
                     if (text) { out.prev = info; break; }
                 }
@@ -6697,7 +6698,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // call, null when absent) so a rebuilt list keeps its AI summaries.
     async function _mdApplyCachedSummaries(run) {
         const { rows } = scheduleMdState;
-        const idx = rows.map((d, i) => i).filter(i => rows[i].prev?.text);
+        const idx = rows.map((d, i) => i).filter(i => rows[i].prev?.text && !rows[i].prev.summary);
         await limitedMap(idx, 4, async i => {
             const summary = await aiSummarize('imaging', rows[i].prev.text, { checkOnly: true });
             if (summary && run === scheduleMdRun) _mdApplySummary(i, summary);
