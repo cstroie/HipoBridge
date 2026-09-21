@@ -441,6 +441,8 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
     # MedicalAlerts above.
     allergies     = ((patient_info or {}).get('allergies') or '')[:64]
     justification = ((patient_info or {}).get('justification') or '')[:64]
+    diagnosis     = ((patient_info or {}).get('diagnosis') or '')[:64]
+    attention     = ((patient_info or {}).get('attention') or '')[:64]
     section       = ((patient_info or {}).get('section') or '')[:64]
     phone         = ((patient_info or {}).get('phone') or '')[:64]
     address       = ((patient_info or {}).get('address') or '')[:64]
@@ -452,11 +454,12 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
     comments      = (patient_info or {}).get('comment') or ''
     if email:
         comments = f'Email: {email}' + (f'\n{comments}' if comments else '')
-    # observations/anamnesis go to AdditionalPatientHistory (0010,21B0)
+    # diagnosis, observations and anamnesis go to AdditionalPatientHistory (0010,21B0)
     # instead of being folded into PatientComments — a separate displayed
     # field on the a550, so the clinical indication in PatientComments stays
     # uncluttered.
     additional_history = '\n'.join(p for p in (
+        (patient_info or {}).get('diagnosis'),
         (patient_info or {}).get('observations'),
         (patient_info or {}).get('anamnesis'),
     ) if p)
@@ -513,6 +516,13 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
         ds.MedicalAlerts = medical_alerts
         ds.Allergies = allergies
         ds.AdditionalPatientHistory = additional_history
+        # Other displayed free-text fields (a550 conformance, Table 4.2-44):
+        # the diagnosis also goes in AdmittingDiagnosesDescription, and the
+        # Atentie (attention) note in SpecialNeeds.
+        if diagnosis:
+            ds.AdmittingDiagnosesDescription = diagnosis
+        if attention:
+            ds.SpecialNeeds = attention
         ds.AdmissionID = admission_id
         if other_ids is not None:
             ds.OtherPatientIDsSequence = other_ids
@@ -1073,6 +1083,7 @@ class WorklistRefresher:
                 'observations':  patient_data.get('patient.observations'),
                 'anamnesis':     patient_data.get('patient.anamnesis'),
                 'comment':       comment,
+                'diagnosis':     cerere_data.get('request.diagnosis') or cerere_data.get('request.diagnosis_referral'),
                 'admission_id':  admission_id,
             }
             self._patient_cache[request_id] = info
