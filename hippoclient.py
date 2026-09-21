@@ -5290,7 +5290,7 @@ class HippoClientSchedule(HippoClient):
         that ward, or a ward family name (e.g. 'CHIRURGIE') synthesized by the
         frontend when 2+ variants exist, which matches all variants.
         """
-        section_name = (section_name or '').strip()
+        section_name = (section_name or '').strip().upper()
         if section_name:
             requests = [r for r in requests if (
                 (r.get('section') or '') == section_name or
@@ -5375,7 +5375,7 @@ class HippoClientSchedule(HippoClient):
                         'status': detail_cells[1].get_text(strip=True),
                         'payment_type': detail_cells[2].get_text(strip=True),
                         'priority': detail_cells[3].get_text(strip=True),
-                        'section': detail_cells[4].get_text(strip=True),
+                        'section': detail_cells[4].get_text(strip=True).upper(),
                         'performed_at': performed_dt.strftime('%Y-%m-%d %H:%M') if performed_dt else '',
                         'requested_by': requested_by,
                         'laboratory': self._MODALITY_DISPLAY.get(modality) or laboratory_raw,
