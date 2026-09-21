@@ -794,7 +794,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const result = await fetchServiceBundle(); // memoized; also warms Laboratory
             if (gen !== dataGeneration) return;
             if (pendingReportData) {
-                pendingReportData.analysesData = result.data || { resourceType: 'Bundle', entry: [] };
+                pendingReportData.analysesData = result.data || { requests: [] };
             }
         } catch (err) {
             log('Prefetch imaging failed (silent):', err);
@@ -847,10 +847,10 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             setLoadingStep('Querying Hipocrate for imaging requests…');
             const result = await fetchServiceBundle();
-            const bundle = result.data || { resourceType: 'Bundle', entry: [] };
+            const bundle = result.data || { requests: [] };
             const IMAGING = ['radio', 'ct', 'irm', 'eco', 'rads'];
-            const entries = (bundle.entry || []).filter(e => IMAGING.includes(e.resource?.code?.coding?.[0]?.code));
-            const allDates = (bundle.entry || []).map(e => e.resource?.authoredOn).filter(Boolean);
+            const entries = (bundle.requests || []).filter(e => IMAGING.includes(e.type));
+            const allDates = (bundle.requests || []).map(e => e.date_time).filter(Boolean);
             setLoadingStep(entries.length ? `Organising ${entries.length} imaging studies…` : 'No imaging studies found.');
             await populateStudyGrid(entries, {
                 grid: elements.imagingGrid, noData: elements.imagingNoData,
@@ -875,10 +875,10 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             setLoadingStep('Querying Hipocrate for lab requests…');
             const result = await fetchServiceBundle();
-            const bundle = result.data || { resourceType: 'Bundle', entry: [] };
+            const bundle = result.data || { requests: [] };
             const LAB = ['lab'];
-            const entries = (bundle.entry || []).filter(e => LAB.includes(e.resource?.code?.coding?.[0]?.code));
-            const allDates = (bundle.entry || []).map(e => e.resource?.authoredOn).filter(Boolean);
+            const entries = (bundle.requests || []).filter(e => LAB.includes(e.type));
+            const allDates = (bundle.requests || []).map(e => e.date_time).filter(Boolean);
             setLoadingStep(entries.length ? `Organising ${entries.length} lab results…` : 'No lab results found.');
             await populateStudyGrid(entries, {
                 grid: elements.labGrid, noData: elements.labNoData,
@@ -909,7 +909,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // memoized, so this is a no-op once the prefetch has already run.
             if (pendingAnalysesData) {
                 const result = await fetchServiceBundle();
-                pendingReportData.analysesData = result.data || { resourceType: 'Bundle', entry: [] };
+                pendingReportData.analysesData = result.data || { requests: [] };
             }
             await loadAndDisplayReport(pendingReportData.patientData, pendingReportData.analysesData);
             hideLoading();
@@ -1019,7 +1019,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (elements.epicrisisContent) delete elements.epicrisisContent.dataset.loaded;
 
             // Report is lazy-loaded on first visit to its tab (analysesData filled in after Analyses tab loads)
-            pendingReportData = { patientData, analysesData: { resourceType: 'Bundle', entry: [] } };
+            pendingReportData = { patientData, analysesData: { requests: [] } };
             if (elements.patientReportMarkdown) delete elements.patientReportMarkdown.dataset.loaded;
 
             log('Switching to patient tab...');
@@ -1064,7 +1064,7 @@ document.addEventListener('DOMContentLoaded', function() {
             pendingEpicrisisData = patientData;
             if (elements.epicrisisContent) delete elements.epicrisisContent.dataset.loaded;
 
-            pendingReportData = { patientData, analysesData: { resourceType: 'Bundle', entry: [] } };
+            pendingReportData = { patientData, analysesData: { requests: [] } };
             if (elements.patientReportMarkdown) delete elements.patientReportMarkdown.dataset.loaded;
 
             // Re-run whichever tab is currently active so its content reloads
@@ -1248,7 +1248,7 @@ document.addEventListener('DOMContentLoaded', function() {
     async function fetchAnalysesData(patientCode) {
         try {
             
-            const analysesResponse = await apiFetch(`/fhir/ServiceRequest?patient=${patientCode}`);
+            const analysesResponse = await apiFetch(`/api/request?patient=${patientCode}`);
             
             if (!analysesResponse.ok) {
                 if (analysesResponse.status === 401) {
@@ -1260,7 +1260,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (analysesResponse.status === 404) {
                     return {
                         success: true, // Not an error, just no data
-                        data: { resourceType: "Bundle", entry: [] },
+                        data: { requests: [] },
                         message: 'No diagnostic reports found for this patient.'
                     };
                 }
@@ -2260,11 +2260,10 @@ document.addEventListener('DOMContentLoaded', function() {
         // Group analyses by modality
         const analysesByModality = {};
         
-        if (analysesData.resourceType === "Bundle" && analysesData.entry && analysesData.entry.length > 0) {
-            analysesData.entry.forEach(entry => {
-                const serviceRequest = entry.resource;
-                const analysisType = serviceRequest.code?.coding?.[0]?.code || 'unknown';
-                const analysisText = serviceRequest.code?.coding?.[0]?.display || 'analysis';
+        if (analysesData.requests && analysesData.requests.length > 0) {
+            analysesData.requests.forEach(serviceRequest => {
+                const analysisType = serviceRequest.type || 'unknown';
+                const analysisText = serviceRequest.type_display || 'analysis';
                 // Skip unknown types
                 if (!modalityMap[analysisType]) return;
 
@@ -2276,7 +2275,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     serviceRequest,
                     analysisType,
                     analysisText,
-                    examDateString: serviceRequest.authoredOn || null
+                    examDateString: serviceRequest.date_time || null
                 });
             });
         }
@@ -2589,7 +2588,7 @@ document.addEventListener('DOMContentLoaded', function() {
             else if (heightWrap) heightWrap.hidden = true;
 
             // ── §2 + §4 Encounters (parallel with analyses) ──────────────
-            const analysesDates = (analysesData?.entry || []).map(e => e.resource?.authoredOn).filter(Boolean);
+            const analysesDates = (analysesData?.requests || []).map(e => e.date_time).filter(Boolean);
             const [analysesMarkdown, epicrisisMarkdown, episodeInfo] = await Promise.all([
                 analysesData ? populateAnalysesMarkdown(analysesData) : Promise.resolve(''),
                 generateEpicrisisMarkdown(patientData),
@@ -2677,17 +2676,15 @@ document.addEventListener('DOMContentLoaded', function() {
             const MOD_VAR   = { radio: '--mod-xr', ct: '--mod-ct', irm: '--mod-mr', eco: '--mod-us', rads: '--mod-fl', fluoro: '--mod-fl' };
             // Hoisted so the markdown builder below can reference them
             let entries = [], reports = [], indications = [];
-            if (imagingList && analysesData?.entry?.length) {
-                const candidates = [...analysesData.entry]
-                    .filter(e => MOD_SHORT[e.resource?.code?.coding?.[0]?.code])
-                    .filter(e => !boundaryDate || (e.resource.authoredOn || '') >= boundaryDate)
-                    .sort((a, b) => (b.resource.authoredOn || '') > (a.resource.authoredOn || '') ? 1 : -1)
+            if (imagingList && analysesData?.requests?.length) {
+                const candidates = [...analysesData.requests]
+                    .filter(e => MOD_SHORT[e.type])
+                    .filter(e => !boundaryDate || (e.date_time || '') >= boundaryDate)
+                    .sort((a, b) => (b.date_time || '') > (a.date_time || '') ? 1 : -1)
                     .slice(0, 20); // fetch more than needed so we can skip empty ones
 
-                const candidateReports = await limitedMap(candidates, MAX_CONCURRENT_REQUESTS, e => {
-                    const sr = e.resource;
-                    return getImagingReportParts(sr.id);
-                });
+                const candidateReports = await limitedMap(candidates, MAX_CONCURRENT_REQUESTS,
+                    sr => getImagingReportParts(sr.id));
 
                 // Keep entries that have a report or a clinical indication, up to 5
                 const physicians = [];
@@ -2702,17 +2699,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
 
                 imagingList.innerHTML = '';
-                entries.forEach((entry, idx) => {
-                    const sr = entry.resource;
-                    const mod  = sr.code?.coding?.[0]?.code || '';
-                    const desc = sr.code?.coding?.[0]?.display || MODALITY_INFO[mod]?.label || mod;
-                    const date = sr.authoredOn ? formatDate(sr.authoredOn) : '';
-                    const code = sr.identifier?.[0]?.value || sr.id || '';
-                    const isUrgent = sr.priority === 'urgent';
+                entries.forEach((sr, idx) => {
+                    const mod  = sr.type || '';
+                    const desc = sr.type_display || MODALITY_INFO[mod]?.label || mod;
+                    const date = sr.date_time ? formatDate(sr.date_time) : '';
+                    const code = sr.id || '';
+                    const isUrgent = !!sr.is_urgent;
                     const physician = physicians[idx] || '';
                     const reportText = reports[idx] || '';
                     const indication = indications[idx] || '';
-                    const regions = (sr.bodySite || []).map(b => b.text).filter(Boolean).join(', ');
+                    const regions = (sr.regions || []).filter(Boolean).join(', ');
 
                     const row = document.createElement('div');
                     row.className = 'report-imaging-row';
@@ -3036,13 +3032,12 @@ document.addEventListener('DOMContentLoaded', function() {
             // imagingMd (all of them joined) still feeds the full, unbudgeted
             // Report tab display.
             const imagingBlocks = [];
-            entries.forEach((entry, idx) => {
+            entries.forEach((sr, idx) => {
                 if (!reports[idx]) return; // indication-only, no report to summarise
-                const sr   = entry.resource;
-                const mod  = sr.code?.coding?.[0]?.code || '';
-                const desc = sr.code?.coding?.[0]?.display || MODALITY_INFO[mod]?.label || mod;
-                const date = sr.authoredOn ? formatDate(sr.authoredOn) : '';
-                const code = sr.identifier?.[0]?.value || sr.id || '';
+                const mod  = sr.type || '';
+                const desc = sr.type_display || MODALITY_INFO[mod]?.label || mod;
+                const date = sr.date_time ? formatDate(sr.date_time) : '';
+                const code = sr.id || '';
                 imagingBlocks.push(`### ${desc}  ·  ${date}${code ? '  #' + code : ''}\n\n${reports[idx]}\n\n`);
             });
             const imagingMd = imagingBlocks.length ? '## Recent Imaging\n\n' + imagingBlocks.join('') : '';
@@ -4061,7 +4056,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const countByType = {};
         for (const e of entries) {
-            const t = e.resource?.code?.coding?.[0]?.code || 'unknown';
+            const t = e.type || 'unknown';
             countByType[t] = (countByType[t] || 0) + 1;
         }
 
@@ -4092,8 +4087,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (myGeneration !== dataGeneration) return; // patient changed while awaiting
             if (boundaryDate) {
                 showDividers = true;
-                currentEntries = entries.filter(e => (e.resource?.authoredOn || '') >= boundaryDate);
-                historicalEntries = entries.filter(e => (e.resource?.authoredOn || '') < boundaryDate);
+                currentEntries = entries.filter(e => (e.date_time || '') >= boundaryDate);
+                historicalEntries = entries.filter(e => (e.date_time || '') < boundaryDate);
             }
         }
 
@@ -4116,10 +4111,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     grid.appendChild(heading);
                 }
             }
-            for (const entry of list) {
-                const sr = entry.resource;
-                const type = sr.code?.coding?.[0]?.code || 'unknown';
-                const text = sr.code?.coding?.[0]?.display || 'analysis';
+            for (const sr of list) {
+                const type = sr.type || 'unknown';
+                const text = sr.type_display || 'analysis';
                 const card = createAnalysisCard(sr, type, text);
                 grid.appendChild(card);
                 cards.push(card);
@@ -4551,7 +4545,7 @@ document.addEventListener('DOMContentLoaded', function() {
             typeText.title = 'Click to copy DokuLLM ID';
             typeText.addEventListener('click', (e) => {
                 e.stopPropagation();
-                copyTextToClipboard(buildExamIdStub(pendingAnalysesData?.patientData, serviceRequest.authoredOn));
+                copyTextToClipboard(buildExamIdStub(pendingAnalysesData?.patientData, serviceRequest.date_time));
             });
         }
 
@@ -4570,14 +4564,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const examDateEl = article.querySelector('.exam-date');
-        if (examDateEl && serviceRequest.authoredOn) {
-            examDateEl.textContent = formatExamDate(serviceRequest.authoredOn);
-            examDateEl.dateTime = serviceRequest.authoredOn;
+        if (examDateEl && serviceRequest.date_time) {
+            examDateEl.textContent = formatExamDate(serviceRequest.date_time);
+            examDateEl.dateTime = serviceRequest.date_time;
         }
 
         // Body regions → part of the card title
-        const regions = (serviceRequest.bodySite || [])
-            .map(b => b.text).filter(Boolean);
+        const regions = (serviceRequest.regions || []).filter(Boolean);
         const regionsEl = article.querySelector('.card-regions');
         if (regionsEl && regions.length > 0) {
             regionsEl.textContent = ` · ${regions.join(', ')}`;
@@ -4600,12 +4593,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         // Urgent: red border only
-        if (serviceRequest.priority === 'urgent') {
+        if (serviceRequest.is_urgent) {
             article.classList.add('urgent-card');
         }
 
         // Ordering physician (from ServiceRequest.requester)
-        const referrer = serviceRequest.requester?.display;
+        const referrer = serviceRequest.medic;
         const referrerEl = article.querySelector('.card-referrer');
         if (referrerEl && referrer) {
             referrerEl.textContent = referrer;
@@ -4614,13 +4607,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         // Clinical indication — show inline next to physician
-        const indication = serviceRequest.reason?.[0]?.display
-            || serviceRequest.reasonCode?.[0]?.text
-            || serviceRequest.reasonCode?.[0]?.coding?.[0]?.display;
-        if (indication) {
-            setCardIndication(article, indication);
-        }
-
         // Remove write/perform/validate controls from non-imaging cards immediately
         // (type is known now) — a radiologist has no access to write lab reports.
         if (!IMAGING_TYPES.includes(analysisType)) {
@@ -4678,7 +4664,7 @@ document.addEventListener('DOMContentLoaded', function() {
     async function buildImagingEpisodeText(list, patientData) {
         const candidates = list.slice(0, IMAGING_EPISODE_STUDY_CAP * 2);
         const parts = await limitedMap(candidates, MAX_CONCURRENT_REQUESTS,
-            e => getImagingReportParts(e.resource.id));
+            e => getImagingReportParts(e.id));
 
         const kept = [];
         for (let i = 0; i < candidates.length && kept.length < IMAGING_EPISODE_STUDY_CAP; i++) {
@@ -4687,19 +4673,18 @@ document.addEventListener('DOMContentLoaded', function() {
             // sometimes type that just to pass form validation), which
             // would otherwise feed the model a fake "study" with no real
             // content.
-            if (_isMeaningfulText(parts[i]?.body)) kept.push({ entry: candidates[i], parts: parts[i] });
+            if (_isMeaningfulText(parts[i]?.body)) kept.push({ sr: candidates[i], parts: parts[i] });
         }
         if (!kept.length) return '';
         kept.reverse(); // oldest → newest, as the prompt expects
 
         const header = patientContextHeader(patientData);
 
-        const blocks = kept.map(({ entry, parts: p }) => {
-            const sr = entry.resource;
-            const mod = sr.code?.coding?.[0]?.code || '';
+        const blocks = kept.map(({ sr, parts: p }) => {
+            const mod = sr.type || '';
             const modLabel = MODALITY_INFO[mod]?.label || mod;
-            const region = (sr.bodySite || []).map(b => b.text).filter(Boolean).join(', ');
-            const date = sr.authoredOn ? formatDate(sr.authoredOn) : 'Unknown date';
+            const region = (sr.regions || []).filter(Boolean).join(', ');
+            const date = sr.date_time ? formatDate(sr.date_time) : 'Unknown date';
             // Date, modality (+ region), and the clinical info attached to
             // this exam all live in the heading itself now — previously the
             // indication was a separate line below, easy to lose track of
@@ -4887,15 +4872,14 @@ document.addEventListener('DOMContentLoaded', function() {
             // regular doctor isn't the one who placed this specific order.
             if (imagingTypes.includes(type)) {
                 try {
-                    const srResp = await apiFetch(`/fhir/ServiceRequest/${id}`);
+                    const srResp = await apiFetch(`/api/request/${id}`);
                     if (srResp.ok) {
-                        const srData = await srResp.json();
+                        const srData = (await srResp.json()).request || {};
                         if (!article.querySelector('.card-indication-text')?.textContent) {
-                            const srIndication = (srData.note || [])
-                                .find(n => n.category?.[0]?.text === 'clinical-indication')?.text || '';
+                            const srIndication = srData.indication || '';
                             if (_isMeaningfulText(srIndication)) setCardIndication(article, srIndication);
                         }
-                        const srReferrer = srData.requester?.display;
+                        const srReferrer = srData.requester;
                         if (referrerEl && _isMeaningfulText(srReferrer)) {
                             referrerEl.textContent = srReferrer;
                             const line = article.querySelector('.card-referrer-line');
@@ -6092,18 +6076,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     // physician) if that row's own lazy correction (scheduleExamObserver)
                     // hadn't resolved yet at the moment this modal was opened.
                     try {
-                        const srResp = await apiFetch(`/fhir/ServiceRequest/${requestId}`);
+                        const srResp = await apiFetch(`/api/request/${requestId}`);
                         if (srResp.ok) {
-                            const srData = await srResp.json();
+                            const srData = (await srResp.json()).request || {};
                             if (!indicationNote?.text) {
-                                const srIndication = (srData.note || [])
-                                    .find(n => n.category?.[0]?.text === 'clinical-indication')?.text || '';
+                                const srIndication = srData.indication || '';
                                 if (_isMeaningfulText(srIndication)) {
                                     modal.querySelector('.modal-indication-text').textContent = srIndication;
                                     modal.querySelector('.report-modal-indication').hidden = false;
                                 }
                             }
-                            const srReferrer = srData.requester?.display;
+                            const srReferrer = srData.requester;
                             if (_isMeaningfulText(srReferrer)) {
                                 modal.querySelector('.modal-requester').textContent = srReferrer;
                                 modal.querySelector('.report-modal-referrer').hidden = false;
@@ -6488,12 +6471,10 @@ document.addEventListener('DOMContentLoaded', function() {
         return (study.studies || []).map(s => (s.result || '').trim()).filter(Boolean).join('\n\n');
     }
 
-    // Best clinical indication from /api/request/{id} — same priority as the
-    // server's resolve_clinical_indication() for BuletinSolicitare data.
+    // Best clinical indication for a request, resolved server-side by
+    // /api/request/{id} (resolve_clinical_indication over BuletinSolicitare).
     function _mdSolicitareIndication(sr) {
-        const rq = sr?.request || {};
-        return [rq.justification, rq.clinical_situation, rq.clinical_data,
-                rq.diagnosis_referral, rq.special_indications].find(_isMeaningfulText) || '';
+        return sr?.request?.indication || '';
     }
 
     async function _mdJson(url) {
@@ -7034,14 +7015,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (_examCache[id].triage) _applyTriage(el, _examCache[id].triage);
                 return;
             }
-            const examPromise = apiFetch(`/fhir/ServiceRequest/${id}`)
+            const examPromise = apiFetch(`/api/request/${id}`)
                 .then(r => r.ok ? r.json() : null)
                 .then(data => {
-                    const regions = _extractRegions(data);
-                    const noteIndication = (data?.note || []).find(n => n.category?.[0]?.text === 'clinical-indication')?.text || '';
-                    const indication = _isMeaningfulText(noteIndication) ? noteIndication : '';
-                    const referrer = data?.requester?.display || '';
-                    const age = data?.subject?.display || '';
+                    const rq = data?.request || {};
+                    const regions = rq.region ? [rq.region] : [];
+                    const indication = _isMeaningfulText(rq.indication) ? rq.indication : '';
+                    const referrer = rq.requester || '';
+                    const age = data?.patient?.age || '';
                     return { regions, indication, referrer, age };
                 })
                 .catch(() => ({ regions: [], indication: '', referrer: '', age: '' }));
@@ -7107,23 +7088,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 .catch(() => {});
         });
     }, { rootMargin: '200px' });
-
-    function _extractRegions(resource) {
-        // ImagingStudy: series[].bodySite.display
-        if (resource?.series) {
-            const regions = [...new Set(
-                resource.series
-                    .map(s => s.bodySite?.display)
-                    .filter(Boolean)
-            )];
-            if (regions.length) return regions;
-        }
-        // ServiceRequest: bodySite[].text
-        if (resource?.bodySite) {
-            return [...new Set(resource.bodySite.map(b => b.text).filter(Boolean))];
-        }
-        return [];
-    }
 
     function _applyReferrer(el, referrerName) {
         const requesterEl = el._requesterEl;

@@ -4162,11 +4162,40 @@ class HippoClientBuletinSolicitare(HippoClient):
                 dt = parse_date_time(date_raw)
                 data.store("request.date_time", dt.isoformat() if dt else date_raw)
 
+            self._derive_request_fields(data)
             return data
         except Exception as e:
             logger.error(f"Error parsing BuletinSolicitare data: {e}")
             data.set_error(str(e))
             return data
+
+    @staticmethod
+    def _derive_request_fields(data: HippoData) -> None:
+        """Store the values consumers want ready-made, so /api/request/{id}
+        and the FHIR ServiceRequest agree without repeating the logic:
+
+        request.requester  ordering physician ("Medic solicitant"), falling
+                           back to the attending physician only when no
+                           distinct orderer was recorded.
+        request.region     short region label ("Abdomen") abstracted from the
+                           procedure name via regions.cfg — "Organ tinta /
+                           segment anatomic" isn't on every exam type's form
+                           (CT/MRI forms use "Investigatii"), so falls back to
+                           that for the same lookup. Unknown is left unset.
+        request.indication resolve_clinical_indication() over this form's
+                           clinical fields; unset when none is meaningful.
+        """
+        requester = data.get("request.physician_solicitant") or data.get("request.physician_curant")
+        if requester:
+            data.store("request.requester", requester)
+        procedure_name = data.get("request.organ") or data.get("request.investigation")
+        if procedure_name:
+            _, region = identify_study_type_and_region(procedure_name)
+            if region and region != "unknown":
+                data.store("request.region", region.replace("_", " ").title())
+        indication = resolve_clinical_indication(solicitare_data=data)
+        if indication:
+            data.store("request.indication", indication)
 
     def fhir_response(self, parsed_data: HippoData, id=None, **kwargs) -> Union[FHIRServiceRequest, FHIROperationOutcome]:
         request_id = id or parsed_data.get("request.id", "")
@@ -4191,8 +4220,7 @@ class HippoClientBuletinSolicitare(HippoClient):
 
             # Ordering physician takes priority — falls back to the attending
             # physician only when no distinct orderer was recorded.
-            referrer = (parsed_data.get("request.physician_solicitant") or
-                        parsed_data.get("request.physician_curant"))
+            referrer = parsed_data.get("request.requester")
             if referrer:
                 fhir_sr["requester"] = FHIRReference(display=referrer)
 
@@ -4211,15 +4239,15 @@ class HippoClientBuletinSolicitare(HippoClient):
             procedure_name = parsed_data.get("request.organ") or parsed_data.get("request.investigation")
             if procedure_name:
                 fhir_sr["code"] = FHIRCodeableConcept(text=procedure_name)
-                _, region = identify_study_type_and_region(procedure_name)
-                if region and region != "unknown":
-                    fhir_sr["bodySite"] = [FHIRCodeableConcept(text=region.replace("_", " ").title())]
+            region = parsed_data.get("request.region")
+            if region:
+                fhir_sr["bodySite"] = [FHIRCodeableConcept(text=region)]
 
             section = parsed_data.get("request.section")
             if section:
                 fhir_sr["note"] = [{"text": section}]
 
-            indication = resolve_clinical_indication(solicitare_data=parsed_data)
+            indication = parsed_data.get("request.indication")
             if indication:
                 fhir_sr["note"] = (fhir_sr.get("note") or []) + [
                     {"text": indication, "category": [{"text": "clinical-indication"}]}

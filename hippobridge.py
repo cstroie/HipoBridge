@@ -218,8 +218,9 @@ async def get_fhir_patient(request):
 
 @require_auth
 async def search_request(request):
-    """Search service requests for a patient. Returns raw HippoData JSON.
-    ?refresh=1 forces a live reload of the patient's imaging/lab lists."""
+    """Search service requests for a patient. Returns raw HippoData JSON
+    (each row also carries type_display). ?refresh=1 forces a live reload of
+    the patient's imaging/lab lists."""
     patient_id = request.query.get('patient', '')
     if not patient_id:
         return web_error_response("Patient ID is required")
@@ -233,6 +234,10 @@ async def search_request(request):
     if request.rel_url.query.get('refresh') == '1':
         await evict_patient_cache(client, patient_id)
     parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime)
+    for req in parsed_data.get("requests") or []:
+        # Display name of the request type ("Ultrasound") — the same text the
+        # FHIR ServiceRequest carries as code.coding[0].display.
+        req["type_display"] = ANALYSIS_TYPES.get(req.get("type"), {}).get("display") or req.get("type")
     return web_json_response(parsed_data)
 
 @require_auth

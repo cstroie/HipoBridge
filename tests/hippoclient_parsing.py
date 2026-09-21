@@ -195,5 +195,41 @@ class TestCerereRecentStrip(unittest.TestCase):
         self.assertFalse(data.get("request.previous"))
 
 
+class TestSolicitareDerivedFields(unittest.TestCase):
+    """request.requester / request.indication / request.region, derived once
+    in the parser so /api/request/{id} and the FHIR ServiceRequest agree."""
+
+    derive = staticmethod(HippoClientBuletinSolicitare._derive_request_fields)
+
+    def _data(self, **fields):
+        d = HippoData()
+        for k, v in fields.items():
+            d.store("request." + k, v)
+        return d
+
+    def test_requester_prefers_orderer_over_attending(self):
+        d = self._data(physician_solicitant="DR. A", physician_curant="DR. B")
+        self.derive(d)
+        self.assertEqual(d.get("request.requester"), "DR. A")
+
+    def test_requester_falls_back_to_attending(self):
+        d = self._data(physician_curant="DR. B")
+        self.derive(d)
+        self.assertEqual(d.get("request.requester"), "DR. B")
+
+    def test_indication_skips_placeholder_and_follows_priority(self):
+        d = self._data(justification=". .. .", clinical_situation="durere abdominala",
+                       diagnosis_referral="R10")
+        self.derive(d)
+        self.assertEqual(d.get("request.indication"), "durere abdominala")
+
+    def test_nothing_meaningful_leaves_fields_unset(self):
+        d = self._data(justification="-", clinical_situation="-")
+        self.derive(d)
+        self.assertFalse(d.get("request.indication"))
+        self.assertFalse(d.get("request.requester"))
+        self.assertFalse(d.get("request.region"))
+
+
 if __name__ == "__main__":
     unittest.main()

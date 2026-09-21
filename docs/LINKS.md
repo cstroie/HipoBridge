@@ -47,7 +47,7 @@ Type codes: `radio`, `eco`, `ct`, `irm`, `rads`, `lab`, `rads`, `apa`.
 | `GET /api/request/{id}` | `/PARA/Printabile/BuletinSolicitare.asp?id={id}&type=63&IdP=70` (plus `request.previous` from `cerere.asp`, `id`, `code`, `day_month` only; full entries on `/patient` below) |
 | `GET /fhir/ServiceRequest/{id}` | same |
 
-Region, indication, and the true ordering physician ("Medic solicitant").
+Region, indication, and the true ordering physician ("Medic solicitant"). `/api/request/{id}` returns them ready-made as `request.region` (short label, e.g. "Abdomen"), `request.indication` (`resolve_clinical_indication`, placeholder text filtered) and `request.requester`; the FHIR resource maps the same values to `bodySite`, the `clinical-indication` note and `requester`. `GET /api/request?patient=` rows carry `type_display` (e.g. "Ultrasound").
 
 ---
 
