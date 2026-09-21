@@ -118,6 +118,11 @@ document.addEventListener('DOMContentLoaded', function() {
         scheduleStartDate: document.getElementById('scheduleStartDate'),
         scheduleEndDate: document.getElementById('scheduleEndDate'),
         refreshScheduleBtn: document.getElementById('refreshScheduleBtn'),
+        scheduleMdBtn: document.getElementById('scheduleMdBtn'),
+        scheduleMdPanel: document.getElementById('scheduleMdPanel'),
+        scheduleMdBody: document.getElementById('scheduleMdBody'),
+        scheduleMdTitle: document.getElementById('scheduleMdTitle'),
+        scheduleMdCopyBtn: document.getElementById('scheduleMdCopyBtn'),
         schedulePatientFilter: document.getElementById('schedulePatientFilter'),
         scheduleLabFilter:     document.getElementById('scheduleLabFilter'),
         scheduleSectionFilter: document.getElementById('scheduleSectionFilter'),
@@ -518,6 +523,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (scheduleAutoRefreshTimer) startScheduleAutoRefresh(true);
                 triggerPacsRefresh();
             });
+        }
+        if (elements.scheduleMdBtn) {
+            elements.scheduleMdBtn.addEventListener('click', buildScheduleMarkdown);
+        }
+        if (elements.scheduleMdCopyBtn) {
+            elements.scheduleMdCopyBtn.addEventListener('click', () =>
+                copyMarkdown(elements.scheduleMdPanel, elements.scheduleMdCopyBtn,
+                    () => flashIcon(elements.scheduleMdCopyBtn)));
         }
         if (elements.refreshPatientBtn) {
             elements.refreshPatientBtn.addEventListener('click', refreshCurrentPatient);
@@ -6343,6 +6356,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function fetchSchedule(startDate, endDate, force = false, patientText = null, labId = null, sectionName = null, status = null, limit = null) {
         if (!elements.scheduleBody) return;
+        hideScheduleMarkdown();
         const params = new URLSearchParams();
         if (startDate)   params.set('start_date', startDate);
         if (endDate)     params.set('end_date', endDate);
@@ -6433,6 +6447,136 @@ document.addEventListener('DOMContentLoaded', function() {
             if (s === current) opt.selected = true;
             elements.scheduleSectionFilter.appendChild(opt);
         });
+    }
+
+    // ── On-demand markdown list of the displayed schedule exams ──
+    // Built only when the "Exam list" button is clicked: per row, cerere
+    // (sex/age/diagnosis/patient id), the request form (indication), and the
+    // patient's last earlier exam of the same modality with its report text.
+    let scheduleMdRun = 0;
+
+    function hideScheduleMarkdown() {
+        scheduleMdRun++;
+        if (elements.scheduleMdPanel) {
+            elements.scheduleMdPanel.hidden = true;
+            elements.scheduleMdPanel.dataset.markdown = '';
+        }
+    }
+
+    const _mdModalityGroup = m => (m === 'fluoro' ? 'rads' : m);
+    const _mdIso = s => (s || '').replace('T', ' ').slice(0, 16);
+
+    function _mdReportText(study) {
+        const forms = (study.presentedForm || []).map(f => (f.data || '').trim()).filter(Boolean);
+        if (forms.length) return forms.join('\n\n');
+        const notes = (study.note || [])
+            .filter(n => n.category?.[0]?.text !== 'clinical-indication')
+            .map(n => (n.text || '').trim()).filter(Boolean);
+        if (notes.length) return notes.join('\n\n');
+        return (study.conclusion || '').trim();
+    }
+
+    async function _mdJson(url) {
+        const r = await apiFetch(url);
+        return r.ok ? r.json() : null;
+    }
+
+    const _mdPatientLists = new Map();
+    function _mdPatientList(pid) {
+        if (!_mdPatientLists.has(pid)) {
+            _mdPatientLists.set(pid, _mdJson(`/fhir/ServiceRequest?patient=${encodeURIComponent(pid)}`)
+                .then(b => (b?.entry || []).map(e => e.resource)).catch(() => []));
+        }
+        return _mdPatientLists.get(pid);
+    }
+
+    async function _mdRowData(r) {
+        const out = { name: r.subject?.display || '', ward: r.note?.[0]?.text || '',
+                      modalityLabel: r.code?.text || '', sex: '', age: '', diagnosis: '',
+                      indication: '', prev: null, failed: false };
+        const modality = _mdModalityGroup(r.category?.[0]?.coding?.[0]?.code || '');
+        try {
+            const cached = _examCache[r.id];
+            const [cerere, sr] = await Promise.all([
+                _mdJson(`/api/request/${r.id}/patient`),
+                cached ? null : _mdJson(`/fhir/ServiceRequest/${r.id}`),
+            ]);
+            const p = cerere?.patient || {}, rq = cerere?.request || {};
+            out.sex = p.gender || '';
+            out.age = p.age != null && p.age !== '' ? String(p.age) : '';
+            out.diagnosis = rq.diagnosis || rq.diagnosis_referral || '';
+            let ind = cached ? cached.indication
+                : (sr?.note || []).find(n => n.category?.[0]?.text === 'clinical-indication')?.text || '';
+            if (!_isMeaningfulText(ind)) ind = rq.clinical_indication || rq.justification || '';
+            out.indication = _isMeaningfulText(ind) ? ind : '';
+            if (p.id && modality) {
+                const list = await _mdPatientList(p.id);
+                const cur = _mdIso(r.authoredOn);
+                const candidates = list
+                    .filter(e => e.id !== r.id
+                        && _mdModalityGroup(e.code?.coding?.[0]?.code) === modality
+                        && _mdIso(e.authoredOn) < cur)
+                    .sort((a, b) => _mdIso(b.authoredOn).localeCompare(_mdIso(a.authoredOn)))
+                    .slice(0, 3);
+                for (const c of candidates) {
+                    const study = await _mdJson(`/fhir/ImagingStudy/${c.id}`);
+                    const text = study ? _mdReportText(study) : '';
+                    const info = { date: _mdIso(c.authoredOn), region: (c.bodySite || []).map(b => b.text).filter(Boolean).join(', '), text };
+                    if (!out.prev) out.prev = info;
+                    if (text) { out.prev = info; break; }
+                }
+            }
+        } catch (_) { out.failed = true; }
+        return out;
+    }
+
+    function _mdEntryBlock(d) {
+        const who = [d.sex, d.age && `${d.age} y`].filter(Boolean).join(', ');
+        const head = `### ${d.name || '(unnamed)'}${who ? ' — ' + who : ''}${d.ward ? ' · ' + d.ward : ''}`;
+        const lines = [head, ''];
+        lines.push(`**Exam:** ${d.modalityLabel}`);
+        if (d.diagnosis) lines.push(`**Diagnosis:** ${d.diagnosis}`);
+        if (d.indication && d.indication.trim().toLowerCase() !== d.diagnosis.trim().toLowerCase()) lines.push(`**Indication:** ${d.indication}`);
+        if (d.failed) lines.push('_(details unavailable)_');
+        if (d.prev) {
+            lines.push(`**Previous ${d.modalityLabel}:** ${[d.prev.date, d.prev.region].filter(Boolean).join(' · ')}`);
+            if (d.prev.text) lines.push('', d.prev.text.split('\n').map(l => '> ' + l).join('\n'));
+            else lines.push('_(no report text)_');
+        } else if (!d.failed) {
+            lines.push(`**Previous ${d.modalityLabel}:** none found`);
+        }
+        return lines.join('\n');
+    }
+
+    async function buildScheduleMarkdown() {
+        const entries = scheduleEntries.slice();
+        if (!entries.length) { showToast('No schedule entries to list', 'warning'); return; }
+        const run = ++scheduleMdRun;
+        const btn = elements.scheduleMdBtn;
+        btn.disabled = true;
+        _mdPatientLists.clear();
+        let done = 0;
+        showLoading('Building exam list…');
+        try {
+            const rows = await limitedMap(entries, 4, async r => {
+                const d = await _mdRowData(r);
+                if (run === scheduleMdRun) setLoadingStep(`${++done}/${entries.length}`);
+                return d;
+            });
+            if (run !== scheduleMdRun) return;
+            const md = rows.map((d, i) => _mdEntryBlock(d || { name: entries[i].subject?.display || '', failed: true,
+                                                              modalityLabel: entries[i].code?.text || '' })).join('\n\n---\n\n');
+            elements.scheduleMdBody.innerHTML = marked.parse(md);
+            elements.scheduleMdPanel.dataset.markdown = md;
+            elements.scheduleMdTitle.textContent = `Exam list · ${entries.length} exam${entries.length !== 1 ? 's' : ''}`;
+            elements.scheduleMdPanel.hidden = false;
+            elements.scheduleMdPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch (err) {
+            showToast(`Failed to build exam list: ${err.message}`, 'error');
+        } finally {
+            hideLoading();
+            btn.disabled = false;
+        }
     }
 
     function isScheduleFilterActive() {

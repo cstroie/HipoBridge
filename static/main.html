@@ -510,6 +510,10 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             <option value="100">100 items</option>
                             <option value="200">200 items</option>
                         </select>
+                        <button class="btn-secondary btn-schedule-refresh" id="scheduleMdBtn" aria-label="Build markdown list of displayed exams" title="Build markdown list of displayed exams">
+                            <i class="fas fa-list" aria-hidden="true"></i>
+                            <span>Exam list</span>
+                        </button>
                         <button class="btn-secondary btn-schedule-refresh" id="refreshScheduleBtn" aria-label="Refresh schedule" title="Refresh schedule">
                             <i class="fas fa-sync-alt" aria-hidden="true"></i>
                             <span>Refresh</span>
@@ -556,6 +560,19 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                         <!-- Hidden table stub kept so scheduleTable.dataset.loaded still works -->
                         <table id="scheduleTable" hidden style="display:none"><tbody></tbody></table>
                     </div>
+
+                    <!-- On-demand markdown list of the displayed exams (built by #scheduleMdBtn) -->
+                    <section id="scheduleMdPanel" class="ai-summary-card tab-card" hidden>
+                        <div class="ai-summary-header">
+                            <span class="ai-summary-badge" id="scheduleMdTitle">Exam list</span>
+                            <div class="card-toolbar">
+                                <button type="button" class="btn-copy" id="scheduleMdCopyBtn" aria-label="Copy exam list as Markdown" title="Copy exam list as Markdown">
+                                    <i class="fas fa-copy" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="ai-summary-body markdown-content" id="scheduleMdBody"></div>
+                    </section>
                 </section>
 
         </main>
