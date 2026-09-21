@@ -1889,7 +1889,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // short to benefit). Must mirror llm/prompts.py's STREAMING_KINDS.
     const STREAMING_KINDS = new Set([
         'report', 'epicrisis', 'pre_exam_brief', 'lab', 'imaging_episode',
-        'pre_exam_soap', 'pre_exam_executive', 'pre_exam_oneliner', 'er_triage',
+        'pre_exam_soap', 'pre_exam_executive', 'pre_exam_oneliner',
         'contrast_safety',
     ]);
 
@@ -5909,24 +5909,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let scheduleEntries = [];
 
-    // Formats GET /api/request/{id}/triage's JSON (HippoClientTriage's
-    // flattened FUPU fields) into the key: value input llm/prompts/
-    // er_triage.md expects. Returns '' (not an error) for a non-UPU
-    // request, one with no saved FUPU sheet, or a failed fetch (data is
-    // null) — runAiSummary already handles empty text as "nothing to
-    // summarize" without a special case here.
-    function formatErTriageText(data) {
-        if (!data) return '';
-        const lines = [];
-        if (data.record_number) lines.push(`Record #: ${data.record_number}`);
-        if (data.date) lines.push(`Date: ${data.date}`);
-        if (data.arrival_mode) lines.push(`Arrival mode: ${data.arrival_mode}`);
-        if (data.arrival_source) lines.push(`Arrival source: ${data.arrival_source}`);
-        if (data.triage_priority) lines.push(`Triage priority: ${data.triage_priority}`);
-        if (data.presentation_reason) lines.push(`Presentation reason: ${data.presentation_reason}`);
-        return lines.join('\n');
-    }
-
     async function showRequestModal(requestId, requestCode, patientName, modality, triggerEl, requesterName, section) {
         const tmpl = document.getElementById('schedule-request-modal-template');
         if (!tmpl) return;
@@ -5949,40 +5931,6 @@ document.addEventListener('DOMContentLoaded', function() {
             modal.querySelector('.report-modal-referrer').hidden = false;
         }
 
-        // ER (UPU) requests only — er_triage summarizes the FUPU intake
-        // sheet (llm/prompts/er_triage.md), which only exists for ER
-        // presentations. Fetched lazily on first click, same
-        // memoize-a-promise pattern as buildImagingEpisodeHeader's
-        // getEpisodeText — most modal opens are never clicked into, so an
-        // eager fetch here would be a wasted round trip most of the time.
-        if ((section || '').toUpperCase() === 'UPU') {
-            const triageBtn = modal.querySelector('.modal-ai-triage-btn');
-            if (triageBtn) {
-                triageBtn.hidden = false;
-                let triageTextPromise = null;
-                const getTriageText = () => triageTextPromise ||= apiFetch(`/api/request/${requestId}/triage`)
-                    .then(r => r.ok ? r.json() : null)
-                    .then(formatErTriageText);
-                triageBtn.addEventListener('click', async () => {
-                    triageBtn.disabled = true;
-                    let text;
-                    try {
-                        text = await getTriageText();
-                    } catch (err) {
-                        triageBtn.disabled = false;
-                        showToast('Failed to load ER triage data for AI summary', 'error');
-                        return;
-                    }
-                    // Prepended into .report-modal-body (not inserted as a
-                    // sibling before it) so the card inherits that
-                    // container's own padding instead of sitting flush
-                    // against the modal's edges with no margin.
-                    runAiSummary(triageBtn, 'er_triage',
-                        () => null, () => text,
-                        { inline: true, intoAnchorParent: () => modal.querySelector('.report-modal-body') });
-                });
-            }
-        }
 
         const bodyDiv = modal.querySelector('.report-modal-body');
 

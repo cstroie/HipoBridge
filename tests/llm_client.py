@@ -60,7 +60,7 @@ class TestPromptRegistry(unittest.TestCase):
         self.assertEqual(set(PROMPTS), {
             "report", "epicrisis", "imaging", "imaging_episode", "lab",
             "pre_exam_brief", "pre_exam_oneliner", "pre_exam_soap", "pre_exam_executive",
-            "er_triage", "contrast_safety",
+            "contrast_safety",
         })
         for kind, (tier, system, max_tokens) in PROMPTS.items():
             self.assertIn(tier, TIERS, f"{kind} uses unknown tier {tier}")

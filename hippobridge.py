@@ -537,10 +537,8 @@ async def get_request_patient(request):
 async def get_request_triage(request):
     """Look up the patient's ER presentation/triage data for a request.
     Returns triage_priority/triage_priority_code (the Schedule page's
-    per-row UPU badge), plus record_number/date/arrival_mode/
-    arrival_source/presentation_reason (the er_triage AI-summary prompt's
-    input — see llm/prompts/er_triage.md). See HippoClientTriage for the
-    resolution chain (cerere.asp -> patient page -> most recent FUPU.asp)
+    per-row UPU badge), plus other FUPU fields for display. See HippoClientTriage
+    for the resolution chain (cerere.asp -> patient page -> most recent FUPU.asp)
     and the UPU-section business rule gating it.
     """
     id = request.match_info.get('id')

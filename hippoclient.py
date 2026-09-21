@@ -4083,9 +4083,8 @@ class HippoClientFUPU(HippoClient):
 
 
 class HippoClientTriage(HippoClient):
-    """Resolves a request's ER presentation/triage data (Schedule page's
-    per-row UPU rows, and the er_triage AI-summary prompt — see
-    llm/prompts/er_triage.md for what it does with these fields).
+    """Resolves a request's ER presentation/triage data for the Schedule page's
+    per-row UPU (ER) section badges.
 
     Not a single-page scraper: chains cerere.asp (section + patient id) →
     patient page (for the FUPU/presentation id list) → the most recent
@@ -4096,9 +4095,7 @@ class HippoClientTriage(HippoClient):
     """
 
     # fupu.* key -> flat key on this class's own result. triage_priority/
-    # triage_priority_code came first (the only fields the Schedule page's
-    # triage badge needs) and keep their non-prefixed names for backward
-    # compatibility; the rest were added later for er_triage's fuller input.
+    # triage_priority_code are used for the Schedule page's triage badge.
     _FUPU_FIELDS = {
         "fupu.triage_priority": "triage_priority",
         "fupu.triage_priority_code": "triage_priority_code",

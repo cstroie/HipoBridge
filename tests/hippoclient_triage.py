@@ -152,9 +152,8 @@ class TestTriageResolution(unittest.TestCase):
         self.assertIsNone(data.get('triage_priority'))
 
     def test_full_fupu_fields_are_passed_through_flattened(self):
-        """er_triage's prompt input needs more than the priority badge —
-        record_number/date/arrival_mode/arrival_source/presentation_reason
-        must all come through under their flat (non-fupu.-prefixed) names."""
+        """All FUPU fields must be passed through under their flat
+        (non-fupu.-prefixed) names for display purposes."""
         with patch.object(HippoClientCerere, 'fetch_and_parse',
                            AsyncMock(return_value=_cerere_data(section='UPU', patient_id='P1'))), \
              patch.object(HippoClientPatient, 'fetch_and_parse',
