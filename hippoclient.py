@@ -4082,7 +4082,16 @@ class HippoClientBuletinSolicitare(HippoClient):
 
             table = soup.find('table', class_='Rap_table_class_generic')
             if not table:
-                data.set_error("Unexpected page: Rap_table_class_generic table not found")
+                # Valid page whose form body is empty (e.g. "FISA SOLICITARE
+                # ECOGRAFIE" for a request created without the SIUI form,
+                # cerere 1763334): not an error, just no solicitation data —
+                # callers fall back to cerere.asp. Keep the header's fields.
+                m = re.search(r'Departamentul:\s*</b>\s*([^<]*)', html_content)
+                if m:
+                    data.store("request.section", m.group(1).strip())
+                m = re.search(r'Cod:\s*<b>\s*([^<\s]+)', html_content)
+                if m:
+                    data.store("request.code", m.group(1))
                 return data
             table_html = str(table)
 

@@ -14,7 +14,8 @@ from bs4 import BeautifulSoup
 
 import hippoclient
 from hippodata import HippoData
-from hippoclient import _parse_buletin_header, is_meaningful_text
+from hippoclient import (_parse_buletin_header, is_meaningful_text,
+                         HippoClientBuletinSolicitare, HippoClientCerere)
 
 
 def _make_soup():
@@ -135,6 +136,63 @@ class TestIsMeaningfulText(unittest.TestCase):
         self.assertTrue(is_meaningful_text("Durere abdominala"))
         self.assertTrue(is_meaningful_text("R10.4"))
         self.assertTrue(is_meaningful_text("TCC"))
+
+
+class TestSolicitareEmptyForm(unittest.TestCase):
+    """BuletinSolicitare pages with a header but an empty body (cerere 1763334)
+    are a success with no solicitation data, not an error."""
+
+    HTML = (
+        '<html><head><title>HIPOCRATE - FISA DE SOLICITARE</title></head><body>'
+        '<table><thead><tr><td><table class="TabelAntet"><tr><td>'
+        '<p class="Antet"><b>Departamentul: </b>UPU<br></p></td><td>'
+        '<p class="Antet">Cod: <b>EY3022</b> Nr.: <b>1763334</b></p></td></tr>'
+        '</table></td></tr></thead><tbody><tr><td></td></tr></tbody></table>'
+        '</body></html>'
+    )
+
+    def test_missing_table_is_success_with_header_fields(self):
+        data = HippoClientBuletinSolicitare().parse_data(self.HTML, id='1763334')
+        self.assertEqual(data.get("status"), "success")
+        self.assertEqual(data.get("request.id"), "1763334")
+        self.assertEqual(data.get("request.section"), "UPU")
+        self.assertEqual(data.get("request.code"), "EY3022")
+        self.assertFalse(data.get("request.justification"))
+
+    def test_wrong_page_is_still_an_error(self):
+        data = HippoClientBuletinSolicitare().parse_data(
+            '<html><head><title>Other</title></head></html>', id='1')
+        self.assertEqual(data.get("status"), "error")
+
+
+class TestCerereRecentStrip(unittest.TestCase):
+    """cerere.asp's default recent-requests link strip -> request.previous."""
+
+    HTML = (
+        '<html><head><title>Cerere</title></head><body>'
+        '<input name="strPacientId" value="1">'
+        '<a style="color:#007399;" href="Cerere.asp?id=1762217"><b>EY1905</b>-19/09</a>'
+        '<a style="color:red!important;" href="Cerere.asp?id=1762242"><b>EY1930</b>-19/09*</a>'
+        '<a style="background-color:#d9fad7;color:#444;" href="Cerere.asp?id=1763270">'
+        '<b>EY2958</b>-21/09</a>'
+        '<a href="/Hipocrate/pacient/analysesALL.asp?type=PA&amp;pacid=1">Istoric</a>'
+        '</body></html>'
+    )
+
+    def test_entries_parsed_with_current_and_flagged(self):
+        data = HippoClientCerere().parse_data(self.HTML, id='1763270')
+        prev = data.get("request.previous")
+        self.assertEqual([e['id'] for e in prev], ['1762217', '1762242', '1763270'])
+        self.assertEqual(prev[1]['code'], 'EY1930')
+        self.assertEqual(prev[1]['day_month'], '19/09')
+        self.assertEqual([e['flagged'] for e in prev], [False, True, False])
+        self.assertEqual([e['current'] for e in prev], [False, False, True])
+
+    def test_no_strip_leaves_field_unset(self):
+        data = HippoClientCerere().parse_data(
+            '<html><head><title>Cerere</title></head><body>'
+            '<input name="strPacientId" value="1"></body></html>', id='1')
+        self.assertFalse(data.get("request.previous"))
 
 
 if __name__ == "__main__":

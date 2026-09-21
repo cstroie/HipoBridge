@@ -28,7 +28,8 @@ from tests.hipo_data import TestHippoData
 from tests.llm_client import TestProviderSelection, TestPromptRegistry
 from tests.regions import TestLoadRegionRules
 from tests.config import TestHippobridgeLoadConfig, TestInitLlm, TestGitignoreOnlyTracksExamples
-from tests.hippoclient_parsing import TestParseBuletinHeader, TestIsMeaningfulText
+from tests.hippoclient_parsing import (TestParseBuletinHeader, TestIsMeaningfulText,
+                                       TestSolicitareEmptyForm, TestCerereRecentStrip)
 from tests.hippoclient_write import (
     TestReportWriteErrors, TestReportValidateErrors, TestCererePerformErrors,
     TestWebJsonResponseEndToEnd, TestTextToReportHtml,
@@ -139,7 +140,8 @@ TEST_GROUPS = {
     ],
     "regions": [TestLoadRegionRules],
     "config": [TestHippobridgeLoadConfig, TestInitLlm, TestGitignoreOnlyTracksExamples],
-    "hippoclient_parsing": [TestParseBuletinHeader, TestIsMeaningfulText],
+    "hippoclient_parsing": [TestParseBuletinHeader, TestIsMeaningfulText,
+                            TestSolicitareEmptyForm, TestCerereRecentStrip],
     "hippoclient_write": [
         TestReportWriteErrors, TestReportValidateErrors, TestCererePerformErrors,
         TestWebJsonResponseEndToEnd, TestTextToReportHtml,
