@@ -3906,6 +3906,9 @@ dialog.report-modal[open]::backdrop {
         scroll-snap-align: center;
     }
     .qr-cell:has(.qr-label:empty) { display: none; }
+    /* Name the field on each slide ("Nume: Achim") — without the grid's
+       neighbours for context, a lone code is ambiguous */
+    .qr-label::before { content: attr(data-field) ": "; }
     .qr-cell canvas { max-width: 100%; height: auto; }
     .qr-dots {
         display: flex;
