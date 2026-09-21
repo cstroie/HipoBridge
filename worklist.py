@@ -484,6 +484,10 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
     is_upu = (entry.get('section') or '').upper() == 'UPU'
     is_day_care = 'spitalizare de zi' in payment_type
     institution_residence = 'Outpatient' if (is_upu or is_day_care) else 'Inpatient'
+    # The a550 splits PatientComments into [Insurance] / [Patient Comment]
+    # (conformance Table 8.1-7: "Insurance=<info><LF><comment>"), so the
+    # Insurance field is used to show the admission type.
+    admission_type = 'Emergency' if is_upu else 'Day care' if is_day_care else 'Inpatient'
 
     other_ids = None
     if hippo_id:
@@ -512,7 +516,7 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
             ds.PatientSize = size
         if weight:
             ds.PatientWeight = weight
-        ds.PatientComments = comments
+        ds.PatientComments = f'Insurance={admission_type}\n{comments}'.rstrip('\n')
         ds.PatientInstitutionResidence = institution_residence
         ds.MedicalAlerts = medical_alerts
         ds.Allergies = allergies
