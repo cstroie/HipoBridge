@@ -6595,8 +6595,8 @@ document.addEventListener('DOMContentLoaded', function() {
             prevWhen: d.prev ? [d.prev.date, d.prev.region].filter(Boolean).join(' · ') : '',
             prevText: d.prev?.text || '',
             prevSummary: d.prev?.summary || '',
-            prevNote: d.prev ? 'No report text' : 'None found',
-            showPrev: !d.failed || !!d.prev,
+            prevNote: 'No report text',
+            showPrev: !!d.prev,
         };
     }
 
