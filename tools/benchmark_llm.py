@@ -119,13 +119,14 @@ class CallResult:
 
 async def stream_chat(session: aiohttp.ClientSession, base_url: str, key: str,
                       model: str, messages: list[dict], max_tokens: int,
-                      timeout: float) -> CallResult:
+                      timeout: float, temperature: float = 0.2,
+                      repetition_penalty: float | None = None) -> CallResult:
     """POST a streaming /chat/completions and time TTFT / total / tokens-sec."""
     payload = {
         "model": model,
         "messages": messages,
         "max_tokens": max_tokens,
-        "temperature": 0.2,
+        "temperature": temperature,
         # Match llm/backend.py's ServerBackend exactly, or these numbers
         # stop representing production: servers disagree on which shape
         # they honor (verified live — the nested form alone left
@@ -142,6 +143,8 @@ async def stream_chat(session: aiohttp.ClientSession, base_url: str, key: str,
         "stream": True,
         "stream_options": {"include_usage": True},
     }
+    if repetition_penalty is not None:
+        payload["repetition_penalty"] = repetition_penalty
     headers = {"Content-Type": "application/json"}
     if key:
         headers["Authorization"] = f"Bearer {key}"
@@ -220,17 +223,19 @@ async def stream_chat(session: aiohttp.ClientSession, base_url: str, key: str,
 # --- per-model benchmark ------------------------------------------------
 
 async def benchmark_model(session, base_url, key, model, messages, max_tokens,
-                          iterations, timeout) -> dict:
+                          iterations, timeout, temperature=0.2,
+                          repetition_penalty=None) -> dict:
     result = {"model": model, "error": None}
     try:
         cold = await stream_chat(session, base_url, key, model, messages,
-                                 max_tokens, timeout)
+                                 max_tokens, timeout, temperature, repetition_penalty)
         result["cold_ttft"] = cold.ttft
 
         warm: list[CallResult] = []
         for _ in range(iterations):
             warm.append(await stream_chat(session, base_url, key, model,
-                                          messages, max_tokens, timeout))
+                                          messages, max_tokens, timeout,
+                                          temperature, repetition_penalty))
         result["warm_ttft"] = statistics.median(c.ttft for c in warm)
         result["tps"] = statistics.median(c.tps for c in warm)
         result["total"] = statistics.median(c.total for c in warm)
@@ -338,6 +343,8 @@ async def async_main(args):
     # position) so a candidate task prompt can be A/B-tested before being
     # promoted into llm/prompts/<kind>.md.
     tier, task_prompt, max_tokens = PROMPTS[args.kind]
+    if args.max_tokens:
+        max_tokens = args.max_tokens
     language = args.language or config["llm"].get("language", "English") or "English"
     shim = _ClientShim(language)
     if args.system_file:
@@ -386,7 +393,8 @@ async def async_main(args):
             print(f"  - {m} ...", flush=True)
             results.append(await benchmark_model(
                 session, base_url, key, m, messages, max_tokens,
-                args.iterations, args.timeout))
+                args.iterations, args.timeout, args.temperature,
+                args.repetition_penalty))
 
     print_table(results, args.sort)
     if args.out:
@@ -430,6 +438,14 @@ def main():
     p.add_argument("--system-file",
                    help="Override the registry system prompt with this text file "
                         "(for A/B prompt testing before promoting to llm/prompts.py)")
+    p.add_argument("--temperature", type=float, default=0.2,
+                   help="Sampling temperature (default 0.2, matches production)")
+    p.add_argument("--repetition-penalty", type=float, default=None,
+                   help="Repetition penalty, if the backend supports it (not sent by default)")
+    p.add_argument("--max-tokens", type=int, default=None,
+                   help="Override the kind's production max_tokens budget "
+                        "(for probing whether a model needs more room, e.g. a "
+                        "reasoning model whose thinking eats the normal budget)")
     args = p.parse_args()
 
     if not args.text_file and not args.report_id:
