@@ -3184,21 +3184,16 @@ select {
     margin-bottom: var(--space-8);
 }
 
-.schedule-footer-actions {
+/* Build / Refresh / Clear travel as one group: right-aligned beside the
+   selects when they fit, wrapping together onto their own line when not. */
+.schedule-actions-btns {
     display: flex;
     align-items: center;
-    gap: var(--space-12);
+    gap: var(--space-8);
     flex-wrap: wrap;
-    margin-top: var(--space-16);
-    padding-top: var(--space-16);
-    border-top: 1px solid var(--border);
+    margin-left: auto;
 }
-.schedule-footer-actions .btn-schedule-refresh { margin-left: 0; }
-.schedule-footer-hint {
-    margin: 0;
-    font-size: var(--font-size-sm);
-    color: var(--text-light);
-}
+.schedule-actions-btns > .btn-schedule-refresh { margin-left: 0; }
 
 /* Keep the refresh button compact — never let it go full-width */
 .btn-schedule-refresh {
@@ -4562,6 +4557,8 @@ dialog.report-editor-modal article > section {
     /* Schedule tab's refresh button (not the patient-header one, which is
        already handled above): stretch full-width but keep it compact
        rather than inheriting the generic larger mobile touch padding */
+    .schedule-actions-btns { width: 100%; flex-direction: column; align-items: stretch; }
+    #scheduleMdBtn,
     #refreshScheduleBtn {
         margin-left: 0;
         width: 100%;
@@ -4575,8 +4572,7 @@ dialog.report-editor-modal article > section {
    own colors and fonts. Printing swaps in light ink so a dark theme still
    produces a normal paper copy. */
 .exam-list {
-    max-width: 820px;
-    margin: var(--space-32) auto;
+    margin: var(--space-32) 0;
     counter-reset: exam;
 }
 .exam-list[hidden] { display: none; }

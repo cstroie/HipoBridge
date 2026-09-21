@@ -484,7 +484,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                     <!-- Modality progress bars -->
                     <div class="schedule-mod-bars" id="scheduleModBars" hidden></div>
 
-                    <!-- Controls row -->
+                    <!-- Search row: patient, dates, limit -->
                     <div class="schedule-actions">
                         <label for="schedulePatientFilter" class="sr-only">Patient name</label>
                         <input type="search" id="schedulePatientFilter" class="schedule-filter-input" placeholder="Filter by patient name…" aria-label="Filter by patient name" title="Filter by patient name">
@@ -493,6 +493,21 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                         <span class="schedule-date-sep" aria-hidden="true">–</span>
                         <label for="scheduleEndDate" class="sr-only">To date</label>
                         <input type="date" id="scheduleEndDate" class="schedule-date-input" aria-label="To date" title="To date" autocomplete="off">
+                        <label for="scheduleLimitSelect" class="sr-only">Max results</label>
+                        <select id="scheduleLimitSelect" class="schedule-filter-select" aria-label="Max results" title="Max results">
+                            <option value="20">20 items</option>
+                            <option value="50" selected>50 items</option>
+                            <option value="100">100 items</option>
+                            <option value="200">200 items</option>
+                        </select>
+                    </div>
+
+                    <!-- Scope row: ward + modality selects, refresh right-aligned -->
+                    <div class="schedule-actions">
+                        <label for="scheduleSectionFilter" class="sr-only">Ward</label>
+                        <select id="scheduleSectionFilter" class="schedule-filter-select" aria-label="Filter by ward" title="Filter by ward">
+                            <option value="">All wards</option>
+                        </select>
                         <label for="scheduleLabFilter" class="sr-only">Modality</label>
                         <select id="scheduleLabFilter" class="schedule-filter-select" aria-label="Filter by modality" title="Filter by modality">
                             <option value="">All modalities</option>
@@ -503,20 +518,23 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             <option value="35">Interventional</option>
                             <option value="50">Fluoroscopy</option>
                         </select>
-                        <label for="scheduleLimitSelect" class="sr-only">Max results</label>
-                        <select id="scheduleLimitSelect" class="schedule-filter-select" aria-label="Max results" title="Max results">
-                            <option value="20">20 items</option>
-                            <option value="50" selected>50 items</option>
-                            <option value="100">100 items</option>
-                            <option value="200">200 items</option>
-                        </select>
-                        <button class="btn-secondary btn-schedule-refresh" id="refreshScheduleBtn" aria-label="Refresh schedule" title="Refresh schedule">
-                            <i class="fas fa-sync-alt" aria-hidden="true"></i>
-                            <span>Refresh</span>
-                        </button>
+                        <div class="schedule-actions-btns">
+                            <button class="btn-secondary btn-schedule-refresh" id="scheduleMdBtn" aria-label="Build markdown list of displayed exams" title="Build markdown list of displayed exams">
+                                <i class="fas fa-list" aria-hidden="true"></i>
+                                <span>Build exam list</span>
+                            </button>
+                            <button class="btn-secondary btn-schedule-refresh" id="refreshScheduleBtn" aria-label="Refresh schedule" title="Refresh schedule">
+                                <i class="fas fa-sync-alt" aria-hidden="true"></i>
+                                <span>Refresh</span>
+                            </button>
+                            <button type="button" class="btn-secondary btn-schedule-clear-filters" id="scheduleClearFiltersBtn" title="Clear all filters" hidden>
+                                <i class="fas fa-times" aria-hidden="true"></i>
+                                <span>Clear filters</span>
+                            </button>
+                        </div>
                     </div>
 
-                    <!-- Filters row -->
+                    <!-- Status row -->
                     <div class="schedule-filters">
 
                         <!-- Status chips — multi-select (any combination of specific
@@ -530,18 +548,6 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             <button type="button" class="chip" data-status="ended" aria-pressed="false" title="Filter: Finished">Finished</button>
                             <button type="button" class="chip" data-status="revoked" aria-pressed="false" title="Filter: Cancelled">Cancelled</button>
                         </div>
-
-                        <div class="schedule-filters-spacer"></div>
-
-                        <label for="scheduleSectionFilter" class="sr-only">Ward</label>
-                        <select id="scheduleSectionFilter" class="schedule-filter-select" aria-label="Filter by ward" title="Filter by ward">
-                            <option value="">All wards</option>
-                        </select>
-
-                        <button type="button" class="btn-secondary btn-schedule-clear-filters" id="scheduleClearFiltersBtn" title="Clear all filters" hidden>
-                            <i class="fas fa-times" aria-hidden="true"></i>
-                            <span>Clear filters</span>
-                        </button>
                     </div>
 
                     <!-- Timeline -->
@@ -555,14 +561,6 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                         </div>
                         <!-- Hidden table stub kept so scheduleTable.dataset.loaded still works -->
                         <table id="scheduleTable" hidden style="display:none"><tbody></tbody></table>
-                    </div>
-
-                    <div class="schedule-footer-actions">
-                        <button class="btn-secondary btn-schedule-refresh" id="scheduleMdBtn" aria-label="Build markdown list of displayed exams" title="Build markdown list of displayed exams">
-                            <i class="fas fa-list" aria-hidden="true"></i>
-                            <span>Build exam list</span>
-                        </button>
-                        <p class="schedule-footer-hint" id="scheduleMdHint"></p>
                     </div>
 
                     <!-- On-demand markdown list of the displayed exams (built by #scheduleMdBtn) -->

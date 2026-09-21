@@ -119,7 +119,6 @@ document.addEventListener('DOMContentLoaded', function() {
         scheduleEndDate: document.getElementById('scheduleEndDate'),
         refreshScheduleBtn: document.getElementById('refreshScheduleBtn'),
         scheduleMdBtn: document.getElementById('scheduleMdBtn'),
-        scheduleMdHint: document.getElementById('scheduleMdHint'),
         scheduleMdPanel: document.getElementById('scheduleMdPanel'),
         scheduleMdBody: document.getElementById('scheduleMdBody'),
         scheduleMdTitle: document.getElementById('scheduleMdTitle'),
@@ -6775,13 +6774,6 @@ document.addEventListener('DOMContentLoaded', function() {
     function renderSchedule() {
         const container = elements.scheduleTimeline || elements.scheduleBody;
         if (!container) return;
-
-        if (elements.scheduleMdHint) {
-            const n = scheduleEntries.length;
-            elements.scheduleMdHint.textContent = n
-                ? `Lists the ${n} displayed exam${n === 1 ? '' : 's'} with diagnosis and previous report`
-                : 'No exams to list';
-        }
 
         container.innerHTML = '';
 
