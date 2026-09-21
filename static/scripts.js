@@ -7117,4 +7117,67 @@ document.addEventListener('DOMContentLoaded', function() {
         return encounterData.diagnosis || null;
     }
 
+    // Phone-width QR carousel (the CSS turns .qr-grid into a horizontal
+    // scroll-snap strip below 480px): position dots, and mouse drag — touch
+    // swipes already scroll it natively.
+    function setupQrCarousel() {
+        const grid = document.querySelector('.qr-grid');
+        const dotsEl = document.getElementById('qrDots');
+        if (!grid || !dotsEl) return;
+        const carousel = window.matchMedia('(max-width: 480px)');
+        const slides = () => [...grid.children].filter(c => c.offsetParent !== null);
+        const nearest = () => {
+            const g = grid.getBoundingClientRect();
+            let best = 0, bestDist = Infinity;
+            slides().forEach((c, i) => {
+                const r = c.getBoundingClientRect();
+                const d = Math.abs(r.left + r.width / 2 - (g.left + g.width / 2));
+                if (d < bestDist) { best = i; bestDist = d; }
+            });
+            return best;
+        };
+        const updateDots = () => {
+            const n = carousel.matches ? slides().length : 0;
+            if (dotsEl.children.length !== n) {
+                dotsEl.replaceChildren(...Array.from({ length: n }, () => {
+                    const dot = document.createElement('span');
+                    dot.className = 'qr-dot';
+                    return dot;
+                }));
+            }
+            const active = nearest();
+            [...dotsEl.children].forEach((dot, i) => dot.classList.toggle('active', i === active));
+        };
+        grid.addEventListener('scroll', updateDots, { passive: true });
+        carousel.addEventListener('change', updateDots);
+        // Slides appear/disappear as the patient's QR labels are filled in
+        new MutationObserver(updateDots).observe(grid, { subtree: true, childList: true, characterData: true });
+
+        let drag = null;
+        grid.addEventListener('pointerdown', e => {
+            if (e.pointerType !== 'mouse' || e.button !== 0 || !carousel.matches) return;
+            drag = { x: e.clientX, left: grid.scrollLeft };
+            grid.setPointerCapture(e.pointerId);
+            grid.classList.add('dragging');
+        });
+        grid.addEventListener('pointermove', e => {
+            if (drag) grid.scrollLeft = drag.left - (e.clientX - drag.x);
+        });
+        const endDrag = () => {
+            if (!drag) return;
+            drag = null;
+            grid.classList.remove('dragging');
+            // Snap to the nearest slide (snapping was off while dragging)
+            const target = slides()[nearest()];
+            if (target) {
+                const shift = target.getBoundingClientRect().left - grid.getBoundingClientRect().left;
+                grid.scrollTo({ left: grid.scrollLeft + shift, behavior: 'smooth' });
+            }
+        };
+        grid.addEventListener('pointerup', endDrag);
+        grid.addEventListener('pointercancel', endDrag);
+        updateDots();
+    }
+    setupQrCarousel();
+
 });

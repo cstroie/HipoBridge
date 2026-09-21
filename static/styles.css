@@ -3876,6 +3876,47 @@ dialog.report-modal[open]::backdrop {
     letter-spacing: 0.05em;
     text-transform: uppercase;
 }
+/* Position dots under the phone carousel (see the 480px rule below) */
+.qr-dots { display: none; }
+.qr-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-full);
+    background: var(--border);
+    transition: background-color 0.15s;
+}
+.qr-dot.active { background: var(--primary); }
+@media (max-width: 480px) {
+    /* One QR code at a time: a horizontal scroll-snap strip. Touch swipes
+       scroll it natively; mouse dragging is added in scripts.js. Empty cells
+       (no CNP, say) are skipped instead of showing a blank slide. */
+    .qr-grid {
+        display: flex;
+        gap: var(--space-12);
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        overscroll-behavior-x: contain;
+        scrollbar-width: none;
+        cursor: grab;
+    }
+    .qr-grid::-webkit-scrollbar { display: none; }
+    .qr-grid.dragging { scroll-snap-type: none; cursor: grabbing; user-select: none; }
+    .qr-cell {
+        flex: 0 0 100%;
+        scroll-snap-align: center;
+    }
+    .qr-cell:has(.qr-label:empty) { display: none; }
+    .qr-cell canvas { max-width: 100%; height: auto; }
+    .qr-dots {
+        display: flex;
+        justify-content: center;
+        gap: var(--space-8);
+        margin-top: var(--space-12);
+    }
+}
+@media (max-width: 480px) and (prefers-reduced-motion: no-preference) {
+    .qr-grid { scroll-behavior: smooth; }
+}
 
 /* ── Report editor modal ───────────────────────────────────────────────── */
 
