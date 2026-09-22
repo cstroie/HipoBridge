@@ -1826,7 +1826,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // then removes the card and re-enables the button if the data still
     // isn't there (runAiSummary's own empty-text toast covers that case,
     // but only once the placeholder/disabled state are cleared first).
-    function showAiPreparingPlaceholder(button, anchor, intoParent) {
+    function showAiPreparingPlaceholder(button, anchor, intoParent, kind) {
         if (!button) return;
         let card = button._aiCard;
         if (!card || !card.isConnected) {
@@ -1834,6 +1834,7 @@ document.addEventListener('DOMContentLoaded', function() {
             wireAiCardCopy(card);
             button._aiCard = card;
         }
+        setAiCardBadgeTitle(card, kind);
         placeAiCard(card, anchor, intoParent);
         const body = card.querySelector('.ai-summary-body');
         card.classList.remove('ai-card-error');
@@ -1851,7 +1852,7 @@ document.addEventListener('DOMContentLoaded', function() {
     async function generatePatientAiSummary() {
         const button = elements.patientAiSummaryBtn;
         if (!getPatientClinicalText()) {
-            const card = showAiPreparingPlaceholder(button, null, elements.patientAiSummaryAnchor);
+            const card = showAiPreparingPlaceholder(button, null, elements.patientAiSummaryAnchor, 'pre_exam_oneliner');
             await loadReportLazily();
             // loadReportLazily reports its own failures (showOverlayError) and
             // leaves getPatientClinicalText() null; runAiSummary below then
@@ -1879,7 +1880,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!button) return;
         const anchor = () => elements.trendsContainer?.firstChild || null;
         if (!getPatientClinicalText()) {
-            const card = showAiPreparingPlaceholder(button, anchor(), elements.trendsContainer);
+            const card = showAiPreparingPlaceholder(button, anchor(), elements.trendsContainer, 'contrast_safety');
             await loadReportLazily();
             if (!getPatientClinicalText()) {
                 card?.remove();
@@ -2081,6 +2082,31 @@ document.addEventListener('DOMContentLoaded', function() {
         return card;
     }
 
+    // Human-readable titles shown in the amber disclaimer badge, in place of
+    // the bare "AI-generated" — lets a radiologist tell cards apart at a
+    // glance (e.g. on the Lab Trends tab, which can show a lab summary and a
+    // contrast-risk card at once). Falls back to plain "AI-generated" for any
+    // kind not listed here.
+    const AI_KIND_LABELS = {
+        report:              'Patient summary',
+        epicrisis:            'Epicrisis summary',
+        imaging:              'Report summary',
+        imaging_episode:      'Episode summary',
+        lab:                  'Lab summary',
+        pre_exam_oneliner:    'Pre-exam one-liner',
+        pre_exam_brief:       'Pre-exam brief',
+        pre_exam_executive:   'Pre-exam executive summary',
+        pre_exam_soap:        'Pre-exam SOAP note',
+        contrast_safety:      'Contrast agent risk',
+    };
+
+    function setAiCardBadgeTitle(card, kind) {
+        const titleEl = card?.querySelector('.ai-summary-badge-title');
+        if (!titleEl) return;
+        const label = AI_KIND_LABELS[kind];
+        titleEl.textContent = label ? `${label} — AI-generated` : 'AI-generated';
+    }
+
     function wireAiCardCopy(card) {
         const copyBtn = card.querySelector('.btn-ai-copy');
         const body = card.querySelector('.ai-summary-body');
@@ -2151,6 +2177,7 @@ document.addEventListener('DOMContentLoaded', function() {
             wireAiCardCopy(card);
             button._aiCard = card;
         }
+        setAiCardBadgeTitle(card, kind);
 
         if (opts.auto) {
             try {
