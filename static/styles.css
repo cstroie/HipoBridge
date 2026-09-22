@@ -3784,9 +3784,15 @@ dialog.modal article > footer {
     border-top: 1px solid var(--border);
     background: var(--bg);
     display: flex;
+    align-items: center;
     justify-content: flex-end;
     gap: var(--space-8);
     flex-shrink: 0;
+}
+.report-modal-footer > button,
+.report-modal-footer > .action-group,
+.report-modal-footer > .action-group > button {
+    min-height: 34px;
 }
 /* Pins the AI action to the footer's left edge, away from the workflow
    button cluster — a different category of action (an AI-generated aid,
