@@ -3663,14 +3663,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const myGeneration = dataGeneration;
         limitedMap(toEnrich, MAX_CONCURRENT_REQUESTS, async ({ r, li }) => {
-            const [p, triage] = await Promise.all([
-                fetchPresentationDetails(r.presentation_id).catch(() => null),
-                fetchTriageLevel(r.presentation_id).catch(() => null),
-            ]);
-            if (myGeneration !== dataGeneration) return;
-            const badge = [triage, p?.decision].filter(Boolean).join(' · ');
+            const p = await fetchPresentationDetails(r.presentation_id).catch(() => null);
+            if (!p || myGeneration !== dataGeneration) return;
+            const badge = [p.triage, p.decision].filter(Boolean).join(' · ');
             if (badge) li.querySelector('.history-type').textContent = badge;
-            if (!p) return;
             // Drug lines read "NAME DOSE Aparat UPU - Program <dates>"; keep the drug.
             const drugs = [].concat(p.treatment || []).map(t => t.split(' Aparat ')[0].trim()).filter(Boolean);
             const dx = p.diagnosis_final || p.diagnosis_initial || p.diagnosis || p.reason;
@@ -3679,21 +3675,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // ER triage level ("Urgent", "Non-urgent"...) from the visit's UPU sheet
-    // (/api/fupu), cached per id for the session.
-    async function fetchTriageLevel(id) {
-        const key = `triage:${id}`;
-        if (key in cache.encounters) return cache.encounters[key];
-        const response = await apiFetch(`/api/fupu/${id}`);
-        if (!response.ok) return null;
-        const json = await response.json();
-        const level = json.status === 'success' ? (json.fupu?.triage_priority || null) : null;
-        cachePut(cache.encounters, key, level);
-        return level;
-    }
-
-    // Raw presentation block from /api/presentation (decision, reason,
-    // diagnosis, treatment...), cached per id for the session.
+    // Raw presentation block from /api/presentation (triage, decision,
+    // reason, diagnosis, treatment...), cached per id for the session.
     async function fetchPresentationDetails(id) {
         const key = `presentation:${id}`;
         if (cache.encounters[key]) return cache.encounters[key];

@@ -1065,6 +1065,28 @@ def _select_current(soup, element_id: str) -> str:
     return option.get_text(' ', strip=True) if option else ''
 
 
+def _header_block(soup, prefix: str) -> Tuple[str, str, Dict[str, str]]:
+    """Read-only "<Title> [ id ]" header blocks on Hipocrate form pages
+    ("Pacient [..]", "Prezentare [..]", "Internare [..]", "Externare [..]"):
+    (linked id, link text, {label: value})."""
+    title = next((d for d in soup.find_all('div', class_=re.compile(r'_titlu$'))
+                  if d.get_text(' ', strip=True).startswith(prefix)), None)
+    if title is None:
+        return '', '', {}
+    link = title.find('a', href=True)
+    link_id, link_text = '', ''
+    if link:
+        m = re.search(r'id=(\d+)', link['href'])
+        link_id = m.group(1) if m else ''
+        link_text = link.get_text(' ', strip=True)
+    fields = {}
+    for p in title.parent.find_all('p', class_='p_amb'):
+        value = p.find_next_sibling('div', class_='control')
+        if value is not None:
+            fields[p.get_text(' ', strip=True).rstrip(':').strip()] = value.get_text(' ', strip=True)
+    return link_id, link_text, fields
+
+
 class HippoClientPatient(HippoClient):
     """Specialized client for patient related operations in the Hipocrate medical system.
 
@@ -3192,27 +3214,6 @@ class HippoClientCheckin(HippoClient):
         return parsed_data
 
     @staticmethod
-    def _header_block(soup, prefix: str) -> Tuple[str, str, Dict[str, str]]:
-        """The read-only "Pacient [..]" / "Prezentare [..]" / "Externare [..]"
-        header blocks: (linked id, link text, {label: value})."""
-        title = next((d for d in soup.find_all('div', class_='div_sectiunePACFULL_titlu')
-                      if d.get_text(' ', strip=True).startswith(prefix)), None)
-        if title is None:
-            return '', '', {}
-        link = title.find('a', href=True)
-        link_id, link_text = '', ''
-        if link:
-            m = re.search(r'id=(\d+)', link['href'])
-            link_id = m.group(1) if m else ''
-            link_text = link.get_text(' ', strip=True)
-        fields = {}
-        for p in title.parent.find_all('p', class_='p_amb'):
-            value = p.find_next_sibling('div', class_='control')
-            if value is not None:
-                fields[p.get_text(' ', strip=True).rstrip(':').strip()] = value.get_text(' ', strip=True)
-        return link_id, link_text, fields
-
-    @staticmethod
     def _rich_text(soup, element_id: str) -> str:
         """Epicrisis/recommendations: hidden input holding percent-encoded HTML
         from the page's rich-text widget, converted to markdown."""
@@ -3244,7 +3245,7 @@ class HippoClientCheckin(HippoClient):
                     data.store(key, value)
 
             # Patient header
-            patient_id, patient_name, pac = self._header_block(soup, 'Pacient [')
+            patient_id, patient_name, pac = _header_block(soup, 'Pacient [')
             put("patient.id", patient_id)
             put("patient.name", patient_name)
             cnp = pac.get('CNP', '')
@@ -3260,7 +3261,7 @@ class HippoClientCheckin(HippoClient):
             put("patient.insurance", pac.get('Asigurat', ''))
 
             # Emergency presentation that led to this admission
-            pres_id, _, pres = self._header_block(soup, 'Prezentare [')
+            pres_id, _, pres = _header_block(soup, 'Prezentare [')
             put("presentation.id", pres_id)
             put("presentation.date_time", pres.get('Data', ''))
             if pres.get('Urgenta'):
@@ -3269,7 +3270,7 @@ class HippoClientCheckin(HippoClient):
             put("presentation.medic", pres.get('Medic', ''))
 
             # Discharge, only on already-discharged admissions
-            out_id, _, out = self._header_block(soup, 'Externare [')
+            out_id, _, out = _header_block(soup, 'Externare [')
             put("checkout.id", out_id)
             put("checkout.date_time", out.get('Data', ''))
             put("checkout.section", out.get('Sectie', ''))
@@ -4460,6 +4461,70 @@ class HippoClientPresentation(HippoClient):
     def __init__(self, service_url=None, request=None):
         super().__init__(service_url=service_url, request=request)
         self.request_url = "/gen_printabile/FisaPrezentare.asp?relname=PR&id={id}"
+        self.form_url = "/files/presentation.asp?id={id}"
+
+    async def fetch_and_parse(self, *args, **kwargs):
+        """The printable sheet (treatment, transport, outcome) merged with the
+        editable visit form (triage, reason, history, consults, linked
+        admission) — each page carries fields the other lacks. Both pages are
+        cached; a form failure leaves the printable data intact."""
+        data = await super().fetch_and_parse(*args, **kwargs)
+        if data.get("status") == "error":
+            return data
+        try:
+            html, error = await self.get_page(_format_request_url(self.form_url, **kwargs))
+            if html and not error:
+                self._merge_form(BeautifulSoup(html, 'html.parser'), data)
+            elif error:
+                logger.warning(f"Presentation form page failed for {kwargs.get('id')}: {error}")
+        except Exception as e:
+            logger.warning(f"Presentation form parse failed for {kwargs.get('id')}: {e}")
+        return data
+
+    @staticmethod
+    def _merge_form(soup, data: HippoData) -> None:
+        def value(element_id):
+            return extract_value_from_input(soup, element_id=element_id)
+
+        # "cod N" matches the UPU sheet's triage code 30+N (verified on 12 visits)
+        triage_code = _select_current(soup, 'EmergencyStatusCode')
+        m = re.match(r'cod\s*(\d)$', triage_code)
+        if m:
+            data.store("presentation.triage_code", triage_code)
+            level = HippoClientFUPU._TRIAGE_PRIORITY_EN.get(str(30 + int(m.group(1))))
+            if level:
+                data.store("presentation.triage", level)
+        data.store("presentation.triage_nurse", _select_current(soup, 'selAsistTriaj') or None)
+        triage_time = " ".join(v for v in (value('strDateTriaj'), value('strTimeTriaj')) if v)
+        data.store("presentation.triage_time", triage_time or None)
+        data.store("presentation.consult_type", _select_current(soup, 'sCUType') or None)
+        data.store("presentation.antecedents", value('strAntecedente') or None)
+        if not data.get("presentation.reason"):
+            data.store("presentation.reason", extract_text_from_element(soup, element_id='strPresReason') or None)
+        if not data.get("presentation.diagnosis"):
+            data.store("presentation.diagnosis", value('Diagnosis') or None)
+
+        # "Lista examinari / consulturi": Cod | Sectie | Medic | Data/Ora | Decizie
+        title = next((d for d in soup.find_all('div', class_=re.compile(r'_titlu$'))
+                      if 'Lista examinari' in d.get_text(' ', strip=True)), None)
+        consults = []
+        if title is not None:
+            for tr in title.parent.find_all('tr'):
+                cells = [td.get_text(' ', strip=True) for td in tr.find_all('td', recursive=False)]
+                if len(cells) >= 5 and cells[0].isdigit():
+                    consults.append({"code": cells[0], "section": cells[1], "medic": cells[2],
+                                     "date_time": cells[3], "decision": cells[4]})
+        if consults:
+            data.store_list("presentation.consults", consults)
+
+        # Admission this visit led to, if any
+        checkin_id, record_number, adm = _header_block(soup, 'Internare [')
+        if adm:
+            data.store("admission.checkin_id", checkin_id or None)
+            data.store("admission.number", record_number or None)
+            for key, label in (("date_time", "Data"), ("section", "Sectie"), ("medic", "Medic"),
+                               ("type", "Tip"), ("criteria", "Criteriu")):
+                data.store(f"admission.{key}", adm.get(label) or None)
 
     # Maps decision display text → (fhir_code, is_final)
     # fhir_code maps to hospitalization.dischargeDisposition coding
@@ -4522,24 +4587,22 @@ class HippoClientPresentation(HippoClient):
                 if any(c.strip() for c in cells):
                     rows.append(cells)
 
+            # Row: [name, gender, age, registry_nr/year] — the row right before
+            # "Data nasterii:" (the rows above it are the page's close links).
+            dob_idx = next((i for i, c in enumerate(rows) if c[0].startswith('Data nasterii:')), None)
+            if dob_idx:
+                name_row = rows[dob_idx - 1]
+                data.store("patient.name", name_row[0])
+                if len(name_row) >= 2 and name_row[1] in ('M', 'F'):
+                    data.store("patient.gender", 'male' if name_row[1] == 'M' else 'female')
+                if len(name_row) >= 3:
+                    data.store("patient.age", name_row[2])
+
             for cells in rows:
                 n = len(cells)
 
-                # Row: [name, gender, age, registry_nr/year]
-                if n >= 1 and cells[0] and not any(
-                    cells[0].startswith(p) for p in ('Data nasterii', 'Prenume', 'Telefon',
-                                                       'Ocupatie', 'Medic de familie', 'Casa',
-                                                       'Alte', 'Tip venire', 'Sectie', '[')
-                ) and not data.get("patient.name") and cells[0] != 'FISA PREZENTARE':
-                    if n >= 1:
-                        data.store("patient.name", cells[0])
-                    if n >= 2 and cells[1] in ('M', 'F'):
-                        data.store("patient.gender", 'male' if cells[1] == 'M' else 'female')
-                    if n >= 3:
-                        data.store("patient.age", cells[2])
-
                 # Row: [Data nasterii: {dob}, Act: {}, CNP: {cnp}]
-                elif n >= 1 and cells[0].startswith('Data nasterii:'):
+                if n >= 1 and cells[0].startswith('Data nasterii:'):
                     data.store("patient.birth_date", self._v(cells[0], 'Data nasterii:'))
                     if n >= 3:
                         cnp_raw = self._v(cells[2], 'CNP:')
@@ -4566,6 +4629,10 @@ class HippoClientPresentation(HippoClient):
                         data.store("patient.county", self._v(cells[1], 'Sector/Judet:'))
                     if n >= 3:
                         data.store("patient.city",   self._v(cells[2], 'Localitate:'))
+
+                # Row: [Alte asigurari medicale: {}, Observatii medicale: {}]
+                elif n >= 2 and cells[0].startswith('Alte asigurari medicale:'):
+                    data.store("patient.observations", self._v(cells[1], 'Observatii medicale:') or None)
 
                 # Row: [Casa de asigurari: {}, Judetul casei: {}, Nr.carnet: {}, Reducere: {}]
                 elif n >= 1 and cells[0].startswith('Casa de asigurari:'):
