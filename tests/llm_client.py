@@ -60,7 +60,8 @@ class TestPromptRegistry(unittest.TestCase):
         self.assertEqual(set(PROMPTS), {
             "report", "epicrisis", "imaging", "imaging_trend", "lab",
             "pre_exam_brief", "pre_exam_oneliner", "pre_exam_soap", "pre_exam_executive",
-            "contrast_safety",
+            "contrast_safety", "report_indication", "followup_pending",
+            "treatment_timeline", "lesion_tracker", "problem_list",
         })
         for kind, (tier, system, max_tokens) in PROMPTS.items():
             self.assertIn(tier, TIERS, f"{kind} uses unknown tier {tier}")
@@ -79,6 +80,7 @@ class TestPromptRegistry(unittest.TestCase):
         # report (imaging) and an already-per-row-timestamped one (lab) don't.
         self.assertEqual(DATE_AWARE_KINDS, {
             "report", "epicrisis", "pre_exam_brief", "pre_exam_soap", "pre_exam_executive",
+            "followup_pending", "treatment_timeline", "problem_list",
         })
         self.assertNotIn("imaging", DATE_AWARE_KINDS)
         self.assertNotIn("lab", DATE_AWARE_KINDS)

@@ -97,6 +97,13 @@ PROMPT_META = {
     # alongside the existing clinical-text feed. Single-line verdict, sized
     # like pre_exam_oneliner.
     "contrast_safety": ("medical", 160),
+    # Extraction kinds on the AI tab's second toolbar, all fed the same
+    # clinical text as the pre_exam_* kinds.
+    "report_indication":  ("medical", 120),
+    "followup_pending":   ("medical", 350),
+    "treatment_timeline": ("medical", 350),
+    "lesion_tracker":     ("medical", 450),
+    "problem_list":       ("medical", 600),
 }
 
 
@@ -167,7 +174,10 @@ PROMPTS = _PromptRegistry(PROMPT_META)
 # (single sentence, no date content in the format at all) — those have no
 # use for it and it would just be unused prompt weight on already-lean,
 # short-output kinds.
-DATE_AWARE_KINDS = frozenset({"report", "epicrisis", "pre_exam_brief", "pre_exam_soap", "pre_exam_executive"})
+DATE_AWARE_KINDS = frozenset({
+    "report", "epicrisis", "pre_exam_brief", "pre_exam_soap", "pre_exam_executive",
+    "followup_pending", "treatment_timeline", "problem_list",
+})
 
 
 def _date_directive(today: str | None = None) -> str:
@@ -209,7 +219,8 @@ def _language_directive(language: str) -> str:
 STREAMING_KINDS = frozenset({
     "report", "epicrisis", "pre_exam_brief", "lab", "imaging_trend",
     "pre_exam_soap", "pre_exam_executive", "pre_exam_oneliner",
-    "contrast_safety",
+    "contrast_safety", "report_indication", "followup_pending",
+    "treatment_timeline", "lesion_tracker", "problem_list",
 })
 
 

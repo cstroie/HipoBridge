@@ -85,6 +85,7 @@ document.addEventListener('DOMContentLoaded', function() {
         contrastSafetyBtn: document.getElementById('contrastSafetyBtn'),
         // AI tab elements
         aiPreExamToolbar: document.getElementById('aiPreExamToolbar'),
+        aiExtractToolbar: document.getElementById('aiExtractToolbar'),
         aiPreExamAnchor: document.getElementById('aiPreExamAnchor'),
         aiEmptyState: document.getElementById('aiEmptyState'),
         // Patient profile "AI Summary" panel
@@ -322,24 +323,28 @@ document.addEventListener('DOMContentLoaded', function() {
     // Pre-exam toolbar: each button sends the same clinical text
     // (getPatientClinicalText()) under a different `kind`, so the
     // radiologist can generate multiple prompt styles for the same record.
-    // Only 'pre_exam_brief' has a working prompt today — the rest are
-    // scaffolded ahead of their prompts landing in llm/prompts/ (drafts
-    // collected in llm/prompts/drafts/ in the meantime); clicking one of
-    // those surfaces the backend's existing "unknown summary kind" error
-    // until its PROMPT_META entry + <kind>.md exist. Icons are chosen from
-    // the existing self-hosted Font Awesome subset (static/fontawesome.css)
-    // — adding a new glyph needs a separate subsetting step.
+    // Each kind needs a PROMPT_META entry + llm/prompts/<kind>.md. Icons
+    // must have a rule in the trimmed static/fontawesome.css (the woff2
+    // itself carries the full glyph set).
     // Declared here (ahead of initApp() below) rather than near
-    // buildAiPreExamToolbar() further down: it's a `const`, not a hoisted
+    // buildAiToolbar() further down: it's a `const`, not a hoisted
     // `function`, and initApp() runs synchronously as soon as this script
     // executes — a `const` declared after that call site is still in its
-    // temporal dead zone when buildAiPreExamToolbar() (called from inside
+    // temporal dead zone when buildAiToolbar() (called from inside
     // initApp() -> initEventListeners()) tries to read it.
     const PRE_EXAM_TOOLBAR = [
         { kind: 'pre_exam_oneliner',  label: 'One-liner',         icon: 'fa-bolt' },
         { kind: 'pre_exam_brief',     label: 'Brief',             icon: 'fa-wand-magic-sparkles' },
         { kind: 'pre_exam_executive', label: 'Executive summary', icon: 'fa-notes-medical' },
         { kind: 'pre_exam_soap',      label: 'SOAP',              icon: 'fa-file-medical' },
+    ];
+    // Second AI-tab group: targeted extractions from the same clinical text.
+    const EXTRACT_TOOLBAR = [
+        { kind: 'report_indication',  label: 'Indication',   icon: 'fa-quote-left' },
+        { kind: 'followup_pending',   label: 'Follow-ups',   icon: 'fa-calendar-check' },
+        { kind: 'treatment_timeline', label: 'Treatments',   icon: 'fa-pills' },
+        { kind: 'lesion_tracker',     label: 'Lesions',      icon: 'fa-ruler' },
+        { kind: 'problem_list',       label: 'Problem list', icon: 'fa-list-check' },
     ];
 
     // Generation counter for the on-demand schedule exam list; must be declared
@@ -508,7 +513,10 @@ document.addEventListener('DOMContentLoaded', function() {
             () => elements.reportCard, () => getPatientClinicalText());
         if (elements.aiLabBtn) elements.aiLabBtn.addEventListener('click', runLabSummary);
         if (elements.contrastSafetyBtn) elements.contrastSafetyBtn.addEventListener('click', runContrastSafetyCheck);
-        elements.aiPreExamBtns = buildAiPreExamToolbar();
+        elements.aiPreExamBtns = [
+            ...buildAiToolbar(elements.aiPreExamToolbar, PRE_EXAM_TOOLBAR),
+            ...buildAiToolbar(elements.aiExtractToolbar, EXTRACT_TOOLBAR),
+        ];
         if (elements.patientAiSummaryBtn) {
             elements.patientAiSummaryBtn.addEventListener('click', generatePatientAiSummary);
         }
@@ -1951,7 +1959,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const STREAMING_KINDS = new Set([
         'report', 'epicrisis', 'pre_exam_brief', 'lab', 'imaging_trend',
         'pre_exam_soap', 'pre_exam_executive', 'pre_exam_oneliner',
-        'contrast_safety',
+        'contrast_safety', 'report_indication', 'followup_pending',
+        'treatment_timeline', 'lesion_tracker', 'problem_list',
     ]);
 
     // Rare sentinel (ASCII Unit Separator) the server uses to signal a
@@ -2098,6 +2107,11 @@ document.addEventListener('DOMContentLoaded', function() {
         pre_exam_executive:   'Pre-exam executive summary',
         pre_exam_soap:        'Pre-exam SOAP note',
         contrast_safety:      'Contrast agent risk',
+        report_indication:    'Report indication',
+        followup_pending:     'Pending follow-ups',
+        treatment_timeline:   'Treatment timeline',
+        lesion_tracker:       'Lesion measurements',
+        problem_list:         'Problem list',
     };
 
     function setAiCardBadgeTitle(card, kind) {
@@ -2253,13 +2267,13 @@ document.addEventListener('DOMContentLoaded', function() {
         button.addEventListener('click', () => runAiSummary(button, kind, getAnchor, getText, opts));
     }
 
-    // Builds one button per PRE_EXAM_TOOLBAR entry into elements.aiPreExamToolbar
+    // Builds one button per `config` entry into `toolbar`
     // (mirrors buildImagingEpisodeHeader's manual document.createElement
     // pattern — no <template> needed since these buttons carry no ids).
     // Returns the created buttons so callers can toggle/reset them as a group.
-    function buildAiPreExamToolbar() {
-        if (!elements.aiPreExamToolbar) return [];
-        return PRE_EXAM_TOOLBAR.map(cfg => {
+    function buildAiToolbar(toolbar, config) {
+        if (!toolbar) return [];
+        return config.map(cfg => {
             const btn = document.createElement('button');
             btn.className = 'btn-ai';
             btn.hidden = true;
@@ -2272,7 +2286,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const span = document.createElement('span');
             span.textContent = cfg.label;
             btn.append(icon, span);
-            elements.aiPreExamToolbar.appendChild(btn);
+            toolbar.appendChild(btn);
             wireAiButton(btn, cfg.kind, () => elements.aiPreExamAnchor, () => getPatientClinicalText());
             return btn;
         });
@@ -2567,7 +2581,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // still goes into the Report tab's own display/copy button.
     const CLINICAL_TEXT_TOKEN_BUDGET = 8000;
     // Reserve: largest system prompt among clinicalMarkdown's consumers
-    // (pre_exam_brief.md, ~1350 tokens) + its max_tokens (450, see
+    // (~550 tokens) + the largest max_tokens (problem_list, 600, see
     // llm/prompts.py PROMPT_META) + the date/language directives appended
     // at call time + a safety margin. Bump this if either grows a lot.
     const CLINICAL_TEXT_RESERVED_TOKENS = 2200;

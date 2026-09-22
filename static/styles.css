@@ -1783,24 +1783,30 @@ select {
    attention) — invert them to a solid filled pill instead of the quiet
    transparent-in-toolbar look every other AI/copy button gets, so they
    read as the primary action rather than secondary icon buttons. */
-#aiPreExamToolbar .btn-ai {
+.ai-kind-toolbar .btn-ai {
     background: var(--warning, #d97706);
     color: var(--on-accent);
     flex-basis: auto;
     min-width: 84px;
     padding: var(--space-8) var(--space-16);
 }
-#aiPreExamToolbar .btn-ai + .btn-ai {
+.ai-kind-toolbar .btn-ai + .btn-ai {
     border-left: 1px solid color-mix(in srgb, var(--on-accent) 30%, transparent);
 }
-#aiPreExamToolbar .btn-ai:hover {
+.ai-kind-toolbar .btn-ai:hover {
     background: color-mix(in srgb, var(--warning, #d97706) 85%, black);
 }
-/* Now a standalone row below the header (not inside .report-header's flex
-   row), so it needs its own gap above #aiPreExamAnchor/#aiEmptyState. */
-#aiPreExamToolbar {
-    margin-bottom: var(--space-24);
+.ai-kind-toolbar {
     flex-wrap: wrap;
+}
+/* Pre-exam and extraction groups side by side, wrapping on narrow screens;
+   a standalone row below the header, so it needs its own gap above
+   #aiPreExamAnchor/#aiEmptyState. */
+.ai-toolbars {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-12);
+    margin-bottom: var(--space-24);
 }
 
 /* Shared compact icon-only style for every "copy as Markdown" button */
