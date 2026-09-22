@@ -5853,7 +5853,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const bodyDiv = modal.querySelector('.report-modal-body');
 
-        const originalText = triggerEl.textContent;
+        // Saved as nodes, not textContent — a trigger built from markup
+        // (e.g. the schedule card's summary button, which wraps its text in
+        // an <em>) needs that structure restored, not flattened to a plain
+        // text node.
+        const originalNodes = [...triggerEl.childNodes];
         triggerEl.textContent = '…';
         triggerEl.disabled = true;
 
@@ -6203,7 +6207,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         await whoamiReady;
         await refreshAll();
-        triggerEl.textContent = originalText;
+        triggerEl.replaceChildren(...originalNodes);
         triggerEl.disabled = false;
     }
 
@@ -7070,7 +7074,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // request code does.
         const openModal = e => {
             e.stopPropagation();
-            showRequestModal(prev.id, prev.code, el._patientName, el._req?.modality || '', line, '', '');
+            showRequestModal(prev.id, prev.code, el._patientName, el._req?.modality || '', e.currentTarget, '', '');
         };
         // With an AI summary in hand, there's no need for a separate "Prev
         // CT · date · region" heading — the summary itself (prefixed with
