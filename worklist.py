@@ -1181,10 +1181,9 @@ class WorklistRefresher:
             # Use the patient's most recent admission (highest checkin id) as
             # AdmissionID when one exists; falls back to the Hipocrate patient
             # id in _build_datasets otherwise. No separate checkin.asp fetch:
-            # HippoClientCheckin.parse_data() just echoes the id it was called
-            # with back as 'checkin.id' (hippoclient.py), so fetching it would
-            # only confirm the page loads — not worth a whole extra round-trip
-            # per newly-enriched patient for a low-stakes worklist display field.
+            # the id is all this field needs, and the page is ~180KB — not
+            # worth a whole extra round-trip per newly-enriched patient for a
+            # low-stakes worklist display field.
             checkin_ids = patient_data.get('checkin') or []
             admission_id = max(checkin_ids, key=lambda cid: int(cid)) if checkin_ids else None
 

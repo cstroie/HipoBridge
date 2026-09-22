@@ -2691,12 +2691,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const dx = extractDiagnosisText(enc);
                 if (dx) parts.push(dx);
                 (enc.notes || []).forEach(text => {
-                    if (!text) return;
-                    const clean = text
-                        .replace(/^\[Exam general\]\s*/i, '')
-                        .replace(/^\[Exam local\]\s*/i, '')
-                        .trim();
-                    if (clean) parts.push(clean);
+                    if (text && text.trim()) parts.push(text.trim());
                 });
                 return parts.join('\n\n');
             }
@@ -5664,9 +5659,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const secondary = extractSecondaryDiagnoses(enc);
         if (secondary.length) parts.push(`**Secondary diagnoses:** ${secondary.join(', ')}`);
         (enc.notes || []).forEach(text => {
-            if (!text) return;
-            const clean = text.replace(/^\[Exam general\]\s*/i, '').replace(/^\[Exam local\]\s*/i, '').trim();
-            if (clean) parts.push(clean);
+            if (text && text.trim()) parts.push(text.trim());
         });
         return parts.join('\n\n');
     }

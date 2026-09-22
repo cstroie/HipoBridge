@@ -3109,7 +3109,60 @@ class HippoClientCheckin(HippoClient):
         super().__init__(service_url=service_url, request=request)
         self.request_url = "/files/checkin.asp?id={id}"
 
+    @staticmethod
+    def _select_text(soup, element_id: str) -> str:
+        """Current value of a checkin-page <select>. AJAX-populated selects
+        (section, physician, ...) carry it in a `vs` attribute matching their
+        single, unselected option; static ones mark it with `selected`. Never
+        falls back to the first option, unlike extract_selected_from_dropdown
+        (whose first-option fallback other scrapers rely on)."""
+        el = soup.find('select', id=element_id)
+        if not el:
+            return ''
+        vs = el.get('vs')
+        option = None
+        if vs is not None:
+            option = next((o for o in el.find_all('option') if o.get('value') == vs), None)
+        if option is None:
+            option = el.find('option', selected=True)
+        return option.get_text(' ', strip=True) if option else ''
+
+    @staticmethod
+    def _header_block(soup, prefix: str) -> Tuple[str, str, Dict[str, str]]:
+        """The read-only "Pacient [..]" / "Prezentare [..]" / "Externare [..]"
+        header blocks: (linked id, link text, {label: value})."""
+        title = next((d for d in soup.find_all('div', class_='div_sectiunePACFULL_titlu')
+                      if d.get_text(' ', strip=True).startswith(prefix)), None)
+        if title is None:
+            return '', '', {}
+        link = title.find('a', href=True)
+        link_id, link_text = '', ''
+        if link:
+            m = re.search(r'id=(\d+)', link['href'])
+            link_id = m.group(1) if m else ''
+            link_text = link.get_text(' ', strip=True)
+        fields = {}
+        for p in title.parent.find_all('p', class_='p_amb'):
+            value = p.find_next_sibling('div', class_='control')
+            if value is not None:
+                fields[p.get_text(' ', strip=True).rstrip(':').strip()] = value.get_text(' ', strip=True)
+        return link_id, link_text, fields
+
+    @staticmethod
+    def _rich_text(soup, element_id: str) -> str:
+        """Epicrisis/recommendations: hidden input holding percent-encoded HTML
+        from the page's rich-text widget, converted to markdown."""
+        raw = extract_value_from_input(soup, element_id=element_id)
+        return html_to_markdown(unquote(raw)).strip() if raw else ''
+
     def parse_data(self, html_content: str, **kwargs) -> HippoData:
+        """Admission record fields, read by element id rather than by table
+        row text — the page is a large form with several same-shaped tables
+        that positional row matching confuses with one another.
+
+        Deliberately not parsed: "Info Transferuri", "Lista examinari si
+        consulturi", companions, billing/co-payment, referral ticket, COVID
+        and penal-code sections — not useful downstream."""
         data = HippoData(status="success", message="")
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
@@ -3118,95 +3171,112 @@ class HippoClientCheckin(HippoClient):
                 logger.warning(data['message'])
                 return data
 
-            rows = soup.find_all('tr')
+            def text(element_id):
+                el = soup.find(id=element_id)
+                return el.get_text(' ', strip=True) if el else ''
 
-            def rt(r):
-                return [c.get_text(' ', strip=True) for c in r.find_all('td')]
+            def put(key, value):
+                if value:
+                    data.store(key, value)
 
-            for i, row in enumerate(rows):
-                cells = rt(row)
-                nc = len(cells)
+            # Patient header
+            patient_id, patient_name, pac = self._header_block(soup, 'Pacient [')
+            put("patient.id", patient_id)
+            put("patient.name", patient_name)
+            cnp = pac.get('CNP', '')
+            put("patient.cnp", cnp)
+            if cnp:
+                parsed = parse_cnp(cnp)
+                if parsed.get("valid"):
+                    data.store("patient.gender", parsed.get("gender"))
+                    data.store("patient.date", parsed.get("birth_date"))
+                    data.store("patient.age", parsed.get("age"))
+            put("patient.allergies", pac.get('Alergii', ''))
+            put("patient.blood_group", pac.get('Gr sange / RH', ''))
+            put("patient.insurance", pac.get('Asigurat', ''))
 
-                # Row 5: "Pacient [ NAME ] CNP ..." + "Prezentare [ id ] Data: ... Urgenta: ... Sectie: ..."
-                if nc >= 1 and cells[0].startswith('Pacient ['):
-                    m = re.search(r'Pacient\s*\[\s*(.*?)\s*\]\s*CNP\s+(\S+)', cells[0])
-                    if m:
-                        data.store("patient.name", m.group(1).strip())
-                        data.store("patient.cnp", m.group(2))
-                        parsed = parse_cnp(m.group(2))
-                        if parsed.get("valid"):
-                            data.store("patient.gender", parsed.get("gender"))
-                            data.store("patient.date", parsed.get("birth_date"))
-                            data.store("patient.age", parsed.get("age"))
-                    if nc >= 2:
-                        m2 = re.search(r'Prezentare\s*\[\s*(\S+)\s*\]\s*Data:\s*(\S+\s+\S+)\s*Urgenta:\s*(\S+)\s*Sect\w*:\s*(\S+)', cells[1])
-                        if m2:
-                            data.store("presentation.id", m2.group(1))
-                            data.store("presentation.date_time", m2.group(2))
-                            data.store("presentation.is_urgent", m2.group(3).upper() == 'DA')
-                            data.store("presentation.section", m2.group(4))
+            # Emergency presentation that led to this admission
+            pres_id, _, pres = self._header_block(soup, 'Prezentare [')
+            put("presentation.id", pres_id)
+            put("presentation.date_time", pres.get('Data', ''))
+            if pres.get('Urgenta'):
+                data.store("presentation.is_urgent", pres['Urgenta'].upper() == 'DA')
+            put("presentation.section", pres.get('Sectie', ''))
+            put("presentation.medic", pres.get('Medic', ''))
 
-                # Row 19: "Tip diagnostic: Cronic Acut Subacut Ore de ventilatie:"
-                elif nc == 1 and cells[0].startswith('Tip diagnostic:'):
-                    tip_raw = cells[0][len('Tip diagnostic:'):].strip()
-                    # Strip the radio-button labels — only keep before "Ore de ventilatie"
-                    tip = re.sub(r'\s*Ore de ventilatie:.*$', '', tip_raw).strip()
-                    data.store("checkin.diagnosis_type", tip)
+            # Discharge, only on already-discharged admissions
+            out_id, _, out = self._header_block(soup, 'Externare [')
+            put("checkout.id", out_id)
+            put("checkout.date_time", out.get('Data', ''))
+            put("checkout.section", out.get('Sectie', ''))
+            put("checkout.medic", out.get('Medic', ''))
 
-                # Row 20: "Diagnostic DRG la internare: CODE desc"
-                elif nc == 1 and cells[0].startswith('Diagnostic DRG la internare:'):
-                    data.store("checkin.diagnosis", cells[0][len('Diagnostic DRG la internare:'):].strip())
+            # General admission data ("Generalitati internare continua/de zi")
+            day_case = extract_value_from_input(soup, element_id='isDayCI')
+            if day_case in ('0', '1'):
+                data.store("checkin.day_case", day_case == '1')
+            put("checkin.number", extract_value_from_input(soup, element_id='Text2'))
+            ci_date = extract_value_from_input(soup, element_id='sCIDate')
+            ci_time = extract_value_from_input(soup, element_id='sCITime')
+            put("checkin.date_time", f"{ci_date} {ci_time}".strip() if ci_date else '')
+            put("checkin.section", self._select_text(soup, 'sSectionCode'))
+            put("checkin.medic", self._select_text(soup, 'iCIMedicID'))
+            put("checkin.on_call_medic", self._select_text(soup, 'MedicGardaID'))
+            put("checkin.type", self._select_text(soup, 'CIType'))
+            put("checkin.criteria", self._select_text(soup, 'strCheckinCriteria'))
+            put("checkin.criteria_a17", self._select_text(soup, 'criteriuA17'))
+            put("checkin.transferred_from", self._select_text(soup, 'strTransferatDeLa'))
+            put("checkin.weight", extract_value_from_input(soup, element_id='strInternmentWeight'))
+            put("checkin.room", extract_value_from_input(soup, element_id='Text5'))
+            put("checkin.bed", extract_value_from_input(soup, element_id='Text6'))
 
-                # Row 21: "Diagnostic la 72H: ..."
-                elif nc == 1 and cells[0].startswith('Diagnostic la 72H:'):
-                    val = cells[0][len('Diagnostic la 72H:'):].strip()
-                    if val:
-                        data.store("checkin.diagnosis_72h", val)
+            # Diagnoses and reason for admission
+            put("checkin.diagnosis_text", text('strCITextDiagnosis'))
+            put("checkin.admission_reason", text('sObs'))
+            put("checkin.diagnosis_type", self._select_text(soup, 'strDiagType'))
+            put("checkin.diagnosis", text('DiagnosisP'))
+            put("checkin.diagnosis_72h", text('DiagnosisH'))
+            secondary = [t.get_text(' ', strip=True)
+                         for t in soup.find_all('textarea', id=re.compile(r'^DiagnosisS\d+$'))]
+            secondary = [s for s in secondary if s]
+            if secondary:
+                data.store_list("checkin.secondary_diagnoses", secondary)
 
-                # Row 22: "Diagnostice secundare" header → next rows with section/regim/de la/pana la
-                elif nc == 1 and cells[0].strip() == 'Diagnostice secundare':
-                    secondary = []
-                    for j in range(i + 1, min(i + 10, len(rows))):
-                        nxt = rt(rows[j])
-                        if len(nxt) >= 1 and nxt[0] in ('Sectia', 'Cod', 'Examen general:', ''):
-                            break
-                        if len(nxt) >= 1 and nxt[0].strip() and not nxt[0].startswith('['):
-                            parts = re.split(r'(?<=[a-zA-Z])(?=[A-Z]\d{2}\.)', nxt[0])
-                            for p in parts:
-                                p = p.strip()
-                                if p and p not in ('Sectia', 'Regim', 'De la', 'Pana la'):
-                                    secondary.append(p)
-                    if secondary:
-                        data.store_list("checkin.secondary_diagnoses", secondary)
+            # Clinical narrative
+            put("checkin.exam_general", text('strGeneralExam'))
+            put("checkin.exam_local", text('strLocalExam'))
+            put("checkin.epicrisis", self._rich_text(soup, 'sEpicrisys'))
+            put("checkin.recommendations", self._rich_text(soup, 'sRecommendations'))
 
-                # Ward transfers: "Cod | Sectie | Medic | Data/Ora | Tip Examinare | Decizie | _"
-                # Skip header rows and lab history rows
-                elif (nc == 7 and cells[0] not in ('Cod', 'Nr.Crt.', 'Laborator', '')
-                      and cells[1] not in ('Sectie', 'Cod cerere', '')
-                      and cells[2] not in ('Medic', 'Data recoltarii', '')):
-                    transfers = data.get("checkin.transfers") or []
-                    transfers.append({
-                        "section": cells[1].strip(),
-                        "medic": cells[2].strip(),
-                        "date_time": cells[3].strip(),
-                        "type": cells[4].strip(),
-                        "decision": cells[5].strip(),
+            # Procedures performed during this admission ("Istoric proceduri").
+            # The collapsed-view row duplicates every cell in one mega-cell, so
+            # only the 6-cell data rows after the column header are read.
+            procedures = []
+            proc_title = next((d for d in soup.find_all('div', class_='div_sectiunePACFULL_titlu')
+                               if d.get_text(' ', strip=True).startswith('Istoric proceduri')), None)
+            if proc_title is not None:
+                for tr in proc_title.parent.find_all('tr'):
+                    cells = [td.get_text(' ', strip=True) for td in tr.find_all('td', recursive=False)]
+                    if len(cells) != 6 or cells[0] == 'Cod examinare' or not cells[1]:
+                        continue
+                    procedures.append({
+                        "code": cells[1],
+                        "name": cells[2],
+                        "quantity": cells[3],
+                        "main": cells[4].upper() == 'DA',
+                        "date_time": cells[5],
                     })
-                    data.store_list("checkin.transfers", transfers)
+            if procedures:
+                data.store_list("checkin.procedures", procedures)
 
-                # Physical exam
-                elif nc == 2 and cells[0] == 'Examen general:':
-                    data.store("checkin.exam_general", cells[1].strip())
-                elif nc == 2 and cells[0] == 'Examen local:':
-                    data.store("checkin.exam_local", cells[1].strip())
-
-            # Epicrisis: hidden input holding percent-encoded HTML (editable rich-text widget).
-            epicrisis_raw = extract_value_from_input(soup, element_id='sEpicrisys')
-            if epicrisis_raw:
-                epicrisis_html = unquote(epicrisis_raw)
-                epicrisis_md = html_to_markdown(epicrisis_html).strip()
-                if epicrisis_md:
-                    data.store("checkin.epicrisis", epicrisis_md)
+            # "Inregistrare actualizata de: X Data / Ora actualizarii: Y"
+            upd = soup.find(string=re.compile(r'Inregistrare actualizata de'))
+            if upd is not None:
+                m = re.search(r'actualizata de:\s*(.*?)\s*Data / Ora actualizarii:\s*(\S+\s+\S+)',
+                              upd.find_parent('p').get_text(' ', strip=True))
+                if m:
+                    data.store("checkin.updated_by", m.group(1))
+                    data.store("checkin.updated_at", m.group(2))
 
             if 'id' in kwargs:
                 data.store("checkin.id", kwargs["id"])
@@ -3243,12 +3313,8 @@ class HippoClientCheckin(HippoClient):
                 }
             )
 
-            # Attending physician from first transfer row or checkin.medic
+            # Attending physician ("Medicul curant").
             medic = parsed_data.get("checkin.medic")
-            if not medic:
-                transfers = parsed_data.get("checkin.transfers") or []
-                if transfers:
-                    medic = transfers[0].get("medic")
             if medic:
                 fhir_encounter["participant"] = [{
                     "type": [{
@@ -3261,19 +3327,18 @@ class HippoClientCheckin(HippoClient):
                     "individual": {"display": medic}
                 }]
 
-            # Admission period — start only (still in progress)
-            checkin_datetime = parsed_data.get("checkin.date_time") or parsed_data.get("presentation.date_time")
+            # Admission period — start only (still in progress). Starts at the
+            # emergency presentation, not the formal ward admission: the
+            # frontend's current-episode boundary uses this start, and imaging
+            # done in the ER before admission belongs to the same episode.
+            checkin_datetime = parsed_data.get("presentation.date_time") or parsed_data.get("checkin.date_time")
             if checkin_datetime:
                 dt = parse_date_time(checkin_datetime)
                 fhir_encounter["period"] = {"start": dt.isoformat() if dt else checkin_datetime}
 
-            # Ward / location from transfers (most recent) or presentation.section
-            section = None
-            transfers = parsed_data.get("checkin.transfers") or []
-            if transfers:
-                section = transfers[-1].get("section")
-            if not section:
-                section = parsed_data.get("presentation.section")
+            # Current ward ("Sectia curenta"); the emergency presentation's
+            # section (e.g. UPU) only if the admission form doesn't name one.
+            section = parsed_data.get("checkin.section") or parsed_data.get("presentation.section")
             if section:
                 fhir_encounter["location"] = [{
                     "location": {"display": section},
@@ -3344,14 +3409,19 @@ class HippoClientCheckin(HippoClient):
                     }]
                 }
 
-            # Notes: epicrisis text (narrative admission summary) first, then physical exam.
+            # Notes (Markdown, shown and fed to the AI prompts as-is): epicrisis
+            # first, unlabeled; then labeled free-text fields.
             notes = []
             if parsed_data.get("checkin.epicrisis"):
                 notes.append({"text": parsed_data.get("checkin.epicrisis")})
-            if parsed_data.get("checkin.exam_general"):
-                notes.append({"text": f"[Exam general] {parsed_data.get('checkin.exam_general')}"})
-            if parsed_data.get("checkin.exam_local"):
-                notes.append({"text": f"[Exam local] {parsed_data.get('checkin.exam_local')}"})
+            for key, label in (("checkin.diagnosis_text", "Diagnosticul de internare"),
+                               ("checkin.admission_reason", "Motivele internării"),
+                               ("checkin.exam_general", "Examen general"),
+                               ("checkin.exam_local", "Examen local")):
+                if parsed_data.get(key):
+                    notes.append({"text": f"**{label}:** {parsed_data.get(key)}"})
+            if parsed_data.get("checkin.recommendations"):
+                notes.append({"text": f"**Recomandări:**\n\n{parsed_data.get('checkin.recommendations')}"})
             if notes:
                 fhir_encounter["note"] = notes
 
