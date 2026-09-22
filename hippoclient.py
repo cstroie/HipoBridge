@@ -4521,7 +4521,7 @@ class HippoClientPresentation(HippoClient):
         checkin_id, record_number, adm = _header_block(soup, 'Internare [')
         if adm:
             data.store("admission.checkin_id", checkin_id or None)
-            data.store("admission.number", record_number or None)
+            data.store("admission.number", record_number.strip('[] ') or None)
             for key, label in (("date_time", "Data"), ("section", "Sectie"), ("medic", "Medic"),
                                ("type", "Tip"), ("criteria", "Criteriu")):
                 data.store(f"admission.{key}", adm.get(label) or None)
