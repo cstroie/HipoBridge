@@ -3111,6 +3111,8 @@ select {
     transition: color var(--transition-fast);
 }
 .timeline-prev-head:hover { color: var(--primary); }
+.timeline-prev-action { color: var(--primary); }
+.timeline-prev-action:hover { color: var(--primary-dark); }
 /* With an AI summary the whole line (heading + italic summary) is clamped to
    three lines until tapped */
 .timeline-prev-text { font-style: italic; }

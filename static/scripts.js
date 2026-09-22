@@ -7099,7 +7099,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (prev.own && !prev.pending) {
             const btn = document.createElement('button');
             btn.type = 'button';
-            btn.className = 'timeline-prev-head';
+            btn.className = 'timeline-prev-head timeline-prev-action';
             btn.textContent = 'Summarize the report';
             btn.addEventListener('click', async e => {
                 e.stopPropagation();
