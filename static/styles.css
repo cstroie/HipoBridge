@@ -3105,6 +3105,16 @@ select {
     text-align: left;
     transition: color var(--transition-fast);
 }
+/* When the button wraps the AI summary, it's the whole line's content —
+   make it block/full-width so the entire clamped area is inside the real
+   clickable element, not just the text's own inline box (the container
+   div still shows a pointer cursor everywhere via the :has() rule below,
+   which would otherwise be misleading dead space around a narrower inline
+   button). */
+.timeline-prev-head:has(.timeline-prev-text) {
+    display: block;
+    width: 100%;
+}
 .timeline-prev-head:hover { color: var(--primary); }
 .timeline-prev-action { color: var(--primary); }
 .timeline-prev-action:hover { color: var(--primary-dark); }
