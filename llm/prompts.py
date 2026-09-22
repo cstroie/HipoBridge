@@ -86,9 +86,9 @@ PROMPT_META = {
     # sentence packing diagnosis + reason for exam + a watch-item, especially
     # once translated, routinely ran past that.
     "pre_exam_oneliner":  ("medical", 160),
-    # 500 -> 700: 4 sections (S/O/A/P) each with several bullets ran past
-    # 500, same truncation pattern as pre_exam_oneliner above.
-    "pre_exam_soap":      ("medical", 700),
+    # 500 -> 700 -> 450: 700 was for open-ended bullet lists; the prompt now
+    # caps each section at 1-4 short bullets.
+    "pre_exam_soap":      ("medical", 450),
     "pre_exam_executive": ("medical", 300),
     # Prompts only — contrast_safety needs a renal-analyte extract (same
     # shape as lab.md's abnormal-rows table, but unconditional on abnormality)
