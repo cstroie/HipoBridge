@@ -3109,6 +3109,17 @@ class HippoClientCheckin(HippoClient):
         super().__init__(service_url=service_url, request=request)
         self.request_url = "/files/checkin.asp?id={id}"
 
+    async def fetch_and_parse(self, *args, **kwargs):
+        """Fetch and parse, evicting the cached page while the admission is
+        still open (no "Externare" block): epicrisis, exams and diagnoses keep
+        being filled in until discharge, and a cached copy would hide them."""
+        parsed_data = await super().fetch_and_parse(*args, **kwargs)
+        if parsed_data.get("status") != "error" and not parsed_data.get("checkout.id"):
+            url = _format_request_url(self.request_url, **kwargs)
+            await self.cache_remove(self.get_full_url(url))
+            logger.debug(f"Evicted open admission from cache: {url}")
+        return parsed_data
+
     @staticmethod
     def _select_text(soup, element_id: str) -> str:
         """Current value of a checkin-page <select>. AJAX-populated selects
