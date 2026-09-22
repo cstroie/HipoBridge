@@ -7081,9 +7081,13 @@ document.addEventListener('DOMContentLoaded', function() {
             const prefix = prev.own ? '' : [when, prev.region].filter(Boolean).join(' · ');
             const btn = document.createElement('button');
             btn.type = 'button';
-            btn.className = 'timeline-prev-head timeline-prev-text';
+            btn.className = 'timeline-prev-head';
             btn.title = 'Open this exam';
-            btn.textContent = prefix ? `${prefix}: ${prev.summary}` : prev.summary;
+            if (prefix) btn.append(`${prefix}: `);
+            const em = document.createElement('em');
+            em.className = 'timeline-prev-text';
+            em.textContent = prev.summary;
+            btn.appendChild(em);
             btn.addEventListener('click', openModal);
             line.appendChild(btn);
             line.classList.remove('expanded');
