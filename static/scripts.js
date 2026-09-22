@@ -7094,6 +7094,30 @@ document.addEventListener('DOMContentLoaded', function() {
             line.hidden = false;
             return;
         }
+        // Own report, no summary yet: a single "Summarize the report" button
+        // instead of a separate "Report" heading + "Summarize" link.
+        if (prev.own && !prev.pending) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'timeline-prev-head';
+            btn.textContent = 'Summarize the report';
+            btn.addEventListener('click', async e => {
+                e.stopPropagation();
+                btn.disabled = true;
+                btn.textContent = 'Summarizing…';
+                try {
+                    prev.summary = await aiSummarize('imaging', prev.text);
+                    _applyPrevLine(el, prev);
+                } catch (err) {
+                    btn.disabled = false;
+                    btn.textContent = 'Summarize the report';
+                    showToast(`AI summary failed: ${err.message || err}`, 'error');
+                }
+            });
+            line.appendChild(btn);
+            line.hidden = false;
+            return;
+        }
         const head = document.createElement('button');
         head.type = 'button';
         head.className = 'timeline-prev-head';
