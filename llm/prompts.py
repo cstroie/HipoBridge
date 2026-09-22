@@ -80,7 +80,8 @@ PROMPT_META = {
     # synthesize instead — 320 gives those a safety margin against a raw
     # truncation cutoff, even though the model may still need this discussed.
     "imaging_trend": ("medical", 320),
-    "lab":             ("medical", 600),
+    # 600 -> 350: prompt now caps output at ~80 words; headroom for Romanian.
+    "lab":             ("medical", 350),
     "pre_exam_brief":  ("medical", 450),
     # 80 -> 160: real output got cut off mid-sentence at 80 — a single dense
     # sentence packing diagnosis + reason for exam + a watch-item, especially
@@ -199,7 +200,7 @@ def _language_directive(language: str) -> str:
 # Separate from DATE_AWARE_KINDS even though currently overlapping — one is
 # about date context, the other about transport; independently editable.
 # imaging (40 tokens) is excluded — too short for streaming to buy anything.
-# lab (600 tokens) is included — long enough that perceived latency matters.
+# lab (350 tokens) is included — long enough that perceived latency matters.
 # imaging_trend (Impression-only conclusion, 320 tokens — see PROMPT_META)
 # is included too: still ~1min+ on this backend, so streaming still helps.
 # pre_exam_oneliner/contrast_safety are included so every AI-tab button
