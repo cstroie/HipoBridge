@@ -89,7 +89,8 @@ PROMPT_META = {
     # 500 -> 700 -> 450: 700 was for open-ended bullet lists; the prompt now
     # caps each section at 1-4 short bullets.
     "pre_exam_soap":      ("medical", 450),
-    "pre_exam_executive": ("medical", 300),
+    # 300 -> 400: Romanian output got cut off mid-bullet at 300.
+    "pre_exam_executive": ("medical", 400),
     # Prompts only — contrast_safety needs a renal-analyte extract (same
     # shape as lab.md's abnormal-rows table, but unconditional on abnormality)
     # alongside the existing clinical-text feed. Single-line verdict, sized
