@@ -1668,11 +1668,6 @@ select {
     width: 64px;
     height: 64px;
 }
-.modal-mod-circle svg {
-    width: 52px;
-    height: 52px;
-    fill: currentColor;
-}
 .timeline-mod-avatar svg {
     width: 64px;
     height: 64px;
