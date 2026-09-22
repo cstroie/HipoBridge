@@ -4128,6 +4128,28 @@ dialog.report-editor-modal article > section {
 .action-group > .btn-cancel-request {
     border-left: 1px solid var(--border);
 }
+/* Edit shares the pill too, but keeps its flat text look (not the filled
+   standalone-button style .btn-edit-report otherwise has) so the three
+   segments read as one toolbar. */
+.action-group > .btn-edit-report {
+    border: none;
+    border-left: 1px solid var(--border);
+    border-radius: 0;
+    background: none;
+    color: var(--primary);
+}
+.action-group > .btn-edit-report:hover {
+    background: var(--primary);
+    color: var(--on-accent);
+}
+.action-group > .btn-edit-report:disabled {
+    background: none;
+    color: var(--muted);
+}
+.action-group > .btn-edit-report:disabled:hover {
+    background: none;
+    color: var(--muted);
+}
 
 .validate-toggles {
     display: flex;
