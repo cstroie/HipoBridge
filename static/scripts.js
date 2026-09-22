@@ -1797,7 +1797,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const clinicalText = relevantClinical
             || (fullClinical ? 'No contrast-relevant mentions found in clinical record.' : 'No clinical record available.');
         const clinicalSection = `### Clinical record\n${clinicalText}`;
-        return header + renalSection + '\n\n' + clinicalSection;
+        const recordLines = [['Allergies', patientData?.allergies], ['Warnings', patientData?.attention]]
+            .filter(([, text]) => text).map(([label, text]) => `${label}: ${text}`);
+        const recordSection = recordLines.length ? `\n\n### Patient record\n${recordLines.join('\n')}` : '';
+        return header + renalSection + '\n\n' + clinicalSection + recordSection;
     }
 
     // Toggle the availability of the singleton AI buttons when patient
@@ -2665,6 +2668,21 @@ document.addEventListener('DOMContentLoaded', function() {
             else if (weightWrap) weightWrap.hidden = true;
             if (height && heightWrap) { document.getElementById('reportHeight').textContent = height + ' cm'; heightWrap.hidden = false; }
             else if (heightWrap) heightWrap.hidden = true;
+            const bloodWrap = document.getElementById('reportBloodGroupWrap');
+            if (bloodWrap) {
+                document.getElementById('reportBloodGroup').textContent = patientData.blood_group || '';
+                bloodWrap.hidden = !patientData.blood_group;
+            }
+            const allergiesEl = document.getElementById('reportAllergies');
+            if (allergiesEl) {
+                allergiesEl.textContent = patientData.allergies || 'Not documented';
+                allergiesEl.classList.toggle('info-alert', !!patientData.allergies);
+            }
+            const attentionWrap = document.getElementById('reportAttentionWrap');
+            if (attentionWrap) {
+                document.getElementById('reportAttention').textContent = patientData.attention || '';
+                attentionWrap.hidden = !patientData.attention;
+            }
 
             // ── §2 + §4 Encounters (parallel with analyses) ──────────────
             const analysesDates = (analysesData?.requests || []).map(e => e.date_time).filter(Boolean);
@@ -3145,7 +3163,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             const timelineMd = buildTimelineMarkdown(encounters);
 
-            const combined = patientMarkdown + admissionsMd + labsMd + imagingMd + timelineMd;
+            const combined = patientMarkdown + patientRecordMarkdown(patientData) + admissionsMd + labsMd + imagingMd + timelineMd;
             if (markdownStore) markdownStore.dataset.markdown = combined;
 
             // Structured payload for the AI tab: imaging reports are already
@@ -3190,6 +3208,19 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    // Blood group and free-text alerts from the patient record, for the
+    // Report tab's Copy markdown ('' when none is documented).
+    function patientRecordMarkdown(patientData) {
+        const lines = [
+            ['Blood group', patientData.blood_group],
+            ['Allergies', patientData.allergies],
+            ['Warnings', patientData.attention],
+            ['Observations', patientData.observations],
+            ['Medical history', patientData.anamnesis],
+        ].filter(([, text]) => text).map(([label, text]) => `**${label}:** ${text}`);
+        return lines.length ? `## Patient Record\n\n${lines.join('  \n')}\n\n` : '';
+    }
+
     async function generatePatientMarkdown(patientData, primaryDiagnosis) {
         log('Generating patient report markdown');
         const markdown = `# PATIENT CLINICAL REPORT\n\n` + patientContextHeader(patientData, primaryDiagnosis);
@@ -3569,159 +3600,66 @@ document.addEventListener('DOMContentLoaded', function() {
         log('Patient data display completed');
     }
 
-    async function loadHospitalisationHistory(patientData) {
+    // Built from the patient page's own history table (patientData.history):
+    // one row per emergency presentation or admission, no per-record fetches.
+    // Presentations carry no reason/outcome there — a later step can fill
+    // those in lazily from /api/presentation.
+    function loadHospitalisationHistory(patientData) {
         if (!elements.historyList) return;
         elements.historyList.innerHTML = '';
-        if (elements.historyEmpty) elements.historyEmpty.hidden = true;
+        if (elements.historyLoading) elements.historyLoading.hidden = true;
 
-        const checkoutIds = extractCheckoutIds(patientData);
-        const checkoutIdSet = new Set(checkoutIds);
-        // Same id can appear in both lists once discharged — checkout wins, so only
-        // fetch as "checkin" the ids that are still active (not yet checked out).
-        const checkinIds = extractCheckinIds(patientData).filter(id => !checkoutIdSet.has(id));
-        const presentationIds = extractPresentationIds(patientData);
+        const rows = (patientData.history || [])
+            .map(r => ({ ...r, startIso: hipocrateDateTimeToIso(r.start) || '', endIso: hipocrateDateTimeToIso(r.end) || '' }))
+            .sort((a, b) => b.startIso.localeCompare(a.startIso));
+        if (elements.historyEmpty) elements.historyEmpty.hidden = rows.length > 0;
+        if (!rows.length) return;
 
-        if (checkoutIds.length === 0 && checkinIds.length === 0 && presentationIds.length === 0) {
-            if (elements.historyEmpty) elements.historyEmpty.hidden = false;
-            return;
+        // Diagnosis badge from the most recent admission if not already set
+        if (elements.patientDiagnosis && elements.patientDiagnosis.hidden) {
+            const latestDx = rows.find(r => r.kind !== 'presentation' && r.diagnosis)?.diagnosis;
+            if (latestDx) {
+                elements.patientDiagnosis.textContent = latestDx;
+                elements.patientDiagnosis.hidden = false;
+            }
         }
 
-        if (elements.historyLoading) elements.historyLoading.hidden = false;
-        try {
-            // A null result means either "not found" (404 — a normal, silent
-            // outcome; see fetchEncounterDataForCheckout etc.) or a genuine
-            // fetch failure. Only the latter should count toward the warning
-            // toast below, so track it explicitly instead of inferring it
-            // from missing results.
-            let failedCount = 0;
-            const [encounters, activeEncounters, presentations] = await Promise.all([
-                limitedMap(checkoutIds, MAX_CONCURRENT_REQUESTS,
-                    async id => { try { return await fetchEncounterDataForCheckout(id); } catch (_) { failedCount++; return null; } }),
-                limitedMap(checkinIds, MAX_CONCURRENT_REQUESTS,
-                    async id => { try { return await fetchEncounterDataForCheckin(id); } catch (_) { failedCount++; return null; } }),
-                limitedMap(presentationIds, MAX_CONCURRENT_REQUESTS,
-                    async id => { try { return await fetchPresentation(id); } catch (_) { failedCount++; return null; } })
-            ]);
+        const tmpl = document.getElementById('history-item-template');
+        rows.forEach((r, idx) => {
+            const li = tmpl.content.cloneNode(true).querySelector('.history-item');
+            const inpatient = r.kind !== 'presentation';
+            li.dataset.type = inpatient ? 'inpatient' : 'outpatient';
+            const nightsEl = li.querySelector('.history-nights');
+            const typeEl = li.querySelector('.history-type');
 
-            if (failedCount > 0) {
-                showToast(`Failed to load ${failedCount} history record${failedCount > 1 ? 's' : ''}`, 'warning');
+            if (inpatient) {
+                const start = r.startIso ? formatDate(r.startIso) : '';
+                const end = r.endIso ? formatDate(r.endIso) : 'present';
+                li.querySelector('.history-period').textContent = start ? `${start} → ${end}` : 'Unknown period';
+                const nights = r.startIso && r.endIso ? Math.round((new Date(r.endIso) - new Date(r.startIso)) / 86400000) : 0;
+                if (nights > 0) nightsEl.textContent = `${nights}d`;
+                else nightsEl.hidden = true;
+                if (r.kind === 'day_admission') { typeEl.textContent = 'Day admission'; typeEl.hidden = false; }
+                li.querySelector('.history-diagnosis').textContent = r.diagnosis || 'No diagnosis recorded';
+                li.querySelector('.history-load').addEventListener('click', () => switchTab('epicrisis'));
+            } else {
+                const period = [r.startIso && formatDate(r.startIso), r.section_in].filter(Boolean).join(' · ');
+                li.querySelector('.history-period').textContent = period || 'Unknown date';
+                nightsEl.hidden = true;
+                typeEl.textContent = 'Outpatient';
+                typeEl.hidden = false;
+                li.querySelector('.history-diagnosis').textContent = r.medic_in || 'Presentation';
+                li.querySelector('.history-load').addEventListener('click', () => switchTab('imaging'));
             }
 
-            // Build a unified list with type tags
-            const encItems = encounters.filter(Boolean).map(enc => ({
-                type: 'inpatient',
-                enc,
-                sortKey: enc.end || enc.start || '',
-                start: enc.start || '',
-                end: enc.end || '',
-                label: extractDiagnosisText(enc) || 'No diagnosis recorded',
-                section: enc.wards?.[0] || '',
-                medic: enc.medic || '',
-                extra: '',
-            }));
-
-            // Active admissions (checked in, not yet discharged) — no end date yet.
-            const activeItems = activeEncounters.filter(Boolean).map(enc => ({
-                type: 'inpatient',
-                enc,
-                sortKey: enc.start || '',
-                start: enc.start || '',
-                end: '',
-                label: extractDiagnosisText(enc) || 'No diagnosis recorded',
-                section: enc.wards?.[0] || '',
-                medic: enc.medic || '',
-                extra: '',
-            }));
-
-            const presItems = presentations.filter(Boolean).map(enc => {
-                const start = enc.start || '';
-                const section = enc.wards?.[0] || '';
-                const reason = enc.reason || '';
-                const notes = enc.notes || [];
-                const decision = notes[0] || '';
-                const consultType = notes[1] || '';
-                const label = reason || consultType || 'Outpatient visit';
-                return {
-                    type: 'outpatient',
-                    enc,
-                    sortKey: start,
-                    start: start ? formatDate(start) : '',
-                    end: '',
-                    label,
-                    section,
-                    medic: enc.medic || '',
-                    extra: decision,
-                };
-            });
-
-            const items = [...encItems, ...activeItems, ...presItems]
-                .sort((a, b) => b.sortKey.localeCompare(a.sortKey));
-
-            if (items.length === 0) {
-                if (elements.historyEmpty) elements.historyEmpty.hidden = false;
-                return;
+            if (idx === rows.length - 1) {
+                const line = li.querySelector('.history-line');
+                if (line) line.hidden = true;
             }
-
-            // Populate diagnosis badge from most recent inpatient discharge if not already set
-            if (elements.patientDiagnosis && elements.patientDiagnosis.hidden) {
-                const latest = items.find(i => i.type === 'inpatient');
-                const latestDx = latest && extractDiagnosisText(latest.enc);
-                if (latestDx) {
-                    elements.patientDiagnosis.textContent = latestDx;
-                    elements.patientDiagnosis.hidden = false;
-                }
-            }
-
-            const tmpl = document.getElementById('history-item-template');
-            items.forEach(({ type, enc, start, end, label, section, medic, extra }, idx) => {
-                const li = tmpl.content.cloneNode(true).querySelector('.history-item');
-                li.dataset.type = type;
-
-                if (type === 'inpatient') {
-                    const period = [start && formatDate(start), end && formatDate(end)]
-                        .filter(Boolean).join(' → ');
-                    li.querySelector('.history-period').textContent = period || 'Unknown period';
-
-                    const nightsEl = li.querySelector('.history-nights');
-                    if (nightsEl && start && end) {
-                        const ms = new Date(end) - new Date(start);
-                        const nights = Math.round(ms / 86400000);
-                        if (nights > 0) nightsEl.textContent = `${nights}d`;
-                        else nightsEl.hidden = true;
-                    } else if (nightsEl) nightsEl.hidden = true;
-
-                    li.querySelector('.history-load').addEventListener('click', () => switchTab('epicrisis'));
-                } else {
-                    // Outpatient presentation: show date + section
-                    const period = [start, section].filter(Boolean).join(' · ');
-                    li.querySelector('.history-period').textContent = period || 'Unknown date';
-
-                    const nightsEl = li.querySelector('.history-nights');
-                    if (nightsEl) nightsEl.hidden = true;
-
-                    const typeEl = li.querySelector('.history-type');
-                    if (typeEl) { typeEl.textContent = extra || 'Outpatient'; typeEl.hidden = false; }
-
-                    li.querySelector('.history-load').addEventListener('click', () => switchTab('imaging'));
-                }
-
-                li.querySelector('.history-diagnosis').textContent = label;
-
-                if (idx === items.length - 1) {
-                    const line = li.querySelector('.history-line');
-                    if (line) line.hidden = true;
-                }
-
-                elements.historyList.appendChild(li);
-            });
-        } catch (err) {
-            log('Failed to load history:', err);
-            if (elements.historyEmpty) elements.historyEmpty.hidden = false;
-        } finally {
-            if (elements.historyLoading) elements.historyLoading.hidden = true;
-        }
+            elements.historyList.appendChild(li);
+        });
     }
-    
+
     // Enhanced patient basic info display
     function displayPatientBasicInfo(patientData) {
         log('Displaying patient basic info:', patientData);
@@ -3798,6 +3736,22 @@ document.addEventListener('DOMContentLoaded', function() {
             const display = district && !text.includes(district) ? `${text}, ${district}` : text;
             elements.patientAddress.textContent = display || '—';
         }
+
+        // Medical information (patient record): blood group + free-text alerts
+        const setText = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+        setText('patientBloodGroup', patientData.blood_group || '—');
+        const allergiesEl = document.getElementById('patientAllergies');
+        if (allergiesEl) {
+            allergiesEl.textContent = patientData.allergies || 'Not documented';
+            allergiesEl.classList.toggle('info-alert', !!patientData.allergies);
+        }
+        [['patientAttention', patientData.attention],
+         ['patientObservations', patientData.observations],
+         ['patientAnamnesis', patientData.anamnesis]].forEach(([id, text]) => {
+            setText(id, text || '');
+            const wrap = document.getElementById(`${id}Wrap`);
+            if (wrap) wrap.hidden = !text;
+        });
         log('CNP:', cnp, 'Phone:', contactInfo.phone, 'Email:', contactInfo.email);
 
         // QR codes
@@ -3856,6 +3810,7 @@ document.addEventListener('DOMContentLoaded', function() {
             presentation_ids: d?.presentation || [],
             checkin_ids: d?.checkin || [],
             checkout_ids: d?.checkout || [],
+            history: [].concat(d?.history || []),
         };
     }
 
@@ -5650,19 +5605,6 @@ document.addEventListener('DOMContentLoaded', function() {
     function extractCheckoutIds(patientData) { return _idList(patientData.checkout_ids); }
     function extractCheckinIds(patientData) { return _idList(patientData.checkin_ids); }
     function extractPresentationIds(patientData) { return _idList(patientData.presentation_ids); }
-
-    async function fetchPresentation(id) {
-        if (cache.encounters[id]) return cache.encounters[id];
-        const response = await apiFetch(`/api/presentation/${id}`);
-        // 404 means this presentation simply isn't viewable via this scrape path
-        // (e.g. it became an inpatient admission) — a normal empty state, not a failure.
-        if (response.status === 404) return null;
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data = (await response.json()).encounter || null;
-        if (!data) return null;
-        cachePut(cache.encounters, id, data);
-        return data;
-    }
 
     // Some scraped epicrisis text repeats a whole paragraph verbatim (e.g. a
     // paste-over during editing at the source, or the same note appearing

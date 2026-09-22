@@ -1048,6 +1048,23 @@ class HippoClient:
 
 
 
+def _select_current(soup, element_id: str) -> str:
+    """Current value of a Hipocrate form <select>. AJAX-populated selects carry
+    it in a `vs` attribute matching their (often single, unselected) option;
+    static ones mark it with `selected`. Never falls back to the first option,
+    unlike extract_selected_from_dropdown (whose fallback other scrapers rely on)."""
+    el = soup.find('select', id=element_id)
+    if not el:
+        return ''
+    vs = el.get('vs')
+    option = None
+    if vs is not None:
+        option = next((o for o in el.find_all('option') if o.get('value') == vs), None)
+    if option is None:
+        option = el.find('option', selected=True)
+    return option.get_text(' ', strip=True) if option else ''
+
+
 class HippoClientPatient(HippoClient):
     """Specialized client for patient related operations in the Hipocrate medical system.
 
@@ -1097,13 +1114,19 @@ class HippoClientPatient(HippoClient):
             data.store("patient.observations", extract_text_from_element(soup, element_id="strObs"))
             data.store("patient.anamnesis", extract_text_from_element(soup, element_id="strAnamneza"))
             data.store("patient.mcp", extract_value_from_input(soup, element_id="strmcp"))
-            city = extract_selected_from_dropdown(soup, element_id='strDomLegal_LocId')
+            city = _select_current(soup, 'strDomLegal_LocId')
             street = extract_value_from_input(soup, element_id='strDomLegal_strada')
-            county = extract_selected_from_dropdown(soup, element_id='strDomLegal_JudId')
+            county = _select_current(soup, 'strDomLegal_JudId')
             address_parts = [p for p in [street, city] if p]
             data.store("patient.address", ", ".join(address_parts) if address_parts else None)
             data.store("patient.city", city)
             data.store("patient.county", county)
+
+            # "Info transfuzii": blood group + Rh, e.g. "A II Rh pozitiv"
+            blood_group = _select_current(soup, 'strGrupaSangeId')
+            rh = _select_current(soup, 'strRHId')
+            if blood_group or rh:
+                data.store("patient.blood_group", " ".join(p for p in (blood_group, f"Rh {rh}" if rh else "") if p))
 
             if data.get("patient.cnp"):
                 parsed_cnp = parse_cnp(data.get("patient.cnp"))
@@ -1111,6 +1134,14 @@ class HippoClientPatient(HippoClient):
                 if parsed_cnp.get("valid"):
                     data.store("patient.sex", parsed_cnp.get("gender", "unknown"))
                     data.store("patient.birth_date", parsed_cnp.get("birth_date", ""))
+
+            # Fallback for patients without a valid CNP (e.g. foreign nationals)
+            if not data.get("patient.sex"):
+                sex = _select_current(soup, 'strSexId').lower()
+                if sex.startswith('masc'):
+                    data.store("patient.sex", "male")
+                elif sex.startswith('fem'):
+                    data.store("patient.sex", "female")
 
             # Fallback: Hipocrate stores birth date as DD/MM/YYYY in strDataNastere
             if not data.get("patient.birth_date"):
@@ -1126,12 +1157,68 @@ class HippoClientPatient(HippoClient):
             data.store_list("checkin", extract_ids_from_links(soup, r'../files/checkin\.asp\?id=(\d+)'))
             data.store_list("checkout", extract_ids_from_links(soup, r'../files/checkout\.asp\?id=(\d+)'))
 
+            history = self._parse_history(soup)
+            if history:
+                data.store_list("history", history)
+
             return data
 
         except Exception as e:
             logger.error(f"Error parsing patient data: {e}")
             data.set_error(str(e))
             return data
+
+    @staticmethod
+    def _parse_history(soup) -> List[Dict[str, Any]]:
+        """The "Istoricul pacientului in spital" table: one row per emergency
+        presentation or admission (an admission row also links the
+        presentation that led to it). Paired columns hold "entry - exit"."""
+        title = next((d for d in soup.find_all('div', class_=re.compile(r'_titlu$'))
+                      if 'Istoricul pacientului in spital' in d.get_text(' ', strip=True)), None)
+        if title is None:
+            return []
+
+        def pair(text):
+            parts = [p.strip() for p in text.split(' - ', 1)]
+            return (parts[0], parts[1] if len(parts) > 1 else '')
+
+        rows = []
+        for tr in title.parent.find_all('tr'):
+            tds = tr.find_all('td', recursive=False)
+            if len(tds) != 8:
+                continue
+            cells = [td.get_text(' ', strip=True) for td in tds]
+            type_m = re.match(r'([^(]+?)\s*(?:\(\s*(\w+)\s*:\s*(\S+?)\s*\))?$', cells[1])
+            type_label = type_m.group(1).strip() if type_m else cells[1]
+            if type_label.startswith('Spitalizare de zi'):
+                kind = 'day_admission'
+            elif type_label.startswith('Spitalizare'):
+                kind = 'admission'
+            elif type_label.startswith('Prezentare'):
+                kind = 'presentation'
+            else:
+                continue  # header rows
+            start, end = pair(cells[2])
+            section_in, section_out = pair(cells[3])
+            medic_in, medic_out = pair(cells[4])
+            link_id = lambda pattern: next((m.group(1) for a in tr.find_all('a', href=True)
+                                            if (m := re.search(pattern, a['href']))), '')
+            rows.append({
+                "kind": kind,
+                "type": type_label,
+                "record": f"{type_m.group(2)} {type_m.group(3)}" if type_m and type_m.group(2) else '',
+                "registry": '' if cells[0].startswith('Fara') else cells[0],
+                "start": start,
+                "end": end,
+                "section_in": section_in,
+                "section_out": section_out,
+                "medic_in": medic_in,
+                "medic_out": medic_out,
+                "diagnosis": cells[5],
+                "presentation_id": link_id(r'presentation\.asp\?id=(\d+)'),
+                "checkin_id": link_id(r'checkin\.asp\?id=(\d+)'),
+            })
+        return rows
 
     def fhir_response(self, parsed_data: HippoData, **kwargs) -> Union[FHIRPatient, FHIROperationOutcome]:
         """Convert parsed patient HippoData to a FHIR Patient resource."""
@@ -3105,24 +3192,6 @@ class HippoClientCheckin(HippoClient):
         return parsed_data
 
     @staticmethod
-    def _select_text(soup, element_id: str) -> str:
-        """Current value of a checkin-page <select>. AJAX-populated selects
-        (section, physician, ...) carry it in a `vs` attribute matching their
-        single, unselected option; static ones mark it with `selected`. Never
-        falls back to the first option, unlike extract_selected_from_dropdown
-        (whose first-option fallback other scrapers rely on)."""
-        el = soup.find('select', id=element_id)
-        if not el:
-            return ''
-        vs = el.get('vs')
-        option = None
-        if vs is not None:
-            option = next((o for o in el.find_all('option') if o.get('value') == vs), None)
-        if option is None:
-            option = el.find('option', selected=True)
-        return option.get_text(' ', strip=True) if option else ''
-
-    @staticmethod
     def _header_block(soup, prefix: str) -> Tuple[str, str, Dict[str, str]]:
         """The read-only "Pacient [..]" / "Prezentare [..]" / "Externare [..]"
         header blocks: (linked id, link text, {label: value})."""
@@ -3214,13 +3283,13 @@ class HippoClientCheckin(HippoClient):
             ci_date = extract_value_from_input(soup, element_id='sCIDate')
             ci_time = extract_value_from_input(soup, element_id='sCITime')
             put("checkin.date_time", f"{ci_date} {ci_time}".strip() if ci_date else '')
-            put("checkin.section", self._select_text(soup, 'sSectionCode'))
-            put("checkin.medic", self._select_text(soup, 'iCIMedicID'))
-            put("checkin.on_call_medic", self._select_text(soup, 'MedicGardaID'))
-            put("checkin.type", self._select_text(soup, 'CIType'))
-            put("checkin.criteria", self._select_text(soup, 'strCheckinCriteria'))
-            put("checkin.criteria_a17", self._select_text(soup, 'criteriuA17'))
-            put("checkin.transferred_from", self._select_text(soup, 'strTransferatDeLa'))
+            put("checkin.section", _select_current(soup, 'sSectionCode'))
+            put("checkin.medic", _select_current(soup, 'iCIMedicID'))
+            put("checkin.on_call_medic", _select_current(soup, 'MedicGardaID'))
+            put("checkin.type", _select_current(soup, 'CIType'))
+            put("checkin.criteria", _select_current(soup, 'strCheckinCriteria'))
+            put("checkin.criteria_a17", _select_current(soup, 'criteriuA17'))
+            put("checkin.transferred_from", _select_current(soup, 'strTransferatDeLa'))
             put("checkin.weight", extract_value_from_input(soup, element_id='strInternmentWeight'))
             put("checkin.room", extract_value_from_input(soup, element_id='Text5'))
             put("checkin.bed", extract_value_from_input(soup, element_id='Text6'))
@@ -3228,7 +3297,7 @@ class HippoClientCheckin(HippoClient):
             # Diagnoses and reason for admission
             put("checkin.diagnosis_text", text('strCITextDiagnosis'))
             put("checkin.admission_reason", text('sObs'))
-            put("checkin.diagnosis_type", self._select_text(soup, 'strDiagType'))
+            put("checkin.diagnosis_type", _select_current(soup, 'strDiagType'))
             put("checkin.diagnosis", text('DiagnosisP'))
             put("checkin.diagnosis_72h", text('DiagnosisH'))
             secondary = [t.get_text(' ', strip=True)

@@ -223,6 +223,34 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             </dl>
                         </section>
 
+                        <!-- Medical information from the patient record (Hipocrate
+                             patient page): blood group and the free-text alerts -->
+                        <section class="patient-info-panel">
+                            <h2 class="panel-heading">Medical Information</h2>
+                            <dl class="info-grid">
+                                <div class="info-cell">
+                                    <dt><i class="fas fa-heartbeat" aria-hidden="true"></i> Blood Group</dt>
+                                    <dd id="patientBloodGroup">—</dd>
+                                </div>
+                                <div class="info-cell info-cell-wide">
+                                    <dt><i class="fas fa-exclamation-triangle" aria-hidden="true"></i> Allergies</dt>
+                                    <dd id="patientAllergies">Not documented</dd>
+                                </div>
+                                <div class="info-cell info-cell-wide" id="patientAttentionWrap" hidden>
+                                    <dt><i class="fas fa-exclamation-circle" aria-hidden="true"></i> Warnings</dt>
+                                    <dd id="patientAttention"></dd>
+                                </div>
+                                <div class="info-cell info-cell-wide" id="patientObservationsWrap" hidden>
+                                    <dt><i class="fas fa-sticky-note" aria-hidden="true"></i> Observations</dt>
+                                    <dd id="patientObservations"></dd>
+                                </div>
+                                <div class="info-cell info-cell-wide" id="patientAnamnesisWrap" hidden>
+                                    <dt><i class="fas fa-notes-medical" aria-hidden="true"></i> Medical History</dt>
+                                    <dd id="patientAnamnesis"></dd>
+                                </div>
+                            </dl>
+                        </section>
+
                         <!-- AI executive summary — reuses the 'report' AI kind/cache
                              (same text, same server-side cache key) as the Report tab's
                              own AI button, so generating it in either place fills both. -->
@@ -408,6 +436,15 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                                 <div><span class="report-field-label">Patient ID</span><div class="report-field-mono" id="reportPatientIdWrap"></div></div>
                                 <div id="reportWeightWrap" hidden><span class="report-field-label">Weight</span><div class="report-field-value" id="reportWeight"></div></div>
                                 <div id="reportHeightWrap" hidden><span class="report-field-label">Height</span><div class="report-field-value" id="reportHeight"></div></div>
+                                <div id="reportBloodGroupWrap" hidden><span class="report-field-label">Blood Group</span><div class="report-field-value" id="reportBloodGroup"></div></div>
+                            </div>
+                            <div class="report-diagnosis-block" id="reportAllergiesWrap">
+                                <span class="report-field-label">Allergies</span>
+                                <div class="report-field-value" id="reportAllergies"></div>
+                            </div>
+                            <div class="report-diagnosis-block" id="reportAttentionWrap" hidden>
+                                <span class="report-field-label">Warnings</span>
+                                <div class="report-field-value" id="reportAttention"></div>
                             </div>
                             <div class="report-diagnosis-block">
                                 <span class="report-field-label">Primary Diagnosis</span>

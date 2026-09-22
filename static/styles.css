@@ -1106,6 +1106,16 @@ small {
     word-break: break-word;
 }
 .info-cell dd#patientCnp { font-family: 'JetBrains Mono', monospace; }
+/* Free-text patient-record fields keep their line breaks; documented
+   allergies stand out (radiologists check them before contrast). */
+#patientAllergies, #patientAttention, #patientObservations, #patientAnamnesis,
+#reportAllergies, #reportAttention {
+    white-space: pre-line;
+}
+.info-alert {
+    color: var(--urgent);
+    font-weight: 700;
+}
 .info-cell dd#patientCnp.cnp-invalid {
     text-decoration: line-through;
     text-decoration-color: var(--urgent);
