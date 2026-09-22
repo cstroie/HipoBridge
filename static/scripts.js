@@ -3225,8 +3225,12 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error(`Error fetching encounter data for checkin ${checkinId}:`, response.status);
             throw new Error(`HTTP ${response.status}`);
         }
-        const encounterData = (await response.json()).encounter || null;
-        if (!encounterData) return null;
+        const json = await response.json();
+        if (!json.encounter) return null;
+        // The raw admission-form fields (section, attending, free-text
+        // diagnosis, exams, epicrisis...) and, once discharged, the linked
+        // checkout id — used by the epicrisis cards.
+        const encounterData = { ...json.encounter, checkin: json.checkin || null, checkoutRef: json.checkout?.id || null };
         cachePut(cache.encounters, checkinId, encounterData);
         log(`Encounter data fetched successfully for checkin ${checkinId}:`, encounterData);
         return encounterData;
@@ -5637,33 +5641,6 @@ document.addEventListener('DOMContentLoaded', function() {
         return /[a-zA-ZÀ-žА-я0-9]/.test(text || '');
     }
 
-    // 72-hour (revised) diagnosis and secondary-diagnosis/comorbidity list from
-    // a checkin encounter summary (`working`, `secondary`) — see
-    // _encounter_summary() in hippobridge.py.
-    function extract72hDiagnosisText(enc) {
-        return enc.working || null;
-    }
-    function extractSecondaryDiagnoses(enc) {
-        return enc.secondary || [];
-    }
-
-    // Diagnosis + exam-note text for a checkin encounter, used as the display
-    // body when there is no epicrisis text yet (ongoing admission — epicrisis
-    // is normally only filled in near/at discharge).
-    function buildCheckinBody(enc) {
-        const parts = [];
-        const dx = extractDiagnosisText(enc);
-        if (dx) parts.push(dx);
-        const dx72h = extract72hDiagnosisText(enc);
-        if (dx72h) parts.push(`**72h diagnosis:** ${dx72h}`);
-        const secondary = extractSecondaryDiagnoses(enc);
-        if (secondary.length) parts.push(`**Secondary diagnoses:** ${secondary.join(', ')}`);
-        (enc.notes || []).forEach(text => {
-            if (text && text.trim()) parts.push(text.trim());
-        });
-        return parts.join('\n\n');
-    }
-
     async function loadAndDisplayEpicrisis(patientData) {
         // Captured before any await: if a slower in-flight call for a previous
         // patient resolves after clearResults() has already moved on to a new
@@ -5727,11 +5704,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 (!latestCheckoutEnd || (item.enc.start || '') > latestCheckoutEnd))
             .sort((a, b) => (b.enc.start || '').localeCompare(a.enc.start || ''))[0];
 
-        // Ongoing admission always shown first, ahead of past discharges — with
-        // diagnosis/exam text as a fallback body when epicrisis hasn't been
-        // written yet (it's normally only filled in near/at discharge).
+        // Ongoing admission always shown first, ahead of past discharges.
         if (activeEnc) {
-            valid.unshift({ enc: activeEnc.enc, checkoutId: activeEnc.checkinId, active: true, fallbackBody: buildCheckinBody(activeEnc.enc) });
+            valid.unshift({ enc: activeEnc.enc, checkoutId: activeEnc.checkinId, active: true });
         }
 
         if (myGeneration !== dataGeneration) return;
@@ -5752,20 +5727,28 @@ document.addEventListener('DOMContentLoaded', function() {
             eyebrowEl.textContent = `Epicrisis · ${patientNameEl.textContent}`;
         }
 
+        // Admission-form fields (from /api/checkin) for each discharge, matched
+        // through the checkout id the discharged admission page links to.
+        const checkinByCheckout = new Map(checkinEncounters
+            .filter(enc => enc?.checkoutRef && enc.checkin)
+            .map(enc => [String(enc.checkoutRef), enc.checkin]));
+
         // Accordion cards; combined markdown for Copy button
         let markdown = patientContextHeader(patientData);
         valid.forEach((item, index) => {
             const enc = item.enc;
-            // Ongoing admissions rarely have epicrisis text yet (it's normally only
-            // written near/at discharge) — fall back to diagnosis + exam notes so the
-            // current admission still shows up instead of being silently dropped.
-            const epicrisisText = extractEpicrisisText(enc) || item.fallbackBody || '';
-            const icd = extractDiagnosisText(enc) || '';
+            const ci = (item.active ? enc.checkin : checkinByCheckout.get(String(item.checkoutId))) || {};
+            // An ongoing admission's epicrisis lives on its admission form
+            // (normally only written near/at discharge, so often empty).
+            const epicrisisText = (item.active ? ci.epicrisis : extractEpicrisisText(enc)) || '';
+            const icd = extractDiagnosisText(enc) || ci.diagnosis || '';
+            const dxText = ci.diagnosis_text || '';
+            const department = ci.section || enc.wards?.slice(-1)[0] || enc.service || 'Admission';
+            const attending = ci.medic || enc.attender || '';
+            const exams = [['general', 'Examen general', ci.exam_general], ['local', 'Examen local', ci.exam_local]]
+                .filter(([, , text]) => isSubstantiveText(text));
             const admission = enc.start ? formatDate(enc.start) : '';
             const discharge = enc.end ? formatDate(enc.end) : '';
-            const service = enc.service || '';
-            const ward = enc.wards?.slice(-1)[0] || '';
-            const attender = enc.attender || '';
 
             // Night count (only meaningful once discharged)
             let nights = '';
@@ -5780,13 +5763,14 @@ document.addEventListener('DOMContentLoaded', function() {
             if (admission) meta.push(`**Admission:** ${admission}`);
             if (item.active) meta.push('**Status:** Ongoing');
             else if (discharge) meta.push(`**Discharge:** ${discharge}`);
-            if (ward)      meta.push(`**Ward:** ${ward}`);
-            if (attender)  meta.push(`**Attending:** ${attender}`);
-            if (service)   meta.push(`**Service:** ${service}`);
+            meta.push(`**Ward:** ${department}`);
+            if (attending) meta.push(`**Attending:** ${attending}`);
             const heading = item.active ? `${icd} (Ongoing)` : icd;
-            markdown += valid.length === 1 ? `# ${heading}\n\n` : `## ${index + 1}. ${heading}\n\n`;
-            if (meta.length) markdown += `${meta.join(' · ')}  \n\n`;
-            markdown += epicrisisText.trim() + '\n\n';
+            let cardMd = meta.join(' · ') + '  \n\n';
+            if (dxText) cardMd += `**Diagnosticul de internare:** ${dxText}\n\n`;
+            if (isSubstantiveText(epicrisisText)) cardMd += epicrisisText.trim() + '\n\n';
+            exams.forEach(([, label, text]) => { cardMd += `**${label}:** ${text.trim()}\n\n`; });
+            markdown += (valid.length === 1 ? `# ${heading}\n\n` : `## ${index + 1}. ${heading}\n\n`) + cardMd;
             if (index < valid.length - 1) markdown += '---\n\n';
 
             // Accordion card
@@ -5795,46 +5779,56 @@ document.addEventListener('DOMContentLoaded', function() {
             if (isOpen) card.classList.add('epi-card-open');
             if (item.active) card.classList.add('epi-card-active');
             card.id = `epicrisis-${item.checkoutId}`;
-            card.dataset.markdown = `# ${heading}\n\n`
-                + (meta.length ? `${meta.join(' · ')}  \n\n` : '')
-                + epicrisisText.trim() + '\n';
+            card.dataset.markdown = `# ${heading}\n\n` + cardMd.trimEnd() + '\n';
 
             const btn    = card.querySelector('.btn-epi-card');
             const body   = card.querySelector('.epi-card-body');
             const chevron = card.querySelector('.epi-chevron');
 
+            // Collapsed header: dates on the left; ward and duration on the right.
             btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
             btn.title = isOpen ? 'Collapse' : 'Expand for details';
             card.querySelector('.epi-date-range').textContent = item.active ? `${admission} → Present` : `${admission} → ${discharge}`;
-            const serviceParts = [ward, attender].filter(Boolean);
-            card.querySelector('.epi-service').textContent = serviceParts.length ? serviceParts.join(' · ') : (service || 'Admission');
-
-            const icdBadge = card.querySelector('.epi-icd-badge');
-            if (icd) { icdBadge.textContent = icd; } else { icdBadge.remove(); }
+            card.querySelector('.epi-service').textContent = department;
             const nightsSpan = card.querySelector('.epi-nights');
             if (item.active) { nightsSpan.textContent = 'Ongoing'; nightsSpan.classList.add('epi-nights-active'); }
             else if (nights) { nightsSpan.textContent = nights; }
             else { nightsSpan.remove(); }
             if (isOpen) chevron.className = 'fas fa-chevron-up epi-chevron';
 
+            // Open body title: coded diagnosis, free-text diagnosis, attending.
+            const icdEl = card.querySelector('.epi-icd-badge');
+            if (icd) { icdEl.textContent = icd; } else { icdEl.remove(); }
+            const dxEl = card.querySelector('.epi-dx-text');
+            if (dxText) { dxEl.textContent = dxText; dxEl.hidden = false; }
+            const attEl = card.querySelector('.epi-attending');
+            if (attending) { attEl.textContent = attending; attEl.hidden = false; }
+
             body.hidden = !isOpen;
+            const prose = card.querySelector('.epi-prose');
             const copyBtn = card.querySelector('.btn-epi-copy');
             const aiBtn = card.querySelector('.btn-epi-ai');
             if (isSubstantiveText(epicrisisText)) {
-                card.querySelector('.epi-prose').innerHTML = marked.parse(epicrisisText.trim());
-                copyBtn.addEventListener('click', () => copyMarkdown(card, copyBtn, () => flashIcon(copyBtn)));
+                prose.innerHTML = marked.parse(epicrisisText.trim());
                 // AI executive summary — inserted inside the collapsible body,
                 // above the prose, so it hides/shows with the accordion. Uses
                 // the epicrisis text (not the demographics-heavy full markdown).
-                wireAiButton(aiBtn, 'epicrisis', () => card.querySelector('.epi-prose'),
-                    () => extractEpicrisisText(enc).trim(), { inline: true });
+                wireAiButton(aiBtn, 'epicrisis', () => prose, () => epicrisisText.trim(), { inline: true });
                 // Silently redisplay a previously generated summary for this admission, if any.
-                runAiSummary(aiBtn, 'epicrisis', () => card.querySelector('.epi-prose'),
-                    () => extractEpicrisisText(enc).trim(), { inline: true, auto: true });
+                runAiSummary(aiBtn, 'epicrisis', () => prose, () => epicrisisText.trim(), { inline: true, auto: true });
             } else {
-                const prose = card.querySelector('.epi-prose');
-                prose.innerHTML = '<p class="epi-empty">— no content —</p>';
+                prose.innerHTML = `<p class="epi-empty">${item.active ? '— epicrisis not written yet —' : '— no content —'}</p>`;
                 prose.classList.add('epi-prose-empty');
+                aiBtn.hidden = true;
+            }
+            exams.forEach(([key, , text]) => {
+                const section = card.querySelector(`.epi-exam[data-exam="${key}"]`);
+                section.querySelector('.epi-exam-text').innerHTML = marked.parse(text.trim());
+                section.hidden = false;
+            });
+            if (isSubstantiveText(epicrisisText) || dxText || exams.length) {
+                copyBtn.addEventListener('click', () => copyMarkdown(card, copyBtn, () => flashIcon(copyBtn)));
+            } else {
                 card.querySelector('.card-toolbar').hidden = true;
             }
 

@@ -1728,7 +1728,7 @@ select {
 /* Grouped top-right actions (AI + copy) — a single pill-shaped toolbar with
    a thin border and a separator between the two buttons. Shared by the
    report header, imaging/lab analysis cards, and the epicrisis accordion
-   (.epi-card-body .card-toolbar) — see the shared rules further below. */
+   (.epi-head .card-toolbar) — see the shared rules further below. */
 .card-toolbar {
     flex-shrink: 0;
     display: inline-flex;
@@ -3429,7 +3429,6 @@ select {
 .epi-service {
     font: 500 var(--font-size-13) 'Inter', sans-serif;
     color: var(--text-light);
-    margin-top: var(--space-4);
 }
 
 .epi-btn-right {
@@ -3440,15 +3439,6 @@ select {
     min-width: 0;
 }
 
-.epi-icd-badge {
-    font: 600 var(--font-size-xs) 'Inter', sans-serif;
-    color: var(--primary);
-    background: color-mix(in srgb, var(--primary) 10%, transparent);
-    padding: var(--space-4) var(--space-12);
-    border-radius: var(--radius-sm);
-    white-space: normal;
-    overflow-wrap: anywhere;
-}
 
 .epi-nights {
     font: 500 var(--font-size-xs) 'Inter', sans-serif;
@@ -3458,32 +3448,6 @@ select {
 .epi-chevron {
     color: var(--ink-3);
     font-size: var(--font-size-xs);
-}
-
-/* Below ~700px there isn't room for the date/service block, the ICD
-   badge and the Ongoing/chevron group to all share one row — the long
-   badge text was shrinking the date block down to slivers (breaking
-   "2025-02-12 → Present" into one word per line) instead of just
-   wrapping itself. Switch to a small grid: date+service and
-   Ongoing/chevron keep sharing the top row (the badge is a sibling in
-   the markup, not nested inside the Ongoing/chevron group, so this
-   doesn't need a flex line-packing decision at all), and the badge —
-   often a full sentence — gets its own full-width row below where it
-   can wrap freely. Placed after the base rules above so it wins the
-   cascade despite matching specificity. */
-@media (max-width: 700px) {
-    .btn-epi-card {
-        display: grid;
-        grid-template-columns: 1fr auto;
-        grid-template-areas:
-            "left  right"
-            "badge badge";
-        column-gap: var(--space-16);
-        row-gap: var(--space-8);
-    }
-    .epi-btn-left { grid-area: left; }
-    .epi-icd-badge { grid-area: badge; }
-    .epi-btn-right { grid-area: right; }
 }
 
 /* Body — hidden until open */
@@ -3504,20 +3468,50 @@ select {
 .epi-prose p { margin: 0 0 0.4em; }
 .epi-prose p:last-child { margin-bottom: 0; }
 
-/* Epicrisis toolbar reuses .card-toolbar for its base pill look (see that
-   rule up top) — just needs positioning within the accordion body, plus a
-   bit of extra breathing room above/below that only this spot asked for. */
-.epi-card-body>.card-toolbar {
-    display: flex;
-    width: auto;
-    margin: var(--space-16) var(--space-24) var(--space-12);
+/* Open body title: diagnosis block on the left, the shared .card-title-row
+   pill (Summary | Copy) on the right at its natural size. */
+.epi-head {
+    margin-bottom: var(--space-16);
 }
-.epi-card-body>.card-toolbar .btn-ai,
-.epi-card-body>.card-toolbar .btn-copy {
-    flex: 1;
-    justify-content: center;
-    padding: var(--space-10) var(--space-12);
+.epi-head .card-toolbar {
+    margin: 0;
 }
+.epi-icd-badge {
+    font: 600 var(--font-size-base)/1.4 'Space Grotesk', 'Inter', sans-serif;
+    color: var(--text);
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+.epi-dx-text {
+    font: 500 var(--font-size-13)/1.5 'Inter', sans-serif;
+    color: var(--text-light);
+    margin: var(--space-4) 0 0;
+}
+.epi-attending {
+    font: 500 var(--font-size-xs) 'Inter', sans-serif;
+    color: var(--muted);
+    margin: var(--space-4) 0 0;
+}
+
+.epi-exam {
+    margin-top: var(--space-20);
+    padding-top: var(--space-16);
+    border-top: 1px dashed var(--border);
+}
+.epi-exam[hidden] { display: none; }
+.epi-exam-title {
+    font: 600 var(--font-size-11) 'Inter', sans-serif;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 var(--space-6);
+}
+.epi-exam-text {
+    font: 400 var(--font-size-15)/1.7 'Inter', sans-serif;
+    color: var(--text-light);
+}
+.epi-exam-text p { margin: 0 0 0.4em; }
+.epi-exam-text p:last-child { margin-bottom: 0; }
 
 .epi-prose-empty {
     text-align: center;

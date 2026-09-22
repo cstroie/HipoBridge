@@ -834,28 +834,40 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                 <button type="button" class="btn-epi-card" aria-expanded="false" title="Expand for details">
                     <div class="epi-btn-left">
                         <div class="epi-dot"></div>
-                        <div>
-                            <div class="epi-date-range"></div>
-                            <div class="epi-service"></div>
-                        </div>
+                        <div class="epi-date-range"></div>
                     </div>
-                    <span class="epi-icd-badge"></span>
                     <div class="epi-btn-right">
+                        <span class="epi-service"></span>
                         <span class="epi-nights"></span>
                         <i class="fas fa-chevron-down epi-chevron" aria-hidden="true"></i>
                     </div>
                 </button>
                 <div class="epi-card-body" hidden>
-                    <div class="card-toolbar" role="toolbar">
-                        <button type="button" class="btn-ai btn-epi-ai" aria-label="AI executive summary" title="AI executive summary">
-                            <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>Summary</span>
-                        </button>
-                        <button type="button" class="btn-copy btn-epi-copy" aria-label="Copy this epicrisis as Markdown" title="Copy this epicrisis as Markdown">
-                            <i class="fas fa-copy" aria-hidden="true"></i>
-                        </button>
-                    </div>
                     <div class="epi-card-inner">
+                        <div class="card-title-row epi-head">
+                            <hgroup>
+                                <h3 class="epi-icd-badge"></h3>
+                                <p class="epi-dx-text" hidden></p>
+                                <p class="epi-attending" hidden></p>
+                            </hgroup>
+                            <div class="card-toolbar" role="toolbar">
+                                <button type="button" class="btn-ai btn-epi-ai" aria-label="AI executive summary" title="AI executive summary">
+                                    <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>Summary</span>
+                                </button>
+                                <button type="button" class="btn-copy btn-epi-copy" aria-label="Copy this epicrisis as Markdown" title="Copy this epicrisis as Markdown">
+                                    <i class="fas fa-copy" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                        </div>
                         <div class="epi-prose"></div>
+                        <section class="epi-exam" data-exam="general" hidden>
+                            <h4 class="epi-exam-title">Examen general</h4>
+                            <div class="epi-exam-text"></div>
+                        </section>
+                        <section class="epi-exam" data-exam="local" hidden>
+                            <h4 class="epi-exam-title">Examen local</h4>
+                            <div class="epi-exam-text"></div>
+                        </section>
                     </div>
                 </div>
             </article>
