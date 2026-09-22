@@ -3508,6 +3508,9 @@ class HippoClientCheckup(HippoClient):
         self.request_url = "/files/checkup.asp?cuid={id}"
 
     def parse_data(self, html_content: str, **kwargs) -> HippoData:
+        """Consult fields read by element id (the page is a large form; the
+        old row-text matching truncated multi-word wards and missed the
+        consult itself)."""
         data = HippoData(status="success", message="")
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
@@ -3516,70 +3519,96 @@ class HippoClientCheckup(HippoClient):
                 logger.warning(data['message'])
                 return data
 
-            rows = soup.find_all('tr')
+            def put(key, value):
+                if value:
+                    data.store(key, value)
 
-            def rt(r):
-                return [c.get_text(' ', strip=True) for c in r.find_all('td')]
+            def text(element_id):
+                el = soup.find(id=element_id)
+                return el.get_text(' ', strip=True) if el else ''
 
-            for i, row in enumerate(rows):
-                cells = rt(row)
-                nc = len(cells)
+            def value(element_id):
+                return extract_value_from_input(soup, element_id=element_id)
 
-                # Row 5 (3-cell): patient + presentation + admission
-                if nc >= 2 and cells[0].startswith('Pacient ['):
-                    m = re.search(r'Pacient\s*\[\s*(.*?)\s*\]\s*CNP\s+(\S+)', cells[0])
-                    if m:
-                        data.store("patient.name", m.group(1).strip())
-                        data.store("patient.cnp", m.group(2))
-                        parsed = parse_cnp(m.group(2))
-                        if parsed.get("valid"):
-                            data.store("patient.gender", parsed.get("gender"))
-                            data.store("patient.date", parsed.get("birth_date"))
-                            data.store("patient.age", parsed.get("age"))
-                    m2 = re.search(r'Prezentare\s*\[\s*(\S+)\s*\]\s*Data:\s*(\S+\s+\S+)\s*Urgenta:\s*(\S+)\s*Sect\w*:\s*(\S+)', cells[1] if nc > 1 else '')
-                    if m2:
-                        data.store("presentation.date_time", m2.group(2))
-                        data.store("presentation.is_urgent", m2.group(3).upper() == 'DA')
-                        data.store("presentation.section", m2.group(4))
-                    if nc >= 3:
-                        m3 = re.search(r'Internare\s*\[\s*(\S+)\s*\]\s*Data:\s*(\S+\s+\S+)\s*Sectie:\s*(\S+)\s*Medic:\s*(.*)', cells[2])
-                        if m3:
-                            data.store("checkin.id", m3.group(1))
-                            data.store("checkin.date_time", m3.group(2))
-                            data.store("checkin.section", m3.group(3))
-                            data.store("checkin.medic", m3.group(4).strip())
+            def date_time(date_id, time_id):
+                d, t = value(date_id), value(time_id)
+                return f"{d} {t}".strip() if d else ''
 
-                # Diagnostic ICD10 + text
-                elif nc == 4 and cells[0] == 'Diagnostic ICD10:':
-                    data.store("diagnosis.icd10", cells[1].strip())
-                    data.store("diagnosis.text", cells[3].strip())
+            def medic(element_id):
+                # "DR. NAME (stamp code)" -> "DR. NAME"
+                return re.sub(r'\s*\([^)]*\)\s*$', '', _select_current(soup, element_id))
 
-                # Initial / final diagnosis
-                elif nc == 4 and cells[0] == 'Diagnostic initial:':
-                    data.store("diagnosis.initial", cells[1].strip())
-                    data.store("diagnosis.final", cells[3].strip())
+            def rich(element_id):
+                raw = extract_value_from_input(soup, element_id=element_id)
+                return html_to_markdown(unquote(raw)).strip() if raw else ''
 
-                # Referral diagnosis
-                elif nc >= 2 and cells[0] == 'Diagnostic trimitere:':
-                    data.store("diagnosis.referral", cells[1].strip())
+            # Header blocks: patient, presentation, admission
+            patient_id, patient_name, pac = _header_block(soup, 'Pacient [')
+            put("patient.id", patient_id)
+            put("patient.name", patient_name)
+            cnp = pac.get('CNP', '')
+            put("patient.cnp", cnp)
+            if cnp:
+                parsed = parse_cnp(cnp)
+                if parsed.get("valid"):
+                    data.store("patient.gender", parsed.get("gender"))
+                    data.store("patient.date", parsed.get("birth_date"))
+                    data.store("patient.age", parsed.get("age"))
+            pres_id, _, pres = _header_block(soup, 'Prezentare [')
+            put("presentation.id", pres_id)
+            put("presentation.date_time", pres.get('Data', ''))
+            if pres.get('Urgenta'):
+                data.store("presentation.is_urgent", pres['Urgenta'].upper() == 'DA')
+            put("presentation.section", pres.get('Sectie', ''))
+            put("presentation.medic", pres.get('Medic', ''))
+            checkin_id, _, adm = _header_block(soup, 'Internare [')
+            put("checkin.id", checkin_id)
+            put("checkin.date_time", adm.get('Data', ''))
+            put("checkin.section", adm.get('Sectie', ''))
+            put("checkin.medic", adm.get('Medic', ''))
 
-                # Discharge state
-                elif nc >= 1 and 'Stare pacient' in cells[0]:
-                    # Value follows in next non-empty cell
-                    for c in cells[1:]:
-                        if c.strip() and c.strip() not in ('50-Ameliorat', '51-Stationar', '52-Agravat', '53-Decedat'):
-                            break
-                    # Parse from the row text: look for selected value
-                    row_text = row.get_text(' ', strip=True)
-                    for state in ('Ameliorat', 'Stationar', 'Agravat', 'Decedat'):
-                        if state.lower() in row_text.lower():
-                            data.store("discharge.status", state.lower())
-                            break
+            # The consult itself. Emergency consults pick the type from a
+            # select; admission consults show it as plain text next to the label.
+            consult_type = _select_current(soup, 'sCUType')
+            if not consult_type:
+                label = next((p for p in soup.find_all('p', class_='p_amb')
+                              if p.get_text(strip=True) == 'Tip Consult:'), None)
+                control = label.find_next_sibling('div', class_='control') if label else None
+                consult_type = control.get_text(' ', strip=True) if control else ''
+            put("checkup.type", consult_type)
+            put("checkup.registry", value('strRefID'))
+            put("checkup.date_time", date_time('sCUDate', 'sCUTime'))
+            put("checkup.first_consult", date_time('strDataPrimConsultMedical', 'strOraPrimConsultMedical'))
+            put("checkup.section", _select_current(soup, 'sCUSection'))
+            put("checkup.medic", medic('iCUMedic'))
+            put("checkup.medic_upu", medic('iCUMedic2'))
+            put("checkup.medic_2", medic('iCUMedic3'))
+            put("checkup.decision", _select_current(soup, 'iCUDecision'))
+            put("checkup.left_upu", date_time('sUPUDate', 'sUPUTime'))
+            put("checkup.death_time", date_time('sDeceaseDate', 'sDeceaseTime'))
 
-                # Exam general / local
-                elif nc == 4 and cells[0] == 'Examen clinic general:':
-                    data.store("exam.general", cells[1].strip())
-                    data.store("exam.local", cells[3].strip())
+            # Diagnoses
+            put("diagnosis.icd10", text('strICD10DiagnosisName'))
+            put("diagnosis.text", text('Diagnosis'))
+            put("diagnosis.initial", text('sCUInitDiag'))
+            put("diagnosis.final", text('sCUFinDiag'))
+            put("diagnosis.referral", text('sCUSendDiag'))
+            secondary = [t.get_text(' ', strip=True)
+                         for t in soup.find_all('textarea', id=re.compile(r'^DiagnosisS\d+$'))]
+            if any(secondary):
+                data.store_list("diagnosis.secondary", [x for x in secondary if x])
+
+            # Clinical exam, text areas, labs, radiology dose
+            put("exam.general", text('strExamenGen'))
+            put("exam.local", text('strExamenLoc'))
+            put("checkup.details", rich('sCUDetails'))
+            put("checkup.epicrisis", rich('sEpicrisys'))
+            put("checkup.recommendations", rich('sRecommendations'))
+            put("labs.urea", value('strUree'))
+            put("labs.creatinine", value('strCreatinina'))
+            put("radiology.dlp", value('strDLP'))
+            put("radiology.dap", value('strDAP'))
+            put("radiology.agd", value('strAGD'))
 
             if 'id' in kwargs:
                 data.store("checkup.id", kwargs["id"])
@@ -3604,16 +3633,18 @@ class HippoClientCheckup(HippoClient):
         }
 
         if parsed_data.get("patient.name"):
-            encounter["subject"] = {"display": parsed_data["patient.name"]}
+            encounter["subject"] = {"display": parsed_data.get("patient.name")}
 
-        if parsed_data.get("presentation.date_time"):
-            encounter["period"] = {"start": parsed_data["presentation.date_time"]}
+        consult_time = parsed_data.get("checkup.date_time") or parsed_data.get("presentation.date_time")
+        if consult_time:
+            dt = parse_date_time(consult_time)
+            encounter["period"] = {"start": dt.isoformat() if dt else consult_time}
 
         reason_code = {}
         if parsed_data.get("diagnosis.icd10"):
-            reason_code["coding"] = [{"code": parsed_data["diagnosis.icd10"]}]
+            reason_code["coding"] = [{"code": parsed_data.get("diagnosis.icd10")}]
         if parsed_data.get("diagnosis.text"):
-            reason_code["text"] = parsed_data["diagnosis.text"]
+            reason_code["text"] = parsed_data.get("diagnosis.text")
         if reason_code:
             encounter["reasonCode"] = [reason_code]
 
@@ -3632,13 +3663,13 @@ class HippoClientCheckup(HippoClient):
             encounter["note"] = notes
 
         if parsed_data.get("presentation.section"):
-            encounter["serviceProvider"] = {"display": parsed_data["presentation.section"]}
+            encounter["serviceProvider"] = {"display": parsed_data.get("presentation.section")}
 
         if parsed_data.get("presentation.is_urgent"):
             encounter["priority"] = {"coding": [{"code": "EM", "display": "emergency"}]}
 
         if parsed_data.get("checkin.id"):
-            encounter["partOf"] = {"reference": f"Encounter/{parsed_data['checkin.id']}"}
+            encounter["partOf"] = {"reference": f"Encounter/{parsed_data.get('checkin.id')}"}
 
         return encounter
 
