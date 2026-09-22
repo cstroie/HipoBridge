@@ -1796,16 +1796,10 @@ select {
 .ai-kind-toolbar .btn-ai:hover {
     background: color-mix(in srgb, var(--warning, #d97706) 85%, black);
 }
+/* A standalone row below the header (not inside .report-header's flex
+   row), so it needs its own gap above #aiPreExamAnchor/#aiEmptyState. */
 .ai-kind-toolbar {
     flex-wrap: wrap;
-}
-/* Pre-exam and extraction groups side by side, wrapping on narrow screens;
-   a standalone row below the header, so it needs its own gap above
-   #aiPreExamAnchor/#aiEmptyState. */
-.ai-toolbars {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-12);
     margin-bottom: var(--space-24);
 }
 

@@ -86,7 +86,6 @@ document.addEventListener('DOMContentLoaded', function() {
         contrastSafetyBtn: document.getElementById('contrastSafetyBtn'),
         // AI tab elements
         aiPreExamToolbar: document.getElementById('aiPreExamToolbar'),
-        aiExtractToolbar: document.getElementById('aiExtractToolbar'),
         aiPreExamAnchor: document.getElementById('aiPreExamAnchor'),
         aiEmptyState: document.getElementById('aiEmptyState'),
         // Patient profile "AI Summary" panel
@@ -333,18 +332,17 @@ document.addEventListener('DOMContentLoaded', function() {
     // executes — a `const` declared after that call site is still in its
     // temporal dead zone when buildAiToolbar() (called from inside
     // initApp() -> initEventListeners()) tries to read it.
+    // Ordered fastest/most-scannable first, longest/most-exhaustive last —
+    // see llm/prompts.py PROMPT_META for each kind's max_tokens.
     const PRE_EXAM_TOOLBAR = [
         { kind: 'pre_exam_oneliner',  label: 'One-liner',         icon: 'fa-bolt' },
-        { kind: 'pre_exam_brief',     label: 'Brief',             icon: 'fa-wand-magic-sparkles' },
+        { kind: 'report_indication',  label: 'Indication',        icon: 'fa-quote-left' },
         { kind: 'pre_exam_executive', label: 'Executive summary', icon: 'fa-notes-medical' },
+        { kind: 'followup_pending',   label: 'Follow-ups',        icon: 'fa-calendar-check' },
+        { kind: 'treatment_timeline', label: 'Treatments',        icon: 'fa-pills' },
+        { kind: 'lesion_tracker',     label: 'Lesions',           icon: 'fa-ruler' },
+        { kind: 'pre_exam_brief',     label: 'Brief',             icon: 'fa-wand-magic-sparkles' },
         { kind: 'pre_exam_soap',      label: 'SOAP',              icon: 'fa-file-medical' },
-    ];
-    // Second AI-tab group: targeted extractions from the same clinical text.
-    const EXTRACT_TOOLBAR = [
-        { kind: 'report_indication',  label: 'Indication',   icon: 'fa-quote-left' },
-        { kind: 'followup_pending',   label: 'Follow-ups',   icon: 'fa-calendar-check' },
-        { kind: 'treatment_timeline', label: 'Treatments',   icon: 'fa-pills' },
-        { kind: 'lesion_tracker',     label: 'Lesions',      icon: 'fa-ruler' },
     ];
 
     // Generation counter for the on-demand schedule exam list; must be declared
@@ -515,10 +513,7 @@ document.addEventListener('DOMContentLoaded', function() {
             () => elements.reportCard, () => getPatientClinicalText());
         if (elements.aiLabBtn) elements.aiLabBtn.addEventListener('click', runLabSummary);
         if (elements.contrastSafetyBtn) elements.contrastSafetyBtn.addEventListener('click', runContrastSafetyCheck);
-        elements.aiPreExamBtns = [
-            ...buildAiToolbar(elements.aiPreExamToolbar, PRE_EXAM_TOOLBAR),
-            ...buildAiToolbar(elements.aiExtractToolbar, EXTRACT_TOOLBAR),
-        ];
+        elements.aiPreExamBtns = buildAiToolbar(elements.aiPreExamToolbar, PRE_EXAM_TOOLBAR);
         if (elements.patientAiSummaryBtn) {
             elements.patientAiSummaryBtn.addEventListener('click', generatePatientAiSummary);
         }
@@ -4750,9 +4745,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const aiBtn = document.createElement('button');
         aiBtn.type = 'button';
         aiBtn.className = 'btn-ai';
-        aiBtn.setAttribute('aria-label', 'AI imaging episode synopsis');
-        aiBtn.title = 'AI imaging episode synopsis';
-        aiBtn.innerHTML = '<i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>AI</span>';
+        aiBtn.setAttribute('aria-label', 'AI imaging trend synopsis');
+        aiBtn.title = 'AI imaging trend synopsis';
+        aiBtn.innerHTML = '<i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>Trend</span>';
         aiBtn.addEventListener('click', async () => {
             aiBtn.disabled = true;
             let text;
