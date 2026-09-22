@@ -3107,31 +3107,22 @@ select {
 }
 /* When the button wraps the AI summary, it's the whole line's content —
    make it block/full-width so the entire clamped area is inside the real
-   clickable element, not just the text's own inline box (the container
-   div still shows a pointer cursor everywhere via the :has() rule below,
-   which would otherwise be misleading dead space around a narrower inline
-   button). */
+   clickable element, not just the text's own inline box. The clamp itself
+   also lives here now, not on the container: -webkit-line-clamp needs its
+   direct content to be inline text, and a nested block-level button broke
+   that (the button, and its text, stopped rendering at all under Webkit's
+   box layout). */
 .timeline-prev-head:has(.timeline-prev-text) {
-    display: block;
+    display: -webkit-box;
     width: 100%;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 .timeline-prev-head:hover { color: var(--primary); }
 .timeline-prev-action { color: var(--primary); }
 .timeline-prev-action:hover { color: var(--primary-dark); }
-/* With an AI summary the whole line (heading + italic summary) is clamped to
-   three lines until tapped */
 .timeline-prev-text { font-style: italic; }
-.timeline-card-prev:has(.timeline-prev-text) {
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    cursor: pointer;
-}
-.timeline-card-prev.expanded:has(.timeline-prev-text) {
-    display: block;
-    -webkit-line-clamp: unset;
-}
 .timeline-prev-summarize { font-size: inherit; }
 .timeline-prev-pending { font-style: italic; opacity: 0.7; }
 

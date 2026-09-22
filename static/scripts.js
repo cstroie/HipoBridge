@@ -7090,7 +7090,6 @@ document.addEventListener('DOMContentLoaded', function() {
             btn.appendChild(em);
             btn.addEventListener('click', openModal);
             line.appendChild(btn);
-            line.classList.remove('expanded');
             line.hidden = false;
             return;
         }
