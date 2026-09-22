@@ -3601,9 +3601,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Built from the patient page's own history table (patientData.history):
-    // one row per emergency presentation or admission, no per-record fetches.
-    // Presentations carry no reason/outcome there — a later step can fill
-    // those in lazily from /api/presentation.
+    // one row per emergency presentation or admission. Presentations carry no
+    // outcome/diagnosis there, so those rows are enriched afterwards from
+    // /api/presentation, each filled in as its request returns.
     function loadHospitalisationHistory(patientData) {
         if (!elements.historyList) return;
         elements.historyList.innerHTML = '';
@@ -3625,6 +3625,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const tmpl = document.getElementById('history-item-template');
+        const toEnrich = [];
         rows.forEach((r, idx) => {
             const li = tmpl.content.cloneNode(true).querySelector('.history-item');
             const inpatient = r.kind !== 'presentation';
@@ -3650,6 +3651,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 typeEl.hidden = false;
                 li.querySelector('.history-diagnosis').textContent = r.medic_in || 'Presentation';
                 li.querySelector('.history-load').addEventListener('click', () => switchTab('imaging'));
+                if (r.presentation_id) toEnrich.push({ r, li });
             }
 
             if (idx === rows.length - 1) {
@@ -3658,6 +3660,31 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             elements.historyList.appendChild(li);
         });
+
+        const myGeneration = dataGeneration;
+        limitedMap(toEnrich, MAX_CONCURRENT_REQUESTS, async ({ r, li }) => {
+            const p = await fetchPresentationDetails(r.presentation_id).catch(() => null);
+            if (!p || myGeneration !== dataGeneration) return;
+            if (p.decision) li.querySelector('.history-type').textContent = p.decision;
+            // Drug lines read "NAME DOSE Aparat UPU - Program <dates>"; keep the drug.
+            const drugs = [].concat(p.treatment || []).map(t => t.split(' Aparat ')[0].trim()).filter(Boolean);
+            const dx = p.diagnosis_final || p.diagnosis_initial || p.diagnosis || p.reason;
+            const label = dx || (drugs.length ? `Treatment: ${drugs.join(', ')}` : '');
+            if (label) li.querySelector('.history-diagnosis').textContent = label;
+        });
+    }
+
+    // Raw presentation block from /api/presentation (decision, reason,
+    // diagnosis, treatment...), cached per id for the session.
+    async function fetchPresentationDetails(id) {
+        const key = `presentation:${id}`;
+        if (cache.encounters[key]) return cache.encounters[key];
+        const response = await apiFetch(`/api/presentation/${id}`);
+        if (!response.ok) return null;
+        const json = await response.json();
+        if (json.status !== 'success' || !json.presentation) return null;
+        cachePut(cache.encounters, key, json.presentation);
+        return json.presentation;
     }
 
     // Enhanced patient basic info display

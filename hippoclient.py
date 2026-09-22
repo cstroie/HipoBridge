@@ -4602,6 +4602,26 @@ class HippoClientPresentation(HippoClient):
                             data.store("presentation.registry",
                                        line[len('Nr.reg:'):].strip().split()[0])
 
+            # Clinical block after the consult: "Cod OMS:", "diagnostic:",
+            # "Tratament:" (one line per drug), "Detalii:", "Recomandari:" —
+            # each in its own innermost div/p — plus the initial/final
+            # diagnosis textareas.
+            labels = {'Cod OMS:': 'icd_code', 'diagnostic:': 'diagnosis',
+                      'Detalii:': 'details', 'Recomandari:': 'recommendations'}
+            for el in soup.find_all(['div', 'p']):
+                if el.find(['div', 'p']):
+                    continue
+                own = el.get_text(' ', strip=True)
+                for label, key in labels.items():
+                    if own.startswith(label) and own[len(label):].strip():
+                        data.store(f"presentation.{key}", own[len(label):].strip())
+                if own.startswith('Tratament:'):
+                    drugs = [l.strip() for l in el.get_text('\n').split('\n') if l.strip()][1:]
+                    if drugs:
+                        data.store_list("presentation.treatment", drugs)
+            data.store("presentation.diagnosis_initial", extract_text_from_element(soup, element_id='DiagInitial') or None)
+            data.store("presentation.diagnosis_final", extract_text_from_element(soup, element_id='DiagFinal') or None)
+
             return data
         except Exception as e:
             logger.error(f"Error parsing presentation data: {e}")
