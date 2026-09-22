@@ -5585,7 +5585,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             encounters = enc
                 .map((e, i) => e ? { enc: e, id: allIds[i] } : null)
-                .filter(Boolean)
+                // A discharged admission is already represented by its
+                // checkout; keep its checkin only while no checkout is known.
+                .filter(item => item && !(item.enc.checkoutRef && checkoutIdSet.has(String(item.enc.checkoutRef))))
                 .sort((a, b) => {
                     const da = a.enc.end || a.enc.start || '';
                     const db = b.enc.end || b.enc.start || '';
