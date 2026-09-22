@@ -3476,16 +3476,19 @@ select {
 .epi-head .card-toolbar {
     margin: 0;
 }
-.epi-icd-badge {
+.epi-dx-text {
     font: 600 var(--font-size-base)/1.4 'Space Grotesk', 'Inter', sans-serif;
     color: var(--text);
     margin: 0;
     overflow-wrap: anywhere;
 }
-.epi-dx-text {
+.epi-icd-badge {
     font: 500 var(--font-size-13)/1.5 'Inter', sans-serif;
     color: var(--text-light);
     margin: var(--space-4) 0 0;
+}
+.epi-dx-text[hidden] + .epi-icd-badge {
+    margin-top: 0;
 }
 .epi-attending {
     font: 500 var(--font-size-xs) 'Inter', sans-serif;
