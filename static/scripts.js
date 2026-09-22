@@ -7057,9 +7057,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Fourth card line: "Prev CT · 12 Jun 2026 · abdomen" + the AI summary
-    // (italic, clamped, tap to expand), or a Summarize link when there is a
-    // report but no summary yet. Hidden when there is no previous exam.
+    // Fourth card line: with a summary, "12 Jun 2026 · abdomen: <summary>"
+    // (clamped, tap to expand, click to open the report modal); without one,
+    // "Prev CT · 12 Jun 2026 · abdomen" + a Summarize link. Hidden when
+    // there is no previous exam.
     function _applyPrevLine(el, prev) {
         const line = el._prevLine;
         if (!line) return;
@@ -7067,6 +7068,28 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!prev) { line.hidden = true; return; }
         // The heading opens that exam's report modal, like the card's own
         // request code does.
+        const openModal = e => {
+            e.stopPropagation();
+            showRequestModal(prev.id, prev.code, el._patientName, el._req?.modality || '', line, '', '');
+        };
+        // With an AI summary in hand, there's no need for a separate "Prev
+        // CT · date · region" heading — the summary itself (prefixed with
+        // date/region for a previous exam) is the whole line, clickable to
+        // open that exam's report modal.
+        if (prev.summary && !prev.pending) {
+            const when = prev.date ? formatDate(prev.date.replace(' ', 'T')) : '';
+            const prefix = prev.own ? '' : [when, prev.region].filter(Boolean).join(' · ');
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'timeline-prev-head timeline-prev-text';
+            btn.title = 'Open this exam';
+            btn.textContent = prefix ? `${prefix}: ${prev.summary}` : prev.summary;
+            btn.addEventListener('click', openModal);
+            line.appendChild(btn);
+            line.classList.remove('expanded');
+            line.hidden = false;
+            return;
+        }
         const head = document.createElement('button');
         head.type = 'button';
         head.className = 'timeline-prev-head';
@@ -7075,10 +7098,7 @@ document.addEventListener('DOMContentLoaded', function() {
         head.textContent = prev.own
             ? 'Report'
             : ['Prev', el.dataset.modality, when, prev.region].filter(Boolean).join(' · ');
-        head.addEventListener('click', e => {
-            e.stopPropagation();
-            showRequestModal(prev.id, prev.code, el._patientName, el._req?.modality || '', head, '', '');
-        });
+        head.addEventListener('click', openModal);
         line.appendChild(head);
         if (prev.pending) {
             line.onclick = null;
@@ -7086,13 +7106,6 @@ document.addEventListener('DOMContentLoaded', function() {
             wait.className = 'timeline-prev-pending';
             wait.textContent = 'summarizing…';
             line.append(' — ', wait);
-        } else if (prev.summary) {
-            const em = document.createElement('em');
-            em.className = 'timeline-prev-text';
-            em.textContent = prev.summary;
-            line.append(' — ', em);
-            line.classList.remove('expanded');
-            line.onclick = () => line.classList.toggle('expanded');
         } else {
             line.onclick = null;
             line.append(' — ');
