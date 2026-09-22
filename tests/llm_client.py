@@ -58,7 +58,7 @@ class TestProviderSelection(unittest.TestCase):
 class TestPromptRegistry(unittest.TestCase):
     def test_kinds_map_to_valid_tiers(self):
         self.assertEqual(set(PROMPTS), {
-            "report", "epicrisis", "imaging", "imaging_episode", "lab",
+            "report", "epicrisis", "imaging", "imaging_trend", "lab",
             "pre_exam_brief", "pre_exam_oneliner", "pre_exam_soap", "pre_exam_executive",
             "contrast_safety",
         })

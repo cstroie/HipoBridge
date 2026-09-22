@@ -1381,7 +1381,7 @@ select {
 .episode-divider:first-child { margin-top: 0; }
 
 /* Current Episode's imaging heading, when it also carries an AI | Copy
-   toolbar (imaging_episode synopsis) — wraps the divider text so the
+   toolbar (imaging_trend synopsis) — wraps the divider text so the
    toolbar can sit flush right on the same row, still spanning both masonry
    columns as a unit. */
 .episode-header {
@@ -1412,7 +1412,7 @@ select {
 }
 
 /* An AI synopsis card inserted directly into the multicol imaging/lab grid
-   (e.g. the imaging_episode synopsis) must span both columns the same way
+   (e.g. the imaging_trend synopsis) must span both columns the same way
    .episode-divider/.episode-header do, or it renders squeezed into one. */
 .analyses-grid > .ai-summary-card {
     column-span: all;

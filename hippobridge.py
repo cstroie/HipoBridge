@@ -1097,7 +1097,7 @@ _STREAM_ERROR_SENTINEL = "\x1f"
 async def _finish_ai_stream_in_background(kind: str, cache_key: str, agen, parts: list) -> None:
     """Keep draining an LLM stream after its client has disconnected mid-
     generation, so the eventual result still gets cached — a page reload
-    (or an auto-probe like imaging_episode's) then serves it instantly
+    (or an auto-probe like imaging_trend's) then serves it instantly
     instead of re-running the same slow generation from scratch.
 
     `agen` is the same async generator _post_ai_summarize_stream was already
@@ -1185,7 +1185,7 @@ async def _post_ai_summarize_stream(request, kind: str, text: str, force: bool):
                 # instant before it would've finished) — hand the same
                 # async generator to a detached task that keeps draining it
                 # and caches the eventual result, so a reload (or the
-                # imaging_episode-style auto-probe) picks it up from cache
+                # imaging_trend-style auto-probe) picks it up from cache
                 # instead of re-running the same slow generation. aiohttp
                 # cancels *this* request's task shortly after a connection
                 # loss (web_protocol.py's connection_lost), so the

@@ -79,7 +79,7 @@ PROMPT_META = {
     # model into date-by-date enumeration despite the prompt telling it to
     # synthesize instead — 320 gives those a safety margin against a raw
     # truncation cutoff, even though the model may still need this discussed.
-    "imaging_episode": ("medical", 320),
+    "imaging_trend": ("medical", 320),
     "lab":             ("medical", 600),
     "pre_exam_brief":  ("medical", 450),
     # 80 -> 160: real output got cut off mid-sentence at 80 — a single dense
@@ -200,13 +200,13 @@ def _language_directive(language: str) -> str:
 # about date context, the other about transport; independently editable.
 # imaging (40 tokens) is excluded — too short for streaming to buy anything.
 # lab (600 tokens) is included — long enough that perceived latency matters.
-# imaging_episode (Impression-only conclusion, 320 tokens — see PROMPT_META)
+# imaging_trend (Impression-only conclusion, 320 tokens — see PROMPT_META)
 # is included too: still ~1min+ on this backend, so streaming still helps.
 # pre_exam_oneliner/contrast_safety are included so every AI-tab button
 # shares the streaming path, even though each is among the shortest
 # of the streaming kinds (160-220 tokens).
 STREAMING_KINDS = frozenset({
-    "report", "epicrisis", "pre_exam_brief", "lab", "imaging_episode",
+    "report", "epicrisis", "pre_exam_brief", "lab", "imaging_trend",
     "pre_exam_soap", "pre_exam_executive", "pre_exam_oneliner",
     "contrast_safety",
 })

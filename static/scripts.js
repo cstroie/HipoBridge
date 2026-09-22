@@ -1902,7 +1902,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // legitimately need to run long). Scoped to just the AI summary requests.
     //
     // Was 45000 (45s) — too short for this server: [llm] log lines show the
-    // configured model actually runs at ~2-3.5 tok/s, and imaging_episode/
+    // configured model actually runs at ~2-3.5 tok/s, and imaging_trend/
     // pre_exam_brief prompts run up to ~2000 prompt tokens, so prefill alone
     // (before the *first* streamed chunk arrives, which is what this timer
     // actually gates for aiSummarizeStream — see armTimer()) can easily
@@ -1949,7 +1949,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // except imaging, which stays on the plain JSON response above (too
     // short to benefit). Must mirror llm/prompts.py's STREAMING_KINDS.
     const STREAMING_KINDS = new Set([
-        'report', 'epicrisis', 'pre_exam_brief', 'lab', 'imaging_episode',
+        'report', 'epicrisis', 'pre_exam_brief', 'lab', 'imaging_trend',
         'pre_exam_soap', 'pre_exam_executive', 'pre_exam_oneliner',
         'contrast_safety',
     ]);
@@ -2091,7 +2091,7 @@ document.addEventListener('DOMContentLoaded', function() {
         report:              'Patient summary',
         epicrisis:            'Epicrisis summary',
         imaging:              'Report summary',
-        imaging_episode:      'Episode summary',
+        imaging_trend:        'Imaging trend',
         lab:                  'Lab summary',
         pre_exam_oneliner:    'Pre-exam one-liner',
         pre_exam_brief:       'Pre-exam brief',
@@ -4660,11 +4660,11 @@ document.addEventListener('DOMContentLoaded', function() {
         return parts.join('  \n') + '\n\n---\n\n';
     }
 
-    // Bounds the imaging_episode AI synopsis's prompt size — same tunable-
+    // Bounds the imaging_trend AI synopsis's prompt size — same tunable-
     // constant pattern as EPISODE_GAP_DAYS/SPARSE_THRESHOLD.
     const IMAGING_EPISODE_STUDY_CAP = 8;
 
-    // Dated, chronological (oldest→newest) markdown fed to the imaging_episode
+    // Dated, chronological (oldest→newest) markdown fed to the imaging_trend
     // AI synopsis — same "grounding header + per-item blocks" shape as
     // labAiText, and the same "fetch more candidates than the cap, keep the
     // first N with usable content" skimming the Report tab's §3 uses.
@@ -4745,7 +4745,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             // headerRow's next sibling is this section's first card — the AI
             // card is inserted right above it, once headerRow is in the DOM.
-            runAiSummary(aiBtn, 'imaging_episode',
+            runAiSummary(aiBtn, 'imaging_trend',
                 () => headerRow.nextElementSibling, () => text,
                 { inline: true, intoAnchorParent: () => headerRow.parentElement });
         });
@@ -4789,7 +4789,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 return; // silent — mirrors opts.auto's own failure handling
             }
             if (!text) return;
-            runAiSummary(aiBtn, 'imaging_episode',
+            runAiSummary(aiBtn, 'imaging_trend',
                 () => headerRow.nextElementSibling, () => text,
                 { inline: true, intoAnchorParent: () => headerRow.parentElement, auto: true });
         });
