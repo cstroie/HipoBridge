@@ -97,8 +97,8 @@ PROMPT_META = {
     # alongside the existing clinical-text feed. Single-line verdict, sized
     # like pre_exam_oneliner.
     "contrast_safety": ("medical", 160),
-    # Extraction kinds on the AI tab's second toolbar, all fed the same
-    # clinical text as the pre_exam_* kinds.
+    # Extraction kinds (AI tab's second toolbar; problem_list sits in the
+    # Report tab toolbar), all fed the same clinical text as pre_exam_*.
     "report_indication":  ("medical", 120),
     "followup_pending":   ("medical", 350),
     "treatment_timeline": ("medical", 350),

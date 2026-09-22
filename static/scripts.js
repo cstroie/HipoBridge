@@ -80,6 +80,7 @@ document.addEventListener('DOMContentLoaded', function() {
         patientReportBlocks: document.getElementById('patientReportBlocks'),
         copyReportBtn: document.getElementById('copyReportBtn'),
         aiReportBtn: document.getElementById('aiReportBtn'),
+        aiProblemsBtn: document.getElementById('aiProblemsBtn'),
         aiLabBtn: document.getElementById('aiLabBtn'),
         copyLabBtn: document.getElementById('copyLabBtn'),
         contrastSafetyBtn: document.getElementById('contrastSafetyBtn'),
@@ -344,7 +345,6 @@ document.addEventListener('DOMContentLoaded', function() {
         { kind: 'followup_pending',   label: 'Follow-ups',   icon: 'fa-calendar-check' },
         { kind: 'treatment_timeline', label: 'Treatments',   icon: 'fa-pills' },
         { kind: 'lesion_tracker',     label: 'Lesions',      icon: 'fa-ruler' },
-        { kind: 'problem_list',       label: 'Problem list', icon: 'fa-list-check' },
     ];
 
     // Generation counter for the on-demand schedule exam list; must be declared
@@ -510,6 +510,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // AI summary buttons (report header, lab trends, pre-exam tab).
         // Per-card buttons (epicrisis, imaging) are wired at render time.
         wireAiButton(elements.aiReportBtn, 'report',
+            () => elements.reportCard, () => getPatientClinicalText());
+        wireAiButton(elements.aiProblemsBtn, 'problem_list',
             () => elements.reportCard, () => getPatientClinicalText());
         if (elements.aiLabBtn) elements.aiLabBtn.addEventListener('click', runLabSummary);
         if (elements.contrastSafetyBtn) elements.contrastSafetyBtn.addEventListener('click', runContrastSafetyCheck);
@@ -1758,13 +1760,14 @@ document.addEventListener('DOMContentLoaded', function() {
     function resetAiTab() {
         if (elements.aiEmptyState) elements.aiEmptyState.hidden = false;
         if (elements.aiReportBtn) elements.aiReportBtn.hidden = true;
+        if (elements.aiProblemsBtn) elements.aiProblemsBtn.hidden = true;
         for (const btn of elements.aiPreExamBtns || []) btn.hidden = true;
         if (elements.aiLabBtn) elements.aiLabBtn.hidden = true;
         if (elements.contrastSafetyBtn) elements.contrastSafetyBtn.hidden = true;
         // Drop any rendered AI cards from a previous patient. querySelectorAll
         // does not descend into <template> content, so the template card is safe.
         document.querySelectorAll('.ai-summary-card').forEach(card => card.remove());
-        for (const btn of [elements.aiReportBtn, ...(elements.aiPreExamBtns || []), elements.aiLabBtn, elements.contrastSafetyBtn, elements.patientAiSummaryBtn]) {
+        for (const btn of [elements.aiReportBtn, elements.aiProblemsBtn, ...(elements.aiPreExamBtns || []), elements.aiLabBtn, elements.contrastSafetyBtn, elements.patientAiSummaryBtn]) {
             if (btn) btn._aiCard = null;
         }
         labAiText = '';
@@ -1808,10 +1811,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const hasContent = !!getPatientClinicalText();
         if (elements.aiEmptyState) elements.aiEmptyState.hidden = hasContent;
         if (elements.aiReportBtn) elements.aiReportBtn.hidden = !hasContent;
+        if (elements.aiProblemsBtn) elements.aiProblemsBtn.hidden = !hasContent;
         for (const btn of elements.aiPreExamBtns || []) btn.hidden = !hasContent;
         if (hasContent) {
             // Silently redisplay a previously generated summary for this patient, if any.
             runAiSummary(elements.aiReportBtn, 'report',
+                () => elements.reportCard, getPatientClinicalText, { auto: true });
+            runAiSummary(elements.aiProblemsBtn, 'problem_list',
                 () => elements.reportCard, getPatientClinicalText, { auto: true });
             for (const btn of elements.aiPreExamBtns || []) {
                 runAiSummary(btn, btn.dataset.kind,
