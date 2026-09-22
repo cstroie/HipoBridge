@@ -2687,12 +2687,21 @@ document.addEventListener('DOMContentLoaded', function() {
             const SPARSE_THRESHOLD = 100;
 
             function buildCheckinText(enc) {
+                const ci = enc.checkin || {};
                 const parts = [];
                 const dx = extractDiagnosisText(enc);
                 if (dx) parts.push(dx);
-                (enc.notes || []).forEach(text => {
-                    if (text && text.trim()) parts.push(text.trim());
-                });
+                const secondary = [].concat(ci.secondary_diagnoses || []);
+                [
+                    ['Diagnosticul de internare', ci.diagnosis_text],
+                    ['Motivele internării', ci.admission_reason],
+                    ['Diagnostic la 72h', ci.diagnosis_72h],
+                    ['Diagnostice secundare', secondary.join('; ')],
+                ].forEach(([label, text]) => { if (text) parts.push(`**${label}:** ${text}`); });
+                if (ci.epicrisis) parts.push(ci.epicrisis.trim());
+                [['Examen general', ci.exam_general], ['Examen local', ci.exam_local]]
+                    .forEach(([label, text]) => { if (text) parts.push(`**${label}:** ${text}`); });
+                if (ci.recommendations) parts.push(`**Recomandări:**\n\n${ci.recommendations.trim()}`);
                 return parts.join('\n\n');
             }
 
@@ -3205,11 +3214,60 @@ document.addEventListener('DOMContentLoaded', function() {
             throw new Error(`HTTP ${response.status}`);
         }
 
-        const encounterData = (await response.json()).encounter || null;
-        if (!encounterData) return null;
+        const json = await response.json();
+        if (json.status !== 'success' || !json.checkout) return null;
+        const encounterData = checkoutToEncounter(json);
         cachePut(cache.encounters, checkoutId, encounterData);
         log(`Encounter data fetched successfully for checkout ${checkoutId}:`, encounterData);
         return encounterData;
+    }
+
+    // "20/09/2026 11:51" (Hipocrate) -> "2026-09-20T11:51:00", the ISO form the
+    // checkout encounters use, so start/end strings compare correctly.
+    function hipocrateDateTimeToIso(value) {
+        const m = /^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?/.exec(value || '');
+        if (!m) return null;
+        return `${m[3]}-${m[2]}-${m[1]}T${m[4] || '00'}:${m[5] || '00'}:00`;
+    }
+
+    // Encounter-shaped view of a raw /api/checkin payload, matching the
+    // fields the checkout encounters carry. Status stays "in-progress" even
+    // once discharged — callers check it against checkout dates instead.
+    // The raw admission-form block rides along as `checkin`; `checkoutRef`
+    // links a discharged admission to its checkout.
+    function checkinToEncounter(json) {
+        const ci = json.checkin || {};
+        const pres = json.presentation || {};
+        const ward = ci.section || pres.section || '';
+        return {
+            status: 'in-progress',
+            // ER presentation first: imaging done there before the formal
+            // admission belongs to the same episode.
+            start: hipocrateDateTimeToIso(pres.date_time) || hipocrateDateTimeToIso(ci.date_time),
+            end: null,
+            wards: ward ? [ward] : [],
+            medic: ci.medic || '',
+            attender: ci.medic || null,
+            diagnosis: ci.diagnosis || null,
+            checkin: json.checkin,
+            checkoutRef: json.checkout?.id || null,
+        };
+    }
+
+    // Encounter-shaped view of a raw /api/checkout payload (the printable
+    // discharge letter). The raw block rides along as `checkout`.
+    function checkoutToEncounter(json) {
+        const co = json.checkout || {};
+        return {
+            status: 'discharged',
+            start: hipocrateDateTimeToIso(json.checkin?.date_time),
+            end: hipocrateDateTimeToIso(co.date_time),
+            wards: co.ward ? [co.ward] : [],
+            medic: co.medic || '',
+            attender: co.medic || null,
+            diagnosis: co.diagnosis || null,
+            checkout: json.checkout,
+        };
     }
 
     // Helper function to fetch encounter data for a checkin ID (active admission, not yet discharged)
@@ -3226,11 +3284,8 @@ document.addEventListener('DOMContentLoaded', function() {
             throw new Error(`HTTP ${response.status}`);
         }
         const json = await response.json();
-        if (!json.encounter) return null;
-        // The raw admission-form fields (section, attending, free-text
-        // diagnosis, exams, epicrisis...) and, once discharged, the linked
-        // checkout id — used by the epicrisis cards.
-        const encounterData = { ...json.encounter, checkin: json.checkin || null, checkoutRef: json.checkout?.id || null };
+        if (json.status !== 'success' || !json.checkin) return null;
+        const encounterData = checkinToEncounter(json);
         cachePut(cache.encounters, checkinId, encounterData);
         log(`Encounter data fetched successfully for checkin ${checkinId}:`, encounterData);
         return encounterData;
@@ -5523,13 +5578,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const enc = await limitedMap(allIds, MAX_CONCURRENT_REQUESTS,
                 async id => {
                     try {
-                        const type = checkoutIdSet.has(id) ? 'checkout' : 'checkin';
-                        if (cache.encounters[id]) return cache.encounters[id];
-                        const r = await apiFetch(`/api/${type}/${id}`);
-                        if (!r.ok) return null;
-                        const data = (await r.json()).encounter || null;
-                        if (data) cachePut(cache.encounters, id, data);
-                        return data;
+                        return checkoutIdSet.has(id)
+                            ? await fetchEncounterDataForCheckout(id)
+                            : await fetchEncounterDataForCheckin(id);
                     } catch { return null; }
                 });
             encounters = enc
@@ -5632,8 +5683,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function extractEpicrisisText(encounterData) {
-        if (!encounterData.notes || !Array.isArray(encounterData.notes)) return '';
-        return dedupeParagraphs(encounterData.notes.join('\n\n'));
+        return dedupeParagraphs(encounterData.checkout?.epicrisis || '');
     }
 
     // Returns true if text has meaningful content beyond markdown markers and punctuation.

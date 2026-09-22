@@ -499,8 +499,10 @@ async def _encounter_api_response(client, request, id) -> web.Response:
 
 @require_auth
 async def get_checkout(request):
-    """Retrieve discharge summary by ID. Returns raw HippoData JSON plus an
-    `encounter` summary (see _encounter_summary)."""
+    """Retrieve discharge summary by ID. Returns raw HippoData JSON (patient,
+    checkin, checkout, investigations) — no `encounter` summary; the frontend
+    reads the fields directly. /fhir/Encounter/{id}?type=checkout still serves
+    the FHIR view."""
     id = request.match_info.get('id')
     if not id:
         return web_error_response("Checkout ID is required")
@@ -512,12 +514,15 @@ async def get_checkout(request):
     if debug_resp is not None:
         return debug_resp
 
-    return await _encounter_api_response(client, request, id)
+    return web_json_response(await client.fetch_and_parse(id=id))
 
 @require_auth
 async def get_checkin(request):
-    """Retrieve admission record by ID. Returns raw HippoData JSON plus an
-    `encounter` summary (see _encounter_summary)."""
+    """Retrieve admission record by ID. Returns raw HippoData JSON (patient,
+    presentation, checkin, and checkout once discharged); unlike the other
+    encounter routes there is no `encounter` summary — the frontend reads the
+    admission-form fields directly. /fhir/Encounter/{id}?type=checkin still
+    serves the FHIR view."""
     id = request.match_info.get('id')
     if not id:
         return web_error_response("Checkin ID is required")
@@ -526,7 +531,7 @@ async def get_checkin(request):
     debug_resp = await web_debug_response(client, request, id=id)
     if debug_resp is not None:
         return debug_resp
-    return await _encounter_api_response(client, request, id)
+    return web_json_response(await client.fetch_and_parse(id=id))
 
 @require_auth
 async def get_checkup(request):

@@ -2758,22 +2758,24 @@ class HippoClientCheckout(HippoClient):
             def row_text(r):
                 return [c.get_text(strip=True) for c in r.find_all('td')]
 
-            # Row 2: 6-cell — "Data eliberarii:", date, "Sectie / Compartiment:", ward, ...
+            # Row 2: 6-cell — "Data eliberarii:" (the date this letter was *printed*,
+            #        i.e. today — not stored), date, "Sectie / Compartiment:", ward, "FO n", "Urgenta DA"
             # Row 3: 4-cell — "Perioada internarii:", "DD/MM/YYYY HH:MM - DD/MM/YYYY HH:MM", "Medic:", name
             # Row 4: 2-cell — "NUME:SURNAME", "PRENUME:FIRSTNAME"
             # Row 5: 2-cell — "DIAGNOSTIC PRINCIPAL (DRG Cod 1):code desc", "DIAGNOSTIC PRINCIPAL (DRG Cod 2):-"
             # Row 6: 2-cell — "VARSTA:...", "CNP:..."
             # Row 10: 2-cell — "STAREA LA EXTERNARE:..."
-            # Row 11-12: secondary diagnoses
+            # Row 11: 2-cell headers "DIAGNOSTICE SECUNDARE (DRG):" / "DIAGNOSTIC FORMULARE LIBERA:";
+            #        Row 12: <br>-separated secondary diagnoses / free-text discharge diagnosis
             # Row 13: 1-cell "EPICRIZA" header; Row 14: 1-cell epicrisis text
-            # Row 15: 1-cell "TRATAMENT RECOMANDAT"; Row 16: 1-cell "RECOMANDARI..."; Row 17: recommendations
+            # Row 15: 1-cell "TRATAMENT RECOMANDAT" (+ text row only when filled in);
+            #        next 1-cell "RECOMANDARI..." header; then recommendations
 
             for i, row in enumerate(rows):
                 cells = row_text(row)
                 nc = len(cells)
 
                 if nc == 6 and cells[0] == 'Data eliberarii:':
-                    data.store("checkout.date", cells[1])
                     data.store("checkout.ward", cells[3])
                     fo_m = re.search(r'FO\s*(\d+)', cells[4])
                     if fo_m:
@@ -2782,7 +2784,7 @@ class HippoClientCheckout(HippoClient):
 
                 elif nc == 4 and cells[0] == 'Perioada internarii:':
                     period = cells[1]
-                    data.store("checkin.medic", re.sub(r'^Dr\.', '', cells[3]).strip())
+                    data.store("checkout.medic", re.sub(r'^Dr\.', '', cells[3]).strip())
                     # "DD/MM/YYYY HH:MM - DD/MM/YYYY HH:MM"
                     m = re.match(r'(\S+\s+\S+)\s*-\s*(\S+\s+\S+)', period)
                     if m:
@@ -2795,7 +2797,7 @@ class HippoClientCheckout(HippoClient):
                     data.store("patient.name", f"{surname} {firstname}".strip())
 
                 elif nc == 2 and cells[0].startswith('DIAGNOSTIC PRINCIPAL (DRG Cod 1):'):
-                    data.store("checkin.diagnosis", cells[0][len('DIAGNOSTIC PRINCIPAL (DRG Cod 1):'):].strip())
+                    data.store("checkout.diagnosis", cells[0][len('DIAGNOSTIC PRINCIPAL (DRG Cod 1):'):].strip())
 
                 elif nc == 2 and cells[1].startswith('CNP:'):
                     cnp = cells[1][len('CNP:'):]
@@ -2837,7 +2839,10 @@ class HippoClientCheckout(HippoClient):
                 elif nc == 1 and cells[0] == 'TRATAMENT RECOMANDAT':
                     for j in range(i + 1, min(i + 5, len(rows))):
                         nxt = row_text(rows[j])
-                        if len(nxt) == 1 and nxt[0] and nxt[0] not in ('RECOMANDARI / REGIM / MEDICATIE',):
+                        # The next section header means the treatment is empty.
+                        if len(nxt) == 1 and nxt[0] == 'RECOMANDARI / REGIM / MEDICATIE':
+                            break
+                        if len(nxt) == 1 and nxt[0]:
                             cell = rows[j].find('td')
                             cell_html = cell.decode_contents() if cell else nxt[0]
                             data.store("checkout.treatment", html_to_markdown(cell_html))
@@ -2853,27 +2858,27 @@ class HippoClientCheckout(HippoClient):
                             break
 
                 elif nc == 2 and cells[0].startswith('DIAGNOSTICE SECUNDARE'):
-                    # Next row contains codes concatenated: "P92.0 Voma la nou-nascutR63.3 ..."
-                    for j in range(i + 1, min(i + 3, len(rows))):
-                        nxt = row_text(rows[j])
-                        if len(nxt) >= 1 and nxt[0] and nxt[0] != '-':
-                            # Split on ICD-10 code boundary: letter+digit+dot preceded by non-space
-                            raw = nxt[0]
-                            parts = re.split(r'(?<=[a-zA-Z])(?=[A-Z]\d{2}\.)', raw)
-                            secondary = [p.strip() for p in parts if p.strip() and p.strip() != '-']
-                            if secondary:
-                                data.store_list("checkin.secondary_diagnoses", secondary)
-                            break
+                    # Next row: <br>-separated secondary diagnoses | free-text discharge diagnosis
+                    tds = rows[i + 1].find_all('td') if i + 1 < len(rows) else []
+                    if len(tds) >= 1:
+                        secondary = [t for t in tds[0].stripped_strings if t != '-']
+                        if secondary:
+                            data.store_list("checkout.secondary_diagnoses", secondary)
+                    if len(tds) >= 2:
+                        free_text = tds[1].get_text(' ', strip=True)
+                        if free_text and free_text != '-':
+                            data.store("checkout.diagnosis_text", free_text)
 
             # Extract 2-cell lab/imaging investigation rows under section headers
             investigations = []
             current_section = ""
             for row in rows:
-                cells = row_text(row)
+                cells = [c.get_text(' ', strip=True) for c in row.find_all('td')]
                 if len(cells) == 1:
+                    # Any other one-cell header (e.g. "PROCEDURI DRG", followed by
+                    # procedure, medication and cost tables) ends the exams list.
                     txt = cells[0]
-                    if txt.startswith('EXAMENE') or txt.startswith('PROCEDURI'):
-                        current_section = txt
+                    current_section = txt if txt.startswith('EXAMENE') else ""
                 elif len(cells) == 2 and cells[0] not in ('COD CERERE / DATA',) and current_section:
                     code_date = cells[0]
                     detail = cells[1]
@@ -2947,14 +2952,11 @@ class HippoClientCheckout(HippoClient):
                     }
                 }]
 
-            # Add reason (admission diagnostic) if available
-            admission_diagnosis = parsed_data.get("checkin.diagnosis")
-            if admission_diagnosis:
-                fhir_encounter["reasonCode"] = [
-                    {
-                        "text": admission_diagnosis
-                    }
-                ]
+            # Reason: the main (DRG) diagnosis — the discharge letter carries no
+            # separate admission diagnosis.
+            main_diagnosis = parsed_data.get("checkout.diagnosis")
+            if main_diagnosis:
+                fhir_encounter["reasonCode"] = [{"text": main_diagnosis}]
 
             # Emergency flag
             if parsed_data.get("checkout.is_urgent"):
@@ -2995,28 +2997,10 @@ class HippoClientCheckout(HippoClient):
             epicrisis = parsed_data.get("checkout.epicrisis")
             if epicrisis:
                 notes.append({"text": epicrisis})
+            if parsed_data.get("checkout.diagnosis_text"):
+                notes.append({"text": f"**Diagnostic la externare:** {parsed_data.get('checkout.diagnosis_text')}"})
             if notes:
                 fhir_encounter["note"] = notes
-
-            # Add diagnosis if available
-            if admission_diagnosis:
-                fhir_encounter["diagnosis"] = [
-                    {
-                        "condition": {
-                            "reference": f"Condition/admission-{encounter_id}",
-                            "display": admission_diagnosis
-                        },
-                        "use": {
-                            "coding": [
-                                {
-                                    "system": "http://terminology.hl7.org/CodeSystem/diagnosis-role",
-                                    "code": "AD",
-                                    "display": "Admission diagnosis"
-                                }
-                            ]
-                        }
-                    }
-                ]
 
             # Add discharge diagnosis if available
             discharge_diagnosis = parsed_data.get("checkout.diagnosis")
@@ -3042,7 +3026,7 @@ class HippoClientCheckout(HippoClient):
                 )
 
             # Secondary diagnoses
-            secondary = parsed_data.get("checkin.secondary_diagnoses") or []
+            secondary = parsed_data.get("checkout.secondary_diagnoses") or []
             if secondary:
                 if "diagnosis" not in fhir_encounter:
                     fhir_encounter["diagnosis"] = []
