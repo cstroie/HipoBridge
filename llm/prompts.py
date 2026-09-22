@@ -92,9 +92,9 @@ PROMPT_META = {
     "pre_exam_executive": ("medical", 300),
     # Prompts only — contrast_safety needs a renal-analyte extract (same
     # shape as lab.md's abnormal-rows table, but unconditional on abnormality)
-    # alongside the existing clinical-text feed. Sized like pre_exam_oneliner
-    # (160): short, single-paragraph output.
-    "contrast_safety": ("medical", 220),
+    # alongside the existing clinical-text feed. Single-line verdict, sized
+    # like pre_exam_oneliner.
+    "contrast_safety": ("medical", 160),
 }
 
 

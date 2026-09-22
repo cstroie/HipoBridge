@@ -1720,6 +1720,33 @@ document.addEventListener('DOMContentLoaded', function() {
     // and estimated/measured glomerular filtration rate.
     const RENAL_ANALYTE_RE = /creatinin|e-?gfr|\brfg\b|filtrare glomerular|clearance.*creatin/i;
 
+    // Keywords marking a sentence as contrast-relevant (allergy/reaction to
+    // contrast media, or the other flags contrast_safety.md checks for).
+    // The clinical record can be long (years of history); rather than send
+    // all of it, buildContrastSafetyText() below keeps only sentences
+    // matching this so the LLM call stays small and on-topic.
+    const CONTRAST_FLAG_RE = /alergi|reac[țt]i|\biod\b|iodat|contrast|iomeron|ultravist|omnipaque|visipaque|optiray|xenetix|gadolini|gadovist|dotarem|magnevist|primovist|\bastm|metformin|mielom multiplu|paraproteinemi/i;
+
+    // Splits clinical markdown into sentences (line-based, then split on
+    // sentence-ending punctuation within each line so list items without a
+    // period still count as one sentence) and keeps only the ones matching
+    // CONTRAST_FLAG_RE, so passages stay whole and meaningful rather than
+    // being cut mid-sentence.
+    function extractContrastRelevantText(text) {
+        if (!text) return '';
+        const kept = [];
+        for (const line of text.split(/\n+/)) {
+            const trimmedLine = line.trim();
+            if (!trimmedLine) continue;
+            const sentences = trimmedLine.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [trimmedLine];
+            for (const raw of sentences) {
+                const sentence = raw.trim();
+                if (sentence && CONTRAST_FLAG_RE.test(sentence)) kept.push(sentence);
+            }
+        }
+        return kept.join(' ');
+    }
+
     function resetAiTab() {
         if (elements.aiEmptyState) elements.aiEmptyState.hidden = false;
         if (elements.aiReportBtn) elements.aiReportBtn.hidden = true;
@@ -1755,12 +1782,15 @@ document.addEventListener('DOMContentLoaded', function() {
     // loaded for this patient) plus the same clinical record text the
     // report/pre-exam prompts use. No button wired to this yet.
     function buildContrastSafetyText() {
-        const clinical = getPatientClinicalText();
-        if (!renalLabAiText && !clinical) return '';
+        const fullClinical = getPatientClinicalText();
+        if (!renalLabAiText && !fullClinical) return '';
         const patientData = pendingAnalysesData?.patientData;
         const header = patientContextHeader(patientData);
         const renalSection = `### Renal function\n${renalLabAiText || 'No renal function analytes on file.'}`;
-        const clinicalSection = `### Clinical record\n${clinical || 'No clinical record available.'}`;
+        const relevantClinical = extractContrastRelevantText(fullClinical);
+        const clinicalText = relevantClinical
+            || (fullClinical ? 'No contrast-relevant mentions found in clinical record.' : 'No clinical record available.');
+        const clinicalSection = `### Clinical record\n${clinicalText}`;
         return header + renalSection + '\n\n' + clinicalSection;
     }
 
