@@ -1704,6 +1704,27 @@ select {
     min-width: 0;
     flex: 1 1 auto;
 }
+/* Imaging cards in the two-column masonry are too narrow for the title and
+   the AI | Copy pill side by side — drop the pill under the hgroup, full
+   width. Keyed to the card's own width (the grid picks its column count
+   from its width, not a fixed breakpoint). */
+#imagingGrid .card-title-block {
+    container-type: inline-size;
+}
+@container (max-width: 440px) {
+    #imagingGrid .card-title-row {
+        flex-wrap: wrap;
+    }
+    #imagingGrid .card-title-row .card-toolbar {
+        display: flex;
+        width: 100%;
+    }
+    #imagingGrid .card-title-row .card-toolbar .btn-ai,
+    #imagingGrid .card-title-row .card-toolbar .btn-copy {
+        flex: 1;
+        justify-content: center;
+    }
+}
 /* Grouped top-right actions (AI + copy) — a single pill-shaped toolbar with
    a thin border and a separator between the two buttons. Shared by the
    report header, imaging/lab analysis cards, and the epicrisis accordion
@@ -3487,8 +3508,9 @@ select {
    rule up top) — just needs positioning within the accordion body, plus a
    bit of extra breathing room above/below that only this spot asked for. */
 .epi-card-body>.card-toolbar {
-    width: 100%;
-    margin: var(--space-16) 0 var(--space-12);
+    display: flex;
+    width: auto;
+    margin: var(--space-16) var(--space-24) var(--space-12);
 }
 .epi-card-body>.card-toolbar .btn-ai,
 .epi-card-body>.card-toolbar .btn-copy {
