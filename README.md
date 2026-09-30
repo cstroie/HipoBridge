@@ -81,7 +81,7 @@ The write endpoints are restricted to usernames listed under `[radiology] allowe
 
 Workflow: **Perform → Write → Validate**, or **Cancel** in place of Perform to withdraw the request. Each step replays the `cerere.asp` form with the appropriate field override; caches for `cerere.asp` and `BuletinAnalize` are evicted after every write.
 
-`/fhir/Schedule` returns a `searchset` Bundle of `ServiceRequest` resources. Modality filter uses Hipocrate's native `PARA_ID_Laborator` param; patient text uses `PARA_TextCautare`; ward is filtered server-side by name. Pass `?refresh=1` to bypass the 30-minute LRU cache.
+`/fhir/Schedule` returns a `searchset` Bundle of `ServiceRequest` resources. Modality filter uses Hipocrate's native `PARA_ID_Laborator` param; patient text uses `PARA_TextCautare`; ward is filtered server-side by name. `status` is the derived request status (`completed`/`ended` = finished, `active` = in work or performed, `draft`/`on-hold`/`revoked`/`entered-in-error`); `occurrenceDateTime` is the performed time (Hipocrate's "Data Efectuarii"), omitted until performed. Pass `?refresh=1` to bypass the 30-minute LRU cache.
 
 All endpoints require HTTP Basic Auth.
 
