@@ -5633,6 +5633,9 @@ class HippoClientSchedule(HippoClient):
                     ] if c] or None,
                     quantityQuantity={"value": req.get('analysis_count')} if req.get('analysis_count') else None,
                     authoredOn=req.get('date_time'),
+                    # ServiceRequest has no "performed" element; occurrenceDateTime
+                    # carries Hipocrate's 'Data Efectuarii' (only set once performed).
+                    occurrenceDateTime=req.get('performed_at', '').replace(' ', 'T') or None,
                     requester=FHIRReference(display=req.get('requested_by')) if req.get('requested_by') else None,
                     note=[{"text": req.get('section')}] if req.get('section') else None,
                 )
