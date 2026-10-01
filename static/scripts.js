@@ -756,7 +756,7 @@ document.addEventListener('DOMContentLoaded', function() {
         stopSchedulePrefetch();
         const gen = scheduleGeneration;
         schedulePrefetchQueue = entries
-            .filter(r => SCHEDULE_PREFETCH_STATUSES.has(r.status_code) && !scheduleFetchedIds.has(r.request_id))
+            .filter(r => SCHEDULE_PREFETCH_STATUSES.has(r.status) && !scheduleFetchedIds.has(r.request_id))
             .map(r => ({ id: r.request_id, isImaging: SCHEDULE_PREFETCH_IMAGING.has(r.modality || '') }));
         if (schedulePrefetchQueue.length) queueSchedulePrefetchStep(gen, SCHEDULE_PREFETCH_IDLE_GATE);
     }
@@ -5885,7 +5885,7 @@ document.addEventListener('DOMContentLoaded', function() {
         'unknown':        'status-pending',
     };
 
-    // Human-readable labels for FHIR request statuses (raw status kept in title)
+    // Human-readable labels for FHIR request statuses (the code is kept in the title)
     const SCHEDULE_STATUS_LABEL = {
         'on-hold':        'Not sent',
         'draft':          'In lab',
@@ -5898,13 +5898,13 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     const PAYMENT_TYPE = {
-        'ambulator':            { label: 'Outpatient',  cls: 'pay-outpatient' },
-        'chitanta':             { label: 'Self-pay',    cls: 'pay-selfpay' },
-        'gratuitate':           { label: 'Exempt',      cls: 'pay-exempt' },
-        'personal-angajat':     { label: 'Staff',       cls: 'pay-staff' },
-        'spitalizare-continua': { label: 'Inpatient',   cls: 'pay-inpatient' },
-        'spitalizare-zi':       { label: 'Day case',    cls: 'pay-daycase' },
-        'urgenta':              { label: 'Emergency',   cls: 'pay-emergency' },
+        'ambulatory': { label: 'Outpatient',  cls: 'pay-outpatient' },
+        'receipt':    { label: 'Self-pay',    cls: 'pay-selfpay' },
+        'free':       { label: 'Exempt',      cls: 'pay-exempt' },
+        'staff':      { label: 'Staff',       cls: 'pay-staff' },
+        'inpatient':  { label: 'Inpatient',   cls: 'pay-inpatient' },
+        'day-care':   { label: 'Day case',    cls: 'pay-daycase' },
+        'emergency':  { label: 'Emergency',   cls: 'pay-emergency' },
     };
 
     let scheduleEntries = [];
@@ -6831,10 +6831,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const requestedBy = r.requested_by || '';
         const laboratory = r.laboratory || '';
         const modalitySlug  = r.modality || '';
-        const paymentSlug   = r.payment_code || '';
-        const status = r.status_code || '';
+        const paymentSlug   = r.payment_type || '';
+        const status = r.status || '';
         const statusClass = SCHEDULE_STATUS_CLASS[status] || '';
-        const isUrgent = r.priority_code === 'urgent';
+        const isUrgent = r.priority === 'urgent';
         const avatar = MODALITY_AVATAR[modalitySlug] || { icon: 'fa-question', cls: '' };
 
         // Row: time col + card
@@ -7060,7 +7060,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // is finished (completed/ended) there is no special need for it.
     const _PREV_FINISHED_STATUSES = new Set(['completed', 'ended']);
     function _prevRelevant(req) {
-        return !_PREV_FINISHED_STATUSES.has(req?.status_code);
+        return !_PREV_FINISHED_STATUSES.has(req?.status);
     }
 
     // Fourth card line: the previous same-modality exam while the request is
@@ -7363,9 +7363,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const total     = scheduleEntries.length;
-        const urgent    = scheduleEntries.filter(r => r.priority_code === 'urgent').length;
-        const inLab     = scheduleEntries.filter(r => ['draft', 'active'].includes(r.status_code)).length;
-        const completed = scheduleEntries.filter(r => ['completed', 'ended'].includes(r.status_code)).length;
+        const urgent    = scheduleEntries.filter(r => r.priority === 'urgent').length;
+        const inLab     = scheduleEntries.filter(r => ['draft', 'active'].includes(r.status)).length;
+        const completed = scheduleEntries.filter(r => ['completed', 'ended'].includes(r.status)).length;
 
         const metricDefs = [
             { label: 'Exams',     value: total,     color: 'var(--primary, #4338ca)' },

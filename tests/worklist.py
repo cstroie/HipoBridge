@@ -26,7 +26,7 @@ except ImportError:
 
 from worklist import (
     _name_to_dicom, _name_parts_to_dicom, _build_datasets, _MODALITY_CODE,
-    WorklistCache, WorklistServer, _HIPOCRATE_TO_FHIR, _load_config,
+    WorklistCache, WorklistServer, _load_config,
 )
 
 
@@ -98,7 +98,7 @@ class TestBuildDatasets(unittest.TestCase):
             'modality':     'eco',
             'laboratory':   'Ecografie',
             'requested_by': 'DR. IONESCU MARIA',
-            '_fhir_status': 'draft',
+            'status': 'draft',
         }
         base.update(kwargs)
         return base
@@ -398,7 +398,7 @@ class TestWorklistSCP(unittest.TestCase):
         ds.ScheduledProcedureStepSequence = Sequence([sps])
 
         cache = WorklistCache()
-        cache.update('28', [ds], [{'request_id': '9999001', '_fhir_status': 'draft',
+        cache.update('28', [ds], [{'request_id': '9999001', 'status': 'draft',
                                    'modality': 'eco', 'section': 'TEST'}])
 
         profiles = [{

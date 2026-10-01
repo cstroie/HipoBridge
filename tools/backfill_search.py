@@ -101,7 +101,7 @@ async def main():
     ap.add_argument("--state", default="backfill_search.state",
                     help="checkpoint file for --resume")
     ap.add_argument("--status", default="ended",
-                    help="comma-separated status_code values to fetch (default: "
+                    help="comma-separated status values to fetch (default: "
                          "ended = 'Terminata', i.e. finalized reports only)")
     ap.add_argument("--resume", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
@@ -149,7 +149,7 @@ async def main():
                     w["rows"] += 1
                     if rid in done:
                         w["skipped"] += 1
-                    elif row.get("status_code") not in statuses:
+                    elif row.get("status") not in statuses:
                         w["empty"] += 1
                     elif args.dry_run:
                         w["fetched"] += 1

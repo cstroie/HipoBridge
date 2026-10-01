@@ -5392,8 +5392,6 @@ class HippoClientSchedule(HippoClient):
                 section_name=kwargs.get('section_name'),
                 status=kwargs.get('status'),
             ))
-            for req in parsed.get("requests") or []:
-                self._annotate_row(req)
             parsed.store("total", len(parsed.get("requests") or []))
             return parsed
         except Exception as e:
@@ -5401,38 +5399,35 @@ class HippoClientSchedule(HippoClient):
             data.set_error(f"Data retrieval failed: {e}")
             return data
 
-    def _derive_fhir_status(self, req: dict) -> str:
+    @classmethod
+    def _fhir_status(cls, text: str, performed: bool) -> str:
         """Map Hipocrate's raw status text to a FHIR ServiceRequest status,
         with one refinement: staff only flip the request's own status text to
         something completion-flavored once they get around to it, which can
-        lag well behind reality. 'Data Efectuarii' (performed_at, scraped
-        per-row since the 2026-08-14 column restoration) tells us the exam
-        was actually performed even while the request still just says
+        lag well behind reality. 'Data Efectuarii' (performed_at) tells us the
+        exam was actually performed even while the request still just says
         'Trimisa in laborator' (→ 'draft'). Promote that case to 'active' —
         already a valid FHIR ServiceRequest status, and already labeled 'In
         progress' in the frontend (SCHEDULE_STATUS_LABEL) — so a
         performed-but-not-yet-marked-complete request doesn't look identical
         to one nobody has touched yet.
         """
-        status_key = (req.get('status') or '').lower()
-        fhir_status = self._FHIR_STATUS.get(status_key, 'unknown')
-        if fhir_status == 'draft' and req.get('performed_at'):
-            fhir_status = 'active'
-        return fhir_status
-
-    def _annotate_row(self, req: dict) -> dict:
-        """Add the derived codes the /api/schedule consumers (frontend) read
-        instead of re-deriving them from Hipocrate's raw text: status_code
-        (FHIR ServiceRequest status), priority_code, payment_code."""
-        req['status_code'] = self._derive_fhir_status(req)
-        req['priority_code'] = self._priority_code(req)
-        req['payment_code'] = self._PAYMENT_SLUG.get((req.get('payment_type') or '').lower(), 'other')
-        return req
+        status = cls._FHIR_STATUS.get((text or '').strip().lower(), 'unknown')
+        if status == 'draft' and performed:
+            status = 'active'
+        return status
 
     @staticmethod
-    def _priority_code(req: dict) -> str:
-        """'urgent' unless Hipocrate's priority text is blank/normal."""
-        return 'urgent' if (req.get('priority') or '').lower() not in ('normala', 'normal', '') else 'routine'
+    def _priority(text: str) -> str:
+        """FHIR ServiceRequest priority: 'urgent' unless Hipocrate's priority
+        text is blank/normal ('routine')."""
+        return 'urgent' if (text or '').strip().lower() not in ('normala', 'normal', '') else 'routine'
+
+    @classmethod
+    def _payment_slug(cls, text: str) -> str:
+        """English payment-type slug from Hipocrate's 'tip plata' text ('' stays '')."""
+        text = (text or '').strip().lower()
+        return cls._PAYMENT_SLUG.get(text, 'other') if text else ''
 
     @staticmethod
     def _ward_family(section: str) -> str:
@@ -5465,7 +5460,7 @@ class HippoClientSchedule(HippoClient):
             )]
         statuses = {s.strip() for s in (status or '').split(',') if s.strip()}
         if statuses:
-            requests = [r for r in requests if self._derive_fhir_status(r) in statuses]
+            requests = [r for r in requests if r.get('status') in statuses]
         return requests
 
     async def debug_page(self, **kwargs):
@@ -5540,9 +5535,10 @@ class HippoClientSchedule(HippoClient):
                         'request_code': request_code,
                         'request_id': request_id,
                         'date_time': iso_dt,
-                        'status': detail_cells[1].get_text(strip=True),
-                        'payment_type': detail_cells[2].get_text(strip=True),
-                        'priority': detail_cells[3].get_text(strip=True),
+                        'status': self._fhir_status(detail_cells[1].get_text(strip=True),
+                                                    bool(performed_dt)),
+                        'payment_type': self._payment_slug(detail_cells[2].get_text(strip=True)),
+                        'priority': self._priority(detail_cells[3].get_text(strip=True)),
                         'section': detail_cells[4].get_text(strip=True).upper(),
                         'performed_at': performed_dt.strftime('%Y-%m-%d %H:%M') if performed_dt else '',
                         'requested_by': requested_by,
@@ -5559,15 +5555,26 @@ class HippoClientSchedule(HippoClient):
             data.set_error(str(e))
             return data
 
-    # Maps Hipocrate "tip plata" display text → FHIR coding slug
+    # Maps Hipocrate "tip plata" display text → English slug (also the FHIR coding code)
     _PAYMENT_SLUG = {
-        'ambulator':            'ambulator',
-        'chitanta':             'chitanta',
-        'gratuitate':           'gratuitate',
-        'personal angajat':     'personal-angajat',
-        'spitalizare continua': 'spitalizare-continua',
-        'spitalizare de zi':    'spitalizare-zi',
-        'urgenta':              'urgenta',
+        'ambulator':            'ambulatory',
+        'chitanta':             'receipt',
+        'gratuitate':           'free',
+        'personal angajat':     'staff',
+        'spitalizare continua': 'inpatient',
+        'spitalizare de zi':    'day-care',
+        'urgenta':              'emergency',
+    }
+
+    _PAYMENT_DISPLAY = {
+        'ambulatory': 'Outpatient',
+        'receipt':    'Self-pay',
+        'free':       'Exempt',
+        'staff':      'Staff',
+        'inpatient':  'Inpatient',
+        'day-care':   'Day case',
+        'emergency':  'Emergency',
+        'other':      'Other',
     }
 
     # Maps Hipocrate status text → FHIR ServiceRequest.status
@@ -5609,14 +5616,11 @@ class HippoClientSchedule(HippoClient):
             )
 
             for req in requests:
-                fhir_status = self._derive_fhir_status(req)
-                priority = self._priority_code(req)
-
                 sr = FHIRServiceRequest(
                     id=req.get('request_id'),
-                    status=fhir_status,
+                    status=req.get('status'),
                     intent="order",
-                    priority=priority,
+                    priority=req.get('priority'),
                     identifier=[{
                         "system": f"{system_base}/fhir/NamingSystem/request-code",
                         "value": req.get('request_code'),
@@ -5627,8 +5631,8 @@ class HippoClientSchedule(HippoClient):
                         FHIRCodeableConcept(coding=[{"code": req.get('modality')}]) if req.get('modality') else None,
                         FHIRCodeableConcept(
                             coding=[{"system": f"{system_base}/fhir/NamingSystem/payment-type",
-                                     "code": self._PAYMENT_SLUG.get((req.get('payment_type') or '').lower(), 'other'),
-                                     "display": req.get('payment_type')}],
+                                     "code": req.get('payment_type'),
+                                     "display": self._PAYMENT_DISPLAY.get(req.get('payment_type'), req.get('payment_type'))}],
                         ) if req.get('payment_type') else None,
                     ] if c] or None,
                     quantityQuantity={"value": req.get('analysis_count')} if req.get('analysis_count') else None,

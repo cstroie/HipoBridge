@@ -54,29 +54,49 @@ class TestApplyFiltersSection(unittest.TestCase):
         self.assertEqual(len(self.client._apply_filters(self.requests, section_name='')), 6)
 
 
-class TestAnnotateRow(unittest.TestCase):
-    def setUp(self):
-        self.client = HippoClientSchedule("http://test.invalid", None)
+class TestTranslation(unittest.TestCase):
+    """Hipocrate's Romanian status/priority/payment text → standard values."""
+    C = HippoClientSchedule
 
-    def test_status_priority_payment_codes(self):
-        r = self.client._annotate_row({
-            'status': 'Cerere Completata', 'priority': 'Urgenta',
-            'payment_type': 'Spitalizare de zi'})
-        self.assertEqual(r['status_code'], 'completed')
-        self.assertEqual(r['priority_code'], 'urgent')
-        self.assertEqual(r['payment_code'], 'spitalizare-zi')
-
-    def test_defaults(self):
-        r = self.client._annotate_row({'status': 'x', 'priority': 'Normala', 'payment_type': ''})
-        self.assertEqual(r['status_code'], 'unknown')
-        self.assertEqual(r['priority_code'], 'routine')
-        self.assertEqual(r['payment_code'], 'other')
+    def test_status(self):
+        self.assertEqual(self.C._fhir_status('Cerere Completata', False), 'completed')
+        self.assertEqual(self.C._fhir_status('Terminata', True), 'ended')
+        self.assertEqual(self.C._fhir_status('x', False), 'unknown')
 
     def test_performed_promotes_sent_to_lab_to_active(self):
-        sent = {'status': 'Trimisa in laborator', 'performed_at': ''}
-        done = {'status': 'Trimisa in laborator', 'performed_at': '2026-09-21 10:00'}
-        self.assertEqual(self.client._annotate_row(sent)['status_code'], 'draft')
-        self.assertEqual(self.client._annotate_row(done)['status_code'], 'active')
+        self.assertEqual(self.C._fhir_status('Trimisa in laborator', False), 'draft')
+        self.assertEqual(self.C._fhir_status('Trimisa in laborator', True), 'active')
+
+    def test_priority(self):
+        self.assertEqual(self.C._priority('Urgenta'), 'urgent')
+        self.assertEqual(self.C._priority('Normala'), 'routine')
+        self.assertEqual(self.C._priority(''), 'routine')
+
+    def test_payment(self):
+        self.assertEqual(self.C._payment_slug('Spitalizare de zi'), 'day-care')
+        self.assertEqual(self.C._payment_slug('Urgenta'), 'emergency')
+        self.assertEqual(self.C._payment_slug('???'), 'other')
+        self.assertEqual(self.C._payment_slug(''), '')
+
+    def test_status_filter_uses_translated_status(self):
+        c = HippoClientSchedule("http://test.invalid", None)
+        rows = [{'status': 'draft'}, {'status': 'ended'}, {'status': 'active'}]
+        self.assertEqual([r['status'] for r in c._apply_filters(rows, status='draft,active')],
+                         ['draft', 'active'])
+
+
+class TestFhirBundle(unittest.TestCase):
+    def test_uses_translated_row_values(self):
+        c = HippoClientSchedule("http://test.invalid", None)
+        from hippodata import HippoData
+        d = HippoData(status="success", message="")
+        d.store_list("requests", [{'request_id': '1', 'status': 'ended', 'priority': 'urgent',
+                                   'payment_type': 'day-care', 'laboratory': 'MRI', 'modality': 'irm'}])
+        text = str(c.fhir_response(d).to_dict())
+        self.assertIn("'ended'", text)
+        self.assertIn("'urgent'", text)
+        self.assertIn("'day-care'", text)
+        self.assertIn("Day case", text)
 
 
 if __name__ == "__main__":

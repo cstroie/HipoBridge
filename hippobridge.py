@@ -618,8 +618,9 @@ async def get_schedule(request):
 
     status accepts a comma-separated list of FHIR ServiceRequest statuses
     (e.g. status=draft,active) to match any of them — see
-    HippoClientSchedule._apply_filters. Each row also carries the derived
-    status_code (that same FHIR status) and priority_code ('urgent'|'routine')."""
+    HippoClientSchedule._apply_filters. Rows carry standard English values,
+    translated once in the parser: status (FHIR ServiceRequest status),
+    priority ('urgent'|'routine'), payment_type (English slug)."""
     start_date   = request.rel_url.query.get('start_date') or request.rel_url.query.get('date')
     end_date     = request.rel_url.query.get('end_date')
     lab_id       = request.rel_url.query.get('lab_id')

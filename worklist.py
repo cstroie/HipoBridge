@@ -103,21 +103,6 @@ for _slug, _lab_id in _MODALITY_SLUG_TO_LAB_ID.items():
 # Entries with any other status (completed, ended, entered-in-error) are excluded.
 _ACTIVE_FHIR_STATUSES = frozenset({'on-hold', 'draft', 'active'})
 
-# Hipocrate status text → FHIR status (mirrors HippoClientSchedule._FHIR_STATUS).
-_HIPOCRATE_TO_FHIR: Dict[str, str] = {
-    'cerere netrimisa':                   'on-hold',
-    'trimisa in laborator':               'draft',
-    'primita in laborator':               'draft',
-    'in lucru(nv)':                       'active',
-    'in lucru(pv)':                       'active',
-    'fara analize':                       'entered-in-error',
-    'cerere completata':                  'completed',
-    'cerere completata/partial validata': 'completed',
-    'terminata':                          'ended',
-    'terminata!':                         'ended',
-    'cerere anulata':                     'revoked',
-}
-
 
 # ---------------------------------------------------------------------------
 # Config
@@ -448,7 +433,7 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
     phone         = ((patient_info or {}).get('phone') or '')[:64]
     address       = ((patient_info or {}).get('address') or '')[:64]
     hippo_id       = (patient_info or {}).get('id') or ''
-    priority      = 'STAT' if (entry.get('priority') or '').lower() not in ('normala', 'normal', '') else 'ROUTINE'
+    priority      = 'STAT' if entry.get('priority') == 'urgent' else 'ROUTINE'
     size          = _height_to_meters((patient_info or {}).get('height') or '')
     weight        = _weight_to_kg((patient_info or {}).get('weight') or '')
     email         = (patient_info or {}).get('email') or ''
@@ -480,9 +465,9 @@ def _build_datasets(entry: dict, patient_info: Optional[dict],
     # Inpatient for genuine admissions. UPU checked directly, same as FUPU
     # triage lookup — more reliable than payment_type's "Urgenta", since an
     # ER patient can still be billed under a different payment type.
-    payment_type = (entry.get('payment_type') or '').lower()
+    payment_type = entry.get('payment_type') or ''
     is_upu = (entry.get('section') or '').upper() == 'UPU'
-    is_day_care = 'spitalizare de zi' in payment_type
+    is_day_care = payment_type == 'day-care'
     institution_residence = 'Outpatient' if (is_upu or is_day_care) else 'Inpatient'
     # The a550 splits PatientComments into [Insurance] / [Patient Comment]
     # (conformance Table 8.1-7: "Insurance=<info><LF><comment>"), so the
@@ -905,7 +890,7 @@ class WorklistServer:
 
         for ds, r in zip(entries, raw):
             # Status: exclude completed / ended / error entries
-            if r.get('_fhir_status') not in _ACTIVE_FHIR_STATUSES:
+            if r.get('status') not in _ACTIVE_FHIR_STATUSES:
                 continue
 
             if profile:
@@ -920,10 +905,10 @@ class WorklistServer:
                 if target_wards and not any(w.upper() in section for w in target_wards):
                     continue
 
-                # Day care filter: 'yes' = spitalizare de zi only, 'no' = exclude it, 'any' = no filter
+                # Day care filter: 'yes' = day-care only, 'no' = exclude it, 'any' = no filter
                 day_care = profile.get('day_care', 'any')
                 if day_care != 'any':
-                    is_day_care = 'spitalizare de zi' in (r.get('payment_type') or '').lower()
+                    is_day_care = r.get('payment_type') == 'day-care'
                     if day_care == 'yes' and not is_day_care:
                         continue
                     if day_care == 'no' and is_day_care:
@@ -1309,10 +1294,6 @@ class WorklistRefresher:
             return [], start, end
 
         entries = data.get('requests') or []
-        for r in entries:
-            status_key = (r.get('status') or '').lower()
-            r['_fhir_status'] = _HIPOCRATE_TO_FHIR.get(status_key, 'unknown')
-
         return entries, start, end
 
     async def refresh(self, lab_id: str,
@@ -1341,7 +1322,7 @@ class WorklistRefresher:
             del self._patient_cache[stale]
 
         # Only enrich active entries.
-        active = [e for e in entries if e.get('_fhir_status') in _ACTIVE_FHIR_STATUSES]
+        active = [e for e in entries if e.get('status') in _ACTIVE_FHIR_STATUSES]
 
         # Bounded concurrency: 3 patients at a time in flight, each a
         # cerere.asp call plus (on cache miss) a patient.asp call — well under
