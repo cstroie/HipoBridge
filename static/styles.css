@@ -4440,6 +4440,15 @@ dialog.report-editor-modal article > section {
     .card-toolbar .btn-copy {
         padding: var(--space-6);
     }
+    /* The pre-exam toolbar's desktop rule (.ai-kind-toolbar .btn-ai) pins
+       min-width: 84px, sized for the text label — with the labels gone
+       that floor alone made 8 icons wrap onto three rows. Drop it so they
+       share one row, wrapping only once the screen can't fit ~32px each. */
+    .ai-kind-toolbar .btn-ai {
+        flex: 1 1 32px;
+        min-width: 32px;
+        padding: var(--space-10) var(--space-4);
+    }
     /* Icon-only below this breakpoint — the text labels are what forces
        the toolbar wide enough to fight section headings for space (see
        .episode-header/.trends-header above). aria-label/title already
@@ -4928,5 +4937,60 @@ dialog.report-editor-modal article > section {
     .search-input-row .btn-search-submit {
         flex: 1 1 0;
         justify-content: center;
+    }
+}
+
+/* Pre-exam toolbar, labels still shown but not enough width for one row
+   (481-960px): instead of wrapping and leaving a lone button on the second
+   row, lay the visible buttons out as an even grid of two rows. The column
+   count follows how many buttons are visible (the toolbar shows only those
+   that apply): 5-6 -> 3 columns, 7+ -> 4. With 4 or fewer they fit on one
+   row anyway and keep the plain flex-wrap layout. Pure CSS: ":nth-child(k of
+   :not([hidden]))" counts visible buttons only. The 1px grid gap over the
+   toolbar's own background draws the dividers (the per-button left borders
+   would be wrong at the start of the second row). */
+@media (min-width: 481px) and (max-width: 960px) {
+    .ai-kind-toolbar:has(> :nth-child(5 of :not([hidden]))) {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1px;
+        width: 100%;
+        background: color-mix(in srgb, var(--on-accent) 30%, var(--warning, #d97706));
+    }
+    .ai-kind-toolbar:has(> :nth-child(7 of :not([hidden]))) {
+        grid-template-columns: repeat(4, 1fr);
+    }
+    /* .card-toolbar too: it must out-rank the (0,5,0) separator rule above. */
+    .card-toolbar.ai-kind-toolbar:has(> :nth-child(5 of :not([hidden]))) .btn-ai {
+        min-width: 0;
+        justify-content: center;
+        text-align: center;
+        line-height: 1.2;
+        padding: var(--space-8);
+        border-left: none;
+    }
+}
+
+/* Pre-exam toolbar below 320px: eight icons no longer fit one row, so stack
+   them as full-width icon + text buttons instead. Placed after the 480px
+   block so these rules win over its icon-only ones. */
+@media (max-width: 320px) {
+    .ai-kind-toolbar {
+        flex-direction: column;
+        flex-wrap: nowrap;
+        border-radius: var(--radius-md);
+    }
+    .ai-kind-toolbar .btn-ai {
+        flex: 0 0 auto;
+        justify-content: flex-start;
+        gap: var(--space-10);
+        padding: var(--space-10) var(--space-14);
+    }
+    .ai-kind-toolbar .btn-ai span {
+        display: inline;
+    }
+    .ai-kind-toolbar .btn-ai + .btn-ai {
+        border-left: none;
+        border-top: 1px solid color-mix(in srgb, var(--on-accent) 30%, transparent);
     }
 }
