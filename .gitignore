@@ -12,3 +12,4 @@ log/
 .python/
 UNINSTALL.md
 docs/vendor/*.pdf
+backfill_search.state

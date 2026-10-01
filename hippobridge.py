@@ -1588,8 +1588,10 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
         _sqlite_cache = SqliteCache(os.path.join(cache_dir, 'cache.db'), ttl=cache_ttl, max_age_days=cache_max_age)
         url_cache.fs_cache = _sqlite_cache
         ai_cache.fs_cache = AiCacheView(_sqlite_cache, ttl=ai_cache.timeout)
+        # max_age_days=0: indexed documents are never evicted (history is kept
+        # on purpose, see tools/backfill_search.py); only the HTML cache expires.
         search.instance = search.SearchIndex(
-            os.path.join(cache_dir, 'search.db'), max_age_days=cache_max_age)
+            os.path.join(cache_dir, 'search.db'), max_age_days=0)
         if no_search_backfill:
             logger.info("Search index cache backfill disabled (--no-search-backfill)")
         asyncio.get_event_loop().create_task(_periodic_cache_cleanup(no_search_backfill=no_search_backfill))
