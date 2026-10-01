@@ -119,23 +119,24 @@ class SearchIndex:
                    WHERE documents_fts MATCH ?
                    ORDER BY rank
                    LIMIT ?""",
-                (match_query, limit * 4),
+                (match_query, limit * 20),
             ).fetchall()
-            # Repeated text (e.g. the same history copied into every
-            # epicrisis of a patient) yields identical snippets: collapse
-            # them per patient/kind, keeping the best-ranked hit and the
-            # ids of the rest.
+            # What the caller wants is the patients having the keyword, not
+            # every document that mentions it (the same history is copied into
+            # each epicrisis, and one patient has many reports): one hit per
+            # patient — the best-ranked document's snippet, with per-kind
+            # document counts and the ids of all matching documents.
             hits: dict = {}
             for r in rows:
                 r = dict(r)
-                key = (r['patient_cnp'] or r['patient_name'], r['kind'], r['snippet'])
+                key = r['patient_cnp'] or r['patient_name']
                 if key in hits:
-                    hits[key]['count'] += 1
-                    hits[key]['source_ids'].append(r['source_id'])
+                    h = hits[key]
                 else:
-                    r['count'] = 1
-                    r['source_ids'] = [r['source_id']]
-                    hits[key] = r
+                    h = hits[key] = {**r, 'count': 0, 'kinds': {}, 'documents': []}
+                h['count'] += 1
+                h['kinds'][r['kind']] = h['kinds'].get(r['kind'], 0) + 1
+                h['documents'].append({'kind': r['kind'], 'source_id': r['source_id']})
             return list(hits.values())[:limit]
         finally:
             con.close()

@@ -53,6 +53,20 @@ class TestSearchIndex(unittest.TestCase):
         self.assertEqual(results[0]['patient_name'], 'Ionescu Maria')
         self.assertIn('<mark>oncologica</mark>', results[0]['snippet'])
 
+    def test_hits_are_grouped_by_patient(self):
+        for i in range(3):
+            _run(self.index.index_document('epicrisis', f'E{i}', 'cnpA', 'Ana', 'rabdomiosarcom embrionar'))
+        _run(self.index.index_document('imaging', 'I1', 'cnpA', 'Ana', 'pacient cu rabdomiosarcom'))
+        _run(self.index.index_document('epicrisis', 'E9', 'cnpB', 'Bob', 'rabdomiosarcom'))
+
+        results = _run(self.index.search('rabdomiosarcom'))
+        self.assertEqual(len(results), 2)
+        by = {r['patient_cnp']: r for r in results}
+        self.assertEqual(by['cnpA']['count'], 4)
+        self.assertEqual(by['cnpA']['kinds'], {'epicrisis': 3, 'imaging': 1})
+        self.assertEqual(len(by['cnpA']['documents']), 4)
+        self.assertEqual(by['cnpB']['count'], 1)
+
     def test_search_no_match(self):
         _run(self.index.index_document('imaging', 'IMG1', 'cnp', 'name', 'CT torace normal.'))
         results = _run(self.index.search('nonexistentterm12345'))

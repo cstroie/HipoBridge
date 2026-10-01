@@ -111,7 +111,10 @@ document.addEventListener('DOMContentLoaded', function() {
         // Recent searches
         recentSearchesList: document.getElementById('recentSearchesList'),
         // Clinical text search (epicrisis/imaging report text)
-        clinicalSearchInput: document.getElementById('clinicalSearchInput'),
+        clinicalSearchBtn: document.getElementById('clinicalSearchBtn'),
+        clinicalSearchPanel: document.getElementById('clinicalSearchPanel'),
+        recentSearchesPanel: document.getElementById('recentSearchesPanel'),
+        clinicalSearchExportBtn: document.getElementById('clinicalSearchExportBtn'),
         clinicalSearchResults: document.getElementById('clinicalSearchResults'),
         clinicalSearchEmpty: document.getElementById('clinicalSearchEmpty'),
         clinicalSearchDisabled: document.getElementById('clinicalSearchDisabled'),
@@ -462,12 +465,14 @@ document.addEventListener('DOMContentLoaded', function() {
             elements.clearRecentBtn.addEventListener('click', clearRecentSearches);
         }
 
-        // Clinical text search (epicrisis/imaging report text already indexed
-        // server-side — see search.py). Debounced like the schedule
-        // patient-name filter above.
-        if (elements.clinicalSearchInput) {
-            const debouncedClinicalSearch = debounce(runClinicalSearch, 400);
-            elements.clinicalSearchInput.addEventListener('input', debouncedClinicalSearch);
+        // Clinical text search (epicrisis/imaging report text indexed
+        // server-side — see search.py): runs only on the Reports button, never
+        // while typing, since the shared box mostly holds patient identifiers.
+        if (elements.clinicalSearchBtn) {
+            elements.clinicalSearchBtn.addEventListener('click', runClinicalSearch);
+        }
+        if (elements.clinicalSearchExportBtn) {
+            elements.clinicalSearchExportBtn.addEventListener('click', exportClinicalSearchCsv);
         }
 
         // Stat pills that navigate to their tab
@@ -962,6 +967,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Clear previous results and show loading state
         clearResults();
+        showClinicalSearchPanel(false);
         const searchTitles = {
             cnp:         'Looking up patient by CNP…',
             partial_cnp: 'Searching by partial CNP…',
@@ -1309,7 +1315,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.loadingSpinner) elements.loadingSpinner.hidden = false;
         if (elements.loadingError) elements.loadingError.hidden = true;
         elements.analyzeBtn.disabled = false;
-        elements.analyzeBtn.innerHTML = '<i class="fas fa-search"></i> Search Patient';
+        elements.analyzeBtn.innerHTML = '<i class="fas fa-user"></i> Patient';
     }
 
     function showOverlayError(message) {
@@ -1318,7 +1324,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.loadingError) elements.loadingError.hidden = false;
         elements.loadingOverlay.style.display = 'flex';
         elements.analyzeBtn.disabled = false;
-        elements.analyzeBtn.innerHTML = '<i class="fas fa-search"></i> Search Patient';
+        elements.analyzeBtn.innerHTML = '<i class="fas fa-user"></i> Patient';
     }
     
     function clearResults() {
@@ -3393,17 +3399,26 @@ document.addEventListener('DOMContentLoaded', function() {
         loadRecentSearches();
     }
 
-    // Full-text search over epicrisis/imaging report text already indexed by
-    // the server (GET /api/search/text — see search.py). Scoped to
-    // patients already viewed through this HippoBridge instance, not a
+    // Full-text search over epicrisis/imaging report text indexed by the
+    // server (GET /api/search/text — see search.py): everything viewed through
+    // this HippoBridge instance plus the historical CT/MRI backfill, not a
     // Hipocrate-wide search (Hipocrate has no such API). Set once the server
-    // reports the index isn't configured, so we stop calling on every keystroke.
+    // reports the index isn't configured, so we stop calling it.
     let clinicalSearchDisabledKnown = false;
 
+    // The Reports results temporarily replace the Recent searches panel.
+    function showClinicalSearchPanel(show) {
+        if (elements.clinicalSearchPanel) elements.clinicalSearchPanel.hidden = !show;
+        if (elements.recentSearchesPanel) elements.recentSearchesPanel.hidden = show;
+    }
+
     async function runClinicalSearch() {
-        const query = elements.clinicalSearchInput?.value.trim() || '';
+        const query = elements.cnpInput?.value.trim() || '';
+        showClinicalSearchPanel(!!query);
         if (elements.clinicalSearchResults) elements.clinicalSearchResults.innerHTML = '';
         if (elements.clinicalSearchEmpty) elements.clinicalSearchEmpty.hidden = true;
+        clinicalSearchLast = null;
+        if (elements.clinicalSearchExportBtn) elements.clinicalSearchExportBtn.hidden = true;
         if (!query || clinicalSearchDisabledKnown) return;
 
         let data;
@@ -3427,6 +3442,44 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         renderClinicalSearchResults(results);
+        clinicalSearchLast = { query, results };
+        if (elements.clinicalSearchExportBtn) elements.clinicalSearchExportBtn.hidden = false;
+    }
+
+    // Last Reports search (query + per-patient results), kept for the CSV export.
+    let clinicalSearchLast = null;
+
+    // One CSV cell. Cells starting with = + - @ are prefixed with ' so a
+    // spreadsheet never evaluates them as a formula.
+    function csvCell(value) {
+        let v = String(value ?? '');
+        if (/^[=+\-@\t\r]/.test(v)) v = "'" + v;
+        return /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+    }
+
+    function exportClinicalSearchCsv() {
+        if (!clinicalSearchLast) return;
+        const { query, results } = clinicalSearchLast;
+        const header = ['patient_name', 'cnp', 'query', 'imaging_reports', 'epicrises', 'documents'];
+        const rows = results.map(r => [
+            csvCell(r.patient_name),
+            // ="…" keeps Excel from turning the 13-digit CNP into 6.2E+12
+            r.patient_cnp ? `="${String(r.patient_cnp).replace(/"/g, '')}"` : '',
+            csvCell(query),
+            (r.kinds || {}).imaging || 0,
+            (r.kinds || {}).epicrisis || 0,
+            csvCell((r.documents || []).map(d => `${d.kind}:${d.source_id}`).join(' ')),
+        ]);
+        // UTF-8 BOM so Excel shows Romanian diacritics correctly
+        const csv = '\uFEFF' + [header, ...rows].map(r => r.join(',')).join('\r\n') + '\r\n';
+        const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `search-${query.replace(/[^\w-]+/g, '_').slice(0, 40)}-${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
     }
 
     const CLINICAL_SEARCH_KIND_ICONS = { epicrisis: 'fa-file-medical', imaging: 'fa-x-ray' };
@@ -3438,6 +3491,12 @@ document.addEventListener('DOMContentLoaded', function() {
             li.querySelector('.recent-avatar i').className =
                 `fas ${CLINICAL_SEARCH_KIND_ICONS[r.kind] || 'fa-file'}`;
             li.querySelector('.recent-primary').textContent = r.patient_name || r.patient_cnp || 'Unknown patient';
+            // One hit per patient: how many documents of each kind matched.
+            const k = r.kinds || {};
+            li.querySelector('.recent-counts').textContent = [
+                k.imaging ? `${k.imaging} imaging ${k.imaging === 1 ? 'report' : 'reports'}` : '',
+                k.epicrisis ? `${k.epicrisis} ${k.epicrisis === 1 ? 'epicrisis' : 'epicrises'}` : '',
+            ].filter(Boolean).join(' · ');
             // Snippet's <mark> highlights come from the server's own FTS5
             // snippet() call (search.py), not user input.
             li.querySelector('.recent-snippet').innerHTML = r.snippet || '';

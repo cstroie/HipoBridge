@@ -665,7 +665,7 @@ small {
 
 /* Search tab column */
 .search-column {
-    max-width: 580px;
+    max-width: 960px;
     margin: 0 auto;
     padding: var(--space-64) 0 var(--space-80);
 }
@@ -767,6 +767,11 @@ small {
     gap: var(--space-8);
 }
 .btn-search-submit:hover { opacity: 0.88; }
+.btn-search-secondary {
+    color: var(--primary);
+    background: var(--card-bg);
+    border: 1.5px solid var(--primary);
+}
 
 .search-hint {
     font: 400 var(--font-size-13) 'Inter', sans-serif;
@@ -782,20 +787,6 @@ small {
     align-items: baseline;
     justify-content: space-between;
     gap: var(--space-8);
-    margin-bottom: var(--space-14);
-}
-
-/* Search-tab's clinical text search panel: reuses .recent-searches/.recent-header/
-   .recent-list chrome, but also sandwiches a .search-input-box in between —
-   that class normally gets its spacing from the .search-input-row wrapper it's
-   paired with elsewhere, which this panel doesn't use, so it needs its own gap
-   here on both sides (header already supplies space above via margin-bottom).
-   .recent-searches itself has no margin, so the "Recent searches" aside above
-   it needs an explicit top margin here too, or the two panels sit flush. */
-#clinicalSearchPanel {
-    margin-top: var(--space-32);
-}
-#clinicalSearchPanel .search-input-box {
     margin-bottom: var(--space-14);
 }
 

@@ -102,14 +102,17 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                                         placeholder="CNP, patient code, or name…"
                                         required aria-describedby="cnpHelp">
                                 </div>
-                                <button type="submit" id="analyzeBtn" class="btn-search-submit" aria-label="Search" title="Search">
-                                    <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                                <button type="submit" id="analyzeBtn" class="btn-search-submit" title="Find a patient in Hipocrate (CNP, patient code or name)">
+                                    <i class="fas fa-user" aria-hidden="true"></i> Patient
+                                </button>
+                                <button type="button" id="clinicalSearchBtn" class="btn-search-submit btn-search-secondary" title="Search the text of reports and epicrises indexed by this server">
+                                    <i class="fas fa-file-medical" aria-hidden="true"></i> Reports
                                 </button>
                             </div>
-                            <p id="cnpHelp" class="search-hint">13-digit CNP, partial CNP with wildcard (1234567*), patient code, or name</p>
+                            <p id="cnpHelp" class="search-hint"><strong>Patient</strong>: 13-digit CNP, partial CNP with wildcard (1234567*), patient code, or name &middot; <strong>Reports</strong>: keywords in indexed report and epicrisis text</p>
                         </form>
 
-                        <aside class="recent-searches">
+                        <aside class="recent-searches" id="recentSearchesPanel">
                             <header class="recent-header">
                                 <span class="recent-heading-label">Recent searches</span>
                                 <button type="button" id="clearRecentBtn" class="btn-link" hidden title="Clear recent searches">Clear</button>
@@ -118,18 +121,13 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             <p class="recent-empty" id="recentEmpty" hidden>No recent searches yet</p>
                         </aside>
 
-                        <!-- Full-text search over epicrisis/imaging report text already
-                             indexed by this server (see search.py) — scoped to
-                             patients already viewed here, not a Hipocrate-wide search. -->
-                        <aside class="recent-searches" id="clinicalSearchPanel">
+                        <!-- Results of the Reports button (temporarily replaces the Recent searches panel above): full-text search over epicrisis/imaging
+                             report text indexed by this server (see search.py). -->
+                        <aside class="recent-searches" id="clinicalSearchPanel" hidden>
                             <header class="recent-header">
-                                <span class="recent-heading-label">Search reports &amp; epicrisis text</span>
+                                <span class="recent-heading-label">Report &amp; epicrisis text matches</span>
+                                <button type="button" id="clinicalSearchExportBtn" class="btn-link" hidden title="Download these results as CSV">Export CSV</button>
                             </header>
-                            <div class="search-input-box">
-                                <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
-                                <input type="search" id="clinicalSearchInput" autocomplete="off"
-                                    placeholder="Search clinical text…" aria-label="Search clinical text">
-                            </div>
                             <ul class="recent-list" id="clinicalSearchResults"></ul>
                             <p class="recent-empty" id="clinicalSearchEmpty" hidden>No matches found</p>
                             <p class="recent-empty" id="clinicalSearchDisabled" hidden>Full-text search is not available on this server</p>
@@ -742,6 +740,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                     </div>
                     <div class="recent-text">
                         <span class="recent-primary"></span>
+                        <span class="recent-secondary recent-counts"></span>
                         <span class="recent-secondary recent-snippet"></span>
                     </div>
                     <i class="fas fa-arrow-up-right-from-square recent-arrow" aria-hidden="true"></i>
