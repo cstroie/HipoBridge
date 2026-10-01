@@ -790,6 +790,11 @@ small {
     margin-bottom: var(--space-14);
 }
 
+.recent-header-actions {
+    display: flex;
+    gap: var(--space-14);
+}
+
 .recent-heading-label {
     font: 600 var(--font-size-11) 'Inter', sans-serif;
     letter-spacing: 0.1em;
@@ -4512,13 +4517,6 @@ dialog.report-editor-modal article > section {
         padding: var(--space-16);
     }
 
-    /* Search box + submit button: the button carries a text label
-       ("Search Patient") that doesn't fit next to the input on a phone —
-       stack them instead of clipping/overflowing horizontally */
-    .search-input-row {
-        flex-direction: column;
-    }
-
     .search-input-box {
         padding: var(--space-10) var(--space-12);
     }
@@ -4915,4 +4913,20 @@ dialog.report-editor-modal article > section {
     body.print-exam-list .exam-list-tools { display: none; }
     body.print-exam-list .exam-prev-text { max-height: none; overflow: visible; }
     @page { margin: 16mm; }
+}
+
+/* Search box + the Patient/Reports buttons: their text labels don't fit next
+   to the input on a narrow screen — the box takes a full row and the two
+   buttons share the row below it instead of clipping/overflowing. */
+@media (max-width: 640px) {
+    .search-input-row {
+        flex-wrap: wrap;
+    }
+    .search-input-row .search-input-box {
+        flex: 1 1 100%;
+    }
+    .search-input-row .btn-search-submit {
+        flex: 1 1 0;
+        justify-content: center;
+    }
 }

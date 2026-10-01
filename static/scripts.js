@@ -115,6 +115,7 @@ document.addEventListener('DOMContentLoaded', function() {
         clinicalSearchPanel: document.getElementById('clinicalSearchPanel'),
         recentSearchesPanel: document.getElementById('recentSearchesPanel'),
         clinicalSearchExportBtn: document.getElementById('clinicalSearchExportBtn'),
+        clinicalSearchCloseBtn: document.getElementById('clinicalSearchCloseBtn'),
         clinicalSearchResults: document.getElementById('clinicalSearchResults'),
         clinicalSearchEmpty: document.getElementById('clinicalSearchEmpty'),
         clinicalSearchDisabled: document.getElementById('clinicalSearchDisabled'),
@@ -474,6 +475,14 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.clinicalSearchExportBtn) {
             elements.clinicalSearchExportBtn.addEventListener('click', exportClinicalSearchCsv);
         }
+        // Close the Reports results (button, or emptying the search box) to get
+        // the Recent searches panel back.
+        if (elements.clinicalSearchCloseBtn) {
+            elements.clinicalSearchCloseBtn.addEventListener('click', () => showClinicalSearchPanel(false));
+        }
+        elements.cnpInput?.addEventListener('input', () => {
+            if (!elements.cnpInput.value.trim()) showClinicalSearchPanel(false);
+        });
 
         // Stat pills that navigate to their tab
         document.querySelectorAll('.stat-pill-link').forEach(pill => {
@@ -3355,7 +3364,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.recentEmpty)   elements.recentEmpty.hidden = hasItems;
         if (elements.clearRecentBtn) elements.clearRecentBtn.hidden = !hasItems;
 
-        const typeIcons = { cnp: 'fa-id-card', partial_cnp: 'fa-search', code: 'fa-barcode', name: 'fa-user', unknown: 'fa-question' };
+        const typeIcons = { cnp: 'fa-id-card', partial_cnp: 'fa-search', code: 'fa-barcode', name: 'fa-user', text: 'fa-file-medical', unknown: 'fa-question' };
         const tmpl = document.getElementById('recent-item-template');
 
         recentSearches.forEach(search => {
@@ -3370,14 +3379,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const when = relativeTime(timestamp);
             li.querySelector('.recent-primary').textContent = patientName || searchTerm;
-            li.querySelector('.recent-secondary').textContent = patientName
-                ? [searchTerm, when].filter(Boolean).join(' · ')
-                : when;
+            li.querySelector('.recent-secondary').textContent = type === 'text'
+                ? ['Reports', when].filter(Boolean).join(' · ')
+                : patientName
+                    ? [searchTerm, when].filter(Boolean).join(' · ')
+                    : when;
 
             const loadBtn = li.querySelector('.recent-load');
-            loadBtn.title = `Search: ${searchTerm}`;
-            loadBtn.setAttribute('aria-label', `Search ${patientName || searchTerm}`);
+            loadBtn.title = type === 'text' ? `Search reports: ${searchTerm}` : `Search: ${searchTerm}`;
+            loadBtn.setAttribute('aria-label', `Search ${type === 'text' ? 'reports for ' : ''}${patientName || searchTerm}`);
             loadBtn.addEventListener('click', () => {
+                if (type === 'text') {
+                    elements.cnpInput.value = searchTerm;
+                    runClinicalSearch();
+                    return;
+                }
                 // Prefer the resolved patient ID — direct fetch, no picker overlay
                 elements.cnpInput.value = patientId || searchTerm;
                 elements.form.dispatchEvent(new Event('submit'));
@@ -3442,6 +3458,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         renderClinicalSearchResults(results);
+        addToRecentSearches(query, null, 'text');
         clinicalSearchLast = { query, results };
         if (elements.clinicalSearchExportBtn) elements.clinicalSearchExportBtn.hidden = false;
     }
@@ -3463,8 +3480,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const header = ['patient_name', 'cnp', 'query', 'imaging_reports', 'epicrises', 'documents'];
         const rows = results.map(r => [
             csvCell(r.patient_name),
-            // ="…" keeps Excel from turning the 13-digit CNP into 6.2E+12
-            r.patient_cnp ? `="${String(r.patient_cnp).replace(/"/g, '')}"` : '',
+            csvCell(r.patient_cnp),
             csvCell(query),
             (r.kinds || {}).imaging || 0,
             (r.kinds || {}).epicrisis || 0,
@@ -3515,7 +3531,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
 
-    function addToRecentSearches(searchTerm, patientData = null) {
+    // type 'text' marks a Reports (full-text) query; anything else is a patient lookup.
+    function addToRecentSearches(searchTerm, patientData = null, type = null) {
         let recentSearches = JSON.parse(localStorage.getItem('recentSearches') || '[]');
         
         // Create a rich search object with more details
@@ -3524,11 +3541,12 @@ document.addEventListener('DOMContentLoaded', function() {
             timestamp: new Date().toISOString(),
             patientId: patientData?.id || null,
             patientName: patientData ? formatPatientName(patientData) : null,
-            type: identifySearchType(searchTerm)
+            type: type || identifySearchType(searchTerm)
         };
         
         // Remove if exact term already exists
-        recentSearches = recentSearches.filter(search => search.term !== searchTerm);
+        recentSearches = recentSearches.filter(search =>
+            !(search.term === searchTerm && (search.type === 'text') === (type === 'text')));
         
         // Add to beginning
         recentSearches.unshift(searchItem);

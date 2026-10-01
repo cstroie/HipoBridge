@@ -90,8 +90,8 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                 <!-- ─── Search tab ─── -->
                 <section id="search-tab" class="tab-content" role="tabpanel" aria-labelledby="search-tab-heading" hidden style="display:none">
                     <div class="search-column">
-                        <p class="search-hero-label">Patient Search</p>
-                        <h1 id="search-tab-heading" class="search-hero-title">Find a patient</h1>
+                        <p class="search-hero-label">Search</p>
+                        <h1 id="search-tab-heading" class="search-hero-title">Find a patient or a report</h1>
 
                         <form id="cnpForm" novalidate>
                             <div class="search-input-row">
@@ -99,7 +99,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                                     <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
                                     <input type="search" id="cnpInput" name="cnp" inputmode="search"
                                         autocomplete="off"
-                                        placeholder="CNP, patient code, or name…"
+                                        placeholder="CNP, patient code, name, or report keywords…"
                                         required aria-describedby="cnpHelp">
                                 </div>
                                 <button type="submit" id="analyzeBtn" class="btn-search-submit" title="Find a patient in Hipocrate (CNP, patient code or name)">
@@ -126,7 +126,10 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                         <aside class="recent-searches" id="clinicalSearchPanel" hidden>
                             <header class="recent-header">
                                 <span class="recent-heading-label">Report &amp; epicrisis text matches</span>
-                                <button type="button" id="clinicalSearchExportBtn" class="btn-link" hidden title="Download these results as CSV">Export CSV</button>
+                                <span class="recent-header-actions">
+                                    <button type="button" id="clinicalSearchExportBtn" class="btn-link" hidden title="Download these results as CSV">Export CSV</button>
+                                    <button type="button" id="clinicalSearchCloseBtn" class="btn-link" title="Close the results and show recent searches again">Close</button>
+                                </span>
                             </header>
                             <ul class="recent-list" id="clinicalSearchResults"></ul>
                             <p class="recent-empty" id="clinicalSearchEmpty" hidden>No matches found</p>
