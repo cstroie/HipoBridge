@@ -49,3 +49,13 @@
   the Schedule. To settle: does Hipocrate have a field or form for it (else a local store, which
   then needs backup and the same no-PHI-in-logs care as the caches), who may flag and
   acknowledge (`allowed_radiologists` vs. ward staff), and whether ntfy/e-mail notifies the ward.
+
+- [ ] Report addenda (moved here from Reporion, 2026-10-02): radiology practice corrects a validated
+  report with an **addendum** — the original text stays as validated, a dated note signed by its
+  author is appended — rather than by rewriting it. In Hipocrate terms: after Validate, an
+  *Addendum* action on the request that appends (never replaces) to the result field, with date,
+  author and a visible "Addendum" heading, through the same report-write path
+  (`POST /api/request/{id}/report`) and its HTML conversion. To settle: whether Hipocrate allows
+  writing to a validated result at all (or only after un-validating, which loses who validated
+  it), whether the addendum is validated again, and how the reader in the HIS tells original from
+  addendum.
