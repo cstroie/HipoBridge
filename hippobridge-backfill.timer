@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the HippoBridge search backfill daily around 06:00
+
+[Timer]
+# Off the round minute; the random delay spreads the start over 5 minutes.
+OnCalendar=*-*-* 06:17:00
+RandomizedDelaySec=300
+Persistent=true
+
+[Install]
+WantedBy=timers.target

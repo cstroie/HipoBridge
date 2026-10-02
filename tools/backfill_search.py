@@ -8,12 +8,17 @@ fetches the rest with /api/study/{id}?justification=0 — the server's own
 fetch hook does the indexing. No summarization. Sequential and throttled so
 Hipocrate is not hammered.
 
-Credentials: HYP_USER / HYP_PASS (or --username/--password).
+--since takes a date (2024-01-01) or a relative span: 1d, 3d, 1w.
+
+Credentials: --username/--password, else HYP_USER / HYP_PASS, else
+[worklist] username/password from worklist.cfg.
 """
 import argparse
 import asyncio
+import configparser
 import json
 import os
+import re
 import sqlite3
 import sys
 from datetime import date, datetime, timedelta
@@ -23,6 +28,20 @@ import aiohttp
 BASE_URL = os.getenv("HIPPOBRIDGE_URL", "http://127.0.0.1:44660")
 MODALITIES = {"ct": "26", "mri": "32"}
 LIMIT = 100
+
+
+def parse_since(v):
+    m = re.fullmatch(r"(\d+)([dw])", v)
+    if m:
+        return date.today() - timedelta(days=int(m[1]) * (7 if m[2] == "w" else 1))
+    return date.fromisoformat(v)
+
+
+def worklist_creds():
+    cfg = configparser.ConfigParser()
+    cfg.read(os.path.join(os.path.dirname(__file__), "..", "worklist.cfg"))
+    return (cfg.get("worklist", "username", fallback=None),
+            cfg.get("worklist", "password", fallback=None))
 
 
 def log(msg):
@@ -93,7 +112,8 @@ async def list_requests(g, lab_id, start, end):
 
 async def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--since", default="2019-01-01")
+    ap.add_argument("--since", default="2019-01-01",
+                    help="YYYY-MM-DD or relative: 1d, 3d, 1w")
     ap.add_argument("--until", default=date.today().isoformat())
     ap.add_argument("--modality", choices=list(MODALITIES), action="append")
     ap.add_argument("--cache-dir", default="/var/tmp/hbcache/",
@@ -111,9 +131,11 @@ async def main():
     ap.add_argument("-w", "--password", default=os.getenv("HYP_PASS"))
     args = ap.parse_args()
     if not (args.username and args.password):
-        sys.exit("HYP_USER and HYP_PASS are required")
+        args.username, args.password = worklist_creds()
+    if not (args.username and args.password):
+        sys.exit("No credentials: set HYP_USER/HYP_PASS or worklist.cfg [worklist]")
 
-    since = date.fromisoformat(args.since)
+    since = parse_since(args.since)
     until = date.fromisoformat(args.until)
     mods = args.modality or list(MODALITIES)
     statuses = set(args.status.split(","))
@@ -129,7 +151,8 @@ async def main():
 
     timeout = aiohttp.ClientTimeout(total=120)
     async with aiohttp.ClientSession(
-            auth=aiohttp.BasicAuth(args.username, args.password),
+            headers={"Authorization": aiohttp.encode_basic_auth(
+                args.username, args.password)},
             timeout=timeout) as session:
         g = Gentle(session, args.pause_schedule, args.pause_study)
         while end >= since:

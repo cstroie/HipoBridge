@@ -1,0 +1,19 @@
+[Unit]
+Description=HippoBridge daily search-index backfill (CT/MRI)
+After=hippobridge.service
+Wants=hippobridge.service
+
+[Service]
+Type=oneshot
+User=hippobridge
+Group=hippobridge
+WorkingDirectory=/opt/hippobridge
+# Credentials come from worklist.cfg [worklist]; the server must be running.
+ExecStart=/opt/hippobridge/.python/bin/python3 tools/backfill_search.py --since 3d
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hippobridge-backfill
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/hippobridge
