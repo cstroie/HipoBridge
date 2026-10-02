@@ -9,8 +9,10 @@ configparser has no nesting, so each provider is a prefixed section
 `[provider:<name>]` with `url`, `key` (empty = no auth) and one model name
 per tier. `[llm] provider = <name>` selects the active one.
 
-Every call ships raw PHI (names, DOB, CNP) to the provider url — provider
-config must stay local/trusted. The `key` field enables remote providers;
+Free text (reports, epicrises) is sent as-is and may contain PHI; the patient
+context header carries initials/age/sex only while the provider's
+`anonymize` is yes (default), and full name + DOB when set to no — only do
+that for a local/trusted provider. The `key` field enables remote providers;
 that is the operator's responsibility, not enforced here.
 """
 import configparser
@@ -46,6 +48,9 @@ LLM_DEFAULTS = {
         "lite": "LFM2.5-230M",
         "default": "LFM2-2.6B-Transcript",
         "medical": "medgemma-4b-it",
+        # yes: the patient context sent to the LLM carries initials only (no
+        # name/DOB). Set to no for a trusted (local) server to send them.
+        "anonymize": "yes",
     },
 }
 

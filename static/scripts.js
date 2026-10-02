@@ -1456,6 +1456,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let whoamiData = null;
     let hipocrateUrl = localStorage.getItem('hipocrateUrl') || null;
+    // llm.cfg [provider:*] anonymize (via /api/whoami); true until told otherwise.
+    let aiAnonymize = true;
     let canWriteReports = false;
     let whoamiInFlight = null;
 
@@ -1483,6 +1485,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     localStorage.setItem('hipocrateUrl', hipocrateUrl);
                 }
                 canWriteReports = data.can_write_reports === true;
+                aiAnonymize = data.ai_anonymize !== false;
                 if (!resp.ok || data.status !== 'success' || !data.user) {
                     throw new Error(data.message || `Whoami failed (${resp.status})`);
                 }
@@ -3948,7 +3951,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Shared "Initials | Age | Sex | Diagnosis" context line — no name/DOB/
-    // CNP — prepended to every tab-level AI|Copy toolbar's copied Markdown
+    // CNP unless aiAnonymize is off (then full name + DOB, still no CNP) — prepended to every tab-level AI|Copy toolbar's copied Markdown
     // and AI input (Patient Report, Lab Trends, Imaging current episode,
     // Hospitalization, and the Profile "AI Summary"/pre-exam text they all
     // share via getPatientClinicalText()). `diagnosis` overrides the
@@ -3956,11 +3959,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // specific one on hand (e.g. the Report tab's own latestDx).
     function patientContextLine(patientData, diagnosis) {
         if (!patientData) return '';
-        const initials = formatPatientInitials(patientData);
+        const initials = aiAnonymize ? formatPatientInitials(patientData) : formatPatientName(patientData);
+        const dob = aiAnonymize ? '' : formatBirthDate(patientData.birth_date);
         const age = calculateAge(patientData.birth_date);
         const gender = formatGender(patientData.sex);
         const dx = diagnosis ?? elements.patientDiagnosis?.textContent?.trim();
-        return [initials, age, gender, dx].filter(v => v && v !== 'N/A').join(' | ');
+        return [initials, age, gender, dob && `DOB ${dob}`, dx].filter(v => v && v !== 'N/A').join(' | ');
     }
 
     function patientContextHeader(patientData, diagnosis) {

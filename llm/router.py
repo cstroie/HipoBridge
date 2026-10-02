@@ -18,11 +18,12 @@ class ConfigError(Exception):
 
 class LLMClient:
     def __init__(self, backend: ServerBackend, models: dict[str, str], language: str = "English",
-                 temperature: float = 0.1):
+                 temperature: float = 0.1, anonymize: bool = True):
         self._backend = backend
         self._models = models
         self.language = language
         self.temperature = temperature
+        self.anonymize = anonymize
 
     async def chat(self, tier: str, messages: list[dict], **kw) -> str:
         model = self._models.get(tier)
@@ -71,4 +72,6 @@ def build_client(config) -> LLMClient:
     language = (llm_section.get("language", "English") or "English").strip()
     temperature = llm_section.getfloat("temperature", 0.1) if config.has_section("llm") else 0.1
     backend = ServerBackend(base_url=url, key=key, timeout=timeout)
-    return LLMClient(backend, models, language=language, temperature=temperature)
+    section = config[f"provider:{llm_section.get('provider', 'default')}"]
+    anonymize = section.getboolean("anonymize", True)
+    return LLMClient(backend, models, language=language, temperature=temperature, anonymize=anonymize)
