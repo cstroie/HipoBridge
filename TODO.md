@@ -40,3 +40,12 @@
   directly (server-side calls cannot reach it), with the endpoint URL kept in
   browser local storage. Needs CORS enabled on the local server and a
   decision on whether prompts are built client-side or fetched from the server.
+
+- [ ] Urgent findings log (moved here from Reporion, 2026-10-02 — it belongs to the HIS, not to the
+  report wiki): when a report holds an urgent/critical finding, record that it was communicated —
+  to whom (ward, physician), how (phone, in person, message), when and by whom — and whether it
+  was acknowledged. A flag on the request (`/api/request/{id}`), set from the report workflow
+  (Perform → Write → Validate), and a list of the open ones (flagged, not yet acknowledged) beside
+  the Schedule. To settle: does Hipocrate have a field or form for it (else a local store, which
+  then needs backup and the same no-PHI-in-logs care as the caches), who may flag and
+  acknowledge (`allowed_radiologists` vs. ward staff), and whether ntfy/e-mail notifies the ward.
