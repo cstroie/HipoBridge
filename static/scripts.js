@@ -2610,6 +2610,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // at call time + a safety margin. Bump this if either grows a lot.
     const CLINICAL_TEXT_RESERVED_TOKENS = 2200;
     const CLINICAL_TEXT_CHARS_PER_TOKEN = 3.5;
+    // From this context size up, the clinical text also carries the extra,
+    // lower-priority blocks (patient record, hospitalization timeline, older
+    // admissions). Below it the text stays as the 8k-tuned base set, so small
+    // models see exactly what they were validated on.
+    const CLINICAL_TEXT_EXTENDED_CONTEXT = 16384;
+    const CLINICAL_TEXT_MAX_OLDER_ADMISSIONS = 3;
     const clinicalTextCharBudget = () =>
         Math.max(0, aiContextTokens - CLINICAL_TEXT_RESERVED_TOKENS) * CLINICAL_TEXT_CHARS_PER_TOKEN;
 
@@ -3217,6 +3223,26 @@ document.addEventListener('DOMContentLoaded', function() {
                     { text: labsMd, priority: 3 },
                     ...imagingCandidates,
                 ];
+                if (aiContextTokens >= CLINICAL_TEXT_EXTENDED_CONTEXT) {
+                    // Allergies/warnings/history first in the text; priority 8+
+                    // so every base block above still wins when space is tight.
+                    clinicalCandidates.unshift({ text: patientRecordMarkdown(patientData), priority: 8 });
+                    // Discharged admissions not already shown above, most
+                    // recent first (encounters is sorted that way).
+                    const shown = new Set([activeAdm?.enc, lastDischarge?.enc].filter(Boolean));
+                    encounters
+                        .filter(item => item.enc.end && !shown.has(item.enc))
+                        .map(item => ({ enc: item.enc, body: extractEpicrisisText(item.enc).trim() }))
+                        .filter(o => o.body)
+                        .slice(0, CLINICAL_TEXT_MAX_OLDER_ADMISSIONS)
+                        .forEach((o, i) => {
+                            clinicalCandidates.push({
+                                text: `## Previous Admission\n\n_${formatDate(o.enc.start)} → ${formatDate(o.enc.end)}_\n\n${o.body}\n\n`,
+                                priority: 9 + i,
+                            });
+                        });
+                    clinicalCandidates.push({ text: timelineMd, priority: 12 });
+                }
                 elements.patientReportBlocks.dataset.clinicalMarkdown =
                     patientContextHeader(patientData, latestDx) +
                     fitClinicalTextToBudget(clinicalCandidates, clinicalTextCharBudget());
