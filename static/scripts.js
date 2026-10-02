@@ -1458,6 +1458,8 @@ document.addEventListener('DOMContentLoaded', function() {
     let hipocrateUrl = localStorage.getItem('hipocrateUrl') || null;
     // llm.cfg [provider:*] anonymize (via /api/whoami); true until told otherwise.
     let aiAnonymize = true;
+    // llm.cfg [provider:*] context (tokens), same source; sizes the clinical text sent to the LLM.
+    let aiContextTokens = 8192;
     let canWriteReports = false;
     let whoamiInFlight = null;
 
@@ -1486,6 +1488,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 canWriteReports = data.can_write_reports === true;
                 aiAnonymize = data.ai_anonymize !== false;
+                if (Number.isFinite(data.ai_context) && data.ai_context > 0) aiContextTokens = data.ai_context;
                 if (!resp.ok || data.status !== 'success' || !data.user) {
                     throw new Error(data.message || `Whoami failed (${resp.status})`);
                 }
@@ -2594,22 +2597,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ── Clinical-text size budget for the on-site LLM ─────────────────────
     // The assembled clinical text (admissions + labs + imaging) is sent
-    // verbatim as the AI tab's "report"/"pre_exam_brief" input, sharing an ~8k
-    // token context window with the system prompt and the model's own
+    // verbatim as the AI tab's "report"/"pre_exam_brief" input, sharing the
+    // provider's context window (llm.cfg `context`, default 8k tokens) with the system prompt and the model's own
     // output. Nothing tokenizes client-side, so this is a conservative
     // chars-per-token approximation (Romanian medical text with diacritics
     // tokenizes worse than plain English), not an exact count. This budget
     // only trims the copy sent to the LLM — the full, untrimmed markdown
     // still goes into the Report tab's own display/copy button.
-    const CLINICAL_TEXT_TOKEN_BUDGET = 8000;
     // Reserve: largest system prompt among clinicalMarkdown's consumers
     // (~550 tokens) + the largest max_tokens (problem_list, 600, see
     // llm/prompts.py PROMPT_META) + the date/language directives appended
     // at call time + a safety margin. Bump this if either grows a lot.
     const CLINICAL_TEXT_RESERVED_TOKENS = 2200;
     const CLINICAL_TEXT_CHARS_PER_TOKEN = 3.5;
-    const CLINICAL_TEXT_CHAR_BUDGET =
-        (CLINICAL_TEXT_TOKEN_BUDGET - CLINICAL_TEXT_RESERVED_TOKENS) * CLINICAL_TEXT_CHARS_PER_TOKEN;
+    const clinicalTextCharBudget = () =>
+        Math.max(0, aiContextTokens - CLINICAL_TEXT_RESERVED_TOKENS) * CLINICAL_TEXT_CHARS_PER_TOKEN;
 
     // Greedily keeps candidates in priority order (lower `priority` = more
     // important, considered first) until the char budget runs out, then
@@ -2631,6 +2633,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function displayPatientReport(patientData, analysesData) {
         log('Displaying patient report data');
+        // The clinical text below bakes in the provider's context size and
+        // anonymize setting, both delivered by /api/whoami.
+        await fetchWhoami().catch(() => {});
 
         const reportCard = elements.reportCard;
         const markdownStore = elements.patientReportMarkdown;
@@ -3214,7 +3219,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 ];
                 elements.patientReportBlocks.dataset.clinicalMarkdown =
                     patientContextHeader(patientData, latestDx) +
-                    fitClinicalTextToBudget(clinicalCandidates, CLINICAL_TEXT_CHAR_BUDGET);
+                    fitClinicalTextToBudget(clinicalCandidates, clinicalTextCharBudget());
             }
 
             if (reportCard) reportCard.hidden = false;

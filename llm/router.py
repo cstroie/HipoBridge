@@ -12,18 +12,25 @@ from llm.config import TIERS, select_provider
 logger = logging.getLogger(__name__)
 
 
+DEFAULT_CONTEXT = 8192
+
+
 class ConfigError(Exception):
     pass
 
 
 class LLMClient:
     def __init__(self, backend: ServerBackend, models: dict[str, str], language: str = "English",
-                 temperature: float = 0.1, anonymize: bool = True):
+                 temperature: float = 0.1, anonymize: bool = True,
+                 context: int | None = None):
         self._backend = backend
         self._models = models
         self.language = language
         self.temperature = temperature
         self.anonymize = anonymize
+        # None = auto: DEFAULT_CONTEXT until resolve_context() probes the server.
+        self.context_auto = context is None
+        self.context = context or DEFAULT_CONTEXT
 
     async def chat(self, tier: str, messages: list[dict], **kw) -> str:
         model = self._models.get(tier)
@@ -54,12 +61,44 @@ class LLMClient:
     def configured_models(self) -> dict[str, str]:
         return dict(self._models)
 
+    async def resolve_context(self, tiers=("default", "medical")) -> None:
+        """For `context = auto`: ask the server for the context of the models
+        the prompts actually use and keep the smallest (the budget has to fit
+        every tier). Falls back to DEFAULT_CONTEXT, with a log line, when the
+        server reports nothing usable. No-op for an explicit integer."""
+        if not self.context_auto:
+            return
+        probed = await self._backend.probe_context()
+        models = {self._models[t] for t in tiers if self._models.get(t)}
+        sizes = {m: probed.get(m, probed.get("*")) for m in models}
+        known = [n for n in sizes.values() if n]
+        if known:
+            self.context = min(known)
+            logger.info(f"LLM context (auto): {self.context} tokens, from {sizes}")
+        else:
+            logger.warning(f"LLM context (auto): server reports none for {sorted(models)}; "
+                           f"using {DEFAULT_CONTEXT} (set `context` explicitly to override)")
+
     async def status(self) -> dict:
         healthy = await self._backend.health()
         return {tier: {"model": self._models.get(tier), "healthy": healthy} for tier in TIERS}
 
     async def close(self):
         await self._backend.close()
+
+
+def _parse_context(value: str) -> int | None:
+    """`auto` (or empty) -> None; otherwise a positive token count."""
+    value = (value or "auto").strip().lower()
+    if value == "auto":
+        return None
+    try:
+        n = int(value)
+    except ValueError:
+        n = 0
+    if n <= 0:
+        raise ConfigError(f"[provider] context must be 'auto' or a positive integer, got {value!r}")
+    return n
 
 
 def build_client(config) -> LLMClient:
@@ -74,4 +113,5 @@ def build_client(config) -> LLMClient:
     backend = ServerBackend(base_url=url, key=key, timeout=timeout)
     section = config[f"provider:{llm_section.get('provider', 'default')}"]
     anonymize = section.getboolean("anonymize", True)
-    return LLMClient(backend, models, language=language, temperature=temperature, anonymize=anonymize)
+    return LLMClient(backend, models, language=language, temperature=temperature, anonymize=anonymize,
+                     context=_parse_context(section.get("context", "auto")))

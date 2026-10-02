@@ -51,6 +51,10 @@ LLM_DEFAULTS = {
         # yes: the patient context sent to the LLM carries initials only (no
         # name/DOB). Set to no for a trusted (local) server to send them.
         "anonymize": "yes",
+        # Context window (tokens) per request: "auto" asks the server (min over
+        # the models the prompts use; 8192 if it can't tell) or an integer.
+        # Sizes how much clinical text the frontend sends.
+        "context": "auto",
     },
 }
 

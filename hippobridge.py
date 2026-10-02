@@ -743,6 +743,7 @@ async def get_whoami(request):
     username, _ = request['auth_credentials']
     parsed_data.store("can_write_reports", username in _ALLOWED_RADIOLOGISTS)
     parsed_data.store("ai_anonymize", _ai_client.anonymize if _ai_client else True)
+    parsed_data.store("ai_context", _ai_client.context if _ai_client else 8192)
     return web_json_response(parsed_data)
 
 @require_auth
@@ -1567,6 +1568,7 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     _ai_client = build_client(llm_config)
     logger.info(f"AI summary provider: {_ai_client.base_url} (anonymize={'yes' if _ai_client.anonymize else 'no'})")
     configured = _ai_client.configured_models()
+    await _ai_client.resolve_context()
     try:
         available = await _ai_client.list_models()
         logger.info(f"LLM server model survey: {len(available)} available: {', '.join(available)}")

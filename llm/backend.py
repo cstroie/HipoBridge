@@ -72,6 +72,67 @@ class ServerBackend:
         except (aiohttp.ClientError, asyncio.TimeoutError):
             return False
 
+    async def _get_json(self, url: str):
+        async with _llm_semaphore:
+            async with self._client().get(
+                url, headers=self._headers(),
+                timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                resp.raise_for_status()
+                return await resp.json()
+
+    async def probe_context(self) -> dict[str, int]:
+        """Best-effort {model id: usable context tokens per request} from
+        whatever the server exposes — the OpenAI API itself has no such
+        field, so this tries vendor extensions in turn and merges what they
+        report (a model absent from the result is simply unknown):
+
+        - llama-server (router mode): GET /models `status.args` carry the
+          launch flags; the context is `--ctx-size` split across `--parallel`
+          slots (each request only gets its slot's share).
+        - llama-server (single model): GET /props `n_ctx` (already per slot).
+        - OpenRouter: GET /models `context_length`.
+        - LM Studio: GET <root>/api/v0/models `loaded_context_length` — the
+          runtime value, not `max_context_length` (the model's maximum,
+          typically far larger than what is actually loaded). Models that
+          aren't loaded yet report null and are skipped.
+
+        Never raises: every probe failure just leaves that source out."""
+        found: dict[str, int] = {}
+        root = self.base_url[:-3] if self.base_url.endswith("/v1") else self.base_url
+        try:
+            for m in (await self._get_json(f"{self.base_url}/models")).get("data", []):
+                n = m.get("context_length")
+                args = (m.get("status") or {}).get("args") or []
+                if not n and args:
+                    def flag(*names):
+                        for name in names:
+                            if name in args and args.index(name) + 1 < len(args):
+                                try:
+                                    return int(args[args.index(name) + 1])
+                                except ValueError:
+                                    pass
+                    ctx = flag("--ctx-size", "-c")
+                    if ctx:
+                        n = ctx // max(flag("--parallel", "-np") or 1, 1)
+                if isinstance(n, int) and n > 0 and "id" in m:
+                    found[m["id"]] = n
+        except Exception as exc:
+            logger.debug(f"context probe /models failed: {type(exc).__name__}: {exc}")
+        try:
+            n = (await self._get_json(f"{root}/props")).get("default_generation_settings", {}).get("n_ctx")
+            if isinstance(n, int) and n > 0:
+                found.setdefault("*", n)
+        except Exception as exc:
+            logger.debug(f"context probe /props failed: {type(exc).__name__}: {exc}")
+        try:
+            for m in (await self._get_json(f"{root}/api/v0/models")).get("data", []):
+                n = m.get("loaded_context_length")
+                if isinstance(n, int) and n > 0 and "id" in m:
+                    found[m["id"]] = n
+        except Exception as exc:
+            logger.debug(f"context probe /api/v0/models failed: {type(exc).__name__}: {exc}")
+        return found
+
     async def list_models(self) -> list[str]:
         """List model ids the server currently exposes via the standard
         OpenAI `GET /models` route (`{"data": [{"id": ...}, ...]}`) — not
