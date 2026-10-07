@@ -2,7 +2,7 @@
 """
 Backfill the search index with historical CT/MRI/US reports.
 
-Walks back week by week, lists CT, MRI and US requests (separately, max 100 each)
+Walks back week by week, lists CT, MRI and US requests (separately, max 200 each)
 via the running server's /api/schedule, skips reports already in search.db and
 fetches the rest with /api/study/{id}?justification=0 — the server's own
 fetch hook does the indexing. No summarization. Sequential and throttled so
@@ -27,9 +27,9 @@ import aiohttp
 
 BASE_URL = os.getenv("HIPPOBRIDGE_URL", "http://127.0.0.1:44660")
 MODALITIES = {"ct": "26", "mri": "32", "us": "28"}
-LIMIT = 100
+LIMIT = 200
 # High-volume modalities are always listed one day at a time instead of
-# weekly-then-split-on-cap, so the 100-row cap is never hit by a full week.
+# weekly-then-split-on-cap, so the row cap is never hit by a full week.
 DAILY = {"us"}
 
 
@@ -92,7 +92,7 @@ def indexed_ids(db_path):
 
 
 async def list_requests(g, lab_id, start, end):
-    """Rows for [start, end]; splits into days if the 100-row cap is hit."""
+    """Rows for [start, end]; splits into days if the row cap is hit."""
     data = await g.get("/api/schedule", {
         "start_date": start.isoformat(), "end_date": end.isoformat(),
         "lab_id": lab_id, "limit": LIMIT}, g.pause_schedule)
