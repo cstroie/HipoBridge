@@ -21,6 +21,7 @@ import os
 import re
 import sqlite3
 import sys
+import time
 from datetime import date, datetime, timedelta
 
 import aiohttp
@@ -149,8 +150,26 @@ async def main():
         log(f"Resuming before {end}")
 
     done = indexed_ids(os.path.join(args.cache_dir, "search.db"))
+    end0 = end
+    total_days = (end - since).days + 1
+    log(f"Interval {since} .. {end} ({total_days} days, newest first, weekly windows)")
+    log(f"Modalities: {', '.join(m.upper() for m in mods)}; fetching only status "
+        f"{{{', '.join(sorted(statuses))}}}; row cap {LIMIT}; "
+        f"{'DRY RUN, nothing fetched' if args.dry_run else 'live'}")
     log(f"{len(done)} imaging documents already indexed")
-    tot = {"rows": 0, "skipped": 0, "fetched": 0, "empty": 0, "failed": 0}
+    keys = ("listed", "indexed", "other_status", "to_fetch", "new", "no_text", "failed")
+    tot = dict.fromkeys(keys, 0)
+    t0 = time.monotonic()
+
+    def fmt(c):
+        parts = [f"listed={c['listed']}", f"already_indexed={c['indexed']}",
+                 f"not_in_status={c['other_status']}"]
+        if args.dry_run:
+            parts.append(f"would_fetch={c['to_fetch']}")
+        else:
+            parts += [f"new={c['new']}", f"no_report_text={c['no_text']}",
+                      f"failed={c['failed']}"]
+        return " ".join(parts)
 
     timeout = aiohttp.ClientTimeout(total=120)
     async with aiohttp.ClientSession(
@@ -160,8 +179,9 @@ async def main():
         g = Gentle(session, args.pause_schedule, args.pause_study)
         while end >= since:
             start = max(since, end - timedelta(days=end.weekday()))
-            w = {"rows": 0, "skipped": 0, "fetched": 0, "empty": 0, "failed": 0}
+            w = dict.fromkeys(keys, 0)
             seen, ok = set(), True
+            log(f"Window {start}..{end}")
             for mod in mods:
                 if mod in DAILY:
                     rows, d = [], start
@@ -173,40 +193,59 @@ async def main():
                     rows = await list_requests(g, MODALITIES[mod], start, end)
                 if rows is None:
                     ok = False
+                    log(f"  {mod.upper()}: listing FAILED, window will be retried with --resume")
                     continue
+                m = dict.fromkeys(keys, 0)
+                by_status, todo = {}, []
                 for row in rows:
                     rid = str(row.get("request_id") or "")
                     if not rid or rid in seen:
                         continue
                     seen.add(rid)
-                    w["rows"] += 1
+                    m["listed"] += 1
+                    st = row.get("status") or "?"
+                    by_status[st] = by_status.get(st, 0) + 1
                     if rid in done:
-                        w["skipped"] += 1
-                    elif row.get("status") not in statuses:
-                        w["empty"] += 1
-                    elif args.dry_run:
-                        w["fetched"] += 1
+                        m["indexed"] += 1
+                    elif st not in statuses:
+                        m["other_status"] += 1
                     else:
+                        todo.append(rid)
+                m["to_fetch"] = len(todo)
+                log(f"  {mod.upper()}: {m['listed']} exams listed ("
+                    + ", ".join(f"{k} {v}" for k, v in sorted(by_status.items()))
+                    + f"); {m['indexed']} already indexed, {len(todo)} to fetch")
+                if not args.dry_run:
+                    for n, rid in enumerate(todo, 1):
                         res = await g.get(f"/api/study/{rid}",
                                           {"justification": "0"}, g.pause_study)
                         if res and res.get("status") == "success":
                             # Report not written yet: the server doesn't index it.
                             if any(st.get("result") for st in res.get("studies") or []):
-                                w["fetched"] += 1
+                                m["new"] += 1
                                 done.add(rid)
                             else:
-                                w["empty"] += 1
+                                m["no_text"] += 1
                         else:
-                            w["failed"] += 1
-            log(f"{start}..{end}: " + " ".join(f"{k}={v}" for k, v in w.items()))
-            for k in tot:
+                            m["failed"] += 1
+                        if n % 25 == 0 and n < len(todo):
+                            log(f"    {mod.upper()} fetching {n}/{len(todo)} "
+                                f"(new={m['new']} no_text={m['no_text']} failed={m['failed']})")
+                    log(f"  {mod.upper()} done: new={m['new']} no_report_text={m['no_text']} "
+                        f"failed={m['failed']}")
+                for k in keys:
+                    w[k] += m[k]
+            for k in keys:
                 tot[k] += w[k]
+            elapsed = time.monotonic() - t0
+            log(f"Window total {start}..{end}: {fmt(w)}")
+            log(f"Progress: {(end0 - start).days + 1}/{total_days} days, "
+                f"running total {fmt(tot)}, elapsed {timedelta(seconds=int(elapsed))}")
             if ok and not args.dry_run:
                 open(args.state, "w").write((start - timedelta(days=1)).isoformat())
             end = start - timedelta(days=1)
 
-    log("Done: " + " ".join(f"{k}={v}" for k, v in tot.items()))
-
+    log(f"Done in {timedelta(seconds=int(time.monotonic() - t0))}: {fmt(tot)}")
 
 if __name__ == "__main__":
     asyncio.run(main())
