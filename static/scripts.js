@@ -5315,6 +5315,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Perform + Cancel: active until performed or cancelled, then
                     // locked (disabled, muted) instead of disappearing.
                     if (actionGroup) {
+                        const notSent = Boolean(d.not_sent) && !cancelled;
+                        applySendButton(actionGroup, notSent,
+                            () => sendRequestCore(cerereId, {
+                                setDisabled: v => { const b = actionGroup.querySelector('.btn-send-request'); if (b) b.disabled = v; },
+                                onDone: () => fetchAndFillReport(article),
+                            }));
                         const locked = performed || cancelled;
                         let performBtn = actionGroup.querySelector('.btn-perform-exam');
                         if (performBtn) {
@@ -5469,6 +5475,39 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         showToast('Request cancelled', 'success');
         onDone();
+    }
+
+    async function sendRequestCore(cerereId, { setDisabled, onDone }) {
+        setDisabled(true);
+        const resp = await fetch(`/api/request/${cerereId}/send`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeader() },
+            body: JSON.stringify({}),
+        });
+        if (!resp.ok) {
+            setDisabled(false);
+            showToast(await resp.text().catch(() => `HTTP ${resp.status}`), 'error');
+            return;
+        }
+        showToast('Request sent', 'success');
+        onDone();
+    }
+
+    // Not-sent requests show only Send; otherwise Send is hidden and
+    // Perform/Cancel are shown. Clone-and-replace drops stale listeners.
+    function applySendButton(actionGroup, notSent, onClick) {
+        let sendBtn = actionGroup.querySelector('.btn-send-request');
+        if (sendBtn) {
+            sendBtn.replaceWith(sendBtn.cloneNode(true));
+            sendBtn = actionGroup.querySelector('.btn-send-request');
+            sendBtn.hidden = !notSent;
+            sendBtn.disabled = false;
+            if (notSent) sendBtn.addEventListener('click', onClick);
+        }
+        for (const sel of ['.btn-perform-exam', '.btn-cancel-request']) {
+            const b = actionGroup.querySelector(sel);
+            if (b) b.hidden = notSent;
+        }
     }
 
     async function cancelRequest(article, cerereId) {
@@ -6297,6 +6336,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 // fetchAndFillReport uses).
                 const actionGroup = modal.querySelector('.action-group');
                 if (actionGroup) {
+                    const notSent = Boolean(d.not_sent) && !cancelled;
+                    applySendButton(actionGroup, notSent,
+                        () => sendRequestCore(requestId, {
+                            setDisabled: v => { const b = actionGroup.querySelector('.btn-send-request'); if (b) b.disabled = v; },
+                            onDone: refreshAll,
+                        }));
                     const locked = performed || cancelled;
                     let performBtn = actionGroup.querySelector('.btn-perform-exam');
                     if (performBtn) {

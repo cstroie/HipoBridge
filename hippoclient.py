@@ -3846,6 +3846,7 @@ class HippoClientCerere(HippoClient):
             banner_text = error_banner.get_text(strip=True).upper() if error_banner else ''
             cancelled = status_text == 'cerere anulata' or 'ANULATA' in banner_text
             data.store("cancelled", cancelled)
+            data.store("not_sent", status_text == 'cerere netrimisa')
 
             # Exam names — four patterns in priority order:
             exams = []
@@ -6010,3 +6011,25 @@ class HippoClientCererePerform(HippoClient):
             cerere_id, hdn_action='A',
             overrides={},
             log_label='CerereCancel')
+
+    async def send(self, cerere_id: str) -> HippoData:
+        """Send a 'not sent' request to the lab by fetching buletinRecoltari.asp with close=true."""
+        data = HippoData()
+        if not self.session:
+            self.session = self.get_user_session()
+
+        path = f"/PARA/Printabile/buletinRecoltari.asp?id={cerere_id}&close=true&trimitereInterop="
+        html, err = await self.make_authenticated_request(
+            self.get_full_url(path), "GET", None, self.username, self.password)
+        logger.info(f"CerereSend: cerere={cerere_id} err={err!r} resp_len={len(html) if html else 0}")
+        if err:
+            data.set_error(err)
+            return data
+
+        # Evict the stale (unsent) pages so the new status is re-read.
+        for p in (f"/PARA/NOM/Listare/cerere.asp?id={cerere_id}",
+                  f"/PARA/Printabile/buletinRecoltari.asp?id={cerere_id}"):
+            await self.cache_remove(self.get_full_url(p))
+
+        data.set_success()
+        return data

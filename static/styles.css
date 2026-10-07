@@ -4066,6 +4066,7 @@ dialog.report-editor-modal article > section {
    so several can sit in a card footer without dominating it. */
 .btn-perform-exam,
 .btn-cancel-request,
+.btn-send-request,
 .btn-write-report,
 .btn-edit-report {
     box-sizing: border-box;
@@ -4115,10 +4116,17 @@ dialog.report-editor-modal article > section {
 .btn-perform-exam { color: var(--success); }
 .btn-perform-exam:hover { background: var(--success); color: var(--on-accent); }
 
+.btn-send-request { color: var(--success); }
+.btn-send-request:hover { background: var(--success); color: var(--on-accent); }
+.btn-send-request[hidden],
+.btn-perform-exam[hidden],
+.btn-cancel-request[hidden] { display: none; }
+
 .btn-cancel-request { color: var(--danger); }
 .btn-cancel-request:hover { background: var(--danger); color: var(--on-accent); }
 
 .btn-perform-exam:disabled,
+.btn-send-request:disabled,
 .btn-cancel-request:disabled {
     color: var(--muted);
     cursor: not-allowed;

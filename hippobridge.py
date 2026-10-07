@@ -814,6 +814,17 @@ async def post_request_cancel(request):
     return web_json_response(result)
 
 @require_auth
+async def post_request_send(request):
+    """Send a 'not sent' request to the lab (buletinRecoltari.asp?close=true)."""
+    cerere_id = request.match_info['id']
+    username, _ = request['auth_credentials']
+    if username not in _ALLOWED_RADIOLOGISTS:
+        return web.Response(status=403, text='Not authorised to send requests')
+    client = HippoClientCererePerform(SERVICE_URL, request)
+    result = await client.send(cerere_id)
+    return web_json_response(result)
+
+@require_auth
 async def post_logout(request):
     """Close the user's Hipocrate session held by the bridge."""
     username, password = request['auth_credentials']
@@ -1633,6 +1644,7 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     app.router.add_post('/api/request/{id}/validate', post_report_validate)
     app.router.add_post('/api/request/{id}/perform', post_study_perform)
     app.router.add_post('/api/request/{id}/cancel', post_request_cancel)
+    app.router.add_post('/api/request/{id}/send', post_request_send)
     app.router.add_get('/api/schedule', get_schedule)
     app.router.add_get('/api/pacs/status', get_pacs_status)
     app.router.add_post('/api/pacs/refresh', post_pacs_refresh)
