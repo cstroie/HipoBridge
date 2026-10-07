@@ -2097,7 +2097,17 @@ def _parse_buletin_header(soup, data: HippoData) -> None:
     _EXPECTED_HTML_ERRORS = (IndexError, AttributeError, TypeError)
 
     row1_cells = rows[1].find_all('td') if len(rows) > 1 else []
-    row2_cells = rows[2].find_all('td') if len(rows) > 2 else []
+    # The patient row is normally rows[2], but some pages (e.g. ultrasound
+    # buletins) carry an extra leading wrapper row that shifts it to rows[3],
+    # leaving name/CNP unparsed. Locate it by content ("NUME:" in the first
+    # of three direct cells); fall back to the fixed position otherwise.
+    row2_cells = next(
+        (tds for r in rows
+         if len(tds := r.find_all('td', recursive=False)) >= 3
+         and tds[0].get_text(strip=True).startswith('NUME:')),
+        None)
+    if row2_cells is None:
+        row2_cells = rows[2].find_all('td') if len(rows) > 2 else []
 
     # Date and barcode from page header
     try:
