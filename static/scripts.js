@@ -7122,7 +7122,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     // requests strip lists something besides this request.
                     const strip = rq.previous;
                     const hasPrev = Array.isArray(strip) && strip.some(e => String(e.id) !== String(id));
-                    return { regions, indication, referrer, age, patientId: data?.patient?.id || '', hasPrev };
+                    return { regions, indication, referrer, age, patientId: data?.patient?.id || '', hasPrev,
+                             investigation: rq.investigation || '' };
                 })
                 .catch(() => ({ regions: [], indication: '', referrer: '', age: '' }));
 
@@ -7440,12 +7441,45 @@ document.addEventListener('DOMContentLoaded', function() {
         span.classList.add('timeline-triage', _TRIAGE_COLOR_CLASS[triageText] || 'triage-gray');
     }
 
-    function _applyExamLabel(el, { regions, indication }) {
+    // Hipocrate files some exams under the wrong lab (e.g. a neck ultrasound
+    // ordered through the X-Ray lab), and the schedule listing only carries
+    // that lab. The request's own investigation name is the reliable signal,
+    // so a clearly-ultrasound name re-labels the row (icon, colour, title)
+    // once the lazy per-row fetch resolves.
+    const _US_INVESTIGATION_RE = /ultrasonograf|ecograf/i;
+    function _applyModalityOverride(el, investigation) {
+        const row = el.closest('.timeline-row');
+        if (!row || row.dataset.modality === 'eco') return false;
+        if (!_US_INVESTIGATION_RE.test(investigation || '')) return false;
+        const oldCls = MODALITY_AVATAR[row.dataset.modality]?.cls;
+        const { icon, cls } = MODALITY_AVATAR.eco;
+        row.dataset.modality = 'eco';
+        el.dataset.modality = MODALITY_INFO.eco.label;
+        const dot = row.querySelector('.timeline-dot');
+        const avatarEl = row.querySelector('.timeline-mod-avatar');
+        [dot, avatarEl].forEach(n => {
+            if (!n) return;
+            if (oldCls) n.classList.remove(oldCls);
+            n.classList.add(cls);
+        });
+        if (avatarEl) {
+            const pacsBadge = avatarEl.querySelector('.pacs-confirmed-badge');
+            avatarEl.innerHTML = modAvatarHTML('eco');
+            if (pacsBadge) avatarEl.appendChild(pacsBadge);
+            avatarEl.title = MODALITY_INFO.eco.label;
+        }
+        return true;
+    }
+
+    function _applyExamLabel(el, { regions, indication, investigation }) {
         el.innerHTML = '';
+        _applyModalityOverride(el, investigation);
         const modality = el.dataset.modality || '';
+        // No region on the request (common for ultrasound): fall back to the
+        // investigation name rather than showing the bare modality.
         const regionText = regions.length
             ? (modality ? modality + ' · ' : '') + regions.join(', ')
-            : modality;
+            : (investigation ? _titleCaseInvestigation(investigation) : modality);
         if (regionText) {
             el.appendChild(document.createTextNode(regionText));
         }
@@ -7456,6 +7490,12 @@ document.addEventListener('DOMContentLoaded', function() {
             em.textContent = indication;
             el.appendChild(em);
         }
+    }
+
+    // "ULTRASONOGRAFIA GATULUI (PARTI MOI CERVICALE)" → "Ultrasonografia gatului (parti moi cervicale)"
+    function _titleCaseInvestigation(text) {
+        const t = String(text).trim().toLowerCase();
+        return t.charAt(0).toUpperCase() + t.slice(1);
     }
 
     function renderScheduleHero() {
