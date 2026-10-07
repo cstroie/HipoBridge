@@ -127,6 +127,10 @@ async def main():
     ap.add_argument("--status", default="ended",
                     help="comma-separated status values to fetch (default: "
                          "ended = 'Terminata', i.e. finalized reports only)")
+    ap.add_argument("--ward", action="append", metavar="TEXT",
+                    help="only exams whose ward contains TEXT (case-insensitive "
+                         "substring; repeatable, any match). Filtered here, after "
+                         "listing, so the row-cap check stays accurate")
     ap.add_argument("--resume", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--pause-schedule", type=float, default=2.0)
@@ -143,6 +147,7 @@ async def main():
     until = date.fromisoformat(args.until)
     mods = args.modality or list(MODALITIES)
     statuses = set(args.status.split(","))
+    wards = [w.strip().upper() for w in args.ward or [] if w.strip()]
     # Windows are Mon-Sun, newest first, clipped to [since, until].
     end = until
     if args.resume and os.path.exists(args.state):
@@ -153,17 +158,21 @@ async def main():
     end0 = end
     total_days = (end - since).days + 1
     log(f"Interval {since} .. {end} ({total_days} days, newest first, weekly windows)")
+    log(f"Wards: {' | '.join(wards) + ' (substring match)' if wards else 'all'}")
     log(f"Modalities: {', '.join(m.upper() for m in mods)}; fetching only status "
         f"{{{', '.join(sorted(statuses))}}}; row cap {LIMIT}; "
         f"{'DRY RUN, nothing fetched' if args.dry_run else 'live'}")
     log(f"{len(done)} imaging documents already indexed")
-    keys = ("listed", "indexed", "other_status", "to_fetch", "new", "no_text", "failed")
+    keys = ("listed", "other_ward", "indexed", "other_status", "to_fetch", "new", "no_text", "failed")
     tot = dict.fromkeys(keys, 0)
     t0 = time.monotonic()
 
     def fmt(c):
-        parts = [f"listed={c['listed']}", f"already_indexed={c['indexed']}",
-                 f"not_in_status={c['other_status']}"]
+        parts = [f"listed={c['listed']}"]
+        if wards:
+            parts.append(f"other_ward={c['other_ward']}")
+        parts += [f"already_indexed={c['indexed']}",
+                  f"not_in_status={c['other_status']}"]
         if args.dry_run:
             parts.append(f"would_fetch={c['to_fetch']}")
         else:
@@ -203,6 +212,10 @@ async def main():
                         continue
                     seen.add(rid)
                     m["listed"] += 1
+                    if wards and not any(w in (row.get("section") or "").upper()
+                                         for w in wards):
+                        m["other_ward"] += 1
+                        continue
                     st = row.get("status") or "?"
                     by_status[st] = by_status.get(st, 0) + 1
                     if rid in done:
