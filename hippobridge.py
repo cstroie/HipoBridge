@@ -23,6 +23,7 @@ Config: hippobridge.cfg (gitignored; copy from examples/hippobridge.cfg),
 layered over the in-code DEFAULT_CONFIG fallback.
 """
 import asyncio
+import math
 import copy
 import os
 import re
@@ -1445,6 +1446,7 @@ def _backfill_search_sync(fs_cache: SqliteCache, idx) -> dict:
     scanned = 0
     indexed = 0
     newest_mtime = cursor
+    oldest_failed = None   # cursor must not pass a page that failed to parse
     # One connection/transaction for the whole scan instead of a fresh
     # connect + commit per document (search.py:batch_writer) — this loop can
     # index hundreds of documents in one pass on a first run against an
@@ -1478,6 +1480,13 @@ def _backfill_search_sync(fs_cache: SqliteCache, idx) -> dict:
                         indexed += 1
             except Exception as exc:
                 logger.warning(f"Search index backfill: failed to parse cached page {url}: {exc}")
+                if oldest_failed is None or mtime < oldest_failed:
+                    oldest_failed = mtime
+    if oldest_failed is not None:
+        # Entries are compared with '>' against the cursor, so stop just
+        # before the oldest failure: it (and everything newer) is rescanned
+        # next run; already-indexed pairs are skipped without re-parsing.
+        newest_mtime = min(newest_mtime, math.nextafter(oldest_failed, -math.inf))
     if newest_mtime > cursor:
         idx.set_backfill_cursor_sync(newest_mtime)
     return {'scanned': scanned, 'indexed': indexed}

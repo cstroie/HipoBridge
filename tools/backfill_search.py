@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Backfill the search index with historical CT/MRI reports.
+Backfill the search index with historical CT/MRI/US reports.
 
-Walks back week by week, lists CT and MRI requests (separately, max 100 each)
+Walks back week by week, lists CT, MRI and US requests (separately, max 100 each)
 via the running server's /api/schedule, skips reports already in search.db and
 fetches the rest with /api/study/{id}?justification=0 — the server's own
 fetch hook does the indexing. No summarization. Sequential and throttled so
@@ -26,8 +26,11 @@ from datetime import date, datetime, timedelta
 import aiohttp
 
 BASE_URL = os.getenv("HIPPOBRIDGE_URL", "http://127.0.0.1:44660")
-MODALITIES = {"ct": "26", "mri": "32"}
+MODALITIES = {"ct": "26", "mri": "32", "us": "28"}
 LIMIT = 100
+# High-volume modalities are always listed one day at a time instead of
+# weekly-then-split-on-cap, so the 100-row cap is never hit by a full week.
+DAILY = {"us"}
 
 
 def parse_since(v):
@@ -160,7 +163,14 @@ async def main():
             w = {"rows": 0, "skipped": 0, "fetched": 0, "empty": 0, "failed": 0}
             seen, ok = set(), True
             for mod in mods:
-                rows = await list_requests(g, MODALITIES[mod], start, end)
+                if mod in DAILY:
+                    rows, d = [], start
+                    while d <= end and rows is not None:
+                        part = await list_requests(g, MODALITIES[mod], d, d)
+                        rows = None if part is None else rows + part
+                        d += timedelta(days=1)
+                else:
+                    rows = await list_requests(g, MODALITIES[mod], start, end)
                 if rows is None:
                     ok = False
                     continue

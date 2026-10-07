@@ -73,7 +73,9 @@ class SearchIndex:
         logger.info(f"SearchIndex initialised at {db_path}")
 
     def _connect(self) -> sqlite3.Connection:
-        return sqlite3.connect(self.db_path)
+        # Generous busy timeout: a long backfill batch and a live
+        # schedule_index() write can briefly contend for the write lock.
+        return sqlite3.connect(self.db_path, timeout=30)
 
     # ── blocking implementations (run off the event loop by the async wrappers) ──
 
@@ -107,7 +109,9 @@ class SearchIndex:
         terms = _TOKEN_RE.findall(query)
         if not terms:
             return []
-        match_query = ' '.join(f'{t}*' for t in terms)
+        # Quoted so a term like "and"/"or"/"not"/"near" is a literal prefix
+        # match, not an FTS5 operator.
+        match_query = ' '.join(f'"{t}"*' for t in terms)
         con = self._connect()
         try:
             con.row_factory = sqlite3.Row
@@ -199,7 +203,7 @@ class SearchIndex:
         return self._indexed_keys_sync()
 
     @contextmanager
-    def batch_writer(self):
+    def batch_writer(self, commit_every: int = 100):
         """One connection/transaction for a whole batch of index_document_sync
         calls, instead of a fresh connection + commit per document.
 
@@ -210,18 +214,26 @@ class SearchIndex:
         the right granularity there.
 
         Yields a callable with the same signature as index_document_sync().
-        Commits once when the block exits, including on error — upserts are
+        Commits every `commit_every` documents (so the write lock isn't held
+        for the whole scan, starving live schedule_index() writes) and once
+        more when the block exits, including on error — upserts are
         idempotent (ON CONFLICT DO UPDATE) and the backfill cursor is only
         advanced after the whole scan finishes, so losing an in-progress
         batch to a crash just means it's safely redone on the next run.
         """
         con = self._connect()
+        pending = 0
         try:
             def _index(kind: str, source_id: str, cnp: Optional[str], name: Optional[str],
                         text: Optional[str]) -> None:
+                nonlocal pending
                 if not text or not text.strip():
                     return
                 self._index_document_conn(con, kind, source_id, cnp, name, text)
+                pending += 1
+                if pending >= commit_every:
+                    con.commit()
+                    pending = 0
             yield _index
         finally:
             con.commit()

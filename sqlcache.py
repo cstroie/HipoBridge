@@ -42,6 +42,9 @@ logger = logging.getLogger('SqliteCache')
 
 _FALLBACK_TABLE = 'cache_other'
 
+# Rows fetched per lock acquisition in SqliteCache.iter_entries().
+_ITER_CHUNK = 200
+
 
 def _episode_key(query: dict) -> Optional[str]:
     pacid = query.get('pacid', [None])[0]
@@ -247,13 +250,23 @@ class SqliteCache:
         against cached_at, so this must keep yielding raw unix timestamps.
         """
         now = self._now()
-        with self._lock:
-            for table in RAW_HTML_TABLES:
-                rows = self._con.execute(
-                    f"""SELECT url, content, cached_at FROM {table}
-                        WHERE cached_at > ? AND expires_at >= ?""",
-                    (since_mtime, now)).fetchall()
-                for url, content, cached_at in rows:
+        for table in RAW_HTML_TABLES:
+            last_rowid = 0
+            while True:
+                # Chunked, lock taken per chunk (not held across yields): the
+                # consumer parses HTML and writes the search index between
+                # chunks, and holding the lock throughout would stall every
+                # request that touches the L2 cache for the whole scan.
+                with self._lock:
+                    rows = self._con.execute(
+                        f"""SELECT rowid, url, content, cached_at FROM {table}
+                            WHERE rowid > ? AND cached_at > ? AND expires_at >= ?
+                            ORDER BY rowid LIMIT ?""",
+                        (last_rowid, since_mtime, now, _ITER_CHUNK)).fetchall()
+                if not rows:
+                    break
+                last_rowid = rows[-1][0]
+                for _rowid, url, content, cached_at in rows:
                     if url and content:
                         yield url, content, cached_at
 
