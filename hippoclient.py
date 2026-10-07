@@ -4020,6 +4020,28 @@ class HippoClientCerere(HippoClient):
             data.set_error(str(e))
             return data
 
+    async def fetch_and_parse(self, *args, **kwargs) -> HippoData:
+        """Fetch and parse a request page, evicting it from the cache while the
+        exam is still unperformed.
+
+        cerere.asp carries live state (DataEfectuarii, cancellation) that
+        changes outside this app too — at the modality or in Hipocrate's own
+        UI — and nothing else invalidates the 7-day cache entry, so the
+        Imaging tab kept offering Perform on an exam already performed
+        (request 1771095). Same remedy as HippoClientImagingStudy: don't keep
+        the unfinished version. Once performed_at is set (or the request is
+        cancelled) the state is final, so it caches normally from then on.
+        The page just parsed is still returned; only the next call refetches.
+        """
+        parsed_data = await super().fetch_and_parse(*args, **kwargs)
+        if (parsed_data.get("status") != "error"
+                and not parsed_data.get("performed_at")
+                and not parsed_data.get("cancelled")):
+            url = _format_request_url(self.request_url, **kwargs)
+            await self.cache_remove(self.get_full_url(url))
+            logger.debug(f"Evicted unperformed request page from cache: {url}")
+        return parsed_data
+
 
 class HippoClientFUPU(HippoClient):
     """Parses the ER intake/triage sheet (FUPU.asp, "Foaie UPU") — a multi-page
