@@ -1737,6 +1737,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // something to hide because nothing is flagged H/L. No button wired to
     // this yet — see buildContrastSafetyText() below.
     let renalLabAiText = '';
+    // Renal analytes kept for computeEgfrText at click time.
+    let renalAnalytesCache = [];
 
     // Analyte names counted as "renal function" — matched case-insensitively
     // against the Hipocrate-supplied analyte name text. There's no
@@ -1773,6 +1775,41 @@ document.addEventListener('DOMContentLoaded', function() {
         return kept.join(' ');
     }
 
+    // Deterministic eGFR for the contrast_safety prompt — the LLM must not do
+    // this arithmetic. Latest serum creatinine (mg/dL; µmol/L ÷ 88.4) with
+    // the patient's age/sex/height from the loaded record: bedside Schwartz
+    // (0.413 × height cm / SCr) under 18 y, CKD-EPI 2021 for adults. Returns
+    // a "not calculated: <reason>" line when an input is missing.
+    function computeEgfrText(renalAnalytes, patientData) {
+        const cr = renalAnalytes.find(a => /creatinin/i.test(a.name) && !/clearance|clear/i.test(a.name));
+        if (!cr) return '';
+        if (!patientData?.birth_date) return 'eGFR not calculated: birth date missing';
+        const latest = cr.measurements.filter(m => m.v != null && m.date)
+            .sort((a, b) => a.date.localeCompare(b.date)).pop();
+        if (!latest) return '';
+        const unit = (cr.unit || '').toLowerCase();
+        const scr = /mol/.test(unit) ? latest.v / 88.4 : latest.v;
+        if (!(scr > 0)) return 'eGFR not calculated: creatinine value unusable';
+        const parts = String(patientData.birth_date).split('-').map(Number);
+        const dob = new Date(parts[0], (parts[1] || 1) - 1, parts[2] || 1);
+        const ageY = (Date.now() - dob) / (365.25 * 86400000);
+        const height = parseFloat(String(patientData.height || '').replace(',', '.'));
+        const female = /^(f|female)/i.test(patientData.sex || '');
+        let egfr, method;
+        if (ageY < 18) {
+            if (!(height > 0)) return 'eGFR not calculated: height missing (needed for Schwartz, patient under 18)';
+            egfr = 0.413 * height / scr;
+            method = 'bedside Schwartz';
+        } else {
+            if (!/^(f|m)/i.test(patientData.sex || '')) return 'eGFR not calculated: sex missing';
+            const k = female ? 0.7 : 0.9, a = female ? -0.241 : -0.302;
+            egfr = 142 * Math.pow(Math.min(scr / k, 1), a) * Math.pow(Math.max(scr / k, 1), -1.2)
+                * Math.pow(0.9938, ageY) * (female ? 1.012 : 1);
+            method = 'CKD-EPI 2021';
+        }
+        return `eGFR ${Math.round(egfr)} mL/min/1.73 m² (${method}; creatinine ${parseFloat(scr.toFixed(2))} mg/dL on ${latest.date.slice(0, 10)})`;
+    }
+
     function resetAiTab() {
         if (elements.aiEmptyState) elements.aiEmptyState.hidden = false;
         if (elements.aiReportBtn) elements.aiReportBtn.hidden = true;
@@ -1789,6 +1826,7 @@ document.addEventListener('DOMContentLoaded', function() {
         labAiText = '';
         labHasAbnormal = false;
         renalLabAiText = '';
+        renalAnalytesCache = [];
     }
 
     // Clinical text used by the Report and Pre-Exam summaries — carries only
@@ -1813,7 +1851,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!renalLabAiText && !fullClinical) return '';
         const patientData = pendingAnalysesData?.patientData;
         const header = patientContextHeader(patientData);
-        const renalSection = `### Renal function\n${renalLabAiText || 'No renal function analytes on file.'}`;
+        const egfrAiText = computeEgfrText(renalAnalytesCache, patientData);
+        const renalSection = `### Renal function\n${renalLabAiText || 'No renal function analytes on file.'}`
+            + (egfrAiText ? `\n\n### Calculated eGFR\n${egfrAiText}` : '');
         const relevantClinical = extractContrastRelevantText(fullClinical);
         const clinicalText = relevantClinical
             || (fullClinical ? 'No contrast-relevant mentions found in clinical record.' : 'No clinical record available.');
@@ -4611,6 +4651,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const renalAnalytes = analytes.filter(a => RENAL_ANALYTE_RE.test(a.name));
         const renalRows = serializeAnalyteRows(renalAnalytes);
         renalLabAiText = renalRows.length ? [header, ...renalRows].join('\n') : '';
+        renalAnalytesCache = renalAnalytes;
         if (elements.copyLabBtn) {
             elements.copyLabBtn.hidden = !labHasAbnormal;
             elements.trendsContainer.dataset.markdown = labHasAbnormal
