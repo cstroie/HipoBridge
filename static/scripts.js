@@ -1888,6 +1888,14 @@ document.addEventListener('DOMContentLoaded', function() {
             runAiSummary(elements.patientAiSummaryBtn, 'pre_exam_oneliner',
                 () => null, getPatientClinicalText,
                 { auto: true, inline: true, intoAnchorParent: () => elements.patientAiSummaryAnchor });
+            // The Lab Trends auto-probe for 'contrast_safety' may have run
+            // before the clinical record was loaded (different text, so a
+            // guaranteed cache miss) — probe again now that it is.
+            if (elements.contrastSafetyBtn && !elements.contrastSafetyBtn.hidden && !elements.contrastSafetyBtn._aiCard?.isConnected) {
+                runAiSummary(elements.contrastSafetyBtn, 'contrast_safety',
+                    () => elements.trendsContainer?.firstChild || null, buildContrastSafetyText,
+                    { intoAnchorParent: () => elements.trendsContainer, inline: true, auto: true });
+            }
         }
     }
 
