@@ -1852,7 +1852,15 @@ document.addEventListener('DOMContentLoaded', function() {
         const patientData = pendingAnalysesData?.patientData;
         const header = patientContextHeader(patientData);
         const egfrAiText = computeEgfrText(renalAnalytesCache, patientData);
-        const renalSection = `### Renal function\n${renalLabAiText || 'No renal function analytes on file.'}`
+        // Latest value only: with the multi-date table the small model picked
+        // an older column. Interval and flag stay so it can judge normality.
+        const renalLatest = renalAnalytesCache.map(a => {
+            const m = a.measurements.filter(x => x.v != null && x.date).sort((x, y) => x.date.localeCompare(y.date)).pop();
+            if (!m) return '';
+            const interval = a.ref || (a.low != null && a.high != null ? `${a.low}-${a.high}` : '');
+            return `${a.name}: ${m.v} ${a.unit || ''} on ${m.date.slice(0, 10)}${interval ? ` (reference ${interval})` : ''}${m.flag ? ` [${m.flag}]` : ''}`;
+        }).filter(Boolean).join('\n');
+        const renalSection = `### Renal function (latest values)\n${renalLatest || 'No renal function analytes on file.'}`
             + (egfrAiText ? `\n\n### Calculated eGFR\n${egfrAiText}` : '');
         const relevantClinical = extractContrastRelevantText(fullClinical);
         const clinicalText = relevantClinical
