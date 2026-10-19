@@ -154,13 +154,13 @@
             "name": "q",
             "in": "query",
             "required": true,
-            "description": "Search term (patient name, CNP, patient code, or partial CNP ending with *). Not required when _content is given.",
+            "description": "Search term (patient name, CNP, patient code, or partial CNP ending with *). Not required when content is given.",
             "schema": {
               "type": "string"
             }
           },
           {
-            "name": "_content",
+            "name": "content",
             "in": "query",
             "required": false,
             "description": "Full-text search over indexed epicrisis/imaging report text (same index and semantics as /api/search/text). Takes precedence over q; returns a searchset Bundle of Patient stubs (id = CNP, name) with extensions search-snippet (matches in <mark>), search-count, and one search-document per matching document (kind, id). Credentials are validated against Hipocrate. 401 on bad credentials; OperationOutcome not-supported when no cache.dir is configured.",
@@ -172,7 +172,7 @@
             "name": "snippet_length",
             "in": "query",
             "required": false,
-            "description": "With _content: snippet size in tokens, clamped to 1-64, default 12",
+            "description": "With content: snippet size in tokens, clamped to 1-64, default 12",
             "schema": {"type": "integer", "default": 12, "minimum": 1, "maximum": 64}
           }
         ],

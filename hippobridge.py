@@ -159,7 +159,7 @@ async def search_patient(request):
 @require_auth
 async def search_fhir_patient(request):
     """Search patients. Returns FHIR Patient resource or Bundle."""
-    content = request.query.get('_content', '').strip()
+    content = request.query.get('content', '').strip()
     if content:
         return await _search_fhir_patient_content(request, content)
     search_term = request.query.get('q', '')
@@ -1393,7 +1393,7 @@ async def post_cache_cleanup(request):
 
 
 async def _run_text_search(request, query: str):
-    """Shared by /api/search/text and /fhir/Patient?_content=. Returns
+    """Shared by /api/search/text and /fhir/Patient?content=. Returns
     (results, None) — results is None when the index is disabled — or
     (None, error_response)."""
     if search.instance is None:
@@ -1432,7 +1432,7 @@ async def search_text(request):
 
 
 async def _search_fhir_patient_content(request, query: str):
-    """GET /fhir/Patient?_content=words — FHIR searchset Bundle of the Patients
+    """GET /fhir/Patient?content=words — FHIR searchset Bundle of the Patients
     whose indexed report text matches. Entries are minimal Patient stubs
     (CNP identifier + name, id = CNP so Patient/{id} resolves); the snippet,
     counts and matching document ids ride along as extensions."""
