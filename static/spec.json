@@ -163,7 +163,7 @@
             "name": "content",
             "in": "query",
             "required": false,
-            "description": "Full-text search over indexed epicrisis/imaging report text (same index and semantics as /api/search/text). Takes precedence over q; returns a searchset Bundle of Patient stubs (id = CNP, name) with extensions search-snippet (matches in <mark>), search-count, and one search-document per matching document: a nested extension with sub-extensions kind and id (valueString). kind is 'epicrisis' (id = Encounter id for /fhir/Encounter/{id}?type=checkout) or 'imaging' (id = request id for /fhir/ImagingStudy/{id}; not a DiagnosticReport id). Credentials are validated against Hipocrate. 401 on bad credentials; OperationOutcome not-supported when no cache.dir is configured.",
+            "description": "Full-text search over indexed epicrisis/imaging report text (same index and semantics as /api/search/text). Takes precedence over q; returns a searchset Bundle of Patient stubs (id = CNP, name) with extensions search-snippet (matches in <mark>), search-count, and one search-document per matching document: a nested extension with sub-extensions kind and id (valueString). kind is 'epicrisis' (id = Encounter id for /fhir/Encounter/{id}?type=checkout; indexed text = the epicrisis, i.e. note[0].text of that Encounter) or 'imaging' (id = request id for /fhir/ImagingStudy/{id}, not a DiagnosticReport id; indexed text = the study results, i.e. the category-less note[].text entries of that ImagingStudy). The justification and discharge-diagnosis notes are not indexed, and the snippet is a slice of the indexed text (may contain Markdown syntax) with <mark> around matches. Credentials are validated against Hipocrate. 401 on bad credentials; OperationOutcome not-supported when no cache.dir is configured.",
             "schema": {
               "type": "string"
             }
@@ -771,7 +771,7 @@
     "/fhir/ImagingStudy/{id}": {
       "get": {
         "summary": "Get imaging study",
-        "description": "Retrieve an imaging study by ID as FHIR ImagingStudy resource",
+        "description": "Retrieve an imaging study by ID as FHIR ImagingStudy resource. Report text is in note[].text (Annotation): an optional first note with category[0].text = 'clinical-indication' (the request justification), then one note per study result (the radiology report, no category). series[].description is the study title, reason[0].text the clinical diagnosis. There is no DiagnosticReport or narrative (text.div) element.",
         "parameters": [
           {
             "name": "id",
@@ -867,7 +867,7 @@
     "/fhir/Encounter/{id}": {
       "get": {
         "summary": "Get encounter information",
-        "description": "Retrieve encounter/checkout information by ID as FHIR Encounter resource",
+        "description": "Retrieve encounter/checkout information by ID as FHIR Encounter resource. For type=checkout, the discharge text is in note[].text (Annotation, Markdown): note[0] is the epicrisis (omitted while empty), followed by a note '**Diagnostic la externare:** …' when present. There is no narrative (text.div) element.",
         "parameters": [
           {
             "name": "id",
