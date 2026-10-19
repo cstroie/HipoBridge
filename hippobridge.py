@@ -41,7 +41,7 @@ import signal
 from hashlib import sha256
 from urllib.parse import urlparse, parse_qs
 
-from fhir import OperationOutcome, Resource
+from fhir import Bundle, OperationOutcome, Patient, Resource
 
 from hippoclient import ANALYSIS_TYPES
 from hippoclient import HippoClient, HippoClientPatient, HippoClientPatientSearch, HippoClientImagingStudy, HippoClientDiagnosticReport, HippoClientServiceRequest, HippoClientServiceRequestSearch, HippoClientCheckout, HippoClientCheckin, HippoClientCheckup, HippoClientSchedule, HippoClientCerere, HippoClientBuletinSolicitare, HippoClientPresentation, HippoClientObservationBundle, HippoClientWhoami, HippoClientReportWrite, HippoClientReportValidate, HippoClientCererePerform, HippoClientFUPU, HippoClientTriage
@@ -159,6 +159,9 @@ async def search_patient(request):
 @require_auth
 async def search_fhir_patient(request):
     """Search patients. Returns FHIR Patient resource or Bundle."""
+    content = request.query.get('_content', '').strip()
+    if content:
+        return await _search_fhir_patient_content(request, content)
     search_term = request.query.get('q', '')
     if not search_term:
         return web_fhir_response("Search term is required")
@@ -1389,16 +1392,12 @@ async def post_cache_cleanup(request):
     return web.json_response({'enabled': True, **result})
 
 
-@require_auth
-async def search_text(request):
-    """Free-text search over epicrisis/imaging report text already indexed by
-    this server (see search.py) — scoped to patients viewed here, not a
-    Hipocrate-wide search (Hipocrate has no such API; see docs/SITE_SURVEY.md)."""
+async def _run_text_search(request, query: str):
+    """Shared by /api/search/text and /fhir/Patient?_content=. Returns
+    (results, None) — results is None when the index is disabled — or
+    (None, error_response)."""
     if search.instance is None:
-        return web.json_response({'enabled': False})
-    query = request.query.get('q', '').strip()
-    if not query:
-        return web_error_response("Search query is required")
+        return None, None
     # Unlike every other route, this one never forwards credentials to
     # Hipocrate — there's nothing to scrape — so @require_auth's bare
     # presence-of-a-header check is the only thing standing between a
@@ -1408,13 +1407,66 @@ async def search_text(request):
     # reject bad credentials.
     whoami_data = await HippoClientWhoami(SERVICE_URL, request).fetch_and_parse()
     if whoami_data.get("status") != "success":
-        return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
+        return None, web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
     try:
         snippet_length = int(request.query.get('snippet_length', 12))
     except ValueError:
-        return web_error_response("snippet_length must be an integer")
-    results = await search.instance.search(query, snippet_length=snippet_length)
+        return None, web_error_response("snippet_length must be an integer")
+    return await search.instance.search(query, snippet_length=snippet_length), None
+
+
+@require_auth
+async def search_text(request):
+    """Free-text search over epicrisis/imaging report text already indexed by
+    this server (see search.py) — scoped to patients viewed here, not a
+    Hipocrate-wide search (Hipocrate has no such API; see docs/SITE_SURVEY.md)."""
+    query = request.query.get('q', '').strip()
+    if search.instance is not None and not query:
+        return web_error_response("Search query is required")
+    results, err = await _run_text_search(request, query)
+    if err is not None:
+        return err
+    if search.instance is None:
+        return web.json_response({'enabled': False})
     return web.json_response({'enabled': True, 'results': results})
+
+
+async def _search_fhir_patient_content(request, query: str):
+    """GET /fhir/Patient?_content=words — FHIR searchset Bundle of the Patients
+    whose indexed report text matches. Entries are minimal Patient stubs
+    (CNP identifier + name, id = CNP so Patient/{id} resolves); the snippet,
+    counts and matching document ids ride along as extensions."""
+    results, err = await _run_text_search(request, query)
+    if err is not None:
+        return err
+    if results is None:
+        return web_fhir_response(OperationOutcome.from_error(
+            message="Full-text search is disabled (no cache.dir configured)",
+            code="not-supported", severity="error"))
+    base = f"{request.scheme}://{request.host}"
+    ext = f"{base}/fhir/StructureDefinition/search-"
+    bundle = Bundle(type="searchset", timestamp=datetime.now(timezone.utc).isoformat())
+    for r in results:
+        cnp = r.get('patient_cnp')
+        patient = Patient(
+            id=cnp,
+            identifier=[{"system": f"{base}/fhir/NamingSystem/patient-cnp", "value": cnp}] if cnp else None,
+            name=[{"text": r['patient_name']}] if r.get('patient_name') else None,
+            extension=[
+                {"url": ext + "snippet", "valueString": r['snippet']},
+                {"url": ext + "count", "valueInteger": r['count']},
+            ] + [
+                {"url": ext + "document", "extension": [
+                    {"url": "kind", "valueString": d['kind']},
+                    {"url": "id", "valueString": d['source_id']}]}
+                for d in r['documents']
+            ],
+        )
+        bundle.append_entry(patient, fullUrl=f"{base}/fhir/Patient/{cnp}" if cnp else None,
+                            search={"mode": "match"})
+    if not results:
+        bundle.set_total(0)
+    return web_fhir_response(bundle)
 
 
 def load_config(config_path: str = 'hippobridge.cfg'):

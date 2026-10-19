@@ -42,6 +42,7 @@ Key endpoints:
 
 ```
 GET  /fhir/Patient?q={search_term}
+GET  /fhir/Patient?_content={words}[&snippet_length=12] — FHIR searchset Bundle of Patient stubs matching the full-text index (same as /api/search/text; snippet/count/documents as extensions)
 GET  /fhir/Patient/{id}
 GET  /fhir/ServiceRequest?patient={id}[&type={code}][&region={region}][&dt={iso_datetime}]
 GET  /fhir/ServiceRequest/{id}               — BuletinSolicitare.asp (region, indication, ordering physician)

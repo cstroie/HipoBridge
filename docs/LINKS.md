@@ -17,6 +17,7 @@ Append `?debug=page` to any `/api/*` single-resource endpoint to get the raw Hip
 | `GET /api/patient/{id}` | `/Pacient/edit.asp?id={id}` |
 | `GET /fhir/Patient?name={name}` | same |
 | `GET /fhir/Patient?q={cnp\|name}` | same |
+| `GET /fhir/Patient?_content={words}[&snippet_length=N]` | none — local FTS index, same as `/api/search/text` |
 | `GET /fhir/Patient/{id}` | `/Pacient/edit.asp?id={id}` |
 
 Patient IDs are 15-digit numbers (e.g. `421200000683090`).
