@@ -31,6 +31,7 @@ HTTP client → hippobridge.py (@require_auth) → HippoClient* (cache + semapho
 | — (`search.SearchIndex`, no scraper) | `GET /api/search/text?q=[&snippet_length=]` | none — local FTS5 index (`search.db`); auth validated via `HippoClientWhoami` |
 | — (`search.SearchIndex`, no scraper) | `GET /fhir/Patient?content=[&snippet_length=]` | none — same index/auth as above, via shared `_run_text_search()`; searchset Bundle of Patient stubs |
 | — (`search.SearchIndex`, no scraper) | `GET /fhir/DocumentReference?content=[&match=any&min-match=&kind=&modality=&date=&status=&_count=&max-chars=&context=]`, `GET /fhir/DocumentReference/$stats` | none — same index/auth; one DocumentReference per document with its best passage (plain text in `content[0].attachment.data`), `search-score`/`search-matched` extensions |
+| — (`search.SearchIndex`, no scraper) | `GET /fhir/ImagingStudy?content=[same params as DocumentReference minus kind]` | none — same passage search fixed to `kind=imaging` via shared `_run_passage_search()`; searchset of ImagingStudy (id resolves at `/fhir/ImagingStudy/{id}`, `subject` = Patient/{cnp}, best passage in `note[0].text`) |
 
 ## Concurrency and caching (critical — Hipocrate is fragile)
 

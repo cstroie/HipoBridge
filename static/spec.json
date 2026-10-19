@@ -926,6 +926,141 @@
         }
       }
     },
+    "/fhir/ImagingStudy": {
+      "get": {
+        "summary": "Search imaging studies by report text",
+        "description": "Same index, parameters and semantics as GET /fhir/DocumentReference?content= (passage-level matching, final-only by default), restricted to imaging. One ImagingStudy per study, best first; each id resolves via /fhir/ImagingStudy/{id}. The best passage(s) are note[0].text (plain text, blank-line separated); subject = Patient/{cnp} with display name when known; started = study date; modality = DICOM code; description = exam name. Extensions search-score, search-matched and one search-passage (section name) per passage. 401 on bad credentials; 400 OperationOutcome on a missing content or bad parameter.",
+        "parameters": [
+          {
+            "name": "content",
+            "in": "query",
+            "required": true,
+            "description": "Words, \"quoted phrases\", a|b alternatives",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "match",
+            "in": "query",
+            "required": false,
+            "description": "all = every word (default), any = at least min-match words",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "any"
+              ],
+              "default": "all"
+            }
+          },
+          {
+            "name": "min-match",
+            "in": "query",
+            "required": false,
+            "description": "With match=any: minimum words present in the document",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "modality",
+            "in": "query",
+            "required": false,
+            "description": "Comma list of DICOM codes (MR, CT, US, CR, OT); imaging only",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "required": false,
+            "description": "FHIR date with optional eq/ge/gt/le/lt prefix (YYYY, YYYY-MM or YYYY-MM-DD); repeatable. Study date (imaging) or discharge date (epicrisis).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "final (default), draft or any. Draft = imaging result not yet validated.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "final",
+                "draft",
+                "any"
+              ],
+              "default": "final"
+            }
+          },
+          {
+            "name": "_count",
+            "in": "query",
+            "required": false,
+            "description": "Most documents returned",
+            "schema": {
+              "type": "integer",
+              "default": 30,
+              "minimum": 1,
+              "maximum": 50
+            }
+          },
+          {
+            "name": "max-chars",
+            "in": "query",
+            "required": false,
+            "description": "Total length of the passage(s) returned per document",
+            "schema": {
+              "type": "integer",
+              "default": 900,
+              "minimum": 100,
+              "maximum": 5000
+            }
+          },
+          {
+            "name": "context",
+            "in": "query",
+            "required": false,
+            "description": "Neighbouring passages added each side of every best passage",
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0,
+              "maximum": 3
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "searchset Bundle of ImagingStudy",
+            "content": {
+              "application/fhir+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "resourceType": {
+                      "type": "string",
+                      "example": "Bundle"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "OperationOutcome"
+          },
+          "401": {
+            "description": "Bad credentials"
+          }
+        }
+      }
+    },
     "/fhir/ImagingStudy/{id}": {
       "get": {
         "summary": "Get imaging study",

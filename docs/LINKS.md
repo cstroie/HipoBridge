@@ -19,6 +19,7 @@ Append `?debug=page` to any `/api/*` single-resource endpoint to get the raw Hip
 | `GET /fhir/Patient?q={cnp\|name}` | same |
 | `GET /fhir/Patient?content={words}[&snippet_length=N]` | none — local FTS index, same as `/api/search/text` |
 | `GET /fhir/DocumentReference?content={words}[&match=any&min-match=&kind=&modality=&date=&status=&_count=&max-chars=&context=]` | none — local FTS index; ranked passages, one per document |
+| `GET /fhir/ImagingStudy?content={words}[&match=any&modality=&date=&_count=…]` | none — local FTS index; imaging studies matching the text |
 | `GET /fhir/DocumentReference/$stats` | none — index counts |
 | `GET /fhir/Patient/{id}` | `/Pacient/edit.asp?id={id}` |
 

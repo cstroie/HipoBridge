@@ -41,7 +41,7 @@ import signal
 from hashlib import sha256
 from urllib.parse import urlparse, parse_qs
 
-from fhir import Bundle, DocumentReference, OperationOutcome, Patient, Resource
+from fhir import Bundle, DocumentReference, ImagingStudy, OperationOutcome, Patient, Resource
 
 from hippoclient import ANALYSIS_TYPES
 from hippoclient import HippoClient, HippoClientPatient, HippoClientPatientSearch, HippoClientImagingStudy, HippoClientDiagnosticReport, HippoClientServiceRequest, HippoClientServiceRequestSearch, HippoClientCheckout, HippoClientCheckin, HippoClientCheckup, HippoClientSchedule, HippoClientCerere, HippoClientBuletinSolicitare, HippoClientPresentation, HippoClientObservationBundle, HippoClientWhoami, HippoClientReportWrite, HippoClientReportValidate, HippoClientCererePerform, HippoClientFUPU, HippoClientTriage
@@ -1496,21 +1496,16 @@ def _fhir_date_bounds(values: list):
     return lo, hi
 
 
-@require_auth
-async def search_fhir_document_reference(request):
-    """GET /fhir/DocumentReference?content=words — ranked passages, one
-    DocumentReference per matching document (not per patient), best first.
-    Params: content (required; "phrases" and a|b alternatives), match=all|any,
-    min-match, kind (epicrisis,imaging), modality (MR,CT…), date (repeatable,
-    ge/le…), status=final|draft|any (default final), _count (≤50), max-chars,
-    context. The passage rides in content[0].attachment.data as plain text
-    (not base64, deliberately — the one consumer asked for it)."""
+async def _run_passage_search(request, kinds_override=None):
+    """Shared by /fhir/DocumentReference and /fhir/ImagingStudy ?content=:
+    parse the passage-search parameters, check credentials, query the index.
+    Returns (results, None) or (None, error_response)."""
     q = request.query
     content = q.get('content', '').strip()
     if not content:
-        return web_fhir_response("content is required")
+        return None, web_fhir_response("content is required")
     if search.instance is None:
-        return web_fhir_response(OperationOutcome.from_error(
+        return None, web_fhir_response(OperationOutcome.from_error(
             message="Full-text search is disabled (no cache.dir configured)",
             code="not-supported", severity="error"))
     try:
@@ -1525,19 +1520,33 @@ async def search_fhir_document_reference(request):
         max_chars = max(100, min(5000, int(q.get('max-chars', 900))))
         context = max(0, min(3, int(q.get('context', 0))))
         lo, hi = _fhir_date_bounds(q.getall('date', []))
-        kinds = [k for k in q.get('kind', '').split(',') if k.strip()]
+        kinds = kinds_override or [k for k in q.get('kind', '').split(',') if k.strip()]
         modalities = [m.strip().upper() for m in q.get('modality', '').split(',') if m.strip()]
         if any(k not in ('epicrisis', 'imaging') for k in kinds):
             raise ValueError("kind must be epicrisis and/or imaging")
     except ValueError as e:
-        return web_fhir_response(str(e))
+        return None, web_fhir_response(str(e))
     denied = await _text_search_denied(request)
     if denied is not None:
-        return denied
-    results = await search.instance.search_passages(
+        return None, denied
+    return await search.instance.search_passages(
         content, match=match, min_match=min_match, kinds=kinds, modalities=modalities,
         date_from=lo, date_to=hi, status=None if status == 'any' else status,
-        limit=count, max_chars=max_chars, context=context)
+        limit=count, max_chars=max_chars, context=context), None
+
+
+@require_auth
+async def search_fhir_document_reference(request):
+    """GET /fhir/DocumentReference?content=words — ranked passages, one
+    DocumentReference per matching document (not per patient), best first.
+    Params: content (required; "phrases" and a|b alternatives), match=all|any,
+    min-match, kind (epicrisis,imaging), modality (MR,CT…), date (repeatable,
+    ge/le…), status=final|draft|any (default final), _count (≤50), max-chars,
+    context. The passage rides in content[0].attachment.data as plain text
+    (not base64, deliberately — the one consumer asked for it)."""
+    results, err = await _run_passage_search(request)
+    if err is not None:
+        return err
     base = f"{request.scheme}://{request.host}"
     ext = f"{base}/fhir/StructureDefinition/search-"
     bundle = Bundle(type="searchset", timestamp=datetime.now(timezone.utc).isoformat())
@@ -1565,6 +1574,43 @@ async def search_fhir_document_reference(request):
             ),
         )
         bundle.append_entry(doc, search={"mode": "match", "score": r['score']})
+    if not results:
+        bundle.set_total(0)
+    return web_fhir_response(bundle)
+
+
+@require_auth
+async def search_fhir_imaging_study(request):
+    """GET /fhir/ImagingStudy?content=words — the imaging studies whose report
+    text matches, one ImagingStudy per study (ids are unique in the index),
+    best first. Same parameters as /fhir/DocumentReference (kind is fixed to
+    imaging). Each id resolves via /fhir/ImagingStudy/{id}; the best passage is
+    note[0].text, the patient is subject (Patient/{cnp})."""
+    results, err = await _run_passage_search(request, kinds_override=['imaging'])
+    if err is not None:
+        return err
+    base = f"{request.scheme}://{request.host}"
+    ext = f"{base}/fhir/StructureDefinition/search-"
+    bundle = Bundle(type="searchset", timestamp=datetime.now(timezone.utc).isoformat())
+    for r in results:
+        cnp = r['patient_cnp']
+        study = ImagingStudy(
+            id=r['source_id'],
+            status="available" if r['status'] == 'final' else "registered",
+            modality=[{"system": "http://dicom.nema.org/resources/ontology/DCM",
+                       "code": r['modality']}] if r['modality'] else None,
+            subject={"reference": f"Patient/{cnp}", **({"display": r['patient_name']} if r['patient_name'] else {})}
+                    if cnp else None,
+            started=r['doc_date'],
+            description=r['title'],
+            note=[{"text": r['passage']}],
+            extension=[
+                {"url": ext + "score", "valueDecimal": r['score']},
+                {"url": ext + "matched", "valueInteger": r['matched']},
+            ] + [{"url": ext + "passage", "valueString": p['section'] or ""} for p in r['passages']],
+        )
+        bundle.append_entry(study, fullUrl=f"{base}/fhir/ImagingStudy/{r['source_id']}",
+                            search={"mode": "match", "score": r['score']})
     if not results:
         bundle.set_total(0)
     return web_fhir_response(bundle)
@@ -1831,6 +1877,7 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     app.router.add_get('/fhir/Patient/{id}', get_fhir_patient)
     app.router.add_get('/fhir/ServiceRequest', search_fhir_service_request)
     app.router.add_get('/fhir/ServiceRequest/{id}', get_fhir_service_request)
+    app.router.add_get('/fhir/ImagingStudy', search_fhir_imaging_study)
     app.router.add_get('/fhir/ImagingStudy/{id}', get_fhir_imaging_study)
     app.router.add_get('/fhir/DiagnosticReport/{id}', get_fhir_diagnostic_report)
     app.router.add_get('/fhir/Encounter/{id}', get_fhir_encounter)
