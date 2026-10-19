@@ -148,12 +148,12 @@
     "/fhir/Patient": {
       "get": {
         "summary": "Search for patients",
-        "description": "Search for patients by name, CNP, patient code, or partial CNP. Returns FHIR Patient resources or Bundle.",
+        "description": "Search for patients by name, CNP, patient code, or partial CNP (q), or by words in their indexed report text (content). Returns FHIR Patient resources or Bundle. One of q or content is required.",
         "parameters": [
           {
             "name": "q",
             "in": "query",
-            "required": true,
+            "required": false,
             "description": "Search term (patient name, CNP, patient code, or partial CNP ending with *). Not required when content is given.",
             "schema": {
               "type": "string"
@@ -178,7 +178,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Single Patient or Bundle of Patients",
+            "description": "Single Patient or Bundle of Patients. With content: a searchset Bundle, one Patient stub per matching patient (max 25), entry.search.mode = match",
             "content": {
               "application/fhir+json": {
                 "schema": {
@@ -196,12 +196,36 @@
                       }
                     }
                   ]
+                },
+                "examples": {
+                  "contentSearch": {
+                    "summary": "GET /fhir/Patient?content=rabdomiosarcom",
+                    "value": {
+                      "resourceType": "Bundle", "type": "searchset", "total": 1,
+                      "entry": [{
+                        "fullUrl": "http://host/fhir/Patient/6200918385574",
+                        "search": {"mode": "match"},
+                        "resource": {
+                          "resourceType": "Patient", "id": "6200918385574",
+                          "identifier": [{"system": "http://host/fhir/NamingSystem/patient-cnp", "value": "6200918385574"}],
+                          "name": [{"text": "Ana Pop"}],
+                          "extension": [
+                            {"url": "http://host/fhir/StructureDefinition/search-snippet", "valueString": "…<mark>rabdomiosarcom</mark> embrionar…"},
+                            {"url": "http://host/fhir/StructureDefinition/search-count", "valueInteger": 10},
+                            {"url": "http://host/fhir/StructureDefinition/search-document", "extension": [
+                              {"url": "kind", "valueString": "epicrisis"}, {"url": "id", "valueString": "CO1"}]}
+                          ]
+                        }
+                      }]
+                    }
+                  }
                 }
               }
             }
           },
+          "401": {"description": "With content: invalid credentials"},
           "400": {
-            "description": "Missing search term",
+            "description": "Missing search term (neither q nor content), or non-integer snippet_length",
             "content": {
               "application/json": {
                 "schema": {
