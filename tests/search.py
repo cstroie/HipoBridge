@@ -201,6 +201,55 @@ class TestSearchIndex(unittest.TestCase):
         self.assertEqual(_run(self.index.search_passages('meningiom')), [])
         self.assertNotIn(('epicrisis', 'L'), self.index.indexed_keys_sync())
 
+    def test_match_all_needs_words_in_one_passage(self):
+        far = 'meningiom frontal. ' + 'Text de umplutură fără legătură. ' * 40 + 'Secvență flair.'
+        near = 'Aspect de meningiom, vizibil pe secvențe flair.'
+        m = {'status': 'final', 'doc_date': '2026-01-01'}
+        _run(self.index.index_document('imaging', 'far', 'c', 'n', far, m))
+        _run(self.index.index_document('imaging', 'near', 'c', 'n', near, m))
+        r = _run(self.index.search_passages('meningiom flair'))
+        self.assertEqual([d['source_id'] for d in r], ['near'])
+        r = _run(self.index.search_passages('meningiom flair', match='any'))
+        self.assertEqual([d['source_id'] for d in r][0], 'near')      # holds both words in one passage
+        self.assertEqual(len(r), 2)
+
+    def test_section_and_context(self):
+        text = ('**Descriere:** Leziune de substanță albă.\n\n'
+                'Concluzii: meningiom frontal drept.\n\nRecomandări: control la 6 luni.')
+        _run(self.index.index_document('imaging', 'S', 'c', 'n', text, {'status': 'final'}))
+        r = _run(self.index.search_passages('meningiom'))[0]
+        self.assertEqual([p['section'] for p in r['passages']], ['Concluzii'])
+        self.assertEqual(r['passage'], 'meningiom frontal drept.')
+        r = _run(self.index.search_passages('meningiom', context=1))[0]
+        self.assertEqual([p['section'] for p in r['passages']], ['Descriere', 'Concluzii', 'Recomandări'])
+
+    def test_identifiers_round_trip(self):
+        ids = {'name': 'POPESCU ION', 'cnp': '1800101123456'}
+        _run(self.index.index_document('epicrisis', 'I', 'c', 'n', 'meningiom',
+                                       {'status': 'final', 'identifiers': ids}))
+        self.assertEqual(_run(self.index.search_passages('meningiom'))[0]['identifiers'], ids)
+        self.assertIn(('epicrisis', 'I'), self.index.indexed_keys_sync())
+
+    def test_reindex_replaces_passages_and_cleanup_removes_them(self):
+        m = {'status': 'final'}
+        _run(self.index.index_document('epicrisis', 'R', 'c', 'n', 'alfa beta', m))
+        _run(self.index.index_document('epicrisis', 'R', 'c', 'n', 'gama delta', m))
+        self.assertEqual(_run(self.index.search_passages('alfa')), [])
+        self.assertEqual(len(_run(self.index.search_passages('gama'))), 1)
+        self.assertEqual(_run(self.index.stats())['passages'], 1)
+        con = sqlite3.connect(self.db_path)
+        con.execute("UPDATE documents SET updated_at = 0"); con.commit(); con.close()
+        _run(self.index.cleanup())
+        self.assertEqual(_run(self.index.stats())['passages'], 0)
+
+    def test_passages_built_for_pre_existing_documents(self):
+        _run(self.index.index_document('epicrisis', 'P', 'c', 'n', 'meningiom', {'status': 'final'}))
+        con = sqlite3.connect(self.db_path)
+        con.execute("DELETE FROM passages_fts"); con.execute("DELETE FROM passages"); con.commit(); con.close()
+        self.assertEqual(_run(self.index.search_passages('meningiom')), [])
+        SearchIndex(self.db_path)          # reopening rebuilds from documents_fts
+        self.assertEqual(len(_run(self.index.search_passages('meningiom'))), 1)
+
 
 if __name__ == '__main__':
     unittest.main()

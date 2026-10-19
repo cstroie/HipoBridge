@@ -1555,7 +1555,14 @@ async def search_fhir_document_reference(request):
             extension=[
                 {"url": ext + "score", "valueDecimal": r['score']},
                 {"url": ext + "matched", "valueInteger": r['matched']},
-            ],
+            ] + [
+                {"url": ext + "passage", "valueString": p['section'] or ""}
+                for p in r['passages']
+            ] + (
+                [{"url": ext + "identifiers", "extension": [
+                    {"url": k, "valueString": v} for k, v in r['identifiers'].items()]}]
+                if r['identifiers'] else []
+            ),
         )
         bundle.append_entry(doc, search={"mode": "match", "score": r['score']})
     if not results:

@@ -148,7 +148,7 @@
     "/fhir/DocumentReference": {
       "get": {
         "summary": "Search report passages (one DocumentReference per document)",
-        "description": "Ranked full-text search over the indexed epicrisis/imaging text. Unlike Patient?content= it returns one searchset entry per document, best first, each carrying its best passage(s). Words are prefix-matched with diacritics folded; \"quoted\" = phrase, a|b = alternatives for one word. Only validated text by default. content[0].attachment.data is the passage as plain text (NOT base64). id = Encounter id (kind epicrisis) or request id (kind imaging). Extensions search-score (valueDecimal; whole query words in the best passage + bm25 fraction, higher is better) and search-matched (valueInteger; query words found anywhere in the document). Same auth as Patient?content= (401 on bad credentials); OperationOutcome not-supported when no cache.dir is configured. Documents indexed before this endpoint existed have no date/modality/status until the startup cache rescan re-parses them; until then they are not returned.",
+        "description": "Ranked full-text search over the indexed epicrisis/imaging text. Unlike Patient?content= it returns one searchset entry per document, best first, each carrying its best passage(s). Words are prefix-matched with diacritics folded; \"quoted\" = phrase, a|b = alternatives for one word. Matching happens inside one passage (a sentence group of about 600 characters; never across a paragraph or section header): with match=all every word must be in the same passage, with min-match that many words in one passage. Only validated text by default. content[0].attachment.data is the best passage(s) as plain text (NOT base64), joined by a blank line (passages never contain one, so split on it). Extensions: one search-passage (valueString = section header in force, e.g. Concluzii, empty if none) per passage, same order; and search-identifiers (sub-extensions with valueString; url = name, family-name, given-name, cnp, birth-date, address, city, phone, email, insurance-number, fo-number, barcode, only those the HIS page held) for de-identification. Relatives and employer are not on the scraped pages, so not returned. id = Encounter id (kind epicrisis) or request id (kind imaging). Extensions search-score (valueDecimal; whole query words in the best passage + bm25 fraction, higher is better) and search-matched (valueInteger; query words found anywhere in the document). Same auth as Patient?content= (401 on bad credentials); OperationOutcome not-supported when no cache.dir is configured. Documents indexed before this endpoint existed have no date/modality/status until the startup cache rescan re-parses them; until then they are not returned.",
         "parameters": [
           {
             "name": "content",
@@ -254,7 +254,7 @@
             "name": "context",
             "in": "query",
             "required": false,
-            "description": "Neighbouring passages (about 600 characters each) added each side of every best passage",
+            "description": "Neighbouring passages added each side of every best passage",
             "schema": {
               "type": "integer",
               "default": 0,

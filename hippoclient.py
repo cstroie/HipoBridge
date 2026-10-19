@@ -2314,6 +2314,26 @@ def _iso_day(value: Optional[str]) -> Optional[str]:
     return f"{m.group(3)}-{m.group(2)}-{m.group(1)}" if m else None
 
 
+_SEARCH_IDENTIFIER_FIELDS = {
+    'name': 'patient.name', 'family-name': 'patient.family_name', 'given-name': 'patient.given_name',
+    'cnp': 'patient.cnp', 'birth-date': 'patient.birth_date', 'address': 'patient.address',
+    'city': 'patient.city', 'phone': 'patient.phone', 'email': 'patient.email',
+    'insurance-number': 'patient.insurance_number', 'fo-number': 'checkout.fo_number',
+    'barcode': 'request.barcode',
+}
+
+
+def search_identifiers(parsed: dict) -> dict:
+    """Everything the parsed page knows that names the patient (for the
+    consumer's de-identification). Relatives and employer are not on these pages."""
+    out = {}
+    for label, key in _SEARCH_IDENTIFIER_FIELDS.items():
+        v = parsed.get(key)
+        if v and str(v).strip():
+            out[label] = str(v).strip()
+    return out
+
+
 def search_meta_imaging(parsed: dict) -> dict:
     """Search-index metadata of a parsed imaging study (see search.py). Final
     only once Hipocrate shows a validation date on a non-empty result."""
@@ -2324,12 +2344,14 @@ def search_meta_imaging(parsed: dict) -> dict:
         'modality': _SEARCH_MODALITY.get(first.get("type", ""), 'OT'),
         'title': "; ".join(s["title"] for s in studies if s.get("title")) or None,
         'status': 'final' if any(s.get("validation_date") for s in studies) else 'draft',
+        'identifiers': search_identifiers(parsed),
     }
 
 
 def search_meta_checkout(parsed: dict) -> dict:
     """Search-index metadata of a parsed discharge summary."""
-    return {'doc_date': _iso_day(parsed.get("checkout.date_time")), 'status': 'final'}
+    return {'doc_date': _iso_day(parsed.get("checkout.date_time")), 'status': 'final',
+            'identifiers': search_identifiers(parsed)}
 
 
 class HippoClientImagingStudy(HippoClient):

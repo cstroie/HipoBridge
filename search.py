@@ -23,6 +23,7 @@ how sqlcache.SqliteCache is already kept off the event loop.
 """
 
 import asyncio
+import json
 import logging
 import re
 import sqlite3
@@ -47,6 +48,16 @@ CREATE TABLE IF NOT EXISTS documents (
 CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
     text, tokenize="unicode61 remove_diacritics 2"
 );
+CREATE TABLE IF NOT EXISTS passages (
+    id INTEGER PRIMARY KEY,
+    doc_id INTEGER NOT NULL,
+    seq INTEGER NOT NULL,
+    section TEXT
+);
+CREATE INDEX IF NOT EXISTS passages_doc ON passages(doc_id, seq);
+CREATE VIRTUAL TABLE IF NOT EXISTS passages_fts USING fts5(
+    text, tokenize="unicode61 remove_diacritics 2"
+);
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT
@@ -61,6 +72,7 @@ _META_COLUMNS = {
     'modality': 'TEXT',      # DICOM code (MR, CT, US, CR…), imaging only
     'title': 'TEXT',         # exam name, imaging only
     'status': 'TEXT',        # 'final' | 'draft'
+    'identifiers': 'TEXT',   # JSON {label: value}: what names the patient in the text
 }
 
 # FTS5 query-syntax characters that would otherwise be interpreted as
@@ -117,54 +129,55 @@ def _slots_in(folded: str, slots: list) -> set:
 
 
 _SENT_RE = re.compile(r'(?<=[.!?;:])\s+|\n+')
-_CHUNK_CHARS = 600
+_CHUNK_CHARS = 600      # aim for passages of 500-900 characters
+_CHUNK_MAX = 900
+# Report section headers, folded. Matched at the start of a sentence/line,
+# optionally wrapped in Markdown emphasis: "**Concluzii:**".
+_SECTION_RE = re.compile(
+    r'^[\s*_#>-]*(descriere|concluzii|concluzie|tehnica|indicatie|indicatii|comparatie|'
+    r'rezultat|rezultate|constatari|istoric|diagnostic|recomandari|recomandare|examen)'
+    r'(?=\s*(?:[:*]|$))[\s*_:.\u2013-]*', re.IGNORECASE)
 
 
-def _chunks(text: str) -> list[str]:
-    """Sentence groups of about _CHUNK_CHARS, never crossing a paragraph break."""
-    out = []
+def chunk_text(text: str) -> list[tuple]:
+    """Text → [(section, passage)]: sentence groups of about _CHUNK_CHARS (hard
+    cap _CHUNK_MAX), never crossing a paragraph break or a section header.
+    `section` is the header in force at the start of the passage, as written
+    ("Concluzii"), or None. Passages hold no blank lines, so joining them with
+    "\n\n" can be split back."""
+    out, section = [], None
+
+    def flush(cur, sec):
+        if cur:
+            out.append((sec, cur))
+
     for para in re.split(r'\n\s*\n', text):
-        cur = ''
+        cur, cur_sec = '', section
         for sent in _SENT_RE.split(para):
             sent = sent.strip()
             if not sent:
                 continue
-            if cur and len(cur) + len(sent) + 1 > _CHUNK_CHARS:
-                out.append(cur)
+            m = _SECTION_RE.match(_fold(sent))
+            if m:
+                flush(cur, cur_sec)
                 cur = ''
+                section = re.match(r'^[\s*_#>-]*([^\s*_:.\u2013-]+)', sent).group(1)
+                cur_sec = section
+                sent = sent[m.end():].strip()
+                if not sent:
+                    continue
+            while len(sent) > _CHUNK_MAX:      # a run-on sentence: cut at a space
+                cut = sent.rfind(' ', 0, _CHUNK_MAX)
+                if cut <= 0:
+                    cut = _CHUNK_MAX
+                flush(f'{cur} {sent[:cut]}'.strip() if cur else sent[:cut], cur_sec)
+                cur, cur_sec, sent = '', section, sent[cut:].strip()
+            if cur and len(cur) + len(sent) + 1 > _CHUNK_CHARS:
+                flush(cur, cur_sec)
+                cur, cur_sec = '', section
             cur = f'{cur} {sent}' if cur else sent
-        if cur:
-            out.append(cur)
+        flush(cur, cur_sec)
     return out
-
-
-def _best_passage(text: str, slots: list, max_chars: int, context: int) -> tuple:
-    """(passage, best) — the chunks holding the most query words (plus
-    `context` neighbours each side), in document order, up to ~max_chars;
-    `best` is how many words the best single chunk holds."""
-    chunks = _chunks(text)
-    if not chunks:
-        return text[:max_chars], 0
-    scored = []
-    for i, c in enumerate(chunks):
-        f = _fold(c)
-        scored.append((len(_slots_in(f, slots)), i))
-    best = max(s for s, _ in scored)
-    picked, size = set(), 0
-    for sc, i in sorted(scored, key=lambda t: (-t[0], t[1])):
-        if sc == 0 and picked:
-            break
-        span = [j for j in range(i - context, i + context + 1)
-                if 0 <= j < len(chunks) and j not in picked]
-        add = sum(len(chunks[j]) + 2 for j in span)
-        if picked and size + add > max_chars:
-            continue
-        picked.update(span)
-        size += add
-    passage = '\n\n'.join(chunks[j] for j in sorted(picked))
-    if len(passage) > max_chars:
-        passage = passage[:max_chars].rsplit(' ', 1)[0] + '…'
-    return passage, best
 
 
 class SearchIndex:
@@ -182,9 +195,35 @@ class SearchIndex:
                 if col not in have:
                     con.execute(f"ALTER TABLE documents ADD COLUMN {col} {typ}")
             con.commit()
+            self._build_missing_passages(con)
         finally:
             con.close()
         logger.info(f"SearchIndex initialised at {db_path}")
+
+    @staticmethod
+    def _write_passages(con: sqlite3.Connection, doc_id: int, text: str) -> None:
+        """Replace a document's passages. Caller commits."""
+        for (pid,) in con.execute("SELECT id FROM passages WHERE doc_id = ?", (doc_id,)).fetchall():
+            con.execute("DELETE FROM passages_fts WHERE rowid = ?", (pid,))
+        con.execute("DELETE FROM passages WHERE doc_id = ?", (doc_id,))
+        for seq, (section, chunk) in enumerate(chunk_text(text)):
+            pid = con.execute("INSERT INTO passages(doc_id, seq, section) VALUES (?, ?, ?) RETURNING id",
+                              (doc_id, seq, section)).fetchone()[0]
+            con.execute("INSERT INTO passages_fts(rowid, text) VALUES (?, ?)", (pid, chunk))
+
+    def _build_missing_passages(self, con: sqlite3.Connection) -> None:
+        """One-off, from the text already in documents_fts (no re-scrape):
+        passages for documents indexed before the passage index existed."""
+        rows = con.execute(
+            """SELECT d.id, f.text FROM documents d JOIN documents_fts f ON f.rowid = d.id
+               WHERE NOT EXISTS (SELECT 1 FROM passages p WHERE p.doc_id = d.id)""").fetchall()
+        for n, (doc_id, text) in enumerate(rows, 1):
+            self._write_passages(con, doc_id, text)
+            if n % 500 == 0:
+                con.commit()
+        con.commit()
+        if rows:
+            logger.info(f"SearchIndex: built passages for {len(rows)} documents")
 
     def _connect(self) -> sqlite3.Connection:
         # Generous busy timeout: a long backfill batch and a live
@@ -201,8 +240,8 @@ class SearchIndex:
         meta = meta or {}
         cur = con.execute(
             """INSERT INTO documents(kind, source_id, patient_cnp, patient_name, updated_at,
-                                     doc_date, modality, title, status)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                     doc_date, modality, title, status, identifiers)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(kind, source_id) DO UPDATE SET
                    patient_cnp=excluded.patient_cnp,
                    patient_name=excluded.patient_name,
@@ -210,14 +249,17 @@ class SearchIndex:
                    doc_date=excluded.doc_date,
                    modality=excluded.modality,
                    title=excluded.title,
-                   status=excluded.status
+                   status=excluded.status,
+                   identifiers=excluded.identifiers
                RETURNING id""",
             (kind, source_id, cnp, name, time.time(),
-             meta.get('doc_date'), meta.get('modality'), meta.get('title'), meta.get('status')),
+             meta.get('doc_date'), meta.get('modality'), meta.get('title'), meta.get('status'),
+             json.dumps(meta['identifiers'], ensure_ascii=False) if meta.get('identifiers') else None),
         )
         doc_id = cur.fetchone()[0]
         con.execute("DELETE FROM documents_fts WHERE rowid = ?", (doc_id,))
         con.execute("INSERT INTO documents_fts(rowid, text) VALUES (?, ?)", (doc_id, text))
+        self._write_passages(con, doc_id, text)
 
     def _index_document_sync(self, kind: str, source_id: str,
                               cnp: Optional[str], name: Optional[str], text: str,
@@ -276,7 +318,7 @@ class SearchIndex:
             return []
         exprs = [_slot_fts(sl) for sl in slots]
         match_query = (' AND ' if match == 'all' else ' OR ').join(exprs)
-        where, params = ["documents_fts MATCH ?"], [match_query]
+        where, params = ["passages_fts MATCH ?"], [match_query]
         if status:
             where.append("d.status = ?"); params.append(status)
         if kinds:
@@ -291,28 +333,55 @@ class SearchIndex:
         try:
             con.row_factory = sqlite3.Row
             rows = con.execute(
-                f"""SELECT d.kind, d.source_id, d.patient_cnp, d.patient_name, d.doc_date,
-                           d.modality, d.title, d.status, documents_fts.text AS text,
-                           -bm25(documents_fts) AS bm25
-                    FROM documents_fts JOIN documents d ON d.id = documents_fts.rowid
+                f"""SELECT d.id AS doc_id, d.kind, d.source_id, d.patient_cnp, d.patient_name,
+                           d.doc_date, d.modality, d.title, d.status, d.identifiers,
+                           p.seq, p.section, passages_fts.text AS text,
+                           -bm25(passages_fts) AS bm25
+                    FROM passages_fts
+                    JOIN passages p ON p.id = passages_fts.rowid
+                    JOIN documents d ON d.id = p.doc_id
                     WHERE {' AND '.join(where)}
-                    ORDER BY bm25(documents_fts)
+                    ORDER BY bm25(passages_fts)
                     LIMIT ?""",
-                params + [max(limit * 10, 200)]).fetchall()
+                params + [max(limit * 20, 300)]).fetchall()
+            need = min_match if match == 'any' else len(slots)
+            docs: dict = {}
+            for r in rows:
+                n = len(_slots_in(_fold(r['text']), slots))
+                if n < need:
+                    continue
+                docs.setdefault(r['doc_id'], []).append((n, max(r['bm25'], 0.0), r))
+            out = []
+            for doc_id, hits in docs.items():
+                hits.sort(key=lambda h: (-h[0], -h[1], h[2]['seq']))
+                best_n, best_bm, first = hits[0]
+                chosen, size = {}, 0
+                for n, bm, r in hits:
+                    if chosen and size + len(r['text']) + 2 > max_chars:
+                        continue
+                    chosen[r['seq']] = (r['section'], r['text'])
+                    size += len(r['text']) + 2
+                if context:
+                    near = {j for q in list(chosen) for j in range(q - context, q + context + 1)} - set(chosen)
+                    for seq, section, text in con.execute(
+                            """SELECT p.seq, p.section, f.text FROM passages p
+                               JOIN passages_fts f ON f.rowid = p.id
+                               WHERE p.doc_id = ? AND p.seq BETWEEN ? AND ?""",
+                            (doc_id, min(near, default=0), max(near, default=0))):
+                        if seq in near and size + len(text) + 2 <= max_chars:
+                            chosen[seq] = (section, text)
+                            size += len(text) + 2
+                passages = [{'section': chosen[q][0], 'text': chosen[q][1]} for q in sorted(chosen)]
+                if len(passages) == 1 and len(passages[0]['text']) > max_chars:
+                    passages[0]['text'] = passages[0]['text'][:max_chars].rsplit(' ', 1)[0] + '…'
+                d = {k: first[k] for k in ('kind', 'source_id', 'patient_cnp', 'patient_name',
+                                           'doc_date', 'modality', 'title', 'status')}
+                d['identifiers'] = json.loads(first['identifiers']) if first['identifiers'] else {}
+                d.update(passages=passages, passage='\n\n'.join(p['text'] for p in passages),
+                         matched=best_n, score=round(best_n + best_bm / (1 + best_bm), 4))
+                out.append(d)
         finally:
             con.close()
-        out = []
-        for r in rows:
-            doc_slots = _slots_in(_fold(r['text']), slots)
-            if len(doc_slots) < (min_match if match == 'any' else len(slots)):
-                continue
-            passage, best = _best_passage(r['text'], slots, max_chars, context)
-            d = {k: r[k] for k in ('kind', 'source_id', 'patient_cnp', 'patient_name',
-                                   'doc_date', 'modality', 'title', 'status')}
-            bm = max(r['bm25'], 0.0)
-            # whole slots held by the best passage first, bm25 as the tie-break
-            d.update(passage=passage, matched=len(doc_slots), score=round(best + bm / (1 + bm), 4))
-            out.append(d)
         out.sort(key=lambda d: d['score'], reverse=True)
         return out[:limit]
 
@@ -325,6 +394,7 @@ class SearchIndex:
             lo, hi, last = con.execute(
                 "SELECT min(doc_date), max(doc_date), max(updated_at) FROM documents").fetchone()
             return {'total': con.execute("SELECT count(*) FROM documents").fetchone()[0],
+                    'passages': con.execute("SELECT count(*) FROM passages").fetchone()[0],
                     'by_kind': grp('kind'), 'by_modality': grp('modality'), 'by_status': grp('status'),
                     'date_min': lo, 'date_max': hi, 'last_indexed': last}
         finally:
@@ -333,10 +403,11 @@ class SearchIndex:
     def _indexed_keys_sync(self) -> set:
         con = self._connect()
         try:
-            # Rows without `status` predate the metadata columns: leave them
+            # Rows without `status`/`identifiers` predate the metadata columns: leave them
             # out so the cache backfill re-parses (and thereby upgrades) them.
             return {(k, s) for k, s in con.execute(
-                "SELECT kind, source_id FROM documents WHERE status IS NOT NULL")}
+                "SELECT kind, source_id FROM documents "
+                "WHERE status IS NOT NULL AND identifiers IS NOT NULL")}
         finally:
             con.close()
 
@@ -344,7 +415,7 @@ class SearchIndex:
         con = self._connect()
         try:
             # One full rescan after the metadata columns were introduced.
-            if not con.execute("SELECT 1 FROM meta WHERE key = 'meta_v1'").fetchone():
+            if not con.execute("SELECT 1 FROM meta WHERE key = 'meta_v2'").fetchone():
                 return 0.0
             row = con.execute("SELECT value FROM meta WHERE key = 'backfill_cursor'").fetchone()
             return float(row[0]) if row else 0.0
@@ -358,7 +429,7 @@ class SearchIndex:
                 "INSERT INTO meta(key, value) VALUES ('backfill_cursor', ?) "
                 "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                 (str(mtime),))
-            con.execute("INSERT OR IGNORE INTO meta(key, value) VALUES ('meta_v1', '1')")
+            con.execute("INSERT OR IGNORE INTO meta(key, value) VALUES ('meta_v2', '1')")
             con.commit()
         finally:
             con.close()
@@ -373,6 +444,9 @@ class SearchIndex:
                 "SELECT id FROM documents WHERE updated_at < ?", (cutoff,)).fetchall()]
             for doc_id in ids:
                 con.execute("DELETE FROM documents_fts WHERE rowid = ?", (doc_id,))
+                for (pid,) in con.execute("SELECT id FROM passages WHERE doc_id = ?", (doc_id,)).fetchall():
+                    con.execute("DELETE FROM passages_fts WHERE rowid = ?", (pid,))
+                con.execute("DELETE FROM passages WHERE doc_id = ?", (doc_id,))
             con.execute("DELETE FROM documents WHERE updated_at < ?", (cutoff,))
             con.commit()
             return {'deleted': len(ids)}
