@@ -41,7 +41,7 @@ import signal
 from hashlib import sha256
 from urllib.parse import urlparse, parse_qs
 
-from fhir import Bundle, OperationOutcome, Patient, Resource
+from fhir import Bundle, DocumentReference, OperationOutcome, Patient, Resource
 
 from hippoclient import ANALYSIS_TYPES
 from hippoclient import HippoClient, HippoClientPatient, HippoClientPatientSearch, HippoClientImagingStudy, HippoClientDiagnosticReport, HippoClientServiceRequest, HippoClientServiceRequestSearch, HippoClientCheckout, HippoClientCheckin, HippoClientCheckup, HippoClientSchedule, HippoClientCerere, HippoClientBuletinSolicitare, HippoClientPresentation, HippoClientObservationBundle, HippoClientWhoami, HippoClientReportWrite, HippoClientReportValidate, HippoClientCererePerform, HippoClientFUPU, HippoClientTriage
@@ -52,6 +52,7 @@ from urlcache import URLCache
 from sqlcache import SqliteCache, AiCacheView
 from hippodata import HippoData
 import search
+from hippoclient import search_meta_checkout, search_meta_imaging
 
 from extractors import parse_cnp
 from worklist import start_worklist
@@ -1392,13 +1393,9 @@ async def post_cache_cleanup(request):
     return web.json_response({'enabled': True, **result})
 
 
-async def _run_text_search(request, query: str):
-    """Shared by /api/search/text and /fhir/Patient?content=. Returns
-    (results, None) — results is None when the index is disabled — or
-    (None, error_response)."""
-    if search.instance is None:
-        return None, None
-    # Unlike every other route, this one never forwards credentials to
+async def _text_search_denied(request):
+    """None if the caller's credentials are valid, else the 401 response."""
+    # Unlike every other route, the text searches never forward credentials to
     # Hipocrate — there's nothing to scrape — so @require_auth's bare
     # presence-of-a-header check is the only thing standing between a
     # made-up Basic header and PHI already sitting in the index. Validate
@@ -1407,7 +1404,19 @@ async def _run_text_search(request, query: str):
     # reject bad credentials.
     whoami_data = await HippoClientWhoami(SERVICE_URL, request).fetch_and_parse()
     if whoami_data.get("status") != "success":
-        return None, web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
+        return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
+    return None
+
+
+async def _run_text_search(request, query: str):
+    """Shared by /api/search/text and /fhir/Patient?content=. Returns
+    (results, None) — results is None when the index is disabled — or
+    (None, error_response)."""
+    if search.instance is None:
+        return None, None
+    denied = await _text_search_denied(request)
+    if denied is not None:
+        return None, denied
     try:
         snippet_length = int(request.query.get('snippet_length', 12))
     except ValueError:
@@ -1467,6 +1476,104 @@ async def _search_fhir_patient_content(request, query: str):
     if not results:
         bundle.set_total(0)
     return web_fhir_response(bundle)
+
+
+def _fhir_date_bounds(values: list):
+    """FHIR date prefixes (ge/gt/le/lt/eq or bare) → (from, to) ISO days.
+    Raises ValueError on anything else. gt/lt are treated as ge/le (day grain)."""
+    lo = hi = None
+    for v in values:
+        m = re.fullmatch(r'(eq|ge|gt|le|lt)?(\d{4}(?:-\d{2}(?:-\d{2})?)?)', v.strip())
+        if not m:
+            raise ValueError(f"invalid date '{v}'")
+        op, day = m.group(1) or 'eq', m.group(2)
+        first = day + ('-01-01', '-01', '')[(len(day) - 4) // 3]
+        last = day + ('-12-31', '-31', '')[(len(day) - 4) // 3]
+        if op in ('eq', 'ge', 'gt'):
+            lo = max(lo, first) if lo else first
+        if op in ('eq', 'le', 'lt'):
+            hi = min(hi, last) if hi else last
+    return lo, hi
+
+
+@require_auth
+async def search_fhir_document_reference(request):
+    """GET /fhir/DocumentReference?content=words — ranked passages, one
+    DocumentReference per matching document (not per patient), best first.
+    Params: content (required; "phrases" and a|b alternatives), match=all|any,
+    min-match, kind (epicrisis,imaging), modality (MR,CT…), date (repeatable,
+    ge/le…), status=final|draft|any (default final), _count (≤50), max-chars,
+    context. The passage rides in content[0].attachment.data as plain text
+    (not base64, deliberately — the one consumer asked for it)."""
+    q = request.query
+    content = q.get('content', '').strip()
+    if not content:
+        return web_fhir_response("content is required")
+    if search.instance is None:
+        return web_fhir_response(OperationOutcome.from_error(
+            message="Full-text search is disabled (no cache.dir configured)",
+            code="not-supported", severity="error"))
+    try:
+        match = q.get('match', 'all')
+        if match not in ('all', 'any'):
+            raise ValueError("match must be 'all' or 'any'")
+        status = q.get('status', 'final')
+        if status not in ('final', 'draft', 'any'):
+            raise ValueError("status must be final, draft or any")
+        count = max(1, min(50, int(q.get('_count', 30))))
+        min_match = max(1, int(q.get('min-match', 1)))
+        max_chars = max(100, min(5000, int(q.get('max-chars', 900))))
+        context = max(0, min(3, int(q.get('context', 0))))
+        lo, hi = _fhir_date_bounds(q.getall('date', []))
+        kinds = [k for k in q.get('kind', '').split(',') if k.strip()]
+        modalities = [m.strip().upper() for m in q.get('modality', '').split(',') if m.strip()]
+        if any(k not in ('epicrisis', 'imaging') for k in kinds):
+            raise ValueError("kind must be epicrisis and/or imaging")
+    except ValueError as e:
+        return web_fhir_response(str(e))
+    denied = await _text_search_denied(request)
+    if denied is not None:
+        return denied
+    results = await search.instance.search_passages(
+        content, match=match, min_match=min_match, kinds=kinds, modalities=modalities,
+        date_from=lo, date_to=hi, status=None if status == 'any' else status,
+        limit=count, max_chars=max_chars, context=context)
+    base = f"{request.scheme}://{request.host}"
+    ext = f"{base}/fhir/StructureDefinition/search-"
+    bundle = Bundle(type="searchset", timestamp=datetime.now(timezone.utc).isoformat())
+    for r in results:
+        imaging = r['kind'] == 'imaging'
+        doc = DocumentReference(
+            id=r['source_id'],
+            status="current" if r['status'] == 'final' else "preliminary",
+            type={"text": r['kind']},
+            category=[{"coding": [{"system": "http://dicom.nema.org/resources/ontology/DCM",
+                                   "code": r['modality']}]}] if imaging and r['modality'] else None,
+            date=r['doc_date'],
+            description=r['title'],
+            content=[{"attachment": {"contentType": "text/plain", "data": r['passage']}}],
+            extension=[
+                {"url": ext + "score", "valueDecimal": r['score']},
+                {"url": ext + "matched", "valueInteger": r['matched']},
+            ],
+        )
+        bundle.append_entry(doc, search={"mode": "match", "score": r['score']})
+    if not results:
+        bundle.set_total(0)
+    return web_fhir_response(bundle)
+
+
+@require_auth
+async def get_fhir_search_stats(request):
+    """GET /fhir/DocumentReference/$stats — what the full-text index holds."""
+    if search.instance is None:
+        return web_fhir_response(OperationOutcome.from_error(
+            message="Full-text search is disabled (no cache.dir configured)",
+            code="not-supported", severity="error"))
+    denied = await _text_search_denied(request)
+    if denied is not None:
+        return denied
+    return web.json_response(await search.instance.stats())
 
 
 def load_config(config_path: str = 'hippobridge.cfg'):
@@ -1532,7 +1639,7 @@ def _backfill_search_sync(fs_cache: SqliteCache, idx) -> dict:
                     epicrisis = data.get('checkout.epicrisis')
                     if epicrisis:
                         index('epicrisis', rel_id, data.get('patient.cnp'),
-                              data.get('patient.name'), epicrisis)
+                              data.get('patient.name'), epicrisis, search_meta_checkout(data))
                         indexed += 1
                 elif '/PARA/Printabile/BuletinAnalize.asp' in url and _url_param(url, 'type') == '3':
                     study_id = _url_param(url, 'id')
@@ -1543,7 +1650,7 @@ def _backfill_search_sync(fs_cache: SqliteCache, idx) -> dict:
                     text = "\n\n".join(s.get('result') for s in studies if s.get('result'))
                     if text:
                         index('imaging', study_id, data.get('patient.cnp'),
-                              data.get('patient.name'), text)
+                              data.get('patient.name'), text, search_meta_imaging(data))
                         indexed += 1
             except Exception as exc:
                 logger.warning(f"Search index backfill: failed to parse cached page {url}: {exc}")
@@ -1712,6 +1819,8 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     app.router.add_post('/api/cache/cleanup', post_cache_cleanup)
     app.router.add_get('/api/search/text', search_text)
     app.router.add_get('/fhir/Patient', search_fhir_patient)
+    app.router.add_get('/fhir/DocumentReference', search_fhir_document_reference)
+    app.router.add_get('/fhir/DocumentReference/$stats', get_fhir_search_stats)
     app.router.add_get('/fhir/Patient/{id}', get_fhir_patient)
     app.router.add_get('/fhir/ServiceRequest', search_fhir_service_request)
     app.router.add_get('/fhir/ServiceRequest/{id}', get_fhir_service_request)

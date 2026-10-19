@@ -145,6 +145,164 @@
         }
       }
     },
+    "/fhir/DocumentReference": {
+      "get": {
+        "summary": "Search report passages (one DocumentReference per document)",
+        "description": "Ranked full-text search over the indexed epicrisis/imaging text. Unlike Patient?content= it returns one searchset entry per document, best first, each carrying its best passage(s). Words are prefix-matched with diacritics folded; \"quoted\" = phrase, a|b = alternatives for one word. Only validated text by default. content[0].attachment.data is the passage as plain text (NOT base64). id = Encounter id (kind epicrisis) or request id (kind imaging). Extensions search-score (valueDecimal; whole query words in the best passage + bm25 fraction, higher is better) and search-matched (valueInteger; query words found anywhere in the document). Same auth as Patient?content= (401 on bad credentials); OperationOutcome not-supported when no cache.dir is configured. Documents indexed before this endpoint existed have no date/modality/status until the startup cache rescan re-parses them; until then they are not returned.",
+        "parameters": [
+          {
+            "name": "content",
+            "in": "query",
+            "required": true,
+            "description": "Words, \"quoted phrases\", a|b alternatives",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "match",
+            "in": "query",
+            "required": false,
+            "description": "all = every word (default), any = at least min-match words",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "any"
+              ],
+              "default": "all"
+            }
+          },
+          {
+            "name": "min-match",
+            "in": "query",
+            "required": false,
+            "description": "With match=any: minimum words present in the document",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "description": "Comma list: epicrisis, imaging",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "modality",
+            "in": "query",
+            "required": false,
+            "description": "Comma list of DICOM codes (MR, CT, US, CR, OT); imaging only",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "required": false,
+            "description": "FHIR date with optional eq/ge/gt/le/lt prefix (YYYY, YYYY-MM or YYYY-MM-DD); repeatable. Study date (imaging) or discharge date (epicrisis).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "final (default), draft or any. Draft = imaging result not yet validated.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "final",
+                "draft",
+                "any"
+              ],
+              "default": "final"
+            }
+          },
+          {
+            "name": "_count",
+            "in": "query",
+            "required": false,
+            "description": "Most documents returned",
+            "schema": {
+              "type": "integer",
+              "default": 30,
+              "minimum": 1,
+              "maximum": 50
+            }
+          },
+          {
+            "name": "max-chars",
+            "in": "query",
+            "required": false,
+            "description": "Total length of the passage(s) returned per document",
+            "schema": {
+              "type": "integer",
+              "default": 900,
+              "minimum": 100,
+              "maximum": 5000
+            }
+          },
+          {
+            "name": "context",
+            "in": "query",
+            "required": false,
+            "description": "Neighbouring passages (about 600 characters each) added each side of every best passage",
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0,
+              "maximum": 3
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "searchset Bundle of DocumentReference (type.text = kind, category = modality, date, description = exam name), entry.search.score set",
+            "content": {
+              "application/fhir+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "resourceType": {
+                      "type": "string",
+                      "example": "Bundle"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "OperationOutcome: missing content or invalid parameter"
+          },
+          "401": {
+            "description": "Bad credentials"
+          }
+        }
+      }
+    },
+    "/fhir/DocumentReference/$stats": {
+      "get": {
+        "summary": "Search index statistics",
+        "description": "Documents indexed per kind, modality and status, date range and time of the last write (epoch seconds). Plain JSON, not a FHIR resource.",
+        "responses": {
+          "200": {
+            "description": "{total, by_kind, by_modality, by_status, date_min, date_max, last_indexed}"
+          },
+          "401": {
+            "description": "Bad credentials"
+          }
+        }
+      }
+    },
     "/fhir/Patient": {
       "get": {
         "summary": "Search for patients",

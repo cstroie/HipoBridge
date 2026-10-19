@@ -774,6 +774,22 @@ class Observation(Resource):
         )
 
 
+class DocumentReference(Resource):
+    def __init__(self, id=None, status=None, type=None, category=None, date=None,
+                 description=None, content=None, extension=None, **kwargs):
+        super().__init__(
+            resourceType="DocumentReference",
+            id=id, status=status,
+            type=type,                   # kind of document (CodeableConcept)
+            category=category,           # modality, for imaging
+            date=date,                   # study / discharge date
+            description=description,     # exam name
+            content=content,             # [{attachment: {contentType, data}}]
+            extension=extension,
+            **kwargs
+        )
+
+
 class Bundle(Resource):
     def __init__(self,
                  id: Optional[str] = None,

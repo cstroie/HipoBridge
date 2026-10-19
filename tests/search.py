@@ -160,6 +160,47 @@ class TestSearchIndex(unittest.TestCase):
         self.index.set_backfill_cursor_sync(99999.0)
         self.assertEqual(self.index.get_backfill_cursor_sync(), 99999.0)
 
+    def _seed_passages(self):
+        m = {'doc_date': '2026-03-02', 'modality': 'MR', 'title': 'RMN cerebral', 'status': 'final'}
+        _run(self.index.index_document('imaging', '1', 'c1', 'A',
+             'Leziune de substanță albă. Concluzii: meningiom frontal drept.', m))
+        _run(self.index.index_document('epicrisis', '2', 'c2', 'B',
+             'Meningioame multiple. Secvențe T2.', {'doc_date': '2025-01-05', 'status': 'final'}))
+        _run(self.index.index_document('imaging', '3', 'c3', 'C', 'meningiom draft', {**m, 'status': 'draft'}))
+
+    def test_passages_all_vs_any(self):
+        self._seed_passages()
+        self.assertEqual(_run(self.index.search_passages('meningiom flair')), [])
+        any_ = _run(self.index.search_passages('meningiom flair', match='any'))
+        self.assertEqual([d['source_id'] for d in any_], ['1'])
+        self.assertEqual(_run(self.index.search_passages('meningiom flair', match='any', min_match=2)), [])
+
+    def test_passages_final_only_and_filters(self):
+        self._seed_passages()
+        ids = lambda **kw: sorted(d['source_id'] for d in _run(self.index.search_passages('meningiom', match='any', **kw)))
+        self.assertEqual(ids(), ['1'])                       # draft '3' hidden; '2' needs the prefix alt
+        self.assertEqual(ids(status=None), ['1', '3'])
+        self.assertEqual(ids(modalities=['CT'], status=None), [])
+        self.assertEqual(ids(date_from='2026-03-03', status=None), [])
+
+    def test_passages_alternatives_and_phrase(self):
+        self._seed_passages()
+        r = _run(self.index.search_passages('meningiom|meningioame t2', match='any', min_match=2))
+        self.assertEqual([d['source_id'] for d in r], ['2'])
+        r = _run(self.index.search_passages('"substanta alba"'))
+        self.assertEqual([d['source_id'] for d in r], ['1'])
+        self.assertIn('substanță albă', r[0]['passage'])
+
+    def test_passages_hostile_query(self):
+        self._seed_passages()
+        for q in ('" OR (', 'NEAR(', '*', '"', '-meningiom'):
+            _run(self.index.search_passages(q, match='any'))   # must not raise
+
+    def test_legacy_rows_have_no_status_and_are_reindexed(self):
+        _run(self.index.index_document('epicrisis', 'L', 'c', 'n', 'meningiom'))
+        self.assertEqual(_run(self.index.search_passages('meningiom')), [])
+        self.assertNotIn(('epicrisis', 'L'), self.index.indexed_keys_sync())
+
 
 if __name__ == '__main__':
     unittest.main()

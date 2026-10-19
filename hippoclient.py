@@ -2300,6 +2300,38 @@ def _parse_narrative_studies(soup: BeautifulSoup) -> list:
     return studies
 
 
+_SEARCH_MODALITY = {'irm': 'MR', 'ct': 'CT', 'eco': 'US', 'radio': 'CR', 'rads': 'CR'}
+
+
+def _iso_day(value: Optional[str]) -> Optional[str]:
+    """'2026-03-02T…' or 'DD/MM/YYYY …' → 'YYYY-MM-DD', None if neither."""
+    if not value:
+        return None
+    m = re.match(r'(\d{4}-\d{2}-\d{2})', value)
+    if m:
+        return m.group(1)
+    m = re.match(r'(\d{2})/(\d{2})/(\d{4})', value)
+    return f"{m.group(3)}-{m.group(2)}-{m.group(1)}" if m else None
+
+
+def search_meta_imaging(parsed: dict) -> dict:
+    """Search-index metadata of a parsed imaging study (see search.py). Final
+    only once Hipocrate shows a validation date on a non-empty result."""
+    studies = [s for s in parsed.get("studies") or [] if s.get("result")]
+    first = studies[0] if studies else {}
+    return {
+        'doc_date': _iso_day(first.get("validation_date")) or _iso_day(parsed.get("request.date_time")),
+        'modality': _SEARCH_MODALITY.get(first.get("type", ""), 'OT'),
+        'title': "; ".join(s["title"] for s in studies if s.get("title")) or None,
+        'status': 'final' if any(s.get("validation_date") for s in studies) else 'draft',
+    }
+
+
+def search_meta_checkout(parsed: dict) -> dict:
+    """Search-index metadata of a parsed discharge summary."""
+    return {'doc_date': _iso_day(parsed.get("checkout.date_time")), 'status': 'final'}
+
+
 class HippoClientImagingStudy(HippoClient):
     """Specialized client for imaging study related operations in the Hipocrate medical system.
 
@@ -2359,7 +2391,8 @@ class HippoClientImagingStudy(HippoClient):
                 text = "\n\n".join(s.get("result") for s in studies if s.get("result"))
                 search.schedule_index(
                     "imaging", str(kwargs.get("id", "")),
-                    parsed_data.get("patient.cnp"), parsed_data.get("patient.name"), text)
+                    parsed_data.get("patient.cnp"), parsed_data.get("patient.name"), text,
+                    search_meta_imaging(parsed_data))
         return parsed_data
 
     def fhir_response(self, parsed_data: HippoData, **kwargs) -> Union[FHIRImagingStudy, FHIROperationOutcome]:
@@ -2857,7 +2890,8 @@ class HippoClientCheckout(HippoClient):
                 # actually uses) — both construct this same client. See search.py.
                 search.schedule_index(
                     "epicrisis", str(kwargs.get("id", "")),
-                    parsed_data.get("patient.cnp"), parsed_data.get("patient.name"), epicrisis)
+                    parsed_data.get("patient.cnp"), parsed_data.get("patient.name"), epicrisis,
+                    search_meta_checkout(parsed_data))
         return parsed_data
 
     def parse_data(self, html_content: str, **kwargs) -> HippoData:
