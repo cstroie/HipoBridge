@@ -163,7 +163,7 @@
             "name": "content",
             "in": "query",
             "required": false,
-            "description": "Full-text search over indexed epicrisis/imaging report text (same index and semantics as /api/search/text). Takes precedence over q; returns a searchset Bundle of Patient stubs (id = CNP, name) with extensions search-snippet (matches in <mark>), search-count, and one search-document per matching document (kind, id). Credentials are validated against Hipocrate. 401 on bad credentials; OperationOutcome not-supported when no cache.dir is configured.",
+            "description": "Full-text search over indexed epicrisis/imaging report text (same index and semantics as /api/search/text). Takes precedence over q; returns a searchset Bundle of Patient stubs (id = CNP, name) with extensions search-snippet (matches in <mark>), search-count, and one search-document per matching document: a nested extension with sub-extensions kind and id (valueString). kind is 'epicrisis' (id = Encounter id for /fhir/Encounter/{id}?type=checkout) or 'imaging' (id = request id for /fhir/ImagingStudy/{id}; not a DiagnosticReport id). Credentials are validated against Hipocrate. 401 on bad credentials; OperationOutcome not-supported when no cache.dir is configured.",
             "schema": {
               "type": "string"
             }
