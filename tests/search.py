@@ -53,6 +53,18 @@ class TestSearchIndex(unittest.TestCase):
         self.assertEqual(results[0]['patient_name'], 'Ionescu Maria')
         self.assertIn('<mark>oncologica</mark>', results[0]['snippet'])
 
+    def test_snippet_length(self):
+        text = ' '.join(f'cuvant{i}' for i in range(100)) + ' oncologica ' + ' '.join(f'dupa{i}' for i in range(100))
+        _run(self.index.index_document('epicrisis', 'CO1', '1', 'A', text))
+
+        short = _run(self.index.search('oncologica'))[0]['snippet']
+        long_ = _run(self.index.search('oncologica', snippet_length=40))[0]['snippet']
+        self.assertLess(len(short.split()), len(long_.split()))
+        self.assertIn('<mark>oncologica</mark>', long_)
+        # out-of-range values are clamped, not an FTS5 error
+        _run(self.index.search('oncologica', snippet_length=1000))
+        _run(self.index.search('oncologica', snippet_length=0))
+
     def test_hits_are_grouped_by_patient(self):
         for i in range(3):
             _run(self.index.index_document('epicrisis', f'E{i}', 'cnpA', 'Ana', 'rabdomiosarcom embrionar'))

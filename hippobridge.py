@@ -1409,7 +1409,11 @@ async def search_text(request):
     whoami_data = await HippoClientWhoami(SERVICE_URL, request).fetch_and_parse()
     if whoami_data.get("status") != "success":
         return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
-    results = await search.instance.search(query)
+    try:
+        snippet_length = int(request.query.get('snippet_length', 12))
+    except ValueError:
+        return web_error_response("snippet_length must be an integer")
+    results = await search.instance.search(query, snippet_length=snippet_length)
     return web.json_response({'enabled': True, 'results': results})
 
 

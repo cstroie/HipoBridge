@@ -105,7 +105,7 @@ class SearchIndex:
         finally:
             con.close()
 
-    def _search_sync(self, query: str, limit: int) -> list[dict]:
+    def _search_sync(self, query: str, limit: int, snippet_length: int = 12) -> list[dict]:
         terms = _TOKEN_RE.findall(query)
         if not terms:
             return []
@@ -117,13 +117,13 @@ class SearchIndex:
             con.row_factory = sqlite3.Row
             rows = con.execute(
                 """SELECT d.kind, d.source_id, d.patient_cnp, d.patient_name, d.updated_at,
-                          snippet(documents_fts, 0, '<mark>', '</mark>', '…', 12) AS snippet
+                          snippet(documents_fts, 0, '<mark>', '</mark>', '…', ?) AS snippet
                    FROM documents_fts
                    JOIN documents d ON d.id = documents_fts.rowid
                    WHERE documents_fts MATCH ?
                    ORDER BY rank
                    LIMIT ?""",
-                (match_query, limit * 20),
+                (snippet_length, match_query, limit * 20),
             ).fetchall()
             # What the caller wants is the patients having the keyword, not
             # every document that mentions it (the same history is copied into
@@ -264,10 +264,12 @@ class SearchIndex:
         """Return the set of (kind, source_id) pairs already indexed."""
         return await asyncio.get_event_loop().run_in_executor(None, self._indexed_keys_sync)
 
-    async def search(self, query: str, limit: int = 25) -> list[dict]:
-        """Return up to `limit` matching documents, ranked by FTS5 relevance."""
+    async def search(self, query: str, limit: int = 25, snippet_length: int = 12) -> list[dict]:
+        """Return up to `limit` matching documents, ranked by FTS5 relevance.
+        `snippet_length` is the snippet size in tokens, clamped to FTS5's 1–64."""
+        snippet_length = max(1, min(64, snippet_length))
         return await asyncio.get_event_loop().run_in_executor(
-            None, self._search_sync, query, limit)
+            None, self._search_sync, query, limit, snippet_length)
 
     async def cleanup(self, max_age_days: Optional[int] = None) -> dict:
         """Evict documents older than max_age_days (default: self.max_age_days).

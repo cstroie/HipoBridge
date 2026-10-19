@@ -1420,6 +1420,37 @@
         }
       }
     },
+    "/api/search/text": {
+      "get": {
+        "summary": "Full-text search over indexed report text",
+        "description": "Free-text search (SQLite FTS5, diacritic-insensitive, each word is a prefix match, all words must match) over epicrisis and imaging-report text already indexed by this server. Scoped to documents that have passed through the bridge (live traffic plus backfill), not a Hipocrate-wide search. Results are grouped one per patient (best-ranked document's snippet, per-kind counts, ids of all matching documents), capped at 25 patients. Credentials are validated against Hipocrate (whoami) before searching. {\"enabled\": false} when no cache.dir is configured.",
+        "parameters": [
+          {"name": "q", "in": "query", "required": true, "description": "Search words (Romanian diacritics optional)", "schema": {"type": "string"}},
+          {"name": "snippet_length", "in": "query", "required": false, "description": "Snippet size in tokens (words); clamped to 1-64 (FTS5 limit), default 12", "schema": {"type": "integer", "default": 12, "minimum": 1, "maximum": 64}}
+        ],
+        "responses": {
+          "200": {
+            "description": "{\"enabled\": true, \"results\": [...]}, or {\"enabled\": false} when the index is disabled. Each result: kind (epicrisis|imaging), source_id, patient_cnp, patient_name, updated_at (epoch seconds), snippet (matches wrapped in <mark>), count, kinds ({kind: n}), documents ([{kind, source_id}] — source_id is the checkout id for epicrisis, the request id for imaging; fetch via /api/checkout/{id} or /api/study/{id})",
+            "content": {"application/json": {"schema": {"type": "object", "properties": {
+              "enabled": {"type": "boolean"},
+              "results": {"type": "array", "items": {"type": "object", "properties": {
+                "kind": {"type": "string", "enum": ["epicrisis", "imaging"]},
+                "source_id": {"type": "string"},
+                "patient_cnp": {"type": "string", "nullable": true},
+                "patient_name": {"type": "string", "nullable": true},
+                "updated_at": {"type": "number"},
+                "snippet": {"type": "string"},
+                "count": {"type": "integer"},
+                "kinds": {"type": "object", "additionalProperties": {"type": "integer"}},
+                "documents": {"type": "array", "items": {"type": "object", "properties": {"kind": {"type": "string"}, "source_id": {"type": "string"}}}}
+              }}}
+            }}}}
+          },
+          "400": {"description": "Missing search query"},
+          "401": {"description": "Authentication required or invalid credentials"}
+        }
+      }
+    },
     "/api/cache/stats": {
       "get": {
         "summary": "Disk cache statistics",

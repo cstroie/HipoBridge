@@ -91,6 +91,7 @@ Encounter IDs are 15-digit numbers (e.g. `260100000619759`).
 |---|---|
 | `GET /fhir/Metadata` | FHIR CapabilityStatement |
 | `GET /fhir/spec` | OpenAPI spec (spec.json) |
+| `GET /api/search/text?q={words}[&snippet_length=N]` | Local full-text search over indexed epicrisis/imaging report text (no Hipocrate URL — served from `search.db`, see `search.py`) |
 | `GET /fhir/CodeSystem/analysis-types` | Analysis type codes and domain mappings |
 | `GET /fhir/ValueSet/cnp?id={cnp}` / `GET /api/cnp?id={cnp}` | Validate and parse a Romanian CNP (same handler, mounted on both paths) |
 

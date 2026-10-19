@@ -64,6 +64,7 @@ GET  /api/request/{id}/patient  — full request details from cerere.asp (patien
 GET  /api/checkin/{id}          — admission record (checkin.asp)
 GET  /api/checkup/{id}          — emergency consultation (checkup.asp)
 GET  /api/whoami                — logged-in user info; includes can_write_reports flag
+GET  /api/search/text?q={words}[&snippet_length=12] — full-text search over indexed epicrisis/imaging report text (one hit per patient: snippet with <mark>, counts, matching document ids); only covers text already seen by this server; {"enabled": false} when no cache dir
 GET  /api/cnp?id={cnp}          — raw counterpart of /fhir/ValueSet/cnp (same handler, mounted twice)
 POST /api/logout                — close the caller's Hipocrate session
 GET  /api/cache/stats           — URLCache size/hit stats

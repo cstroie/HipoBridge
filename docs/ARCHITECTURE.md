@@ -28,6 +28,7 @@ HTTP client → hippobridge.py (@require_auth) → HippoClient* (cache + semapho
 | `HippoClientFUPU` | `/api/fupu/{id}` | `/gen_printabile/FUPU.asp?id={id}&tip=1` |
 | `HippoClientObservationBundle` | `/api/observation?patient=`, `/fhir/Observation?patient=` | `/Pacient/analysesEpisod.asp` (parallel per domain) |
 | `HippoClientWhoami` | `/api/whoami` | `Template/menu.asp` |
+| — (`search.SearchIndex`, no scraper) | `GET /api/search/text?q=[&snippet_length=]` | none — local FTS5 index (`search.db`); auth validated via `HippoClientWhoami` |
 
 ## Concurrency and caching (critical — Hipocrate is fragile)
 
