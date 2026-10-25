@@ -1340,12 +1340,6 @@ button.stat-pill {
     margin: 0;
 }
 
-.analyses-meta {
-    font: 500 var(--font-size-sm) 'Inter', sans-serif;
-    color: var(--text-light);
-    margin: 0;
-}
-
 select {
     background: var(--card-bg);
     border: 1px solid var(--border);
@@ -3366,12 +3360,6 @@ select {
 }
 
 /* epicrisis eyebrow/title now use shared .tab-eyebrow/.tab-title */
-
-.epicrisis-meta {
-    font: 500 var(--font-size-sm) 'Inter', sans-serif;
-    color: var(--text-light);
-    margin: 0;
-}
 
 /* ── Epicrisis accordion cards ────────────────────────────────────────── */
 .epi-card {

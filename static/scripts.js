@@ -1338,8 +1338,25 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Patient tabs show the patient name as the big .tab-title (readable from a
     // distance); the tab's own name lives in the .tab-eyebrow above it.
-    function setTabPatientTitles(name) {
+    // The .tab-sub under it is the patient's demographics, optionally followed
+    // by a tab-specific summary (study counts, admissions).
+    let tabSubDemographics = '';
+    const TAB_SUB_IDS = ['imagingMeta', 'labMeta', 'epicrisisMeta', 'reportMeta', 'aiMeta'];
+
+    function setTabPatientTitles(patientData) {
+        const name = patientData ? formatPatientName(patientData) : '';
         document.querySelectorAll('.tab-title.tab-patient').forEach(el => { el.textContent = name || '—'; });
+        tabSubDemographics = patientData ? [
+            patientData.sex ? formatGender(patientData.sex) : '',
+            patientData.birth_date ? `${calculateAge(patientData.birth_date)} · ${formatBirthDate(patientData.birth_date)}` : '',
+            patientData.cnp ? `CNP ${patientData.cnp}` : '',
+        ].filter(Boolean).join(' · ') : '';
+        TAB_SUB_IDS.forEach(id => setTabSub(id));
+    }
+
+    function setTabSub(id, summary = '') {
+        const el = document.getElementById(id);
+        if (el) el.textContent = [tabSubDemographics, summary].filter(Boolean).join(' · ');
     }
 
     function clearResults() {
@@ -1350,7 +1367,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Clear patient data with null checks
         if (elements.patientId) elements.patientId.innerHTML = '';
         if (elements.patientName) elements.patientName.textContent = '';
-        setTabPatientTitles('');
+        setTabPatientTitles(null);
         if (elements.patientNameInfo) elements.patientNameInfo.textContent = '';
         if (elements.patientAgeInfo) elements.patientAgeInfo.textContent = '';
         if (elements.patientCnp) elements.patientCnp.textContent = '';
@@ -1371,7 +1388,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.imagingGrid) elements.imagingGrid.innerHTML = '';
         if (elements.imagingNoData) elements.imagingNoData.style.display = 'none';
         if (elements.imagingEyebrow) elements.imagingEyebrow.textContent = 'Imaging Studies';
-        document.getElementById('imagingMeta')?.replaceChildren();
         document.querySelectorAll('#imagingChips .chip').forEach(c => {
             c.classList.toggle('chip-active', c.dataset.filter === 'all');
             c.textContent = c.textContent.replace(/\s*\(\d+\)$/, '');
@@ -1384,7 +1400,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.labGrid) elements.labGrid.innerHTML = '';
         if (elements.labNoData) elements.labNoData.style.display = 'none';
         if (elements.labEyebrow) elements.labEyebrow.textContent = 'Lab Results';
-        document.getElementById('labMeta')?.replaceChildren();
         // Remove dynamically-added section chips, keep only "All"
         document.querySelectorAll('#labChips .chip:not([data-filter="all"])').forEach(c => c.remove());
         document.querySelector('#labChips .chip[data-filter="all"]')?.classList.add('chip-active');
@@ -3867,7 +3882,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Patient Name
         const name = formatPatientName(patientData);
         if (elements.patientName) elements.patientName.textContent = name;
-        setTabPatientTitles(name);
+        setTabPatientTitles(patientData);
         if (elements.patientNameInfo) elements.patientNameInfo.textContent = name || '—';
         log('Patient name set to:', name);
 
@@ -4297,10 +4312,9 @@ document.addEventListener('DOMContentLoaded', function() {
             countByType[t] = (countByType[t] || 0) + 1;
         }
 
-        const metaEl = metaId ? document.getElementById(metaId) : null;
-        if (metaEl) {
+        if (metaId) {
             const parts = types.filter(t => countByType[t]).map(t => `${countByType[t]} ${MODALITY_INFO[t]?.label || t}`);
-            metaEl.textContent = parts.join(', ') || `${entries.length} studies`;
+            setTabSub(metaId, parts.join(', ') || `${entries.length} studies`);
         }
 
         // Update chip counts for this grid's chip container
@@ -5955,8 +5969,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
         elements.epicrisisContent.innerHTML = '';
 
-        // Update header eyebrow + meta
-        const metaEl = document.getElementById('epicrisisMeta');
 
         // Admission-form fields (from /api/checkin) for each discharge, matched
         // through the checkout id the discharged admission page links to.
@@ -6074,10 +6086,8 @@ document.addEventListener('DOMContentLoaded', function() {
             elements.epicrisisContent.appendChild(card);
         });
 
-        if (metaEl) {
-            const icdSample = valid[0] ? (extractDiagnosisText(valid[0].enc) || '') : '';
-            metaEl.textContent = `${valid.length} ${valid.length === 1 ? 'admission' : 'admissions'}${icdSample ? ' · ' + icdSample : ''}`;
-        }
+        const icdSample = valid[0] ? (extractDiagnosisText(valid[0].enc) || '') : '';
+        setTabSub('epicrisisMeta', `${valid.length} ${valid.length === 1 ? 'admission' : 'admissions'}${icdSample ? ' · ' + icdSample : ''}`);
 
         elements.epicrisisContent.dataset.markdown = markdown;
         if (elements.copyEpicrisisBtn) elements.copyEpicrisisBtn.hidden = !markdown.trim();
