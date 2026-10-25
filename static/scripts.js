@@ -873,7 +873,7 @@ document.addEventListener('DOMContentLoaded', function() {
             setLoadingStep(entries.length ? `Organising ${entries.length} imaging studies…` : 'No imaging studies found.');
             await populateStudyGrid(entries, {
                 grid: elements.imagingGrid, noData: elements.imagingNoData,
-                eyebrow: elements.imagingEyebrow, eyebrowLabel: `Imaging · ${patientLabel}`,
+                eyebrow: elements.imagingEyebrow, eyebrowLabel: 'Imaging Studies',
                 metaId: 'imagingMeta', types: IMAGING, patientData, allDates,
             });
             if (pendingReportData) pendingReportData.analysesData = bundle;
@@ -901,7 +901,7 @@ document.addEventListener('DOMContentLoaded', function() {
             setLoadingStep(entries.length ? `Organising ${entries.length} lab results…` : 'No lab results found.');
             await populateStudyGrid(entries, {
                 grid: elements.labGrid, noData: elements.labNoData,
-                eyebrow: elements.labEyebrow, eyebrowLabel: `Laboratory · ${patientLabel}`,
+                eyebrow: elements.labEyebrow, eyebrowLabel: 'Lab Results',
                 metaId: 'labMeta', types: LAB, patientData, allDates,
             });
             loadTrends(patientData.id);
@@ -1336,6 +1336,12 @@ document.addEventListener('DOMContentLoaded', function() {
         elements.analyzeBtn.innerHTML = '<i class="fas fa-user"></i> Patient';
     }
     
+    // Patient tabs show the patient name as the big .tab-title (readable from a
+    // distance); the tab's own name lives in the .tab-eyebrow above it.
+    function setTabPatientTitles(name) {
+        document.querySelectorAll('.tab-title.tab-patient').forEach(el => { el.textContent = name || '—'; });
+    }
+
     function clearResults() {
         dataGeneration++;
         prefetchTimers.forEach(clearTimeout);
@@ -1344,6 +1350,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Clear patient data with null checks
         if (elements.patientId) elements.patientId.innerHTML = '';
         if (elements.patientName) elements.patientName.textContent = '';
+        setTabPatientTitles('');
         if (elements.patientNameInfo) elements.patientNameInfo.textContent = '';
         if (elements.patientAgeInfo) elements.patientAgeInfo.textContent = '';
         if (elements.patientCnp) elements.patientCnp.textContent = '';
@@ -1363,7 +1370,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Clear imaging tab
         if (elements.imagingGrid) elements.imagingGrid.innerHTML = '';
         if (elements.imagingNoData) elements.imagingNoData.style.display = 'none';
-        if (elements.imagingEyebrow) elements.imagingEyebrow.textContent = 'Imaging';
+        if (elements.imagingEyebrow) elements.imagingEyebrow.textContent = 'Imaging Studies';
         document.getElementById('imagingMeta')?.replaceChildren();
         document.querySelectorAll('#imagingChips .chip').forEach(c => {
             c.classList.toggle('chip-active', c.dataset.filter === 'all');
@@ -1376,7 +1383,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Clear laboratory tab
         if (elements.labGrid) elements.labGrid.innerHTML = '';
         if (elements.labNoData) elements.labNoData.style.display = 'none';
-        if (elements.labEyebrow) elements.labEyebrow.textContent = 'Laboratory';
+        if (elements.labEyebrow) elements.labEyebrow.textContent = 'Lab Results';
         document.getElementById('labMeta')?.replaceChildren();
         // Remove dynamically-added section chips, keep only "All"
         document.querySelectorAll('#labChips .chip:not([data-filter="all"])').forEach(c => c.remove());
@@ -2713,8 +2720,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const pid      = patientData.id || '';
 
             const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-            const eyebrowEl = document.getElementById('reportEyebrow');
-            if (eyebrowEl) eyebrowEl.textContent = `Clinical Report · ${name}`;
             const patientLineEl = document.getElementById('reportPatientLine');
             if (patientLineEl) {
                 patientLineEl.innerHTML = '';
@@ -3862,6 +3867,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Patient Name
         const name = formatPatientName(patientData);
         if (elements.patientName) elements.patientName.textContent = name;
+        setTabPatientTitles(name);
         if (elements.patientNameInfo) elements.patientNameInfo.textContent = name || '—';
         log('Patient name set to:', name);
 
@@ -5950,12 +5956,7 @@ document.addEventListener('DOMContentLoaded', function() {
         elements.epicrisisContent.innerHTML = '';
 
         // Update header eyebrow + meta
-        const eyebrowEl = document.getElementById('epicrisisEyebrow');
         const metaEl = document.getElementById('epicrisisMeta');
-        const patientNameEl = elements.patientName;
-        if (eyebrowEl && patientNameEl?.textContent) {
-            eyebrowEl.textContent = `Epicrisis · ${patientNameEl.textContent}`;
-        }
 
         // Admission-form fields (from /api/checkin) for each discharge, matched
         // through the checkout id the discharged admission page links to.
