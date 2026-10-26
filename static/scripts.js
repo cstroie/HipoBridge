@@ -777,9 +777,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // group: 'imaging' | 'lab' | '' (everything). The lab domains are the slow
     // ones in Hipocrate, so only the Lab and Report tabs ask for them.
-    async function fetchRequestList(group = '') {
+    // background: ask the server to fetch the domains one at a time.
+    async function fetchRequestList(group = '', background = false) {
         if (cachedServiceRequests[group]) return cachedServiceRequests[group];
-        const result = await fetchAnalysesData(pendingAnalysesData.patientCode, group);
+        const result = await fetchAnalysesData(pendingAnalysesData.patientCode, group, background);
         cachedServiceRequests[group] = result;
         return result;
     }
@@ -792,20 +793,16 @@ document.addEventListener('DOMContentLoaded', function() {
     function schedulePrefetch(patientCode, patientData) {
         const myGeneration = dataGeneration;
         const BASE_DELAY = 2500;    // let the patient tab render/settle first
-        const JITTER_SPREAD = 4000; // spread targets over this window, no burst
-        const targets = [
-            () => prefetchImaging(patientCode, myGeneration),
-            () => prefetchEpicrisis(patientData, myGeneration),
-        ];
-        targets.forEach((task, i) => {
-            const delay = BASE_DELAY
-                + (i * JITTER_SPREAD / targets.length)
-                + Math.random() * (JITTER_SPREAD / targets.length);
-            prefetchTimers.push(setTimeout(() => {
-                if (myGeneration !== dataGeneration) return;
-                task();
-            }, delay));
-        });
+        // One step at a time, in the order the user is likely to need them:
+        // Hipocrate handles a session's requests serially, so parallel
+        // prefetches only make the imaging list (and any tab click) wait.
+        prefetchTimers.push(setTimeout(async () => {
+            const alive = () => myGeneration === dataGeneration;
+            if (!alive()) return;
+            await prefetchImaging(patientCode, myGeneration);
+            if (alive()) await prefetchEpicrisis(patientData, myGeneration);
+            if (alive()) await prefetchLaboratory(patientData, myGeneration);
+        }, BASE_DELAY));
     }
 
     async function prefetchImaging(patientCode, gen) {
@@ -820,25 +817,37 @@ document.addEventListener('DOMContentLoaded', function() {
     async function prefetchEpicrisis(patientData, gen) {
         if (gen !== dataGeneration) return;
         try {
-            const checkoutIds = extractCheckoutIds(patientData);
-            const checkinIds = extractCheckinIds(patientData);
-            if (!checkoutIds.length && !checkinIds.length) return;
-            await Promise.all([
-                limitedMap(checkoutIds, MAX_CONCURRENT_REQUESTS, async id => {
-                    if (gen !== dataGeneration) return null;
-                    try { return await fetchEncounterDataForCheckout(id); }
-                    catch { return null; }
-                }),
-                // Also warms the checkin side of computeCurrentEpisodeBoundary's
-                // cache.encounters lookups, not just the Epicrisis tab.
-                limitedMap(checkinIds, MAX_CONCURRENT_REQUESTS, async id => {
-                    if (gen !== dataGeneration) return null;
-                    try { return await fetchEncounterDataForCheckin(id); }
-                    catch { return null; }
-                }),
-            ]);
+            // Also warms the checkin side of computeCurrentEpisodeBoundary's
+            // cache.encounters lookups, not just the Epicrisis tab.
+            const jobs = [
+                ...extractCheckinIds(patientData).map(id => () => fetchEncounterDataForCheckin(id)),
+                ...extractCheckoutIds(patientData).map(id => () => fetchEncounterDataForCheckout(id)),
+            ];
+            await limitedMap(jobs, 1, async job => {
+                if (gen !== dataGeneration) return null;
+                try { return await job(); }
+                catch { return null; }
+            });
         } catch (err) {
             log('Prefetch epicrisis failed (silent):', err);
+        }
+    }
+
+    // Lab domains are the slow ones, so they are warmed last and with the
+    // server fetching them one at a time (background=1), leaving gaps for
+    // whatever the user clicks meanwhile. Observations and the full list the
+    // Report tab needs are then served from the server cache.
+    async function prefetchLaboratory(patientData, gen) {
+        if (gen !== dataGeneration) return;
+        try {
+            await fetchRequestList('lab', true);
+            if (gen !== dataGeneration) return;
+            const sd = new Date(); sd.setDate(sd.getDate() - 90);
+            await apiFetch(`/api/observation?patient=${encodeURIComponent(patientData.id)}&start_date=${localDateStr(sd)}`);
+            if (gen !== dataGeneration) return;
+            await fetchRequestList('');
+        } catch (err) {
+            log('Prefetch laboratory failed (silent):', err);
         }
     }
 
@@ -1247,10 +1256,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    async function fetchAnalysesData(patientCode, group = '') {
+    async function fetchAnalysesData(patientCode, group = '', background = false) {
         try {
             
-            const analysesResponse = await apiFetch(`/api/request?patient=${patientCode}${group ? `&type=${group}` : ''}`);
+            const analysesResponse = await apiFetch(`/api/request?patient=${patientCode}${group ? `&type=${group}` : ''}${background ? '&background=1' : ''}`);
             
             if (!analysesResponse.ok) {
                 if (analysesResponse.status === 401) {

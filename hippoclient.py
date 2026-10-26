@@ -1765,11 +1765,14 @@ class HippoClientServiceRequestSearch(HippoClientServiceRequest):
                     fetch_specs += [(t, ANALYSIS_TYPES[t]['domain']) for t in imaging_types]
                 if group != 'imaging':
                     fetch_specs += [('lab', d) for d in LAB_DOMAINS]
-                tasks = []
-                for _type_tag, domain_id in fetch_specs:
-                    url = _format_request_url(self.request_url_episode + f"&strDomeniu={domain_id}&NrPePag=100", pacid=patient_id)
-                    tasks.append(self.get_page(url))
-                results = await asyncio.gather(*tasks)
+                urls = [_format_request_url(self.request_url_episode + f"&strDomeniu={domain_id}&NrPePag=100", pacid=patient_id)
+                        for _type_tag, domain_id in fetch_specs]
+                if kwargs.get('background'):
+                    # Cache prefill: one domain at a time so interactive
+                    # requests of the same session can slip in between.
+                    results = [await self.get_page(url) for url in urls]
+                else:
+                    results = await asyncio.gather(*(self.get_page(url) for url in urls))
                 merged = HippoData(status="success", message="")
                 seen_ids = set()
                 all_requests = []

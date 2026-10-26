@@ -238,7 +238,8 @@ async def search_request(request):
     client = HippoClientServiceRequestSearch(SERVICE_URL, request)
     if request.rel_url.query.get('refresh') == '1':
         await evict_patient_cache(client, patient_id)
-    parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime)
+    parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime,
+                                      background=request.query.get('background') == '1')
     for req in parsed_data.get("requests") or []:
         # Display name of the request type ("Ultrasound") — the same text the
         # FHIR ServiceRequest carries as code.coding[0].display.
