@@ -3908,6 +3908,13 @@ document.addEventListener('DOMContentLoaded', function() {
             const nightsEl = li.querySelector('.history-nights');
             const typeEl = li.querySelector('.history-type');
 
+            // Same three lines for every row: period + badges, diagnosis, section · doctor · treatment
+            const metaEl = li.querySelector('.history-meta');
+            const doctors = [r.medic_in, r.medic_out].filter(Boolean).filter((m, i, a) => a.indexOf(m) === i).join(' → ');
+            r.metaBase = [r.section_in, doctors].filter(Boolean);
+            metaEl.textContent = r.metaBase.join(' · ');
+            setHistoryDiagnosis(li, r.diagnosis);
+
             if (inpatient) {
                 const start = r.startIso ? formatDate(r.startIso) : '';
                 const end = r.endIso ? formatDate(r.endIso) : 'present';
@@ -3915,16 +3922,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 const nights = r.startIso && r.endIso ? Math.round((new Date(r.endIso) - new Date(r.startIso)) / 86400000) : 0;
                 if (nights > 0) nightsEl.textContent = `${nights}d`;
                 else nightsEl.hidden = true;
-                if (r.kind === 'day_admission') { typeEl.textContent = 'Day admission'; typeEl.hidden = false; }
-                li.querySelector('.history-diagnosis').textContent = r.diagnosis || 'No diagnosis recorded';
+                typeEl.textContent = r.kind === 'day_admission' ? 'Day admission' : 'Admission';
+                typeEl.hidden = false;
                 li.querySelector('.history-load').addEventListener('click', () => switchTab('epicrisis'));
             } else {
-                const period = [r.startIso && formatDate(r.startIso), r.section_in].filter(Boolean).join(' · ');
-                li.querySelector('.history-period').textContent = period || 'Unknown date';
+                li.querySelector('.history-period').textContent = (r.startIso && formatDate(r.startIso)) || 'Unknown date';
                 nightsEl.hidden = true;
                 typeEl.textContent = 'Outpatient';
                 typeEl.hidden = false;
-                li.querySelector('.history-diagnosis').textContent = r.medic_in || 'Presentation';
                 li.querySelector('.history-load').addEventListener('click', () => switchTab('imaging'));
                 if (r.presentation_id) toEnrich.push({ r, li });
             }
@@ -3942,12 +3947,21 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!p || myGeneration !== dataGeneration) return;
             const badge = [p.triage, p.decision].filter(Boolean).join(' · ');
             if (badge) li.querySelector('.history-type').textContent = badge;
-            // Drug lines read "NAME DOSE Aparat UPU - Program <dates>"; keep the drug.
-            const drugs = [].concat(p.treatment || []).map(t => t.split(' Aparat ')[0].trim()).filter(Boolean);
             const dx = p.diagnosis_final || p.diagnosis_initial || p.diagnosis || p.reason;
-            const label = dx || (drugs.length ? `Treatment: ${drugs.join(', ')}` : '');
-            if (label) li.querySelector('.history-diagnosis').textContent = label;
+            if (dx) setHistoryDiagnosis(li, dx);
+            // Drug lines read "NAME DOSE Aparat UPU - Program <dates>"; keep the drug name.
+            const drugs = [].concat(p.treatment || []).map(t => t.split(' Aparat ')[0].trim()).filter(Boolean);
+            const shown = drugs.slice(0, 3).join(', ') + (drugs.length > 3 ? ` +${drugs.length - 3}` : '');
+            const meta = [...r.metaBase, drugs.length ? `Rx: ${shown}` : ''].filter(Boolean).join(' · ');
+            li.querySelector('.history-meta').textContent = meta;
+            if (drugs.length) li.querySelector('.history-meta').title = drugs.join('\n');
         });
+    }
+
+    function setHistoryDiagnosis(li, dx) {
+        const el = li.querySelector('.history-diagnosis');
+        el.textContent = dx || 'No diagnosis recorded';
+        el.classList.toggle('is-empty', !dx);
     }
 
     // Raw presentation block from /api/presentation (triage, decision,
