@@ -39,6 +39,8 @@ from tests.hippoclient_triage import TestTriageResolution
 from tests.hippoclient_schedule import TestWardFamily, TestApplyFiltersSection, TestAnnotateRow
 from tests.hippobridge_handlers import TestServeSpec, TestGetCacheStats, TestBackfillSearch, TestEncounterSummary
 from tests.search import TestSearchIndex
+from tests.upu_us_stats import (TestShiftOf, TestParse, TestStats as TestUpuStats,
+    TestIntervals, TestOutcome, TestStudy, TestEndToEnd as TestUpuEndToEnd)
 from tests.sqlcache import (
     TestRoute, TestSqliteCacheRoundTrip, TestIterEntries, TestCleanup,
     TestStats, TestConcurrency, TestAiCache,
@@ -92,6 +94,7 @@ TEST_GROUPS = {
         TestGetCacheStats,
         TestBackfillSearch,
         TestSearchIndex,
+        TestShiftOf, TestParse, TestUpuStats, TestIntervals, TestOutcome, TestStudy, TestUpuEndToEnd,
         TestRoute, TestSqliteCacheRoundTrip, TestIterEntries, TestCleanup,
         TestStats, TestConcurrency, TestAiCache,
     ],
@@ -152,6 +155,7 @@ TEST_GROUPS = {
     "hippoclient_schedule": [TestWardFamily, TestApplyFiltersSection, TestAnnotateRow],
     "hippobridge_handlers": [TestServeSpec, TestGetCacheStats, TestBackfillSearch, TestEncounterSummary],
     "search": [TestSearchIndex],
+    "upu_us_stats": [TestShiftOf, TestParse, TestUpuStats, TestIntervals, TestOutcome, TestStudy, TestUpuEndToEnd],
     "sqlcache": [
         TestRoute, TestSqliteCacheRoundTrip, TestIterEntries, TestCleanup,
         TestStats, TestConcurrency, TestAiCache,
