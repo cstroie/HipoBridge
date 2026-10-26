@@ -1807,15 +1807,16 @@ class HippoClientServiceRequestSearch(HippoClientServiceRequest):
                     fetch_specs += [('lab', d) for d in LAB_DOMAINS]
                 urls = [_format_request_url(self.request_url_episode + f"&strDomeniu={domain_id}&NrPePag=100", pacid=patient_id)
                         for _type_tag, domain_id in fetch_specs]
-                if kwargs.get('background'):
-                    # Cache prefill: one domain at a time so interactive
-                    # requests of the same session can slip in between.
-                    results = []
-                    for url in urls:
-                        await kwargs['background']()  # yield to the user's foreground requests
-                        results.append(await self.get_page(url))
-                else:
-                    results = await asyncio.gather(*(self.get_page(url) for url in urls))
+                # One domain at a time: Hipocrate serves a session's requests
+                # serially anyway, so firing them all at once only makes every
+                # other request of the user queue behind the whole batch.
+                # Cache prefill (background) additionally yields to the user's
+                # foreground requests before each domain.
+                results = []
+                for url in urls:
+                    if kwargs.get('background'):
+                        await kwargs['background']()
+                    results.append(await self.get_page(url))
                 merged = HippoData(status="success", message="")
                 seen_ids = set()
                 all_requests = []

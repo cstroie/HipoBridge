@@ -97,6 +97,14 @@ Both prompts were rewritten per `_testing_/final50/{REPORT,EPICRISIS}_PROPOSALS.
 - `epicrisis.md`: gained a 5th, conditional **Flag** line for safety/procedure-relevant facts that don't fit Admission/Diagnosis/Treatment/Outcome (MRI-incompatible hardware, allergies, substance use, family cancer history) — the 4-field format had no home for these and was silently dropping them, including an MRI-safety fact `report.md` caught on the identical source text. Also restructured the field-definition block (was an inline `**Label:** description` block that the model would echo verbatim as if it were example text) and added a concrete filled example.
 - **Residual, not prompt-fixable**: on real dense records, ministral still occasionally fabricates a procedure/diagnosis name under compression (e.g. renaming a laparoscopic cystectomy to "cholecystectomy" and inventing "teratoma") or invents an expansion for an undefined source abbreviation. Same category as medgemma's `pre_exam_brief` language-drift issue above — a model-capability ceiling, not something a further wording change reliably fixes. Track alongside the existing model-routing recommendations rather than adding more rules chasing this specific model's idiosyncrasies.
 
+### Request-list fetching and cache prefill (2026-10-26)
+
+Hipocrate handles one session's requests strictly serially (measured: parallel `analysesEpisod.asp` fetches complete one after another), so the semaphore of 6 gives no speed-up and any batch makes the user's other requests queue behind it. Consequences:
+
+- `/api/request?patient=` fans out over domains **sequentially**; `type=imaging` / `type=lab` fetch just that group (lab domains 2, 5, 8, 9, 21 take ~17s each cold, imaging ones 2–6s). The Report tab uses the full list, Imaging/Lab tabs their group.
+- `background=1` (frontend patient-open prefill: imaging → epicrisis encounters → lab → observations → full list, one step at a time) additionally waits before each domain until `foreground` (`ForegroundActivity`, counted in `require_auth`, excluding `/api/ai/*` and background requests) has been idle 1.5s (max 30s per domain).
+- Frontend dedupes concurrent checkin/checkout fetches (`encounterInflight`).
+
 ## Entry point conventions
 
 - **Dual-level logging**: the root logger is always set to `DEBUG` (`hippobridge.py:69`) so nothing is filtered before handlers see it; the *console* handler is what actually applies `LOG_LEVEL`/`--log-level` (default `INFO`) via `_console_handler.setLevel(...)`. If `[logging] file` (or `--log-file`) is set, the `RotatingFileHandler` is hardcoded to `DEBUG` regardless of console level — so the file always captures everything (including `Worklist.*` and pydicom's `warn_and_log` warnings) even when the console is quieter. Never hardcode `DEBUG` on the console handler itself.
