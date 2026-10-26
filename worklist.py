@@ -1121,6 +1121,10 @@ class WorklistRefresher:
         # Widest date range actually fetched per lab_id, so we can detect when
         # a device asks for a range wider than what's currently cached.
         self._last_range:     Dict[str, Tuple[str, str]] = {}
+        # In-flight refresh per lab_id, so a C-FIND arriving while one runs
+        # (e.g. the startup warm-up) waits for it instead of reading an
+        # empty/stale slot.
+        self._inflight:       Dict[str, 'asyncio.Task'] = {}
 
     def _client(self, cls):
         """Return a HippoClient subclass instance authenticated with the service account."""
@@ -1382,6 +1386,16 @@ class WorklistRefresher:
         The throttle check-and-set is protected by a threading.Lock so concurrent
         C-FIND handlers cannot both slip through simultaneously.
         """
+        # A refresh already running for this slot (startup warm-up, another
+        # device's C-FIND) is joined, then freshness is judged against what
+        # it fetched — never a second parallel fetch of the same slot.
+        pending = self._inflight.get(lab_id)
+        if pending and not pending.done():
+            logger.debug("On-demand refresh joining the one in flight (lab_id=%s)", lab_id)
+            try:
+                await asyncio.shield(pending)
+            except Exception:
+                pass   # its own caller logs the failure; fall through and re-evaluate
         now = datetime.now()
         with self._throttle_lock:
             last = self._last_refresh.get(lab_id)
@@ -1397,7 +1411,22 @@ class WorklistRefresher:
                 )
                 return
             self._last_refresh[lab_id] = now   # claim the slot before releasing the lock
-        await self.refresh(lab_id, min_start=min_start, max_end=max_end)
+        task = asyncio.ensure_future(self.refresh(lab_id, min_start=min_start, max_end=max_end))
+        self._inflight[lab_id] = task
+        try:
+            await task
+        finally:
+            if self._inflight.get(lab_id) is task:
+                del self._inflight[lab_id]
+
+    async def warm_up(self, lab_ids: List[str]) -> None:
+        """Fill the cache slots once at startup, one modality at a time, so the
+        first device query doesn't pay for the schedule fetch + enrichment."""
+        for lab_id in lab_ids:
+            try:
+                await self.refresh_if_stale(lab_id=lab_id)
+            except Exception as exc:
+                logger.warning("Startup warm-up failed (lab_id=%s): %s", lab_id, exc)
 
 
 # ---------------------------------------------------------------------------
@@ -1475,6 +1504,15 @@ def start_worklist(service_url: str,
     # pynetdicom's start_server() is blocking — run it in a daemon thread.
     t = threading.Thread(target=server.serve, daemon=True, name='DicomMWL')
     t.start()
+
+    # Warm the cache for every modality a (non-test) profile serves, so the
+    # first device query is as fast as the later ones.
+    warm_ids = sorted({lid for p in profiles
+                       if p['name'].upper() != 'TEST' and not p.get('test')
+                       for lid in server._lab_ids_for_profile(p)})
+    if warm_ids:
+        loop.create_task(refresher.warm_up(warm_ids))
+        logger.info("Worklist startup warm-up scheduled for lab_ids %s", warm_ids)
 
     logger.info(
         "DICOM MWL server started: AE=%s port=%d on-demand=%.0fs profiles=%d",
