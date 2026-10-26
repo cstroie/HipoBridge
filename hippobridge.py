@@ -45,7 +45,7 @@ from fhir import Bundle, DocumentReference, ImagingStudy, OperationOutcome, Pati
 
 from hippoclient import ANALYSIS_TYPES
 from hippoclient import HippoClient, HippoClientPatient, HippoClientPatientSearch, HippoClientImagingStudy, HippoClientDiagnosticReport, HippoClientServiceRequest, HippoClientServiceRequestSearch, HippoClientCheckout, HippoClientCheckin, HippoClientCheckup, HippoClientSchedule, HippoClientCerere, HippoClientBuletinSolicitare, HippoClientPresentation, HippoClientObservationBundle, HippoClientWhoami, HippoClientReportWrite, HippoClientReportValidate, HippoClientCererePerform, HippoClientFUPU, HippoClientTriage
-from hippoclient import user_session_manager, url_cache
+from hippoclient import user_session_manager, url_cache, foreground
 from hippoclient import evict_patient_cache
 from hippoclient import is_meaningful_text as _is_meaningful_text
 from urlcache import URLCache
@@ -141,7 +141,16 @@ def require_auth(handler):
             return web.Response(status=401, headers={'WWW-Authenticate': 'Basic realm="HippoBridge"'})
         username, password = auth
         request['auth_credentials'] = (username, password)
-        return await handler(request)
+        # Count interactive requests so background cache prefills (background=1)
+        # can yield to them. The LLM endpoints don't touch Hipocrate, and
+        # prefill requests themselves must not count.
+        if request.query.get('background') == '1' or request.path.startswith('/api/ai/'):
+            return await handler(request)
+        foreground.enter(username)
+        try:
+            return await handler(request)
+        finally:
+            foreground.leave(username)
     return wrapper
 
 
@@ -239,7 +248,8 @@ async def search_request(request):
     if request.rel_url.query.get('refresh') == '1':
         await evict_patient_cache(client, patient_id)
     parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime,
-                                      background=request.query.get('background') == '1')
+                                      background=((lambda: foreground.wait_idle(request['auth_credentials'][0]))
+                                                  if request.query.get('background') == '1' else None))
     for req in parsed_data.get("requests") or []:
         # Display name of the request type ("Ultrasound") — the same text the
         # FHIR ServiceRequest carries as code.coding[0].display.

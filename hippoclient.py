@@ -314,6 +314,46 @@ _ACCESS_DENIED_MARKER = "Nu aveti suficiente drepturi"
 _hipocrate_semaphore = asyncio.Semaphore(6)
 
 
+class ForegroundActivity:
+    """Per-user count of in-flight interactive requests.
+
+    Hipocrate works through one session's requests serially, so a background
+    cache prefill (``background=1``) must not start its next upstream fetch
+    while the user is actively clicking around: wait_idle() holds it back
+    until the user's foreground requests have drained and stayed quiet for a
+    short grace period (the frontend fires follow-ups in bursts).
+    """
+
+    def __init__(self):
+        self._active: Dict[str, int] = {}
+        self._last_busy: Dict[str, float] = {}
+
+    def enter(self, user: str) -> None:
+        self._active[user] = self._active.get(user, 0) + 1
+
+    def leave(self, user: str) -> None:
+        n = self._active.get(user, 1) - 1
+        if n > 0:
+            self._active[user] = n
+        else:
+            self._active.pop(user, None)
+        self._last_busy[user] = time.monotonic()
+
+    async def wait_idle(self, user: str, grace: float = 1.5, max_wait: float = 30.0) -> None:
+        """Return once ``user`` has had no foreground request for ``grace`` s,
+        or after ``max_wait`` s regardless so a busy user can't starve the
+        prefill forever."""
+        deadline = time.monotonic() + max_wait
+        while time.monotonic() < deadline:
+            if (not self._active.get(user)
+                    and time.monotonic() - self._last_busy.get(user, float('-inf')) >= grace):
+                return
+            await asyncio.sleep(0.25)
+
+
+foreground = ForegroundActivity()
+
+
 def _session_key(username: str, password: str) -> str:
     """username + a short hash of password.
 
@@ -1770,7 +1810,10 @@ class HippoClientServiceRequestSearch(HippoClientServiceRequest):
                 if kwargs.get('background'):
                     # Cache prefill: one domain at a time so interactive
                     # requests of the same session can slip in between.
-                    results = [await self.get_page(url) for url in urls]
+                    results = []
+                    for url in urls:
+                        await kwargs['background']()  # yield to the user's foreground requests
+                        results.append(await self.get_page(url))
                 else:
                     results = await asyncio.gather(*(self.get_page(url) for url in urls))
                 merged = HippoData(status="success", message="")
