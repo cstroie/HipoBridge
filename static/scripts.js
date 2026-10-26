@@ -284,6 +284,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Trigger the initial schedule load now that we have credentials
             fetchScheduleFromInputs();
             startScheduleAutoRefresh();
+            restoreFromUrl();
         } catch (err) {
             loginError.textContent = `Network error: ${err.message}`;
             loginError.hidden = false;
@@ -354,6 +355,12 @@ document.addEventListener('DOMContentLoaded', function() {
     let scheduleMdRun = 0;
     const scheduleMdState = { rows: [], els: [] };
 
+    // URL routing state (declared before initApp() to avoid TDZ)
+    const PATIENT_TABS = ['patient', 'imaging', 'laboratory', 'epicrisis', 'report', 'ai'];
+    let pendingRoute = null;   // patient route waiting for credentials
+    let routeWriteLocked = false;
+    let suppressRecent = false;
+
     // Initialize application
     initApp();
     
@@ -390,6 +397,7 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             whoamiReady = fetchWhoami().catch(() => {});
             startScheduleAutoRefresh();
+            restoreFromUrl();
         }
     }
     
@@ -412,11 +420,78 @@ document.addEventListener('DOMContentLoaded', function() {
             tab.style.display = 'none';
         });
 
-        // Honour the URL fragment, but only for tabs available without a
-        // loaded patient; patient-scoped tabs fall back to the default
-        const hash = location.hash.replace('#', '');
-        switchTab(['schedule', 'search'].includes(hash) ? hash : 'search');
+        // Honour the URL fragment. Patient routes need credentials and a
+        // patient fetch, so they are parked in pendingRoute until
+        // restoreFromUrl() runs; meanwhile the search tab is shown.
+        const route = parseHash();
+        withoutRouteWrite(() => switchTab(route.section || 'search'));
+        if (route.patientId) pendingRoute = route;
+        else history.replaceState(null, '', `#${route.section || 'search'}`);
     }
+
+    // --- URL routing: #search | #schedule | #patient/<id>[/<tab>] ---
+    function withoutRouteWrite(fn) {
+        const prev = routeWriteLocked;
+        routeWriteLocked = true;
+        try { return fn(); } finally { routeWriteLocked = prev; }
+    }
+
+    function parseHash() {
+        const parts = location.hash.replace(/^#/, '').split('/');
+        if (parts[0] === 'patient' && parts[1]) {
+            let id;
+            try { id = decodeURIComponent(parts[1]); } catch { id = ''; }
+            if (id) {
+                const tab = parts[2] || 'patient';
+                return { patientId: id, tab: PATIENT_TABS.includes(tab) ? tab : 'patient' };
+            }
+        }
+        return { section: parts[0] === 'schedule' ? 'schedule' : 'search' };
+    }
+
+    function buildHash(tabId) {
+        const id = pendingAnalysesData?.patientCode;
+        if (PATIENT_TABS.includes(tabId) && id) {
+            return `#patient/${encodeURIComponent(id)}` + (tabId === 'patient' ? '' : `/${tabId}`);
+        }
+        return `#${tabId}`;
+    }
+
+    // Open a patient by id (from the URL), then show the requested tab
+    async function openPatientById(id, tab) {
+        elements.cnpInput.value = id;
+        suppressRecent = true;
+        try {
+            await withoutRouteWrite(async () => {
+                await handleFormSubmit(new Event('submit'));
+                if (pendingAnalysesData?.patientCode === id) {
+                    if (tab && tab !== 'patient') switchTab(tab);
+                } else {
+                    switchTab('search');
+                }
+            });
+        } finally {
+            suppressRecent = false;
+        }
+        history.replaceState(null, '', pendingAnalysesData?.patientCode === id ? buildHash(tab || 'patient') : '#search');
+    }
+
+    function restoreFromUrl() {
+        const route = pendingRoute;
+        pendingRoute = null;
+        if (route) openPatientById(route.patientId, route.tab);
+    }
+
+    window.addEventListener('popstate', () => {
+        if (!getCredentials()) return;
+        const route = parseHash();
+        if (route.patientId) {
+            if (pendingAnalysesData?.patientCode === route.patientId) withoutRouteWrite(() => switchTab(route.tab));
+            else openPatientById(route.patientId, route.tab);
+        } else {
+            withoutRouteWrite(() => switchTab(route.section));
+        }
+    });
     
     function initEventListeners() {
         // Tab navigation
@@ -665,8 +740,11 @@ document.addEventListener('DOMContentLoaded', function() {
             targetTab.style.display = 'block';
         }
 
-        // Reflect the tab in the URL fragment (no scroll, no history entry)
-        history.replaceState(null, '', `#${tabId}`);
+        // Reflect the tab in the URL fragment (one history entry per change)
+        if (!routeWriteLocked) {
+            const hash = buildHash(tabId);
+            if (hash !== location.hash) history.pushState(null, '', hash);
+        }
 
         if (tabId === 'schedule') {
             setPageTitle('Schedule');
@@ -3652,6 +3730,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // type 'text' marks a Reports (full-text) query; anything else is a patient lookup.
     function addToRecentSearches(searchTerm, patientData = null, type = null) {
+        if (suppressRecent) return;
         let recentSearches = JSON.parse(localStorage.getItem('recentSearches') || '[]');
         
         // Create a rich search object with more details
