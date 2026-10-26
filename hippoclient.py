@@ -1720,6 +1720,7 @@ class HippoClientServiceRequestSearch(HippoClientServiceRequest):
 
         Retrieves all service requests associated with a specific patient.
         If no type is specified, filters by year extracted from the 'dt' parameter.
+        type may also be 'imaging' or 'lab' to fetch just that group of domains.
 
         Args:
             patient_id: Patient identifier
@@ -1733,7 +1734,8 @@ class HippoClientServiceRequestSearch(HippoClientServiceRequest):
         data = HippoData(status="success", message="")
 
         try:
-            if kwargs.get('type'):
+            group = kwargs.get('type') if kwargs.get('type') in ('imaging', 'lab') else None
+            if kwargs.get('type') and not group:
                 domain = ANALYSIS_TYPES[kwargs['type']]['domain']
                 year_suffix = ""
                 if kwargs.get('dt'):
@@ -1744,7 +1746,7 @@ class HippoClientServiceRequestSearch(HippoClientServiceRequest):
                     except (ValueError, TypeError):
                         pass
                 request_url = self.request_url_episode + f"&strDomeniu={domain}{year_suffix}&NrPePag=100"
-            elif kwargs.get('dt'):
+            elif kwargs.get('dt') and not group:
                 dt_param = kwargs.get('dt')
                 try:
                     dt_obj = datetime.fromisoformat(dt_param.replace('Z', '+00:00').replace(' ', 'T'))
@@ -1753,11 +1755,16 @@ class HippoClientServiceRequestSearch(HippoClientServiceRequest):
                     year = datetime.now().year
                 request_url = self.request_url_episode + f"&strAN={year}&NrPePag=100"
             else:
-                # Fetch all imaging + lab domains in parallel and merge
+                # Fetch the imaging and/or lab domains in parallel and merge
+                # (type=imaging / type=lab restrict to one group; the lab
+                # domains are the slow ones, so the Imaging tab skips them)
                 imaging_types = [t for t, v in ANALYSIS_TYPES.items() if v['domain'] != 0]
                 # (type_tag, domain_id) — imaging types use their slug; lab domains all map to 'lab'
-                fetch_specs = [(t, ANALYSIS_TYPES[t]['domain']) for t in imaging_types]
-                fetch_specs += [('lab', d) for d in LAB_DOMAINS]
+                fetch_specs = []
+                if group != 'lab':
+                    fetch_specs += [(t, ANALYSIS_TYPES[t]['domain']) for t in imaging_types]
+                if group != 'imaging':
+                    fetch_specs += [('lab', d) for d in LAB_DOMAINS]
                 tasks = []
                 for _type_tag, domain_id in fetch_specs:
                     url = _format_request_url(self.request_url_episode + f"&strDomeniu={domain_id}&NrPePag=100", pacid=patient_id)

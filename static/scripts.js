@@ -704,7 +704,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let pendingEpicrisisData = null;
     let pendingReportData = null;
     let pendingAnalysesData = null;
-    let cachedServiceRequests = null;
+    let cachedServiceRequests = {};
 
     // Bumped on every new patient load (clearResults) so background prefetch
     // work scheduled for a previous patient becomes a no-op once stale.
@@ -775,10 +775,12 @@ document.addEventListener('DOMContentLoaded', function() {
         if (schedulePrefetchQueue.length) queueSchedulePrefetchStep(gen, SCHEDULE_PREFETCH_IDLE_GATE);
     }
 
-    async function fetchRequestList() {
-        if (cachedServiceRequests !== null) return cachedServiceRequests;
-        const result = await fetchAnalysesData(pendingAnalysesData.patientCode);
-        cachedServiceRequests = result;
+    // group: 'imaging' | 'lab' | '' (everything). The lab domains are the slow
+    // ones in Hipocrate, so only the Lab and Report tabs ask for them.
+    async function fetchRequestList(group = '') {
+        if (cachedServiceRequests[group]) return cachedServiceRequests[group];
+        const result = await fetchAnalysesData(pendingAnalysesData.patientCode, group);
+        cachedServiceRequests[group] = result;
         return result;
     }
 
@@ -793,7 +795,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const JITTER_SPREAD = 4000; // spread targets over this window, no burst
         const targets = [
             () => prefetchImaging(patientCode, myGeneration),
-            () => prefetchLaboratory(patientData, myGeneration),
             () => prefetchEpicrisis(patientData, myGeneration),
         ];
         targets.forEach((task, i) => {
@@ -810,25 +811,9 @@ document.addEventListener('DOMContentLoaded', function() {
     async function prefetchImaging(patientCode, gen) {
         if (gen !== dataGeneration) return;
         try {
-            const result = await fetchRequestList(); // memoized; also warms Laboratory
-            if (gen !== dataGeneration) return;
-            if (pendingReportData) {
-                pendingReportData.analysesData = result.data || { requests: [] };
-            }
+            await fetchRequestList('imaging'); // memoized
         } catch (err) {
             log('Prefetch imaging failed (silent):', err);
-        }
-    }
-
-    async function prefetchLaboratory(patientData, gen) {
-        if (gen !== dataGeneration) return;
-        try {
-            await fetchRequestList(); // shares cachedServiceRequests with imaging
-            if (gen !== dataGeneration) return;
-            const sd = new Date(); sd.setDate(sd.getDate() - 90);
-            await apiFetch(`/api/observation?patient=${encodeURIComponent(patientData.id)}&start_date=${localDateStr(sd)}`);
-        } catch (err) {
-            log('Prefetch laboratory failed (silent):', err);
         }
     }
 
@@ -865,7 +850,7 @@ document.addEventListener('DOMContentLoaded', function() {
         showLoading(`Loading imaging studies for ${patientLabel}…`);
         try {
             setLoadingStep('Querying Hipocrate for imaging requests…');
-            const result = await fetchRequestList();
+            const result = await fetchRequestList('imaging');
             const bundle = result.data || { requests: [] };
             const IMAGING = ['radio', 'ct', 'irm', 'eco', 'rads'];
             const entries = (bundle.requests || []).filter(e => IMAGING.includes(e.type));
@@ -876,7 +861,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 eyebrow: elements.imagingEyebrow, eyebrowLabel: 'Imaging Studies',
                 metaId: 'imagingMeta', types: IMAGING, patientData, allDates,
             });
-            if (pendingReportData) pendingReportData.analysesData = bundle;
             hideLoading();
         } catch (err) {
             delete elements.imagingGrid.dataset.loaded;
@@ -893,7 +877,7 @@ document.addEventListener('DOMContentLoaded', function() {
         showLoading(`Loading lab results for ${patientLabel}…`);
         try {
             setLoadingStep('Querying Hipocrate for lab requests…');
-            const result = await fetchRequestList();
+            const result = await fetchRequestList('lab');
             const bundle = result.data || { requests: [] };
             const LAB = ['lab'];
             const entries = (bundle.requests || []).filter(e => LAB.includes(e.type));
@@ -920,12 +904,9 @@ document.addEventListener('DOMContentLoaded', function() {
         showLoading(`Assembling clinical report for ${name}…`);
         try {
             setLoadingStep('Compiling diagnoses, admissions and imaging history…');
-            // pendingReportData.analysesData starts as an empty stub and is
-            // normally backfilled by the background schedulePrefetch imaging
-            // fetch — but landing here (Report/AI tab) before that prefetch
-            // finishes would otherwise build the clinical text, and its AI
-            // cache key, from zero imaging entries. fetchRequestList is
-            // memoized, so this is a no-op once the prefetch has already run.
+            // pendingReportData.analysesData starts as an empty stub; the
+            // Report needs imaging and lab entries, so fetch the full list
+            // here (memoized; the imaging/lab tabs only fetch their group).
             if (pendingAnalysesData) {
                 const result = await fetchRequestList();
                 pendingReportData.analysesData = result.data || { requests: [] };
@@ -1030,7 +1011,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Imaging + lab + trends are lazy-loaded on first visit to their respective tabs
             pendingAnalysesData = { patientCode, patientData };
-            cachedServiceRequests = null;
+            cachedServiceRequests = {};
             if (elements.imagingGrid) delete elements.imagingGrid.dataset.loaded;
             if (elements.labGrid) delete elements.labGrid.dataset.loaded;
 
@@ -1077,7 +1058,7 @@ document.addEventListener('DOMContentLoaded', function() {
             displayPatientData(patientData);
 
             pendingAnalysesData = { patientCode, patientData };
-            cachedServiceRequests = null;
+            cachedServiceRequests = {};
             if (elements.imagingGrid) delete elements.imagingGrid.dataset.loaded;
             if (elements.labGrid) delete elements.labGrid.dataset.loaded;
 
@@ -1266,10 +1247,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    async function fetchAnalysesData(patientCode) {
+    async function fetchAnalysesData(patientCode, group = '') {
         try {
             
-            const analysesResponse = await apiFetch(`/api/request?patient=${patientCode}`);
+            const analysesResponse = await apiFetch(`/api/request?patient=${patientCode}${group ? `&type=${group}` : ''}`);
             
             if (!analysesResponse.ok) {
                 if (analysesResponse.status === 401) {
@@ -1413,7 +1394,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Clear lazy-load state
         pendingAnalysesData = null;
-        cachedServiceRequests = null;
+        cachedServiceRequests = {};
         episodeBoundaryPromise = null;
         if (elements.imagingGrid) delete elements.imagingGrid.dataset.loaded;
         if (elements.labGrid) delete elements.labGrid.dataset.loaded;
@@ -3353,13 +3334,28 @@ document.addEventListener('DOMContentLoaded', function() {
         return markdown;
     }
     
+    // Concurrent callers (prefetch, Epicrisis tab, episode boundary, report)
+    // ask for the same encounter at once and the cache is only filled on
+    // completion, so share one in-flight request per kind+id.
+    const encounterInflight = new Map();
+    function dedupeEncounter(key, fetcher) {
+        if (!encounterInflight.has(key)) {
+            const p = fetcher().finally(() => encounterInflight.delete(key));
+            encounterInflight.set(key, p);
+        }
+        return encounterInflight.get(key);
+    }
+
     // Helper function to fetch encounter data for a checkout ID
-    async function fetchEncounterDataForCheckout(checkoutId) {
+    function fetchEncounterDataForCheckout(checkoutId) {
         // check cache first
         if (cache.encounters[checkoutId]) {
-            return cache.encounters[checkoutId];
+            return Promise.resolve(cache.encounters[checkoutId]);
         }
+        return dedupeEncounter(`co:${checkoutId}`, () => _fetchEncounterDataForCheckout(checkoutId));
+    }
 
+    async function _fetchEncounterDataForCheckout(checkoutId) {
         const response = await apiFetch(`/api/checkout/${checkoutId}`);
 
         // 404 means this checkout simply isn't viewable via this scrape path
@@ -3427,10 +3423,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Helper function to fetch encounter data for a checkin ID (active admission, not yet discharged)
-    async function fetchEncounterDataForCheckin(checkinId) {
+    function fetchEncounterDataForCheckin(checkinId) {
         if (cache.encounters[checkinId]) {
-            return cache.encounters[checkinId];
+            return Promise.resolve(cache.encounters[checkinId]);
         }
+        return dedupeEncounter(`ci:${checkinId}`, () => _fetchEncounterDataForCheckin(checkinId));
+    }
+
+    async function _fetchEncounterDataForCheckin(checkinId) {
         const response = await apiFetch(`/api/checkin/${checkinId}`);
         // 404 means this checkin simply isn't viewable via this scrape path
         // (e.g. superseded record) — a normal empty state, not a failure.
