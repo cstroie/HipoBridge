@@ -137,6 +137,77 @@ class TestOutcome(unittest.TestCase):
         self.assertIsNone(u.two_proportions(0, 0, 1, 10))
 
 
+class TestVisit(unittest.TestCase):
+    def test_pres_time(self):
+        self.assertEqual(u.pres_time("08/10/2026 20:06"), dt("2026-10-08 20:06"))
+        self.assertIsNone(u.pres_time("26/12/2023"))
+        self.assertIsNone(u.pres_time(None))
+
+    def test_decision_kind(self):
+        k = u.decision_kind
+        self.assertEqual(k("Plecat fara aviz"), "left_unadvised")
+        self.assertEqual(k("Plecat din UPU la domiciliu"), "home")
+        self.assertEqual(k("Internare"), "admitted")
+        self.assertEqual(k("Alta unitate sanitara"), "transfer")
+        self.assertEqual(k(""), "unknown")
+
+    def test_match_presentation(self):
+        chain = [(dt("2026-10-08 20:06"), "new"), (dt("2023-12-26 18:28"), "old")]
+        self.assertEqual(u.match_presentation(dt("2026-10-08 21:26"), chain)[1], "new")
+        # arrival after the request: the older one is tried, and it is too old
+        self.assertIsNone(u.match_presentation(dt("2026-10-08 19:00"), chain))
+        # more than 48 h after arrival: no match
+        self.assertIsNone(u.match_presentation(dt("2026-10-11 20:06"), chain))
+        self.assertIsNone(u.match_presentation(dt("2026-10-08 21:26"), [(None, "x")]))
+
+    def test_apply_visit(self):
+        rec = u.new_record({"request_id": 1})
+        u.apply_visit(rec, dt("2026-10-08 20:06"), {
+            "presentation": {"triage": "Urgent", "triage_time": "08/10/2026 20:06",
+                             "decision": "Internare"},
+            "admission": {"date_time": "08/10/2026 23:00"}})
+        self.assertEqual((rec["v_arrival"], rec["v_admission"], rec["v_triage"]),
+                         ("2026-10-08 20:06", "2026-10-08 23:00", "Urgent"))
+        self.assertTrue(rec["v_done"])
+
+
+class TestVisitStats(unittest.TestCase):
+    def test_visit_analysis(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cache = {}
+            spec = [  # id, arrival, requested, signed, decision, admission
+                ("1", "2026-10-05 14:00", "2026-10-05 14:40", "2026-10-05 15:30", "Internare", "2026-10-05 17:00"),
+                ("2", "2026-10-05 15:00", "2026-10-05 15:20", "2026-10-05 16:00", "Plecat din UPU la domiciliu", ""),
+                ("3", "2026-10-05 16:00", "2026-10-05 16:30", "2026-10-05 17:10", "Plecat fara aviz", ""),
+                ("4", "2026-10-05 17:00", "2026-10-05 17:10", "", "Plecat fara aviz", ""),
+                ("5", "2026-10-05 18:00", "2026-10-05 18:10", "2026-10-05 18:50", "", ""),
+            ]
+            for i, arr, req, sig, dec, adm in spec:
+                rec = u.new_record({"request_id": i, "date_time": req, "status": "ended",
+                                    "performed_at": req})
+                rec.update(signed=sig, studied=True, n_studies=1, n_validated=1 if sig else 0)
+                if dec:
+                    rec.update(v_done=True, v_arrival=arr, v_triage_time=arr, v_triage="Urgent",
+                               v_decision=dec, v_admission=adm)
+                cache[i] = rec
+            u.export_csv(tmp, cache)
+            recs = u.load_requests(tmp, frozenset())
+            ra = u.analyze_data(recs, date(2026, 10, 5), date(2026, 10, 6), as_of=dt("2026-10-07 12:00"))
+            v = ra["visits"]
+            self.assertEqual((v["matched"], v["total"]), (4, 5))
+            self.assertEqual(v["kinds"], {"admitted": 1, "home": 1, "left_unadvised": 2})
+            self.assertEqual(v["intervals"]["all"]["i_ar"]["median"], 25)
+            a = v["admitted"]
+            self.assertEqual((a["n"], a["complete"]), (1, 1))
+            self.assertEqual(a["i_sa"]["median"], 90)           # signed 15:30 -> admitted 17:00
+            self.assertAlmostEqual(a["shares"]["request_to_signed"], 50 / 180)
+            lu = v["left_unadvised"]
+            self.assertEqual(lu["n"], 2)
+            self.assertEqual(lu["outcomes"], {"signed": 1, "performed_unsigned": 1})
+            report = u.render(ra, {"ward": "UPU"})
+            self.assertIn("left without notice", report)
+
+
 class TestStudy(unittest.TestCase):
     def test_latest_validation_wins(self):
         rec = u.new_record({"request_id": 7, "date_time": "2026-10-05 14:00"})
@@ -220,6 +291,7 @@ class TestEndToEnd(unittest.TestCase):
             self.assertEqual((rs["n"], rs["missing"]), (4, 1))
             self.assertEqual(ra["closing"]["weeknight"], {"n": 2, "signed_by_end": 1, "signed_ever": 2})
             self.assertEqual(len(ra["signers"]), 2)
+            self.assertEqual(ra["visits"]["matched"], 0)
             oc = ra["outcomes"]["counts"]      # as of 2026-10-14 nothing is pending
             self.assertEqual((oc["signed"], oc["performed_unsigned"], oc["cancelled"]), (4, 1, 1))
             self.assertEqual(ra["outcomes"]["left"], 1)

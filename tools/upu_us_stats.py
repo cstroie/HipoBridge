@@ -51,7 +51,9 @@ CLASS_LABEL = {"day": "weekday 08-14", "weeknight": "weekday 14-08",
                "weekend": "weekend/holiday 08-08"}
 WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 CSV_FIELDS = ("rid", "requested", "performed", "signed", "status", "priority",
-              "payment", "validator", "n_studies", "n_validated")
+              "payment", "validator", "n_studies", "n_validated",
+              "v_arrival", "v_triage_time", "v_triage", "v_decision", "v_admission")
+VISIT_KEYS = ("v_done", "v_arrival", "v_triage_time", "v_triage", "v_decision", "v_admission")
 
 
 # ---------------------------------------------------------------- time helpers
@@ -337,6 +339,7 @@ def export_csv(out, cache):
                         **{k: r[k] for k in ("requested", "performed", "signed",
                                              "status", "priority", "payment",
                                              "n_studies", "n_validated")},
+                        **{k: r.get(k) or "" for k in CSV_FIELDS if k.startswith("v_")},
                         "validator": digest(salt, "val", r["validator"], 6)
                         if r["validator"] else ""})
     return path, len(recs)
@@ -373,8 +376,9 @@ async def fetch(args):
                 rec = new_record(row)
                 old = cache.get(rid)
                 if old:        # the listing is current, the study part is kept
-                    for k in ("signed", "validator", "n_studies", "n_validated", "studied"):
-                        rec[k] = old[k]
+                    for k in ("signed", "validator", "n_studies", "n_validated", "studied") + VISIT_KEYS:
+                        if k in old:
+                            rec[k] = old[k]
                 cache[rid] = rec
             todo = [cache[str(r.get("request_id"))] for r in rows
                     if r.get("request_id") and needs_study(
@@ -402,6 +406,121 @@ async def fetch(args):
         + ", ".join(f"{k}={v}" for k, v in sections.most_common(12)))
 
 
+def pres_time(v):
+    """A presentation page's 'dd/mm/yyyy hh:mm' as a naive datetime, or None
+    (the triage time is sometimes a bare date: then it is no time)."""
+    if not v or not isinstance(v, str) or ":" not in v:
+        return None
+    try:
+        return datetime.strptime(v.strip()[:16], "%d/%m/%Y %H:%M")
+    except ValueError:
+        return None
+
+
+def iso(t):
+    return t.strftime("%Y-%m-%d %H:%M") if t else ""
+
+
+def decision_kind(text):
+    """Disposition text of the presentation -> a short class."""
+    t = (text or "").lower()
+    if "fara aviz" in t or "fără aviz" in t:
+        return "left_unadvised"
+    if "domiciliu" in t:
+        return "home"
+    if "intern" in t:
+        return "admitted"
+    if "transfer" in t or "unitate" in t:
+        return "transfer"
+    if "refuz" in t:
+        return "refused"
+    return "other" if t.strip() else "unknown"
+
+
+def match_presentation(req_time, presentations):
+    """The presentation a request belongs to: the newest one that began no
+    later than the request, if it began less than 48 h before it.
+
+    `presentations` is [(arrival datetime, payload)], newest first."""
+    for arrival, payload in presentations:
+        if arrival is None or arrival > req_time:
+            continue
+        if req_time - arrival <= timedelta(hours=48):
+            return arrival, payload
+        return None
+    return None
+
+
+def apply_visit(rec, arrival, payload):
+    pr = payload.get("presentation") or {}
+    adm = payload.get("admission") or {}
+    rec.update(v_done=True, v_arrival=iso(arrival),
+               v_triage_time=iso(pres_time(pr.get("triage_time"))),
+               v_triage=pr.get("triage") or "", v_decision=pr.get("decision") or "",
+               v_admission=iso(pres_time(adm.get("date_time"))))
+
+
+async def fetch_visits(args):
+    """For each cached request, the UPU visit it belongs to: arrival, triage,
+    disposition and admission time. Nothing identifying is kept."""
+    import aiohttp
+    cache_path = os.path.join(args.out, "cache.jsonl")
+    cache = load_cache(cache_path)
+    todo = [r for r in cache.values() if not r.get("v_done") and not r.get("v_failed")]
+    todo.sort(key=lambda r: r["requested"])
+    log(f"Visits: {len(todo)} of {len(cache)} requests to look up")
+    patients, presentations = {}, {}      # in memory only
+    timeout = aiohttp.ClientTimeout(total=120)
+    t0, found, none = time.monotonic(), 0, 0
+    async with aiohttp.ClientSession(auth=aiohttp.BasicAuth(args.username, args.password),
+                                     timeout=timeout) as session:
+        g = Gentle(session, args.url)
+        for n, rec in enumerate(todo, 1):
+            req_time = parse_dt(rec["requested"])
+            rq = await g.get(f"/api/request/{rec['id']}", {}, args.pause_visit)
+            pid = ((rq or {}).get("patient") or {}).get("id")
+            if rq is None:
+                continue                  # try again on the next run
+            if not pid:
+                rec["v_done"] = True
+                none += 1
+                continue
+            if pid not in patients:
+                pat = await g.get(f"/api/patient/{pid}", {}, args.pause_visit)
+                if pat is None:
+                    continue
+                ids = pat.get("presentation") or []
+                ids = ids if isinstance(ids, list) else [ids]
+                patients[pid] = sorted((i for i in ids if str(i).isdigit()), key=int, reverse=True)
+            chain, ok = [], True
+            for prid in patients[pid][:4]:
+                if prid not in presentations:
+                    d = await g.get(f"/api/presentation/{prid}", {}, args.pause_visit)
+                    if d is None:
+                        ok = False
+                        break
+                    presentations[prid] = (pres_time((d.get("presentation") or {}).get("date_time")), d)
+                chain.append(presentations[prid])
+                if chain[-1][0] is not None and chain[-1][0] <= req_time:
+                    break
+            if not ok:
+                continue
+            hit = match_presentation(req_time, chain)
+            rec["v_done"] = True
+            if hit:
+                apply_visit(rec, *hit)
+                found += 1
+            else:
+                none += 1
+            if n % 50 == 0:
+                save_cache(cache_path, cache)
+                log(f"    visits {n}/{len(todo)} (found {found}, none {none})")
+    save_cache(cache_path, cache)
+    path, rows = export_csv(args.out, cache)
+    log(f"Visits done in {timedelta(seconds=int(time.monotonic() - t0))}: found {found}, "
+        f"no matching presentation {none}; wrote {rows} rows to {path}")
+
+
 # --------------------------------------------------------------------- analysis
 
 def load_requests(out, holidays):
@@ -417,6 +536,15 @@ def load_requests(out, holidays):
             r["i_rp"] = minutes(t, r["t_perf"])
             r["i_ps"] = minutes(r["t_perf"], r["t_sign"])
             r["i_rs"] = minutes(t, r["t_sign"])
+            r["t_arr"], r["t_tri"], r["t_adm"] = (parse_dt(r.get("v_arrival")),
+                                                  parse_dt(r.get("v_triage_time")),
+                                                  parse_dt(r.get("v_admission")))
+            r["kind"] = decision_kind(r.get("v_decision")) if r["t_arr"] else None
+            r["i_ar"] = minutes(r["t_arr"], t)            # arrival -> request
+            r["i_tr"] = minutes(r["t_tri"], t)            # triage -> request
+            r["i_as"] = minutes(r["t_arr"], r["t_sign"])  # arrival -> signed
+            r["i_sa"] = minutes(r["t_sign"], r["t_adm"])  # signed -> ward admission
+            r["i_aa"] = minutes(r["t_arr"], r["t_adm"])   # arrival -> ward admission
             recs.append(r)
     return recs
 
@@ -518,6 +646,77 @@ def outcome_stats(recs, as_of):
     return o
 
 
+VISIT_METRICS = (("i_ar", "arrival -> request"),
+                 ("i_rs", "request -> signed"), ("i_as", "arrival -> signed"))
+
+
+def visit_stats(recs):
+    """The UPU visit around each request: where the ultrasound sits in the stay."""
+    vis = [r for r in recs if r["t_arr"]]
+    v = {"matched": len(vis), "total": len(recs)}
+    if not vis:
+        return v
+    v["kinds"] = dict(Counter(r["kind"] for r in vis))
+    v["decisions"] = dict(Counter(r.get("v_decision") or "?" for r in vis).most_common(12))
+    v["triage"] = dict(Counter(r.get("v_triage") or "?" for r in vis))
+    v["intervals"] = {"all": {k: interval_stats(vis, k, ci=True) for k, _ in VISIT_METRICS}}
+    for c in CLASSES:
+        sub = [r for r in vis if r["cls"] == c]
+        v["intervals"][c] = {k: interval_stats(sub, k) for k, _ in VISIT_METRICS}
+    for lvl in sorted({r.get("v_triage") or "?" for r in vis}):
+        sub = [r for r in vis if (r.get("v_triage") or "?") == lvl]
+        v["intervals"]["triage:" + lvl] = {k: interval_stats(sub, k) for k, _ in VISIT_METRICS}
+    v["share_before_request"] = {
+        lim: within(vis, "i_ar", lim) for lim in (15, 30, 60, 120)}
+
+    # patients admitted to a ward: the whole stay is timed
+    adm = [r for r in vis if r["kind"] == "admitted"]
+    seg = [(r["i_ar"], r["i_rs"], r["i_sa"], r["i_aa"]) for r in adm
+           if None not in (r["i_ar"], r["i_rs"], r["i_sa"], r["i_aa"])
+           and r["i_ar"] >= 0 and r["i_rs"] >= 0 and r["i_sa"] >= 0 and r["i_aa"] > 0]
+    v["admitted"] = {
+        "n": len(adm), "with_admission_time": sum(1 for r in adm if r["t_adm"]),
+        "i_aa": interval_stats(adm, "i_aa", ci=True), "i_sa": interval_stats(adm, "i_sa", ci=True),
+        "signed_after_admission": sum(1 for r in adm if r["i_sa"] is not None and r["i_sa"] < 0),
+        "complete": len(seg)}
+    if seg:
+        share = lambda i: sorted(x[i] / x[3] for x in seg)  # noqa: E731
+        v["admitted"]["shares"] = {name: percentile(share(i), 50) for name, i in
+                                   (("before_request", 0), ("request_to_signed", 1), ("signed_to_admission", 2))}
+        v["admitted"]["us_dominates"] = sum(1 for x in seg if x[1] > max(x[0], x[2])) / len(seg)
+
+    # patients who left without notice
+    left = [r for r in vis if r["kind"] == "left_unadvised"]
+    rest = [r for r in vis if r["kind"] != "left_unadvised"]
+    home = [r for r in vis if r["kind"] == "home"]
+    lu = {"n": len(left), "rate": len(left) / len(vis),
+          "outcomes": dict(Counter(r["outcome"] for r in left)),
+          "by_class": {c: {"n": len([r for r in vis if r["cls"] == c]),
+                           "left": len([r for r in left if r["cls"] == c])} for c in CLASSES},
+          "by_hour": [{"n": len([r for r in vis if r["t_req"].hour == h]),
+                       "left": len([r for r in left if r["t_req"].hour == h])} for h in range(24)]}
+    lu["intervals"] = {k: interval_stats(left, k) for k, _ in VISIT_METRICS}
+    lu["intervals"]["i_rp"] = interval_stats(left, "i_rp")
+    lu["tests"] = {}
+    for k in ("i_ar", "i_rp", "i_rs", "i_as"):
+        a, b = (clean([r[k] for r in left])[0], clean([r[k] for r in home])[0])
+        lu["tests"][k] = mann_whitney(a, b)
+    d = lu["by_class"]
+    on_n = d["weeknight"]["n"] + d["weekend"]["n"]
+    on_l = d["weeknight"]["left"] + d["weekend"]["left"]
+    lu["test_oncall_vs_day"] = two_proportions(on_l, on_n, d["day"]["left"], d["day"]["n"])
+    v["left_unadvised"] = lu
+    # how the proxy of section 6 agrees with the recorded disposition
+    v["proxy_vs_disposition"] = {
+        k: dict(Counter(r["outcome"] for r in vis if r["kind"] == k))
+        for k in sorted({r["kind"] for r in vis})}
+    # waiting before the request, per disposition
+    v["by_kind"] = {k: {m: interval_stats([r for r in vis if r["kind"] == k], m)
+                        for m in ("i_ar", "i_rp", "i_rs")}
+                    for k in sorted({r["kind"] for r in vis})}
+    return v
+
+
 def analyze_data(recs, since, until, holidays=frozenset(), as_of=None):
     live = [r for r in recs if not r["cancelled"]]
     ra = {"range": [since.isoformat(), until.isoformat()],
@@ -588,6 +787,7 @@ def analyze_data(recs, since, until, holidays=frozenset(), as_of=None):
     ra["closing"] = closing
 
     ra["outcomes"] = outcome_stats(recs, as_of or datetime.now())
+    ra["visits"] = visit_stats(recs)
 
     # intervals
     ra["intervals"] = {"all": {k: interval_stats(live, k, ci=True) for k, _ in METRICS}}
@@ -696,8 +896,9 @@ def test_line(name, t, a, b, unit="minutes"):
 def render_left(add, ra):
     o = ra["outcomes"]
     c = o["counts"]
-    add("A request that is cancelled, or never performed and never signed, is read as a patient who "
-        "left before the exam (long wait, or a request that was not needed). Requests younger than "
+    add("A request that is cancelled, or never performed and never signed, is read here as a patient who "
+        "may have left before the exam. It is only a guess: section 7 compares it with the disposition the "
+        "visit records, and the two overlap little. Requests younger than "
         f"{PENDING_HOURS} h at {o['as_of']} may still be waiting and are not judged. Performed but not yet "
         "signed reports are a different thing (a missing report) and are counted apart.\n")
     add(table(["outcome", "requests", "share"],
@@ -743,6 +944,96 @@ def render_left(add, ra):
         "the same hours stands in for it.\n")
 
 
+def render_visits(add, ra):
+    v = ra.get("visits") or {}
+    if not v.get("matched"):
+        add("No UPU visit could be matched to the requests (run the `visits` stage).\n")
+        return
+    iv = v["intervals"]
+    add(f"Each request is joined to the UPU presentation it belongs to (the newest one that began no later "
+        f"than the request and less than 48 h before it): **{v['matched']} of {v['total']}** requests matched. "
+        "Only patients who got an ultrasound request are here: those who left before one was written "
+        "cannot be seen.\n")
+    add("### Disposition recorded for the visit\n")
+    kinds = v["kinds"]
+    label = {"home": "went home", "admitted": "admitted", "left_unadvised": "left without notice",
+             "transfer": "other unit", "refused": "refused", "other": "other", "unknown": "none"}
+    add(table(["disposition", "requests", "share"],
+              [[label.get(k, k), n, pct(n / v["matched"])] for k, n in sorted(kinds.items(), key=lambda kv: -kv[1])]))
+    add("\nTriage level: " + ", ".join(f"{k} {n}" for k, n in sorted(v["triage"].items(), key=lambda kv: -kv[1])) + ".\n")
+    add("### Before the request, and the whole stretch to the report\n")
+    for k, name in VISIT_METRICS:
+        add(f"**{name[0].upper() + name[1:]}**\n")
+        rows = [stat_row("all", iv["all"][k])]
+        rows += [stat_row(CLASS_LABEL[c], iv[c][k]) for c in CLASSES]
+        rows += [stat_row("triage " + t.split(":", 1)[1], x[k]) for t, x in iv.items() if t.startswith("triage:")]
+        add(table(STAT_HEAD, rows))
+        add("")
+    sb = v["share_before_request"]
+    add("Requests written within: " + "; ".join(
+        f"{lim} min of arrival {pct((sb[lim] or {}).get('share'))}" for lim in sorted(sb)) + ".\n")
+
+    a = v["admitted"]
+    add("### Patients admitted to a ward\n")
+    add(f"{a['n']} visits ended in admission, {a['with_admission_time']} with an admission time. "
+        "Their whole stay can be timed; patients who went home have no recorded departure time.\n")
+    add(table(STAT_HEAD, [stat_row("arrival -> ward admission", a["i_aa"]),
+                          stat_row("report signed -> ward admission", a["i_sa"])]))
+    add("")
+    if a.get("shares"):
+        sh = a["shares"]
+        add(f"Median share of the time from arrival to admission ({a['complete']} complete stays): "
+            f"before the request {pct(sh['before_request'])}, request to report {pct(sh['request_to_signed'])}, "
+            f"report to admission {pct(sh['signed_to_admission'])}. The ultrasound stretch is the longest "
+            f"of the three in {pct(a['us_dominates'])} of the stays.")
+    if a["signed_after_admission"]:
+        add(f"- {a['signed_after_admission']} reports were signed after the patient was already admitted.")
+    add("")
+
+    lu = v["left_unadvised"]
+    add("### Patients who left without notice\n")
+    add(f"**{lu['n']} of {v['matched']} visits ({pct(lu['rate'])})** ended with the disposition "
+        "*left without notice*. What had happened to their ultrasound request:\n")
+    add(table(["request outcome", "visits"], [[k, n] for k, n in sorted(lu["outcomes"].items(), key=lambda kv: -kv[1])]))
+    add("")
+    signed = lu["outcomes"].get("signed", 0)
+    if lu["n"]:
+        add(f"{pct(signed / lu['n'])} of them left **after** the report was signed, so the ultrasound wait "
+            f"cannot be what made them leave; {pct((lu['n'] - signed) / lu['n'])} left before it was signed.\n")
+    rows = [stat_row("left without notice, " + name, lu["intervals"][k]) for k, name in
+            (("i_ar", "arrival -> request"), ("i_rp", "request -> performed"),
+             ("i_rs", "request -> signed"), ("i_as", "arrival -> signed"))]
+    rows += [stat_row("went home, " + name, v["by_kind"].get("home", {}).get(k, {"n": 0}))
+             for k, name in (("i_ar", "arrival -> request"), ("i_rp", "request -> performed"),
+                             ("i_rs", "request -> signed"))]
+    add(table(STAT_HEAD, rows))
+    add("")
+    for k, name in (("i_ar", "arrival -> request"), ("i_rp", "request -> performed"),
+                    ("i_rs", "request -> signed"), ("i_as", "arrival -> signed")):
+        add(test_line(f"{name}, left without notice vs went home", lu["tests"][k],
+                      "left without notice", "went home"))
+    add("")
+    add("By shift class:\n")
+    add(table(["shift class", "visits", "left without notice", "rate"],
+              [[CLASS_LABEL[c], d["n"], d["left"], pct(d["left"] / d["n"]) if d["n"] else "-"]
+               for c, d in lu["by_class"].items()]))
+    t = lu["test_oncall_vs_day"]
+    if t:
+        add(f"\n- on-call vs routine hours: {pct(t['x1'] / t['n1'])} ({t['x1']}/{t['n1']}) vs "
+            f"{pct(t['x2'] / t['n2'])} ({t['x2']}/{t['n2']}), z = {t['z']:.2f}, p {pval(t['p'])}"
+            + (", significant." if t["p"] < 0.05 else ", not significant."))
+    add("\nBy hour of the request:\n")
+    top = max((d["left"] for d in lu["by_hour"]), default=0)
+    add(table(["hour", "visits", "left", "rate", ""],
+              [[f"{h:02d}", d["n"], d["left"], pct(d["left"] / d["n"]) if d["n"] else "-", bar(d["left"], top, 25)]
+               for h, d in enumerate(lu["by_hour"])]))
+    add("\n### The proxy of section 6 against the recorded disposition\n")
+    outs = ("signed", "performed_unsigned", "cancelled", "left", "pending")
+    add(table(["disposition"] + list(outs),
+              [[label.get(k, k)] + [d.get(o, 0) for o in outs] for k, d in v["proxy_vs_disposition"].items()]))
+    add("\nA request that was never performed is not always a patient who left: compare the rows.\n")
+
+
 def render(ra, meta):
     since, until = ra["range"]
     L = []
@@ -764,8 +1055,16 @@ def render(ra, meta):
     oo = ra["outcomes"]
     if oo["judged"]:
         add(f"- **{oo['left']}** ({pct(oo['rate'])}) never became an exam: {oo['counts'].get('cancelled', 0)} "
-            f"cancelled and {oo['counts'].get('left', 0)} never performed, taken as patients who left "
-            "before the exam (section 6).")
+            f"cancelled and {oo['counts'].get('left', 0)} never performed (section 6). This is a guess "
+            "at patients who left; the recorded disposition (section 7) is the better measure.")
+    vv = ra.get("visits") or {}
+    if vv.get("matched"):
+        lu = vv["left_unadvised"]
+        sg = lu["outcomes"].get("signed", 0)
+        add(f"- **{lu['n']}** visits ({pct(lu['rate'])}) ended *left without notice*; "
+            f"{sg} of them ({pct(sg / lu['n']) if lu['n'] else '-'}) left after their report was signed. "
+            f"Median arrival -> request {dur(vv['intervals']['all']['i_ar'].get('median'))}, "
+            f"arrival -> signed {dur(vv['intervals']['all']['i_as'].get('median'))}.")
     add(f"- **{oc}** ({pct(oc / ra['active'])}) were made in the on-call window "
         f"(weekdays 14:00-08:00, weekends 08:00-08:00): {ra['by_class']['weeknight']} on weekday "
         f"nights/evenings, {ra['by_class']['weekend']} at weekends; "
@@ -786,7 +1085,7 @@ def render(ra, meta):
     if a:
         add("- Request -> signed, on-call vs routine hours: "
             + ("a significant difference" if a["p"] < 0.05 else "no significant difference")
-            + f" (p {pval(a['p'])}, see section 7).")
+            + f" (p {pval(a['p'])}, see section 8).")
     add("")
 
     add("## 2. Data and method\n")
@@ -895,7 +1194,9 @@ def render(ra, meta):
 
     add("## 6. Requests that never became an exam\n")
     render_left(add, ra)
-    add("## 7. On-call focus and tests\n")
+    add("## 7. Before and after the ultrasound\n")
+    render_visits(add, ra)
+    add("## 8. On-call focus and tests\n")
     for c in ("weeknight", "weekend"):
         x = ra["closing"][c]
         add(f"- {CLASS_LABEL[c]}: {x['n']} requests, {x['signed_ever']} signed so far, "
@@ -916,24 +1217,27 @@ def render(ra, meta):
         "P(a > b) is the chance that a random request of group a took longer than one of group b "
         "(0.5 = no difference). Medians carry 95 % bootstrap intervals (2000 resamples, fixed seed).\n")
 
-    add("## 8. Signers\n")
+    add("## 9. Signers\n")
     add("Signers are labelled by workload; the labels are not stable between runs of other periods.\n")
     add(table(["signer", "reports", "on-call share", "median performed -> signed", "median request -> signed"],
               [[s["label"], s["n"], pct(s["oncall_share"]), dur(s["i_ps"].get("median")),
                 dur(s["i_rs"].get("median"))] for s in ra["signers"]]))
     add("")
 
-    add("## 9. Limits\n")
+    add("## 10. Limits\n")
     add("- *Performed* is the time entered in Hipocrate (by hand or from the modality), not a measured "
         "start of the scan; a missing or late entry lengthens request -> performed.")
     add("- *Signed* is the validation time of the report; a request with several studies uses the latest, "
         "and a request still unsigned today counts as missing, so recent days look slower than they are.")
     add("- `requested_by` is the attending physician, so the report cannot say who actually ordered the scan.")
+    add("- The visit is found through the patient's presentation list; the departure time of a patient who "
+        "goes home is not recorded in the pages HippoBridge reads, so report -> leaving exists only for "
+        "admitted patients. Patients who left before a request was written are not in the data at all.")
     add("- Public holidays are treated as weekdays unless given with `--holidays`.")
     add("- The tests assume independent requests; consecutive requests share a radiologist and a queue, "
         "so p-values are optimistic.\n")
-    add("## 10. Reproduction\n")
-    add(f"```\ntools/upu_us_stats.py all --since {since} --until {until} --out <dir>\n```")
+    add("## 11. Reproduction\n")
+    add(f"```\ntools/upu_us_stats.py all --since {since} --until {until} --out <dir>   # fetch, visits, analyze\n```")
     return "\n".join(L) + "\n"
 
 
@@ -969,7 +1273,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                  formatter_class=argparse.RawDescriptionHelpFormatter,
                                  epilog=__doc__.split("\n\n", 1)[1])
-    ap.add_argument("stage", choices=("fetch", "analyze", "all"))
+    ap.add_argument("stage", choices=("fetch", "visits", "analyze", "all"))
     ap.add_argument("--month", help="YYYY-MM: shortcut for the whole month (to --until if given)")
     ap.add_argument("--since", help="first request day, YYYY-MM-DD")
     ap.add_argument("--until", help="last request day, YYYY-MM-DD")
@@ -982,6 +1286,7 @@ def main():
     ap.add_argument("--refresh", action="store_true", help="bypass the server's schedule cache")
     ap.add_argument("--pause-schedule", type=float, default=2.0)
     ap.add_argument("--pause-study", type=float, default=1.0)
+    ap.add_argument("--pause-visit", type=float, default=0.5)
     ap.add_argument("-u", "--username", default=os.getenv("HYP_USER"))
     ap.add_argument("-w", "--password", default=os.getenv("HYP_PASS"))
     args = ap.parse_args()
@@ -997,6 +1302,12 @@ def main():
         if not (args.username and args.password):
             sys.exit("No credentials: set HYP_USER/HYP_PASS or worklist.cfg [worklist]")
         asyncio.run(fetch(args))
+    if args.stage in ("visits", "all"):
+        if not (args.username and args.password):
+            args.username, args.password = worklist_creds()
+        if not (args.username and args.password):
+            sys.exit("No credentials: set HYP_USER/HYP_PASS or worklist.cfg [worklist]")
+        asyncio.run(fetch_visits(args))
     if args.stage in ("analyze", "all"):
         analyze(args)
 
