@@ -41,7 +41,8 @@ from datetime import date, datetime, timedelta
 from datetime import time as dtime
 
 BASE_URL = os.getenv("HIPPOBRIDGE_URL", "http://127.0.0.1:44660")
-US_LAB = "28"
+LABS = {"us": "28", "ct": "26", "xr": "49"}     # laboratory ids of /api/schedule
+MOD_NAME = {"us": "Ultrasound", "ct": "CT", "xr": "X-ray"}
 LIMIT = 200
 PENDING_HOURS = 12              # a request younger than this may still be waiting
 MAX_MINUTES = 7 * 24 * 60       # an interval longer than this is a data error
@@ -50,7 +51,7 @@ CLASSES = ("day", "weeknight", "weekend")
 CLASS_LABEL = {"day": "weekday 08-14", "weeknight": "weekday 14-08",
                "weekend": "weekend/holiday 08-08"}
 WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
-CSV_FIELDS = ("rid", "requested", "performed", "signed", "status", "priority",
+CSV_FIELDS = ("rid", "mod", "requested", "performed", "signed", "status", "priority",
               "payment", "validator", "n_studies", "n_validated",
               "v_arrival", "v_triage_time", "v_triage", "v_decision", "v_admission")
 VISIT_KEYS = ("v_done", "v_arrival", "v_triage_time", "v_triage", "v_decision", "v_admission")
@@ -259,8 +260,15 @@ async def list_day(g, d, ward, lab, refresh, pause):
     return [r for r in rows if is_ward(r, ward)], sections
 
 
-def new_record(row):
-    return {"id": str(row.get("request_id") or ""),
+def ckey(rec):
+    """Cache key: the bare request id for ultrasound (the first cache kept
+    that shape), `mod:id` for the other modalities."""
+    mod = rec.get("mod") or "us"
+    return rec["id"] if mod == "us" else f"{mod}:{rec['id']}"
+
+
+def new_record(row, mod="us"):
+    return {"id": str(row.get("request_id") or ""), "mod": mod,
             "requested": row.get("date_time") or "",
             "performed": row.get("performed_at") or "",
             "status": row.get("status") or "",
@@ -293,7 +301,7 @@ def load_cache(path):
         with open(path, encoding="utf-8") as f:
             for line in f:
                 rec = json.loads(line)
-                cache[rec["id"]] = rec
+                cache[ckey(rec)] = rec
     return cache
 
 
@@ -330,12 +338,12 @@ def digest(salt, kind, value, n):
 def export_csv(out, cache):
     salt = salt_for(out)
     path = os.path.join(out, "requests.csv")
-    recs = sorted(cache.values(), key=lambda r: (r["requested"], r["id"]))
+    recs = sorted(cache.values(), key=lambda r: (r["requested"], ckey(r)))
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, CSV_FIELDS)
         w.writeheader()
         for r in recs:
-            w.writerow({"rid": digest(salt, "req", r["id"], 10),
+            w.writerow({"rid": digest(salt, "req", ckey(r), 10), "mod": r.get("mod") or "us",
                         **{k: r[k] for k in ("requested", "performed", "signed",
                                              "status", "priority", "payment",
                                              "n_studies", "n_validated")},
@@ -351,59 +359,74 @@ async def fetch(args):
     cache_path = os.path.join(args.out, "cache.jsonl")
     cache = load_cache(cache_path)
     since, until = date.fromisoformat(args.since), date.fromisoformat(args.until)
-    log(f"Fetching {args.ward} US requests {since} .. {until} "
+    mods = [m.strip() for m in args.modalities.split(",") if m.strip()]
+    for m in mods:
+        if m not in LABS:
+            sys.exit(f"unknown modality {m!r}: choose from {', '.join(LABS)}")
+    log(f"Fetching {args.ward} {', '.join(MOD_NAME[m] for m in mods)} requests {since} .. {until} "
         f"({(until - since).days + 1} days) from {args.url}; {len(cache)} cached")
-    sections, t0 = Counter(), time.monotonic()
+    sections, t0 = {}, time.monotonic()
     timeout = aiohttp.ClientTimeout(total=120)
     async with aiohttp.ClientSession(
             auth=aiohttp.BasicAuth(args.username, args.password),
             timeout=timeout) as session:
         g = Gentle(session, args.url)
-        d = since
-        while d <= until:
-            fresh = args.refresh or d >= date.today() - timedelta(days=1)
-            rows, secs = await list_day(g, d, args.ward, US_LAB, fresh,
-                                        args.pause_schedule)
-            if rows is None:
-                log(f"{d}: listing FAILED, skipped (re-run to retry)")
-                d += timedelta(days=1)
-                continue
-            sections.update(secs)
-            for row in rows:
-                rid = str(row.get("request_id") or "")
-                if not rid:
+        for mod in mods:
+            sections[mod] = Counter()
+            d = since
+            while d <= until:
+                fresh = args.refresh or d >= date.today() - timedelta(days=1)
+                rows, secs = await list_day(g, d, args.ward, LABS[mod], fresh,
+                                            args.pause_schedule)
+                if rows is None:
+                    log(f"{mod} {d}: listing FAILED, skipped (re-run to retry)")
+                    d += timedelta(days=1)
                     continue
-                rec = new_record(row)
-                old = cache.get(rid)
-                if old:        # the listing is current, the study part is kept
-                    for k in ("signed", "validator", "n_studies", "n_validated", "studied") + VISIT_KEYS:
-                        if k in old:
-                            rec[k] = old[k]
-                cache[rid] = rec
-            todo = [cache[str(r.get("request_id"))] for r in rows
-                    if r.get("request_id") and needs_study(
-                        cache[str(r["request_id"])], args.resume)]
-            failed = 0
-            for n, rec in enumerate(todo, 1):
-                res = await g.get(f"/api/study/{rec['id']}",
-                                  {"justification": "0"}, args.pause_study)
-                if not apply_study(rec, res):
-                    failed += 1
-                if n % 25 == 0 and n < len(todo):
-                    log(f"    {d}: studies {n}/{len(todo)}")
-            save_cache(cache_path, cache)
-            signed = sum(1 for r in rows if cache[str(r["request_id"])]["signed"])
-            log(f"{d}: {len(rows)} {args.ward} requests, {signed} signed, "
-                f"{len(todo)} studies read, {failed} failed")
-            d += timedelta(days=1)
-    with open(os.path.join(args.out, "meta.json"), "w") as f:
-        json.dump({"since": args.since, "until": args.until, "ward": args.ward,
-                   "sections_seen": dict(sections.most_common()),
-                   "fetched_at": datetime.now().isoformat(timespec="seconds")}, f, indent=1)
+                sections[mod].update(secs)
+                keys = []
+                for row in rows:
+                    if not row.get("request_id"):
+                        continue
+                    rec = new_record(row, mod)
+                    key = ckey(rec)
+                    old = cache.get(key)
+                    if old:        # the listing is current, the study part is kept
+                        for k in ("signed", "validator", "n_studies", "n_validated", "studied") + VISIT_KEYS:
+                            if k in old:
+                                rec[k] = old[k]
+                    cache[key] = rec
+                    keys.append(key)
+                todo = [cache[k] for k in keys if needs_study(cache[k], args.resume)]
+                failed = 0
+                for n, rec in enumerate(todo, 1):
+                    res = await g.get(f"/api/study/{rec['id']}",
+                                      {"justification": "0"}, args.pause_study)
+                    if not apply_study(rec, res):
+                        failed += 1
+                    if n % 25 == 0 and n < len(todo):
+                        log(f"    {mod} {d}: studies {n}/{len(todo)}")
+                save_cache(cache_path, cache)
+                signed = sum(1 for k in keys if cache[k]["signed"])
+                log(f"{mod} {d}: {len(rows)} {args.ward} requests, {signed} signed, "
+                    f"{len(todo)} studies read, {failed} failed")
+                d += timedelta(days=1)
+    meta_path = os.path.join(args.out, "meta.json")
+    meta = {}
+    if os.path.exists(meta_path):
+        with open(meta_path) as f:
+            meta = json.load(f)
+    seen = meta.get("sections_seen") if isinstance(meta.get("sections_seen"), dict) else {}
+    seen = {k: v for k, v in seen.items() if isinstance(v, dict)}      # the first cache kept US only
+    seen.update({m: dict(c.most_common()) for m, c in sections.items()})
+    meta.update(since=args.since, until=args.until, ward=args.ward, sections_seen=seen,
+                fetched_at=datetime.now().isoformat(timespec="seconds"))
+    with open(meta_path, "w") as f:
+        json.dump(meta, f, indent=1)
     path, n = export_csv(args.out, cache)
     log(f"Wrote {n} rows to {path} in {timedelta(seconds=int(time.monotonic() - t0))}")
-    log("Sections seen (all wards, for checking the UPU filter): "
-        + ", ".join(f"{k}={v}" for k, v in sections.most_common(12)))
+    for mod, c in sections.items():
+        log(f"Sections seen for {MOD_NAME[mod]} (all wards, for checking the UPU filter): "
+            + ", ".join(f"{k}={v}" for k, v in c.most_common(12)))
 
 
 def pres_time(v):
@@ -466,7 +489,8 @@ async def fetch_visits(args):
     import aiohttp
     cache_path = os.path.join(args.out, "cache.jsonl")
     cache = load_cache(cache_path)
-    todo = [r for r in cache.values() if not r.get("v_done") and not r.get("v_failed")]
+    todo = [r for r in cache.values() if (r.get("mod") or "us") == "us"
+            and not r.get("v_done") and not r.get("v_failed")]
     todo.sort(key=lambda r: r["requested"])
     log(f"Visits: {len(todo)} of {len(cache)} requests to look up")
     patients, presentations = {}, {}      # in memory only
@@ -536,6 +560,7 @@ def load_requests(out, holidays):
             r["i_rp"] = minutes(t, r["t_perf"])
             r["i_ps"] = minutes(r["t_perf"], r["t_sign"])
             r["i_rs"] = minutes(t, r["t_sign"])
+            r["mod"] = r.get("mod") or "us"
             r["t_arr"], r["t_tri"], r["t_adm"] = (parse_dt(r.get("v_arrival")),
                                                   parse_dt(r.get("v_triage_time")),
                                                   parse_dt(r.get("v_admission")))
@@ -833,6 +858,193 @@ def analyze_data(recs, since, until, holidays=frozenset(), as_of=None):
     return ra
 
 
+# ------------------------------------------------------------ queue and workload
+
+STEP = 5                                    # minutes between queue samples
+SLOT_HOURS = 3        # slots start at 08:00, so a routine shift (08-14) is two, and an on-call one is shared in them
+SLOT_START = 8
+SLOTS = tuple(((SLOT_START + i * SLOT_HOURS) % 24, (SLOT_START + (i + 1) * SLOT_HOURS) % 24)
+              for i in range(24 // SLOT_HOURS))
+
+
+def slot_label(i):
+    return "%02d-%02d" % SLOTS[i]
+
+
+def slot_of(hour):
+    return ((hour - SLOT_START) % 24) // SLOT_HOURS
+
+
+def summ(xs):
+    xs = sorted(xs)
+    if not xs:
+        return {"n": 0}
+    return {"n": len(xs), "mean": sum(xs) / len(xs), "min": xs[0], "median": percentile(xs, 50),
+            "p90": percentile(xs, 90), "p99": percentile(xs, 99), "max": xs[-1]}
+
+
+def queue_series(pairs, since, until, holidays):
+    """How many (start, end) intervals hold each STEP-minute sample of the
+    period: for (requested, performed) it is the patients waiting for the exam.
+    Returns [(time, count, shift class)]."""
+    import bisect
+    starts = sorted(a for a, _ in pairs)
+    ends = sorted(b for _, b in pairs)
+    t, stop = datetime.combine(since, dtime(0)), datetime.combine(until + timedelta(days=1), dtime(0))
+    out = []
+    while t < stop:
+        out.append((t, bisect.bisect_right(starts, t) - bisect.bisect_right(ends, t),
+                    shift_of(t, holidays)[0]))
+        t += timedelta(minutes=STEP)
+    return out
+
+
+def queue_stats(series):
+    """Summaries of a queue series: overall, by class, hour, weekday, slot x weekday."""
+    q = {"all": summ([n for _, n, _ in series]),
+         "by_class": {c: summ([n for _, n, k in series if k == c]) for c in CLASSES},
+         "by_hour": [summ([n for t, n, _ in series if t.hour == h]) for h in range(24)],
+         "by_weekday": [summ([n for t, n, _ in series if t.weekday() == w]) for w in range(7)],
+         "share_ge": {k: sum(1 for _, n, _ in series if n >= k) / len(series) for k in (1, 3, 5, 8, 10, 15)},
+         "matrix": [[summ([n for t, n, _ in series if t.weekday() == w and slot_of(t.hour) == i]).get("mean")
+                     for i in range(len(SLOTS))] for w in range(7)]}
+    # worst moments, one per day at most
+    best = {}
+    for t, n, _ in series:
+        if n > best.get(t.date(), (0, None))[0]:
+            best[t.date()] = (n, t)
+    q["worst"] = [{"at": t.strftime("%Y-%m-%d %H:%M"), "n": n}
+                  for n, t in sorted(best.values(), key=lambda x: -x[0])[:5]]
+    q["worst_per_day"] = summ([n for n, _ in best.values()])
+    return q
+
+
+def cadence_stats(perf_times, since, until):
+    """Exams performed per hour of the day and the gaps between them."""
+    days = (until - since).days + 1
+    ts = sorted(perf_times)
+    per_hour = Counter((t.date(), t.hour) for t in ts)
+    by_h = defaultdict(list)
+    for (d, h), n in per_hour.items():
+        by_h[h].append(n)
+    n_wd = Counter((since + timedelta(days=i)).weekday() for i in range(days))
+    mat = Counter((t.weekday(), slot_of(t.hour)) for t in ts)
+    gaps = [(b - a).total_seconds() / 60 for a, b in zip(ts, ts[1:])]
+    gh = defaultdict(list)
+    for a, b in zip(ts, ts[1:]):
+        gh[b.hour].append((b - a).total_seconds() / 60)
+    per_day = Counter(t.date() for t in ts)
+    return {"n": len(ts),
+            "per_day": summ([per_day.get(since + timedelta(days=i), 0) for i in range(days)]),
+            "by_hour_avg": [sum(by_h[h]) / days for h in range(24)],
+            "by_hour_max": [max(by_h[h]) if by_h[h] else 0 for h in range(24)],
+            "clock_hours": summ([per_hour.get((since + timedelta(days=i), h), 0)
+                                 for i in range(days) for h in range(24)]),
+            "gap": summ(gaps),
+            "gap_by_hour": [percentile(sorted(gh[h]), 50) if gh[h] else None for h in range(24)],
+            "matrix": [[mat.get((w, i), 0) / (n_wd[w] * SLOT_HOURS) if n_wd[w] else None
+                        for i in range(len(SLOTS))] for w in range(7)]}
+
+
+def modality_block(recs, since, until, holidays):
+    live = [r for r in recs if not r["cancelled"]]
+    performed = [r for r in live if r["t_perf"] and r["i_rp"] is not None and 0 <= r["i_rp"] <= MAX_MINUTES]
+    unread = [r for r in live if r["t_perf"] and r["t_sign"] and r["i_ps"] is not None
+              and 0 <= r["i_ps"] <= MAX_MINUTES]
+    days = (until - since).days + 1
+    by_day = Counter(r["t_req"].date() for r in recs)
+    b = {"requests": len(recs), "cancelled": len(recs) - len(live), "per_day": summ(
+        [by_day.get(since + timedelta(days=i), 0) for i in range(days)]),
+        "by_class": {c: sum(1 for r in recs if r["cls"] == c) for c in CLASSES},
+        "by_hour": [sum(1 for r in recs if r["t_req"].hour == h) for h in range(24)],
+        "signed": sum(1 for r in live if r["t_sign"]),
+        "intervals": {k: interval_stats(live, k, ci=True) for k in ("i_rp", "i_ps", "i_rs")}}
+    b["by_class_intervals"] = {c: {k: interval_stats([r for r in live if r["cls"] == c], k)
+                                   for k in ("i_rp", "i_ps", "i_rs")} for c in CLASSES}
+    if performed:
+        b["waiting"] = queue_stats(queue_series([(r["t_req"], r["t_perf"]) for r in performed],
+                                                since, until, holidays))
+        b["cadence"] = cadence_stats([r["t_perf"] for r in performed], since, until)
+        b["performed"] = len(performed)
+    if unread:
+        b["unread"] = queue_stats(queue_series([(r["t_perf"], r["t_sign"]) for r in unread],
+                                               since, until, holidays))
+    return b
+
+
+def workload_stats(recs, since, until, holidays):
+    """Queue and cadence per modality, and the load on each signer."""
+    mods = [m for m in LABS if any(r["mod"] == m for r in recs)]
+    w = {"mods": {m: modality_block([r for r in recs if r["mod"] == m], since, until, holidays)
+                  for m in mods}}
+    signed = [r for r in recs if r["t_sign"] and r["validator"] and not r["cancelled"]]
+    cnt = Counter(r["validator"] for r in signed)
+    label = {v: chr(65 + i) if i < 26 else f"S{i}" for i, (v, _) in enumerate(cnt.most_common())}
+    lo, hi = datetime.combine(since, dtime(0)), datetime.combine(until + timedelta(days=1), dtime(0))
+    inside = [r for r in signed if lo <= r["t_sign"] < hi]
+    # signers: reports by modality, shift class, and hours worked
+    hours = defaultdict(set)
+    for r in inside:
+        hours[r["validator"]].add((r["t_sign"].date(), r["t_sign"].hour))
+    w["signers"] = []
+    for v, n in cnt.most_common():
+        mine = [r for r in inside if r["validator"] == v]
+        w["signers"].append({
+            "label": label[v], "reports": len(mine),
+            "by_mod": {m: sum(1 for r in mine if r["mod"] == m) for m in mods},
+            "by_class": {c: sum(1 for r in mine if shift_of(r["t_sign"], holidays)[0] == c) for c in CLASSES},
+            "hours": len(hours[v]), "per_hour": len(mine) / len(hours[v]) if hours[v] else None,
+            "max_hour": max(Counter((r["t_sign"].date(), r["t_sign"].hour) for r in mine).values(), default=0)})
+    # who signs in each clock hour
+    by_hour = defaultdict(set)
+    for r in inside:
+        by_hour[(r["t_sign"].date(), r["t_sign"].hour)].add(label[r["validator"]])
+    conc = Counter(len(v) for v in by_hour.values())
+    w["concurrency"] = {
+        "hours_with_signing": len(by_hour),
+        "distribution": {str(k): conc[k] for k in sorted(conc)},
+        "by_hour_of_day": [
+            (sum(len(v) for (d, h), v in by_hour.items() if h == hh) /
+             max(1, sum(1 for (d, h) in by_hour if h == hh))) for hh in range(24)],
+        "share_two_or_more": sum(c for k, c in conc.items() if k >= 2) / len(by_hour) if by_hour else None}
+    # per shift (by signing time), complete shifts only
+    shifts = defaultdict(list)
+    for r in inside:
+        shifts[shift_of(r["t_sign"], holidays)].append(r)
+    rows = []
+    for (c, d), rs in sorted(shifts.items(), key=lambda kv: (kv[0][1], kv[0][0])):
+        s0, e0 = shift_bounds(c, d)
+        if s0 < lo or e0 > hi:
+            continue
+        per = Counter(label[r["validator"]] for r in rs)
+        rows.append({"date": d.isoformat(), "class": c, "reports": len(rs),
+                     "by_mod": {m: sum(1 for r in rs if r["mod"] == m) for m in mods},
+                     "signers": dict(per.most_common()), "n_signers": len(per),
+                     "top_share": per.most_common(1)[0][1] / len(rs)})
+    w["shifts"] = rows
+    w["shift_summary"] = {c: {"shifts": len([x for x in rows if x["class"] == c]),
+                              "reports": summ([x["reports"] for x in rows if x["class"] == c]),
+                              "n_signers": dict(Counter(x["n_signers"] for x in rows if x["class"] == c)),
+                              "top_share": summ([x["top_share"] for x in rows if x["class"] == c])}
+                          for c in CLASSES}
+    # work waiting for a radiologist: ultrasound patients not yet examined plus
+    # performed X-ray / CT not yet read
+    parts = []
+    for m, key in (("us", "waiting"), ("xr", "unread"), ("ct", "unread")):
+        sub = [r for r in recs if r["mod"] == m and not r["cancelled"] and r["t_perf"]]
+        if m == "us":
+            pairs = [(r["t_req"], r["t_perf"]) for r in sub if r["i_rp"] is not None and 0 <= r["i_rp"] <= MAX_MINUTES]
+        else:
+            pairs = [(r["t_perf"], r["t_sign"]) for r in sub if r["t_sign"] and r["i_ps"] is not None
+                     and 0 <= r["i_ps"] <= MAX_MINUTES]
+        if pairs:
+            parts.append(queue_series(pairs, since, until, holidays))
+    if parts:
+        total = [(parts[0][i][0], sum(p[i][1] for p in parts), parts[0][i][2]) for i in range(len(parts[0]))]
+        w["backlog"] = queue_stats(total)
+    return w
+
+
 # ----------------------------------------------------------------------- report
 
 def f1(v):
@@ -1034,6 +1246,136 @@ def render_visits(add, ra):
     add("\nA request that was never performed is not always a patient who left: compare the rows.\n")
 
 
+def f2(v):
+    return "-" if v is None else f"{v:.1f}"
+
+
+def queue_tables(add, q, what, per_hour=None):
+    """The tables of one queue series."""
+    a = q["all"]
+    add(f"{what}: on average **{a['mean']:.1f}** (median {a['median']:.0f}, 90th percentile {a['p90']:.0f}, "
+        f"99th {a['p99']:.0f}, worst {a['max']}). At least 1 for {pct(q['share_ge'][1])} of the time, "
+        + ", ".join(f"{k} for {pct(q['share_ge'][k])}" for k in (3, 5, 8, 10) if k in q["share_ge"]) + ".\n")
+    add(table(["shift class", "mean", "median", "p90", "p99", "max"],
+              [[CLASS_LABEL[c], f2(x.get("mean")), f0(x.get("median")), f0(x.get("p90")), f0(x.get("p99")), x.get("max", "-")]
+               for c, x in q["by_class"].items()]))
+    add("")
+    rows = []
+    for h in range(24):
+        x = q["by_hour"][h]
+        row = [f"{h:02d}", f2(x.get("mean")), f0(x.get("p90")), x.get("max", "-")]
+        if per_hour:
+            row += [f2(per_hour["by_hour_avg"][h]), per_hour["by_hour_max"][h], f1(per_hour["gap_by_hour"][h])]
+        rows.append(row)
+    head = ["hour", "waiting, mean", "p90", "max"]
+    if per_hour:
+        head += ["exams/hour, mean", "exams/hour, max", "median gap (min)"]
+    add(table(head, rows))
+    add("")
+    add("By weekday:\n")
+    add(table(["day", "mean", "median", "p90", "max"],
+              [[WEEKDAYS[w], f2(x.get("mean")), f0(x.get("median")), f0(x.get("p90")), x.get("max", "-")]
+               for w, x in enumerate(q["by_weekday"])]))
+    add("")
+    add("Mean number waiting, weekday x three-hour slot:\n")
+    add(table(["day"] + [slot_label(i) for i in range(len(SLOTS))],
+              [[WEEKDAYS[w]] + [f2(v) for v in q["matrix"][w]] for w in range(7)]))
+    add("")
+    add("Worst moment of the days: " + "; ".join(f"{x['at']} ({x['n']})" for x in q["worst"])
+        + f". The worst moment of each day averages {q['worst_per_day']['mean']:.1f}.\n")
+
+
+def render_workload(add, ra):
+    w = ra.get("workload") or {}
+    mods = w.get("mods") or {}
+    if not mods:
+        return
+    add("The queue is sampled every 5 minutes: *waiting* is a patient whose request is written and whose exam "
+        "has not been performed; *unread* is an exam performed and not yet signed. Cancelled requests and "
+        "requests without a usable performed time are left out, so the figures are slightly low.\n")
+    us = mods.get("us")
+    if us and us.get("waiting"):
+        add("### 9.1 Ultrasound: the queue\n")
+        queue_tables(add, us["waiting"], "Patients waiting for the ultrasound", us["cadence"])
+        c = us["cadence"]
+        add("### 9.2 Ultrasound: cadence\n")
+        add(f"{c['n']} exams performed in the period: {c['per_day']['mean']:.1f} a day (median {c['per_day']['median']:.0f}, "
+            f"range {c['per_day']['min']:.0f}-{c['per_day']['max']:.0f}). "
+            f"In a clock hour: {c['clock_hours']['mean']:.1f} on average, 90th percentile {c['clock_hours']['p90']:.0f}, "
+            f"most {c['clock_hours']['max']}. Gap between two consecutive exams: median {c['gap']['median']:.0f} min, "
+            f"90th percentile {c['gap']['p90']:.0f} min.\n")
+        add("Exams per hour, weekday x three-hour slot:\n")
+        add(table(["day"] + [slot_label(i) for i in range(len(SLOTS))],
+                  [[WEEKDAYS[d]] + [f2(v) for v in c["matrix"][d]] for d in range(7)]))
+        add("")
+        add("The performed time is the one entered in Hipocrate, so a gap is the time between two entries, "
+            "not the length of an exam.\n")
+    add("### 9.3 X-ray and CT requested by UPU\n")
+    rows = []
+    for m in ("us", "xr", "ct"):
+        b = mods.get(m)
+        if not b:
+            continue
+        iv = b["intervals"]
+        rows.append([MOD_NAME[m], b["requests"], f1(b["per_day"]["mean"]), b["cancelled"],
+                     dur(iv["i_rp"].get("median")), dur(iv["i_rp"].get("p90")),
+                     dur(iv["i_ps"].get("median")), dur(iv["i_ps"].get("p90")),
+                     dur(iv["i_rs"].get("median"))])
+    add(table(["modality", "requests", "per day", "cancelled", "request -> performed (median)", "(p90)",
+               "performed -> signed (median)", "(p90)", "request -> signed (median)"], rows))
+    add("")
+    for m in ("xr", "ct"):
+        b = mods.get(m)
+        if not b:
+            continue
+        add(f"#### {MOD_NAME[m]}\n")
+        add(f"{b['requests']} requests, {b['requests'] / len(ra['daily']):.1f} a day on average (range "
+            f"{b['per_day'].get('min', 0):.0f}-{b['per_day']['max']}); "
+            f"by shift class: " + ", ".join(f"{CLASS_LABEL[c]} {n}" for c, n in b["by_class"].items()) + ".\n")
+        mxh = max(b["by_hour"]) or 1
+        add(table(["hour", "requests", ""], [[f"{h:02d}", b["by_hour"][h], bar(b["by_hour"][h], mxh, 25)]
+                                              for h in range(24)]))
+        add("")
+        if b.get("waiting") and m == "xr":
+            queue_tables(add, b["waiting"], "Patients waiting for the X-ray", b.get("cadence"))
+        if b.get("unread"):
+            queue_tables(add, b["unread"], f"{MOD_NAME[m]} exams performed and not yet read", None)
+    if w.get("backlog") and len([m for m in mods if mods[m].get("waiting") or mods[m].get("unread")]) > 1:
+        add("### 9.4 Work waiting for a radiologist\n")
+        add("Patients waiting for an ultrasound, plus X-ray and CT exams performed and not yet signed.\n")
+        queue_tables(add, w["backlog"], "Items waiting for a radiologist")
+    add("### 9.5 The radiologists\n")
+    add("Reports allocated by who signed them and when they signed (so the ultrasound is credited to the "
+        "radiologist who did and signed it). Names are replaced by letters, by workload.\n")
+    mm = [m for m in ("us", "xr", "ct") if m in mods]
+    add(table(["signer", "reports"] + [MOD_NAME[m] for m in mm] +
+              [CLASS_LABEL[c] for c in CLASSES] + ["hours with a signature", "reports/hour", "most in a clock hour"],
+              [[x["label"], x["reports"]] + [x["by_mod"].get(m, 0) for m in mm] +
+               [x["by_class"][c] for c in CLASSES] + [x["hours"], f1(x["per_hour"]), x["max_hour"]]
+               for x in w["signers"]]))
+    cc = w["concurrency"]
+    add(f"\nIn the {cc['hours_with_signing']} clock hours with any signature, "
+        + ", ".join(f"{n} hours had {k} signer{'s' if k != '1' else ''}" for k, n in cc["distribution"].items())
+        + f" ({pct(cc['share_two_or_more'])} had two or more).\n")
+    add("Mean number of different signers in the hours that had a signature, by hour of the day:\n")
+    add(table(["hour"] + [f"{h:02d}" for h in range(24)], [["signers"] + [f2(v) for v in cc["by_hour_of_day"]]]))
+    add("")
+    add("#### Per shift\n")
+    sm = w["shift_summary"]
+    add(table(["shift class", "shifts", "reports per shift (mean)", "min", "max", "signers per shift", "share of the busiest signer"],
+              [[CLASS_LABEL[c], x["shifts"], f1(x["reports"].get("mean")), f0(x["reports"].get("min")),
+                f0(x["reports"].get("max")),
+                ", ".join(f"{n}x{k}" for k, n in sorted(x["n_signers"].items())) or "-",
+                pct(x["top_share"].get("mean"))] for c, x in sm.items() if x["shifts"]]))
+    add("")
+    oc = [x for x in w["shifts"] if x["class"] != "day"]
+    add(table(["date", "day", "shift", "reports"] + [MOD_NAME[m] for m in mm] + ["by signer"],
+              [[x["date"], WEEKDAYS[date.fromisoformat(x["date"]).weekday()], CLASS_LABEL[x["class"]], x["reports"]] +
+               [x["by_mod"].get(m, 0) for m in mm] +
+               [", ".join(f"{k} {n}" for k, n in x["signers"].items())] for x in oc]))
+    add("")
+
+
 def render(ra, meta):
     since, until = ra["range"]
     L = []
@@ -1217,14 +1559,16 @@ def render(ra, meta):
         "P(a > b) is the chance that a random request of group a took longer than one of group b "
         "(0.5 = no difference). Medians carry 95 % bootstrap intervals (2000 resamples, fixed seed).\n")
 
-    add("## 9. Signers\n")
+    add("## 9. Queue, cadence and the radiologists\n")
+    render_workload(add, ra)
+    add("## 10. Signers of the ultrasounds\n")
     add("Signers are labelled by workload; the labels are not stable between runs of other periods.\n")
     add(table(["signer", "reports", "on-call share", "median performed -> signed", "median request -> signed"],
               [[s["label"], s["n"], pct(s["oncall_share"]), dur(s["i_ps"].get("median")),
                 dur(s["i_rs"].get("median"))] for s in ra["signers"]]))
     add("")
 
-    add("## 10. Limits\n")
+    add("## 11. Limits\n")
     add("- *Performed* is the time entered in Hipocrate (by hand or from the modality), not a measured "
         "start of the scan; a missing or late entry lengthens request -> performed.")
     add("- *Signed* is the validation time of the report; a request with several studies uses the latest, "
@@ -1236,8 +1580,8 @@ def render(ra, meta):
     add("- Public holidays are treated as weekdays unless given with `--holidays`.")
     add("- The tests assume independent requests; consecutive requests share a radiologist and a queue, "
         "so p-values are optimistic.\n")
-    add("## 11. Reproduction\n")
-    add(f"```\ntools/upu_us_stats.py all --since {since} --until {until} --out <dir>   # fetch, visits, analyze\n```")
+    add("## 12. Reproduction\n")
+    add(f"```\ntools/upu_us_stats.py all --since {since} --until {until} --out <dir>   # fetch, visits, analyze (add --modalities us,ct,xr for the rest)\n```")
     return "\n".join(L) + "\n"
 
 
@@ -1258,8 +1602,11 @@ def analyze(args):
     holidays = frozenset(date.fromisoformat(h) for h in args.holidays.split(",") if h.strip())
     recs = load_requests(args.out, holidays)
     recs = [r for r in recs if since <= r["t_req"].date() <= until]
+    everything = recs
+    recs = [r for r in recs if r["mod"] == "us"]
     as_of = parse_dt((meta.get("fetched_at") or "").replace("T", " ")[:16]) or datetime.now()
     ra = analyze_data(recs, since, until, holidays, as_of)
+    ra["workload"] = workload_stats(everything, since, until, holidays)
     with open(os.path.join(args.out, "stats.json"), "w") as f:
         json.dump(ra, f, indent=1, default=default_json, ensure_ascii=False)
     with open(os.path.join(args.out, "report.md"), "w", encoding="utf-8") as f:
@@ -1278,6 +1625,8 @@ def main():
     ap.add_argument("--since", help="first request day, YYYY-MM-DD")
     ap.add_argument("--until", help="last request day, YYYY-MM-DD")
     ap.add_argument("--out", default="_testing_/upu-us-stats", help="output directory")
+    ap.add_argument("--modalities", default="us",
+                    help="comma-separated: us, ct, xr (laboratory 28, 26, 49); default us")
     ap.add_argument("--ward", default="UPU", help="ward (the schedule's section), default UPU")
     ap.add_argument("--holidays", default="", help="comma-separated YYYY-MM-DD treated as weekends")
     ap.add_argument("--url", default=BASE_URL)

@@ -208,6 +208,78 @@ class TestVisitStats(unittest.TestCase):
             self.assertIn("left without notice", report)
 
 
+class TestQueue(unittest.TestCase):
+    def test_queue_series_counts_waiting(self):
+        pairs = [(dt("2026-10-05 10:00"), dt("2026-10-05 10:20")),
+                 (dt("2026-10-05 10:10"), dt("2026-10-05 10:40"))]
+        ser = dict((t.strftime("%H:%M"), n) for t, n, _ in
+                   u.queue_series(pairs, date(2026, 10, 5), date(2026, 10, 5), frozenset()))
+        self.assertEqual((ser["09:55"], ser["10:00"], ser["10:10"], ser["10:20"], ser["10:25"], ser["10:40"]),
+                         (0, 1, 2, 1, 1, 0))
+
+    def test_queue_stats_shape(self):
+        ser = u.queue_series([(dt("2026-10-05 10:00"), dt("2026-10-05 11:00"))],
+                             date(2026, 10, 5), date(2026, 10, 5), frozenset())
+        q = u.queue_stats(ser)
+        self.assertEqual(q["by_hour"][10]["max"], 1)
+        self.assertAlmostEqual(q["share_ge"][1], 12 / 288)
+        self.assertEqual(q["worst"][0]["n"], 1)
+
+    def test_cadence(self):
+        ts = [dt("2026-10-05 10:00"), dt("2026-10-05 10:10"), dt("2026-10-05 10:40"), dt("2026-10-06 03:00")]
+        c = u.cadence_stats(ts, date(2026, 10, 5), date(2026, 10, 6))
+        self.assertEqual(c["n"], 4)
+        self.assertEqual(c["by_hour_max"][10], 3)
+        self.assertEqual(c["by_hour_avg"][10], 1.5)
+        self.assertEqual(c["gap"]["min"], 10)
+        self.assertEqual(c["matrix"][0][0], 3 / 3)           # Monday 08-11: 3 exams over 1 Monday x 3 h
+
+
+class TestSlots(unittest.TestCase):
+    def test_slots_start_at_eight(self):
+        self.assertEqual([u.slot_label(i) for i in range(8)],
+                         ["08-11", "11-14", "14-17", "17-20", "20-23", "23-02", "02-05", "05-08"])
+        self.assertEqual([u.slot_of(h) for h in (8, 10, 11, 13, 14, 23, 0, 1, 2, 7)],
+                         [0, 0, 1, 1, 2, 5, 5, 5, 6, 7])
+
+
+class TestWorkload(unittest.TestCase):
+    def rec(self, mod, req, perf, sign, who):
+        r = u.new_record({"request_id": req, "date_time": req, "performed_at": perf, "status": "ended"}, mod)
+        r.update(signed=sign, validator=who, studied=True, n_studies=1, n_validated=1)
+        return r
+
+    def test_signers_and_shifts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cache = {}
+            for i, (mod, req, perf, sign, who) in enumerate([
+                    ("us", "2026-10-05 15:00", "2026-10-05 15:30", "2026-10-05 15:40", "Dr X"),
+                    ("us", "2026-10-05 15:10", "2026-10-05 16:00", "2026-10-05 16:05", "Dr X"),
+                    ("xr", "2026-10-05 15:05", "2026-10-05 15:20", "2026-10-05 15:50", "Dr Y"),
+                    ("ct", "2026-10-05 20:00", "2026-10-05 20:30", "2026-10-05 21:00", "Dr Y")]):
+                r = self.rec(mod, str(i), perf, sign, who)
+                r["requested"] = req
+                cache[u.ckey(r)] = r
+            u.export_csv(tmp, cache)
+            recs = u.load_requests(tmp, frozenset())
+            self.assertEqual(sorted(r["mod"] for r in recs), ["ct", "us", "us", "xr"])
+            w = u.workload_stats(recs, date(2026, 10, 4), date(2026, 10, 7), frozenset())
+            self.assertEqual(w["mods"]["us"]["requests"], 2)
+            self.assertEqual(w["mods"]["xr"]["unread"]["all"]["max"], 1)
+            self.assertEqual([x["reports"] for x in w["signers"]], [2, 2])
+            night = [x for x in w["shifts"] if x["class"] == "weeknight"][0]
+            self.assertEqual((night["date"], night["reports"], night["n_signers"]), ("2026-10-05", 4, 2))
+            self.assertEqual(night["by_mod"], {"us": 2, "ct": 1, "xr": 1})
+            # 15:xx is signed by two people, 16:xx and 21:xx by one
+            self.assertEqual(w["concurrency"]["distribution"], {"1": 2, "2": 1})
+            self.assertEqual(w["backlog"]["all"]["max"], 3)       # two waiting for the exam, one unread
+            out = []
+            u.render_workload(out.append, {"daily": {"2026-10-04": 0, "2026-10-05": 0}, "workload": w})
+            text = "\n".join(out)
+            self.assertIn("X-ray and CT requested by UPU", text)
+            self.assertNotIn("Dr X", text)
+
+
 class TestStudy(unittest.TestCase):
     def test_latest_validation_wins(self):
         rec = u.new_record({"request_id": 7, "date_time": "2026-10-05 14:00"})
