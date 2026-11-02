@@ -4,8 +4,8 @@ asked to come back for, rather than an emergency?
 
 A score from what is known when the request is made (no outcome), validated
 retrospectively on September-October 2026 with tools/upu_called.py: at the
-threshold below, about 1.3 UPU ultrasounds a day are flagged and 78% of them
-end non-urgent (home, untreated, no ambulance), against 47% of all. It is a
+threshold below, about 1.5 UPU ultrasounds a day are flagged and about 78% of
+them end non-urgent (home, untreated, no ambulance), against 47% of all. It is a
 hint for the radiologist to ask who sent the child, never a verdict, and it
 names nobody.
 
@@ -13,6 +13,7 @@ Points:
   +2  discharged from a surgery or orthopaedics ward in the 30 days before
   +2  another UPU visit in the 7 days before
   +2  the surgeon of the child's last surgical stay (90 days) is on call today
+      (+3 at weekends, Saturday 08:00 to Monday 08:00)
   +1  discharged from any ward in the 90 days before
   +1  weekday 08:00-14:00
   +1  request within 15 minutes of arrival
@@ -146,8 +147,11 @@ def assess(req_time, history, transport="", roster=None, holidays=frozenset()):
             score += 1
             if not (surgical and days <= 30):
                 reasons.append({"code": "recent_discharge", "days": days})
-            if surgical and roster and on_call(last_medics, roster, shift_date(arrival)):
-                score += 2
+            duty = shift_date(arrival)
+            if surgical and roster and on_call(last_medics, roster, duty):
+                # At weekends the treating surgeon's own shift is the clearest
+                # sign (10 returns against 2.8 by chance, Sep-Oct 2026).
+                score += 3 if duty.weekday() >= 5 else 2
                 reasons.append({"code": "surgeon_on_call"})
     if upu7 is not None:
         score += 2

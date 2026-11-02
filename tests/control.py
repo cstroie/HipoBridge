@@ -52,6 +52,18 @@ class TestScore(unittest.TestCase):
         self.assertNotIn({"code": "surgeon_on_call"},
                          c.assess(dt("2026-10-05 18:30"), h, "", other)["reasons"])
 
+    def test_surgeon_on_call_weighs_more_at_weekends(self):
+        # 2026-10-10 is a Saturday: on call +3, discharge within 90 days +1
+        h = [pres("50", "10/10/2026 18:00"),
+             stay("01/08/2026 10:00", "10/08/2026 12:00", "CHIRURGIE I", "DR. POPESCU ION")]
+        roster = {date(2026, 10, 10): [("popescu", "")]}
+        r = c.assess(dt("2026-10-10 18:30"), h, "", roster)
+        self.assertEqual(r["score"], 4)
+        self.assertTrue(r["flag"])
+        # Sunday night before 08:00 is still Saturday's weekend shift
+        h2 = [pres("50", "12/10/2026 03:00"), h[1]]
+        self.assertTrue(c.assess(dt("2026-10-12 03:20"), h2, "", {date(2026, 10, 11): [("popescu", "")]})["flag"])
+
     def test_night_after_08_belongs_to_previous_roster_date(self):
         self.assertEqual(c.shift_date(dt("2026-10-06 07:30")), date(2026, 10, 5))
         self.assertEqual(c.shift_date(dt("2026-10-06 08:00")), date(2026, 10, 6))
