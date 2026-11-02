@@ -26,6 +26,7 @@ HTTP client → hippobridge.py (@require_auth) → HippoClient* (cache + semapho
 | `HippoClientCererePerform` | `POST /api/request/{id}/perform`, `POST /api/request/{id}/cancel` | `/PARA/NOM/Listare/cerere.asp` (form replay via shared `_replay_form()`: perform sets DataEfectuarii + hdnAction=S; cancel sets hdnAction=A, mirrors the "Anulează" button) |
 | `HippoClientSchedule` | `/api/schedule`, `/fhir/Schedule` | `/PARA/NOM/Listare/?id=44&NrPePag=100` |
 | `HippoClientFUPU` | `/api/fupu/{id}` | `/gen_printabile/FUPU.asp?id={id}&tip=1` |
+| — (`control.py`, over `HippoClientCerere` + `HippoClientPatient` + `HippoClientPresentation`) | `GET /api/request/{id}/control` | none of its own — cerere.asp, the patient page and FisaPrezentare.asp; radiologists only (`[radiology] allowed_radiologists`), `flag: false` for anyone else and for non-UPU requests |
 | `HippoClientObservationBundle` | `/api/observation?patient=`, `/fhir/Observation?patient=` | `/Pacient/analysesEpisod.asp` (parallel per domain) |
 | `HippoClientWhoami` | `/api/whoami` | `Template/menu.asp` |
 | — (`search.SearchIndex`, no scraper) | `GET /api/search/text?q=[&snippet_length=]` | none — local FTS5 index (`search.db`); auth validated via `HippoClientWhoami` |
@@ -215,11 +216,13 @@ SPA: `main.html` + `scripts.js` + `styles.css` + `marked.js`. All assets self-ho
 - **(2026-07-30)** `buildImagingCardHeader()`'s `**Examination:**` line prefers the card's own `.type-text` (set from the ServiceRequest, e.g. "CT Scan") and `.card-regions` (e.g. "abdomen") over the DiagnosticReport's `data.modality[0].display`, which comes back as a generic `"Other"` for many reports even when the exam is a plain CT/MRI — `data.modality` is now only a last-resort fallback, not the primary source.
 - **(2026-08-19)** Schedule auto-refresh (`startScheduleAutoRefresh`/`scheduleNextAutoRefresh`) is a self-rescheduling `setTimeout` chain, not a fixed `setInterval`: it starts at 5 minutes and multiplies the interval by 1.2x after each tick, capped at 15 minutes, to ease off polling on schedules left open a long time. Clicking the manual refresh button (`refreshScheduleBtn`) resets the interval back to 5 minutes via `startScheduleAutoRefresh(true)` — but only if auto-refresh is currently running, so it's a no-op before login/first schedule load. Each tick calls `fetchScheduleFromInputs(true)`, which also re-warms the idle-prefetch cache (imaging/lab/epicrisis) for newly-appeared schedule entries.
 
+- **(2026-11-03)** Possible planned control (`control.py`): UPU ultrasound rows on the schedule may carry a quiet `.timeline-control` marker (muted `fa-calendar-check` after the section label, reasons in its `title`, no names) when `GET /api/request/{id}/control` flags the request. The score uses only what is known when the request is made: a surgery/orthopaedics discharge in 30 days (+2), another UPU visit in 7 days (+2), the surgeon of the last surgical stay on call per `[control] roster` (+2), any discharge in 90 days (+1), weekday 08-14 (+1), request within 15 min of arrival (+1), ambulance (-2); flag at 4. Validated on September-October 2026 with `tools/upu_called.py`: 1.4 flags a day, 79% of them non-urgent (47% of all). Fetched only after the row's own request fetch says ultrasound, so X-ray/CT rows cost nothing; answered to radiologists only. A hint to ask the family who sent the child, never a verdict.
+
 ## CSS design system
 
 - `var(--radius-sm/md/lg/full)` — `var(--radius)` is **not defined**.
 - `var(--font-size-xs/sm/base/lg/2xl/3xl/5xl)` / `var(--font-weight-normal/medium/semibold/bold)`.
-- `var(--spacing-xs/sm/md/lg/xl/2xl)` — no hardcoded `px` or `rem`.
+- `var(--space-2/4/6/8/…/80)` (pixel steps) — no hardcoded `px` or `rem`. (Older notes said `--spacing-*`; those are not defined.)
 - `--header-height: 72px` for sticky nav `top` offset.
 - Modality colours: `--mod-xr`, `--mod-ct`, `--mod-mr`, `--mod-us`, `--mod-fl` (not `--modality-*`).
 - Action-button color semantics: Perform uses `--success`, Cancel/destructive uses `--danger`, disabled state uses `--muted` (text/border, not opacity).

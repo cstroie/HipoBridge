@@ -52,6 +52,7 @@ from urlcache import URLCache
 from sqlcache import SqliteCache, AiCacheView
 from hippodata import HippoData
 import search
+import control
 from hippoclient import search_meta_checkout, search_meta_imaging
 
 from extractors import parse_cnp
@@ -95,6 +96,9 @@ DEFAULT_CONFIG = {
     },
     'radiology': {
         'allowed_radiologists': '',
+    },
+    'control': {
+        'roster': '',
     },
     'logging': {
         'file': '',
@@ -627,6 +631,48 @@ async def get_request_triage(request):
         return web_error_response("Request ID is required")
     client = HippoClientTriage(SERVICE_URL, request)
     return web_json_response(await client.fetch_and_parse(id=id))
+
+@require_auth
+async def get_request_control(request):
+    """Possible planned control (control.py): for a UPU request, a score from the
+    child's history, the visit and the surgical on-call roster ([control] roster),
+    known when the request is made. Answered to radiologists only
+    ([radiology] allowed_radiologists); anyone else, and any non-UPU request,
+    gets flag false. Reasons are codes with day counts, never a name."""
+    id = request.match_info.get('id')
+    if not id:
+        return web_error_response("Request ID is required")
+    data = HippoData(status="success", message="")
+    data["flag"] = False
+    username, _ = request['auth_credentials']
+    if username not in _ALLOWED_RADIOLOGISTS:
+        return web_json_response(data)
+    cerere = await HippoClientCerere(SERVICE_URL, request).fetch_and_parse(id=id)
+    if cerere.get('status') == 'error':
+        return web_json_response(cerere)
+    if (cerere.get('request.section') or '').strip().upper() != 'UPU':
+        return web_json_response(data)
+    req_time = control.parse_time(cerere.get('request.date_time'))
+    patient_id = cerere.get('patient.id')
+    if not req_time or not patient_id:
+        return web_json_response(data)
+    patient = await HippoClientPatient(SERVICE_URL, request).fetch_and_parse(id=patient_id)
+    history = patient.get('history') or []
+    prid, _start = control.presentation_for(req_time, history)
+    transport = ''
+    if prid:
+        pres = await HippoClientPresentation(SERVICE_URL, request).fetch_and_parse(id=prid)
+        transport = pres.get('presentation.transport_type') or ''
+    try:
+        roster = control.load_roster(_CONTROL_ROSTER)
+    except OSError as e:
+        logger.warning(f"Control roster unreadable: {e}")
+        roster = {}
+    result = control.assess(req_time, history, transport, roster)
+    data["flag"] = result["flag"]
+    data["score"] = result["score"]
+    data["reasons"] = result["reasons"]
+    return web_json_response(data)
 
 @require_auth
 async def get_schedule(request):
@@ -1786,8 +1832,9 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
                    port: int = None, host: str = None, service_url: str = None,
                    log_file: str = None):
     """Load config, wire up routes and lifecycle handlers, return the configured app."""
-    global SERVICE_URL, _PORT, _HOST, _ALLOWED_RADIOLOGISTS, _ai_client
+    global SERVICE_URL, _PORT, _HOST, _ALLOWED_RADIOLOGISTS, _ai_client, _CONTROL_ROSTER
     config = load_config()
+    _CONTROL_ROSTER = config.get('control', 'roster').strip()
     SERVICE_URL = service_url or config.get('hipocrate', 'service_url')
     _PORT = port or config.getint('server', 'port')
     _HOST = host or config.get('server', 'host')
@@ -1867,6 +1914,7 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     app.router.add_get('/api/cnp', serve_validate_cnp)
     app.router.add_get('/api/request/{id}/patient', get_request_patient)
     app.router.add_get('/api/request/{id}/triage', get_request_triage)
+    app.router.add_get('/api/request/{id}/control', get_request_control)
     app.router.add_post('/api/request/{id}/report', post_study_report)
     app.router.add_post('/api/request/{id}/validate', post_report_validate)
     app.router.add_post('/api/request/{id}/perform', post_study_perform)
@@ -1920,6 +1968,7 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
 # Module-level defaults — overridden by init_app() from the config files
 SERVICE_URL: str = DEFAULT_CONFIG['hipocrate']['service_url']
 _PORT: int = int(DEFAULT_CONFIG['server']['port'])
+_CONTROL_ROSTER: str = ''
 _HOST: str = DEFAULT_CONFIG['server']['host']
 _ALLOWED_RADIOLOGISTS: set = set()
 

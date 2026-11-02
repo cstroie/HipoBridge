@@ -41,6 +41,7 @@ from tests.hippobridge_handlers import TestServeSpec, TestGetCacheStats, TestBac
 from tests.search import TestSearchIndex
 from tests.upu_us_stats import (TestShiftOf, TestParse, TestStats as TestUpuStats,
     TestIntervals, TestOutcome, TestStudy, TestEndToEnd as TestUpuEndToEnd)
+from tests.control import TestScore as TestControlScore
 from tests.upu_called import (TestPickPresentation, TestNames as TestCalledNames,
     TestFeatures as TestCalledFeatures, TestTexts as TestCalledTexts, TestRoster as TestCalledRoster)
 from tests.sqlcache import (
@@ -158,6 +159,7 @@ TEST_GROUPS = {
     "hippobridge_handlers": [TestServeSpec, TestGetCacheStats, TestBackfillSearch, TestEncounterSummary],
     "search": [TestSearchIndex],
     "upu_us_stats": [TestShiftOf, TestParse, TestUpuStats, TestIntervals, TestOutcome, TestStudy, TestUpuEndToEnd],
+    "control": [TestControlScore],
     "upu_called": [TestPickPresentation, TestCalledNames, TestCalledFeatures, TestCalledTexts, TestCalledRoster],
     "sqlcache": [
         TestRoute, TestSqliteCacheRoundTrip, TestIterEntries, TestCleanup,

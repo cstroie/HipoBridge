@@ -7322,6 +7322,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (_examCache[id].referrer) _applyReferrer(el, _examCache[id].referrer);
                 if (_examCache[id].age) _applyPatientAge(el, _examCache[id].age);
                 if (_examCache[id].triage) _applyTriage(el, _examCache[id].triage);
+                if (_examCache[id].control) _applyControl(el, _examCache[id].control);
                 _showCardLine(el, _examCache[id]);
                 return;
             }
@@ -7355,13 +7356,34 @@ document.addEventListener('DOMContentLoaded', function() {
                     .catch(() => '')
                 : Promise.resolve('');
 
-            Promise.all([examPromise, triagePromise]).then(([cached, triage]) => {
+            // UPU ultrasound rows: a possible planned control (control.py, via
+            // /api/request/{id}/control), known once the investigation says
+            // ultrasound, so X-ray/CT rows cost Hipocrate nothing extra. The
+            // server answers radiologists only; a quiet marker, reasons in its
+            // tooltip, no names.
+            const isUpu = (el.dataset.section || '').toUpperCase() === 'UPU';
+            const controlPromise = isUpu
+                ? examPromise.then(cached => {
+                    const row = el.closest('.timeline-row');
+                    const isUs = row?.dataset.modality === 'eco'
+                        || _US_INVESTIGATION_RE.test(cached.investigation || '');
+                    if (!isUs) return null;
+                    return apiFetch(`/api/request/${id}/control`)
+                        .then(r => r.ok ? r.json() : null)
+                        .then(data => data?.flag ? data : null)
+                        .catch(() => null);
+                })
+                : Promise.resolve(null);
+
+            Promise.all([examPromise, triagePromise, controlPromise]).then(([cached, triage, control]) => {
                 cached.triage = triage;
+                cached.control = control;
                 _examCache[id] = cached;
                 _applyExamLabel(el, cached);
                 if (cached.referrer) _applyReferrer(el, cached.referrer);
                 if (cached.age) _applyPatientAge(el, cached.age);
                 if (triage) _applyTriage(el, triage);
+                if (control) _applyControl(el, control);
                 _showCardLine(el, cached);
             });
         });
@@ -7654,6 +7676,27 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!span) return;
         span.textContent = `${el.dataset.section}: ${triageText}`;
         span.classList.add('timeline-triage', _TRIAGE_COLOR_CLASS[triageText] || 'triage-gray');
+    }
+
+    // Possible planned control: the reasons the server gave, in plain words
+    const _CONTROL_REASON = {
+        surgical_discharge: r => `surgical discharge ${r.days} d ago`,
+        recent_discharge: r => `discharge ${r.days} d ago`,
+        recent_upu_visit: r => `UPU visit ${r.days} d ago`,
+        surgeon_on_call: () => 'treating surgeon on call',
+        weekday_morning: () => 'weekday morning',
+        fast_request: () => 'requested on arrival',
+    };
+    function _applyControl(el, control) {
+        const mark = el._sectionEl?.querySelector('.timeline-control');
+        if (!mark) return;
+        const words = (control.reasons || [])
+            .map(r => _CONTROL_REASON[r.code]?.(r))
+            .filter(Boolean);
+        const text = `Possibly a planned control: ${words.join(', ')}`;
+        mark.title = text;
+        mark.setAttribute('aria-label', text);
+        mark.hidden = false;
     }
 
     // Hipocrate files some exams under the wrong lab (e.g. a neck ultrasound

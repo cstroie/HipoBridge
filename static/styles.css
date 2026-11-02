@@ -3172,6 +3172,15 @@ select {
 .timeline-triage.triage-blue   { color: var(--info); }
 .timeline-triage.triage-gray   { color: var(--ink-3); }
 
+/* Possible planned control (control.py): deliberately quiet */
+.timeline-control {
+    margin-left: var(--space-4);
+    color: var(--ink-3);
+    font-size: var(--font-size-xs);
+    cursor: help;
+}
+.timeline-control[hidden] { display: none; }
+
 .timeline-card-meta {
     font: 500 var(--font-size-xs) 'Inter', sans-serif;
     color: color-mix(in srgb, var(--ink-3) 70%, transparent);
