@@ -188,7 +188,19 @@ async def fetch_texts(args):
             for line in f:
                 t = json.loads(line)
                 texts[t["id"]] = t
-    todo = sorted((r for r in recs.values() if r["id"] not in texts and r.get("done")),
+    def arrival_of(r):
+        return parse_dt(r.get("v_arrival")) or pres_time((r.get("presentation") or {})
+                                                          .get("date_time"))
+
+    def needs(r):
+        t = texts.get(r["id"])
+        if t is None:
+            return True
+        # A discharge letter not looked for yet (an older run used v_arrival only).
+        return (not t.get("co_checked") and not t.get("epicrisis")
+                and last_discharge(r, arrival_of(r)) is not None)
+
+    todo = sorted((r for r in recs.values() if r.get("done") and needs(r)),
                   key=lambda r: r["requested"])
     if args.limit:
         todo = todo[:args.limit]
@@ -200,12 +212,14 @@ async def fetch_texts(args):
                                      timeout=timeout) as session:
         g = base.Gentle(session, args.url)
         for n, r in enumerate(todo, 1):
-            t = {"id": r["id"], "report": "", "epicrisis": "", "co_ward": "", "co_out": ""}
-            st = await g.get(f"/api/study/{r['id']}", {"justification": "0"}, args.pause)
-            if st is None:
-                continue
-            t["report"] = "\n\n".join(s.get("result") or "" for s in st.get("studies") or [])
-            arrival = parse_dt(r.get("v_arrival"))
+            t = texts.get(r["id"])
+            if t is None:
+                t = {"id": r["id"], "report": "", "epicrisis": "", "co_ward": "", "co_out": ""}
+                st = await g.get(f"/api/study/{r['id']}", {"justification": "0"}, args.pause)
+                if st is None:
+                    continue
+                t["report"] = "\n\n".join(s.get("result") or "" for s in st.get("studies") or [])
+            arrival = arrival_of(r)
             last = last_discharge(r, arrival)
             pid = r.get("pid")
             if last and pid:
@@ -232,6 +246,7 @@ async def fetch_texts(args):
                         t["co_ward"] = co.get("checkout.ward") or c.get("ward") or ""
                         t["co_out"] = base.iso(out)
                         break
+            t["co_checked"] = True
             texts[r["id"]] = t
             if n % 25 == 0:
                 save(path, texts)
@@ -539,7 +554,8 @@ def features(r, home, holidays=frozenset(), texts=None, prev_us=None, roster=Non
     pr = r.get("presentation") or {}
     arrival = parse_dt(r.get("v_arrival")) or pres_time(pr.get("date_time"))
     requested = parse_dt(r.get("requested"))
-    f = {"id": r["id"], "requested": r.get("requested") or "", "arrival": base.iso(arrival)}
+    f = {"id": r["id"], "requested": r.get("requested") or "", "arrival": base.iso(arrival),
+         "_pid": r.get("pid")}
     f["matched"] = bool(pr)
     a = age_years(r.get("age"))
     f["age_band"] = age_band(a)
@@ -768,7 +784,9 @@ def analyze(args):
     m_ = [f for f in feats if f["matched"] and (not args.since or f["arrival"][:10] >= args.since)]
     spath = os.path.join(args.out, "surgeons.md")
     with open(spath, "w", encoding="utf-8") as fh:
-        fh.write(surgeon_drill(m_, home, roster, display_names(recs), holidays))
+        fh.write(surgeon_drill(m_, home, roster, display_names(recs), holidays,
+                               named=set(named_people(home, [x for x in (args.named or "").split(",")
+                                                             if x]))))
     os.chmod(spath, 0o600)
     with open(os.path.join(args.out, "report.md"), "w", encoding="utf-8") as fh:
         fh.write(md)
@@ -937,7 +955,7 @@ def display_names(recs):
     return {n: c.most_common(1)[0][0] for n, c in seen.items()}
 
 
-def surgeon_drill(m, home, roster, shown, holidays=frozenset(), window=365):
+def surgeon_drill(m, home, roster, shown, holidays=frozenset(), window=365, named=()):
     """Per surgeon: the UPU ultrasound visits of their patients (discharged by
     them from surgery in the 90 days before, or admitted electively by them in
     the 30 days after), the non-urgent share against the pooled share (a
@@ -966,6 +984,21 @@ def surgeon_drill(m, home, roster, shown, holidays=frozenset(), window=365):
         on = sum(1 for f in oc if f["own_surgeon_on_call"])
         shifts = sum(1 for d in roster if n in roster[d]) if roster else 0
         rows.append((x - exp, n, k, x, lo, hi, z, pv, morning, rep, preop, on, len(oc), shifts))
+    # The same per child: the first visit of each child per surgeon.
+    firsts = {}
+    for n, v in by.items():
+        seen = {}
+        for f in sorted(v, key=lambda f: f["arrival"]):
+            seen.setdefault(f["_pid"], f)
+        firsts[n] = seen
+    allc = [f for seen in firsts.values() for f in seen.values()]
+    p1 = sum(f["nonurgent"] for f in allc) / len(allc) if allc else 0
+    child = {}
+    for n, seen in firsts.items():
+        k, x = len(seen), sum(f["nonurgent"] for f in seen.values())
+        z = (x - k * p1) / math.sqrt(k * p1 * (1 - p1)) if k and 0 < p1 < 1 else 0
+        child[n] = (k, x, 0.5 * math.erfc(z / math.sqrt(2)))
+    rows = [r + child[r[1]] for r in rows]
     rows.sort(reverse=True)
     L = ["# UPU ultrasound by surgeon: FOR THE OWNER ONLY (names; never share or commit)\n",
          f"{len(allv)} visits attributed to {len(by)} surgeons. A visit belongs to the surgeon "
@@ -978,13 +1011,32 @@ def surgeon_drill(m, home, roster, shown, holidays=frozenset(), window=365):
          "to come: no record says that.\n"]
     L.append(base.table(
         ["surgeon", "visits", "non-urgent", "95% CI", "excess", "p", "mornings", "repeat <=7 d",
-         "pre-op", "back on own on-call", "on-call shifts"],
+         "pre-op", "back on own on-call", "on-call shifts", "children", "non-urgent (children)",
+         "p (children)"],
         [[shown.get(n, n), str(k), f"{x} ({100 * x / k:.0f}%)", f"{100 * lo:.0f}-{100 * hi:.0f}%",
           f"{ex:+.1f}", base.pval(pv), str(mo), str(rp), str(po),
-          f"{on}/{noc}" if noc else "-", str(sh) if roster else "-"]
-         for ex, n, k, x, lo, hi, z, pv, mo, rp, po, on, noc, sh in rows]))
+          f"{on}/{noc}" if noc else "-", str(sh) if roster else "-", str(ck),
+          f"{cx} ({100 * cx / ck:.0f}%)" if ck else "-", base.pval(cp)]
+         for ex, n, k, x, lo, hi, z, pv, mo, rp, po, on, noc, sh, ck, cx, cp in rows]))
     if roster:
         L.append(oncall_drill(m, roster, shown, holidays))
+    for label, col in (("visits", 7), ("children", 16)):
+        ps = sorted(r[col] for r in rows)
+        bh = [p for i, p in enumerate(ps, 1) if p <= 0.05 * i / len(ps)]
+        L.append(f"\nBy {label}: false-discovery control (Benjamini-Hochberg, 5%, {len(ps)} "
+                 f"surgeons): {len(bh)} pass; smallest p {base.pval(ps[0]) if ps else '-'}.")
+        if named:
+            sel = sorted((r[col], shown.get(r[1], r[1])) for r in rows if r[1] in named)
+            holm, k = [], len(sel)
+            for i, (p, who) in enumerate(sel):
+                if p <= 0.05 / (k - i):
+                    holm.append(f"{who} (p {base.pval(p)})")
+                else:
+                    break
+            L.append(f"By {label}: Holm over the {k} surgeons named by the owner (exploratory: "
+                     "named from experience of the same period): "
+                     + (", ".join(holm) if holm else "none") + " pass.")
+    L.append("")
     return "\n".join(L) + "\n"
 
 
@@ -1094,9 +1146,11 @@ def bottom_line(m, nd, days, roster, home, args):
         obs = sum(bool(f["own_surgeon_on_call"]) for f in rows)
         exp = sum(f.get("_chance", 0) for f in rows)
         if exp:
-            out.append(f"5. **Own surgeon on call, a hint only:** surgical patients came back "
+            pt = poisson_tail(obs, exp)
+            word = ("more often than chance" if pt < 0.05 else "a hint only")
+            out.append(f"5. **Own surgeon on call, {word}:** surgical patients came back "
                        f"while their own surgeon was on call {obs} times, against {exp:.1f} "
-                       f"by chance (n {len(rows)}, P {poisson_tail(obs, exp):.2f}). Extra "
+                       f"by chance (n {len(rows)}, P {pt:.2f}). Extra "
                        "volume on a named surgeon's shift is too small to detect against the "
                        "shift-to-shift spread.")
     out.append("\n**What would settle it:** the owner's labels (label_sheet.csv) and, in "
@@ -1215,6 +1269,14 @@ def report(feats, home, args, roster=None, holidays=frozenset()):
             f"was on call on {obs} of them; chance alone would give {exp:.1f}"
             + (f" (ratio {obs / exp:.2f}; P(at least {obs} by chance) "
                f"{poisson_tail(obs, exp):.2f})." if exp else ".") + "\n")
+        first = {}
+        for f in sorted(rows, key=lambda f: f["arrival"]):
+            first.setdefault(f["_pid"], f)
+        o1 = sum(bool(f["own_surgeon_on_call"]) for f in first.values())
+        e1 = sum(f.get("_chance", 0) for f in first.values())
+        if e1:
+            add(f"One visit per child (the first): {o1} of {len(first)} children, against "
+                f"{e1:.1f} by chance (P {poisson_tail(o1, e1):.3f}).\n")
         if rows:
             add(crosstab(rows, lambda f: "own surgeon on call" if f["own_surgeon_on_call"]
                          else "not on call", lambda f: "non-urgent" if f["nonurgent"] else
