@@ -1350,7 +1350,12 @@ document.addEventListener('DOMContentLoaded', function() {
             cancel.className = 'btn-secondary';
             cancel.title = 'Cancel selection';
             cancel.style.cssText = 'display:block;width:100%;margin-top:var(--space-16)';
-            cancel.textContent = 'Cancel';
+            const cancelIcon = document.createElement('i');
+            cancelIcon.className = 'fas fa-times';
+            cancelIcon.setAttribute('aria-hidden', 'true');
+            const cancelLbl = document.createElement('span');
+            cancelLbl.textContent = 'Cancel';
+            cancel.append(cancelIcon, cancelLbl);
             cancel.addEventListener('click', () => dismiss(null));
             dlg.appendChild(cancel);
 
