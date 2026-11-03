@@ -188,6 +188,36 @@ document.addEventListener('DOMContentLoaded', function() {
         return { 'Authorization': 'Basic ' + btoa(`${creds.username}:${creds.password}`) };
     }
 
+    // Links into Hipocrate itself: the browser has no Hipocrate session, so a
+    // plain link lands on its login page. Intercept the click, open a window,
+    // POST the credentials to logon.asp there (it always redirects to
+    // main.asp, no target parameter), then send the window on to the real page.
+    document.addEventListener('click', (e) => {
+        const a = e.target.closest && e.target.closest('a[href]');
+        const creds = getCredentials();
+        if (!a || !hipocrateUrl || !creds || !a.href.startsWith(hipocrateUrl + '/')) return;
+        if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+        const win = window.open('', '_blank');
+        if (!win) return;   // popup blocked: fall back to the plain link
+        e.preventDefault();
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `${hipocrateUrl}/security/logon.asp`;
+        form.target = win.name = 'hb_hipocrate_' + Date.now();
+        for (const [k, v] of Object.entries({
+            strUser: creds.username, strPwd: creds.password, cboLang: 'ro', id_recuperare_pwd_2: '',
+        })) {
+            const i = document.createElement('input');
+            i.type = 'hidden'; i.name = k; i.value = v;
+            form.appendChild(i);
+        }
+        document.body.appendChild(form);
+        form.submit();
+        form.remove();
+        const target = a.href;
+        setTimeout(() => { try { win.location.href = target; } catch (_) {} }, 1200);
+    });
+
     // Wrapper around fetch() that injects auth and handles 401 by re-showing login dialog
     async function apiFetch(url, options = {}) {
         const headers = { ...authHeader(), ...(options.headers || {}) };
