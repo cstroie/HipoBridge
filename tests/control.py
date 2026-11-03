@@ -53,7 +53,7 @@ class TestScore(unittest.TestCase):
                          c.assess(dt("2026-10-05 18:30"), h, "", other)["reasons"])
 
     def test_same_team_return(self):
-        # seen Fri 30/10, back Tue 3/11 with two of the same surgeons on call
+        # seen Fri 30/10, back Tue 3/11 with the same surgeons on call
         h = [pres("60", "03/11/2026 16:00"), pres("50", "30/10/2026 12:29")]
         team_a = [("coman", ""), ("vasile", "l"), ("asavinei", "")]
         team_b = [("coman", ""), ("vasile", "l"), ("strimbu", "")]
@@ -62,8 +62,27 @@ class TestScore(unittest.TestCase):
         self.assertIn({"code": "same_team_return", "days": 4}, r["reasons"])
         self.assertEqual(r["score"], 4)                  # UPU within 7 d (+2), same team (+2)
         one = {date(2026, 10, 30): team_a, date(2026, 11, 3): [("coman", ""), ("x", "")]}
-        self.assertEqual(c.assess(dt("2026-11-03 16:20"), h, "", one)["score"], 2)
+        self.assertEqual(c.assess(dt("2026-11-03 16:20"), h, "", one)["score"], 4)   # one is enough
+        none = {date(2026, 10, 30): team_a, date(2026, 11, 3): [("x", ""), ("y", "")]}
+        self.assertEqual(c.assess(dt("2026-11-03 16:20"), h, "", none)["score"], 2)
         self.assertEqual(c.assess(dt("2026-11-03 16:20"), h, "", None)["score"], 2)
+
+    def test_same_team_return_counts_lines_1_2_only(self):
+        h = [pres("60", "03/11/2026 16:00"), pres("50", "30/10/2026 12:29")]
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "r.csv"), "w", encoding="utf-8") as fh:
+                fh.write("date,weekday,line1,line2,line3,line4\n"
+                         "2026-10-30,Fri,Coman,Vasile L,Dumbrava,Asavinei\n"
+                         "2026-11-03,Tue,Datu,Tuca,Dumbrava,Asavinei\n")        # only lines 3-4 shared
+            roster = c.load_roster(os.path.join(d, "*.csv"))
+        self.assertNotIn("same_team_return", [r["code"] for r in c.assess(dt("2026-11-03 16:20"), h, "", roster)["reasons"]])
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "r.csv"), "w", encoding="utf-8") as fh:
+                fh.write("date,weekday,line1,line2,line3,line4\n"
+                         "2026-10-30,Fri,Coman,Vasile L,Dumbrava,Asavinei\n"
+                         "2026-11-03,Tue,Datu,Vasile L,Strimbu,Asavinei\n")
+            roster = c.load_roster(os.path.join(d, "*.csv"))
+        self.assertIn("same_team_return", [r["code"] for r in c.assess(dt("2026-11-03 16:20"), h, "", roster)["reasons"]])
 
     def test_surgeon_on_call_weighs_more_at_weekends(self):
         # 2026-10-10 is a Saturday: on call +3, discharge within 90 days +1

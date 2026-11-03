@@ -14,9 +14,10 @@ Points:
   +2  another UPU visit in the 7 days before
   +2  the surgeon of the child's last surgical stay (90 days) is on call today
       (+3 at weekends, Saturday 08:00 to Monday 08:00)
-  +2  returning to UPU within 7 days of an earlier UPU visit, with at least two of
-      the surgeons on call that day also on call on the earlier visit's day
-      (told to come back when "the same team" is on: the 30 Oct -> 3 Nov returns)
+  +2  returning to UPU within 7 days of an earlier UPU visit, with at least one
+      of the senior surgeons (roster lines 1-2) on call that day also on call on
+      the earlier visit's day (an emergency has no reason to recur on the same
+      surgeon's duty: the 30 Oct -> 3 Nov returns)
   +1  discharged from any ward in the 90 days before
   +1  weekday 08:00-14:00
   +1  request within 15 minutes of arrival
@@ -73,9 +74,17 @@ def shift_date(t):
     return (t - timedelta(hours=8)).date()
 
 
+class Roster(dict):
+    """{date: [(surname, initial or '')]} of everyone on call, plus `.senior`:
+    the same for lines 1-2 only (the lines whose surgeons treat the stays)."""
+    def __init__(self):
+        super().__init__()
+        self.senior = {}
+
+
 def load_roster(patterns):
-    """{date: [(surname, initial or '')]} from the roster CSV files."""
-    roster = {}
+    """A Roster from the roster CSV files."""
+    roster = Roster()
     for pattern in [p.strip() for p in (patterns or "").split(",") if p.strip()]:
         for path in sorted(glob.glob(pattern)):
             with open(path, encoding="utf-8") as fh:
@@ -93,6 +102,9 @@ def load_roster(patterns):
                         sur = max(parts, key=len)
                         ini = next((x for x in parts if x != sur and len(x) == 1), "")
                         roster.setdefault(d, []).append((sur, ini))
+                        m = re.fullmatch(r"line(\d+)", col)
+                        if m and int(m.group(1)) <= 2:
+                            roster.senior.setdefault(d, []).append((sur, ini))
     return roster
 
 
@@ -108,8 +120,10 @@ def on_call(names, roster, d):
 
 
 def team_overlap(roster, d1, d2):
-    """How many of the surgeons on call on d1 are also on call on d2."""
-    return len(set(roster.get(d1) or []) & set(roster.get(d2) or []))
+    """How many of the senior surgeons (lines 1-2) on call on d1 are also on
+    call on d2. A plain dict roster (no line information) counts everyone."""
+    senior = getattr(roster, "senior", roster)
+    return len(set(senior.get(d1) or []) & set(senior.get(d2) or []))
 
 
 def presentation_for(req_time, history):
@@ -164,7 +178,7 @@ def assess(req_time, history, transport="", roster=None, holidays=frozenset()):
     if upu7 is not None:
         score += 2
         reasons.append({"code": "recent_upu_visit", "days": upu7})
-        if roster and team_overlap(roster, shift_date(upu7_start), shift_date(arrival)) >= 2:
+        if roster and team_overlap(roster, shift_date(upu7_start), shift_date(arrival)) >= 1:
             score += 2
             reasons.append({"code": "same_team_return", "days": upu7})
     weekday = arrival.weekday() < 5 and arrival.date() not in holidays
