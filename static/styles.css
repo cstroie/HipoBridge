@@ -3655,6 +3655,44 @@ dialog.modal article > footer {
     flex-shrink: 0;
 }
 
+/* Report-editor snippets panel: lists the modality's ;name snippets; the button sits left of Cancel/Save. */
+.editor-snippets-btn { margin-right: auto; }
+.editor-snippets-btn[hidden] { display: none; }
+.editor-snippets-panel {
+    border-top: 1px solid var(--border);
+    padding: var(--space-8) var(--space-24) var(--space-16);
+    max-height: 220px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    flex-shrink: 0;
+}
+.editor-snippets-panel[hidden] { display: none; }
+.editor-snippets-filter {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: var(--font-size-sm);
+    padding: var(--space-4) var(--space-8);
+    border: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
+    border-radius: var(--radius-md);
+    background: var(--bg);
+    color: var(--text);
+}
+.editor-snippets-filter:focus { outline: none; border-color: var(--border); }
+.editor-snippets-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; }
+.editor-snippets-list li {
+    display: flex;
+    gap: var(--space-8);
+    padding: var(--space-4) var(--space-8);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+}
+.editor-snippets-list li:hover,
+.editor-snippets-list li:focus { background: color-mix(in srgb, var(--primary) 10%, transparent); outline: none; }
+.editor-snippets-list .snippet-name { font-weight: var(--font-weight-semibold); white-space: nowrap; color: var(--primary); }
+.editor-snippets-list .snippet-text { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* ── User account modal ───────────────────────────────────────────────── */
 
 .user-modal-identity {

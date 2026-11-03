@@ -1000,7 +1000,12 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                         <button class="close" aria-label="Close modal" title="Close"><i class="fas fa-times"></i></button>
                     </header>
                     <section class="editor-analyses"></section>
+                    <div class="editor-snippets-panel" hidden>
+                        <input type="search" class="editor-snippets-filter" placeholder="Filter snippets…" aria-label="Filter snippets" autocomplete="off">
+                        <ul class="editor-snippets-list"></ul>
+                    </div>
                     <footer>
+                        <button class="btn-secondary editor-snippets-btn" title="List snippets (;name + Tab)" hidden><i class="fas fa-bolt" aria-hidden="true"></i> Snippets</button>
                         <button class="btn-secondary" data-close-modal title="Discard changes">Cancel</button>
                         <button class="btn-primary editor-save" title="Save report">Save</button>
                     </footer>

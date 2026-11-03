@@ -5794,7 +5794,57 @@ document.addEventListener('DOMContentLoaded', function() {
         if (textareas.length) textareas[0].ta.focus();
 
         let snippets = {};
-        apiFetch('/api/snippets?modality=' + encodeURIComponent(modality)).then(r => r.ok ? r.json() : {}).then(d => { snippets = d || {}; }).catch(() => {});
+        const snipBtn = modal.querySelector('.editor-snippets-btn');
+        const snipPanel = modal.querySelector('.editor-snippets-panel');
+        const snipFilter = modal.querySelector('.editor-snippets-filter');
+        const snipList = modal.querySelector('.editor-snippets-list');
+        let lastTa = textareas.length ? textareas[0].ta : null;
+        for (const { ta } of textareas) ta.addEventListener('focus', () => { lastTa = ta; });
+        const renderSnippetList = () => {
+            const q = snipFilter.value.trim().toLowerCase();
+            const rows = [];
+            for (const [name, body] of Object.entries(snippets).sort(([a], [b]) => a.localeCompare(b))) {
+                if (q && !name.includes(q) && !body.toLowerCase().includes(q)) continue;
+                const li = document.createElement('li');
+                li.tabIndex = 0;
+                li.title = body.replace('$0', '');
+                const n = document.createElement('span');
+                n.className = 'snippet-name';
+                n.textContent = ';' + name;
+                const t = document.createElement('span');
+                t.className = 'snippet-text';
+                t.textContent = body.replace('$0', '…').replace(/\s*\n\s*/g, ' ');
+                li.append(n, t);
+                const pick = () => {
+                    if (!lastTa) return;
+                    lastTa.focus();
+                    const text = body.includes('$0') ? body.replace('$0', '') : body;
+                    const caret = body.indexOf('$0');
+                    const from = lastTa.selectionStart;
+                    if (!document.execCommand('insertText', false, text)) lastTa.setRangeText(text, from, lastTa.selectionEnd, 'end');
+                    const pos = from + (caret < 0 ? text.length : caret);
+                    lastTa.setSelectionRange(pos, pos);
+                };
+                li.addEventListener('click', pick);
+                li.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); pick(); } });
+                rows.push(li);
+            }
+            if (!rows.length) {
+                const li = document.createElement('li');
+                li.textContent = 'No snippets';
+                rows.push(li);
+            }
+            snipList.replaceChildren(...rows);
+        };
+        snipBtn.addEventListener('click', () => {
+            snipPanel.hidden = !snipPanel.hidden;
+            if (!snipPanel.hidden) { renderSnippetList(); snipFilter.focus(); }
+        });
+        snipFilter.addEventListener('input', renderSnippetList);
+        apiFetch('/api/snippets?modality=' + encodeURIComponent(modality)).then(r => r.ok ? r.json() : {}).then(d => {
+            snippets = d || {};
+            snipBtn.hidden = !Object.keys(snippets).length;
+        }).catch(() => {});
         for (const { ta } of textareas) {
             ta.addEventListener('keydown', (e) => {
                 if (e.key !== 'Tab' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
