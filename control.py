@@ -14,6 +14,9 @@ Points:
   +2  another UPU visit in the 7 days before
   +2  the surgeon of the child's last surgical stay (90 days) is on call today
       (+3 at weekends, Saturday 08:00 to Monday 08:00)
+  +2  returning to UPU within 7 days of an earlier UPU visit, with at least two of
+      the surgeons on call that day also on call on the earlier visit's day
+      (told to come back when "the same team" is on: the 30 Oct -> 3 Nov returns)
   +1  discharged from any ward in the 90 days before
   +1  weekday 08:00-14:00
   +1  request within 15 minutes of arrival
@@ -104,6 +107,11 @@ def on_call(names, roster, d):
     return False
 
 
+def team_overlap(roster, d1, d2):
+    """How many of the surgeons on call on d1 are also on call on d2."""
+    return len(set(roster.get(d1) or []) & set(roster.get(d2) or []))
+
+
 def presentation_for(req_time, history):
     """(presentation id, start) of the UPU visit a request belongs to: the newest
     presentation that began no later than the request and less than 48 h before."""
@@ -123,7 +131,7 @@ def assess(req_time, history, transport="", roster=None, holidays=frozenset()):
     prid, arrival = presentation_for(req_time, history)
     arrival = arrival or req_time
     last_end, last_ward, last_medics = None, "", []
-    upu7 = None
+    upu7, upu7_start = None, None
     for h in history or []:
         st, en = parse_time(h.get("start")), parse_time(h.get("end"))
         kind = h.get("kind")
@@ -131,7 +139,7 @@ def assess(req_time, history, transport="", roster=None, holidays=frozenset()):
             if st and st < arrival and str(h.get("presentation_id") or "") != prid:
                 days = (arrival - st).days
                 if days <= 7 and (upu7 is None or days < upu7):
-                    upu7 = days
+                    upu7, upu7_start = days, st
         elif kind in ("admission", "day_admission") and en and en <= arrival:
             if last_end is None or en > last_end:
                 last_end = en
@@ -156,6 +164,9 @@ def assess(req_time, history, transport="", roster=None, holidays=frozenset()):
     if upu7 is not None:
         score += 2
         reasons.append({"code": "recent_upu_visit", "days": upu7})
+        if roster and team_overlap(roster, shift_date(upu7_start), shift_date(arrival)) >= 2:
+            score += 2
+            reasons.append({"code": "same_team_return", "days": upu7})
     weekday = arrival.weekday() < 5 and arrival.date() not in holidays
     if weekday and time(8) <= arrival.time() < time(14):
         score += 1

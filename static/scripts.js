@@ -7799,6 +7799,7 @@ document.addEventListener('DOMContentLoaded', function() {
         surgical_discharge: r => `surgical discharge ${r.days} d ago`,
         recent_discharge: r => `discharge ${r.days} d ago`,
         recent_upu_visit: r => `UPU visit ${r.days} d ago`,
+        same_team_return: () => 'same surgical team on call as at the earlier visit',
         surgeon_on_call: () => 'treating surgeon on call',
         weekday_morning: () => 'weekday morning',
         fast_request: () => 'requested on arrival',
