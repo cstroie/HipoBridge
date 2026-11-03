@@ -5731,12 +5731,33 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Report-editor snippets: ";name" + Tab expands to the text served by
+    // /api/snippets (snippets.cfg). "$0" in a text marks the caret. Replaces
+    // via execCommand so one Ctrl+Z restores the typed ";name".
+    const SNIPPET_TRIGGER = /(^|[\s(\[])(;([\p{L}\d][\p{L}\d_-]*))$/u;
+    function expandSnippetAtCaret(ta, snippets) {
+        if (ta.selectionStart !== ta.selectionEnd) return false;
+        const at = ta.selectionStart;
+        const m = SNIPPET_TRIGGER.exec(ta.value.slice(0, at));
+        if (!m) return false;
+        const body = snippets[m[3].toLowerCase()];
+        if (body === undefined) return false;
+        const caret = body.indexOf('$0');
+        const text = caret < 0 ? body : body.replace('$0', '');
+        const from = at - m[2].length;
+        ta.setSelectionRange(from, at);
+        if (!document.execCommand('insertText', false, text)) ta.setRangeText(text, from, at, 'end');
+        const pos = from + (caret < 0 ? text.length : caret);
+        ta.setSelectionRange(pos, pos);
+        return true;
+    }
+
     // Core textarea-editor + save logic, decoupled from any specific card's
     // DOM. Callers pass in the analyses to edit and an onSaved() callback
     // invoked after a successful save (instead of assuming a fixed refresh
     // path), so this can be reused from both the Imaging tab and the
     // Schedule exam modal.
-    function openReportEditorCore(cerereId, analyses, { onSaved }) {
+    function openReportEditorCore(cerereId, analyses, { onSaved, modality = '' }) {
         const tmpl = document.getElementById('report-editor-modal-template');
         if (!tmpl) { showToast('Error: report editor template missing', 'error'); return; }
         const modal = tmpl.content.cloneNode(true).querySelector('dialog');
@@ -5771,6 +5792,15 @@ document.addEventListener('DOMContentLoaded', function() {
             textareas.push({ ta, anl_id: analysis.anl_id });
         }
         if (textareas.length) textareas[0].ta.focus();
+
+        let snippets = {};
+        apiFetch('/api/snippets?modality=' + encodeURIComponent(modality)).then(r => r.ok ? r.json() : {}).then(d => { snippets = d || {}; }).catch(() => {});
+        for (const { ta } of textareas) {
+            ta.addEventListener('keydown', (e) => {
+                if (e.key !== 'Tab' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+                if (expandSnippetAtCaret(ta, snippets)) e.preventDefault();
+            });
+        }
 
         const closeModal = () => { modal.close(); modal.remove(); };
         modal.querySelectorAll('[data-close-modal], .close').forEach(b => b.addEventListener('click', closeModal));
@@ -5815,6 +5845,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const cerereId = article.dataset.serviceRequestId;
         const analyses = JSON.parse(article.dataset.reportAnalyses || '[]');
         openReportEditorCore(cerereId, analyses, {
+            modality: article.dataset.type || '',
             onSaved: () => {
                 const reportBody = article.querySelector('.report-body');
                 const reportPreview = article.querySelector('.report-preview');
@@ -6585,7 +6616,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     editBtn.disabled = !editable;
                     if (editable) {
                         editBtn.addEventListener('click', () => {
-                            openReportEditorCore(requestId, analyses, { onSaved: refreshAll });
+                            openReportEditorCore(requestId, analyses, { onSaved: refreshAll, modality });
                         });
                     }
                 }

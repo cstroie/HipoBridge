@@ -53,6 +53,7 @@ from sqlcache import SqliteCache, AiCacheView
 from hippodata import HippoData
 import search
 import control
+import snippets
 from hippoclient import search_meta_checkout, search_meta_imaging
 
 from extractors import parse_cnp
@@ -792,6 +793,12 @@ async def get_observation(request):
         end_date=end_date,
     )
     return web_json_response(parsed)
+
+@require_auth
+async def get_snippets(request):
+    """Report-editor snippets from snippets.cfg for ?modality=<slug>: [common]
+    overlaid by that modality's section, as {name: text} (empty when none)."""
+    return web.json_response(snippets.get_snippets(request.query.get('modality', '')))
 
 @require_auth
 async def get_whoami(request):
@@ -1926,6 +1933,7 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     app.router.add_get('/api/pacs/{id}', get_pacs_request_status)
     app.router.add_get('/fhir/Schedule', get_fhir_schedule)
     app.router.add_get('/api/whoami', get_whoami)
+    app.router.add_get('/api/snippets', get_snippets)
     app.router.add_post('/api/logout', post_logout)
     app.router.add_get('/api/cache/stats', get_cache_stats)
     app.router.add_post('/api/cache/cleanup', post_cache_cleanup)

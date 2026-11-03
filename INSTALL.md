@@ -25,6 +25,7 @@ Every config file follows the same pattern: only `examples/*.cfg` is tracked in 
 cp examples/hippobridge.cfg hippobridge.cfg   # server, hipocrate, cache, logging, radiology
 cp examples/llm.cfg llm.cfg                    # AI provider config
 cp examples/regions.cfg regions.cfg            # imaging region keyword rules
+cp examples/snippets.cfg snippets.cfg          # report-editor ;name + Tab snippets (optional)
 cp examples/worklist.cfg worklist.cfg          # DICOM MWL — see docs/WORKLIST.md
 ```
 

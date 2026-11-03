@@ -29,7 +29,7 @@ port = 8080
 service_url = http://192.168.3.230/hipocrate
 ```
 
-Every subsystem follows the same pattern: `hippobridge.cfg` (server/hipocrate/cache/logging/radiology/pacs), `llm.cfg` (AI provider config), `regions.cfg` (imaging region keyword rules), `worklist.cfg` (DICOM MWL) are all gitignored — copy the matching `examples/*.cfg` and edit it. Unlike `worklist.cfg`, the PACS study-check subsystem (`pacs.py`) has no config file of its own — its `[pacs]` section lives directly in `hippobridge.cfg`, since there's exactly one PACS to talk to.
+Every subsystem follows the same pattern: `hippobridge.cfg` (server/hipocrate/cache/logging/radiology/pacs), `llm.cfg` (AI provider config), `regions.cfg` (imaging region keyword rules), `snippets.cfg` (report-editor `;name`+Tab snippets, optional), `worklist.cfg` (DICOM MWL) are all gitignored — copy the matching `examples/*.cfg` and edit it. Unlike `worklist.cfg`, the PACS study-check subsystem (`pacs.py`) has no config file of its own — its `[pacs]` section lives directly in `hippobridge.cfg`, since there's exactly one PACS to talk to.
 
 CLI: `--port`, `--host`, `--service-url`, `--log-level DEBUG|INFO|WARNING|ERROR`, `--log-file PATH`, `--no-disk-cache`, `--no-worklist`, `--no-pacs`, `--no-search-backfill`, `--pidfile PATH`.
 
