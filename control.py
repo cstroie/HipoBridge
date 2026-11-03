@@ -3,8 +3,8 @@ Possible planned control: is a UPU (ER) request likely a control the child was
 asked to come back for, rather than an emergency?
 
 A score from what is known when the request is made (no outcome), validated
-retrospectively on September-October 2026 with tools/upu_called.py: at the
-threshold below, about 1.5 UPU ultrasounds a day are flagged and about 78% of
+retrospectively on September-October 2026 with tools/upu_called.py: at a
+threshold of 4 (now 3, not re-validated), about 1.5 UPU ultrasounds a day are flagged and about 78% of
 them end non-urgent (home, untreated, no ambulance), against 47% of all. It is a
 hint for the radiologist to ask who sent the child, never a verdict, and it
 names nobody.
@@ -31,7 +31,7 @@ import re
 import unicodedata
 from datetime import date, datetime, time, timedelta
 
-THRESHOLD = 4
+THRESHOLD = 3  # was 4 (validated Sep-Oct 2026); lowered 2026-11-03, not re-validated
 TITLES = {"dr", "prof", "conf", "sl", "as", "med", "univ", "acad"}
 
 
