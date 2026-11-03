@@ -208,15 +208,15 @@ class TestSolicitareDerivedFields(unittest.TestCase):
             d.store("request." + k, v)
         return d
 
-    def test_requester_prefers_orderer_over_attending(self):
+    def test_requester_prefers_attending_over_orderer(self):
         d = self._data(physician_solicitant="DR. A", physician_curant="DR. B")
         self.derive(d)
-        self.assertEqual(d.get("request.requester"), "DR. A")
-
-    def test_requester_falls_back_to_attending(self):
-        d = self._data(physician_curant="DR. B")
-        self.derive(d)
         self.assertEqual(d.get("request.requester"), "DR. B")
+
+    def test_requester_falls_back_to_orderer(self):
+        d = self._data(physician_solicitant="DR. A")
+        self.derive(d)
+        self.assertEqual(d.get("request.requester"), "DR. A")
 
     def test_indication_skips_placeholder_and_follows_priority(self):
         d = self._data(justification=". .. .", clinical_situation="durere abdominala",

@@ -4490,9 +4490,10 @@ class HippoClientBuletinSolicitare(HippoClient):
         """Store the values consumers want ready-made, so /api/request/{id}
         and the FHIR ServiceRequest agree without repeating the logic:
 
-        request.requester  ordering physician ("Medic solicitant"), falling
-                           back to the attending physician only when no
-                           distinct orderer was recorded.
+        request.requester  attending physician ("Medic curant"), falling back
+                           to "Medic solicitant" only when none is recorded
+                           (the solicitant is often just whoever typed the
+                           order in, e.g. a nurse).
         request.region     short region label ("Abdomen") abstracted from the
                            procedure name via regions.cfg — "Organ tinta /
                            segment anatomic" isn't on every exam type's form
@@ -4501,7 +4502,7 @@ class HippoClientBuletinSolicitare(HippoClient):
         request.indication resolve_clinical_indication() over this form's
                            clinical fields; unset when none is meaningful.
         """
-        requester = data.get("request.physician_solicitant") or data.get("request.physician_curant")
+        requester = data.get("request.physician_curant") or data.get("request.physician_solicitant")
         if requester:
             data.store("request.requester", requester)
         procedure_name = data.get("request.organ") or data.get("request.investigation")
