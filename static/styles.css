@@ -3172,12 +3172,25 @@ select {
 .timeline-triage.triage-blue   { color: var(--info); }
 .timeline-triage.triage-gray   { color: var(--ink-3); }
 
-/* Possible planned control (control.py): deliberately quiet */
+/* Possible planned control (control.py): a corner badge on the modality
+   avatar, mirroring .pacs-confirmed-badge (lower right) at the upper right. */
 .timeline-control {
-    margin-left: var(--space-4);
-    color: var(--ink-3);
-    font-size: var(--font-size-xs);
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: var(--space-12);
+    height: var(--space-12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-xs);
+    background: currentColor;
+    box-shadow: 0 0 0 2px var(--card-bg);
+    font-size: 7px;
     cursor: help;
+}
+.timeline-control i {
+    color: var(--card-bg);
 }
 .timeline-control[hidden] { display: none; }
 

@@ -7299,11 +7299,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const avatarEl = row.querySelector('.timeline-mod-avatar');
         if (avatar.cls) avatarEl.classList.add(avatar.cls);
-        // Preserve the PACS-confirmed badge (in the template markup) across
-        // this innerHTML overwrite — it starts hidden and is only revealed
-        // once pacsStatusObserver's lazy per-row check resolves.
+        // Preserve the PACS-confirmed and planned-control badges (in the
+        // template markup) across this innerHTML overwrite — both start
+        // hidden and are only revealed once their lazy per-row checks resolve.
         const pacsBadge = avatarEl.querySelector('.pacs-confirmed-badge');
+        const controlBadge = avatarEl.querySelector('.timeline-control');
         avatarEl.innerHTML = modAvatarHTML(modalitySlug);
+        if (controlBadge) avatarEl.appendChild(controlBadge);
         if (pacsBadge) {
             avatarEl.appendChild(pacsBadge);
             pacsBadge.dataset.requestId = r.request_id;
@@ -7805,7 +7807,7 @@ document.addEventListener('DOMContentLoaded', function() {
         fast_request: () => 'requested on arrival',
     };
     function _applyControl(el, control) {
-        const mark = el._sectionEl?.querySelector('.timeline-control');
+        const mark = el.closest('.timeline-row')?.querySelector('.timeline-control');
         if (!mark) return;
         const words = (control.reasons || [])
             .map(r => _CONTROL_REASON[r.code]?.(r))
@@ -7839,7 +7841,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         if (avatarEl) {
             const pacsBadge = avatarEl.querySelector('.pacs-confirmed-badge');
+            const controlBadge = avatarEl.querySelector('.timeline-control');
             avatarEl.innerHTML = modAvatarHTML('eco');
+            if (controlBadge) avatarEl.appendChild(controlBadge);
             if (pacsBadge) avatarEl.appendChild(pacsBadge);
             avatarEl.title = MODALITY_INFO.eco.label;
         }
