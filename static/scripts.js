@@ -7474,18 +7474,20 @@ document.addEventListener('DOMContentLoaded', function() {
                     .catch(() => '')
                 : Promise.resolve('');
 
-            // UPU ultrasound rows: a possible planned control (control.py, via
-            // /api/request/{id}/control), known once the investigation says
-            // ultrasound, so X-ray/CT rows cost Hipocrate nothing extra. The
-            // server answers radiologists only; a quiet marker, reasons in its
-            // tooltip, no names.
+            // UPU ultrasound and X-ray rows: a possible planned control
+            // (control.py, via /api/request/{id}/control), known once the
+            // investigation says ultrasound or the row is X-ray, so CT/MRI/
+            // lab rows cost Hipocrate nothing extra. The server answers
+            // radiologists only; a quiet marker, reasons in its tooltip, no names.
             const isUpu = (el.dataset.section || '').toUpperCase() === 'UPU';
             const controlPromise = isUpu
                 ? examPromise.then(cached => {
                     const row = el.closest('.timeline-row');
                     const isUs = row?.dataset.modality === 'eco'
                         || _US_INVESTIGATION_RE.test(cached.investigation || '');
-                    if (!isUs) return null;
+                    // X-ray rows, unless the investigation is an ultrasound misfiled under the X-ray lab
+                    const isXr = !isUs && row?.dataset.modality === 'radio';
+                    if (!isUs && !isXr) return null;
                     return apiFetch(`/api/request/${id}/control`)
                         .then(r => r.ok ? r.json() : null)
                         .then(data => data?.flag ? data : null)
