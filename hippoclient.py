@@ -1060,6 +1060,23 @@ class HippoClient:
             data.set_error(f"Data retrieval failed: {e}")
             return data
 
+    async def parse_cached(self, **kwargs) -> Optional[HippoData]:
+        """parse_data() over the cached page only: None when request_url
+        (formatted with kwargs) is not in the cache. Never asks Hipocrate —
+        for read-only analyses (queuestats) that must add no load."""
+        url = _format_request_url(self.request_url, **kwargs)
+        html = await self.cache_get(url)
+        if not html:
+            return None
+        try:
+            # Straight parse_data, not _parse_data_cached: a sweep over ~1000
+            # pages would flush the shared 300-entry parse_cache that
+            # interactive views rely on (callers memoise what they extract).
+            return await asyncio.to_thread(self.parse_data, html, **kwargs)
+        except Exception as e:
+            logger.debug(f"parse_cached failed for {url}: {e}")
+            return None
+
     async def fetch_respond_fhir(self, *args, max_redirects=5, **kwargs):
         """Fetch, parse, and convert to FHIR. Returns resource or OperationOutcome."""
         try:
@@ -4181,6 +4198,19 @@ class HippoClientFUPU(HippoClient):
         self.request_url = "/gen_printabile/FUPU.asp?id={id}&tip=1"
 
     @staticmethod
+    def _box_time(soup: BeautifulSoup, label: str) -> Optional[str]:
+        """The first "HH:MM" input value after the text node holding label;
+        None when absent, blank or 00:00 (an empty box prints as 00:00)."""
+        node = soup.find(string=lambda s: s and label in s)
+        if not node:
+            return None
+        el = node.find_next('input')
+        value = (el.get('value') or '').strip() if el else ''
+        if not re.fullmatch(r'\d{1,2}:\d{2}', value) or value in ('0:00', '00:00'):
+            return None
+        return value
+
+    @staticmethod
     def _checkbox_group_choice(soup: BeautifulSoup, first_option_text: str):
         """Given the group's first option's own label text (e.g. "30-Resuscit."),
         locate that checkbox group's containing <td> and return (code, text)
@@ -4220,6 +4250,12 @@ class HippoClientFUPU(HippoClient):
                 date_input = date_span.find('input') if date_span else None
                 if date_input:
                     data.store("fupu.date", (date_input.get('value') or '').strip())
+
+            # Box 10 "Preluat de: La ora HH:MM" is the ER intake time (the
+            # patient's arrival, queuestats.py), box 11 the first medical
+            # consult; each has a hidden readonly input carrying "HH:MM".
+            data.store("fupu.intake_time", self._box_time(soup, '10-Preluat de'))
+            data.store("fupu.first_consult_time", self._box_time(soup, '11-Ora prim consult'))
 
             code, text = self._checkbox_group_choice(soup, '30-Resuscit.')
             data.store("fupu.triage_priority_code", code)

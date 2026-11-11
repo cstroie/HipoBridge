@@ -2912,6 +2912,91 @@ select {
     margin-top: var(--space-8);
 }
 
+/* Queue mode (queuestats.py): the metrics strip flips on click */
+.schedule-day-metrics[role="button"] {
+    cursor: pointer;
+    border-radius: var(--radius-md);
+}
+.schedule-day-metrics[role="button"]:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 6px;
+}
+.schedule-metric-note {
+    display: block;
+    font: 500 var(--font-size-10) 'Inter', sans-serif;
+    color: var(--ink-3);
+    margin-top: 2px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.schedule-metric-note:empty { display: none; }
+
+.schedule-queue-chart {
+    margin-bottom: var(--space-26);
+    padding-bottom: var(--space-18);
+    border-bottom: 1px solid var(--border);
+}
+.schedule-queue-chart[hidden] { display: none; }
+.schedule-queue-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-18);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-8);
+}
+.schedule-queue-title {
+    font: 600 var(--font-size-xs) 'Inter', sans-serif;
+    color: var(--text);
+    margin: 0;
+}
+.schedule-queue-legend {
+    display: flex;
+    gap: var(--space-12);
+    flex-wrap: wrap;
+    flex: 1;
+    font: 500 var(--font-size-10) 'Inter', sans-serif;
+    color: var(--ink-2);
+}
+.q-key::before {
+    content: '';
+    display: inline-block;
+    width: 12px;
+    height: 3px;
+    margin-right: 4px;
+    vertical-align: middle;
+    border-radius: 2px;
+}
+.q-key-lam::before { background: var(--st-inlab); }
+.q-key-x::before   { background: var(--st-completed); }
+.q-key-L::before   { background: var(--primary); opacity: 0.25; height: 8px; }
+.q-key-w::before   { background: var(--st-inprogress); }
+.q-key-wr::before  { background: var(--mod-mr); }
+.schedule-queue-span { display: flex; gap: 4px; }
+.schedule-queue-span-btn { padding: 2px 8px; font-size: var(--font-size-10); }
+.schedule-queue-span-btn[aria-pressed="true"] {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+.schedule-queue-svg { width: 100%; overflow: hidden; }
+.schedule-queue-svg:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.q-svg { display: block; touch-action: pan-y; }
+.q-grid { stroke: var(--border); stroke-width: 1; }
+.q-base { stroke: var(--border); stroke-width: 1; }
+.q-axis { fill: var(--ink-3); font: 500 10px 'Inter', sans-serif; }
+.q-area { fill: var(--primary); fill-opacity: 0.14; stroke: none; }
+.q-line { fill: none; stroke-width: 1.75; stroke-linejoin: round; stroke-linecap: round; }
+.q-lam { stroke: var(--st-inlab); }
+.q-x   { stroke: var(--st-completed); }
+.q-w   { stroke: var(--st-inprogress); }
+.q-wr  { stroke: var(--mod-mr); stroke-dasharray: 4 3; }
+.q-cursor { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 2 2; }
+.schedule-queue-readout {
+    margin: var(--space-8) 0 0;
+    font: 500 var(--font-size-11) 'Inter', sans-serif;
+    color: var(--ink-2);
+    font-variant-numeric: tabular-nums;
+}
+
 /* Modality progress bars */
 .schedule-mod-bars {
     display: flex;

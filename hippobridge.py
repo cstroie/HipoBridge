@@ -27,6 +27,7 @@ import math
 import copy
 import os
 import re
+import time
 import aiohttp
 from aiohttp import web
 from typing import Dict, Any, Optional
@@ -34,7 +35,7 @@ import json
 import logging
 from logging.handlers import RotatingFileHandler
 import functools
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import configparser
 import base64
 import signal
@@ -53,6 +54,7 @@ from sqlcache import SqliteCache, AiCacheView
 from hippodata import HippoData
 import search
 import control
+import queuestats
 import snippets
 from hippoclient import search_meta_checkout, search_meta_imaging
 
@@ -702,6 +704,131 @@ async def get_schedule(request):
                                                lab_id=lab_id, section_name=section_name, status=status,
                                                patient_text=patient_text, force=force, limit=limit)
     return web_json_response(parsed_data)
+
+# Times found in cached pages for /api/schedule/queue, by (kind, request_id).
+# A found time is a fact that no longer changes, so it is kept for the
+# process lifetime; a miss is retried after _QUEUE_MISS_TTL (a retry sweep
+# re-parses the cerere/patient pages: ~10 s), by when the
+# idle-prefetch may have cached the page. parse_cache (300 entries) is far
+# too small for the ~1000 pages one 24 h analysis reads.
+_queue_found: Dict[tuple, datetime] = {}
+_queue_miss: Dict[tuple, float] = {}
+_QUEUE_MISS_TTL = 600.0  # the 10-minute tick; a retry sweep costs ~10 s
+_QUEUE_MEMO_MAX = 20000
+
+async def _queue_memo(key, lookup):
+    if key in _queue_found:
+        return _queue_found[key]
+    if _queue_miss.get(key, 0.0) > time.monotonic():
+        return None
+    value = await lookup()
+    if len(_queue_found) > _QUEUE_MEMO_MAX or len(_queue_miss) > _QUEUE_MEMO_MAX:
+        _queue_found.clear()
+        _queue_miss.clear()
+    if value is None:
+        _queue_miss[key] = time.monotonic() + _QUEUE_MISS_TTL
+    else:
+        _queue_found[key] = value
+    return value
+
+async def _queue_report_time(client, request_id):
+    data = await client.parse_cached(id=request_id)
+    return queuestats.latest_validation(data.get('studies')) if data else None
+
+async def _queue_upu_arrival(cerere_client, patient_client, fupu_client, presentation_client, row):
+    """UPU arrival from cached pages only: cerere.asp -> patient page ->
+    each presentation id, newest first: the FUPU sheet's date + box 10 intake
+    time ('Preluat de: La ora', cached for most UPU rows by the triage badge),
+    else FisaPrezentare's 'Data prezentare'. Stops at the first one at or
+    before the request (queuestats.pick_presentation)."""
+    t_req = queuestats.parse_ts(row.get('date_time'))
+    cerere = await cerere_client.parse_cached(id=row.get('request_id'))
+    patient_id = cerere.get('patient.id') if cerere else None
+    if not t_req or not patient_id:
+        return None
+    patient = await patient_client.parse_cached(id=patient_id)
+    ids = (patient.get('presentation') if patient else None) or []
+    if not isinstance(ids, list):  # HippoData stores a one-id list as the bare id
+        ids = [ids]
+    for pid in sorted(ids, key=lambda v: int(v) if str(v).isdigit() else 0, reverse=True)[:5]:
+        fupu = await fupu_client.parse_cached(id=pid)
+        t = queuestats.fupu_arrival(fupu.get('fupu.date'), fupu.get('fupu.intake_time')) if fupu else None
+        if t is None:
+            pres = await presentation_client.parse_cached(id=pid)
+            t = queuestats.parse_ts(pres.get('presentation.date_time')) if pres else None
+        if t and t <= t_req:
+            return queuestats.pick_presentation([t], t_req)
+    return None
+
+@require_auth
+async def get_schedule_queue(request):
+    """Queue-theory metrics of the UPU ultrasound requests (queuestats.py).
+    ?end=YYYY-MM-DD[THH:MM]&hours=12|24&refresh=1
+
+    Fetches the ultrasound lab's schedule from a day before the span (so the
+    queues it starts with are right), keeps the UPU rows (in_scope); report
+    validation and UPU arrival times come from cached pages only — this
+    endpoint never adds Hipocrate requests beyond the one listing."""
+    q = request.rel_url.query
+    t0 = time.perf_counter()
+    as_of = queuestats.parse_anchor(q.get('end'), datetime.now())
+    hours = 12 if q.get('hours') == '12' else 24
+    last_day = (as_of - timedelta(minutes=1)).date()
+    first_day = (as_of - timedelta(hours=hours + 24)).date()
+    client = HippoClientSchedule(SERVICE_URL, request)
+    parsed = await client.fetch_and_parse(start_date=first_day.isoformat(), end_date=last_day.isoformat(),
+                                          lab_id=queuestats.SCOPE_LAB_ID, force=q.get('refresh') == '1',
+                                          limit=queuestats.FETCH_LIMIT)
+    if parsed.get('status') == 'error':
+        return web_error_response(parsed.get('message') or 'Schedule not available', 502)
+    raw = parsed.get('requests') or []
+    truncated = len(raw) >= queuestats.FETCH_LIMIT
+    rows = [r for r in raw if queuestats.in_scope(r)]
+
+    t1 = time.perf_counter()
+    sem = asyncio.Semaphore(8)
+    study_client = HippoClientImagingStudy(SERVICE_URL, request)
+    cerere_client = HippoClientCerere(SERVICE_URL, request)
+    patient_client = HippoClientPatient(SERVICE_URL, request)
+    fupu_client = HippoClientFUPU(SERVICE_URL, request)
+    presentation_client = HippoClientPresentation(SERVICE_URL, request)
+
+    async def report_time(r):
+        async with sem:
+            return await _queue_memo(('report', r['request_id']),
+                                     lambda: _queue_report_time(study_client, r['request_id']))
+
+    async def upu_arrival(r):
+        async with sem:
+            return await _queue_memo(('upu', r['request_id']),
+                                     lambda: _queue_upu_arrival(cerere_client, patient_client, fupu_client,
+                                                                presentation_client, r))
+
+    # Only the rows the analysis can use: reports for jobs requested since
+    # the warm-up began, UPU arrivals for requests inside the span.
+    span_start = as_of - timedelta(hours=hours)
+    warmup_start = span_start - queuestats.OPEN_MAX
+
+    def req_after(r, t):
+        t_req = queuestats.parse_ts(r.get('date_time'))
+        return t_req is not None and t < t_req <= as_of
+
+    with_id = [r for r in rows if r.get('request_id')]
+    need_report = [r for r in with_id if req_after(r, warmup_start)
+                   and (r.get('status') in queuestats.LEFT_STATUSES or r.get('performed_at'))]
+    upu_rows = [r for r in with_id if req_after(r, span_start)
+                and (r.get('section') or '').strip().upper() == 'UPU']
+    rep = await asyncio.gather(*(report_time(r) for r in need_report), return_exceptions=True)
+    arr = await asyncio.gather(*(upu_arrival(r) for r in upu_rows), return_exceptions=True)
+    report_times = {r['request_id']: t for r, t in zip(need_report, rep) if isinstance(t, datetime)}
+    arrivals = {r['request_id']: t for r, t in zip(upu_rows, arr) if isinstance(t, datetime)}
+
+    t2 = time.perf_counter()
+    result = await asyncio.to_thread(queuestats.compute, rows, report_times, arrivals, as_of,
+                                     hours=hours, truncated=truncated)
+    logger.debug("schedule/queue: %d rows, listing %.2fs, cached times %.2fs, compute %.2fs",
+                 len(rows), t1 - t0, t2 - t1, time.perf_counter() - t2)
+    return web.json_response(result)
 
 @require_auth
 async def get_pacs_status(request):
@@ -1928,6 +2055,7 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     app.router.add_post('/api/request/{id}/cancel', post_request_cancel)
     app.router.add_post('/api/request/{id}/send', post_request_send)
     app.router.add_get('/api/schedule', get_schedule)
+    app.router.add_get('/api/schedule/queue', get_schedule_queue)
     app.router.add_get('/api/pacs/status', get_pacs_status)
     app.router.add_post('/api/pacs/refresh', post_pacs_refresh)
     app.router.add_get('/api/pacs/{id}', get_pacs_request_status)

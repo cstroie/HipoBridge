@@ -520,11 +520,31 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                             <h1 id="schedule-tab-heading" class="schedule-hero-date">Schedule</h1>
                             <p class="schedule-hero-sub" id="scheduleHeroSub">Imaging and lab requests for the selected date range</p>
                         </div>
-                        <div class="schedule-day-metrics" id="scheduleDayMetrics"></div>
+                        <div class="schedule-day-metrics" id="scheduleDayMetrics" role="button" tabindex="0" aria-pressed="false" title="Show queue metrics"></div>
                     </header>
 
-                    <!-- Modality progress bars -->
+                    <!-- Modality progress bars (queue mode: utilisation per modality) -->
                     <div class="schedule-mod-bars" id="scheduleModBars" hidden></div>
+
+                    <!-- Queue mode: rates, queue length and waits over the last 12/24 h (queuestats.py) -->
+                    <section class="schedule-queue-chart" id="scheduleQueueChart" aria-labelledby="scheduleQueueTitle" hidden>
+                        <header class="schedule-queue-head">
+                            <h2 class="schedule-queue-title" id="scheduleQueueTitle">UPU ultrasound · last 24 h</h2>
+                            <div class="schedule-queue-legend" aria-hidden="true">
+                                <span class="q-key q-key-lam">Arrivals /h</span>
+                                <span class="q-key q-key-x">Done /h</span>
+                                <span class="q-key q-key-L">In queue</span>
+                                <span class="q-key q-key-w">Wait exam</span>
+                                <span class="q-key q-key-wr">Wait report</span>
+                            </div>
+                            <div class="schedule-queue-span" role="group" aria-label="Graph span">
+                                <button type="button" class="btn-secondary schedule-queue-span-btn" data-hours="12" aria-pressed="false">12 h</button>
+                                <button type="button" class="btn-secondary schedule-queue-span-btn" data-hours="24" aria-pressed="true">24 h</button>
+                            </div>
+                        </header>
+                        <div class="schedule-queue-svg" id="scheduleQueueSvg" tabindex="0" role="img" aria-label="Queue graph; use the arrow keys to read each 10-minute point"></div>
+                        <p class="schedule-queue-readout" id="scheduleQueueReadout" aria-live="polite"></p>
+                    </section>
 
                     <!-- Search row: patient, dates, limit -->
                     <div class="schedule-actions">
@@ -978,6 +998,7 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
             <div class="schedule-metric">
                 <span class="schedule-metric-value"></span>
                 <span class="schedule-metric-label"></span>
+                <span class="schedule-metric-note"></span>
             </div>
         </template>
 

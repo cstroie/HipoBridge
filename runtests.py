@@ -37,8 +37,10 @@ from tests.hippoclient_write import (
     TestWebJsonResponseEndToEnd, TestTextToReportHtml,
 )
 from tests.hippoclient_triage import TestTriageResolution
-from tests.hippoclient_schedule import TestWardFamily, TestApplyFiltersSection, TestAnnotateRow
-from tests.hippobridge_handlers import TestServeSpec, TestGetCacheStats, TestBackfillSearch, TestEncounterSummary
+from tests.hippoclient_schedule import TestWardFamily, TestApplyFiltersSection, TestTranslation, TestFhirBundle
+from tests.queuestats import (TestParsing as TestQueueParsing, TestJobs as TestQueueJobs,
+                              TestStats as TestQueueStats, TestCompute as TestQueueCompute)
+from tests.hippobridge_handlers import TestServeSpec, TestGetCacheStats, TestBackfillSearch, TestEncounterSummary, TestScheduleQueueGlue
 from tests.search import TestSearchIndex
 from tests.upu_us_stats import (TestShiftOf, TestParse, TestStats as TestUpuStats,
     TestIntervals, TestOutcome, TestStudy, TestEndToEnd as TestUpuEndToEnd)
@@ -102,6 +104,7 @@ TEST_GROUPS = {
         TestShiftOf, TestParse, TestUpuStats, TestIntervals, TestOutcome, TestStudy, TestUpuEndToEnd,
         TestRoute, TestSqliteCacheRoundTrip, TestIterEntries, TestCleanup,
         TestStats, TestConcurrency, TestAiCache,
+        TestQueueParsing, TestQueueJobs, TestQueueStats, TestQueueCompute,
     ],
     "root": [test_root_endpoint],
     "auth": [
@@ -158,8 +161,9 @@ TEST_GROUPS = {
         TestWebJsonResponseEndToEnd, TestTextToReportHtml,
     ],
     "hippoclient_triage": [TestTriageResolution],
-    "hippoclient_schedule": [TestWardFamily, TestApplyFiltersSection, TestAnnotateRow],
-    "hippobridge_handlers": [TestServeSpec, TestGetCacheStats, TestBackfillSearch, TestEncounterSummary],
+    "hippoclient_schedule": [TestWardFamily, TestApplyFiltersSection, TestTranslation, TestFhirBundle],
+    "queuestats": [TestQueueParsing, TestQueueJobs, TestQueueStats, TestQueueCompute],
+    "hippobridge_handlers": [TestServeSpec, TestGetCacheStats, TestBackfillSearch, TestEncounterSummary, TestScheduleQueueGlue],
     "search": [TestSearchIndex],
     "upu_us_stats": [TestShiftOf, TestParse, TestUpuStats, TestIntervals, TestOutcome, TestStudy, TestUpuEndToEnd],
     "control": [TestControlScore],

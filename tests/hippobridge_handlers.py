@@ -20,6 +20,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import asyncio
+from datetime import datetime
 import json
 import tempfile
 import unittest
@@ -266,3 +267,74 @@ class TestEncounterSummary(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class _StubCached:
+    """parse_cached() stub: id -> HippoData (missing id = not in the cache)."""
+    def __init__(self, pages):
+        self.pages = pages
+        self.calls = []
+
+    async def parse_cached(self, **kwargs):
+        self.calls.append(kwargs.get('id'))
+        values = self.pages.get(kwargs.get('id'))
+        if values is None:
+            return None
+        data = HippoData(status="success", message="")
+        for k, v in values.items():
+            data.store(k, v)
+        return data
+
+
+class TestScheduleQueueGlue(unittest.TestCase):
+    """The cache-only lookups behind GET /api/schedule/queue."""
+
+    def setUp(self):
+        hippobridge._queue_found.clear()
+        hippobridge._queue_miss.clear()
+
+    def test_upu_arrival_prefers_fupu_and_stops_at_first_before_request(self):
+        cerere = _StubCached({'7': {'patient.id': 'P'}})
+        patient = _StubCached({'P': {'presentation': ['10', '12', '11']}})
+        fupu = _StubCached({'12': {'fupu.date': '11/11/2026', 'fupu.intake_time': '11:00'},  # after the request
+                            '11': {'fupu.date': '11/11/2026', 'fupu.intake_time': '08:04'}})
+        pres = _StubCached({'11': {'presentation.date_time': '11/11/2026 07:00'}})
+        row = {'request_id': '7', 'date_time': '2026-11-11 09:00'}
+        t = _run(hippobridge._queue_upu_arrival(cerere, patient, fupu, pres, row))
+        self.assertEqual(t, datetime(2026, 11, 11, 8, 4))
+        self.assertNotIn('10', fupu.calls)  # stopped at 11
+
+    def test_upu_arrival_falls_back_to_presentation_sheet(self):
+        cerere = _StubCached({'7': {'patient.id': 'P'}})
+        patient = _StubCached({'P': {'presentation': ['11']}})
+        pres = _StubCached({'11': {'presentation.date_time': '11/11/2026 07:00'}})
+        row = {'request_id': '7', 'date_time': '2026-11-11 09:00'}
+        t = _run(hippobridge._queue_upu_arrival(cerere, patient, _StubCached({}), pres, row))
+        self.assertEqual(t, datetime(2026, 11, 11, 7, 0))
+
+    def test_upu_arrival_uncached_cerere(self):
+        row = {'request_id': '7', 'date_time': '2026-11-11 09:00'}
+        stub = _StubCached({})
+        self.assertIsNone(_run(hippobridge._queue_upu_arrival(stub, stub, stub, stub, row)))
+
+    def test_memo_keeps_found_and_retries_misses_later(self):
+        calls = []
+
+        async def lookup(value):
+            calls.append(value)
+            return value
+
+        found = datetime(2026, 11, 11, 10, 0)
+        self.assertEqual(_run(hippobridge._queue_memo(('report', '1'), lambda: lookup(found))), found)
+        self.assertEqual(_run(hippobridge._queue_memo(('report', '1'), lambda: lookup(None))), found)
+        self.assertIsNone(_run(hippobridge._queue_memo(('report', '2'), lambda: lookup(None))))
+        self.assertIsNone(_run(hippobridge._queue_memo(('report', '2'), lambda: lookup(found))))  # miss memo
+        self.assertEqual(len(calls), 2)
+        hippobridge._queue_miss[('report', '2')] = 0.0  # miss expired
+        self.assertEqual(_run(hippobridge._queue_memo(('report', '2'), lambda: lookup(found))), found)
+
+    def test_report_time_is_latest_validation(self):
+        study = _StubCached({'5': {'studies': [{'validation_date': '2026-11-11T10:00:00'},
+                                               {'validation_date': '2026-11-11T10:40:00'}]}})
+        self.assertEqual(_run(hippobridge._queue_report_time(study, '5')), datetime(2026, 11, 11, 10, 40))
+        self.assertIsNone(_run(hippobridge._queue_report_time(study, '6')))

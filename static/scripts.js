@@ -16,6 +16,15 @@ document.addEventListener('DOMContentLoaded', function() {
     // Multi-select: empty set means "All" (no filter), same as before when
     // this was a single empty string.
     let activeScheduleStatusFilter = new Set();
+    // Queue-metrics mode of the Schedule hero (queuestats.py): click the
+    // big numbers to flip between counts and queue metrics; remembered.
+    let scheduleQueueMode = localStorage.getItem('scheduleQueueMode') === '1';
+    let scheduleQueueHours = localStorage.getItem('scheduleQueueHours') === '12' ? 12 : 24;
+    let scheduleQueueData = null;
+    let scheduleQueueSeq = 0;
+    let scheduleQueueLoading = false;
+    let scheduleQueueTimer = null;
+    let scheduleQueuePoint = -1; // highlighted series index (-1 = latest)
 
     // DOM Elements - Cache selectors for better performance
     const elements = {
@@ -143,7 +152,10 @@ document.addEventListener('DOMContentLoaded', function() {
         scheduleClearFiltersBtn: document.getElementById('scheduleClearFiltersBtn'),
         scheduleHero: document.getElementById('scheduleHero'),
         scheduleDayMetrics: document.getElementById('scheduleDayMetrics'),
-        scheduleModBars: document.getElementById('scheduleModBars')
+        scheduleModBars: document.getElementById('scheduleModBars'),
+        scheduleQueueChart: document.getElementById('scheduleQueueChart'),
+        scheduleQueueSvg: document.getElementById('scheduleQueueSvg'),
+        scheduleQueueReadout: document.getElementById('scheduleQueueReadout')
     };
     
     // Bounded in-memory cache (100 entries per store; evicts oldest on overflow)
@@ -855,13 +867,19 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         const item = schedulePrefetchQueue.shift();
-        if (!item) return; // queue drained
-        if (scheduleFetchedIds.has(item.id)) {
+        if (!item) {
+            // Queue drained: the cache now holds more report/arrival times,
+            // so the queue metrics (read from the cache only) can improve.
+            if (scheduleQueueMode) fetchScheduleQueue(false, 60000);
+            return;
+        }
+        if (scheduleFetchedIds.has(item.key)) {
             schedulePrefetchStep(gen); // already warm, move on without waiting
             return;
         }
-        scheduleFetchedIds.add(item.id);
-        const endpoint = item.isImaging ? `/api/study/${item.id}` : `/api/report/${item.id}`;
+        scheduleFetchedIds.add(item.key);
+        const endpoint = item.kind === 'triage' ? `/api/request/${item.id}/triage`
+            : item.isImaging ? `/api/study/${item.id}` : `/api/report/${item.id}`;
         apiFetch(endpoint).catch(() => {}).finally(() => {
             if (gen !== scheduleGeneration) return;
             queueSchedulePrefetchStep(gen, SCHEDULE_PREFETCH_GAP);
@@ -877,9 +895,16 @@ document.addEventListener('DOMContentLoaded', function() {
         scheduleGeneration++;
         stopSchedulePrefetch();
         const gen = scheduleGeneration;
-        schedulePrefetchQueue = entries
-            .filter(r => SCHEDULE_PREFETCH_STATUSES.has(r.status) && !scheduleFetchedIds.has(r.request_id))
-            .map(r => ({ id: r.request_id, isImaging: SCHEDULE_PREFETCH_IMAGING.has(r.modality || '') }));
+        // Reports first; then, for UPU ultrasound rows, the triage chain
+        // (cerere -> patient -> FUPU), whose intake time is the patient's ER
+        // arrival for the queue metrics (UPU ultrasound only).
+        const reports = entries
+            .filter(r => SCHEDULE_PREFETCH_STATUSES.has(r.status))
+            .map(r => ({ key: r.request_id, id: r.request_id, isImaging: SCHEDULE_PREFETCH_IMAGING.has(r.modality || '') }));
+        const triage = entries
+            .filter(r => (r.section || '').toUpperCase() === 'UPU' && r.modality === 'eco')
+            .map(r => ({ key: `t:${r.request_id}`, id: r.request_id, kind: 'triage' }));
+        schedulePrefetchQueue = [...reports, ...triage].filter(item => !scheduleFetchedIds.has(item.key));
         if (schedulePrefetchQueue.length) queueSchedulePrefetchStep(gen, SCHEDULE_PREFETCH_IDLE_GATE);
     }
 
@@ -6807,6 +6832,7 @@ document.addEventListener('DOMContentLoaded', function() {
             renderSchedule();
             if (elements.scheduleTable) elements.scheduleTable.dataset.loaded = '1';
             startSchedulePrefetch(scheduleEntries);
+            if (scheduleQueueMode) fetchScheduleQueue(force);
             if (listOpen) buildScheduleMarkdown(true);
         } catch (err) {
             showToast(`Failed to load schedule: ${err.message}`, 'error');
@@ -7895,6 +7921,11 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
+        elements.scheduleDayMetrics.setAttribute('aria-pressed', String(scheduleQueueMode));
+        elements.scheduleDayMetrics.title = scheduleQueueMode ? 'Show counts' : 'Show queue metrics';
+        if (scheduleQueueMode) { renderScheduleQueueHero(); return; }
+        if (elements.scheduleQueueChart) elements.scheduleQueueChart.hidden = true;
+
         const total     = scheduleEntries.length;
         const urgent    = scheduleEntries.filter(r => r.priority === 'urgent').length;
         const inLab     = scheduleEntries.filter(r => ['draft', 'active'].includes(r.status)).length;
@@ -7949,6 +7980,292 @@ document.addEventListener('DOMContentLoaded', function() {
             elements.scheduleModBars.hidden = false;
         }
     }
+
+    // ── Schedule queue metrics (queuestats.py, GET /api/schedule/queue) ──
+    // Arrival rate, throughput, queue length, waits and utilisation of the
+    // UPU ultrasound requests over a 1-hour window rolling every 10 minutes, plus
+    // a 12/24 h graph. Recomputed by the server from the schedule's own
+    // timestamps and cached report/FUPU pages: nothing is stored.
+    const QUEUE_RHO_HIGH = 0.85;
+        let scheduleQueueFetchedAt = 0;
+
+    // The moment analysed: now for today (or no date), else the end of the
+    // selected "To" date (the server reads a bare date as its 24:00).
+    function scheduleQueueAnchor() {
+        const day = elements.scheduleEndDate?.value || elements.scheduleStartDate?.value || '';
+        return day && day < localDateStr() ? day : '';
+    }
+
+    async function fetchScheduleQueue(force = false, minAgeMs = 0) {
+        if (minAgeMs && Date.now() - scheduleQueueFetchedAt < minAgeMs) return;
+        const seq = ++scheduleQueueSeq;
+        const params = new URLSearchParams({ hours: String(scheduleQueueHours) });
+        const end = scheduleQueueAnchor();
+        if (end) params.set('end', end);
+        if (force) params.set('refresh', '1');
+        scheduleQueueLoading = true;
+        if (scheduleQueueMode && !scheduleQueueData) renderScheduleQueueHero();
+        try {
+            const resp = await apiFetch(`/api/schedule/queue?${params}`);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+            if (seq !== scheduleQueueSeq) return; // a newer request superseded this one
+            scheduleQueueData = data;
+            scheduleQueueFetchedAt = Date.now();
+            scheduleQueuePoint = -1;
+        } catch (err) {
+            if (seq === scheduleQueueSeq) showToast(`Queue metrics failed: ${err.message}`, 'error');
+        } finally {
+            if (seq === scheduleQueueSeq) {
+                scheduleQueueLoading = false;
+                if (scheduleQueueMode) renderScheduleQueueHero();
+            }
+        }
+    }
+
+    // Every 10 minutes on the clock (+30 s for the step to close), while
+    // queue mode is on, the page is visible and the anchor is "now".
+    function scheduleQueueTick() {
+        clearTimeout(scheduleQueueTimer);
+        const ms = 600000 - (Date.now() % 600000) + 30000;
+        scheduleQueueTimer = setTimeout(() => {
+            if (scheduleQueueMode && !document.hidden && !scheduleQueueAnchor()) fetchScheduleQueue(false);
+            scheduleQueueTick();
+        }, ms);
+    }
+
+    const fmtRate = v => v == null ? '–' : (v >= 10 ? String(Math.round(v)) : v.toFixed(1));
+    function fmtMin(v) {
+        if (v == null) return '–';
+        const m = Math.round(v);
+        if (m < 100) return `${m}′`;
+        return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}`;
+    }
+    const fmtPct = v => v == null ? '–' : `${Math.round(v * 100)}%`;
+    const pctOf = c => c && c.of ? Math.round(100 * c.known / c.of) : null;
+    const hhmm = iso => (iso || '').slice(11, 16);
+
+    function renderScheduleQueueHero() {
+        const d = scheduleQueueData;
+        const metricTpl = document.getElementById('schedule-metric-template');
+        const box = elements.scheduleDayMetrics;
+        const sub = document.getElementById('scheduleHeroSub');
+        box.innerHTML = '';
+        if (!d) {
+            if (sub) sub.textContent = scheduleQueueLoading ? 'Computing queue metrics…' : 'Queue metrics not available';
+            if (elements.scheduleModBars) elements.scheduleModBars.hidden = true;
+            if (elements.scheduleQueueChart) elements.scheduleQueueChart.hidden = true;
+            return;
+        }
+        const all = d.current; // UPU ultrasound only (queuestats.SCOPE_*): one server
+        const ex = all.exam, rp = all.report;
+        const rhoHigh = ex.rho != null && ex.rho >= QUEUE_RHO_HIGH;
+
+        const defs = [
+            { label: 'Arrivals /h', value: fmtRate(ex.lam), color: 'var(--st-inlab)',
+              note: `${d.span_h} h avg ${fmtRate(all.span.exam.lam)}`,
+              title: 'λ: requests made in the last hour' },
+            { label: 'Done /h', value: fmtRate(ex.x), color: 'var(--st-completed)',
+              note: `capacity μ ${fmtRate(ex.mu)}`,
+              title: `Exams done in the last hour. μ = demonstrated capacity: the 90th percentile of the hourly exams done over ${d.span_h} h (an estimate: Hipocrate records no service times)` },
+            { label: 'Utilisation', value: fmtPct(ex.rho),
+              color: rhoHigh ? 'var(--urgent)' : 'var(--primary)',
+              note: `${d.span_h} h busy ${fmtPct(all.span.exam.busy)}`,
+              title: 'ρ = λ / μ: arrivals in the last hour against the demonstrated capacity. Under it, the share of the span with someone waiting' },
+            { label: 'In queue', value: fmtRate(ex.L), color: 'var(--st-inprogress)',
+              note: all.span.exam.little != null ? `${d.span_h} h: L ${fmtRate(all.span.exam.L)} · λW ${fmtRate(all.span.exam.little)}` : '',
+              title: `L: average number waiting for the exam in the last hour. Under it, Little's law over ${d.span_h} h: L should equal λ·W (a 1-hour W sees only the jobs that left inside it, so the check is made over the span)` },
+            { label: 'Wait', value: fmtMin(ex.W), color: 'var(--text)',
+              note: `report +${fmtMin(rp.W)}`,
+              title: 'W: request → exam, mean of the exams done in the last hour; then exam → validated report' },
+        ];
+        defs.forEach(m => {
+            const div = document.importNode(metricTpl.content, true).firstElementChild;
+            const val = div.querySelector('.schedule-metric-value');
+            val.textContent = m.value;
+            val.style.color = m.color;
+            div.querySelector('.schedule-metric-label').textContent = m.label;
+            div.querySelector('.schedule-metric-note').textContent = m.note;
+            div.title = m.title;
+            box.appendChild(div);
+        });
+
+        if (sub) {
+            const cov = d.coverage || {};
+            const parts = [`UPU ultrasound queue · hour to ${hhmm(d.as_of) === '00:00' && scheduleQueueAnchor() ? '24:00' : hhmm(d.as_of)}`];
+            const rep = pctOf(cov.report_times), upu = pctOf(cov.upu_arrivals);
+            if (rep != null) parts.push(`reports ${rep}% known`);
+            if (upu != null) parts.push(`UPU arrivals ${upu}% known`);
+            const stale = (cov.stale?.exam || 0) + (cov.stale?.report || 0);
+            if (stale) parts.push(`${stale} stale left out`);
+            if (d.truncated) parts.push('list truncated');
+            if (all.upu_door_W_span != null) parts.push(`UPU door → request ${fmtMin(all.upu_door_W_span)}`);
+            sub.textContent = parts.join(' · ');
+            sub.title = 'Report and UPU arrival times come only from pages already cached (the idle prefetch warms them); rows with an unknown time are left out of that stage. ' +
+                'Stale: requests open longer than they usually take (95th percentile of the finished waits, 2–24 h), not counted as waiting';
+        }
+
+        // One bar: UPU ultrasound utilisation
+        if (elements.scheduleModBars) {
+            const barTpl = document.getElementById('schedule-mod-bar-template');
+            const bar = document.importNode(barTpl.content, true).firstElementChild;
+            const color = rhoHigh ? 'var(--urgent)' : 'var(--mod-us)';
+            bar.querySelector('.schedule-mod-bar-name').textContent = 'UPU ultrasound';
+            const countEl = bar.querySelector('.schedule-mod-bar-count');
+            countEl.textContent = `λ ${fmtRate(ex.lam)} · μ ${fmtRate(ex.mu)} · ρ ${fmtPct(ex.rho)}`;
+            countEl.style.color = color;
+            const fill = bar.querySelector('.schedule-mod-bar-fill');
+            fill.style.width = `${Math.min(100, Math.round((ex.rho || 0) * 100))}%`;
+            fill.style.background = color;
+            bar.title = `Utilisation ρ ${fmtPct(ex.rho)}, in queue ${fmtRate(ex.L)}, report wait ${fmtMin(rp.W)}; ` +
+                `${d.span_h} h: ${all.span.exam.n_in} requests, wait ${fmtMin(all.span.exam.W)}`;
+            elements.scheduleModBars.replaceChildren(bar);
+            elements.scheduleModBars.hidden = false;
+        }
+        renderScheduleQueueChart();
+    }
+
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    function svgEl(tag, attrs = {}, cls = '') {
+        const el = document.createElementNS(SVG_NS, tag);
+        Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
+        if (cls) el.setAttribute('class', cls);
+        return el;
+    }
+
+    // Path through the points, broken where a value is null.
+    function svgLine(series, key, xOf, yOf) {
+        let dStr = '', pen = false;
+        series.forEach((p, i) => {
+            const v = p[key];
+            if (v == null) { pen = false; return; }
+            dStr += `${pen ? 'L' : 'M'}${xOf(i).toFixed(1)},${yOf(v).toFixed(1)}`;
+            pen = true;
+        });
+        return dStr;
+    }
+
+    function niceMax(v) {
+        if (!(v > 0)) return 1;
+        const p = Math.pow(10, Math.floor(Math.log10(v)));
+        return [1, 2, 5, 10].map(m => m * p).find(m => m >= v);
+    }
+
+    function renderScheduleQueueChart() {
+        const wrap = elements.scheduleQueueSvg, chart = elements.scheduleQueueChart;
+        const d = scheduleQueueData;
+        if (!wrap || !chart || !d || !d.series?.length) { if (chart) chart.hidden = true; return; }
+        chart.hidden = false;
+        const title = document.getElementById('scheduleQueueTitle');
+        if (title) title.textContent = `UPU ultrasound · last ${d.span_h} h`;
+        chart.querySelectorAll('.schedule-queue-span-btn').forEach(b =>
+            b.setAttribute('aria-pressed', String(Number(b.dataset.hours) === scheduleQueueHours)));
+
+        const s = d.series;
+        const W = Math.max(280, wrap.clientWidth || 800);
+        const padL = 34, padR = 8, h1 = 130, h2 = 80, gap = 22, axis = 16;
+        const H = h1 + gap + h2 + axis;
+        const xOf = i => padL + (s.length > 1 ? i * (W - padL - padR) / (s.length - 1) : 0);
+        const max1 = niceMax(Math.max(...s.map(p => Math.max(p.lam || 0, p.x || 0, p.L || 0))));
+        const max2 = niceMax(Math.max(...s.map(p => Math.max(p.W || 0, p.Wr || 0))));
+        const y1 = v => h1 - (v / max1) * (h1 - 6);
+        const y2 = v => h1 + gap + h2 - (v / max2) * (h2 - 6);
+
+        const svg = svgEl('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}` }, 'q-svg');
+        // Hour gridlines + labels
+        const stepH = d.span_h > 12 ? 2 : 1;
+        s.forEach((p, i) => {
+            const t = hhmm(p.t);
+            if (!t.endsWith(':00') || Number(t.slice(0, 2)) % stepH) return;
+            svg.appendChild(svgEl('line', { x1: xOf(i), x2: xOf(i), y1: 0, y2: h1 + gap + h2 }, 'q-grid'));
+            const lbl = svgEl('text', { x: xOf(i), y: H - 3, 'text-anchor': 'middle' }, 'q-axis');
+            lbl.textContent = t.slice(0, 2);
+            svg.appendChild(lbl);
+        });
+        [[0, h1, `${max1}`], [h1 + gap, h1 + gap + h2, fmtMin(max2)]].forEach(([top, bottom, label]) => {
+            svg.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: bottom, y2: bottom }, 'q-base'));
+            const t = svgEl('text', { x: padL - 4, y: top + 10, 'text-anchor': 'end' }, 'q-axis');
+            t.textContent = label;
+            svg.appendChild(t);
+        });
+        // L as an area, rates and waits as lines
+        const area = svgLine(s, 'L', xOf, y1);
+        if (area) {
+            const first = s.findIndex(p => p.L != null);
+            const last = s.length - 1 - [...s].reverse().findIndex(p => p.L != null);
+            svg.appendChild(svgEl('path', { d: `${area}L${xOf(last).toFixed(1)},${h1}L${xOf(first).toFixed(1)},${h1}Z` }, 'q-area'));
+        }
+        [['lam', y1, 'q-lam'], ['x', y1, 'q-x'], ['W', y2, 'q-w'], ['Wr', y2, 'q-wr']].forEach(([key, yOf, cls]) => {
+            const path = svgLine(s, key, xOf, yOf);
+            if (path) svg.appendChild(svgEl('path', { d: path }, `q-line ${cls}`));
+        });
+        const cursor = svgEl('line', { y1: 0, y2: h1 + gap + h2 }, 'q-cursor');
+        svg.appendChild(cursor);
+
+        const show = i => {
+            const p = s[i];
+            cursor.setAttribute('x1', xOf(i));
+            cursor.setAttribute('x2', xOf(i));
+            elements.scheduleQueueReadout.textContent =
+                `${hhmm(p.t)} (hour to) · arrivals ${fmtRate(p.lam)}/h · done ${fmtRate(p.x)}/h · ` +
+                `in queue ${fmtRate(p.L)} · wait ${fmtMin(p.W)} · reports ${fmtRate(p.xr)}/h, ` +
+                `awaiting ${fmtRate(p.Lr)}, wait ${fmtMin(p.Wr)}`;
+        };
+        svg.addEventListener('pointermove', e => {
+            const r = svg.getBoundingClientRect();
+            const x = (e.clientX - r.left) * (W / r.width);
+            const i = Math.round((x - padL) / ((W - padL - padR) / Math.max(1, s.length - 1)));
+            scheduleQueuePoint = Math.max(0, Math.min(s.length - 1, i));
+            show(scheduleQueuePoint);
+        });
+        svg.addEventListener('pointerleave', () => { scheduleQueuePoint = -1; show(s.length - 1); });
+        wrap.replaceChildren(svg);
+        show(scheduleQueuePoint >= 0 && scheduleQueuePoint < s.length ? scheduleQueuePoint : s.length - 1);
+    }
+
+    function setScheduleQueueMode(on) {
+        scheduleQueueMode = on;
+        localStorage.setItem('scheduleQueueMode', on ? '1' : '0');
+        if (on) {
+            scheduleQueueTick();
+            if (!scheduleQueueData || Date.now() - scheduleQueueFetchedAt > 120000) fetchScheduleQueue(false);
+        } else {
+            clearTimeout(scheduleQueueTimer);
+        }
+        renderScheduleHero();
+        if (!on && elements.scheduleModBars && !scheduleEntries.length) elements.scheduleModBars.hidden = true;
+    }
+
+    (function setupScheduleQueue() {
+        const box = elements.scheduleDayMetrics;
+        if (!box) return;
+        box.addEventListener('click', () => setScheduleQueueMode(!scheduleQueueMode));
+        box.addEventListener('keydown', e => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setScheduleQueueMode(!scheduleQueueMode); }
+        });
+        elements.scheduleQueueChart?.querySelectorAll('.schedule-queue-span-btn').forEach(btn =>
+            btn.addEventListener('click', () => {
+                scheduleQueueHours = Number(btn.dataset.hours) === 12 ? 12 : 24;
+                localStorage.setItem('scheduleQueueHours', String(scheduleQueueHours));
+                fetchScheduleQueue(false);
+            }));
+        elements.scheduleQueueSvg?.addEventListener('keydown', e => {
+            const n = scheduleQueueData?.series?.length || 0;
+            if (!n || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+            e.preventDefault();
+            const cur = scheduleQueuePoint >= 0 ? scheduleQueuePoint : n - 1;
+            scheduleQueuePoint = Math.max(0, Math.min(n - 1, cur + (e.key === 'ArrowLeft' ? -1 : 1)));
+            renderScheduleQueueChart();
+        });
+        if (window.ResizeObserver && elements.scheduleQueueSvg) {
+            let lastW = 0;
+            new ResizeObserver(entries => {
+                const w = Math.round(entries[0].contentRect.width);
+                if (w && w !== lastW && scheduleQueueMode && scheduleQueueData) { lastW = w; renderScheduleQueueChart(); }
+            }).observe(elements.scheduleQueueSvg);
+        }
+        if (scheduleQueueMode) scheduleQueueTick();
+    })();
 
     // "2026-06-11" → "Wednesday, 2026-06-11" (string split avoids UTC offset)
     function formatDayHeading(day) {

@@ -61,6 +61,7 @@ Raw-JSON-only endpoints (no FHIR equivalent yet):
 
 ```
 GET  /api/schedule[?start_date=&end_date=&lab_id=&section_name=&patient_text=&status=&limit=&refresh=1] — rows carry derived status_code / priority_code / payment_code
+GET  /api/schedule/queue[?end=&hours=12|24] — queue metrics (λ, μ, ρ, L, W, Little) of the UPU ultrasound requests, 10-min series; cache-only report/arrival times
 GET  /api/request/{id}/patient  — full request details from cerere.asp (patient name, CNP, priority, clinical indication, physician, section, report text, performed date, validate toggles)
 GET  /api/checkin/{id}          — admission record (checkin.asp)
 GET  /api/checkup/{id}          — emergency consultation (checkup.asp)

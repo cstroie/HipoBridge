@@ -1384,6 +1384,22 @@
         }
       }
     },
+    "/api/schedule/queue": {
+      "get": {
+        "summary": "Queue-theory metrics of the UPU ultrasound requests",
+        "description": "Arrival rate, throughput, average queue length, waits (request to exam, exam to report, UPU door to request), demonstrated capacity (90th percentile of the hourly throughput), utilisation and the Little's-law check, over a 1-hour window rolling every 10 minutes, plus a 12/24 h series (queuestats.py). Report and UPU arrival times are read from cached pages only; `coverage` says how many were known. Nothing is stored.",
+        "parameters": [
+          {"name": "end", "in": "query", "required": false, "description": "Analysis moment: YYYY-MM-DD (its 24:00) or YYYY-MM-DDTHH:MM; default now; never later than now", "schema": {"type": "string"}},
+          {"name": "hours", "in": "query", "required": false, "description": "Series span: 12 or 24 (default)", "schema": {"type": "integer"}},
+          {"name": "refresh", "in": "query", "required": false, "schema": {"type": "integer"}}
+        ],
+        "responses": {
+          "200": {"description": "{as_of, span_h, window_min, step_min, scope, current, series, coverage, truncated, open_caps_h}"},
+          "401": {"description": "Authentication required"},
+          "502": {"description": "Schedule listing not available"}
+        }
+      }
+    },
     "/api/request/{id}/patient": {
       "get": {
         "summary": "Full request details from cerere.asp",
