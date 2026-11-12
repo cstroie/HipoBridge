@@ -317,6 +317,16 @@ class TestScheduleQueueGlue(unittest.TestCase):
         stub = _StubCached({})
         self.assertIsNone(_run(hippobridge._queue_upu_arrival(stub, stub, stub, stub, row)))
 
+    def test_report_time_carries_the_study_regions(self):
+        study = _StubCached({'7': {'studies': [
+            {'validation_date': '2026-11-11T10:00:00', 'region': 'abdomen'},
+            {'validation_date': '2026-11-11T10:20:00', 'region': 'pelvis'}]},
+            '8': {'studies': [{'validation_date': None, 'region': 'abdomen'}]}})
+        v = _run(hippobridge._queue_report_time(study, '7'))
+        self.assertEqual(v, {'t': datetime(2026, 11, 11, 10, 20), 'regions': ['abdomen', 'pelvis']})
+        self.assertIsNone(_run(hippobridge._queue_report_time(study, '8')))   # not validated yet
+        self.assertIsNone(_run(hippobridge._queue_report_time(study, '9')))   # not cached
+
     def test_memo_keeps_found_and_retries_misses_later(self):
         calls = []
 
@@ -336,5 +346,5 @@ class TestScheduleQueueGlue(unittest.TestCase):
     def test_report_time_is_latest_validation(self):
         study = _StubCached({'5': {'studies': [{'validation_date': '2026-11-11T10:00:00'},
                                                {'validation_date': '2026-11-11T10:40:00'}]}})
-        self.assertEqual(_run(hippobridge._queue_report_time(study, '5')), datetime(2026, 11, 11, 10, 40))
+        self.assertEqual(_run(hippobridge._queue_report_time(study, '5'))['t'], datetime(2026, 11, 11, 10, 40))
         self.assertIsNone(_run(hippobridge._queue_report_time(study, '6')))

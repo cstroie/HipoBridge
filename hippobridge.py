@@ -732,8 +732,14 @@ async def _queue_memo(key, lookup):
     return value
 
 async def _queue_report_time(client, request_id):
+    """{'t': latest validation, 'regions': [each study's region]} from the
+    cached report page; None until the report is validated."""
     data = await client.parse_cached(id=request_id)
-    return queuestats.latest_validation(data.get('studies')) if data else None
+    studies = data.get('studies') if data else None
+    t = queuestats.latest_validation(studies)
+    if t is None:
+        return None
+    return {'t': t, 'regions': [s.get('region') for s in studies if isinstance(s, dict) and s.get('region')]}
 
 async def _queue_upu_arrival(cerere_client, patient_client, fupu_client, presentation_client, row):
     """UPU arrival from cached pages only: cerere.asp -> patient page ->
@@ -831,7 +837,8 @@ async def get_schedule_queue(request):
                 and (r.get('section') or '').strip().upper() == 'UPU']
     rep = await asyncio.gather(*(report_time(r) for r in need_report), return_exceptions=True)
     arr = await asyncio.gather(*(upu_arrival(r) for r in upu_rows), return_exceptions=True)
-    report_times = {r['request_id']: t for r, t in zip(need_report, rep) if isinstance(t, datetime)}
+    report_times = {r['request_id']: v['t'] for r, v in zip(need_report, rep) if isinstance(v, dict)}
+    regions = {r['request_id']: v['regions'] for r, v in zip(need_report, rep) if isinstance(v, dict)}
     arrivals = {r['request_id']: t for r, t in zip(upu_rows, arr) if isinstance(t, datetime)}
 
     t2 = time.perf_counter()
@@ -870,7 +877,7 @@ async def get_schedule_queue(request):
                     pacs_studies[r['request_id']] = by_cnp[cnp]
     result = await asyncio.to_thread(queuestats.compute, rows, report_times, arrivals, as_of,
                                      hours=hours, truncated=truncated, pacs_studies=pacs_studies,
-                                     room_studies=room_studies)
+                                     room_studies=room_studies, regions=regions)
     logger.debug("schedule/queue: %d rows, listing %.2fs, cached times %.2fs, compute %.2fs",
                  len(rows), t1 - t0, t2 - t1, time.perf_counter() - t2)
     return web.json_response(result)

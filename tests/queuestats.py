@@ -205,14 +205,43 @@ class TestJobs(unittest.TestCase):
         self.assertEqual(p['ward'], 1)
         self.assertGreater(p['rho_room'], p['rho'])
 
-    def test_ward_studies_only_on_call(self):
-        self.assertFalse(qs.on_call(datetime(2026, 11, 11, 10, 0)))    # Wednesday day shift
-        self.assertTrue(qs.on_call(datetime(2026, 11, 11, 14, 0)))
-        self.assertTrue(qs.on_call(datetime(2026, 11, 11, 7, 59)))
-        self.assertTrue(qs.on_call(datetime(2026, 11, 14, 10, 0)))     # Saturday
+    def test_ward_studies_count_at_any_hour(self):
+        # owner, 2026-11-12: the UPU radiologist does the ward ultrasounds too
         room = [{'uid': 'd', 'start': '2026-11-11T10:00:00'}, {'uid': 'n', 'start': '2026-11-11T20:00:00'}]
         out = qs.compute([], {}, {}, datetime(2026, 11, 12, 0, 0), room_studies=room)
-        self.assertEqual(out['coverage']['ward_studies'], 1)
+        self.assertEqual(out['coverage']['ward_studies'], 2)
+
+    def test_relative_lengths_by_region(self):
+        t = lambda h, m: datetime(2026, 11, 11, h, m)
+        jobs, samples, regions = [], [], {}
+        # abdomen exams take 20 min, hips 10: a 10-min hip is usual, a 10-min abdomen is half
+        for i, (reg, mins) in enumerate([('abdomen', 20)] * 3 + [('hip', 10)] * 3 + [('abdomen', 10), ('hip', 10)]):
+            start = t(8, 0) + timedelta(minutes=30 * i)
+            jobs.append({'id': str(i), 't_start': start})
+            samples.append((start, start + timedelta(minutes=mins)))
+            regions[str(i)] = [reg]
+        rel = dict((iv[0], r) for iv, r in qs.relative_lengths(samples, jobs, regions))
+        self.assertEqual(rel[jobs[6]['t_start']], 0.5)
+        self.assertEqual(rel[jobs[7]['t_start']], 1.0)
+        self.assertEqual(qs.region_key(['pelvis', 'abdomen', 'unknown']), 'abdomen+pelvis')
+
+    def test_oldest_wait(self):
+        t = lambda h, m: datetime(2026, 11, 11, h, m)
+        ivs = [(t(9, 0), t(9, 50)), (t(9, 30), None, timedelta(hours=2)), (t(8, 0), t(8, 30))]
+        self.assertEqual(qs.oldest_wait(ivs, t(9, 40)), 40.0)
+        self.assertEqual(qs.oldest_wait(ivs, t(10, 0)), 30.0)
+        self.assertIsNone(qs.oldest_wait(ivs, t(12, 0)))
+
+    def test_idle_while_waiting_leaves_out_the_call(self):
+        t = lambda h, m: datetime(2026, 11, 11, h, m)
+        busy = [(t(9, 0), t(9, 20)), (t(9, 40), t(10, 0))]
+        waiting = [(t(9, 10), t(9, 40))]             # someone waited through the gap
+        # the gap 9:20-9:40, less 5 min of calling: 15 min of the hour
+        self.assertEqual(qs.idle_while_waiting(waiting, busy, t(9, 0), t(10, 0)), 0.25)
+        self.assertEqual(qs.idle_while_waiting([], busy, t(9, 0), t(10, 0)), 0.0)
+        # a 4-minute gap is all calling
+        busy2 = [(t(9, 0), t(9, 20)), (t(9, 24), t(10, 0))]
+        self.assertEqual(qs.idle_while_waiting(waiting, busy2, t(9, 0), t(10, 0)), 0.0)
 
     def test_measured_rho_and_occupancy(self):
         base = datetime(2026, 11, 11, 6, 0)

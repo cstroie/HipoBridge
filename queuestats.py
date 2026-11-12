@@ -80,15 +80,7 @@ PACS_SLACK = timedelta(minutes=15)    # a study may start a little before the re
 # report with idle time in it, not one exam.
 SERVICE_MAX = timedelta(minutes=60)
 WARD_TYPICAL = timedelta(minutes=15)  # a ward study's length when no UPU exam was measured
-
-
-def on_call(t: datetime) -> bool:
-    """Inside the on-call block (weekdays 14:00 -> 08:00, weekends all day;
-    holidays not known), when one radiologist does every ultrasound. In the
-    weekday day shift another room or radiologist may scan in parallel, so
-    the day's other studies are not counted as the UPU radiologist's work
-    then (an assumption, not confirmed: 2026-11-12)."""
-    return t.weekday() >= 5 or not (8 <= t.hour < 14)
+REGION_MIN_SAMPLES = 3                # exams of a kind needed for its own median length
 SERVICE_MIN_SAMPLES = 5               # samples needed before the measured rho is shown
 
 
@@ -492,6 +484,94 @@ def service_rate(intervals, a: datetime, b: datetime, window: timedelta = timede
     return round(per_h, 2) if per_h > 0 else None
 
 
+def ward_starts(room_studies: Optional[List[dict]], jobs: List[dict]) -> List[datetime]:
+    """Starts of the day lists' studies not matched to a UPU request, once each."""
+    claimed = {j['study_key'] for j in jobs if j['study_key']}
+    seen, out = set(), []
+    for st in room_studies or []:
+        key, t = study_key(st), parse_ts(st.get('start'))
+        if t is None or key in claimed or key in seen:
+            continue
+        seen.add(key)
+        out.append(t)
+    return sorted(out)
+
+
+def region_key(regions: Optional[List[str]]) -> str:
+    """The kind of exam: its regions, sorted ('abdomen+pelvis'); '' unknown."""
+    return '+'.join(sorted({r for r in (regions or []) if r and r != 'unknown'}))
+
+
+def relative_lengths(samples: List[tuple], jobs: List[dict],
+                     regions: Dict[str, List[str]]) -> List[tuple]:
+    """((start, end), length / median length of the same kind of exam): the
+    region's median with REGION_MIN_SAMPLES of them, else all exams'."""
+    kind = {j['t_start']: region_key(regions.get(j['id'])) for j in jobs if j['t_start']}
+    mins = lambda s, e: (e - s).total_seconds() / 60.0
+    by_kind: Dict[str, List[float]] = {}
+    for s, e in samples:
+        by_kind.setdefault(kind.get(s, ''), []).append(mins(s, e))
+    every = [m for ms in by_kind.values() for m in ms]
+    if not every:
+        return []
+    median = lambda ms: sorted(ms)[len(ms) // 2]
+    overall = median(every)
+    out = []
+    for s, e in samples:
+        ms = by_kind.get(kind.get(s, ''), [])
+        ref = median(ms) if kind.get(s) and len(ms) >= REGION_MIN_SAMPLES else overall
+        if ref > 0:
+            out.append(((s, e), mins(s, e) / ref))
+    return out
+
+
+def strain_refs(stats: List[dict]) -> 'strain_index.Refs':
+    """People waiting are judged against this queue's own busy hours (the
+    span's 90th percentile of the hourly L and W), never below the floors."""
+    Ls = [e['L'] for e in stats if e['L']]
+    Ws = [e['W'] for e in stats if e['W'] is not None]
+    return strain_index.Refs(
+        queue=max(strain_index.QUEUE_REF, _pct(Ls, 0.9)) if Ls else strain_index.QUEUE_REF,
+        wait=max(strain_index.WAIT_REF_MIN, _pct(Ws, 0.9)) if Ws else strain_index.WAIT_REF_MIN)
+
+
+def oldest_wait(exam_intervals, t: datetime) -> Optional[float]:
+    """Minutes the longest-waiting patient has waited at t (None: nobody)."""
+    ages = []
+    for iv in exam_intervals:
+        start, end, cap = _parts(iv)
+        end = end if end is not None else start + cap
+        if start <= t < end:
+            ages.append((t - start).total_seconds() / 60.0)
+    return round(max(ages), 1) if ages else None
+
+
+def idle_while_waiting(exam_intervals, busy_merged: List[tuple], a: datetime, b: datetime) -> float:
+    """Share of [a, b] with someone waiting and the room idle, not counting
+    the first CALL_ALLOWANCE of each idle gap (calling and preparing the
+    next patient). |idle ∩ waiting| = |idle| + |waiting| - |idle ∪ waiting|."""
+    allowance = strain_index.CALL_ALLOWANCE
+    idle, cursor = [], None
+    for s, e in busy_merged:
+        if e <= a - allowance:
+            cursor = e
+            continue
+        if s >= b:
+            break
+        gap_start = cursor if cursor is not None else a - allowance
+        if s > gap_start:
+            idle.append((gap_start + allowance, s))
+        cursor = e
+    gap_start = cursor if cursor is not None else a - allowance
+    if b > gap_start:
+        idle.append((gap_start + allowance, b))
+    idle = [(max(s, a), min(e, b)) for s, e in idle if min(e, b) > max(s, a)]
+    if not idle:
+        return 0.0
+    both = _hours(_busy(idle, a, b)) + _hours(_busy(exam_intervals, a, b)) - _hours(_busy(idle + list(exam_intervals), a, b))
+    return round(max(0.0, both) / _hours(b - a), 3)
+
+
 def _segment(jobs, as_of, span_start, window, samples=(), busy=None, ward=()) -> dict:
     exam = [j['exam'] for j in jobs if j['exam']]
     report = [j['report'] for j in jobs if j['report']]
@@ -534,34 +614,30 @@ def compute(rows: List[dict], report_times: Dict[str, Optional[datetime]],
             arrivals: Dict[str, Optional[datetime]], as_of: datetime,
             hours: int = 24, window_min: int = 60, step_min: int = 10,
             truncated: bool = False, pacs_studies: Optional[Dict[str, list]] = None,
-            room_studies: Optional[List[dict]] = None) -> dict:
+            room_studies: Optional[List[dict]] = None,
+            regions: Optional[Dict[str, List[str]]] = None) -> dict:
     """`room_studies`: every ultrasound study of the days analysed, any
     patient ({'uid', 'start'}, PacsChecker.studies_for_day()); those not
-    matched to a UPU request and started on call (on_call()) are the UPU
-    radiologist's ward work."""
+    matched to a UPU request are the UPU radiologist's ward work (owner,
+    2026-11-12: the same radiologist does both). `regions`: the regions of
+    each request's studies (from its report page), so an exam's length is
+    compared with the same kind of exam."""
     jobs = build_jobs(rows, report_times, arrivals, pacs_studies)
     caps = open_caps(jobs)
     apply_caps(jobs, caps)
     window = timedelta(minutes=window_min)
     span_start = as_of - timedelta(hours=hours)
 
-    claimed = {j['study_key'] for j in jobs if j['study_key']}
-    seen, ward = set(), []
-    for st in room_studies or []:
-        key, t = study_key(st), parse_ts(st.get('start'))
-        if t is None or key in claimed or key in seen or not on_call(t):
-            continue
-        seen.add(key)
-        ward.append(t)
-    ward.sort()
+    ward = ward_starts(room_studies, jobs)
     samples = service_samples(jobs, ward)
     typical = _median_td(samples) or WARD_TYPICAL
     # all the work done: the measured exams, plus the ward studies and the
     # UPU exams without a measured end, each the typical length cut at the
     # next start (they are work all the same: occupancy, accumulated strain)
     sampled = {s for s, _ in samples}
-    unmeasured = [j['t_start'] for j in jobs if j['t_start'] and j['t_start'] not in sampled]
-    busy = samples + ward_intervals(ward + unmeasured, [j['t_start'] for j in jobs if j['t_start']], typical)
+    starts = [j['t_start'] for j in jobs if j['t_start']]
+    unmeasured = [t for t in starts if t not in sampled]
+    busy = samples + ward_intervals(ward + unmeasured, starts, typical)
 
     current = _segment(jobs, as_of, span_start, window, samples, busy, ward)
 
@@ -575,24 +651,21 @@ def compute(rows: List[dict], report_times: Dict[str, Optional[datetime]],
     while t <= as_of:
         points.append((t, stage_stats(exam, t - window, t)))
         t += timedelta(minutes=step_min)
-    # people waiting are judged against this queue's own busy hours (the
-    # span's 90th percentile), never below the fixed floors
-    Ls = [e['L'] for _, e in points if e['L']]
-    Ws = [e['W'] for _, e in points if e['W'] is not None]
-    queue_ref = max(strain_index.QUEUE_REF, _pct(Ls, 0.9)) if Ls else strain_index.QUEUE_REF
-    wait_ref = max(strain_index.WAIT_REF_MIN, _pct(Ws, 0.9)) if Ws else strain_index.WAIT_REF_MIN
+    refs = strain_refs([e for _, e in points])
+    relative = relative_lengths(samples, jobs, regions or {})
+    busy_merged = strain_index.merge(busy)
     series = []
     for t, e in points:
         rho_t = round(e['lam'] / mu_eff, 2) if mu_eff else None
-        # the radiologist's load (strain) counts the ward studies too, at the
-        # same capacity as the UPU exams; `rho` stays the UPU queue's
+        # the radiologist's load counts the ward studies too, at the same
+        # capacity as the UPU exams; `rho` stays the UPU queue's
         ward_n = sum(1 for w in ward if t - window < w <= t)
         rho_room = round(rho_t + ward_n / _hours(window) / mu_eff, 2) if rho_t is not None else None
-        # someone waiting while the room is idle: |waiting U busy| - |busy|
-        idle_w = (_hours(_busy(exam + busy, t - window, t)) - _hours(_busy(busy, t - window, t))) / _hours(window)
-        st = strain_index.strain(t, rho_room, e['L'], e['W'], samples, current['service']['median_span'],
-                                 window, busy=busy, queue_ref=queue_ref, wait_ref=wait_ref,
-                                 idle_waiting=idle_w)
+        idle_w = idle_while_waiting(exam, busy_merged, t - window, t)
+        st = strain_index.score(strain_index.Moment(
+            t=t, rho=rho_room, queue=e['L'], wait=e['W'], oldest=oldest_wait(exam, t),
+            idle_waiting=idle_w, busy=busy,
+            relative=[r for (s0, e0), r in relative if t - window < e0 <= t]), refs)
         series.append({
             't': t.strftime('%Y-%m-%dT%H:%M'),
             'lam': e['lam'], 'x': e['x'], 'L': e['L'], 'W': e['W'],
@@ -640,6 +713,6 @@ def compute(rows: List[dict], report_times: Dict[str, Optional[datetime]],
         'series': series,
         'coverage': coverage,
         'truncated': truncated,
-        'strain_refs': {'queue': round(queue_ref, 2), 'wait_min': round(wait_ref, 1)},
+        'strain_refs': {'queue': round(refs.queue, 2), 'wait_min': round(refs.wait, 1)},
         'open_caps_h': {f"{stage}:{m or 'all'}": round(_hours(cap), 2) for (stage, m), cap in caps.items()},
     }

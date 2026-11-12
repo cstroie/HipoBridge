@@ -5,98 +5,125 @@ import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-import math
 import unittest
 from datetime import datetime, timedelta
 
 import strain as sx
+from strain import Moment
 
 
 def dt(h, m=0, day=11):   # 2026-11-11 is a Wednesday
     return datetime(2026, 11, day, h, m)
 
 
-class TestParts(unittest.TestCase):
+def spread(n, start, end, minutes=12):
+    """n exams of `minutes`, evenly from start to end."""
+    step = (end - start) / n
+    return [(start + i * step, start + i * step + timedelta(minutes=minutes)) for i in range(n)]
+
+
+ON = dt(8, day=10)   # the duty block that holds Wednesday 04:00 began Tuesday 08:00
+
+
+class TestClock(unittest.TestCase):
     def test_circadian_deepest_at_night(self):
         self.assertEqual(sx.circadian(dt(4)), 1.0)
         self.assertGreater(sx.circadian(dt(3)), sx.circadian(dt(10)))
         self.assertGreater(sx.circadian(dt(14, 30)), sx.circadian(dt(11)))   # after-lunch dip
         self.assertAlmostEqual(sx.circadian(dt(23, 59)), sx.circadian(dt(0)), places=1)
 
-    def test_duty_start(self):
-        self.assertEqual(sx.duty_start(dt(10)), dt(8))                 # weekday day shift
-        self.assertEqual(sx.duty_start(dt(20)), dt(14))                # weekday on-call
-        self.assertEqual(sx.duty_start(dt(3)), dt(14, day=10))         # night: yesterday 14:00
-        self.assertEqual(sx.duty_start(dt(3, day=14)), dt(14, day=13)) # Sat 03:00: Friday's block
-        self.assertEqual(sx.duty_start(dt(20, day=14)), dt(8, day=14)) # Saturday: 08:00 block
-        self.assertEqual(sx.duty_start(dt(3, day=15)), dt(8, day=14))  # Sunday 03:00: Saturday's
-        self.assertEqual(sx.duty_hours(dt(8)), 0.0)
+    def test_duty_runs_08_to_08_every_day(self):
+        self.assertEqual(sx.duty_start(dt(10)), dt(8))
+        self.assertEqual(sx.duty_start(dt(20)), dt(8))                  # on call: since the morning
+        self.assertEqual(sx.duty_start(dt(3)), dt(8, day=10))
+        self.assertEqual(sx.duty_start(dt(20, day=14)), dt(8, day=14))  # Saturday
+        self.assertEqual(sx.duty_hours(dt(4)), 20.0)
 
-    def test_accumulated_is_the_decayed_integral_since_duty_start(self):
-        # 1 h of work ending now: H/ln2 * (1 - 2**(-1/H))
+
+class TestAccumulated(unittest.TestCase):
+    def test_work_adds_up_and_short_gaps_are_not_rest(self):
+        # 3 h of 12-min exams with 8-min gaps: 1.8 h of work, nothing lost
+        busy = [(dt(9, 0) + timedelta(minutes=20 * i), dt(9, 12) + timedelta(minutes=20 * i)) for i in range(9)]
+        self.assertAlmostEqual(sx.accumulated_hours(busy, dt(12)), 1.8, places=6)
+        # a 29-minute pause after it: still nothing lost
+        self.assertAlmostEqual(sx.accumulated_hours(busy, dt(12, 9)), 1.8, places=6)
+
+    def test_rest_of_30_min_or_more_decays_for_its_whole_length(self):
+        busy = [(dt(9), dt(11))]
         h = sx.ACCUM_HALF_LIFE_H
-        one = sx.accumulated_hours([(dt(9), dt(10))], dt(10))
-        self.assertAlmostEqual(one, h / math.log(2) * (1 - 2 ** (-1 / h)), places=6)
-        # the same hour 8 h back counts half
-        self.assertAlmostEqual(sx.accumulated_hours([(dt(15), dt(16))], dt(0, day=12)), one / 2, places=6)
-        # work before the duty block began does not count (Wednesday 14:00)
-        self.assertEqual(sx.accumulated_hours([(dt(9), dt(10))], dt(20)), 0.0)
-        # a break does not reset it
-        self.assertAlmostEqual(sx.accumulated_hours([(dt(9), dt(10))], dt(11)),
-                               one * 2 ** (-1 / h), places=6)
+        self.assertAlmostEqual(sx.accumulated_hours(busy, dt(11, 30)), 2 * 2 ** (-0.5 / h), places=6)
+        self.assertAlmostEqual(sx.accumulated_hours(busy, dt(19)), 1.0, places=6)          # 8 h: half
+        # a rest between two blocks decays only what came before it
+        two = [(dt(9), dt(10)), (dt(18), dt(19))]
+        self.assertAlmostEqual(sx.accumulated_hours(two, dt(19)), 1.5, places=6)
 
-    def test_shorter_needs_samples_and_a_shorter_median(self):
-        self.assertEqual(sx.shorter([4, 4], 8.0), 0.0)            # too few
-        self.assertEqual(sx.shorter([4, 4, 4], 8.0), 1.0)         # half the usual
-        self.assertEqual(sx.shorter([8, 9, 10], 8.0), 0.0)        # not shorter
-        self.assertEqual(sx.shorter([6, 6, 6], 8.0), 0.5)
+    def test_the_block_starts_at_08(self):
+        self.assertEqual(sx.accumulated_hours([(dt(6), dt(7, 30))], dt(9)), 0.0)
+        self.assertAlmostEqual(sx.accumulated_hours([(dt(7), dt(9))], dt(9)), 1.0, places=6)
+
+    def test_merge(self):
+        self.assertEqual(sx.merge([(dt(9), dt(10)), (dt(9, 30), dt(10, 30)), (dt(11), dt(12))]),
+                         [(dt(9), dt(10, 30)), (dt(11), dt(12))])
 
 
-def night(n=45, end=dt(4), minutes=12):
-    """n exams of `minutes` spread evenly from Tuesday 14:00 to `end`."""
-    start = dt(14, day=10)
-    step = (end - start) / n
-    return [(start + i * step, start + i * step + timedelta(minutes=minutes)) for i in range(n)]
+class TestNow(unittest.TestCase):
+    def test_shorter_compares_with_the_region(self):
+        self.assertEqual(sx.shorter([0.5, 0.5]), 0.0)          # too few
+        self.assertEqual(sx.shorter([0.5, 0.5, 0.5]), 1.0)     # half the usual
+        self.assertEqual(sx.shorter([1.0, 1.1, 1.2]), 0.0)
+        self.assertEqual(sx.shorter([0.75, 0.75, 0.75]), 0.5)
+
+    def test_rushing_needs_short_exams_and_idle_while_waiting(self):
+        short = [0.5, 0.5, 0.5]
+        r = lambda rel, idle: sx.score(Moment(dt(10), relative=rel, idle_waiting=idle))['c']['rushing']
+        self.assertEqual(r(short, 0.25), 100)
+        self.assertEqual(r(short, 0.0), 0)        # fast and flowing: efficiency
+        self.assertEqual(r([], 0.25), 0)          # idle alone: may be other work
+
+    def test_pressure_takes_the_worst_of_count_mean_and_longest_wait(self):
+        p = lambda **kw: sx.score(Moment(dt(10), **kw))['c']['pressure']
+        self.assertEqual(p(queue=1.5), 50)
+        self.assertEqual(p(wait=45), 100)
+        self.assertEqual(p(oldest=45), 50)        # full at twice the wait reference
+        self.assertEqual(sx.score(Moment(dt(10), queue=3), sx.Refs(queue=6, wait=90))['c']['pressure'], 50)
 
 
 class TestIndex(unittest.TestCase):
-    def test_parts(self):
-        r = sx.strain(dt(10), 0.2, 0.0, 5, [], None)
-        self.assertEqual(set(r['c']), set(sx.WEIGHTS) | {'accumulated', 'sleepiness', 'now', 'fatigue'})
-        self.assertAlmostEqual(sum(sx.WEIGHTS.values()), 1.0)
+    def test_parts_and_weights(self):
+        r = sx.score(Moment(dt(10)))
+        self.assertEqual(set(r['c']), set(sx.NOW_WEIGHTS) | {'accumulated', 'sleepiness', 'now', 'fatigue'})
+        self.assertAlmostEqual(sum(sx.NOW_WEIGHTS.values()), 1.0)
 
     def test_nothing_done_nobody_waiting_is_zero_at_any_hour(self):
-        self.assertEqual(sx.strain(dt(4), 0.0, 0.0, None, [], None)['index'], 0)
-        self.assertEqual(sx.strain(dt(10), 0.0, 0.0, None, [], None)['index'], 0)
-
-    def test_owner_04h_after_a_long_night_is_high_even_with_a_short_queue(self):
-        work = night(45)
-        idle = sx.strain(dt(4), 0.0, 0.0, None, [], None, busy=work)
-        short_q = sx.strain(dt(4), 0.5, 2.0, 20, [], None, busy=work)
-        self.assertGreaterEqual(idle['c']['accumulated'], 80)
-        self.assertGreaterEqual(short_q['index'], 75)
-        self.assertGreater(short_q['index'], idle['index'])
-        # the same night's work, read at 18:00 of a rested day: far lower
-        day = [(s + timedelta(hours=14), e + timedelta(hours=14)) for s, e in night(15, end=dt(18, day=10))]
-        self.assertLess(sx.strain(dt(18), 0.5, 2.0, 20, [], None, busy=day)['index'], short_q['index'])
-
-    def test_a_break_does_not_reset_the_strain(self):
-        work = night(45, end=dt(3, 30))
-        self.assertGreaterEqual(sx.strain(dt(4), 0.0, 0.0, None, [], None, busy=work)['index'], 60)
+        self.assertEqual(sx.score(Moment(dt(4)))['index'], 0)
+        self.assertEqual(sx.score(Moment(dt(10)))['index'], 0)
 
     def test_combination(self):
-        r = sx.strain(dt(10), 1.0, 3.0, 45, [], None)
+        r = sx.score(Moment(dt(10), rho=1.0, queue=3.0))
         self.assertEqual(r['c']['fatigue'], 0)
-        self.assertEqual(r['index'], round(100 * (sx.WEIGHTS['load'] + sx.WEIGHTS['pressure'])))
+        self.assertEqual(r['index'], round(100 * (sx.NOW_WEIGHTS['load'] + sx.NOW_WEIGHTS['pressure'])))
 
-    def test_rushing_needs_short_exams_and_idle_while_waiting(self):
-        short = [(dt(9, 10 + 15 * i), dt(9, 14 + 15 * i)) for i in range(3)]   # 4 min vs a median of 12
-        a = sx.strain(dt(10), 0.5, 2.0, 20, short, 12.0, idle_waiting=0.25)
-        b = sx.strain(dt(10), 0.5, 2.0, 20, short, 12.0, idle_waiting=0.0)    # fast and flowing
-        c = sx.strain(dt(10), 0.5, 2.0, 20, [], 12.0, idle_waiting=0.25)      # idle, no short exams
-        self.assertEqual(a['c']['rushing'], 100)
-        self.assertEqual(b['c']['rushing'], 0)
-        self.assertEqual(c['c']['rushing'], 0)
+    def test_owner_04h_after_45_exams_is_high_even_with_a_short_queue(self):
+        work = spread(45, ON, dt(4))
+        idle = sx.score(Moment(dt(4), busy=work))
+        short_q = sx.score(Moment(dt(4), rho=0.5, queue=2.0, wait=20, busy=work))
+        self.assertGreaterEqual(idle['index'], 70)
+        self.assertGreaterEqual(short_q['index'], 80)
+        self.assertGreater(short_q['index'], idle['index'])
+        # the same work done by 18:00 reads lower: less sleepy
+        day = spread(45, ON, dt(18, day=10))
+        self.assertLess(sx.score(Moment(dt(18, day=10), rho=0.5, queue=2.0, wait=20, busy=day))['index'],
+                        short_q['index'])
+
+    def test_a_break_does_not_reset_the_strain(self):
+        work = spread(45, ON, dt(3, 15))
+        self.assertGreaterEqual(sx.score(Moment(dt(4), busy=work))['index'], 65)
+
+    def test_accumulated_saturates_softly(self):
+        four = [(dt(8), dt(12))]
+        self.assertEqual(sx.score(Moment(dt(12), busy=four))['c']['accumulated'], 50)
+        eight = [(dt(8), dt(16))]
+        self.assertEqual(sx.score(Moment(dt(16), busy=eight))['c']['accumulated'], 75)
 
 
 if __name__ == '__main__':
