@@ -8131,6 +8131,19 @@ document.addEventListener('DOMContentLoaded', function() {
               note: `${d.span_h} h avg ${fmtMin(all.span.exam.W)}`,
               title: 'W: request → exam start (PACS, else the performed time), mean of the exams done in the last hour' },
         ];
+        // Relative strain index at the analysed moment (strain.py): not a probability
+        const lastPt = d.series?.[d.series.length - 1];
+        if (lastPt && lastPt.strain != null) {
+            const c = lastPt.strain_c || {};
+            const peak = Math.max(...d.series.map(p => p.strain ?? 0));
+            defs.push({
+                label: 'Strain', value: String(lastPt.strain),
+                color: lastPt.strain >= 65 ? 'var(--urgent)' : lastPt.strain >= 40 ? 'var(--st-inprogress)' : 'var(--muted)',
+                note: `${d.span_h} h peak ${peak}`,
+                title: 'Relative strain index 0–100 of the working conditions (not a probability, not calibrated): ' +
+                    `load ${c.load}, people waiting ${c.pressure}, no break ${c.no_break}, sleepiness ${c.sleepiness}, rushing ${c.rushing} (each 0–100)`,
+            });
+        }
         defs.forEach(m => {
             const div = document.importNode(metricTpl.content, true).firstElementChild;
             const val = div.querySelector('.schedule-metric-value');
@@ -8188,16 +8201,40 @@ document.addEventListener('DOMContentLoaded', function() {
         return el;
     }
 
-    // Path through the points, broken where a value is null.
+    // Path through the points, broken where a value is null, drawn as a
+    // monotone cubic (Fritsch-Carlson): a smooth curve through every point that
+    // never overshoots between them, so a rate cannot dip below 0 nor the strain
+    // pass 100. Purely visual: the values (and the hover readout) are unchanged.
     function svgLine(series, key, xOf, yOf) {
-        let dStr = '', pen = false;
+        const runs = [];
+        let run = null;
         series.forEach((p, i) => {
             const v = p[key];
-            if (v == null) { pen = false; return; }
-            dStr += `${pen ? 'L' : 'M'}${xOf(i).toFixed(1)},${yOf(v).toFixed(1)}`;
-            pen = true;
+            if (v == null) { run = null; return; }
+            if (!run) { run = []; runs.push(run); }
+            run.push([xOf(i), yOf(v)]);
         });
-        return dStr;
+        const f = n => n.toFixed(1);
+        return runs.map(pts => {
+            if (pts.length < 2) return `M${f(pts[0][0])},${f(pts[0][1])}`;
+            const n = pts.length;
+            const d = [], m = new Array(n);
+            for (let k = 0; k < n - 1; k++) d.push((pts[k + 1][1] - pts[k][1]) / ((pts[k + 1][0] - pts[k][0]) || 1));
+            m[0] = d[0];
+            m[n - 1] = d[n - 2];
+            for (let k = 1; k < n - 1; k++) m[k] = d[k - 1] * d[k] <= 0 ? 0 : (d[k - 1] + d[k]) / 2;
+            for (let k = 0; k < n - 1; k++) {
+                if (d[k] === 0) { m[k] = 0; m[k + 1] = 0; continue; }
+                const a = m[k] / d[k], b = m[k + 1] / d[k], q = a * a + b * b;
+                if (q > 9) { const t = 3 / Math.sqrt(q); m[k] = t * a * d[k]; m[k + 1] = t * b * d[k]; }
+            }
+            let out = `M${f(pts[0][0])},${f(pts[0][1])}`;
+            for (let k = 0; k < n - 1; k++) {
+                const h = (pts[k + 1][0] - pts[k][0]) / 3;
+                out += `C${f(pts[k][0] + h)},${f(pts[k][1] + m[k] * h)},${f(pts[k + 1][0] - h)},${f(pts[k + 1][1] - m[k + 1] * h)},${f(pts[k + 1][0])},${f(pts[k + 1][1])}`;
+            }
+            return out;
+        }).join('');
     }
 
     function niceMax(v) {
