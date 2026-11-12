@@ -2991,6 +2991,7 @@ select {
 .q-key-x::before   { background: var(--st-completed); }
 .q-key-L::before   { background: var(--primary); opacity: 0.25; height: 8px; }
 .q-key-w::before   { background: var(--st-inprogress); }
+.q-key-strain::before { background: repeating-linear-gradient(90deg, var(--urgent) 0 2px, transparent 2px 5px); }
 .schedule-queue-span { display: flex; gap: 4px; }
 .schedule-queue-span-btn { padding: 2px 8px; font-size: var(--font-size-10); }
 .schedule-queue-span-btn[aria-pressed="true"] {
@@ -3008,6 +3009,7 @@ select {
 .q-lam { stroke: var(--st-inlab); }
 .q-x   { stroke: var(--st-completed); }
 .q-w   { stroke: var(--st-inprogress); }
+.q-strain { stroke: var(--urgent); stroke-width: 1.5; stroke-dasharray: 1.5 3.5; }
 .q-cursor { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 2 2; }
 .schedule-queue-readout {
     margin: var(--space-8) 0 0;

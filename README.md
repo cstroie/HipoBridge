@@ -112,6 +112,8 @@ HippoBridge can serve the imaging schedule to CT, MRI, ultrasound, and X-Ray dev
 
 The MWL server starts automatically alongside the HTTP server when `worklist.cfg` is present. Copy `examples/worklist.cfg` to get started. See [docs/WORKLIST.md](docs/WORKLIST.md) for full documentation.
 
+The Schedule tab's queue graph also shows a relative strain index (conditions of the UPU ultrasound radiologist, not a risk probability); method and limits in [docs/STRAIN_INDEX.md](docs/STRAIN_INDEX.md).
+
 ```bash
 pip install pynetdicom pydicom
 cp examples/worklist.cfg worklist.cfg   # fill in credentials and device sections

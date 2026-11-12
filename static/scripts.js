@@ -8214,6 +8214,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const max2 = niceMax(Math.max(...s.map(p => p.W || 0)));
         const y1 = v => h1 - (v / max1) * (h1 - 6);
         const yW = v => h1 - (v / max2) * (h1 - 6);
+        const yS = v => h1 - (v / 100) * (h1 - 6);   // strain index: 0-100 over the full height
 
         const svg = svgEl('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}` }, 'q-svg');
         // Hour gridlines + labels
@@ -8239,7 +8240,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const last = s.length - 1 - [...s].reverse().findIndex(p => p.L != null);
             svg.appendChild(svgEl('path', { d: `${area}L${xOf(last).toFixed(1)},${h1}L${xOf(first).toFixed(1)},${h1}Z` }, 'q-area'));
         }
-        [['lam', y1, 'q-lam'], ['x', y1, 'q-x'], ['W', yW, 'q-w']].forEach(([key, yOf, cls]) => {
+        [['lam', y1, 'q-lam'], ['x', y1, 'q-x'], ['W', yW, 'q-w'], ['strain', yS, 'q-strain']].forEach(([key, yOf, cls]) => {
             const path = svgLine(s, key, xOf, yOf);
             if (path) svg.appendChild(svgEl('path', { d: path }, `q-line ${cls}`));
         });
@@ -8258,6 +8259,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 [`ρ ${fmtPct(p.rho)}`, p.rho != null && p.rho >= QUEUE_RHO_HIGH ? 'var(--urgent)' : 'var(--primary)'],
                 [`in queue ${fmtRate(p.L)}`, 'var(--muted)'],
                 [`wait ${fmtMin(p.W)}`, 'var(--st-inprogress)'],
+                [`strain ${p.strain}`, p.strain >= 65 ? 'var(--urgent)' : p.strain >= 40 ? 'var(--st-inprogress)' : 'var(--muted)'],
             ];
             const nodes = [];
             parts.forEach(([text, color], k) => {
@@ -8268,6 +8270,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 nodes.push(span);
             });
             elements.scheduleQueueReadout.replaceChildren(...nodes);
+            const c = p.strain_c || {};
+            elements.scheduleQueueReadout.title = 'Relative strain index 0–100 (not a probability, not calibrated): ' +
+                `load ${c.load}, people waiting ${c.pressure}, no break ${c.no_break}, sleepiness ${c.sleepiness}, rushing ${c.rushing} (each 0–100)`;
         };
         svg.addEventListener('pointermove', e => {
             const r = svg.getBoundingClientRect();

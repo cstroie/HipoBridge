@@ -46,6 +46,8 @@ Rules for unknown times (docs/ARCHITECTURE.md, 2026-11-11):
 from datetime import datetime, timedelta
 from typing import Dict, Iterable, List, Optional
 
+import strain as strain_index
+
 SCOPE_MODALITY = 'eco'   # ultrasound
 SCOPE_LAB_ID = '28'      # its Hipocrate laboratory (HippoClientSchedule._LAB_ID_TO_MODALITY)
 SCOPE_SECTION = 'UPU'
@@ -471,14 +473,18 @@ def compute(rows: List[dict], report_times: Dict[str, Optional[datetime]],
     # rho per point: lam of that point's hour over the span's capacity (the
     # measured 1/E[S] when there is one, else the demonstrated p90 one)
     mu_eff = current['service']['mu'] or current['exam']['mu']
+    samples = service_samples(jobs)
     series = []
     t = span_start + timedelta(minutes=step_min)
     while t <= as_of:
         e = stage_stats(exam, t - window, t)
+        rho_t = round(e['lam'] / mu_eff, 2) if mu_eff else None
+        st = strain_index.strain(t, rho_t, e['L'], e['W'], samples, current['service']['median_span'], window)
         series.append({
             't': t.strftime('%Y-%m-%dT%H:%M'),
             'lam': e['lam'], 'x': e['x'], 'L': e['L'], 'W': e['W'],
-            'rho': round(e['lam'] / mu_eff, 2) if mu_eff else None,
+            'rho': rho_t,
+            'strain': st['index'], 'strain_c': st['c'],
         })
         t += timedelta(minutes=step_min)
 
