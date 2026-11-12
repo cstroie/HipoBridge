@@ -732,14 +732,20 @@ async def _queue_memo(key, lookup):
     return value
 
 async def _queue_report_time(client, request_id):
-    """{'t': latest validation, 'regions': [each study's region]} from the
-    cached report page; None until the report is validated."""
+    """{'t': latest validation, 'regions': [each study's region], 'validator':
+    who validated the latest study} from the cached report page; None until
+    the report is validated. The validator only picks whose exams make the
+    on-call radiologist's accumulated work (queuestats); it is never logged
+    or returned by /api/schedule/queue."""
     data = await client.parse_cached(id=request_id)
     studies = data.get('studies') if data else None
     t = queuestats.latest_validation(studies)
     if t is None:
         return None
-    return {'t': t, 'regions': [s.get('region') for s in studies if isinstance(s, dict) and s.get('region')]}
+    dicts = [s for s in studies if isinstance(s, dict)]
+    latest = next((s for s in dicts if queuestats.parse_ts(s.get('validation_date')) == t), {})
+    return {'t': t, 'regions': [s.get('region') for s in dicts if s.get('region')],
+            'validator': latest.get('validator') or None}
 
 async def _queue_upu_arrival(cerere_client, patient_client, fupu_client, presentation_client, row):
     """UPU arrival from cached pages only: cerere.asp -> patient page ->
@@ -839,6 +845,7 @@ async def get_schedule_queue(request):
     arr = await asyncio.gather(*(upu_arrival(r) for r in upu_rows), return_exceptions=True)
     report_times = {r['request_id']: v['t'] for r, v in zip(need_report, rep) if isinstance(v, dict)}
     regions = {r['request_id']: v['regions'] for r, v in zip(need_report, rep) if isinstance(v, dict)}
+    validators = {r['request_id']: v.get('validator') for r, v in zip(need_report, rep) if isinstance(v, dict)}
     arrivals = {r['request_id']: t for r, t in zip(upu_rows, arr) if isinstance(t, datetime)}
 
     t2 = time.perf_counter()
@@ -846,15 +853,14 @@ async def get_schedule_queue(request):
     # poll loop has reached; the rest comes from one on-demand C-FIND per day
     # (cached, past days for good), matched to the requests by CNP.
     pacs_studies = {}
-    room_studies = []
     if _pacs_checker is not None:
         for r in with_id:
             found = _pacs_checker.status_for(r['request_id']).get('studies')
             if found:
                 pacs_studies[r['request_id']] = list(found)
         # Every ultrasound study of the days analysed (cached: a past day for
-        # good, today for 5 min): the room's ward work, and the requests the
-        # poll loop has not reached, matched by CNP.
+        # good, today for 5 min), for the requests the poll loop has not
+        # reached, matched by CNP.
         days, d = [], warmup_start.date()
         while d <= (as_of - timedelta(minutes=1)).date():
             days.append(d)
@@ -864,7 +870,6 @@ async def get_schedule_queue(request):
         for studies in by_day:
             for cnp, lst in (studies or {}).items():
                 by_cnp.setdefault(cnp, []).extend(lst)
-                room_studies.extend(lst)
         missing = [r for r in with_id if r['request_id'] not in pacs_studies and req_after(r, warmup_start)]
         if missing and by_cnp:
             async def cnp_of(r):
@@ -877,7 +882,7 @@ async def get_schedule_queue(request):
                     pacs_studies[r['request_id']] = by_cnp[cnp]
     result = await asyncio.to_thread(queuestats.compute, rows, report_times, arrivals, as_of,
                                      hours=hours, truncated=truncated, pacs_studies=pacs_studies,
-                                     room_studies=room_studies, regions=regions)
+                                     regions=regions, validators=validators)
     logger.debug("schedule/queue: %d rows, listing %.2fs, cached times %.2fs, compute %.2fs",
                  len(rows), t1 - t0, t2 - t1, time.perf_counter() - t2)
     return web.json_response(result)

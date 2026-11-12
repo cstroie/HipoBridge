@@ -58,8 +58,9 @@ CAPACITY_DEFAULT_H = 4.0                # exams per hour when no capacity is kno
 
 # --- fatigue --------------------------------------------------------------
 FATIGUE_FLOOR = 0.5               # the share of the accumulated work counted fully rested
-ACCUM_HALF_FULL_H = 4.0           # busy hours that make it half full (about 20 exams of 12 min);
-                                  # 8 h = 75 %, 12 h = 88 %: it nears 1, never clips
+ACCUM_HALF_FULL_H = 2.5           # busy hours that make it half full (about 17 exams of 9 min);
+                                  # 5 h = 75 %, 7.5 h = 88 %: it nears 1, never clips. Real exams
+                                  # last 7-9 min (2026-11-12): the owner's 40-50 exams ~ 80 %
 ACCUM_HALF_LIFE_H = 8.0           # during rest, the accumulated work halves in 8 h
 REST_MIN = timedelta(minutes=30)  # a shorter idle gap is not rest (owner, 2026-11-12)
 DUTY_START_HOUR = 8

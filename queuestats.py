@@ -79,18 +79,8 @@ PACS_SLACK = timedelta(minutes=15)    # a study may start a little before the re
 # done one at a time (owner, 2026-11-12); a longer start-to-report is a late
 # report with idle time in it, not one exam.
 SERVICE_MAX = timedelta(minutes=60)
-WARD_TYPICAL = timedelta(minutes=15)  # a ward study's length when no UPU exam was measured
+TYPICAL_EXAM = timedelta(minutes=8)   # an exam's length when none was measured
 REGION_MIN_SAMPLES = 3                # exams of a kind needed for its own median length
-WARD_MATCH = timedelta(hours=6)       # an unmatched UPU request's study starts within this after it
-
-
-def on_call(t: datetime) -> bool:
-    """Inside the on-call block: weekdays 14:00 -> 08:00, weekends all day
-    (holidays not known). Only then is every other ultrasound study the UPU
-    radiologist's. Real data (2026-11-10/11, 10:00-14:00): 10-16 other
-    studies an hour beside the UPU ones, impossible for one radiologist at
-    7-9 min an exam, so in the weekday morning other rooms scan too."""
-    return t.weekday() >= 5 or not (8 <= t.hour < 14)
 SERVICE_MIN_SAMPLES = 5               # samples needed before the measured rho is shown
 
 
@@ -397,54 +387,90 @@ def stage_stats(intervals, a: datetime, b: datetime) -> dict:
     }
 
 
-def service_samples(jobs: List[dict], others: Iterable[datetime] = ()) -> List[tuple]:
+def service_samples(jobs: List[dict]) -> List[tuple]:
     """(start, end) of each UPU exam, from the PACS start and the written report.
 
     The PACS gives no end time, but an ultrasound exam is done one at a time
     and ends with its written report: nothing else starts before it (owner,
-    2026-11-12). So the end is the report validation, and whenever another
-    study starts the previous exam is over (end = min(report, next start)).
-    `others` are the starts of the room's other studies (ward patients, from
-    the PACS day list): they end a UPU exam just as a UPU one does. Rules:
-      * report at/after the start: end = report, unless another study started
+    2026-11-12). So the end is the report validation, and whenever the next
+    exam starts the previous one is over (end = min(report, next start)):
+      * report at/after the start: end = report, unless the next exam started
         first (a late or forgotten report, the rare exception): then end =
-        next start, only valid when that next was a UPU request already
-        waiting (else the gap may hold idle time);
+        next start, only valid when that next request was already waiting
+        (else the gap may hold idle time);
       * no report time: end = next start, same condition;
-      * none known, or an exam longer than SERVICE_MAX: no sample."""
-    events = [(j['t_start'], j) for j in jobs if j['t_start']] + [(t, None) for t in others if t]
-    events.sort(key=lambda e: e[0])
+      * none known, or an exam longer than SERVICE_MAX: no sample.
+    In the day shift two radiologists may scan UPU patients at once; the
+    next start then cuts an exam short, so daytime lengths read low."""
+    started = sorted((j for j in jobs if j['t_start']), key=lambda j: j['t_start'])
     out = []
-    for i, (start, cur) in enumerate(events):
-        if cur is None:
-            continue
-        rep = cur['t_rep']
-        nxt_t, nxt = events[i + 1] if i + 1 < len(events) else (None, None)
+    for i, cur in enumerate(started):
+        start, rep = cur['t_start'], cur['t_rep']
+        nxt = started[i + 1] if i + 1 < len(started) else None
         next_ok = nxt is not None and nxt['t_req'] <= start
         end = None
         if rep is not None and rep > start:
-            if nxt_t is not None and nxt_t < rep:
-                end = nxt_t if next_ok else None
+            if nxt is not None and nxt['t_start'] < rep:
+                end = nxt['t_start'] if next_ok else None
             else:
                 end = rep
         elif rep is None and next_ok:
-            end = nxt_t
+            end = nxt['t_start']
         if end is not None and timedelta(0) < end - start <= SERVICE_MAX:
             out.append((start, end))
     return out
 
 
-def ward_intervals(ward: List[datetime], starts: List[datetime], typical: timedelta) -> List[tuple]:
-    """(start, end) of studies with no measured end (the ward's, whose report
-    time is not read, and UPU exams without a sample): each lasts `typical`
-    (the UPU median), cut at the next start."""
-    every = sorted(set(starts) | set(ward))
+def work_intervals(jobs: List[dict], samples: List[tuple], typical: timedelta) -> List[tuple]:
+    """(job, (start, end)) of every UPU exam done, for the accumulated work:
+    the measured exam (service_samples()); a PACS start without a measured
+    end: `typical` long, cut at the next start; no PACS start at all (the
+    patient's CNP not cached): `typical` long, ending at the report, else at
+    the performed time."""
+    measured = dict(samples)
+    starts = sorted(j['t_start'] for j in jobs if j['t_start'])
     out = []
-    for t in sorted(ward):
-        i = bisect.bisect_right(every, t)
-        end = min(t + typical, every[i]) if i < len(every) else t + typical
-        out.append((t, end))
+    for j in jobs:
+        if j['merged'] or j['inconsistent']:
+            continue
+        s = j['t_start']
+        if s is not None:
+            if s in measured:
+                out.append((j, (s, measured[s])))
+                continue
+            i = bisect.bisect_right(starts, s)
+            end = min(s + typical, starts[i]) if i < len(starts) else s + typical
+            out.append((j, (s, end)))
+        elif j['left']:
+            end = j['t_rep'] or j['t_perf']
+            if end is not None:
+                out.append((j, (end - typical, end)))
     return out
+
+
+def norm_name(value) -> Optional[str]:
+    """A validator's name, compared case- and space-insensitively."""
+    v = ' '.join(str(value or '').split()).casefold()
+    return v or None
+
+
+def on_call_radiologist(jobs: List[dict], block_start: datetime, until: datetime) -> Optional[str]:
+    """Who did the UPU ultrasounds on call in the duty block starting at
+    block_start: the validator of most of its reports in the night
+    (22:00-08:00), else in the on-call hours so far (weekdays from 14:00,
+    weekends from 08:00). None before anyone has validated one. Used only
+    to choose whose exams make the accumulated work: never returned, never
+    logged."""
+    end = min(block_start + timedelta(days=1), until)
+    oncall_from = block_start + timedelta(hours=6 if block_start.weekday() < 5 else 0)
+    for frm in (block_start + timedelta(hours=14), oncall_from):
+        counts: Dict[str, int] = {}
+        for j in jobs:
+            if j['validator'] and j['t_rep'] and frm <= j['t_rep'] < end:
+                counts[j['validator']] = counts.get(j['validator'], 0) + 1
+        if counts:
+            return max(sorted(counts), key=lambda k: counts[k])
+    return None
 
 
 def _median_td(samples: List[tuple]) -> Optional[timedelta]:
@@ -456,8 +482,8 @@ def _median_td(samples: List[tuple]) -> Optional[timedelta]:
 
 def service_stats(samples: List[tuple], a: datetime, b: datetime, busy: Optional[List[tuple]] = None) -> dict:
     """Exams that ended in (a, b]: count, mean and median minutes; and the
-    share of [a, b] the room was occupied (union of `busy`, the UPU exams
-    and the ward studies; the samples alone when not given)."""
+    share of [a, b] a UPU exam was running (union of `busy`, every UPU exam
+    done; the samples alone when not given)."""
     done = [(s, e) for s, e in samples if a < e <= b]
     span_h = _hours(b - a)
     occ = round(_hours(_busy(busy if busy is not None else samples, a, b)) / span_h, 3) if span_h > 0 else 0.0
@@ -493,46 +519,6 @@ def service_rate(intervals, a: datetime, b: datetime, window: timedelta = timede
     counts.sort()
     per_h = counts[min(len(counts) - 1, int(q * (len(counts) - 1) + 0.5))] / _hours(window)
     return round(per_h, 2) if per_h > 0 else None
-
-
-def ward_starts(room_studies: Optional[List[dict]], jobs: List[dict]) -> List[datetime]:
-    """Starts of the day lists' studies that are the UPU radiologist's other
-    work: not matched to a UPU request, started on call (on_call()), once
-    each. A UPU request with no matched study (its patient's CNP not in the
-    cache) still has its study in the day list: for each, in request order,
-    the first unclaimed study starting from PACS_SLACK before it to
-    WARD_MATCH after it is taken as that request's, not ward work (else the
-    same exam is counted twice)."""
-    claimed = {j['study_key'] for j in jobs if j['study_key']}
-    seen, free = set(), []
-    for st in room_studies or []:
-        key, t = study_key(st), parse_ts(st.get('start'))
-        if t is None or key in claimed or key in seen:
-            continue
-        seen.add(key)
-        free.append(t)
-    free.sort()
-    for j in sorted((j for j in jobs if not j['t_start'] and not j['merged'] and not j['inconsistent']),
-                    key=lambda j: j['t_req']):
-        for i, t in enumerate(free):
-            if j['t_req'] - PACS_SLACK <= t <= j['t_req'] + WARD_MATCH:
-                del free[i]
-                break
-    return [t for t in free if on_call(t)]
-
-
-def unmatched_busy(jobs: List[dict], typical: timedelta) -> List[tuple]:
-    """UPU exams done with no PACS start (the patient's CNP not cached): the
-    typical length ending at the report, else at the performed time, so the
-    accumulated work does not lose them."""
-    out = []
-    for j in jobs:
-        if j['t_start'] or j['merged'] or j['inconsistent'] or not j['left']:
-            continue
-        end = j['t_rep'] or j['t_perf']
-        if end is not None:
-            out.append((end - typical, end))
-    return out
 
 
 def region_key(regions: Optional[List[str]]) -> str:
@@ -610,7 +596,7 @@ def idle_while_waiting(exam_intervals, busy_merged: List[tuple], a: datetime, b:
     return round(max(0.0, both) / _hours(b - a), 3)
 
 
-def _segment(jobs, as_of, span_start, window, samples=(), busy=None, ward=()) -> dict:
+def _segment(jobs, as_of, span_start, window, samples=(), busy=None) -> dict:
     exam = [j['exam'] for j in jobs if j['exam']]
     report = [j['report'] for j in jobs if j['report']]
     w_start = as_of - window
@@ -625,15 +611,10 @@ def _segment(jobs, as_of, span_start, window, samples=(), busy=None, ward=()) ->
     svc_cur = service_stats(samples, w_start, as_of, busy)
     svc_span = service_stats(samples, span_start, as_of, busy)
     mean_h = svc_span['mean'] / 60.0 if svc_span['n'] >= SERVICE_MIN_SAMPLES and svc_span['mean'] else None
-    ward_h = sum(1 for t in ward if w_start < t <= as_of) / _hours(window)
     service = {'occupancy': svc_cur['occupancy'], 'n_span': svc_span['n'],
                'mean_span': svc_span['mean'], 'median_span': svc_span['median'],
                'mu': round(1.0 / mean_h, 2) if mean_h else None,
-               'rho': round(cur['lam'] * mean_h, 2) if mean_h else None,
-               # the room's load: UPU requests plus the ward studies started
-               'ward_h': round(ward_h, 2),
-               'ward_span': sum(1 for t in ward if span_start < t <= as_of),
-               'rho_room': round((cur['lam'] + ward_h) * mean_h, 2) if mean_h else None}
+               'rho': round(cur['lam'] * mean_h, 2) if mean_h else None}
     door = [(j['t_req'] - j['t_arr']).total_seconds() / 60.0
             for j in jobs if j['t_arr'] and w_start < j['t_req'] <= as_of]
     door_span = [(j['t_req'] - j['t_arr']).total_seconds() / 60.0
@@ -652,32 +633,28 @@ def compute(rows: List[dict], report_times: Dict[str, Optional[datetime]],
             arrivals: Dict[str, Optional[datetime]], as_of: datetime,
             hours: int = 24, window_min: int = 60, step_min: int = 10,
             truncated: bool = False, pacs_studies: Optional[Dict[str, list]] = None,
-            room_studies: Optional[List[dict]] = None,
-            regions: Optional[Dict[str, List[str]]] = None) -> dict:
-    """`room_studies`: every ultrasound study of the days analysed, any
-    patient ({'uid', 'start'}, PacsChecker.studies_for_day()); those not
-    matched to a UPU request and started on call are the UPU radiologist's
-    ward work (ward_starts()). `regions`: the regions of
-    each request's studies (from its report page), so an exam's length is
-    compared with the same kind of exam."""
+            regions: Optional[Dict[str, List[str]]] = None,
+            validators: Optional[Dict[str, str]] = None) -> dict:
+    """`regions`: the regions of each request's studies (from its report
+    page), so an exam's length is compared with the same kind of exam.
+    `validators`: who validated each request's report, so the accumulated
+    work counts only the on-call radiologist's UPU exams
+    (on_call_radiologist()); the names stay inside this function."""
     jobs = build_jobs(rows, report_times, arrivals, pacs_studies)
+    validators = validators or {}
+    for j in jobs:
+        j['validator'] = norm_name(validators.get(j['id']))
     caps = open_caps(jobs)
     apply_caps(jobs, caps)
     window = timedelta(minutes=window_min)
     span_start = as_of - timedelta(hours=hours)
 
-    ward = ward_starts(room_studies, jobs)
-    samples = service_samples(jobs, ward)
-    typical = _median_td(samples) or WARD_TYPICAL
-    # all the work done: the measured exams, plus the ward studies and the
-    # UPU exams without a measured end, each the typical length cut at the
-    # next start (they are work all the same: occupancy, accumulated strain)
-    sampled = {s for s, _ in samples}
-    starts = [j['t_start'] for j in jobs if j['t_start']]
-    unmeasured = [t for t in starts if t not in sampled]
-    busy = samples + ward_intervals(ward + unmeasured, starts, typical) + unmatched_busy(jobs, typical)
+    samples = service_samples(jobs)
+    typical = _median_td(samples) or TYPICAL_EXAM
+    work = work_intervals(jobs, samples, typical)
+    busy = [iv for _, iv in work]
 
-    current = _segment(jobs, as_of, span_start, window, samples, busy, ward)
+    current = _segment(jobs, as_of, span_start, window, samples, busy)
 
     exam = [j['exam'] for j in jobs if j['exam']]
     report = [j['report'] for j in jobs if j['report']]
@@ -694,22 +671,33 @@ def compute(rows: List[dict], report_times: Dict[str, Optional[datetime]],
     busy_merged = strain_index.merge(busy)
     # the requests the exam queue counts (the same ones as its lambda)
     arrivals = sorted(j['t_req'] for j in jobs if j['exam'])
+    # the accumulated work of each duty block: its on-call radiologist's exams
+    blocks: Dict[datetime, dict] = {}
+
+    def block_of(t):
+        start = strain_index.duty_start(t)
+        if start not in blocks:
+            who = on_call_radiologist(jobs, start, as_of)
+            ours = lambda j: who is None or j['validator'] == who
+            until = min(start + timedelta(days=1), as_of)
+            in_block = [(j, iv) for j, iv in work if iv[1] > start and iv[0] < until]
+            blocks[start] = {'busy': [iv for j, iv in work if ours(j)], 'known': who is not None,
+                             'exams': sum(1 for j, _ in in_block if ours(j)), 'of': len(in_block)}
+        return blocks[start]
+
     series = []
     for t, e in points:
         rho_t = round(e['lam'] / mu_eff, 2) if mu_eff else None
-        # the radiologist's load counts the ward studies too, at the same
-        # capacity as the UPU exams; `rho` stays the UPU queue's
-        ward_n = sum(1 for w in ward if t - window < w <= t)
-        rho_room = round(rho_t + ward_n / _hours(window) / mu_eff, 2) if rho_t is not None else None
         idle_w = idle_while_waiting(exam, busy_merged, t - window, t)
+        blk = block_of(t)
         st = strain_index.score(strain_index.Moment(
-            t=t, rho=rho_room, queue=e['L'], wait=e['W'], oldest=oldest_wait(exam, t),
-            idle_waiting=idle_w, busy=busy, arrivals=arrivals, capacity=mu_eff,
+            t=t, rho=rho_t, queue=e['L'], wait=e['W'], oldest=oldest_wait(exam, t),
+            idle_waiting=idle_w, busy=blk['busy'], arrivals=arrivals, capacity=mu_eff,
             relative=[r for (s0, e0), r in relative if t - window < e0 <= t]), refs)
         series.append({
             't': t.strftime('%Y-%m-%dT%H:%M'),
             'lam': e['lam'], 'x': e['x'], 'L': e['L'], 'W': e['W'],
-            'rho': rho_t, 'rho_room': rho_room, 'ward': ward_n, 'idle_waiting': round(idle_w, 2),
+            'rho': rho_t, 'idle_waiting': round(idle_w, 2), 'on_call_known': blk['known'],
             'strain': st['index'], 'strain_c': st['c'],
         })
 
@@ -734,7 +722,10 @@ def compute(rows: List[dict], report_times: Dict[str, Optional[datetime]],
         'pacs_start': {'known': sum(1 for j in left if j['pacs_start']), 'of': len(left)},
         'inconsistent': sum(1 for j in in_span if j['inconsistent']),
         'merged': sum(1 for j in in_span if j['merged']),
-        'ward_studies': sum(1 for t in ward if span_start < t <= as_of),
+        # per duty block: whether its on-call radiologist is known, and how
+        # many of its UPU exams are theirs (counts only, never the name)
+        'on_call': [{'block': k.strftime('%Y-%m-%dT%H:%M'), 'known': v['known'],
+                     'exams': v['exams'], 'of': v['of']} for k, v in sorted(blocks.items())],
         'upu_arrivals': {'known': sum(1 for j in upu if j['t_arr']), 'of': len(upu)},
         # open past their cap at as_of: left out of the queue
         'stale': {stage: sum(1 for j in jobs if j[stage] and j[stage][1] is None

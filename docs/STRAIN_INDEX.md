@@ -16,7 +16,7 @@ Read it as "conditions known to raise the risk of errors, hurried reads and shor
 ## The facts it rests on (owner, 2026-11-12)
 
 - One ultrasound runs from calling the patient (1–2 min), preparation, the scan, talking to the patient and discharge to the **written report**. Nothing else starts before the report (rare exceptions). So an exam's busy time is *PACS study start → report validation*.
-- The radiologist who does the UPU ultrasounds also does the **ward ultrasounds**. The real data narrows this to the on-call hours (weekdays 14:00 → 08:00, weekends all day): on weekday mornings 10–16 other ultrasound studies an hour run beside the UPU ones, impossible for one radiologist at 7–9 minutes an exam, so other rooms scan then (`queuestats.on_call()`).
+- **Only the UPU ultrasounds** are measured, not the wards' (14 radiologists share those). The accumulated work is **the on-call radiologist's own UPU exams**, found by who validated the reports (below).
 - The on-call radiologist **also works the morning**: the duty block is 08:00 → 08:00.
 - The strain at 03:00–05:00 after 40–50 ultrasounds is **very high even with a short queue**: it builds up over the duty, and an idle gap of 10 minutes is not rest.
 - "Short exams with long spaces between them while a queue waits" is a sign of fatigue: getting rid of the patients fast.
@@ -43,7 +43,7 @@ Either part alone raises the index; both together raise it more. With nothing do
 
 | Part | Weight | Definition |
 |---|---|---|
-| `load` | 0.35 | `clamp((ρ − 0.30) / 0.70)`, ρ the room's utilisation of the hour: (UPU requests + ward studies started) × mean exam length (`rho_room`). 0 at 30 %, 1 at 100 % or more |
+| `load` | 0.35 | `clamp((ρ − 0.30) / 0.70)`, ρ the UPU queue's utilisation of the hour: requests × mean exam length. 0 at 30 %, 1 at 100 % or more |
 | `pressure` | 0.25 | the worst of: people waiting `L / L_ref`, mean wait `W / W_ref`, the **longest wait** at that moment `/ (2 · W_ref)` (clinicians call about the patient waiting longest, not about the average). `L_ref`, `W_ref` = the span's 90th percentile of the hourly L and W, never under 3 people / 45 min (`strain_refs` in the response) |
 | `burst` | 0.20 | the worst recent burst of requests: for every 30-minute window ending at a request in the last 2 hours, the requests in it beyond what the room clears in half an hour (capacity × 0.5 h, capacity = 1 / mean exam length, 4/h when unknown), over 3. Felt fully for 1 hour after the window, fading linearly to 0 at 2 hours. Steady arrivals at the same ρ read 0 |
 | `rushing` | 0.20 | `shorter × clamp(idle_waiting / 0.25)`: both needed. Fast exams back to back are efficiency; idle gaps alone may be a CT being read |
@@ -54,64 +54,73 @@ Either part alone raises the index; both together raise it more. With nothing do
 ### fatigue: what the duty has cost
 
 - **`accumulated`**: the work done since the duty began (08:00), as an integral:
-  - busy time adds up: UPU exams (PACS start → report), on-call ward studies and UPU exams with no measured end (the median exam length, cut at the next start); a UPU exam with no PACS start at all (its patient's CNP not cached) counts as the median length ending at its report, else at its performed time (`unmatched_busy()`);
+  - busy time adds up: **the on-call radiologist's UPU exams** (PACS start → report; with no measured end, the median exam length cut at the next start; with no PACS start at all, the median length ending at the report, else at the performed time: `work_intervals()`);
   - an idle gap **under 30 minutes is not rest**: it changes nothing;
   - a gap of 30 minutes or more is rest: for its whole length the accumulated work decays with a **half-life of 8 hours** (a 2.5-hour rest takes off about 20 %);
-  - read on a saturating scale, `1 − 2^(−hours / 4)`: 4 busy hours (about 20 exams) = 50 %, 8 h = 75 %, 12 h = 88 %. It nears 1 and never clips, so a heavy night still differs from a very heavy one.
+  - read on a saturating scale, `1 − 2^(−hours / 2.5)`: 2.5 busy hours (about 17 exams of 9 minutes) = 50 %, 5 h = 75 %, 7.5 h = 88 %. Real exams last 7–9 minutes (call to written report), so the owner's 40–50 exams read about 80 %. It nears 1 and never clips, so a heavy night still differs from a very heavy one.
 - **`sleepiness`** = `0.6 · circadian(t) + 0.4 · clamp(hours since 08:00 / 24)`:
   - **circadian(t)**: an *assumed* curve inspired by the two-process model's process C, linear between `0:00 .65 · 2:00 .85 · 4:00 1.0 · 6:00 .85 · 8:00 .40 · 10:00 .15 · 12:00 .20 · 14:00 .40 · 15:00 .40 · 16:00 .25 · 18:00 .10 · 20:00 .20 · 22:00 .45 · 24:00 .65`. Deepest 02:00–06:00, a smaller dip after lunch;
   - **hours on duty**: since 08:00 (before 08:00, since the day before's). Holidays are not known.
 - The `0.5 +` floor: fully rested, the accumulated work counts half; at the deepest of the night after a long block, fully.
 
+### Whose work: the on-call radiologist
+
+In the day shift several radiologists do UPU ultrasounds (174 exams of 9 minutes in a day are 26 hours of work), so counting every UPU exam from 08:00 overstated the on-call radiologist's morning. Each report records who validated it (the report page's studies; the latest one validated).
+
+- **Who is on call** in a duty block (`on_call_radiologist()`): the validator of most UPU reports between 22:00 and 08:00; before the night, the most in the on-call hours so far (weekdays from 14:00, weekends from 08:00).
+- **`accumulated`** then counts only that radiologist's UPU exams since 08:00: their morning UPU work included, other radiologists' left out.
+- Before anyone has validated a report on call (a weekday morning seen live), it counts every UPU exam, and the point says so (`on_call_known: false`, shown in the tooltip).
+- The name is used only inside `queuestats.compute()` to choose the exams. It is **never returned, logged or stored**: the response carries per block only `on_call: [{block, known, exams, of}]`, counts.
+- The queue parts (`load`, `pressure`, `burst`, `rushing`) stay the queue's, whoever serves it.
+- If two radiologists split the UPU ultrasounds at night, the one with more reports is taken, and the other's exams are left out.
+
 ## What it gives
 
-Computed with `strain.score()`; 12-minute exams spread evenly since the duty began, requests arriving steadily at 4 an hour unless a burst is named (6 requests in 15 minutes), capacity 5 exams an hour.
+Computed with `strain.score()`; the on-call radiologist's 9-minute exams spread evenly from 14:00 (on the real days they did no UPU exam in the morning), requests arriving steadily at 4 an hour unless a burst is named (6 requests in 15 minutes), capacity 6.5 exams an hour.
 
 | Moment | Index | now | burst | accumulated | sleepiness | fatigue |
 |---|---|---|---|---|---|---|
-| 10:00, 8 done since 08:00, 1 waiting | **29** | 18 | 0 | 24 | 12 | 14 |
-| 12:00, 15 done, 5 waiting | **66** | 55 | 0 | 41 | 19 | 24 |
-| 14:00, 20 done, 2 waiting | **55** | 32 | 0 | 50 | 34 | 34 |
-| 20:00, 30 done, 2 waiting | **61** | 32 | 0 | 65 | 32 | 43 |
-| 21:00, 30 done, 6 arrived 20:30-20:45, 4 waiting | **86** | 75 | 100 | 65 | 41 | 46 |
-| 22:00, the same burst an hour on, 2 waiting | **75** | 47 | 75 | 69 | 50 | 52 |
-| 00:00, 38 done, 2 waiting | **73** | 32 | 0 | 73 | 66 | 61 |
-| 04:00, 25 done (quiet night), 2 waiting | **53** | 27 | 0 | 38 | 93 | 36 |
-| 04:00, 45 done, nobody waiting | **76** | 0 | 0 | 79 | 93 | 76 |
-| 04:00, 45 done, 2 waiting | **83** | 27 | 0 | 79 | 93 | 76 |
-| 04:00, 45 done, 5 waiting | **88** | 50 | 0 | 79 | 93 | 76 |
-| 04:00, 45 done, a burst at 03:00, 3 waiting | **93** | 70 | 100 | 79 | 93 | 76 |
-| 04:00, 45 done, rested 01:00-03:30, 2 waiting | **76** | 27 | 0 | 69 | 93 | 67 |
-| 04:00, 45 done, short exams + idle while 5 wait | **93** | 70 | 0 | 79 | 93 | 76 |
-| 07:30, 55 done, 3 waiting | **83** | 40 | 0 | 85 | 70 | 72 |
+| 16:00, 8 done since 14:00, 1 waiting | **33** | 18 | 0 | 28 | 28 | 18 |
+| 18:00, 15 done, 5 waiting | **68** | 55 | 0 | 46 | 23 | 28 |
+| 21:00, 20 done, 6 arrived 20:30-20:45, 4 waiting | **84** | 73 | 92 | 56 | 41 | 40 |
+| 22:00, the same burst an hour on, 2 waiting | **70** | 46 | 69 | 60 | 50 | 45 |
+| 00:00, 30 done, 2 waiting | **72** | 32 | 0 | 71 | 66 | 59 |
+| 04:00, 20 done (quiet night), 2 waiting | **56** | 27 | 0 | 41 | 93 | 39 |
+| 04:00, 45 done, nobody waiting | **82** | 0 | 0 | 85 | 93 | 82 |
+| 04:00, 45 done, 2 waiting | **87** | 27 | 0 | 85 | 93 | 82 |
+| 04:00, 45 done, 5 waiting | **91** | 50 | 0 | 85 | 93 | 82 |
+| 04:00, 45 done, rested 01:00-03:30, 2 waiting | **81** | 27 | 0 | 77 | 93 | 74 |
+| 04:00, 45 done, short exams + idle while 5 wait | **95** | 70 | 0 | 85 | 93 | 82 |
+| 07:30, 55 done, 3 waiting | **86** | 40 | 0 | 90 | 70 | 76 |
 
-The quiet night reads lower than its 25 exams suggest: spread over 20 hours they leave gaps over 30 minutes, which count as rest.
+The quiet night reads lower than its 20 exams suggest: spread over 14 hours they leave gaps over 30 minutes, which count as rest.
 
 ## How to read the numbers
 
 - Readout colours: below 40 muted, 40–64 orange, 65 and over red. Display thresholds, not risk classes.
 - Meaningful for comparing times and days of *this* queue; not comparable with another department or tool.
+- The index is about conditions, not a person's performance: the validator only decides whose work accumulates. Do not use it to compare radiologists.
 - `pressure` is judged against the span shown, so the same moment reads differently in the 12 h, 24 h and multi-day views. The other parts do not depend on the span.
-- Coverage limits: `accumulated`, `rushing` and the measured ρ need PACS exam starts (coverage in the hero subtitle); `shorter` by region needs the report pages cached (else all exams are one kind). Without the PACS day list there are no ward studies, and the load is understated.
-- A ward study's length is not measured (its report time is not read): the median exam length, cut at the next start.
-- A UPU request whose study was not matched (CNP not cached) still has that study in the PACS day list. `ward_starts()` takes, for each such request, the first unmatched study from 15 min before it to 6 h after as its own, so it is not counted again as ward work (before 2026-11-12 it was: 74 "ward" studies on 8 Nov).
+- Coverage limits: `accumulated`, `rushing` and the measured ρ need PACS exam starts (coverage in the hero subtitle); `shorter` by region needs the report pages cached (else all exams are one kind).
 - X-rays and CT are not counted (two radiologists, see above). A gap spent reading a CT can still show as `idle_waiting`; `rushing` needs short exams as well, which limits that.
 
 ## Seen on real data (2026-11-12)
 
-Three on-call days, 08:00 → 08:00, through `GET /api/schedule/queue` (aggregates only):
+Three on-call days, 08:00 → 08:00, through `GET /api/schedule/queue` (aggregates only), after the changes below:
 
-| Day | UPU requests | PACS starts matched | mean exam | index 21:00 / 00:00 / 04:00 / 07:00 |
-|---|---|---|---|---|
-| Mon 10 Nov | 174 | 91 (52 %) | 9.0 min | 77 / 88 / 94 / 81 |
-| Tue 11 Nov | 107 | 84 (79 %) | 7.5 min | 65 / 78 / 70 / 66 |
-| Sat 8 Nov | 141 | 6 (4 %) | (6 measured) | 64 / 62 / 61 / 46 |
+| Day | UPU requests | PACS starts matched | mean exam | on-call radiologist's UPU exams | index 18:00 / 22:00 / 00:00 / 02:00 / 04:00 / 07:50 |
+|---|---|---|---|---|---|
+| Mon 10 Nov | 174 | 91 (52 %) | 9.4 min | 54 of 101 with a report | 77 / 71 / 84 / 82 / 90 / 51 |
+| Tue 11 Nov | 107 | 84 (79 %) | 8.1 min | 44 of 86 | 83 / 41 / 66 / 67 / 55 / 35 |
+| Sat 8 Nov | 141 | 6 (4 %) | (6 measured) | 49 of 69 | 40 / 52 / 60 / 64 / 61 / 41 |
 
-- The ranking follows the day's volume, and mornings read 15–42.
-- Real exams (call to written report) last 7–9 minutes, not the 12 assumed for the table above: 45 exams are about 6 busy hours, `accumulated` ≈ 65 %.
-- 174 exams of 9 minutes are 26 hours of work in 24: in the day shift more than one radiologist does UPU ultrasounds. `accumulated` counts all of them from 08:00, so it overstates the on-call radiologist's own morning (open question).
-- Matching exam starts needs each patient's CNP from cached pages; older days are not cached (8 Nov: 4 %). There `accumulated` rests on the report times (`unmatched_busy()`), `idle_waiting` is unreliable and the index reads low. Coverage is in the hero subtitle: below about 75 % read the strain with care.
-- Ward studies at night: 0–3 a day. The night's load is the UPU's.
+- The busy Monday night reads 82–90 between 02:00 and 04:00, the owner's experience; the quiet Tuesday (1 request an hour at 04:00) 55–67.
+- On all three days **the on-call radiologist validated no UPU ultrasound before 14:00**: their morning is other work, so their accumulated UPU work starts at 14:00 (the duty clock, for sleepiness, still at 08:00).
+- In the evening the accumulated work can fall while the queue is long (Monday 18:00 → 22:00): the on-call radiologist had gaps of 30 minutes or more, and someone else validated UPU reports (two radiologists on call).
+- Real exams (call to written report) last 7–9 minutes, hence `ACCUM_HALF_FULL_H` = 2.5 h.
+- 174 exams of 9 minutes are 26 hours of work in 24: in the day shift more than one radiologist does UPU ultrasounds. Hence `accumulated` counts only the on-call radiologist's exams (by validator, above).
+- Matching exam starts needs each patient's CNP from cached pages; older days are not cached (8 Nov: 4 %). There `accumulated` rests on the report times (`work_intervals()`), `idle_waiting` is unreliable and the index reads low. Coverage is in the hero subtitle: below about 75 % read the strain with care.
+- Weekday mornings had 10–16 other ultrasound studies an hour (other rooms, other radiologists): the reason ward studies were first gated, then left out.
 
 ## History
 
@@ -120,7 +129,8 @@ Three on-call days, 08:00 → 08:00, through `GET /api/schedule/queue` (aggregat
 3. **A decaying integral since 14:00** (`10bdba8`): fixed the memory, but decayed during work too, and the block started at 14:00.
 4. **Rest-only decay** (`2ca90d7`): the duty block starts at 08:00; only a rest of 30 minutes or more decays the work; a saturating scale; `shorter` by exam regions; the longest wait in `pressure`; calling time left out of `idle_waiting`; ward studies counted at every hour.
 5. **Bursts** (`e6419e2`): bursts of arrivals, felt over the next 1–2 hours (`burst`).
-6. **Now**, after the first real data: ward studies on call only again, an unmatched UPU study no longer counted as ward work, UPU exams without a PACS start kept in `accumulated`.
+6. **After the first real data** (`b77e9f3`): ward studies on call only, an unmatched UPU study no longer counted as ward work, UPU exams without a PACS start kept in `accumulated`.
+7. **Now**: ward studies left out entirely; the accumulated work is the on-call radiologist's own UPU exams, by validator; half full at 2.5 busy hours (real exams are 7–9 minutes, not 12).
 
 ## Changing it
 
@@ -139,7 +149,7 @@ All tunables are constants at the top of `strain.py`:
 | `IDLE_REF`, `CALL_ALLOWANCE` | 0.25, 5 min | a quarter of the hour idle while people wait = 1; calling is not idle |
 | `REST_MIN` | 30 min | a shorter idle gap is not rest |
 | `ACCUM_HALF_LIFE_H` | 8 h | decay of the accumulated work during rest |
-| `ACCUM_HALF_FULL_H` | 4 h | busy hours that make `accumulated` half full |
+| `ACCUM_HALF_FULL_H` | 2.5 h | busy hours that make `accumulated` half full |
 | `FATIGUE_FLOOR` | 0.5 | share of the accumulated work counted fully rested |
 | `DUTY_START_HOUR`, `DUTY_REF_H` | 08:00, 24 h | the duty block |
 | `CIRCADIAN` | see above | the assumed curve |

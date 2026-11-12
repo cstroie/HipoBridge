@@ -319,11 +319,12 @@ class TestScheduleQueueGlue(unittest.TestCase):
 
     def test_report_time_carries_the_study_regions(self):
         study = _StubCached({'7': {'studies': [
-            {'validation_date': '2026-11-11T10:00:00', 'region': 'abdomen'},
-            {'validation_date': '2026-11-11T10:20:00', 'region': 'pelvis'}]},
+            {'validation_date': '2026-11-11T10:00:00', 'region': 'abdomen', 'validator': 'A'},
+            {'validation_date': '2026-11-11T10:20:00', 'region': 'pelvis', 'validator': 'B'}]},
             '8': {'studies': [{'validation_date': None, 'region': 'abdomen'}]}})
         v = _run(hippobridge._queue_report_time(study, '7'))
-        self.assertEqual(v, {'t': datetime(2026, 11, 11, 10, 20), 'regions': ['abdomen', 'pelvis']})
+        self.assertEqual(v, {'t': datetime(2026, 11, 11, 10, 20), 'regions': ['abdomen', 'pelvis'],
+                             'validator': 'B'})
         self.assertIsNone(_run(hippobridge._queue_report_time(study, '8')))   # not validated yet
         self.assertIsNone(_run(hippobridge._queue_report_time(study, '9')))   # not cached
 

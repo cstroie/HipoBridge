@@ -145,10 +145,10 @@ class TestIndex(unittest.TestCase):
         self.assertGreaterEqual(sx.score(Moment(dt(4), busy=work))['index'], 65)
 
     def test_accumulated_saturates_softly(self):
-        four = [(dt(8), dt(12))]
-        self.assertEqual(sx.score(Moment(dt(12), busy=four))['c']['accumulated'], 50)
-        eight = [(dt(8), dt(16))]
-        self.assertEqual(sx.score(Moment(dt(16), busy=eight))['c']['accumulated'], 75)
+        half = [(dt(8), dt(10, 30))]
+        self.assertEqual(sx.score(Moment(dt(10, 30), busy=half))['c']['accumulated'], 50)
+        five = [(dt(8), dt(13))]
+        self.assertEqual(sx.score(Moment(dt(13), busy=five))['c']['accumulated'], 75)
 
 
 if __name__ == '__main__':
