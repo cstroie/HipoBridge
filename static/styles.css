@@ -2544,6 +2544,8 @@ select {
         border-top-color: var(--primary);
         opacity: 0.6;
     }
+
+    .q-busy-spin::after { animation: none; opacity: 0.6; }
 }
 
 /* ── AI tab ──────────────────────────────────────────────────────────── */
@@ -2937,6 +2939,25 @@ select {
     border-bottom: 1px solid var(--border);
 }
 .schedule-queue-chart[hidden] { display: none; }
+
+/* While the queue metrics refresh: hero, utilisation bar and graph blurred (.q-busy),
+   one spinner over the graph (.q-busy-spin; over the hero while the graph is hidden) */
+.q-busy > * { opacity: 0.55; filter: blur(3px); transition: opacity 0.15s, filter 0.15s; }
+.q-busy-spin { position: relative; }
+.q-busy-spin::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 28px;
+    height: 28px;
+    margin: -14px 0 0 -14px;
+    border: 3px solid var(--border);
+    border-top-color: var(--primary);
+    border-radius: var(--radius-full);
+    animation: spin 0.9s linear infinite;
+    pointer-events: none;
+}
 .schedule-queue-head {
     display: flex;
     align-items: center;

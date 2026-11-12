@@ -468,6 +468,9 @@ def compute(rows: List[dict], report_times: Dict[str, Optional[datetime]],
 
     exam = [j['exam'] for j in jobs if j['exam']]
     report = [j['report'] for j in jobs if j['report']]
+    # rho per point: lam of that point's hour over the span's capacity (the
+    # measured 1/E[S] when there is one, else the demonstrated p90 one)
+    mu_eff = current['service']['mu'] or current['exam']['mu']
     series = []
     t = span_start + timedelta(minutes=step_min)
     while t <= as_of:
@@ -475,6 +478,7 @@ def compute(rows: List[dict], report_times: Dict[str, Optional[datetime]],
         series.append({
             't': t.strftime('%Y-%m-%dT%H:%M'),
             'lam': e['lam'], 'x': e['x'], 'L': e['L'], 'W': e['W'],
+            'rho': round(e['lam'] / mu_eff, 2) if mu_eff else None,
         })
         t += timedelta(minutes=step_min)
 

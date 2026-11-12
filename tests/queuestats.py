@@ -166,6 +166,9 @@ class TestJobs(unittest.TestCase):
         self.assertEqual(svc['mu'], 3.0)
         self.assertEqual(svc['rho'], round(out['current']['exam']['lam'] / 3.0, 2))
         self.assertEqual(out['coverage']['pacs_start'], {'known': 8, 'of': 8})
+        # every series point carries rho = lam / (the measured mu)
+        p = next(p for p in out['series'] if p['lam'])
+        self.assertEqual(p['rho'], round(p['lam'] / 3.0, 2))
 
 
 class TestStats(unittest.TestCase):

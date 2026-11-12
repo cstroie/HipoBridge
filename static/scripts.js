@@ -8008,6 +8008,21 @@ document.addEventListener('DOMContentLoaded', function() {
         return day && day < localDateStr() ? day : '';
     }
 
+    // While the metrics are computed: hero, utilisation bar and graph blurred,
+    // one spinner over the graph (over the hero until the graph exists).
+    function applyScheduleQueueBusy() {
+        const busy = scheduleQueueMode && scheduleQueueLoading;
+        const hero = document.getElementById('scheduleHero');
+        const chart = elements.scheduleQueueChart;
+        const spinOn = chart && !chart.hidden ? chart : hero;
+        [hero, elements.scheduleModBars, chart].forEach(el => {
+            if (!el) return;
+            el.classList.toggle('q-busy', busy);
+            el.classList.toggle('q-busy-spin', busy && el === spinOn);
+            if (busy) el.setAttribute('aria-busy', 'true'); else el.removeAttribute('aria-busy');
+        });
+    }
+
     async function fetchScheduleQueue(force = false, minAgeMs = 0) {
         if (minAgeMs && Date.now() - scheduleQueueFetchedAt < minAgeMs) return;
         const seq = ++scheduleQueueSeq;
@@ -8016,6 +8031,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (end) params.set('end', end);
         if (force) params.set('refresh', '1');
         scheduleQueueLoading = true;
+        applyScheduleQueueBusy();
         if (scheduleQueueMode && !scheduleQueueData) renderScheduleQueueHero();
         try {
             const resp = await apiFetch(`/api/schedule/queue?${params}`);
@@ -8030,6 +8046,7 @@ document.addEventListener('DOMContentLoaded', function() {
         } finally {
             if (seq === scheduleQueueSeq) {
                 scheduleQueueLoading = false;
+                applyScheduleQueueBusy();
                 if (scheduleQueueMode) renderScheduleQueueHero();
             }
         }
@@ -8238,6 +8255,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 [`${hhmm(p.t)} (hour to)`, ''],
                 [`requests ${fmtRate(p.lam)}/h`, 'var(--st-inlab)'],
                 [`exams ${fmtRate(p.x)}/h`, 'var(--st-completed)'],
+                [`ρ ${fmtPct(p.rho)}`, p.rho != null && p.rho >= QUEUE_RHO_HIGH ? 'var(--urgent)' : 'var(--primary)'],
                 [`in queue ${fmtRate(p.L)}`, 'var(--muted)'],
                 [`wait ${fmtMin(p.W)}`, 'var(--st-inprogress)'],
             ];
@@ -8272,6 +8290,7 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             clearTimeout(scheduleQueueTimer);
         }
+        applyScheduleQueueBusy();
         renderScheduleHero();
         if (!on && elements.scheduleModBars && !scheduleEntries.length) elements.scheduleModBars.hidden = true;
     }
