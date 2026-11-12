@@ -205,11 +205,29 @@ class TestJobs(unittest.TestCase):
         self.assertEqual(p['ward'], 1)
         self.assertGreater(p['rho_room'], p['rho'])
 
-    def test_ward_studies_count_at_any_hour(self):
-        # owner, 2026-11-12: the UPU radiologist does the ward ultrasounds too
+    def test_ward_studies_only_on_call(self):
+        self.assertFalse(qs.on_call(datetime(2026, 11, 11, 10, 0)))    # Wednesday morning: other rooms
+        self.assertTrue(qs.on_call(datetime(2026, 11, 11, 14, 0)))
+        self.assertTrue(qs.on_call(datetime(2026, 11, 11, 7, 59)))
+        self.assertTrue(qs.on_call(datetime(2026, 11, 14, 10, 0)))     # Saturday
         room = [{'uid': 'd', 'start': '2026-11-11T10:00:00'}, {'uid': 'n', 'start': '2026-11-11T20:00:00'}]
         out = qs.compute([], {}, {}, datetime(2026, 11, 12, 0, 0), room_studies=room)
-        self.assertEqual(out['coverage']['ward_studies'], 2)
+        self.assertEqual(out['coverage']['ward_studies'], 1)
+
+    def test_unmatched_upu_study_is_not_ward_work(self):
+        # request 1 found no study (CNP not cached); its study at 20:10 is in
+        # the day list: it is taken as that request's, the 21:00 one is ward
+        rows = [row('1', '2026-11-11 20:00', performed='2026-11-11 20:20')]
+        room = [{'uid': 'a', 'start': '2026-11-11T20:10:00'}, {'uid': 'w', 'start': '2026-11-11T21:00:00'}]
+        out = qs.compute(rows, {}, {}, datetime(2026, 11, 12, 0, 0), room_studies=room)
+        self.assertEqual(out['coverage']['ward_studies'], 1)
+
+    def test_unmatched_exam_still_counts_as_work(self):
+        t = lambda h, m: datetime(2026, 11, 11, h, m)
+        jobs = qs.build_jobs([row('1', '2026-11-11 20:00', performed='2026-11-11 20:20'),
+                              row('2', '2026-11-11 20:30')], {'2': t(20, 50)}, {})
+        self.assertEqual(qs.unmatched_busy(jobs, timedelta(minutes=8)),
+                         [(t(20, 12), t(20, 20)), (t(20, 42), t(20, 50))])
 
     def test_relative_lengths_by_region(self):
         t = lambda h, m: datetime(2026, 11, 11, h, m)

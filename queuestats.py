@@ -81,6 +81,16 @@ PACS_SLACK = timedelta(minutes=15)    # a study may start a little before the re
 SERVICE_MAX = timedelta(minutes=60)
 WARD_TYPICAL = timedelta(minutes=15)  # a ward study's length when no UPU exam was measured
 REGION_MIN_SAMPLES = 3                # exams of a kind needed for its own median length
+WARD_MATCH = timedelta(hours=6)       # an unmatched UPU request's study starts within this after it
+
+
+def on_call(t: datetime) -> bool:
+    """Inside the on-call block: weekdays 14:00 -> 08:00, weekends all day
+    (holidays not known). Only then is every other ultrasound study the UPU
+    radiologist's. Real data (2026-11-10/11, 10:00-14:00): 10-16 other
+    studies an hour beside the UPU ones, impossible for one radiologist at
+    7-9 min an exam, so in the weekday morning other rooms scan too."""
+    return t.weekday() >= 5 or not (8 <= t.hour < 14)
 SERVICE_MIN_SAMPLES = 5               # samples needed before the measured rho is shown
 
 
@@ -269,6 +279,7 @@ def build_jobs(rows: List[dict], report_times: Dict[str, Optional[datetime]],
             't_start': t_start,
             'study_key': None if merged else key,
             't_rep': t_rep,
+            't_perf': None if inconsistent or merged else t_perf,
             'inconsistent': inconsistent,
             'merged': merged,
             'exam_known': t_left is not None,
@@ -485,16 +496,43 @@ def service_rate(intervals, a: datetime, b: datetime, window: timedelta = timede
 
 
 def ward_starts(room_studies: Optional[List[dict]], jobs: List[dict]) -> List[datetime]:
-    """Starts of the day lists' studies not matched to a UPU request, once each."""
+    """Starts of the day lists' studies that are the UPU radiologist's other
+    work: not matched to a UPU request, started on call (on_call()), once
+    each. A UPU request with no matched study (its patient's CNP not in the
+    cache) still has its study in the day list: for each, in request order,
+    the first unclaimed study starting from PACS_SLACK before it to
+    WARD_MATCH after it is taken as that request's, not ward work (else the
+    same exam is counted twice)."""
     claimed = {j['study_key'] for j in jobs if j['study_key']}
-    seen, out = set(), []
+    seen, free = set(), []
     for st in room_studies or []:
         key, t = study_key(st), parse_ts(st.get('start'))
         if t is None or key in claimed or key in seen:
             continue
         seen.add(key)
-        out.append(t)
-    return sorted(out)
+        free.append(t)
+    free.sort()
+    for j in sorted((j for j in jobs if not j['t_start'] and not j['merged'] and not j['inconsistent']),
+                    key=lambda j: j['t_req']):
+        for i, t in enumerate(free):
+            if j['t_req'] - PACS_SLACK <= t <= j['t_req'] + WARD_MATCH:
+                del free[i]
+                break
+    return [t for t in free if on_call(t)]
+
+
+def unmatched_busy(jobs: List[dict], typical: timedelta) -> List[tuple]:
+    """UPU exams done with no PACS start (the patient's CNP not cached): the
+    typical length ending at the report, else at the performed time, so the
+    accumulated work does not lose them."""
+    out = []
+    for j in jobs:
+        if j['t_start'] or j['merged'] or j['inconsistent'] or not j['left']:
+            continue
+        end = j['t_rep'] or j['t_perf']
+        if end is not None:
+            out.append((end - typical, end))
+    return out
 
 
 def region_key(regions: Optional[List[str]]) -> str:
@@ -618,8 +656,8 @@ def compute(rows: List[dict], report_times: Dict[str, Optional[datetime]],
             regions: Optional[Dict[str, List[str]]] = None) -> dict:
     """`room_studies`: every ultrasound study of the days analysed, any
     patient ({'uid', 'start'}, PacsChecker.studies_for_day()); those not
-    matched to a UPU request are the UPU radiologist's ward work (owner,
-    2026-11-12: the same radiologist does both). `regions`: the regions of
+    matched to a UPU request and started on call are the UPU radiologist's
+    ward work (ward_starts()). `regions`: the regions of
     each request's studies (from its report page), so an exam's length is
     compared with the same kind of exam."""
     jobs = build_jobs(rows, report_times, arrivals, pacs_studies)
@@ -637,7 +675,7 @@ def compute(rows: List[dict], report_times: Dict[str, Optional[datetime]],
     sampled = {s for s, _ in samples}
     starts = [j['t_start'] for j in jobs if j['t_start']]
     unmeasured = [t for t in starts if t not in sampled]
-    busy = samples + ward_intervals(ward + unmeasured, starts, typical)
+    busy = samples + ward_intervals(ward + unmeasured, starts, typical) + unmatched_busy(jobs, typical)
 
     current = _segment(jobs, as_of, span_start, window, samples, busy, ward)
 
