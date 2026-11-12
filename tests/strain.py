@@ -54,10 +54,30 @@ class TestIndex(unittest.TestCase):
         self.assertTrue(0 <= calm['index'] < bad['index'] <= 100)
         self.assertLess(calm['index'], 25)
         self.assertGreater(bad['index'], 75)
-        self.assertEqual(set(calm['c']), set(sx.WEIGHTS))
+        self.assertEqual(set(calm['c']), set(sx.WEIGHTS) | {'sleepiness'})
 
     def test_weights_sum_to_one(self):
         self.assertAlmostEqual(sum(sx.WEIGHTS.values()), 1.0)
+
+    def test_no_work_is_zero_at_any_hour(self):
+        # fatigue scales the work, it does not add to it: an empty room at
+        # 04:00 after a long block is not strained
+        self.assertEqual(sx.strain(dt(4), 0.0, 0.0, None, [], None)['index'], 0)
+        self.assertGreater(sx.strain(dt(4), 0.0, 0.0, None, [], None)['c']['sleepiness'], 50)
+
+    def test_fatigue_scales_the_same_work(self):
+        day = sx.strain(dt(10), 1.0, 3.0, 45, [], None)
+        night = sx.strain(dt(4), 1.0, 3.0, 45, [], None)
+        work = 100 * (sx.WEIGHTS['load'] + sx.WEIGHTS['pressure'])
+        f = lambda t: sx.FATIGUE_FLOOR + (1 - sx.FATIGUE_FLOOR) * sx.sleepiness(t)
+        self.assertEqual(day['index'], round(work * f(dt(10))))
+        self.assertEqual(night['index'], round(work * f(dt(4))))
+        self.assertLessEqual(night['index'], work)
+
+    def test_pressure_references_and_busy(self):
+        self.assertEqual(sx.strain(dt(10), 0, 3.0, 45, [], None, queue_ref=6, wait_ref=90)['c']['pressure'], 50)
+        busy = [(dt(8), dt(10))]
+        self.assertEqual(sx.strain(dt(10), 0, 0, None, [], None, busy=busy)['c']['no_break'], 50)
 
     def test_night_is_worse_than_day_at_equal_load(self):
         day = sx.strain(dt(10), 0.7, 1.0, 20, [], None)

@@ -9,12 +9,15 @@ days) can be compared. The weights are assumptions, kept in one place
 with. Read it as "conditions known to raise the risk of errors, hurried
 reads and short tempers", never as "an error is X% likely".
 
-Components, each 0..1:
-  load       rho of the hour (lam / mu): 0 at 30 %, 1 at 100 % and over
-  pressure   people waiting: the queue length (3 waiting = 1) or the mean wait
-             (45 min = 1), whichever is worse
-  no_break   minutes of back-to-back work (gaps under 10 min): 4 h = 1
-  sleepiness 0.6 * circadian + 0.4 * time on duty
+Work components, each 0..1, weighted (WEIGHTS):
+  load       rho of the hour (lam / mu, the ward studies included): 0 at
+             30 %, 1 at 100 % and over
+  pressure   people waiting: the queue length or the mean wait, whichever is
+             worse, against references the caller gives (queuestats: the
+             span's 90th percentile, never under 3 waiting / 45 min)
+  no_break   minutes of back-to-back work (UPU exams and ward studies, gaps
+             under 10 min): 4 h = 1
+  sleepiness parts:
                circadian  assumed shape of the two-process model's process C:
                           deepest 02:00-06:00, a smaller dip after lunch
                duty       hours since the duty block began (weekdays: day
@@ -22,17 +25,28 @@ Components, each 0..1:
                           08:00; holidays not known), 24 h = 1
   rushing    exams of the last hour much shorter than the span's median
              (50 % shorter = 1); people speed up under load. Needs 3 exams.
+
+Fatigue does not add to the index, it scales it (2026-11-12):
+
+  index = 100 * work * (FATIGUE_FLOOR + (1 - FATIGUE_FLOOR) * sleepiness)
+
+  sleepiness 0.6 * circadian + 0.4 * time on duty (below), shown as a component
+             but carrying no weight of its own: with no work (no exams, nobody
+             waiting) the index is 0 at any hour, and the same work weighs up to
+             twice as much at 04:00 after a long block as at 10:00 rested.
 """
 import math
 from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
 
-# no_break is weighted up on purpose: unbroken work also stands in for accumulated strain
-WEIGHTS = {'load': 0.20, 'pressure': 0.15, 'no_break': 0.25, 'sleepiness': 0.30, 'rushing': 0.10}
+# The work components (sum to 1). no_break is weighted up on purpose:
+# unbroken work also stands in for accumulated strain.
+WEIGHTS = {'load': 0.30, 'pressure': 0.20, 'no_break': 0.35, 'rushing': 0.15}
+FATIGUE_FLOOR = 0.5                   # the share of the work counted fully rested
 
 LOAD_FLOOR = 0.30
-QUEUE_REF = 3.0                       # people waiting
-WAIT_REF_MIN = 45.0
+QUEUE_REF = 3.0                       # people waiting: the default, and queuestats' floor
+WAIT_REF_MIN = 45.0                   # minutes: likewise
 BREAK_GAP = timedelta(minutes=10)     # an idle gap this long is a break
 NO_BREAK_REF = timedelta(hours=4)
 DUTY_REF_H = 24.0
@@ -98,17 +112,26 @@ def rushing(window_minutes: List[float], span_median: Optional[float]) -> float:
     return clamp((span_median - med) / (RUSH_REF * span_median))
 
 
+def sleepiness(t: datetime) -> float:
+    return 0.6 * circadian(t) + 0.4 * clamp(duty_hours(t) / DUTY_REF_H)
+
+
 def strain(t: datetime, rho: Optional[float], queue: float, wait_min: Optional[float],
            samples: List[Tuple[datetime, datetime]], span_median: Optional[float],
-           window: timedelta = timedelta(hours=1)) -> dict:
-    """{'index': 0-100, 'c': {component: 0-100}} at moment t."""
+           window: timedelta = timedelta(hours=1), busy: Optional[List[Tuple[datetime, datetime]]] = None,
+           queue_ref: float = QUEUE_REF, wait_ref: float = WAIT_REF_MIN) -> dict:
+    """{'index': 0-100, 'c': {component: 0-100}} at moment t.
+
+    `samples` are the measured UPU exams (rushing), `busy` all the room's
+    work (no_break; the samples when not given)."""
     window_minutes = [(e - s).total_seconds() / 60.0 for s, e in samples if t - window < e <= t]
     c = {
         'load': clamp(((rho or 0.0) - LOAD_FLOOR) / (1.0 - LOAD_FLOOR)),
-        'pressure': max(clamp((queue or 0.0) / QUEUE_REF), clamp((wait_min or 0.0) / WAIT_REF_MIN)),
-        'no_break': clamp(run_without_break(samples, t) / NO_BREAK_REF),
-        'sleepiness': 0.6 * circadian(t) + 0.4 * clamp(duty_hours(t) / DUTY_REF_H),
+        'pressure': max(clamp((queue or 0.0) / queue_ref), clamp((wait_min or 0.0) / wait_ref)),
+        'no_break': clamp(run_without_break(busy if busy is not None else samples, t) / NO_BREAK_REF),
         'rushing': rushing(window_minutes, span_median),
     }
-    index = 100.0 * sum(WEIGHTS[k] * v for k, v in c.items())
+    work = sum(WEIGHTS[k] * v for k, v in c.items())
+    c['sleepiness'] = sleepiness(t)
+    index = 100.0 * work * (FATIGUE_FLOOR + (1.0 - FATIGUE_FLOOR) * c['sleepiness'])
     return {'index': int(round(index)), 'c': {k: int(round(100 * v)) for k, v in c.items()}}
