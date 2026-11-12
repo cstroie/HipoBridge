@@ -30,11 +30,13 @@ Each is clamped to 0..1 (`c`), then weighted. `clamp(v) = min(1, max(0, v))`.
 
 | Component | Weight | Definition |
 |---|---|---|
-| `load` | 0.25 | `clamp((ρ − 0.30) / 0.70)`: 0 at 30 % utilisation, 1 at 100 % or more |
-| `pressure` | 0.20 | `max(clamp(L / 3), clamp(W / 45 min))`: people waiting, by count or by how long |
-| `no_break` | 0.15 | minutes of back-to-back work ending at the point, `/ 4 h`. Exams chained with idle gaps under 10 min count as continuous; a gap of 10 min or more is a break (the run restarts); it is 0 when the last exam ended more than 10 min ago |
+| `load` | 0.20 | `clamp((ρ − 0.30) / 0.70)`: 0 at 30 % utilisation, 1 at 100 % or more |
+| `pressure` | 0.15 | `max(clamp(L / 3), clamp(W / 45 min))`: people waiting, by count or by how long |
+| `no_break` | 0.25 | minutes of back-to-back work ending at the point, `/ 4 h`. Exams chained with idle gaps under 10 min count as continuous; a gap of 10 min or more is a break (the run restarts); it is 0 when the last exam ended more than 10 min ago |
 | `sleepiness` | 0.30 | `0.6 · circadian(t) + 0.4 · clamp(hours on duty / 24)` |
 | `rushing` | 0.10 | `clamp((median_span − median_hour) / (0.5 · median_span))`: the exams that ended in the last hour are much shorter than the span's median (people speed up under load). 0 with fewer than 3 exams in the hour |
+
+`no_break` is weighted up on purpose (2026-11-12): unbroken work also stands in, a little, for accumulated strain, which the index otherwise does not model (a leaky accumulator was considered and left for later).
 
 `index = round(100 · Σ weight · component)`; the five components are also sent (0–100) as `strain_c` with every point.
 
@@ -51,7 +53,7 @@ The duty clock is only a proxy: someone awake long before the shift, or resting 
 
 Yesterday 01:00: ρ 0.57, L 2.46, W 42 min, 4 h or more of unbroken work, 11 h on duty (since 14:00), circadian 0.75.
 `load` 39 · `pressure` 94 · `no_break` 100 · `sleepiness` 63 · `rushing` 0
-→ 0.25·39 + 0.20·94 + 0.15·100 + 0.30·63 + 0.10·0 = 62.4 → **62**.
+→ 0.20·39 + 0.15·94 + 0.25·100 + 0.30·63 + 0.10·0 = 65.8 → **66**.
 
 ## How to read the numbers
 

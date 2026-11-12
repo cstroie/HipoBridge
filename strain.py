@@ -27,7 +27,8 @@ import math
 from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
 
-WEIGHTS = {'load': 0.25, 'pressure': 0.20, 'no_break': 0.15, 'sleepiness': 0.30, 'rushing': 0.10}
+# no_break is weighted up on purpose: unbroken work also stands in for accumulated strain
+WEIGHTS = {'load': 0.20, 'pressure': 0.15, 'no_break': 0.25, 'sleepiness': 0.30, 'rushing': 0.10}
 
 LOAD_FLOOR = 0.30
 QUEUE_REF = 3.0                       # people waiting
