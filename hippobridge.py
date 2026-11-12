@@ -839,33 +839,38 @@ async def get_schedule_queue(request):
     # poll loop has reached; the rest comes from one on-demand C-FIND per day
     # (cached, past days for good), matched to the requests by CNP.
     pacs_studies = {}
+    room_studies = []
     if _pacs_checker is not None:
         for r in with_id:
             found = _pacs_checker.status_for(r['request_id']).get('studies')
             if found:
                 pacs_studies[r['request_id']] = list(found)
+        # Every ultrasound study of the days analysed (cached: a past day for
+        # good, today for 5 min): the room's ward work, and the requests the
+        # poll loop has not reached, matched by CNP.
+        days, d = [], warmup_start.date()
+        while d <= (as_of - timedelta(minutes=1)).date():
+            days.append(d)
+            d += timedelta(days=1)
+        by_day = await asyncio.gather(*(_pacs_checker.studies_for_day(day) for day in days))
+        by_cnp = {}
+        for studies in by_day:
+            for cnp, lst in (studies or {}).items():
+                by_cnp.setdefault(cnp, []).extend(lst)
+                room_studies.extend(lst)
         missing = [r for r in with_id if r['request_id'] not in pacs_studies and req_after(r, warmup_start)]
-        if missing:
-            days, d = [], warmup_start.date()
-            while d <= (as_of - timedelta(minutes=1)).date():
-                days.append(d)
-                d += timedelta(days=1)
-            by_day = await asyncio.gather(*(_pacs_checker.studies_for_day(day) for day in days))
-            by_cnp = {}
-            for studies in by_day:
-                for cnp, lst in (studies or {}).items():
-                    by_cnp.setdefault(cnp, []).extend(lst)
-            if by_cnp:
-                async def cnp_of(r):
-                    async with sem:
-                        return await _queue_memo(('cnp', r['request_id']),
-                                                 lambda: _queue_cnp(cerere_client, patient_client, r))
-                cnps = await asyncio.gather(*(cnp_of(r) for r in missing), return_exceptions=True)
-                for r, cnp in zip(missing, cnps):
-                    if isinstance(cnp, str) and cnp in by_cnp:
-                        pacs_studies[r['request_id']] = by_cnp[cnp]
+        if missing and by_cnp:
+            async def cnp_of(r):
+                async with sem:
+                    return await _queue_memo(('cnp', r['request_id']),
+                                             lambda: _queue_cnp(cerere_client, patient_client, r))
+            cnps = await asyncio.gather(*(cnp_of(r) for r in missing), return_exceptions=True)
+            for r, cnp in zip(missing, cnps):
+                if isinstance(cnp, str) and cnp in by_cnp:
+                    pacs_studies[r['request_id']] = by_cnp[cnp]
     result = await asyncio.to_thread(queuestats.compute, rows, report_times, arrivals, as_of,
-                                     hours=hours, truncated=truncated, pacs_studies=pacs_studies)
+                                     hours=hours, truncated=truncated, pacs_studies=pacs_studies,
+                                     room_studies=room_studies)
     logger.debug("schedule/queue: %d rows, listing %.2fs, cached times %.2fs, compute %.2fs",
                  len(rows), t1 - t0, t2 - t1, time.perf_counter() - t2)
     return web.json_response(result)

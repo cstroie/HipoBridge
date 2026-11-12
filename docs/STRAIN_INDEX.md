@@ -19,26 +19,33 @@ All come from the queue analysis (`queuestats.py`), no new data source:
 
 | Signal | From |
 |---|---|
-| ρ of the hour (λ / μ) | requests made in the hour over the measured capacity (1 / mean exam duration; the demonstrated-capacity guess with fewer than 5 exams) |
+| ρ of the hour (λ / μ) | UPU requests made in the hour **plus the ward ultrasound studies started in it** over the capacity (1 / mean UPU exam duration; the demonstrated-capacity guess with fewer than 5 exams). Sent as `rho_room`; `rho` stays the UPU queue's |
 | L, W of the hour | mean number waiting and mean wait (request → exam start) |
-| exam intervals (start, end) | PACS study start → written report, capped by the next exam's start (`service_samples()`; the radiologist's busy time, the report being part of it) |
+| UPU exam intervals (start, end) | PACS study start → written report, capped by the next study's start (`service_samples()`). An exam is call, preparation, scan, talk, discharge and the written report, one at a time (owner, 2026-11-12); over 60 min is a late report, no sample |
+| ward studies | the day's other ultrasound studies from the PACS (`PacsChecker.studies_for_day()`, any patient, not matched to a UPU request), started on call only: each lasts the UPU median, cut at the next start (`ward_intervals()`) |
+| clock | the point's time and the duty block it falls in |
 | clock | the point's time and the duty block it falls in |
 
 ## Components
 
-Each is clamped to 0..1 (`c`), then weighted. `clamp(v) = min(1, max(0, v))`.
+Each is clamped to 0..1 (`c`). `clamp(v) = min(1, max(0, v))`. Four describe the **work** and are weighted:
 
 | Component | Weight | Definition |
 |---|---|---|
-| `load` | 0.20 | `clamp((ρ − 0.30) / 0.70)`: 0 at 30 % utilisation, 1 at 100 % or more |
-| `pressure` | 0.15 | `max(clamp(L / 3), clamp(W / 45 min))`: people waiting, by count or by how long |
-| `no_break` | 0.25 | minutes of back-to-back work ending at the point, `/ 4 h`. Exams chained with idle gaps under 10 min count as continuous; a gap of 10 min or more is a break (the run restarts); it is 0 when the last exam ended more than 10 min ago |
-| `sleepiness` | 0.30 | `0.6 · circadian(t) + 0.4 · clamp(hours on duty / 24)` |
-| `rushing` | 0.10 | `clamp((median_span − median_hour) / (0.5 · median_span))`: the exams that ended in the last hour are much shorter than the span's median (people speed up under load). 0 with fewer than 3 exams in the hour |
+| `load` | 0.30 | `clamp((ρ − 0.30) / 0.70)`: 0 at 30 % utilisation, 1 at 100 % or more (ward studies included) |
+| `pressure` | 0.20 | `max(clamp(L / L_ref), clamp(W / W_ref))`: people waiting, by count or by how long. The references are this span's 90th percentile of the hourly L and W, never under 3 waiting / 45 min (`strain_refs` in the response) |
+| `no_break` | 0.35 | minutes of back-to-back work ending at the point, `/ 4 h`, UPU exams and ward studies alike. Work chained with idle gaps under 10 min counts as continuous; a gap of 10 min or more is a break (the run restarts); it is 0 when the last study ended more than 10 min ago |
+| `rushing` | 0.15 | `clamp((median_span − median_hour) / (0.5 · median_span))`: the UPU exams that ended in the last hour are much shorter than the span's median (people speed up under load). 0 with fewer than 3 exams in the hour |
+
+The fifth, **`sleepiness`** = `0.6 · circadian(t) + 0.4 · clamp(hours on duty / 24)`, has no weight of its own: it **scales** the work.
+
+`index = round(100 · work · (0.5 + 0.5 · sleepiness))`, `work = Σ weight · component`.
+
+So an empty room reads 0 at any hour (there is nothing to get wrong), and the same work weighs up to twice as much at 04:00 after a long block as fully rested. Until 2026-11-12 sleepiness was a 0.30 additive term, which made the index mostly a clock curve: about 25 at 04:00 with nobody waiting. `FATIGUE_FLOOR` (0.5) is the share counted fully rested, an assumption like the weights.
 
 `no_break` is weighted up on purpose (2026-11-12): unbroken work also stands in, a little, for accumulated strain, which the index otherwise does not model (a leaky accumulator was considered and left for later).
 
-`index = round(100 · Σ weight · component)`; the five components are also sent (0–100) as `strain_c` with every point.
+The five components are sent (0–100) as `strain_c` with every point, with `ward` (ward studies started in the hour) and `rho_room`.
 
 ### Sleepiness
 
@@ -52,19 +59,21 @@ The duty clock is only a proxy: someone awake long before the shift, or resting 
 ## Worked example
 
 Yesterday 01:00: ρ 0.57, L 2.46, W 42 min, 4 h or more of unbroken work, 11 h on duty (since 14:00), circadian 0.75.
-`load` 39 · `pressure` 94 · `no_break` 100 · `sleepiness` 63 · `rushing` 0
-→ 0.20·39 + 0.15·94 + 0.25·100 + 0.30·63 + 0.10·0 = 65.8 → **66**.
+`load` 39 · `pressure` 94 · `no_break` 100 · `rushing` 0 · `sleepiness` 63
+→ work = 0.30·0.39 + 0.20·0.94 + 0.35·1 + 0.15·0 = 0.655; × (0.5 + 0.5·0.63) = 0.815 → 53.4 → **53** (66 under the earlier additive form). With the span's references `pressure` would read lower.
 
 ## How to read the numbers
 
-- Rough bands used for the readout colour: below 40 muted, 40–64 orange, 65 and over red. They are display thresholds, not risk classes.
+- Rough bands used for the readout colour: below 40 muted, 40–64 orange, 65 and over red. They are display thresholds, not risk classes. Under the multiplicative form a rested daytime peak tops out near 65, so red is in practice night-time or long-block work; the bands were not re-tuned.
 - It is meaningful for comparing times and days of *this* queue. It is not comparable with another department or another tool.
-- Coverage limits apply: `no_break`, `rushing` and the measured ρ need PACS exam starts (see coverage in the hero subtitle); where there are none they fall back or read 0.
-- Seen live (2026-11-12): `pressure` saturates often because waits of 30–60 min are normal for this queue, so it discriminates little. `QUEUE_REF` / `WAIT_REF_MIN` should be revisited after a few days of watching.
+- Coverage limits apply: `no_break`, `rushing` and the measured ρ need PACS exam starts (see coverage in the hero subtitle); where there are none they fall back or read 0. Without the PACS day list there are no ward studies, and the radiologist's load is understated.
+- The ward studies are assumed to be the UPU radiologist's work **inside the on-call block only** (weekdays 14:00→08:00, weekends; `queuestats.on_call()`): in the weekday day shift another room or radiologist may scan in parallel. This is an assumption, **not confirmed** by the owner (who confirmed only that one UPU exam runs from call to written report with nothing starting in between). A ward study's length is not measured (its report time is not read): the UPU median, cut at the next start.
+- `pressure` saturated in the first live view (2026-11-12: waits of 30–60 min are normal for this queue), hence the span-relative references. The cost: `pressure` compares a moment with its own span, so it is less comparable across days than the other components; the floors keep a quiet day's small queue from reading as full pressure.
+- The duty clock restarts at 14:00 on weekdays. If the on-call radiologist also worked that morning, time on duty and sleepiness are understated after 14:00 (not confirmed; `duty_start()`).
 
 ## Changing it
 
-All tunables are module constants in `strain.py`: `WEIGHTS` (must sum to 1, tested), `LOAD_FLOOR`, `QUEUE_REF`, `WAIT_REF_MIN`, `BREAK_GAP`, `NO_BREAK_REF`, `DUTY_REF_H`, `RUSH_*`, `CIRCADIAN`. Tests: `python3 runtests.py strain`.
+All tunables are module constants in `strain.py`: `WEIGHTS` (the work components, must sum to 1, tested), `FATIGUE_FLOOR`, `LOAD_FLOOR`, `QUEUE_REF`, `WAIT_REF_MIN` (the floors of the span references), `BREAK_GAP`, `NO_BREAK_REF`, `DUTY_REF_H`, `RUSH_*`, `CIRCADIAN`. Tests: `python3 runtests.py strain`.
 
 ## Validating it (not done)
 

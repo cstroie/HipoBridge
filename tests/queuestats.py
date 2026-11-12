@@ -152,6 +152,68 @@ class TestJobs(unittest.TestCase):
         # nor an "exam" of 3 h
         self.assertEqual(self._svc([('1', '10:00', '10:05', '13:05')]), [])
 
+    def test_late_report_past_the_cap_is_no_sample(self):
+        # call to written report is one exam; 75 min holds idle time
+        self.assertEqual(self._svc([('1', '10:00', '10:05', '11:20')]), [])
+        t = lambda h, m: datetime(2026, 11, 11, h, m)
+        self.assertEqual(self._svc([('1', '10:00', '10:05', '10:55')]), [(t(10, 5), t(10, 55))])
+
+    def test_ward_study_ends_a_late_report_only_when_known_waiting(self):
+        t = lambda h, m: datetime(2026, 11, 11, h, m)
+        rows = [row('1', '2026-11-11 10:00')]
+        st = {'1': [{'uid': 'a', 'start': '2026-11-11T10:05:00'}]}
+        jobs = qs.build_jobs(rows, {'1': t(10, 50)}, {}, st)
+        # a ward study started at 10:30, before the report: whether the room
+        # was idle in between is unknown, so no sample
+        self.assertEqual(qs.service_samples(jobs, [t(10, 30)]), [])
+        # a ward study after the report does not touch it
+        self.assertEqual(qs.service_samples(jobs, [t(11, 0)]), [(t(10, 5), t(10, 50))])
+
+    def test_two_requests_one_study_are_one_patient(self):
+        rows = [row('1', '2026-11-11 10:00'), row('2', '2026-11-11 10:01')]
+        same = [{'uid': 'a', 'start': '2026-11-11T10:20:00'}]
+        rep = {'1': datetime(2026, 11, 11, 10, 40), '2': datetime(2026, 11, 11, 10, 40)}
+        jobs = qs.build_jobs(rows, rep, {}, {'1': same, '2': same})
+        first, second = sorted(jobs, key=lambda j: j['id'])
+        self.assertFalse(first['merged'])
+        self.assertTrue(second['merged'])
+        self.assertIsNone(second['exam'])
+        self.assertIsNone(second['report'])
+        out = qs.compute(rows, rep, {}, AS_OF, pacs_studies={'1': same, '2': same})
+        self.assertEqual(out['coverage']['merged'], 1)
+        self.assertEqual(out['coverage']['pacs_start'], {'known': 1, 'of': 1})
+
+    def test_ward_studies_count_as_room_work(self):
+        base = datetime(2026, 11, 14, 6, 0)   # Saturday: on call all day
+        rows, st, rep, room = [], {}, {}, []
+        for i in range(6):   # a UPU exam every hour, 20 min, a ward study 30 min after it
+            rid, req = str(i), base + timedelta(hours=i)
+            rows.append(row(rid, req.strftime('%Y-%m-%d %H:%M')))
+            st[rid] = [{'uid': f'u{i}', 'start': (req + timedelta(minutes=5)).isoformat()}]
+            rep[rid] = req + timedelta(minutes=25)
+            room.append(st[rid][0])
+            room.append({'uid': f'w{i}', 'start': (req + timedelta(minutes=30)).isoformat()})
+        out = qs.compute(rows, rep, {}, datetime(2026, 11, 14, 12, 0), hours=12,
+                         pacs_studies=st, room_studies=room)
+        svc = out['current']['service']
+        self.assertEqual(svc['mean_span'], 20.0)          # the UPU exams alone
+        self.assertEqual(out['coverage']['ward_studies'], 6)
+        self.assertEqual(svc['ward_span'], 6)
+        # last hour: UPU 11:05-11:25 + ward 11:30-11:50 (the UPU median) = 40 min
+        self.assertEqual(svc['occupancy'], round(40 / 60, 3))
+        p = out['series'][-1]
+        self.assertEqual(p['ward'], 1)
+        self.assertGreater(p['rho_room'], p['rho'])
+
+    def test_ward_studies_only_on_call(self):
+        self.assertFalse(qs.on_call(datetime(2026, 11, 11, 10, 0)))    # Wednesday day shift
+        self.assertTrue(qs.on_call(datetime(2026, 11, 11, 14, 0)))
+        self.assertTrue(qs.on_call(datetime(2026, 11, 11, 7, 59)))
+        self.assertTrue(qs.on_call(datetime(2026, 11, 14, 10, 0)))     # Saturday
+        room = [{'uid': 'd', 'start': '2026-11-11T10:00:00'}, {'uid': 'n', 'start': '2026-11-11T20:00:00'}]
+        out = qs.compute([], {}, {}, datetime(2026, 11, 12, 0, 0), room_studies=room)
+        self.assertEqual(out['coverage']['ward_studies'], 1)
+
     def test_measured_rho_and_occupancy(self):
         base = datetime(2026, 11, 11, 6, 0)
         rows, st, rep = [], {}, {}
