@@ -454,19 +454,26 @@ def norm_name(value) -> Optional[str]:
     return v or None
 
 
+def on_call_from(block_start: datetime) -> datetime:
+    """When the on-call team takes the UPU over: weekdays 14:00, weekends at
+    the block's start (08:00). Holidays are not known."""
+    return block_start + timedelta(hours=6 if block_start.weekday() < 5 else 0)
+
+
 def on_call_radiologist(jobs: List[dict], block_start: datetime, until: datetime) -> Optional[str]:
-    """Who did the UPU ultrasounds on call in the duty block starting at
-    block_start: the validator of most of its reports in the night
-    (22:00-08:00), else in the on-call hours so far (weekdays from 14:00,
-    weekends from 08:00). None before anyone has validated one. Used only
-    to choose whose exams make the accumulated work: never returned, never
-    logged."""
+    """The senior on call in the duty block starting at block_start: the
+    validator of most UPU reports between 20:00 and 02:00, the busiest hours,
+    which the senior takes (owner, 2026-11-12); before 20:00, the most in
+    the on-call hours so far. Alone on call, that is the one radiologist.
+    None before anyone has validated one. Used only to tell the senior's
+    rest from the team's work: never returned, never logged."""
     end = min(block_start + timedelta(days=1), until)
-    oncall_from = block_start + timedelta(hours=6 if block_start.weekday() < 5 else 0)
-    for frm in (block_start + timedelta(hours=14), oncall_from):
+    windows = [(block_start + timedelta(hours=12), min(block_start + timedelta(hours=18), end)),
+               (on_call_from(block_start), end)]
+    for frm, to in windows:
         counts: Dict[str, int] = {}
         for j in jobs:
-            if j['validator'] and j['t_rep'] and frm <= j['t_rep'] < end:
+            if j['validator'] and j['t_rep'] and frm <= j['t_rep'] < to:
                 counts[j['validator']] = counts.get(j['validator'], 0) + 1
         if counts:
             return max(sorted(counts), key=lambda k: counts[k])
@@ -637,9 +644,9 @@ def compute(rows: List[dict], report_times: Dict[str, Optional[datetime]],
             validators: Optional[Dict[str, str]] = None) -> dict:
     """`regions`: the regions of each request's studies (from its report
     page), so an exam's length is compared with the same kind of exam.
-    `validators`: who validated each request's report, so the accumulated
-    work counts only the on-call radiologist's UPU exams
-    (on_call_radiologist()); the names stay inside this function."""
+    `validators`: who validated each request's report, so the senior on
+    call is found (on_call_radiologist()) and their own gaps are the rest of
+    the accumulated work; the names stay inside this function."""
     jobs = build_jobs(rows, report_times, arrivals, pacs_studies)
     validators = validators or {}
     for j in jobs:
@@ -671,18 +678,26 @@ def compute(rows: List[dict], report_times: Dict[str, Optional[datetime]],
     busy_merged = strain_index.merge(busy)
     # the requests the exam queue counts (the same ones as its lambda)
     arrivals = sorted(j['t_req'] for j in jobs if j['exam'])
-    # the accumulated work of each duty block: its on-call radiologist's exams
+    # The accumulated work of each duty block: the on-call team's UPU work
+    # (senior and junior: the junior's stands for the senior's ward, CT and
+    # other duties), decaying only while the senior rests (their own gaps).
     blocks: Dict[datetime, dict] = {}
 
     def block_of(t):
         start = strain_index.duty_start(t)
         if start not in blocks:
             who = on_call_radiologist(jobs, start, as_of)
-            ours = lambda j: who is None or j['validator'] == who
-            until = min(start + timedelta(days=1), as_of)
-            in_block = [(j, iv) for j, iv in work if iv[1] > start and iv[0] < until]
-            blocks[start] = {'busy': [iv for j, iv in work if ours(j)], 'known': who is not None,
-                             'exams': sum(1 for j, _ in in_block if ours(j)), 'of': len(in_block)}
+            frm, until = on_call_from(start), min(start + timedelta(days=1), as_of)
+            team = [(j, iv) for j, iv in work if iv[1] > frm]
+            in_block = [(j, iv) for j, iv in team if iv[0] < until]
+            blocks[start] = {
+                'busy': [iv for _, iv in team],
+                'own': [iv for j, iv in work if j['validator'] == who] if who else None,
+                'known': who is not None,
+                'team': len(in_block),
+                'senior': sum(1 for j, _ in in_block if who and j['validator'] == who),
+                'radiologists': len({j['validator'] for j, _ in in_block if j['validator']}),
+            }
         return blocks[start]
 
     series = []
@@ -692,7 +707,7 @@ def compute(rows: List[dict], report_times: Dict[str, Optional[datetime]],
         blk = block_of(t)
         st = strain_index.score(strain_index.Moment(
             t=t, rho=rho_t, queue=e['L'], wait=e['W'], oldest=oldest_wait(exam, t),
-            idle_waiting=idle_w, busy=blk['busy'], arrivals=arrivals, capacity=mu_eff,
+            idle_waiting=idle_w, busy=blk['busy'], own=blk['own'], arrivals=arrivals, capacity=mu_eff,
             relative=[r for (s0, e0), r in relative if t - window < e0 <= t]), refs)
         series.append({
             't': t.strftime('%Y-%m-%dT%H:%M'),
@@ -722,10 +737,11 @@ def compute(rows: List[dict], report_times: Dict[str, Optional[datetime]],
         'pacs_start': {'known': sum(1 for j in left if j['pacs_start']), 'of': len(left)},
         'inconsistent': sum(1 for j in in_span if j['inconsistent']),
         'merged': sum(1 for j in in_span if j['merged']),
-        # per duty block: whether its on-call radiologist is known, and how
-        # many of its UPU exams are theirs (counts only, never the name)
-        'on_call': [{'block': k.strftime('%Y-%m-%dT%H:%M'), 'known': v['known'],
-                     'exams': v['exams'], 'of': v['of']} for k, v in sorted(blocks.items())],
+        # per duty block (counts only, never a name): the on-call team's UPU
+        # exams, the senior's share, how many radiologists validated them
+        'on_call': [{'block': k.strftime('%Y-%m-%dT%H:%M'), 'known': v['known'], 'team_exams': v['team'],
+                     'senior_exams': v['senior'], 'radiologists': v['radiologists']}
+                    for k, v in sorted(blocks.items())],
         'upu_arrivals': {'known': sum(1 for j in upu if j['t_arr']), 'of': len(upu)},
         # open past their cap at as_of: left out of the queue
         'stale': {stage: sum(1 for j in jobs if j[stage] and j[stage][1] is None

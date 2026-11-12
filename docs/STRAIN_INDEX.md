@@ -16,7 +16,8 @@ Read it as "conditions known to raise the risk of errors, hurried reads and shor
 ## The facts it rests on (owner, 2026-11-12)
 
 - One ultrasound runs from calling the patient (1–2 min), preparation, the scan, talking to the patient and discharge to the **written report**. Nothing else starts before the report (rare exceptions). So an exam's busy time is *PACS study start → report validation*.
-- **Only the UPU ultrasounds** are measured, not the wards' (14 radiologists share those). The accumulated work is **the on-call radiologist's own UPU exams**, found by who validated the reports (below).
+- **Only the UPU ultrasounds** are measured, not the wards' (14 radiologists share those).
+- On call there is usually a **senior and a junior**; the senior takes 20:00–02:00. A gap of 30 minutes or more in the senior's own UPU work, while the junior works, is rest (a 15–20 minute nap is possible). The junior's UPU work still counts toward the accumulated work: it stands for the senior's ward ultrasounds, CT and other duties, and for the nights they are alone.
 - The on-call radiologist **also works the morning**: the duty block is 08:00 → 08:00.
 - The strain at 03:00–05:00 after 40–50 ultrasounds is **very high even with a short queue**: it builds up over the duty, and an idle gap of 10 minutes is not rest.
 - "Short exams with long spaces between them while a queue waits" is a sign of fatigue: getting rid of the patients fast.
@@ -53,26 +54,26 @@ Either part alone raises the index; both together raise it more. With nothing do
 
 ### fatigue: what the duty has cost
 
-- **`accumulated`**: the work done since the duty began (08:00), as an integral:
-  - busy time adds up: **the on-call radiologist's UPU exams** (PACS start → report; with no measured end, the median exam length cut at the next start; with no PACS start at all, the median length ending at the report, else at the performed time: `work_intervals()`);
+- **`accumulated`**: the work done on call, as an integral:
+  - busy time adds up: **the on-call team's UPU exams**, senior and junior (below; PACS start → report; with no measured end, the median exam length cut at the next start; with no PACS start at all, the median length ending at the report, else at the performed time: `work_intervals()`);
   - an idle gap **under 30 minutes is not rest**: it changes nothing;
-  - a gap of 30 minutes or more is rest: for its whole length the accumulated work decays with a **half-life of 8 hours** (a 2.5-hour rest takes off about 20 %);
+  - a gap of 30 minutes or more **in the senior's own exams** is rest: for its whole length the accumulated work decays with a **half-life of 8 hours** (a 2.5-hour rest takes off about 20 %);
   - read on a saturating scale, `1 − 2^(−hours / 2.5)`: 2.5 busy hours (about 17 exams of 9 minutes) = 50 %, 5 h = 75 %, 7.5 h = 88 %. Real exams last 7–9 minutes (call to written report), so the owner's 40–50 exams read about 80 %. It nears 1 and never clips, so a heavy night still differs from a very heavy one.
 - **`sleepiness`** = `0.6 · circadian(t) + 0.4 · clamp(hours since 08:00 / 24)`:
   - **circadian(t)**: an *assumed* curve inspired by the two-process model's process C, linear between `0:00 .65 · 2:00 .85 · 4:00 1.0 · 6:00 .85 · 8:00 .40 · 10:00 .15 · 12:00 .20 · 14:00 .40 · 15:00 .40 · 16:00 .25 · 18:00 .10 · 20:00 .20 · 22:00 .45 · 24:00 .65`. Deepest 02:00–06:00, a smaller dip after lunch;
   - **hours on duty**: since 08:00 (before 08:00, since the day before's). Holidays are not known.
 - The `0.5 +` floor: fully rested, the accumulated work counts half; at the deepest of the night after a long block, fully.
 
-### Whose work: the on-call radiologist
+### Whose work, whose rest: the on-call team and the senior
 
-In the day shift several radiologists do UPU ultrasounds (174 exams of 9 minutes in a day are 26 hours of work), so counting every UPU exam from 08:00 overstated the on-call radiologist's morning. Each report records who validated it (the report page's studies; the latest one validated).
+Most on-call blocks have a **senior and a junior** radiologist; some have one (owner, 2026-11-12). The senior usually takes the busiest hours, 20:00–02:00, while the junior covers the UPU the rest of the time; the senior then does ward ultrasounds, CT and other duties, and may nap 15–20 minutes if the junior does not call.
 
-- **Who is on call** in a duty block (`on_call_radiologist()`): the validator of most UPU reports between 22:00 and 08:00; before the night, the most in the on-call hours so far (weekdays from 14:00, weekends from 08:00).
-- **`accumulated`** then counts only that radiologist's UPU exams since 08:00: their morning UPU work included, other radiologists' left out.
-- Before anyone has validated a report on call (a weekday morning seen live), it counts every UPU exam, and the point says so (`on_call_known: false`, shown in the tooltip).
-- The name is used only inside `queuestats.compute()` to choose the exams. It is **never returned, logged or stored**: the response carries per block only `on_call: [{block, known, exams, of}]`, counts.
+- **The senior** of a duty block (`on_call_radiologist()`): the validator of most UPU reports between 20:00 and 02:00 (each report records who validated it: the report page's latest validated study). Before 20:00, the one with most in the on-call hours so far. Alone on call, that is the one radiologist.
+- **What accumulates**: the on-call team's UPU work, the junior's included, from the start of on-call (weekdays 14:00, weekends 08:00). The junior's exams stand for the senior's duties outside the UPU (ward ultrasounds, CT…) and for the nights the senior is alone. The day staff's UPU work before 14:00 on weekdays is left out.
+- **What is rest**: an idle gap of 30 minutes or more in **the senior's own** UPU exams, between two of them or since their last one; the junior may be working meanwhile. The gap before the senior's first exam is not rest (other duties). During rest the accumulated work decays (half-life 8 h); the junior's work in it still adds up.
+- Before anyone has validated a report on call (a weekday morning seen live), the team's own gaps are the rest, and the point says so (`on_call_known: false`, in the tooltip).
+- **Names never leave** `queuestats.compute()`: not returned, logged or stored. Per block the response has only counts: `on_call: [{block, known, team_exams, senior_exams, radiologists}]`.
 - The queue parts (`load`, `pressure`, `burst`, `rushing`) stay the queue's, whoever serves it.
-- If two radiologists split the UPU ultrasounds at night, the one with more reports is taken, and the other's exams are left out.
 
 ## What it gives
 
@@ -108,15 +109,16 @@ The quiet night reads lower than its 20 exams suggest: spread over 14 hours they
 
 Three on-call days, 08:00 → 08:00, through `GET /api/schedule/queue` (aggregates only), after the changes below:
 
-| Day | UPU requests | PACS starts matched | mean exam | on-call radiologist's UPU exams | index 18:00 / 22:00 / 00:00 / 02:00 / 04:00 / 07:50 |
-|---|---|---|---|---|---|
-| Mon 10 Nov | 174 | 91 (52 %) | 9.4 min | 54 of 101 with a report | 77 / 71 / 84 / 82 / 90 / 51 |
-| Tue 11 Nov | 107 | 84 (79 %) | 8.1 min | 44 of 86 | 83 / 41 / 66 / 67 / 55 / 35 |
-| Sat 8 Nov | 141 | 6 (4 %) | (6 measured) | 49 of 69 | 40 / 52 / 60 / 64 / 61 / 41 |
+| Day | UPU requests | PACS starts matched | on-call team's UPU exams (senior's) | index 16:00 / 20:00 / 00:00 / 02:00 / 04:00 / 06:00 |
+|---|---|---|---|---|
+| Mon 10 Nov | 174 | 91 (52 %) | 83 (54), 2 radiologists | 69 / 64 / 90 / 89 / 95 / 87 |
+| Tue 11 Nov | 107 | 84 (79 %) | 66 (44), 2 radiologists | 63 / 60 / 79 / 80 / 73 / 73 |
+| Sat 8 Nov | 141 | 6 (4 %) | 69 (49), 2 radiologists | 49 / 58 / 69 / 74 / 72 / 63 |
 
-- The busy Monday night reads 82–90 between 02:00 and 04:00, the owner's experience; the quiet Tuesday (1 request an hour at 04:00) 55–67.
+- The busy Monday night reads 89–95 between 02:00 and 04:00, the owner's experience; the quieter Tuesday 73–80. (Counting only the senior's own exams, before the team model, they read 82–90 and 55–67.)
 - On all three days **the on-call radiologist validated no UPU ultrasound before 14:00**: their morning is other work, so their accumulated UPU work starts at 14:00 (the duty clock, for sleepiness, still at 08:00).
-- In the evening the accumulated work can fall while the queue is long (Monday 18:00 → 22:00): the on-call radiologist had gaps of 30 minutes or more, and someone else validated UPU reports (two radiologists on call).
+- With the senior's own exams alone, the accumulated work fell in the evening while the queue was long (Monday 18:00 → 22:00): the junior was doing the UPU. Counting the team's work, it keeps rising until the senior's real rests.
+- Today's reports appear only once their pages are cached: until then the senior is not known and the point says so.
 - Real exams (call to written report) last 7–9 minutes, hence `ACCUM_HALF_FULL_H` = 2.5 h.
 - 174 exams of 9 minutes are 26 hours of work in 24: in the day shift more than one radiologist does UPU ultrasounds. Hence `accumulated` counts only the on-call radiologist's exams (by validator, above).
 - Matching exam starts needs each patient's CNP from cached pages; older days are not cached (8 Nov: 4 %). There `accumulated` rests on the report times (`work_intervals()`), `idle_waiting` is unreliable and the index reads low. Coverage is in the hero subtitle: below about 75 % read the strain with care.
@@ -130,7 +132,8 @@ Three on-call days, 08:00 → 08:00, through `GET /api/schedule/queue` (aggregat
 4. **Rest-only decay** (`2ca90d7`): the duty block starts at 08:00; only a rest of 30 minutes or more decays the work; a saturating scale; `shorter` by exam regions; the longest wait in `pressure`; calling time left out of `idle_waiting`; ward studies counted at every hour.
 5. **Bursts** (`e6419e2`): bursts of arrivals, felt over the next 1–2 hours (`burst`).
 6. **After the first real data** (`b77e9f3`): ward studies on call only, an unmatched UPU study no longer counted as ward work, UPU exams without a PACS start kept in `accumulated`.
-7. **Now**: ward studies left out entirely; the accumulated work is the on-call radiologist's own UPU exams, by validator; half full at 2.5 busy hours (real exams are 7–9 minutes, not 12).
+7. **The on-call radiologist's own exams** (`e21e61e`): ward studies left out entirely; the accumulated work only the on-call radiologist's UPU exams, by validator; half full at 2.5 busy hours (real exams are 7–9 minutes, not 12).
+8. **Now**: the senior (most reports 20:00–02:00) and the team: the team's UPU work from the start of on-call accumulates, the senior's own gaps are the rest.
 
 ## Changing it
 

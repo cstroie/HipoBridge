@@ -185,37 +185,46 @@ class TestJobs(unittest.TestCase):
         self.assertEqual(work['3'], (t(21, 5), t(21, 9)))          # cut at the next start
         self.assertEqual(work['4'], (t(21, 9), t(21, 17)))
 
-    def test_on_call_radiologist_is_the_nights_validator(self):
+    def test_senior_is_who_reads_most_between_20_and_02(self):
         t = lambda d, h, m=0: datetime(2026, 11, d, h, m)
         mk = lambda rid, rep, who: {'id': rid, 'validator': who, 't_rep': rep}
-        # Wednesday's block: Ana reads the morning, Bo from 14:00 and all night
-        jobs = [mk('1', t(11, 10), 'ana'), mk('2', t(11, 11), 'ana'), mk('3', t(11, 12), 'ana'),
-                mk('4', t(11, 16), 'bo'), mk('5', t(11, 23), 'bo'), mk('6', t(12, 3), 'bo'), mk('7', t(12, 4), 'cy')]
-        self.assertEqual(qs.on_call_radiologist(jobs, t(11, 8), t(12, 8)), 'bo')
-        # at 17:00 the night has not come: the on-call hours so far
-        self.assertEqual(qs.on_call_radiologist(jobs, t(11, 8), t(11, 17)), 'bo')
-        # at 12:00 nobody is on call yet
-        self.assertIsNone(qs.on_call_radiologist(jobs, t(11, 8), t(11, 12)))
+        # Wednesday: the junior reads most of the evening and the early morning,
+        # the senior takes 20:00-02:00
+        jobs = [mk('1', t(11, 15), 'jr'), mk('2', t(11, 16), 'jr'), mk('3', t(11, 17), 'jr'),
+                mk('4', t(11, 21), 'sr'), mk('5', t(11, 23), 'sr'), mk('6', t(12, 1), 'jr'),
+                mk('7', t(12, 4), 'jr'), mk('8', t(12, 5), 'jr')]
+        self.assertEqual(qs.on_call_radiologist(jobs, t(11, 8), t(12, 8)), 'sr')
+        # at 18:00 the busy hours have not come: the most since 14:00
+        self.assertEqual(qs.on_call_radiologist(jobs, t(11, 8), t(11, 18)), 'jr')
+        self.assertIsNone(qs.on_call_radiologist(jobs, t(11, 8), t(11, 12)))   # weekday morning
+        self.assertEqual(qs.on_call_from(t(11, 8)), t(11, 14))
+        self.assertEqual(qs.on_call_from(t(14, 8)), t(14, 8))                   # Saturday
         self.assertEqual(qs.norm_name('  Bo   POP '), 'bo pop')
 
-    def test_accumulated_counts_the_on_call_radiologists_exams_only(self):
-        base = datetime(2026, 11, 11, 8, 0)
+    def test_team_work_accumulates_and_the_senior_s_gaps_are_rest(self):
         rows, st, rep, who = [], {}, {}, {}
-        for i in range(40):   # an exam every 30 min from 08:00, 10 min each; the morning is someone else's
+        base = datetime(2026, 11, 11, 8, 0)
+        for i in range(40):   # an exam every 30 min from 08:00, 10 min each
             rid, req = str(i), base + timedelta(minutes=30 * i)
             rows.append(row(rid, req.strftime('%Y-%m-%d %H:%M')))
             st[rid] = [{'uid': f'u{i}', 'start': (req + timedelta(minutes=2)).isoformat()}]
             rep[rid] = req + timedelta(minutes=12)
-            who[rid] = 'Morning Doc' if i < 12 else 'Night Doc'      # 08:00-13:30, then on call
+            # the morning's day staff, then on call: the senior every other exam, the junior between
+            who[rid] = 'Day Doc' if i < 12 else ('Senior Doc' if i % 2 else 'Junior Doc')
         as_of = datetime(2026, 11, 12, 4, 0)
-        mine = qs.compute(rows, rep, {}, as_of, hours=20, pacs_studies=st, validators=who)
-        everyone = qs.compute(rows, rep, {}, as_of, hours=20, pacs_studies=st)
+        team = qs.compute(rows, rep, {}, as_of, hours=20, pacs_studies=st, validators=who)
+        alone = qs.compute(rows, rep, {}, as_of, hours=20, pacs_studies=st)   # no validators: one radiologist
         a = lambda out: out['series'][-1]['strain_c']['accumulated']
-        self.assertLess(a(mine), a(everyone))
-        oc = mine['coverage']['on_call']
-        self.assertEqual(oc, [{'block': '2026-11-11T08:00', 'known': True, 'exams': 28, 'of': 40}])
-        self.assertTrue(mine['series'][-1]['on_call_known'])
-        self.assertNotIn('night doc', str(mine).casefold())             # the name never leaves
+        # the same work, but the senior rests 50 min between their exams: lower than alone
+        self.assertLess(a(team), a(alone))
+        self.assertGreater(a(team), 0)
+        self.assertEqual(team['coverage']['on_call'],
+                         [{'block': '2026-11-11T08:00', 'known': True, 'team_exams': 28,
+                           'senior_exams': 14, 'radiologists': 2}])
+        # the morning before 14:00 is the day staff's, not the on-call team's
+        noon = [p for p in team['series'] if p['t'] == '2026-11-11T13:00'][0]
+        self.assertEqual(noon['strain_c']['accumulated'], 0)
+        self.assertNotIn('doc', str(team).casefold())   # no name leaves compute()
 
     def test_relative_lengths_by_region(self):
         t = lambda h, m: datetime(2026, 11, 11, h, m)

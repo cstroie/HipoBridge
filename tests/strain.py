@@ -57,6 +57,21 @@ class TestAccumulated(unittest.TestCase):
         two = [(dt(9), dt(10)), (dt(18), dt(19))]
         self.assertAlmostEqual(sx.accumulated_hours(two, dt(19)), 1.5, places=6)
 
+    def test_the_junior_s_work_adds_up_and_the_senior_s_gaps_are_rest(self):
+        h = sx.ACCUM_HALF_LIFE_H
+        senior = [(dt(20), dt(22))]
+        junior = [(dt(22), dt(23))]
+        work = senior + junior
+        # at 00:00 the senior has rested 2 h: their 2 h decayed by 2 h, the
+        # junior's hour by the hour of rest since it ended
+        expect = 2 * 2 ** (-2 / h) + 1 * 2 ** (-1 / h)
+        self.assertAlmostEqual(sx.accumulated_hours(work, dt(0, day=12), own=senior), expect, places=6)
+        # alone (own = all the work): only the hour after 23:00 is rest
+        self.assertAlmostEqual(sx.accumulated_hours(work, dt(0, day=12)), 3 * 2 ** (-1 / h), places=6)
+        # before the senior's first exam nothing is rest: the team's work stands for their other duties
+        self.assertAlmostEqual(sx.accumulated_hours([(dt(15), dt(17))], dt(19, 30), own=[(dt(19), dt(19, 30))]),
+                               2.0, places=6)
+
     def test_the_block_starts_at_08(self):
         self.assertEqual(sx.accumulated_hours([(dt(6), dt(7, 30))], dt(9)), 0.0)
         self.assertAlmostEqual(sx.accumulated_hours([(dt(7), dt(9))], dt(9)), 1.0, places=6)

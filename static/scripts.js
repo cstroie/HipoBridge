@@ -8142,7 +8142,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 note: `${d.span_h} h peak ${peak}`,
                 title: 'Relative strain index 0–100 of the working conditions (not a probability, not calibrated): ' +
                     `now ${c.now} (load ${c.load}, people waiting ${c.pressure}, burst ${c.burst}, rushing ${c.rushing}) · ` +
-                    `fatigue ${c.fatigue} (the on-call radiologist's UPU work since 08:00 ${c.accumulated} × sleepiness ${c.sleepiness}), each 0–100`,
+                    `fatigue ${c.fatigue} (the on-call team's UPU work, less the senior's rest, ${c.accumulated} × sleepiness ${c.sleepiness}), each 0–100`,
             });
         }
         defs.forEach(m => {
@@ -8330,8 +8330,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const c = p.strain_c || {};
             elements.scheduleQueueReadout.title = 'Relative strain index 0–100 (not a probability, not calibrated): ' +
                 `now ${c.now} (load ${c.load}, people waiting ${c.pressure}, burst ${c.burst}, rushing ${c.rushing}) · ` +
-                `fatigue ${c.fatigue} (the on-call radiologist's UPU work since 08:00 ${c.accumulated} × sleepiness ${c.sleepiness}), each 0–100` +
-                (p.on_call_known === false ? ' · on-call radiologist not known yet: all UPU exams counted' : '');
+                `fatigue ${c.fatigue} (the on-call team's UPU work, less the senior's rest, ${c.accumulated} × sleepiness ${c.sleepiness}), each 0–100` +
+                (p.on_call_known === false ? ' · senior on call not known yet: the team\'s gaps are the rest' : '');
         };
         svg.addEventListener('pointermove', e => {
             const r = svg.getBoundingClientRect();

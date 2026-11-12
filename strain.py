@@ -25,10 +25,12 @@ now: the moment's work (NOW_WEIGHTS)
               for their region AND the room idle while people wait
 
 fatigue = accumulated * (FATIGUE_FLOOR + (1 - FATIGUE_FLOOR) * sleepiness)
-    accumulated  the busy time since the duty began, an integral that only
-                 a real rest (an idle gap of REST_MIN or more) lets decay,
-                 with a half-life of ACCUM_HALF_LIFE_H; read on a saturating
-                 scale, 1 - 2 ** -(hours / ACCUM_HALF_FULL_H)
+    accumulated  the on-call UPU work since the duty began (the senior's and
+                 the junior's: it stands for the senior's ward, CT and other
+                 duties too), an integral that only the senior's real rest
+                 (an idle gap of REST_MIN or more in their own exams) lets
+                 decay, with a half-life of ACCUM_HALF_LIFE_H; read on a
+                 saturating scale, 1 - 2 ** -(hours / ACCUM_HALF_FULL_H)
     sleepiness   an assumed circadian curve and the hours on duty
 
 The duty block runs 08:00 -> 08:00 every day: the on-call radiologist also
@@ -83,7 +85,8 @@ class Moment:
     relative: List[float] = field(default_factory=list)   # the hour's exam lengths / their region's median
     arrivals: List[datetime] = field(default_factory=list)  # request times (sorted), the last BURST_FADE at least
     capacity: Optional[float] = None     # exams the room does per hour (1 / mean exam length)
-    busy: List[Interval] = field(default_factory=list)    # all the work done (accumulated)
+    busy: List[Interval] = field(default_factory=list)    # the on-call UPU work, senior and junior (accumulated)
+    own: Optional[List[Interval]] = None                 # the senior's own exams: their gaps are the rest
 
 
 @dataclass
@@ -136,26 +139,32 @@ def merge(intervals: List[Interval]) -> List[Interval]:
     return out
 
 
-def accumulated_hours(busy: List[Interval], t: datetime, since: Optional[datetime] = None) -> float:
+def accumulated_hours(busy: List[Interval], t: datetime, since: Optional[datetime] = None,
+                      own: Optional[List[Interval]] = None) -> float:
     """The work accumulated at t since the duty began, in busy hours.
 
-    Busy time adds up; an idle gap shorter than REST_MIN is part of the
-    work (calling, waiting for a patient, a phone call) and changes
-    nothing; a gap of REST_MIN or more is rest, and for its whole length
-    the accumulated work decays with a half-life of ACCUM_HALF_LIFE_H."""
+    Busy time adds up. Rest is an idle gap of REST_MIN or more in `own`, the
+    senior radiologist's own work (`busy` itself when not given): after
+    their first exam, between two of theirs, or since their last one. A
+    shorter gap is part of the work (calling, waiting for a patient, a phone
+    call). During rest the accumulated work decays with a half-life of
+    ACCUM_HALF_LIFE_H; work done meanwhile (a junior's) still adds up, since
+    it stands for the senior's other duties too (owner, 2026-11-12)."""
     since = since or duty_start(t)
-    acc, cursor = 0.0, since
-    for s, e in merge([(max(s, since), min(e, t)) for s, e in busy if e > since and s < t]):
-        acc = _rest(acc, s - cursor)
-        acc += (e - s).total_seconds() / 3600.0
-        cursor = e
-    return _rest(acc, t - cursor)
-
-
-def _rest(acc: float, gap: timedelta) -> float:
-    if acc <= 0 or gap < REST_MIN:
-        return acc
-    return acc * 2 ** (-(gap.total_seconds() / 3600.0) / ACCUM_HALF_LIFE_H)
+    clip = lambda ivs: [(max(s, since), min(e, t)) for s, e in ivs if e > since and s < t]
+    work = clip(busy)                    # each exam on its own: two radiologists' may overlap
+    mine = merge(work if own is None else clip(own))
+    rests = []
+    for (_, e0), (s1, _) in zip(mine, mine[1:]):
+        if s1 - e0 >= REST_MIN:
+            rests.append((e0, s1))
+    if mine and t - mine[-1][1] >= REST_MIN:
+        rests.append((mine[-1][1], t))
+    acc = 0.0
+    for s, e in work:
+        rested = sum(((min(re, t) - max(rs, e)).total_seconds() for rs, re in rests if re > e), 0.0) / 3600.0
+        acc += (e - s).total_seconds() / 3600.0 * 2 ** (-max(0.0, rested) / ACCUM_HALF_LIFE_H)
+    return acc
 
 
 def shorter(relative: List[float]) -> float:
@@ -202,7 +211,7 @@ def score(m: Moment, refs: Optional[Refs] = None) -> dict:
         'rushing': shorter(m.relative) * clamp((m.idle_waiting or 0.0) / IDLE_REF),
     }
     now = sum(NOW_WEIGHTS[k] * c[k] for k in NOW_WEIGHTS)
-    c['accumulated'] = 1.0 - 2 ** (-accumulated_hours(m.busy, m.t) / ACCUM_HALF_FULL_H)
+    c['accumulated'] = 1.0 - 2 ** (-accumulated_hours(m.busy, m.t, own=m.own) / ACCUM_HALF_FULL_H)
     c['sleepiness'] = sleepiness(m.t)
     fatigue = c['accumulated'] * (FATIGUE_FLOOR + (1.0 - FATIGUE_FLOOR) * c['sleepiness'])
     c['now'], c['fatigue'] = now, fatigue
