@@ -94,6 +94,79 @@ class TestJobs(unittest.TestCase):
         jobs = qs.build_jobs([row('1', '2026-11-11 10:00', '2026-11-11 10:30')], {}, {})
         self.assertIsNone(jobs[0]['report'])
 
+    def test_exam_before_request_leaves_both_stages(self):
+        jobs = qs.build_jobs([row('1', '2026-11-11 10:00', '2026-11-11 09:00')],
+                             {'1': datetime(2026, 11, 11, 11, 0)}, {})
+        self.assertTrue(jobs[0]['inconsistent'])
+        self.assertIsNone(jobs[0]['exam'])
+        self.assertIsNone(jobs[0]['report'])
+
+    def test_pacs_start_ends_the_wait_and_performed_starts_the_report(self):
+        st = {'1': [{'start': '2026-11-11T10:20:00'}]}
+        jobs = qs.build_jobs([row('1', '2026-11-11 10:00', '2026-11-11 10:50')],
+                             {'1': datetime(2026, 11, 11, 11, 30)}, {}, st)
+        d = datetime
+        self.assertEqual(jobs[0]['exam'], (d(2026, 11, 11, 10, 0), d(2026, 11, 11, 10, 20)))
+        self.assertEqual(jobs[0]['report'], (d(2026, 11, 11, 10, 50), d(2026, 11, 11, 11, 30)))
+
+    def test_pacs_start_alone_rescues_a_row_without_performed(self):
+        st = {'1': [{'start': '2026-11-11T10:20:00'}]}
+        jobs = qs.build_jobs([row('1', '2026-11-11 10:00', '', status='completed')], {}, {}, st)
+        self.assertEqual(jobs[0]['exam'], (datetime(2026, 11, 11, 10, 0), datetime(2026, 11, 11, 10, 20)))
+
+    def test_pick_study(self):
+        t = datetime(2026, 11, 11, 10, 0)
+        old = {'start': '2026-11-11T08:00:00'}          # before the request: another exam
+        a = {'start': '2026-11-11T10:20:00'}
+        b = {'start': '2026-11-11T13:00:00'}
+        self.assertEqual(qs.pick_study([old, b, a], t), datetime(2026, 11, 11, 10, 20))
+        self.assertEqual(qs.pick_study([a, b], t, datetime(2026, 11, 11, 13, 5)), datetime(2026, 11, 11, 13, 0))
+        self.assertEqual(qs.pick_study([{'start': '2026-11-11T09:50:00'}], t), t)  # clamped
+        self.assertIsNone(qs.pick_study([old], t))
+
+    def _svc(self, spec):
+        """spec: [(rid, req, start, report)] as 'HH:MM' on 2026-11-11."""
+        d = lambda h: f'2026-11-11 {h}' if h else ''
+        rows = [row(r, d(req)) for r, req, _, _ in spec]
+        st = {r: [{'start': f'2026-11-11T{s}:00'}] for r, _, s, _ in spec}
+        rep = {r: qs.parse_ts(d(rp)) for r, _, _, rp in spec if rp}
+        return qs.service_samples(qs.build_jobs(rows, rep, {}, st))
+
+    def test_service_ends_with_the_report(self):
+        t = lambda h, m: datetime(2026, 11, 11, h, m)
+        # idle room (next request after the start): the report still ends the exam
+        self.assertEqual(self._svc([('1', '10:00', '10:05', '10:20'), ('2', '11:00', '11:05', '11:30')]),
+                         [(t(10, 5), t(10, 20)), (t(11, 5), t(11, 30))])
+
+    def test_next_start_ends_a_late_report(self):
+        t = lambda h, m: datetime(2026, 11, 11, h, m)
+        # exam 2 was waiting and started at 10:30 before exam 1 was reported
+        # (10:50): exam 1 ended at 10:30; exam 2 (no report, nothing after) has none
+        self.assertEqual(self._svc([('1', '10:00', '10:05', '10:50'), ('2', '10:02', '10:30', None)]),
+                         [(t(10, 5), t(10, 30))])
+        # the next request was not waiting: the gap holds idle time, no sample
+        self.assertEqual(self._svc([('1', '10:00', '10:05', '10:50'), ('2', '10:20', '10:30', None)]), [])
+
+    def test_no_report_no_next_exam_is_no_sample(self):
+        self.assertEqual(self._svc([('1', '10:00', '10:05', None)]), [])
+        # nor an "exam" of 3 h
+        self.assertEqual(self._svc([('1', '10:00', '10:05', '13:05')]), [])
+
+    def test_measured_rho_and_occupancy(self):
+        base = datetime(2026, 11, 11, 6, 0)
+        rows, st, rep = [], {}, {}
+        for i in range(8):   # an exam every hour, 20 min from start to report
+            rid, req = str(i), base + timedelta(hours=i)
+            rows.append(row(rid, req.strftime('%Y-%m-%d %H:%M')))
+            st[rid] = [{'start': (req + timedelta(minutes=5)).isoformat()}]
+            rep[rid] = req + timedelta(minutes=25)
+        out = qs.compute(rows, rep, {}, datetime(2026, 11, 11, 14, 0), hours=12, pacs_studies=st)
+        svc = out['current']['service']
+        self.assertEqual(svc['mean_span'], 20.0)
+        self.assertEqual(svc['mu'], 3.0)
+        self.assertEqual(svc['rho'], round(out['current']['exam']['lam'] / 3.0, 2))
+        self.assertEqual(out['coverage']['pacs_start'], {'known': 8, 'of': 8})
+
 
 class TestStats(unittest.TestCase):
     def test_hand_computed_window(self):
@@ -163,6 +236,16 @@ class TestCompute(unittest.TestCase):
         self.assertEqual(out['coverage']['stale']['exam'], 1)
         self.assertEqual(out['current']['exam']['L'], 0.5)  # only the fresh one, half the hour
         self.assertLess(out['current']['span']['exam']['busy'], 1.0)
+
+    def test_stale_row_not_counted_as_a_job_of_the_span(self):
+        done = [row(str(i), f'2026-11-11 0{i}:00', f'2026-11-11 0{i}:30') for i in range(1, 6)]
+        stale = row('9', '2026-11-10 01:00', '', status='draft')  # open ~35 h: long past its cap
+        out = qs.compute(done + [stale], {}, {}, AS_OF, hours=12)
+        self.assertEqual(out['coverage']['jobs'], 5)
+
+    def test_inconsistent_counted_in_coverage(self):
+        out = qs.compute([row('1', '2026-11-11 10:00', '2026-11-11 09:00')], {}, {}, AS_OF, hours=12)
+        self.assertEqual(out['coverage']['inconsistent'], 1)
 
     def test_truncated_flag(self):
         self.assertTrue(qs.compute([], {}, {}, AS_OF, truncated=True)['truncated'])

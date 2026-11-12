@@ -38,7 +38,7 @@ import logging
 import os
 import threading
 from collections import Counter
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 
 try:
@@ -60,6 +60,20 @@ _ENV_PASS_KEYS = ('HYP_PASS',)
 # Confidence ranking used when a single query returns multiple matching
 # studies — the strongest classification found wins (see _query_pacs_sync).
 _OUTCOME_RANK = {'not_found': 0, 'error': 0, 'likely': 1, 'performed': 2}
+
+
+def dicom_datetime(date_s, time_s) -> Optional[str]:
+    """DICOM DA 'YYYYMMDD' + TM 'HHMM[SS[.ffffff]]' -> 'YYYY-MM-DDTHH:MM:SS',
+    or None when either part is missing or malformed."""
+    d = str(date_s or '').strip()
+    t = str(time_s or '').strip().split('.')[0]
+    if len(d) != 8 or len(t) < 4 or not (d.isdigit() and t.isdigit()):
+        return None
+    t = (t + '00')[:6]
+    try:
+        return datetime.strptime(d + t, '%Y%m%d%H%M%S').isoformat(timespec='seconds')
+    except ValueError:
+        return None
 
 
 def _load_config(config) -> dict:
@@ -101,6 +115,9 @@ class PacsChecker:
         self._last_query_time: Optional[datetime] = None
         self._task: Optional[asyncio.Task] = None
         self._refresh_lock = asyncio.Lock()
+        # (day, modality) -> (fetched_at, {cnp: [{'uid', 'start'}]}); see studies_for_day
+        self._day_cache: Dict[tuple, tuple] = {}
+        self._day_lock = asyncio.Lock()
 
     async def _poll_once(self) -> None:
         """One cycle: find candidates, batch-query the PACS, merge results."""
@@ -172,7 +189,7 @@ class PacsChecker:
                             "PACS confirmed request %s (CNP %s): %s performed, %s instances",
                             request_id, result.get('cnp'), result.get('modality'), result.get('instances'),
                         )
-                self._status.update(results)
+                    self._status[request_id] = result
             outcomes = Counter(r['outcome'] for r in results.values())
             logger.info(
                 "PACS poll cycle: %d candidates checked, outcomes=%s",
@@ -215,13 +232,21 @@ class PacsChecker:
                     # than just the last response, so one wrong-modality
                     # match can't mask a real one found earlier.
                     outcome, detail = 'not_found', {}
+                    studies = []   # every study of the asked modality: its start (StudyTime; the PACS gives no per-image times)
                     try:
                         for status, ds in assoc.send_c_find(
                                 ident, StudyRootQueryRetrieveInformationModelFind):
                             if status and status.Status in (0xFF00, 0xFF01) and ds is not None:
                                 candidate_outcome, candidate_detail = self._classify(ds, c['modality'])
+                                if candidate_outcome != 'not_found':
+                                    studies.append({
+                                        'uid': str(getattr(ds, 'StudyInstanceUID', '') or '') or None,
+                                        'start': dicom_datetime(getattr(ds, 'StudyDate', None),
+                                                                getattr(ds, 'StudyTime', None)),
+                                    })
                                 if _OUTCOME_RANK[candidate_outcome] > _OUTCOME_RANK[outcome]:
                                     outcome, detail = candidate_outcome, candidate_detail
+                        detail['studies'] = studies
                     except Exception as exc:
                         logger.warning("C-FIND failed for request %s: %s", c['request_id'], exc)
                         outcome = 'error'
@@ -238,6 +263,68 @@ class PacsChecker:
             logger.warning("PACS query batch failed: %s", exc)
         return out
 
+    DAY_CACHE_TTL = timedelta(minutes=5)   # a day still in progress; a finished one never changes
+
+    async def studies_for_day(self, day: date, modality: str = 'US') -> Optional[Dict[str, List[dict]]]:
+        """On demand: every study of one modality on one day, by CNP:
+        {cnp: [{'uid', 'start'}]}, from a single C-FIND without a patient key
+        (the poll loop asks per patient and only for the current schedule, so
+        it never sees a past day). A day that was already over when asked is
+        kept for good, today for DAY_CACHE_TTL. None when the PACS cannot be
+        reached (nothing cached then)."""
+        key = (day, modality)
+        async with self._day_lock:
+            now = datetime.now()
+            hit = self._day_cache.get(key)
+            if hit and (hit[0].date() > day or now - hit[0] < self.DAY_CACHE_TTL):
+                return hit[1]
+            result = await asyncio.get_event_loop().run_in_executor(
+                None, self._query_day_sync, day, modality)
+            if result is not None:
+                self._day_cache[key] = (now, result)
+                return result
+            return hit[1] if hit else None
+
+    def _query_day_sync(self, day: date, modality: str) -> Optional[Dict[str, List[dict]]]:
+        """Blocking: one association, one STUDY-level C-FIND for the day."""
+        ae = AE(ae_title=self._cfg['calling_ae_title'])
+        ae.add_requested_context(StudyRootQueryRetrieveInformationModelFind)
+        ae.acse_timeout    = self._cfg['acse_timeout']
+        ae.network_timeout = self._cfg['network_timeout']
+        ae.dimse_timeout   = self._cfg['dimse_timeout'] * 4   # a whole day's list
+        ident = Dataset()
+        ident.QueryRetrieveLevel = 'STUDY'
+        ident.PatientID = ''
+        ident.StudyDate = day.strftime('%Y%m%d')
+        ident.ModalitiesInStudy = modality
+        ident.NumberOfStudyRelatedInstances = ''
+        ident.StudyTime = ''
+        ident.StudyInstanceUID = ''
+        out: Dict[str, List[dict]] = {}
+        try:
+            assoc = ae.associate(self._cfg['host'], self._cfg['port'], ae_title=self._cfg['called_ae_title'])
+            if not assoc.is_established:
+                logger.warning("PACS day query: association failed")
+                return None
+            try:
+                for status, ds in assoc.send_c_find(ident, StudyRootQueryRetrieveInformationModelFind):
+                    if not (status and status.Status in (0xFF00, 0xFF01) and ds is not None):
+                        continue
+                    cnp = str(getattr(ds, 'PatientID', '') or '').strip()
+                    outcome, _ = self._classify(ds, modality)
+                    start = dicom_datetime(getattr(ds, 'StudyDate', None), getattr(ds, 'StudyTime', None))
+                    if cnp and start and outcome != 'not_found':
+                        out.setdefault(cnp, []).append({
+                            'uid': str(getattr(ds, 'StudyInstanceUID', '') or '') or None, 'start': start})
+            finally:
+                assoc.release()
+        except Exception as exc:
+            logger.warning("PACS day query for %s failed: %s", day, exc)
+            return None
+        logger.info("PACS day query %s %s: %d patients, %d studies", day, modality, len(out),
+                    sum(len(v) for v in out.values()))
+        return out
+
     @staticmethod
     def _build_identifier(cnp: str, modality: str, since: datetime, until: datetime) -> 'Dataset':
         ds = Dataset()
@@ -246,6 +333,7 @@ class PacsChecker:
         ds.StudyDate = f"{since.strftime('%Y%m%d')}-{until.strftime('%Y%m%d')}"
         ds.ModalitiesInStudy = modality
         ds.NumberOfStudyRelatedInstances = ''
+        ds.StudyTime = ''
         ds.StudyInstanceUID = ''
         ds.StudyDescription = ''
         return ds

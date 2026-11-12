@@ -65,6 +65,14 @@ OPEN_MIN = timedelta(hours=2)
 OPEN_MAX = timedelta(hours=24)
 OPEN_SAMPLES = 5
 FETCH_LIMIT = 2000
+# PACS study start (pacs.py: StudyTime). Hipocrate records no exam start, the
+# modality's MPPS is not available, and the PACS returns no per-image times
+# (checked live 2026-11-12: image/series-level C-FIND repeats StudyTime
+# only), so the end of an exam is unknown; it is taken from the written report
+# (an ultrasound exam ends with it) or the next exam's start (service_samples()).
+PACS_SLACK = timedelta(minutes=15)    # a study may start a little before the request is entered
+SERVICE_MAX = timedelta(hours=2)      # a longer start-to-end is not one ultrasound exam
+SERVICE_MIN_SAMPLES = 5               # samples needed before the measured rho is shown
 
 
 def parse_ts(value) -> Optional[datetime]:
@@ -137,10 +145,37 @@ def pick_presentation(times: Iterable[datetime], t_req: datetime) -> Optional[da
     return best
 
 
+def pick_study(studies, t_req: datetime, t_perf: Optional[datetime] = None) -> Optional[datetime]:
+    """Start of the PACS study that belongs to this request.
+
+    `studies` are the same-patient, same-modality studies the PACS returned
+    (dicts with an ISO 'start'). A candidate starts no earlier than
+    PACS_SLACK before the request and no later than OPEN_MAX after it; with a
+    performed_at the nearest one wins, else the earliest. The start is
+    clamped to the request time (an exam cannot wait a negative time).
+    None when none fits."""
+    cands = []
+    for st in studies or []:
+        a = parse_ts(st.get('start'))
+        if a is not None and t_req - PACS_SLACK <= a <= t_req + OPEN_MAX:
+            cands.append(a)
+    if not cands:
+        return None
+    start = min(cands, key=(lambda a: abs(a - t_perf)) if t_perf else (lambda a: a))
+    return max(start, t_req)
+
+
 def build_jobs(rows: List[dict], report_times: Dict[str, Optional[datetime]],
-               arrivals: Dict[str, Optional[datetime]]) -> List[dict]:
+               arrivals: Dict[str, Optional[datetime]],
+               pacs_studies: Optional[Dict[str, list]] = None) -> List[dict]:
     """One job per imaging row, with each stage as an interval [start, end)
-    (end None = still waiting), or None when the stage is unknown/not reached."""
+    (end None = still waiting), or None when the stage is unknown/not reached.
+
+    With a PACS study the exam stage ends when the exam *starts* (the patient
+    leaves the queue for the room) and a `service` stage (start, end) exists;
+    the report stage starts at the exam's end. Without one, performed_at
+    stands for all of it, as before."""
+    pacs_studies = pacs_studies or {}
     jobs = []
     for r in rows:
         if not in_scope(r):
@@ -153,21 +188,41 @@ def build_jobs(rows: List[dict], report_times: Dict[str, Optional[datetime]],
         left = status in LEFT_STATUSES
         t_rep = report_times.get(rid)
         t_exam = parse_performed(r.get('performed_at'))
+        t_perf = t_exam
         if t_exam is None and left and t_rep is not None:
             t_exam = t_rep
 
+        # An exam time before the request is a clock/date glitch: the job is
+        # dropped from both stages (not left in the report queue alone) and
+        # counted in coverage as inconsistent.
+        inconsistent = t_exam is not None and t_exam < t_req
+        if inconsistent:
+            t_exam = None
+
+        t_start = None
+        if not inconsistent:
+            t_start = pick_study(pacs_studies.get(rid), t_req, t_perf)
+        # the wait ends when the exam starts (PACS), else at performed_at
+        t_left = t_start or t_exam
+        t_out = t_exam or t_start            # the exam is over: the report stage starts
+
         exam = None
-        if t_exam is not None:
-            exam = (t_req, t_exam) if t_exam >= t_req else None
+        if inconsistent:
+            pass
+        elif t_left is not None:
+            exam = (t_req, t_left)
         elif not left:
             exam = (t_req, None)
 
         report = None
-        if t_exam is not None:
-            if t_rep is not None and t_rep >= t_exam:
-                report = (t_exam, t_rep)
+        if inconsistent:
+            pass
+        elif t_out is not None:
+            if t_rep is not None and t_rep >= t_out:
+                report = (t_out, t_rep)
             elif not left:
-                report = (t_exam, None)
+                report = (t_out, None)
+
 
         jobs.append({
             'id': rid,
@@ -178,7 +233,11 @@ def build_jobs(rows: List[dict], report_times: Dict[str, Optional[datetime]],
             't_arr': arrivals.get(rid),
             'exam': exam,
             'report': report,
-            'exam_known': t_exam is not None,
+            'pacs_start': t_start is not None,
+            't_start': t_start,
+            't_rep': t_rep,
+            'inconsistent': inconsistent,
+            'exam_known': t_left is not None,
             'report_known': t_rep is not None,
         })
     return jobs
@@ -288,6 +347,55 @@ def stage_stats(intervals, a: datetime, b: datetime) -> dict:
     }
 
 
+def service_samples(jobs: List[dict]) -> List[tuple]:
+    """(start, end) of each exam the room was busy with, from the PACS start
+    and the written report.
+
+    The PACS gives no end time, but an ultrasound exam ends with its report
+    and the next one normally starts only after it, so the end is the report
+    validation; and whenever the next exam starts the previous one is over
+    (end = min(report, next start)). Rules:
+      * report at/after the start: end = report, unless the next exam started
+        first (a late or forgotten report): then end = next start, only valid
+        when that next request was already waiting (else the gap holds idle
+        time);
+      * no report time: end = next start, same waiting condition;
+      * none known, or an exam longer than SERVICE_MAX: no sample.
+    One room is assumed; another room's exams only lengthen the estimate."""
+    started = sorted((j for j in jobs if j['t_start']), key=lambda j: j['t_start'])
+    out = []
+    for i, cur in enumerate(started):
+        start, rep = cur['t_start'], cur['t_rep']
+        nxt = started[i + 1] if i + 1 < len(started) else None
+        next_ok = nxt is not None and nxt['t_req'] <= start
+        end = None
+        if rep is not None and rep > start:
+            if nxt is not None and nxt['t_start'] < rep:
+                end = nxt['t_start'] if next_ok else None
+            else:
+                end = rep
+        elif rep is None and next_ok:
+            end = nxt['t_start']
+        if end is not None and timedelta(0) < end - start <= SERVICE_MAX:
+            out.append((start, end))
+    return out
+
+
+def service_stats(samples: List[tuple], a: datetime, b: datetime) -> dict:
+    """Exams that ended in (a, b]: count, mean and median minutes; and the
+    share of [a, b] the room was occupied (union of the exams)."""
+    done = [(s, e) for s, e in samples if a < e <= b]
+    span_h = _hours(b - a)
+    occ = round(_hours(_busy(samples, a, b)) / span_h, 3) if span_h > 0 else 0.0
+    if not done:
+        return {'n': 0, 'mean': None, 'median': None, 'occupancy': occ}
+    vals = sorted((e - s).total_seconds() / 60.0 for s, e in done)
+    mid = len(vals) // 2
+    med = vals[mid] if len(vals) % 2 else (vals[mid - 1] + vals[mid]) / 2.0
+    return {'n': len(vals), 'mean': round(sum(vals) / len(vals), 1), 'median': round(med, 1),
+            'occupancy': occ}
+
+
 def service_rate(intervals, a: datetime, b: datetime, window: timedelta = timedelta(hours=1),
                  step: timedelta = timedelta(minutes=10), q: float = 0.9) -> Optional[float]:
     """Demonstrated capacity: the q-th percentile of the departures in a
@@ -313,7 +421,7 @@ def service_rate(intervals, a: datetime, b: datetime, window: timedelta = timede
     return round(per_h, 2) if per_h > 0 else None
 
 
-def _segment(jobs, as_of, span_start, window) -> dict:
+def _segment(jobs, as_of, span_start, window, samples=()) -> dict:
     exam = [j['exam'] for j in jobs if j['exam']]
     report = [j['report'] for j in jobs if j['report']]
     w_start = as_of - window
@@ -323,6 +431,15 @@ def _segment(jobs, as_of, span_start, window) -> dict:
     span_r = stage_stats(report, span_start, as_of)
     mu = service_rate(exam, span_start, as_of)
     mu_r = service_rate(report, span_start, as_of)
+    # With enough estimated durations the utilisation is the offered load
+    # lam * E[S] (and mu = 1 / E[S]) instead of the demonstrated-capacity guess.
+    svc_cur = service_stats(samples, w_start, as_of)
+    svc_span = service_stats(samples, span_start, as_of)
+    mean_h = svc_span['mean'] / 60.0 if svc_span['n'] >= SERVICE_MIN_SAMPLES and svc_span['mean'] else None
+    service = {'occupancy': svc_cur['occupancy'], 'n_span': svc_span['n'],
+               'mean_span': svc_span['mean'], 'median_span': svc_span['median'],
+               'mu': round(1.0 / mean_h, 2) if mean_h else None,
+               'rho': round(cur['lam'] * mean_h, 2) if mean_h else None}
     door = [(j['t_req'] - j['t_arr']).total_seconds() / 60.0
             for j in jobs if j['t_arr'] and w_start < j['t_req'] <= as_of]
     door_span = [(j['t_req'] - j['t_arr']).total_seconds() / 60.0
@@ -331,6 +448,7 @@ def _segment(jobs, as_of, span_start, window) -> dict:
         'exam': {**cur, 'mu': mu, 'rho': round(cur['lam'] / mu, 2) if mu else None},
         'report': {**cur_r, 'mu': mu_r, 'rho': round(cur_r['lam'] / mu_r, 2) if mu_r else None},
         'span': {'exam': {**span, 'mu': mu}, 'report': {**span_r, 'mu': mu_r}},
+        'service': service,
         'upu_door_W': round(sum(door) / len(door), 1) if door else None,
         'upu_door_W_span': round(sum(door_span) / len(door_span), 1) if door_span else None,
     }
@@ -339,14 +457,14 @@ def _segment(jobs, as_of, span_start, window) -> dict:
 def compute(rows: List[dict], report_times: Dict[str, Optional[datetime]],
             arrivals: Dict[str, Optional[datetime]], as_of: datetime,
             hours: int = 24, window_min: int = 60, step_min: int = 10,
-            truncated: bool = False) -> dict:
-    jobs = build_jobs(rows, report_times, arrivals)
+            truncated: bool = False, pacs_studies: Optional[Dict[str, list]] = None) -> dict:
+    jobs = build_jobs(rows, report_times, arrivals, pacs_studies)
     caps = open_caps(jobs)
     apply_caps(jobs, caps)
     window = timedelta(minutes=window_min)
     span_start = as_of - timedelta(hours=hours)
 
-    current = _segment(jobs, as_of, span_start, window)
+    current = _segment(jobs, as_of, span_start, window, service_samples(jobs))
 
     exam = [j['exam'] for j in jobs if j['exam']]
     report = [j['report'] for j in jobs if j['report']]
@@ -354,22 +472,32 @@ def compute(rows: List[dict], report_times: Dict[str, Optional[datetime]],
     t = span_start + timedelta(minutes=step_min)
     while t <= as_of:
         e = stage_stats(exam, t - window, t)
-        r = stage_stats(report, t - window, t)
         series.append({
             't': t.strftime('%Y-%m-%dT%H:%M'),
             'lam': e['lam'], 'x': e['x'], 'L': e['L'], 'W': e['W'],
-            'xr': r['x'], 'Lr': r['L'], 'Wr': r['W'],
         })
         t += timedelta(minutes=step_min)
 
-    in_span = [j for j in jobs if span_start < j['t_req'] <= as_of
-               or (j['exam'] and (j['exam'][1] is None or j['exam'][1] > span_start))]
-    left = [j for j in in_span if j['left']]
+    def relevant(j):
+        # requested in the span, or its exam stage reaches into it; an open
+        # one only until its cap (a stale row is not a job of this span)
+        if span_start < j['t_req'] <= as_of:
+            return True
+        iv = j['exam']
+        if not iv:
+            return False
+        end = iv[1] if iv[1] is not None else iv[0] + _parts(iv)[2]
+        return end > span_start
+
+    in_span = [j for j in jobs if relevant(j)]
+    left = [j for j in in_span if j['left'] and not j['inconsistent']]
     upu = [j for j in in_span if j['upu']]
     coverage = {
         'jobs': len(in_span),
         'exam_times': {'known': sum(1 for j in left if j['exam_known']), 'of': len(left)},
         'report_times': {'known': sum(1 for j in left if j['report_known']), 'of': len(left)},
+        'pacs_start': {'known': sum(1 for j in left if j['pacs_start']), 'of': len(left)},
+        'inconsistent': sum(1 for j in in_span if j['inconsistent']),
         'upu_arrivals': {'known': sum(1 for j in upu if j['t_arr']), 'of': len(upu)},
         # open past their cap at as_of: left out of the queue
         'stale': {stage: sum(1 for j in jobs if j[stage] and j[stage][1] is None

@@ -655,7 +655,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 elements.scheduleStartDate.addEventListener('change', fetchScheduleFromInputs);
             }
             if (elements.scheduleEndDate) {
-                elements.scheduleEndDate.addEventListener('change', fetchScheduleFromInputs);
+                // A "To" before "From" pulls "From" to the day before "To".
+                elements.scheduleEndDate.addEventListener('change', ev => {
+                    const to = elements.scheduleEndDate.value, from = elements.scheduleStartDate?.value;
+                    if (to && from && to < from) {
+                        const d = new Date(`${to}T12:00:00`);
+                        d.setDate(d.getDate() - 1);
+                        elements.scheduleStartDate.value = localDateStr(d);
+                    }
+                    fetchScheduleFromInputs(ev);
+                });
             }
         }
         if (elements.loadingErrorDismiss) {
@@ -7987,6 +7996,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // a 12/24 h graph. Recomputed by the server from the schedule's own
     // timestamps and cached report/FUPU pages: nothing is stored.
     const QUEUE_RHO_HIGH = 0.85;
+    // Fewer events than this in the 1-hour window: Poisson noise of ±40% or
+    // more, so the value is drawn dimmed (tooltip says so).
+    const QUEUE_LOW_N = 5;
         let scheduleQueueFetchedAt = 0;
 
     // The moment analysed: now for today (or no date), else the end of the
@@ -8058,26 +8070,37 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         const all = d.current; // UPU ultrasound only (queuestats.SCOPE_*): one server
-        const ex = all.exam, rp = all.report;
-        const rhoHigh = ex.rho != null && ex.rho >= QUEUE_RHO_HIGH;
+        const ex = all.exam;
+        // Estimated exam durations (PACS start → written report) give the true
+        // offered load λ·E[S]; without enough of them, the demonstrated-capacity guess.
+        const sv = all.service || {};
+        const measured = sv.rho != null;
+        const rho = measured ? sv.rho : ex.rho;
+        const mu = measured ? sv.mu : ex.mu;
+        const rhoHigh = rho != null && rho >= QUEUE_RHO_HIGH;
+        const lowIn = ex.n_in < QUEUE_LOW_N, lowOut = ex.n_out < QUEUE_LOW_N;
 
         const defs = [
-            { label: 'Arrivals /h', value: fmtRate(ex.lam), color: 'var(--st-inlab)',
+            { label: 'Requests /h', value: fmtRate(ex.lam), color: 'var(--st-inlab)',
               note: `${d.span_h} h avg ${fmtRate(all.span.exam.lam)}`,
-              title: 'λ: requests made in the last hour' },
-            { label: 'Done /h', value: fmtRate(ex.x), color: 'var(--st-completed)',
-              note: `capacity μ ${fmtRate(ex.mu)}`,
-              title: `Exams done in the last hour. μ = demonstrated capacity: the 90th percentile of the hourly exams done over ${d.span_h} h (an estimate: Hipocrate records no service times)` },
-            { label: 'Utilisation', value: fmtPct(ex.rho),
+              low: lowIn, n: ex.n_in, title: 'λ: requests made in the last hour' },
+            { label: 'Exams /h', value: fmtRate(ex.x), color: 'var(--st-completed)', low: lowOut, n: ex.n_out,
+              note: `capacity μ ${fmtRate(mu)}`,
+              title: measured
+                  ? `Exams done in the last hour. μ = 1 / mean exam duration (mean ${fmtMin(sv.mean_span)} from the PACS exam start to the written report, or the next exam's start, ${sv.n_span} exams)`
+                  : `Exams done in the last hour. μ = demonstrated capacity: the 90th percentile of the hourly exams done over ${d.span_h} h (an estimate: too few exam durations known from the PACS)` },
+            { label: 'Utilisation', value: fmtPct(rho), low: lowIn, n: ex.n_in,
               color: rhoHigh ? 'var(--urgent)' : 'var(--primary)',
-              note: `${d.span_h} h busy ${fmtPct(all.span.exam.busy)}`,
-              title: 'ρ = λ / μ: arrivals in the last hour against the demonstrated capacity. Under it, the share of the span with someone waiting' },
-            { label: 'In queue', value: fmtRate(ex.L), color: 'var(--st-inprogress)',
+              note: measured ? `room occupied ${fmtPct(sv.occupancy)}` : `${d.span_h} h busy ${fmtPct(all.span.exam.busy)}`,
+              title: measured
+                  ? 'ρ = λ · mean exam duration (PACS start → written report). Under it, the share of the last hour the room was occupied'
+                  : 'ρ = λ / μ: requests in the last hour against the demonstrated capacity. Under it, the share of the span with someone waiting' },
+            { label: 'In queue', value: fmtRate(ex.L), color: 'var(--muted)',
               note: all.span.exam.little != null ? `${d.span_h} h: L ${fmtRate(all.span.exam.L)} · λW ${fmtRate(all.span.exam.little)}` : '',
-              title: `L: average number waiting for the exam in the last hour. Under it, Little's law over ${d.span_h} h: L should equal λ·W (a 1-hour W sees only the jobs that left inside it, so the check is made over the span)` },
-            { label: 'Wait', value: fmtMin(ex.W), color: 'var(--text)',
-              note: `report +${fmtMin(rp.W)}`,
-              title: 'W: request → exam, mean of the exams done in the last hour; then exam → validated report' },
+              title: `L: average number waiting for the exam in the last hour. Under it, the Little's-law check over ${d.span_h} h: L should be close to λ·W. Only the span check is meaningful: the 1-hour W counts just the jobs that left inside the window while L also counts those still waiting, so the two differ even with perfect data` },
+            { label: 'Wait', value: fmtMin(ex.W), color: 'var(--st-inprogress)', low: lowOut, n: ex.n_out,
+              note: `${d.span_h} h avg ${fmtMin(all.span.exam.W)}`,
+              title: 'W: request → exam start (PACS, else the performed time), mean of the exams done in the last hour' },
         ];
         defs.forEach(m => {
             const div = document.importNode(metricTpl.content, true).firstElementChild;
@@ -8086,18 +8109,21 @@ document.addEventListener('DOMContentLoaded', function() {
             val.style.color = m.color;
             div.querySelector('.schedule-metric-label').textContent = m.label;
             div.querySelector('.schedule-metric-note').textContent = m.note;
-            div.title = m.title;
+            div.title = m.low ? `${m.title}\n\nOnly ${m.n} event${m.n === 1 ? '' : 's'} in the last hour: too few for a reliable value` : m.title;
+            val.style.opacity = m.low ? '0.5' : '';
             box.appendChild(div);
         });
 
         if (sub) {
             const cov = d.coverage || {};
             const parts = [`UPU ultrasound queue · hour to ${hhmm(d.as_of) === '00:00' && scheduleQueueAnchor() ? '24:00' : hhmm(d.as_of)}`];
-            const rep = pctOf(cov.report_times), upu = pctOf(cov.upu_arrivals);
+            const rep = pctOf(cov.report_times), upu = pctOf(cov.upu_arrivals), ps = pctOf(cov.pacs_start);
+            if (ps != null) parts.push(`exam start from PACS ${ps}%`);
             if (rep != null) parts.push(`reports ${rep}% known`);
             if (upu != null) parts.push(`UPU arrivals ${upu}% known`);
             const stale = (cov.stale?.exam || 0) + (cov.stale?.report || 0);
             if (stale) parts.push(`${stale} stale left out`);
+            if (cov.inconsistent) parts.push(`${cov.inconsistent} with exam before request left out`);
             if (d.truncated) parts.push('list truncated');
             if (all.upu_door_W_span != null) parts.push(`UPU door → request ${fmtMin(all.upu_door_W_span)}`);
             sub.textContent = parts.join(' · ');
@@ -8112,12 +8138,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const color = rhoHigh ? 'var(--urgent)' : 'var(--mod-us)';
             bar.querySelector('.schedule-mod-bar-name').textContent = 'UPU ultrasound';
             const countEl = bar.querySelector('.schedule-mod-bar-count');
-            countEl.textContent = `λ ${fmtRate(ex.lam)} · μ ${fmtRate(ex.mu)} · ρ ${fmtPct(ex.rho)}`;
+            countEl.textContent = `λ ${fmtRate(ex.lam)} · μ ${fmtRate(mu)} · ρ ${fmtPct(rho)}`;
             countEl.style.color = color;
             const fill = bar.querySelector('.schedule-mod-bar-fill');
-            fill.style.width = `${Math.min(100, Math.round((ex.rho || 0) * 100))}%`;
+            fill.style.width = `${Math.min(100, Math.round((rho || 0) * 100))}%`;
             fill.style.background = color;
-            bar.title = `Utilisation ρ ${fmtPct(ex.rho)}, in queue ${fmtRate(ex.L)}, report wait ${fmtMin(rp.W)}; ` +
+            bar.title = `Utilisation ρ ${fmtPct(rho)}, in queue ${fmtRate(ex.L)}; ` +
                 `${d.span_h} h: ${all.span.exam.n_in} requests, wait ${fmtMin(all.span.exam.W)}`;
             elements.scheduleModBars.replaceChildren(bar);
             elements.scheduleModBars.hidden = false;
@@ -8163,13 +8189,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const s = d.series;
         const W = Math.max(280, wrap.clientWidth || 800);
-        const padL = 34, padR = 8, h1 = 130, h2 = 80, gap = 22, axis = 16;
-        const H = h1 + gap + h2 + axis;
+        const padL = 34, padR = 36, h1 = 170, axis = 16;
+        const H = h1 + axis;
         const xOf = i => padL + (s.length > 1 ? i * (W - padL - padR) / (s.length - 1) : 0);
+        // left axis: requests/h, exams/h and the queue; right axis: the wait in minutes
         const max1 = niceMax(Math.max(...s.map(p => Math.max(p.lam || 0, p.x || 0, p.L || 0))));
-        const max2 = niceMax(Math.max(...s.map(p => Math.max(p.W || 0, p.Wr || 0))));
+        const max2 = niceMax(Math.max(...s.map(p => p.W || 0)));
         const y1 = v => h1 - (v / max1) * (h1 - 6);
-        const y2 = v => h1 + gap + h2 - (v / max2) * (h2 - 6);
+        const yW = v => h1 - (v / max2) * (h1 - 6);
 
         const svg = svgEl('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}` }, 'q-svg');
         // Hour gridlines + labels
@@ -8177,14 +8204,14 @@ document.addEventListener('DOMContentLoaded', function() {
         s.forEach((p, i) => {
             const t = hhmm(p.t);
             if (!t.endsWith(':00') || Number(t.slice(0, 2)) % stepH) return;
-            svg.appendChild(svgEl('line', { x1: xOf(i), x2: xOf(i), y1: 0, y2: h1 + gap + h2 }, 'q-grid'));
+            svg.appendChild(svgEl('line', { x1: xOf(i), x2: xOf(i), y1: 0, y2: h1 }, 'q-grid'));
             const lbl = svgEl('text', { x: xOf(i), y: H - 3, 'text-anchor': 'middle' }, 'q-axis');
             lbl.textContent = t.slice(0, 2);
             svg.appendChild(lbl);
         });
-        [[0, h1, `${max1}`], [h1 + gap, h1 + gap + h2, fmtMin(max2)]].forEach(([top, bottom, label]) => {
-            svg.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: bottom, y2: bottom }, 'q-base'));
-            const t = svgEl('text', { x: padL - 4, y: top + 10, 'text-anchor': 'end' }, 'q-axis');
+        svg.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: h1, y2: h1 }, 'q-base'));
+        [[padL - 4, 'end', `${max1}`], [W - padR + 4, 'start', fmtMin(max2)]].forEach(([x, anchor, label]) => {
+            const t = svgEl('text', { x, y: 10, 'text-anchor': anchor }, 'q-axis');
             t.textContent = label;
             svg.appendChild(t);
         });
@@ -8195,21 +8222,34 @@ document.addEventListener('DOMContentLoaded', function() {
             const last = s.length - 1 - [...s].reverse().findIndex(p => p.L != null);
             svg.appendChild(svgEl('path', { d: `${area}L${xOf(last).toFixed(1)},${h1}L${xOf(first).toFixed(1)},${h1}Z` }, 'q-area'));
         }
-        [['lam', y1, 'q-lam'], ['x', y1, 'q-x'], ['W', y2, 'q-w'], ['Wr', y2, 'q-wr']].forEach(([key, yOf, cls]) => {
+        [['lam', y1, 'q-lam'], ['x', y1, 'q-x'], ['W', yW, 'q-w']].forEach(([key, yOf, cls]) => {
             const path = svgLine(s, key, xOf, yOf);
             if (path) svg.appendChild(svgEl('path', { d: path }, `q-line ${cls}`));
         });
-        const cursor = svgEl('line', { y1: 0, y2: h1 + gap + h2 }, 'q-cursor');
+        const cursor = svgEl('line', { y1: 0, y2: h1 }, 'q-cursor');
         svg.appendChild(cursor);
 
         const show = i => {
             const p = s[i];
             cursor.setAttribute('x1', xOf(i));
             cursor.setAttribute('x2', xOf(i));
-            elements.scheduleQueueReadout.textContent =
-                `${hhmm(p.t)} (hour to) · arrivals ${fmtRate(p.lam)}/h · done ${fmtRate(p.x)}/h · ` +
-                `in queue ${fmtRate(p.L)} · wait ${fmtMin(p.W)} · reports ${fmtRate(p.xr)}/h, ` +
-                `awaiting ${fmtRate(p.Lr)}, wait ${fmtMin(p.Wr)}`;
+            // Same colours as the lines / hero tiles
+            const parts = [
+                [`${hhmm(p.t)} (hour to)`, ''],
+                [`requests ${fmtRate(p.lam)}/h`, 'var(--st-inlab)'],
+                [`exams ${fmtRate(p.x)}/h`, 'var(--st-completed)'],
+                [`in queue ${fmtRate(p.L)}`, 'var(--muted)'],
+                [`wait ${fmtMin(p.W)}`, 'var(--st-inprogress)'],
+            ];
+            const nodes = [];
+            parts.forEach(([text, color], k) => {
+                if (k) nodes.push(' · ');
+                const span = document.createElement('span');
+                span.textContent = text;
+                if (color) span.style.color = color;
+                nodes.push(span);
+            });
+            elements.scheduleQueueReadout.replaceChildren(...nodes);
         };
         svg.addEventListener('pointermove', e => {
             const r = svg.getBoundingClientRect();

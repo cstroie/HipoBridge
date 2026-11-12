@@ -97,6 +97,55 @@ class TestCnpPreFilter(unittest.TestCase):
 # Single-request lookup (lazy per-row enrichment)
 # ---------------------------------------------------------------------------
 
+class TestDicomDatetime(unittest.TestCase):
+    def test_parsing(self):
+        from pacs import dicom_datetime
+        self.assertEqual(dicom_datetime('20261112', '101030'), '2026-11-12T10:10:30')
+        self.assertEqual(dicom_datetime('20261112', '1010'), '2026-11-12T10:10:00')
+        self.assertEqual(dicom_datetime('20261112', '101030.123'), '2026-11-12T10:10:30')
+        self.assertIsNone(dicom_datetime('20261112', ''))
+        self.assertIsNone(dicom_datetime('', '101030'))
+        self.assertIsNone(dicom_datetime('20261399', '101030'))
+
+
+class TestStudiesForDay(unittest.TestCase):
+    def _checker(self, results):
+        import asyncio
+        from datetime import date as _d
+        c = PacsChecker({}, None)
+        calls = []
+        def fake(day, modality):
+            calls.append(day)
+            return results.pop(0)
+        c._query_day_sync = fake
+        return c, calls
+
+    def test_past_day_cached_for_good_and_failure_not_cached(self):
+        import asyncio
+        from datetime import date, timedelta
+        yday = date.today() - timedelta(days=1)
+        c, calls = self._checker([None, {'123': [{'uid': 'u', 'start': '2026-01-01T10:00:00'}]}])
+        run = lambda coro: asyncio.new_event_loop().run_until_complete(coro)
+        self.assertIsNone(run(c.studies_for_day(yday)))            # PACS unreachable
+        r = run(c.studies_for_day(yday))                           # asked again, now answers
+        self.assertEqual(r['123'][0]['uid'], 'u')
+        self.assertEqual(run(c.studies_for_day(yday)), r)          # served from the cache
+        self.assertEqual(len(calls), 2)
+
+    def test_today_refetched_after_ttl(self):
+        import asyncio
+        from datetime import date, datetime, timedelta
+        c, calls = self._checker([{}, {}])
+        run = lambda coro: asyncio.new_event_loop().run_until_complete(coro)
+        run(c.studies_for_day(date.today()))
+        run(c.studies_for_day(date.today()))
+        self.assertEqual(len(calls), 1)
+        k = (date.today(), 'US')
+        c._day_cache[k] = (datetime.now() - timedelta(minutes=6), c._day_cache[k][1])
+        run(c.studies_for_day(date.today()))
+        self.assertEqual(len(calls), 2)
+
+
 class TestStatusFor(unittest.TestCase):
 
     def test_unknown_when_never_checked(self):

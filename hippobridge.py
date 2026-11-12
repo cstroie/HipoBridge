@@ -711,7 +711,7 @@ async def get_schedule(request):
 # re-parses the cerere/patient pages: ~10 s), by when the
 # idle-prefetch may have cached the page. parse_cache (300 entries) is far
 # too small for the ~1000 pages one 24 h analysis reads.
-_queue_found: Dict[tuple, datetime] = {}
+_queue_found: Dict[tuple, object] = {}
 _queue_miss: Dict[tuple, float] = {}
 _QUEUE_MISS_TTL = 600.0  # the 10-minute tick; a retry sweep costs ~10 s
 _QUEUE_MEMO_MAX = 20000
@@ -759,6 +759,14 @@ async def _queue_upu_arrival(cerere_client, patient_client, fupu_client, present
         if t and t <= t_req:
             return queuestats.pick_presentation([t], t_req)
     return None
+
+async def _queue_cnp(cerere_client, patient_client, row):
+    """The patient's CNP from cached pages only (cerere.asp -> patient page)."""
+    cerere = await cerere_client.parse_cached(id=row.get('request_id'))
+    patient_id = cerere.get('patient.id') if cerere else None
+    patient = await patient_client.parse_cached(id=patient_id) if patient_id else None
+    cnp = patient.get('patient.cnp') if patient else None
+    return str(cnp).strip() if cnp else None
 
 @require_auth
 async def get_schedule_queue(request):
@@ -824,8 +832,37 @@ async def get_schedule_queue(request):
     arrivals = {r['request_id']: t for r, t in zip(upu_rows, arr) if isinstance(t, datetime)}
 
     t2 = time.perf_counter()
+    # Exam starts from the PACS. The checker's table (no I/O) covers what the
+    # poll loop has reached; the rest comes from one on-demand C-FIND per day
+    # (cached, past days for good), matched to the requests by CNP.
+    pacs_studies = {}
+    if _pacs_checker is not None:
+        for r in with_id:
+            found = _pacs_checker.status_for(r['request_id']).get('studies')
+            if found:
+                pacs_studies[r['request_id']] = list(found)
+        missing = [r for r in with_id if r['request_id'] not in pacs_studies and req_after(r, warmup_start)]
+        if missing:
+            days, d = [], warmup_start.date()
+            while d <= (as_of - timedelta(minutes=1)).date():
+                days.append(d)
+                d += timedelta(days=1)
+            by_day = await asyncio.gather(*(_pacs_checker.studies_for_day(day) for day in days))
+            by_cnp = {}
+            for studies in by_day:
+                for cnp, lst in (studies or {}).items():
+                    by_cnp.setdefault(cnp, []).extend(lst)
+            if by_cnp:
+                async def cnp_of(r):
+                    async with sem:
+                        return await _queue_memo(('cnp', r['request_id']),
+                                                 lambda: _queue_cnp(cerere_client, patient_client, r))
+                cnps = await asyncio.gather(*(cnp_of(r) for r in missing), return_exceptions=True)
+                for r, cnp in zip(missing, cnps):
+                    if isinstance(cnp, str) and cnp in by_cnp:
+                        pacs_studies[r['request_id']] = by_cnp[cnp]
     result = await asyncio.to_thread(queuestats.compute, rows, report_times, arrivals, as_of,
-                                     hours=hours, truncated=truncated)
+                                     hours=hours, truncated=truncated, pacs_studies=pacs_studies)
     logger.debug("schedule/queue: %d rows, listing %.2fs, cached times %.2fs, compute %.2fs",
                  len(rows), t1 - t0, t2 - t1, time.perf_counter() - t2)
     return web.json_response(result)
