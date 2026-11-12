@@ -654,6 +654,8 @@ def compute(rows: List[dict], report_times: Dict[str, Optional[datetime]],
     refs = strain_refs([e for _, e in points])
     relative = relative_lengths(samples, jobs, regions or {})
     busy_merged = strain_index.merge(busy)
+    # the requests the exam queue counts (the same ones as its lambda)
+    arrivals = sorted(j['t_req'] for j in jobs if j['exam'])
     series = []
     for t, e in points:
         rho_t = round(e['lam'] / mu_eff, 2) if mu_eff else None
@@ -664,7 +666,7 @@ def compute(rows: List[dict], report_times: Dict[str, Optional[datetime]],
         idle_w = idle_while_waiting(exam, busy_merged, t - window, t)
         st = strain_index.score(strain_index.Moment(
             t=t, rho=rho_room, queue=e['L'], wait=e['W'], oldest=oldest_wait(exam, t),
-            idle_waiting=idle_w, busy=busy,
+            idle_waiting=idle_w, busy=busy, arrivals=arrivals, capacity=mu_eff,
             relative=[r for (s0, e0), r in relative if t - window < e0 <= t]), refs)
         series.append({
             't': t.strftime('%Y-%m-%dT%H:%M'),

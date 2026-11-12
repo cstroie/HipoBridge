@@ -88,6 +88,31 @@ class TestNow(unittest.TestCase):
         self.assertEqual(sx.score(Moment(dt(10), queue=3), sx.Refs(queue=6, wait=90))['c']['pressure'], 50)
 
 
+class TestBurst(unittest.TestCase):
+    def test_a_burst_beyond_capacity(self):
+        # 6 requests in 20 minutes, the room clears 2 in half an hour: 4 beyond, over 3 -> full
+        arr = [dt(10, 3 * i) for i in range(6)]
+        self.assertEqual(sx.burst(arr, dt(10, 20), 4.0), 1.0)
+        # within capacity: nothing
+        self.assertEqual(sx.burst(arr[:2], dt(10, 20), 4.0), 0.0)
+        # 4 in the window, 2 cleared: 2 beyond, over 3
+        self.assertAlmostEqual(sx.burst(arr[:4], dt(10, 20), 4.0), 2 / 3, places=6)
+
+    def test_felt_for_an_hour_then_fading_by_two(self):
+        arr = [dt(10, 3 * i) for i in range(6)]          # the window ends at 10:15
+        self.assertEqual(sx.burst(arr, dt(11, 15), 4.0), 1.0)
+        self.assertAlmostEqual(sx.burst(arr, dt(11, 45), 4.0), 0.5, places=6)
+        self.assertEqual(sx.burst(arr, dt(12, 15), 4.0), 0.0)
+
+    def test_spread_arrivals_are_no_burst(self):
+        arr = [dt(8) + timedelta(minutes=15 * i) for i in range(12)]   # 4/h, steady
+        self.assertEqual(sx.burst(arr, dt(11), 4.0), 0.0)
+
+    def test_unknown_capacity_uses_the_default(self):
+        arr = [dt(10, 3 * i) for i in range(6)]
+        self.assertEqual(sx.burst(arr, dt(10, 20), None), sx.burst(arr, dt(10, 20), sx.CAPACITY_DEFAULT_H))
+
+
 class TestIndex(unittest.TestCase):
     def test_parts_and_weights(self):
         r = sx.score(Moment(dt(10)))

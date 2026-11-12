@@ -243,6 +243,14 @@ class TestJobs(unittest.TestCase):
         busy2 = [(t(9, 0), t(9, 20)), (t(9, 24), t(10, 0))]
         self.assertEqual(qs.idle_while_waiting(waiting, busy2, t(9, 0), t(10, 0)), 0.0)
 
+    def test_burst_reaches_the_series(self):
+        rows = [row(str(i), f'2026-11-11 10:{3 * i:02d}', status='active') for i in range(6)]
+        out = qs.compute(rows, {}, {}, datetime(2026, 11, 11, 12, 0), hours=4)
+        at = {p['t']: p['strain_c']['burst'] for p in out['series']}
+        self.assertEqual(at['2026-11-11T09:50'], 0)
+        self.assertEqual(at['2026-11-11T10:20'], 100)
+        self.assertEqual(at['2026-11-11T11:10'], 100)     # still felt an hour on
+
     def test_measured_rho_and_occupancy(self):
         base = datetime(2026, 11, 11, 6, 0)
         rows, st, rep = [], {}, {}

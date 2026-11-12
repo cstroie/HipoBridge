@@ -41,7 +41,8 @@ from tests.hippoclient_schedule import TestWardFamily, TestApplyFiltersSection, 
 from tests.queuestats import (TestParsing as TestQueueParsing, TestJobs as TestQueueJobs,
                               TestStats as TestQueueStats, TestCompute as TestQueueCompute)
 from tests.strain import (TestClock as TestStrainClock, TestAccumulated as TestStrainAccumulated,
-                          TestNow as TestStrainNow, TestIndex as TestStrainIndex)
+                          TestNow as TestStrainNow, TestBurst as TestStrainBurst,
+                          TestIndex as TestStrainIndex)
 from tests.hippobridge_handlers import TestServeSpec, TestGetCacheStats, TestBackfillSearch, TestEncounterSummary, TestScheduleQueueGlue
 from tests.search import TestSearchIndex
 from tests.upu_us_stats import (TestShiftOf, TestParse, TestStats as TestUpuStats,
@@ -165,7 +166,7 @@ TEST_GROUPS = {
     "hippoclient_triage": [TestTriageResolution],
     "hippoclient_schedule": [TestWardFamily, TestApplyFiltersSection, TestTranslation, TestFhirBundle],
     "queuestats": [TestQueueParsing, TestQueueJobs, TestQueueStats, TestQueueCompute],
-    "strain": [TestStrainClock, TestStrainAccumulated, TestStrainNow, TestStrainIndex],
+    "strain": [TestStrainClock, TestStrainAccumulated, TestStrainNow, TestStrainBurst, TestStrainIndex],
     "hippobridge_handlers": [TestServeSpec, TestGetCacheStats, TestBackfillSearch, TestEncounterSummary, TestScheduleQueueGlue],
     "search": [TestSearchIndex],
     "upu_us_stats": [TestShiftOf, TestParse, TestUpuStats, TestIntervals, TestOutcome, TestStudy, TestUpuEndToEnd],

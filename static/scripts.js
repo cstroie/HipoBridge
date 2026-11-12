@@ -8141,7 +8141,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 color: lastPt.strain >= 65 ? 'var(--urgent)' : lastPt.strain >= 40 ? 'var(--st-inprogress)' : 'var(--muted)',
                 note: `${d.span_h} h peak ${peak}`,
                 title: 'Relative strain index 0–100 of the working conditions (not a probability, not calibrated): ' +
-                    `now ${c.now} (load ${c.load}, people waiting ${c.pressure}, rushing ${c.rushing}) · ` +
+                    `now ${c.now} (load ${c.load}, people waiting ${c.pressure}, burst ${c.burst}, rushing ${c.rushing}) · ` +
                     `fatigue ${c.fatigue} (work accumulated since the duty began ${c.accumulated} × sleepiness ${c.sleepiness}), each 0–100`,
             });
         }
@@ -8329,7 +8329,7 @@ document.addEventListener('DOMContentLoaded', function() {
             elements.scheduleQueueReadout.replaceChildren(...nodes);
             const c = p.strain_c || {};
             elements.scheduleQueueReadout.title = 'Relative strain index 0–100 (not a probability, not calibrated): ' +
-                `now ${c.now} (load ${c.load}, people waiting ${c.pressure}, rushing ${c.rushing}) · ` +
+                `now ${c.now} (load ${c.load}, people waiting ${c.pressure}, burst ${c.burst}, rushing ${c.rushing}) · ` +
                 `fatigue ${c.fatigue} (work accumulated since the duty began ${c.accumulated} × sleepiness ${c.sleepiness}), each 0–100` +
                 (p.ward ? ` · ${p.ward} ward ${p.ward === 1 ? 'study' : 'studies'} in the hour` : '');
         };

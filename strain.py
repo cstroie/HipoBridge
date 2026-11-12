@@ -18,6 +18,9 @@ both together raise it more:
 now: the moment's work (NOW_WEIGHTS)
     load      the room's utilisation of the hour (UPU and ward studies)
     pressure  people waiting: count, mean wait or the longest wait
+    burst     a burst of arrivals beyond what the room clears in half an
+              hour, felt fully for an hour after it and fading by two
+              (owner: bursts add pressure over the next 1-2 hours)
     rushing   "get rid of them fast" (owner): exams much shorter than usual
               for their region AND the room idle while people wait
 
@@ -38,7 +41,7 @@ from typing import Dict, List, Optional, Tuple
 Interval = Tuple[datetime, datetime]
 
 # --- now ------------------------------------------------------------------
-NOW_WEIGHTS = {'load': 0.45, 'pressure': 0.30, 'rushing': 0.25}   # sum to 1
+NOW_WEIGHTS = {'load': 0.35, 'pressure': 0.25, 'burst': 0.20, 'rushing': 0.20}   # sum to 1
 LOAD_FLOOR = 0.30                 # utilisation that counts as no load
 QUEUE_REF = 3.0                   # people waiting = full pressure (a floor: queuestats
 WAIT_REF_MIN = 45.0               # mean wait, minutes      raises both to the span's p90)
@@ -47,6 +50,11 @@ SHORT_REF = 0.5                   # exams 50 % shorter than their region's media
 SHORT_MIN_SAMPLES = 3             # exams needed in the hour to judge
 IDLE_REF = 0.25                   # a quarter of the hour idle while people wait = 1
 CALL_ALLOWANCE = timedelta(minutes=5)   # calling and preparing the next patient is not idle
+BURST_SPAN = timedelta(minutes=30)      # arrivals counted together
+BURST_REF = 3.0                         # patients beyond what the room clears in BURST_SPAN = 1
+BURST_HOLD = timedelta(hours=1)         # felt fully this long after the burst,
+BURST_FADE = timedelta(hours=2)         # then fading linearly to nothing at this age
+CAPACITY_DEFAULT_H = 4.0                # exams per hour when no capacity is known
 
 # --- fatigue --------------------------------------------------------------
 FATIGUE_FLOOR = 0.5               # the share of the accumulated work counted fully rested
@@ -72,6 +80,8 @@ class Moment:
     oldest: Optional[float] = None       # minutes the longest-waiting patient has waited at t
     idle_waiting: float = 0.0            # share of the hour idle while someone waits
     relative: List[float] = field(default_factory=list)   # the hour's exam lengths / their region's median
+    arrivals: List[datetime] = field(default_factory=list)  # request times (sorted), the last BURST_FADE at least
+    capacity: Optional[float] = None     # exams the room does per hour (1 / mean exam length)
     busy: List[Interval] = field(default_factory=list)    # all the work done (accumulated)
 
 
@@ -158,6 +168,27 @@ def shorter(relative: List[float]) -> float:
     return clamp((1.0 - med) / SHORT_REF)
 
 
+def burst(arrivals: List[datetime], t: datetime, capacity: Optional[float]) -> float:
+    """The worst recent burst: for every BURST_SPAN window ending at an
+    arrival in the last BURST_FADE, the patients beyond what the room clears
+    in it (capacity * BURST_SPAN), over BURST_REF; weighted 1 up to
+    BURST_HOLD after the window, fading linearly to 0 at BURST_FADE."""
+    cap = (capacity or CAPACITY_DEFAULT_H) * BURST_SPAN.total_seconds() / 3600.0
+    recent = [a for a in arrivals if t - BURST_FADE - BURST_SPAN < a <= t]
+    worst = 0.0
+    for end in recent:
+        age = t - end
+        if age >= BURST_FADE:
+            continue
+        n = sum(1 for a in recent if end - BURST_SPAN < a <= end)
+        size = clamp((n - cap) / BURST_REF)
+        if size <= 0:
+            continue
+        weight = 1.0 if age <= BURST_HOLD else (BURST_FADE - age) / (BURST_FADE - BURST_HOLD)
+        worst = max(worst, size * weight)
+    return worst
+
+
 def score(m: Moment, refs: Optional[Refs] = None) -> dict:
     """{'index': 0-100, 'c': {part: 0-100}} at m.t."""
     refs = refs or Refs()
@@ -166,6 +197,7 @@ def score(m: Moment, refs: Optional[Refs] = None) -> dict:
         'load': clamp(((m.rho or 0.0) - LOAD_FLOOR) / (1.0 - LOAD_FLOOR)),
         'pressure': max(clamp((m.queue or 0.0) / refs.queue), clamp((m.wait or 0.0) / refs.wait),
                         clamp((m.oldest or 0.0) / oldest_ref)),
+        'burst': burst(m.arrivals, m.t, m.capacity),
         'rushing': shorter(m.relative) * clamp((m.idle_waiting or 0.0) / IDLE_REF),
     }
     now = sum(NOW_WEIGHTS[k] * c[k] for k in NOW_WEIGHTS)
