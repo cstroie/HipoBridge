@@ -8141,8 +8141,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 color: lastPt.strain >= 65 ? 'var(--urgent)' : lastPt.strain >= 40 ? 'var(--st-inprogress)' : 'var(--muted)',
                 note: `${d.span_h} h peak ${peak}`,
                 title: 'Relative strain index 0–100 of the working conditions (not a probability, not calibrated): ' +
-                    `work (load ${c.load}, people waiting ${c.pressure}, no break ${c.no_break}, rushing ${c.rushing}) ` +
-                    `scaled by sleepiness ${c.sleepiness} (each 0–100; no work reads 0 at any hour)`,
+                    `now ${c.now} (load ${c.load}, people waiting ${c.pressure}, rushing ${c.rushing}) · ` +
+                    `fatigue ${c.fatigue} (work accumulated since the duty began ${c.accumulated} × sleepiness ${c.sleepiness}), each 0–100`,
             });
         }
         defs.forEach(m => {
@@ -8329,8 +8329,8 @@ document.addEventListener('DOMContentLoaded', function() {
             elements.scheduleQueueReadout.replaceChildren(...nodes);
             const c = p.strain_c || {};
             elements.scheduleQueueReadout.title = 'Relative strain index 0–100 (not a probability, not calibrated): ' +
-                `work (load ${c.load}, people waiting ${c.pressure}, no break ${c.no_break}, rushing ${c.rushing}) ` +
-                `scaled by sleepiness ${c.sleepiness} (each 0–100; no work reads 0 at any hour)` +
+                `now ${c.now} (load ${c.load}, people waiting ${c.pressure}, rushing ${c.rushing}) · ` +
+                `fatigue ${c.fatigue} (work accumulated since the duty began ${c.accumulated} × sleepiness ${c.sleepiness}), each 0–100` +
                 (p.ward ? ` · ${p.ward} ward ${p.ward === 1 ? 'study' : 'studies'} in the hour` : '');
         };
         svg.addEventListener('pointermove', e => {

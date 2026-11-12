@@ -432,8 +432,9 @@ def service_samples(jobs: List[dict], others: Iterable[datetime] = ()) -> List[t
 
 
 def ward_intervals(ward: List[datetime], starts: List[datetime], typical: timedelta) -> List[tuple]:
-    """(start, end) of the room's other studies: their report time is not
-    read, so each lasts `typical` (the UPU median), cut at the next start."""
+    """(start, end) of studies with no measured end (the ward's, whose report
+    time is not read, and UPU exams without a sample): each lasts `typical`
+    (the UPU median), cut at the next start."""
     every = sorted(set(starts) | set(ward))
     out = []
     for t in sorted(ward):
@@ -555,7 +556,12 @@ def compute(rows: List[dict], report_times: Dict[str, Optional[datetime]],
     ward.sort()
     samples = service_samples(jobs, ward)
     typical = _median_td(samples) or WARD_TYPICAL
-    busy = samples + ward_intervals(ward, [j['t_start'] for j in jobs if j['t_start']], typical)
+    # all the work done: the measured exams, plus the ward studies and the
+    # UPU exams without a measured end, each the typical length cut at the
+    # next start (they are work all the same: occupancy, accumulated strain)
+    sampled = {s for s, _ in samples}
+    unmeasured = [j['t_start'] for j in jobs if j['t_start'] and j['t_start'] not in sampled]
+    busy = samples + ward_intervals(ward + unmeasured, [j['t_start'] for j in jobs if j['t_start']], typical)
 
     current = _segment(jobs, as_of, span_start, window, samples, busy, ward)
 
@@ -582,12 +588,15 @@ def compute(rows: List[dict], report_times: Dict[str, Optional[datetime]],
         # same capacity as the UPU exams; `rho` stays the UPU queue's
         ward_n = sum(1 for w in ward if t - window < w <= t)
         rho_room = round(rho_t + ward_n / _hours(window) / mu_eff, 2) if rho_t is not None else None
+        # someone waiting while the room is idle: |waiting U busy| - |busy|
+        idle_w = (_hours(_busy(exam + busy, t - window, t)) - _hours(_busy(busy, t - window, t))) / _hours(window)
         st = strain_index.strain(t, rho_room, e['L'], e['W'], samples, current['service']['median_span'],
-                                 window, busy=busy, queue_ref=queue_ref, wait_ref=wait_ref)
+                                 window, busy=busy, queue_ref=queue_ref, wait_ref=wait_ref,
+                                 idle_waiting=idle_w)
         series.append({
             't': t.strftime('%Y-%m-%dT%H:%M'),
             'lam': e['lam'], 'x': e['x'], 'L': e['L'], 'W': e['W'],
-            'rho': rho_t, 'rho_room': rho_room, 'ward': ward_n,
+            'rho': rho_t, 'rho_room': rho_room, 'ward': ward_n, 'idle_waiting': round(idle_w, 2),
             'strain': st['index'], 'strain_c': st['c'],
         })
 
