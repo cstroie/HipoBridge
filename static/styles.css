@@ -2993,6 +2993,7 @@ select {
 .q-key-w::before   { background: var(--st-inprogress); }
 .q-key-strain::before { background: repeating-linear-gradient(90deg, var(--urgent) 0 2px, transparent 2px 5px); }
 .schedule-queue-span { display: flex; gap: 4px; }
+.schedule-queue-span[hidden] { display: none; }
 .schedule-queue-span-btn { padding: 2px 8px; font-size: var(--font-size-10); }
 .schedule-queue-span-btn[aria-pressed="true"] {
     border-color: var(--primary);

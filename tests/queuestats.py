@@ -250,6 +250,11 @@ class TestCompute(unittest.TestCase):
         out = qs.compute([row('1', '2026-11-11 10:00', '2026-11-11 09:00')], {}, {}, AS_OF, hours=12)
         self.assertEqual(out['coverage']['inconsistent'], 1)
 
+    def test_explicit_span_start_is_reported(self):
+        out = qs.compute([], {}, {}, datetime(2026, 11, 11, 8, 0), hours=24)
+        self.assertEqual(out['span_start'], '2026-11-10T08:00')
+        self.assertEqual(qs.parse_anchor('2026-11-11T08:00', datetime(2026, 11, 12, 12, 0)), datetime(2026, 11, 11, 8, 0))
+
     def test_truncated_flag(self):
         self.assertTrue(qs.compute([], {}, {}, AS_OF, truncated=True)['truncated'])
 

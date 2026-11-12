@@ -771,7 +771,7 @@ async def _queue_cnp(cerere_client, patient_client, row):
 @require_auth
 async def get_schedule_queue(request):
     """Queue-theory metrics of the UPU ultrasound requests (queuestats.py).
-    ?end=YYYY-MM-DD[THH:MM]&hours=12|24&refresh=1
+    ?end=YYYY-MM-DD[THH:MM]&hours=12|24&start=YYYY-MM-DDTHH:MM&refresh=1
 
     Fetches the ultrasound lab's schedule from a day before the span (so the
     queues it starts with are right), keeps the UPU rows (in_scope); report
@@ -781,6 +781,9 @@ async def get_schedule_queue(request):
     t0 = time.perf_counter()
     as_of = queuestats.parse_anchor(q.get('end'), datetime.now())
     hours = 12 if q.get('hours') == '12' else 24
+    start = queuestats.parse_ts(q.get('start'))   # historical view: an explicit span (e.g. 08:00 to 08:00)
+    if start is not None and start < as_of:
+        hours = min(queuestats.MAX_SPAN_H, max(1, math.ceil((as_of - start).total_seconds() / 3600.0)))
     last_day = (as_of - timedelta(minutes=1)).date()
     first_day = (as_of - timedelta(hours=hours + 24)).date()
     client = HippoClientSchedule(SERVICE_URL, request)

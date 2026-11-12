@@ -67,6 +67,7 @@ OPEN_MIN = timedelta(hours=2)
 OPEN_MAX = timedelta(hours=24)
 OPEN_SAMPLES = 5
 FETCH_LIMIT = 2000
+MAX_SPAN_H = 96   # longest explicit ?start=..&end=.. span
 # PACS study start (pacs.py: StudyTime). Hipocrate records no exam start, the
 # modality's MPPS is not available, and the PACS returns no per-image times
 # (checked live 2026-11-12: image/series-level C-FIND repeats StudyTime
@@ -518,6 +519,7 @@ def compute(rows: List[dict], report_times: Dict[str, Optional[datetime]],
     return {
         'as_of': as_of.strftime('%Y-%m-%dT%H:%M'),
         'span_h': hours,
+        'span_start': span_start.strftime('%Y-%m-%dT%H:%M'),
         'window_min': window_min,
         'step_min': step_min,
         'scope': {'modality': SCOPE_MODALITY, 'section': SCOPE_SECTION},

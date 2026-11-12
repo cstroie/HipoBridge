@@ -8001,11 +8001,23 @@ document.addEventListener('DOMContentLoaded', function() {
     const QUEUE_LOW_N = 5;
         let scheduleQueueFetchedAt = 0;
 
-    // The moment analysed: now for today (or no date), else the end of the
-    // selected "To" date (the server reads a bare date as its 24:00).
-    function scheduleQueueAnchor() {
-        const day = elements.scheduleEndDate?.value || elements.scheduleStartDate?.value || '';
-        return day && day < localDateStr() ? day : '';
+    // The span analysed. Real time (the "To" date is today or later, or none):
+    // null, a rolling 12/24 h ending now. Historical (a past "To" date): the
+    // on-call day(s), 08:00 of "From" to 08:00 of "To" (a single past day D:
+    // 08:00 of D to 08:00 of the next day), so what builds up over a duty
+    // block is seen whole.
+    function scheduleQueueRange() {
+        const to = elements.scheduleEndDate?.value || elements.scheduleStartDate?.value || '';
+        if (!to || to >= localDateStr()) return null;
+        const from = elements.scheduleStartDate?.value || to;
+        const day = s => { const d = new Date(`${s}T12:00:00`); return d; };
+        let endDay = to, startDay = from;
+        if (from >= to) { // one day chosen (or From after To): that day's duty block
+            const d = day(to); d.setDate(d.getDate() + 1);
+            endDay = localDateStr(d);
+            startDay = to;
+        }
+        return { start: `${startDay}T08:00`, end: `${endDay}T08:00` };
     }
 
     // While the metrics are computed: hero, utilisation bar and graph blurred,
@@ -8027,8 +8039,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (minAgeMs && Date.now() - scheduleQueueFetchedAt < minAgeMs) return;
         const seq = ++scheduleQueueSeq;
         const params = new URLSearchParams({ hours: String(scheduleQueueHours) });
-        const end = scheduleQueueAnchor();
-        if (end) params.set('end', end);
+        const range = scheduleQueueRange();
+        if (range) { params.set('start', range.start); params.set('end', range.end); }
         if (force) params.set('refresh', '1');
         scheduleQueueLoading = true;
         applyScheduleQueueBusy();
@@ -8058,7 +8070,7 @@ document.addEventListener('DOMContentLoaded', function() {
         clearTimeout(scheduleQueueTimer);
         const ms = 600000 - (Date.now() % 600000) + 30000;
         scheduleQueueTimer = setTimeout(() => {
-            if (scheduleQueueMode && !document.hidden && !scheduleQueueAnchor()) fetchScheduleQueue(false);
+            if (scheduleQueueMode && !document.hidden && !scheduleQueueRange()) fetchScheduleQueue(false);
             scheduleQueueTick();
         }, ms);
     }
@@ -8133,7 +8145,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (sub) {
             const cov = d.coverage || {};
-            const parts = [`UPU ultrasound queue · hour to ${hhmm(d.as_of) === '00:00' && scheduleQueueAnchor() ? '24:00' : hhmm(d.as_of)}`];
+            const parts = [`UPU ultrasound queue · hour to ${hhmm(d.as_of)}`];
             const rep = pctOf(cov.report_times), upu = pctOf(cov.upu_arrivals), ps = pctOf(cov.pacs_start);
             if (ps != null) parts.push(`exam start from PACS ${ps}%`);
             if (rep != null) parts.push(`reports ${rep}% known`);
@@ -8200,7 +8212,14 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!wrap || !chart || !d || !d.series?.length) { if (chart) chart.hidden = true; return; }
         chart.hidden = false;
         const title = document.getElementById('scheduleQueueTitle');
-        if (title) title.textContent = `UPU ultrasound · last ${d.span_h} h`;
+        const historical = !!scheduleQueueRange();
+        const dm = iso => `${iso.slice(8, 10)}.${iso.slice(5, 7)} ${hhmm(iso)}`;
+        if (title) title.textContent = historical && d.span_start
+            ? `UPU ultrasound · ${dm(d.span_start)} → ${dm(d.as_of)}`
+            : `UPU ultrasound · last ${d.span_h} h`;
+        // the 12/24 h choice only applies to the rolling real-time view
+        const spanBtns = chart.querySelector('.schedule-queue-span');
+        if (spanBtns) spanBtns.hidden = historical;
         chart.querySelectorAll('.schedule-queue-span-btn').forEach(b =>
             b.setAttribute('aria-pressed', String(Number(b.dataset.hours) === scheduleQueueHours)));
 
@@ -8218,13 +8237,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const svg = svgEl('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}` }, 'q-svg');
         // Hour gridlines + labels
-        const stepH = d.span_h > 12 ? 2 : 1;
+        const stepH = d.span_h > 48 ? 6 : d.span_h > 24 ? 4 : d.span_h > 12 ? 2 : 1;
         s.forEach((p, i) => {
             const t = hhmm(p.t);
             if (!t.endsWith(':00') || Number(t.slice(0, 2)) % stepH) return;
             svg.appendChild(svgEl('line', { x1: xOf(i), x2: xOf(i), y1: 0, y2: h1 }, 'q-grid'));
             const lbl = svgEl('text', { x: xOf(i), y: H - 3, 'text-anchor': 'middle' }, 'q-axis');
-            lbl.textContent = t.slice(0, 2);
+            lbl.textContent = t === '00:00' ? `${p.t.slice(8, 10)}.${p.t.slice(5, 7)}` : t.slice(0, 2);   // midnight: the date
             svg.appendChild(lbl);
         });
         svg.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: h1, y2: h1 }, 'q-base'));
