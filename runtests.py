@@ -39,7 +39,8 @@ from tests.hippoclient_write import (
 from tests.hippoclient_triage import TestTriageResolution
 from tests.hippoclient_schedule import TestWardFamily, TestApplyFiltersSection, TestTranslation, TestFhirBundle
 from tests.queuestats import (TestParsing as TestQueueParsing, TestJobs as TestQueueJobs,
-                              TestStats as TestQueueStats, TestCompute as TestQueueCompute)
+                              TestStats as TestQueueStats, TestCompute as TestQueueCompute,
+                              TestOnCallShift as TestQueueOnCallShift)
 from tests.strain import (TestClock as TestStrainClock, TestAccumulated as TestStrainAccumulated,
                           TestNow as TestStrainNow, TestBurst as TestStrainBurst,
                           TestIndex as TestStrainIndex)
@@ -107,7 +108,7 @@ TEST_GROUPS = {
         TestShiftOf, TestParse, TestUpuStats, TestIntervals, TestOutcome, TestStudy, TestUpuEndToEnd,
         TestRoute, TestSqliteCacheRoundTrip, TestIterEntries, TestCleanup,
         TestStats, TestConcurrency, TestAiCache,
-        TestQueueParsing, TestQueueJobs, TestQueueStats, TestQueueCompute,
+        TestQueueParsing, TestQueueJobs, TestQueueStats, TestQueueCompute, TestQueueOnCallShift,
     ],
     "root": [test_root_endpoint],
     "auth": [
@@ -165,7 +166,7 @@ TEST_GROUPS = {
     ],
     "hippoclient_triage": [TestTriageResolution],
     "hippoclient_schedule": [TestWardFamily, TestApplyFiltersSection, TestTranslation, TestFhirBundle],
-    "queuestats": [TestQueueParsing, TestQueueJobs, TestQueueStats, TestQueueCompute],
+    "queuestats": [TestQueueParsing, TestQueueJobs, TestQueueStats, TestQueueCompute, TestQueueOnCallShift],
     "strain": [TestStrainClock, TestStrainAccumulated, TestStrainNow, TestStrainBurst, TestStrainIndex],
     "hippobridge_handlers": [TestServeSpec, TestGetCacheStats, TestBackfillSearch, TestEncounterSummary, TestScheduleQueueGlue],
     "search": [TestSearchIndex],

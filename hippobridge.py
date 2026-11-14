@@ -733,10 +733,10 @@ async def _queue_memo(key, lookup):
 
 async def _queue_report_time(client, request_id):
     """{'t': latest validation, 'regions': [each study's region], 'validator':
-    who validated the latest study} from the cached report page; None until
-    the report is validated. The validator only picks whose exams make the
-    on-call radiologist's accumulated work (queuestats); it is never logged
-    or returned by /api/schedule/queue."""
+    who validated the latest study, 'n': validated studies} from the cached
+    report page; None until the report is validated. The validator only
+    tells the on-call team and whose work accumulates (queuestats); it is
+    never logged or returned by /api/schedule/queue."""
     data = await client.parse_cached(id=request_id)
     studies = data.get('studies') if data else None
     t = queuestats.latest_validation(studies)
@@ -745,7 +745,8 @@ async def _queue_report_time(client, request_id):
     dicts = [s for s in studies if isinstance(s, dict)]
     latest = next((s for s in dicts if queuestats.parse_ts(s.get('validation_date')) == t), {})
     return {'t': t, 'regions': [s.get('region') for s in dicts if s.get('region')],
-            'validator': latest.get('validator') or None}
+            'validator': latest.get('validator') or None,
+            'n': sum(1 for s in dicts if s.get('validation_date'))}
 
 async def _queue_upu_arrival(cerere_client, patient_client, fupu_client, presentation_client, row):
     """UPU arrival from cached pages only: cerere.asp -> patient page ->
@@ -782,13 +783,15 @@ async def _queue_cnp(cerere_client, patient_client, row):
 
 @require_auth
 async def get_schedule_queue(request):
-    """Queue-theory metrics of the UPU ultrasound requests (queuestats.py).
+    """Queue-theory metrics of the UPU ultrasound requests and the on-call
+    shift's work in every modality (queuestats.py).
     ?end=YYYY-MM-DD[THH:MM]&hours=12|24&start=YYYY-MM-DDTHH:MM&refresh=1
 
-    Fetches the ultrasound lab's schedule from a day before the span (so the
-    queues it starts with are right), keeps the UPU rows (in_scope); report
-    validation and UPU arrival times come from cached pages only — this
-    endpoint never adds Hipocrate requests beyond the one listing."""
+    Fetches the schedule of each imaging lab (queuestats.SCOPE_LABS) from a
+    day before the span (so the queues it starts with are right): the UPU
+    ultrasound rows are the exam queue (in_scope), every other row a read.
+    Report validation and UPU arrival times come from cached pages only —
+    this endpoint never adds Hipocrate requests beyond the listings."""
     q = request.rel_url.query
     t0 = time.perf_counter()
     as_of = queuestats.parse_anchor(q.get('end'), datetime.now())
@@ -799,14 +802,22 @@ async def get_schedule_queue(request):
     last_day = (as_of - timedelta(minutes=1)).date()
     first_day = (as_of - timedelta(hours=hours + 24)).date()
     client = HippoClientSchedule(SERVICE_URL, request)
-    parsed = await client.fetch_and_parse(start_date=first_day.isoformat(), end_date=last_day.isoformat(),
-                                          lab_id=queuestats.SCOPE_LAB_ID, force=q.get('refresh') == '1',
-                                          limit=queuestats.FETCH_LIMIT)
-    if parsed.get('status') == 'error':
-        return web_error_response(parsed.get('message') or 'Schedule not available', 502)
-    raw = parsed.get('requests') or []
-    truncated = len(raw) >= queuestats.FETCH_LIMIT
-    rows = [r for r in raw if queuestats.in_scope(r)]
+    # One listing per lab (Hipocrate serves a session's requests one at a
+    # time, so in turn). The ultrasound one is needed; another lab failing
+    # only leaves its reads out.
+    rows, truncated = [], False
+    for modality, lab_id in queuestats.SCOPE_LABS.items():
+        parsed = await client.fetch_and_parse(start_date=first_day.isoformat(), end_date=last_day.isoformat(),
+                                              lab_id=lab_id, force=q.get('refresh') == '1',
+                                              limit=queuestats.FETCH_LIMIT)
+        if parsed.get('status') == 'error':
+            if modality == queuestats.SCOPE_MODALITY:
+                return web_error_response(parsed.get('message') or 'Schedule not available', 502)
+            logger.warning("schedule/queue: lab %s listing not available", lab_id)
+            continue
+        raw = parsed.get('requests') or []
+        truncated = truncated or len(raw) >= queuestats.FETCH_LIMIT
+        rows.extend(r for r in raw if r.get('status') not in queuestats.EXCLUDED_STATUSES)
 
     t1 = time.perf_counter()
     sem = asyncio.Semaphore(8)
@@ -839,13 +850,14 @@ async def get_schedule_queue(request):
     with_id = [r for r in rows if r.get('request_id')]
     need_report = [r for r in with_id if req_after(r, warmup_start)
                    and (r.get('status') in queuestats.LEFT_STATUSES or r.get('performed_at'))]
-    upu_rows = [r for r in with_id if req_after(r, span_start)
-                and (r.get('section') or '').strip().upper() == 'UPU']
+    us_rows = [r for r in with_id if queuestats.in_scope(r)]   # the exam queue: PACS starts, UPU arrivals
+    upu_rows = [r for r in us_rows if req_after(r, span_start)]
     rep = await asyncio.gather(*(report_time(r) for r in need_report), return_exceptions=True)
     arr = await asyncio.gather(*(upu_arrival(r) for r in upu_rows), return_exceptions=True)
     report_times = {r['request_id']: v['t'] for r, v in zip(need_report, rep) if isinstance(v, dict)}
     regions = {r['request_id']: v['regions'] for r, v in zip(need_report, rep) if isinstance(v, dict)}
     validators = {r['request_id']: v.get('validator') for r, v in zip(need_report, rep) if isinstance(v, dict)}
+    counts = {r['request_id']: v.get('n') for r, v in zip(need_report, rep) if isinstance(v, dict)}
     arrivals = {r['request_id']: t for r, t in zip(upu_rows, arr) if isinstance(t, datetime)}
 
     t2 = time.perf_counter()
@@ -854,7 +866,7 @@ async def get_schedule_queue(request):
     # (cached, past days for good), matched to the requests by CNP.
     pacs_studies = {}
     if _pacs_checker is not None:
-        for r in with_id:
+        for r in us_rows:
             found = _pacs_checker.status_for(r['request_id']).get('studies')
             if found:
                 pacs_studies[r['request_id']] = list(found)
@@ -870,7 +882,7 @@ async def get_schedule_queue(request):
         for studies in by_day:
             for cnp, lst in (studies or {}).items():
                 by_cnp.setdefault(cnp, []).extend(lst)
-        missing = [r for r in with_id if r['request_id'] not in pacs_studies and req_after(r, warmup_start)]
+        missing = [r for r in us_rows if r['request_id'] not in pacs_studies and req_after(r, warmup_start)]
         if missing and by_cnp:
             async def cnp_of(r):
                 async with sem:
@@ -882,7 +894,8 @@ async def get_schedule_queue(request):
                     pacs_studies[r['request_id']] = by_cnp[cnp]
     result = await asyncio.to_thread(queuestats.compute, rows, report_times, arrivals, as_of,
                                      hours=hours, truncated=truncated, pacs_studies=pacs_studies,
-                                     regions=regions, validators=validators)
+                                     regions=regions, validators=validators, counts=counts,
+                                     now=datetime.now())
     logger.debug("schedule/queue: %d rows, listing %.2fs, cached times %.2fs, compute %.2fs",
                  len(rows), t1 - t0, t2 - t1, time.perf_counter() - t2)
     return web.json_response(result)

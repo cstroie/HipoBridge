@@ -324,7 +324,7 @@ class TestScheduleQueueGlue(unittest.TestCase):
             '8': {'studies': [{'validation_date': None, 'region': 'abdomen'}]}})
         v = _run(hippobridge._queue_report_time(study, '7'))
         self.assertEqual(v, {'t': datetime(2026, 11, 11, 10, 20), 'regions': ['abdomen', 'pelvis'],
-                             'validator': 'B'})
+                             'validator': 'B', 'n': 2})
         self.assertIsNone(_run(hippobridge._queue_report_time(study, '8')))   # not validated yet
         self.assertIsNone(_run(hippobridge._queue_report_time(study, '9')))   # not cached
 

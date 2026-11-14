@@ -285,6 +285,148 @@ class TestJobs(unittest.TestCase):
         self.assertEqual(p['rho'], round(p['lam'] / 3.0, 2))
 
 
+class TestOnCallShift(unittest.TestCase):
+    """The whole shift: reads of every modality, told by who validated them."""
+
+    T = staticmethod(lambda d, h, m=0: datetime(2026, 11, d, h, m))   # 11 Nov 2026 is a Wednesday
+
+    @staticmethod
+    def read(mod, perf, rep, who, upu=True, n=1, left=True, rid='r'):
+        return {'id': rid, 'modality': mod, 'upu': upu, 'left': left, 't_req': perf, 't_perf': perf,
+                't_rep': rep, 'validator': who, 'n': n, 'read': None}
+
+    def test_team_needs_five_reports_or_one_after_the_handover(self):
+        t, ev = self.T, lambda rep, who: {'validator': who, 't_rep': rep}
+        # the day staff's last reports at 14:00-14:10, then two on call
+        events = [ev(t(11, 14, 5 * i), 'day') for i in range(3)]
+        events += [ev(t(11, 15, 10 * i), 'sr') for i in range(5)] + [ev(t(11, 20, 10 * i), 'jr') for i in range(6)]
+        self.assertEqual(qs.on_call_team(events, t(11, 8), t(12, 8)), {'sr', 'jr'})
+        # 14:20: nobody past the grace yet -> nobody; 15:25: the first reports after it
+        self.assertEqual(qs.on_call_team(events, t(11, 8), t(11, 14, 20)), set())
+        self.assertEqual(qs.on_call_team(events, t(11, 8), t(11, 15, 25)), {'sr'})
+        # alone on call
+        self.assertEqual(qs.on_call_team(events[:8], t(11, 8), t(12, 8)), {'sr'})
+        # the morning is not on call on a weekday
+        self.assertEqual(qs.on_call_team([ev(t(11, 9, i), 'day') for i in range(9)], t(11, 8), t(12, 8)), set())
+
+    def test_senior_counts_every_modality_and_only_the_team(self):
+        t, ev = self.T, lambda rep, who: {'validator': who, 't_rep': rep}
+        events = [ev(t(11, 21, i), 'sr') for i in range(3)] + [ev(t(11, 22, i), 'jr') for i in range(2)]
+        events += [ev(t(11, 23, i), 'guest') for i in range(6)]
+        self.assertEqual(qs.on_call_radiologist(events, t(11, 8), t(12, 8), {'sr', 'jr'}), 'sr')
+        self.assertEqual(qs.on_call_radiologist(events, t(11, 8), t(12, 8)), 'guest')
+
+    def test_build_reads_keeps_what_is_not_in_the_exam_queue(self):
+        rows = [row('1', '2026-11-11 20:00', '2026-11-11 20:10'),                                   # UPU ultrasound: the queue
+                row('2', '2026-11-11 20:00', '2026-11-11 20:10', modality='radio'),
+                row('3', '2026-11-11 20:00', '2026-11-11 20:10', modality='ct', section='ATI'),
+                row('4', '2026-11-11 20:00', '2026-11-11 20:10', section='ATI'),                    # ward ultrasound
+                row('5', '2026-11-11 20:00', '2026-11-11 20:10', modality='radio', status='revoked'),
+                row('6', '2026-11-11 20:00', '2026-11-11 19:00', modality='radio'),                 # performed before asked
+                row('7', '2026-11-11 20:00', '2026-11-11 20:10', modality='rads')]
+        reads = qs.build_reads(rows, {'2': self.T(11, 20, 30)}, {'2': ' Bo  POP '}, {'2': 2})
+        self.assertEqual([r['id'] for r in reads], ['2', '3', '4', '6'])
+        self.assertEqual((reads[0]['validator'], reads[0]['n'], reads[0]['upu']), ('bo pop', 2, True))
+        self.assertFalse(reads[1]['upu'])
+        self.assertIsNone(reads[3]['t_perf'])
+
+    def test_read_work_is_the_gap_since_the_previous_report_capped(self):
+        t, typ = self.T, timedelta(minutes=8)
+        us = [({'validator': 'a'}, (t(11, 20, 0), t(11, 20, 9)))]            # their ultrasound, ends 20:09
+        reads = [self.read('radio', t(11, 19, 0), t(11, 20, 10), 'a', rid='x1'),   # right after it: 1 min
+                 self.read('radio', t(11, 19, 0), t(11, 20, 10), 'a', rid='x2'),   # same minute: READ_MIN
+                 self.read('radio', t(11, 19, 0), t(11, 20, 30), 'a', rid='x3'),   # after a pause: 3 min
+                 self.read('radio', t(11, 19, 0), t(11, 20, 50), 'a', n=2, rid='x4'),      # two studies: 6 min
+                 self.read('ct', t(11, 21, 50), t(11, 22, 0), 'a', rid='c1'),      # images 10 min before: 10 min
+                 self.read('ct', t(11, 22, 0), t(11, 23, 0), 'a', rid='c2'),       # 25 min cap
+                 self.read('eco', t(11, 23, 0), t(11, 23, 40), 'a', upu=False, rid='w1'),  # ward US: the typical exam
+                 self.read('radio', t(11, 20, 0), t(11, 20, 10), 'b', rid='y1'),   # another radiologist: own line
+                 self.read('radio', t(11, 20, 0), None, 'a', rid='open'),
+                 self.read('radio', t(11, 20, 0), t(11, 20, 5), None, rid='anon')]
+        out = {rd['id']: (e - s) for rd, (s, e) in qs.read_work(reads, us, typ)}
+        m = lambda n: timedelta(minutes=n)
+        self.assertEqual(out, {'x1': m(1), 'x2': m(1), 'x3': m(3), 'x4': m(6), 'c1': m(10), 'c2': m(25),
+                               'w1': m(8), 'y1': m(3)})
+
+    def test_reading_queue_is_the_upu_s_and_what_the_team_validated(self):
+        t = self.T
+        team = lambda block: {'sr'} if block == t(11, 8) else set()
+        reads = [self.read('radio', t(11, 20, 0), t(11, 20, 30), 'sr', rid='upu'),
+                 self.read('radio', t(11, 20, 0), None, None, left=False, rid='waiting'),
+                 self.read('radio', t(11, 20, 0), None, None, left=True, rid='uncached'),
+                 self.read('ct', t(11, 12, 0), t(11, 21, 0), 'sr', upu=False, rid='ward'),      # done at noon
+                 self.read('ct', t(11, 22, 0), t(12, 9, 0), 'day', upu=False, rid='morning'),   # left for the day staff
+                 self.read('ct', t(11, 22, 0), t(11, 23, 0), 'other', upu=False, rid='guest'),
+                 self.read('radio', None, t(11, 21, 0), 'sr', rid='noperf')]
+        qs.reading_queue(reads, team)
+        got = {rd['id']: rd['read'] for rd in reads}
+        self.assertEqual(got['upu'], (t(11, 20, 0), t(11, 20, 30)))
+        self.assertEqual(got['waiting'], (t(11, 20, 0), None))
+        self.assertEqual(got['ward'], (t(11, 14, 0), t(11, 21, 0)))   # from the handover at the earliest
+        for rid in ('uncached', 'morning', 'guest', 'noperf'):
+            self.assertIsNone(got[rid], rid)
+
+    def shift(self, with_reads=True, **kw):
+        """A Wednesday on call, one radiologist: an ultrasound every 30 min
+        from 14:00 to 02:00 and, with_reads, two X-rays after each plus a CT
+        every 3 hours; a ward CT left for the morning."""
+        rows, st, rep, who = [], {}, {}, {}
+        f = lambda x: x.strftime('%Y-%m-%d %H:%M')
+        base = datetime(2026, 11, 11, 14, 0)
+        for i in range(24):
+            rid, req = f'u{i}', base + timedelta(minutes=30 * i)
+            rows.append(row(rid, f(req)))
+            st[rid] = [{'uid': rid, 'start': (req + timedelta(minutes=2)).isoformat()}]
+            rep[rid], who[rid] = req + timedelta(minutes=10), 'Solo Doc'
+            if not with_reads:
+                continue
+            for k in (0, 1):
+                xid = f'x{i}{k}'
+                rows.append(row(xid, f(req), f(req + timedelta(minutes=5)), modality='radio'))
+                rep[xid], who[xid] = req + timedelta(minutes=12 + 2 * k), 'Solo Doc'
+            if i % 6 == 0:
+                cid = f'c{i}'
+                rows.append(row(cid, f(req), f(req + timedelta(minutes=1)), modality='ct', section='ATI'))
+                rep[cid], who[cid] = req + timedelta(minutes=29), 'Solo Doc'
+        rows.append(row('late', '2026-11-11 23:00', '2026-11-11 23:30', modality='ct', section='ATI'))
+        rep['late'], who['late'] = datetime(2026, 11, 12, 9, 30), 'Day Doc'
+        return qs.compute(rows, rep, {}, datetime(2026, 11, 12, 8, 0), hours=24, pacs_studies=st,
+                          validators=who, **kw)
+
+    def test_shift_counts_every_modality_and_reads_harder_with_them(self):
+        out, bare = self.shift(), self.shift(with_reads=False)
+        sh = out['shifts']
+        self.assertEqual(len(sh), 1)
+        self.assertEqual(sh[0]['reports'], {'us': 24, 'xr': 48, 'ct': 4, 'rf': 0, 'mr': 0})
+        self.assertEqual((sh[0]['ward'], sh[0]['radiologists'], sh[0]['complete'], sh[0]['known']), (4, 1, True, True))
+        self.assertEqual((sh[0]['from'], sh[0]['to']), ('2026-11-11T14:00', '2026-11-12T08:00'))
+        self.assertEqual(bare['shifts'][0]['reports'], {'us': 24, 'xr': 0, 'ct': 0, 'rf': 0, 'mr': 0})
+        at = lambda o, hhmm: [p for p in o['series'] if p['t'].endswith(hhmm)][0]
+        # the same ultrasounds with X-rays and CT on top: more accumulated, more load, a higher index
+        self.assertGreater(at(out, '02:00')['strain_c']['accumulated'], at(bare, '02:00')['strain_c']['accumulated'])
+        self.assertGreater(at(out, '20:00')['rho'], at(bare, '20:00')['rho'])
+        self.assertGreater(sh[0]['mean'], bare['shifts'][0]['mean'])
+        self.assertGreaterEqual(sh[0]['peak'], sh[0]['mean'])
+        # the X-rays wait to be read; the ward CT left for the morning never does
+        self.assertGreater(at(out, '20:00')['read_L'], 0)
+        self.assertEqual(at(out, '06:00')['read_L'], 0)
+        self.assertEqual(out['current']['reading']['span']['n_in'], 52)
+        self.assertEqual(out['coverage']['read_times'], {'known': 53, 'of': 53})
+        self.assertNotIn('doc', str(out).casefold())   # no name leaves compute()
+
+    def test_a_read_never_reported_did_not_wait(self):
+        rows = [row(f'x{i}', f'2026-11-11 1{i}:00', f'2026-11-11 1{i}:10', modality='radio') for i in range(6)]
+        rep = {f'x{i}': datetime(2026, 11, 11, 10 + i, 30) for i in range(6)}
+        rows.append(row('never', '2026-11-11 17:00', '2026-11-11 17:10', status='active', modality='radio'))
+        at = lambda o, hhmm: [p for p in o['series'] if p['t'].endswith(hhmm)][0]
+        live = qs.compute(rows, rep, {}, datetime(2026, 11, 11, 18, 0), hours=12)
+        self.assertGreater(at(live, '18:00')['read_L'], 0)          # seen live, it is waiting
+        self.assertEqual(live['current']['reading']['now'], 1)
+        later = qs.compute(rows, rep, {}, datetime(2026, 11, 11, 18, 0), hours=12, now=datetime(2026, 11, 13, 9, 0))
+        self.assertEqual(at(later, '18:00')['read_L'], 0)           # seen two days on, it never was
+        self.assertEqual(later['coverage']['stale']['read'], 1)
+
+
 class TestStats(unittest.TestCase):
     def test_hand_computed_window(self):
         a, b = datetime(2026, 11, 11, 11, 0), AS_OF
@@ -336,7 +478,8 @@ class TestCompute(unittest.TestCase):
         self.assertEqual(len(out['series']), 72)
         self.assertEqual(out['series'][-1]['t'], '2026-11-11T12:00')
         self.assertGreater(out['series'][0]['L'], 0)  # the warm-up job is in the first window
-        self.assertEqual(out['scope'], {'modality': 'eco', 'section': 'UPU'})
+        self.assertEqual(out['scope'], {'modality': 'eco', 'section': 'UPU',
+                                        'work': ['ct', 'eco', 'fluoro', 'irm', 'radio']})
         self.assertIn('rho', out['current']['exam'])
         self.assertEqual(out['coverage']['report_times'], {'known': 1, 'of': 2})
         self.assertEqual(out['coverage']['upu_arrivals'], {'known': 1, 'of': 3})

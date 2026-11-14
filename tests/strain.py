@@ -160,10 +160,23 @@ class TestIndex(unittest.TestCase):
         self.assertGreaterEqual(sx.score(Moment(dt(4), busy=work))['index'], 65)
 
     def test_accumulated_saturates_softly(self):
-        half = [(dt(8), dt(10, 30))]
-        self.assertEqual(sx.score(Moment(dt(10, 30), busy=half))['c']['accumulated'], 50)
-        five = [(dt(8), dt(13))]
-        self.assertEqual(sx.score(Moment(dt(13), busy=five))['c']['accumulated'], 75)
+        h = timedelta(hours=sx.ACCUM_HALF_FULL_H)
+        half = [(dt(8), dt(8) + h)]
+        self.assertEqual(sx.score(Moment(dt(8) + h, busy=half))['c']['accumulated'], 50)
+        twice = [(dt(8), dt(8) + 2 * h)]
+        self.assertEqual(sx.score(Moment(dt(8) + 2 * h, busy=twice))['c']['accumulated'], 75)
+
+    def test_studies_waiting_to_be_read_are_pressure(self):
+        p = lambda **kw: sx.score(Moment(dt(22), **kw))['c']['pressure']
+        self.assertEqual(p(), 0)
+        self.assertEqual(p(read_queue=sx.READ_QUEUE_REF), 100)
+        self.assertEqual(p(read_queue=sx.READ_QUEUE_REF / 2), 50)
+        # the oldest unread study is full at OLDEST_FACTOR times its reference
+        self.assertEqual(p(read_oldest=sx.READ_OLDEST_REF), int(round(100 / sx.OLDEST_FACTOR)))
+        self.assertEqual(p(read_oldest=sx.OLDEST_FACTOR * sx.READ_OLDEST_REF), 100)
+        # the worse of the two queues, not their sum
+        self.assertEqual(p(queue=sx.QUEUE_REF, read_queue=sx.READ_QUEUE_REF), 100)
+        self.assertEqual(p(read_queue=2.5, read_oldest=30, queue=1.5), 50)
 
 
 if __name__ == '__main__':

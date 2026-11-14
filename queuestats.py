@@ -5,9 +5,17 @@ fetches the schedule rows and the cache-only times (report validation, UPU
 presentation) and hands them here. Nothing is stored; every call recomputes
 from the timestamps, so any past moment can be analysed as well as now.
 
-Scope (2026-11-11, owner's call): ultrasound requests from UPU only: one
-server, so one queue and a meaningful rho. Other modalities and wards are
-left out (in_scope()); the handler fetches only the ultrasound lab.
+Scope. The exam queue is the ultrasound requests from UPU (2026-11-11,
+owner's call: one server, so one queue and a meaningful rho; in_scope()):
+the only one where a patient waits for the radiologist. Since 2026-11-14
+the on-call shift is seen whole: every other report (X-ray, CT, RF, MRI
+from UPU or a ward, ward ultrasound) is a *read* (build_reads()). On-call
+work is told by who validated it and when, not by the section: the on-call
+team (on_call_team()) is whoever validates reports in the on-call hours.
+Reads have no measured length: each is the time since that radiologist's
+previous report, capped by a typical length (read_work()). UPU reads, and
+ward ones the team validated, wait in a second, reading queue (exam done ->
+report validated).
 
 Each request is a job passing through two queues:
 
@@ -52,6 +60,20 @@ import strain as strain_index
 SCOPE_MODALITY = 'eco'   # ultrasound
 SCOPE_LAB_ID = '28'      # its Hipocrate laboratory (HippoClientSchedule._LAB_ID_TO_MODALITY)
 SCOPE_SECTION = 'UPU'
+# Every laboratory whose reports the on-call team may validate (the handler
+# fetches one listing each); interventional radiology is left out.
+SCOPE_LABS = {'eco': '28', 'radio': '49', 'ct': '26', 'fluoro': '50', 'irm': '32'}
+MODALITY_LABEL = {'eco': 'us', 'radio': 'xr', 'ct': 'ct', 'fluoro': 'rf', 'irm': 'mr'}
+# Minutes of work per study of a read, when the gap since the radiologist's
+# previous report is longer (assumptions; seen 6-12 Nov 2026 on call: an
+# X-ray report follows the previous one by a median 2 min, a CT by 22).
+# A ward ultrasound takes the median measured UPU exam.
+READ_TYPICAL = {'radio': timedelta(minutes=3), 'ct': timedelta(minutes=25),
+                'fluoro': timedelta(minutes=15), 'irm': timedelta(minutes=30)}
+READ_MIN = timedelta(minutes=1)       # a report validated the same minute as the previous one
+TEAM_MIN_REPORTS = 5                  # reports in the on-call hours that make a team member
+TEAM_GRACE = timedelta(minutes=30)    # the day staff's last reports, just after the handover
+SHIFT_HIGH = 65                       # strain from which a point counts in a shift's hours_high
 EXCLUDED_STATUSES = {'on-hold', 'entered-in-error', 'revoked'}
 LEFT_STATUSES = {'completed', 'ended'}
 OPEN_STATUSES = {'draft', 'active'}
@@ -305,12 +327,12 @@ def _percentile(values: List[timedelta], q: float) -> timedelta:
     return ordered[min(len(ordered) - 1, int(q * (len(ordered) - 1) + 0.5))]
 
 
-def open_caps(jobs: List[dict]) -> Dict[tuple, timedelta]:
+def open_caps(jobs: List[dict], stages=('exam', 'report')) -> Dict[tuple, timedelta]:
     """{(stage, modality): cap} and {(stage, None): pooled cap}, from the
     finished waits: 95th percentile, clamped to OPEN_MIN..OPEN_MAX."""
     clamp = lambda td: max(OPEN_MIN, min(OPEN_MAX, td))
     caps = {}
-    for stage in ('exam', 'report'):
+    for stage in stages:
         waits = {}
         for j in jobs:
             iv = j[stage]
@@ -324,10 +346,10 @@ def open_caps(jobs: List[dict]) -> Dict[tuple, timedelta]:
     return caps
 
 
-def apply_caps(jobs: List[dict], caps: Dict[tuple, timedelta]) -> None:
+def apply_caps(jobs: List[dict], caps: Dict[tuple, timedelta], stages=('exam', 'report')) -> None:
     """Give each open stage its modality's cap: (start, None, cap)."""
     for j in jobs:
-        for stage in ('exam', 'report'):
+        for stage in stages:
             iv = j[stage]
             if iv and iv[1] is None:
                 cap = caps.get((stage, j['modality'])) or caps.get((stage, None)) or OPEN_MAX
@@ -460,24 +482,156 @@ def on_call_from(block_start: datetime) -> datetime:
     return block_start + timedelta(hours=6 if block_start.weekday() < 5 else 0)
 
 
-def on_call_radiologist(jobs: List[dict], block_start: datetime, until: datetime) -> Optional[str]:
+def in_on_call(t: datetime) -> bool:
+    """t falls in the on-call hours of its duty block."""
+    return t >= on_call_from(strain_index.duty_start(t))
+
+
+def on_call_team(events: List[dict], block_start: datetime, until: datetime) -> set:
+    """The radiologists on call in the duty block starting at block_start:
+    whoever validated TEAM_MIN_REPORTS reports or more, of any modality and
+    section, in its on-call hours (one or two people; the day staff's last
+    few reports right after the handover do not make them on call). Until
+    someone has that many, whoever validated one later than TEAM_GRACE after
+    the handover. Empty when nobody has. `events` have 'validator' and
+    't_rep'. The names never leave compute()."""
+    frm, end = on_call_from(block_start), min(block_start + timedelta(days=1), until)
+    counts: Dict[str, int] = {}
+    late = set()
+    for e in events:
+        v, t = e['validator'], e['t_rep']
+        if v and t and frm <= t < end:
+            counts[v] = counts.get(v, 0) + 1
+            if t >= frm + TEAM_GRACE:
+                late.add(v)
+    return {v for v, n in counts.items() if n >= TEAM_MIN_REPORTS} or late
+
+
+def on_call_radiologist(jobs: List[dict], block_start: datetime, until: datetime,
+                        team: Optional[set] = None) -> Optional[str]:
     """The senior on call in the duty block starting at block_start: the
-    validator of most UPU reports between 20:00 and 02:00, the busiest hours,
-    which the senior takes (owner, 2026-11-12); before 20:00, the most in
-    the on-call hours so far. Alone on call, that is the one radiologist.
-    None before anyone has validated one. Used only to tell the senior's
-    rest from the team's work: never returned, never logged."""
+    validator of most reports (any modality) between 20:00 and 02:00, the
+    busiest hours, which the senior takes (owner, 2026-11-12); before 20:00,
+    the most in the on-call hours so far. Alone on call, that is the one
+    radiologist. Only `team` members when given. None before anyone has
+    validated one. Used only to tell the senior's rest from the team's work:
+    never returned, never logged."""
     end = min(block_start + timedelta(days=1), until)
     windows = [(block_start + timedelta(hours=12), min(block_start + timedelta(hours=18), end)),
                (on_call_from(block_start), end)]
     for frm, to in windows:
         counts: Dict[str, int] = {}
         for j in jobs:
-            if j['validator'] and j['t_rep'] and frm <= j['t_rep'] < to:
+            if j['validator'] and j['t_rep'] and frm <= j['t_rep'] < to and (not team or j['validator'] in team):
                 counts[j['validator']] = counts.get(j['validator'], 0) + 1
         if counts:
             return max(sorted(counts), key=lambda k: counts[k])
     return None
+
+
+def build_reads(rows: List[dict], report_times: Dict[str, Optional[datetime]],
+                validators: Optional[Dict[str, str]] = None,
+                counts: Optional[Dict[str, int]] = None) -> List[dict]:
+    """One read per imaging row outside the exam queue (X-ray, CT, RF, MRI of
+    any section; ward ultrasound): images done at t_perf, report validated at
+    t_rep by `validator`, `n` studies. A performed time before the request
+    is a glitch: unknown."""
+    validators, counts = validators or {}, counts or {}
+    out = []
+    for r in rows:
+        if (r.get('modality') not in SCOPE_LABS or r.get('status') in EXCLUDED_STATUSES or in_scope(r)):
+            continue
+        t_req = parse_ts(r.get('date_time'))
+        if t_req is None:
+            continue
+        rid = str(r.get('request_id') or '')
+        t_perf = parse_performed(r.get('performed_at'))
+        if t_perf is not None and t_perf < t_req:
+            t_perf = None
+        try:
+            n = max(1, int(counts.get(rid) or r.get('analysis_count') or 1))
+        except (TypeError, ValueError):
+            n = 1
+        out.append({
+            'id': rid,
+            'modality': r.get('modality'),
+            'upu': (r.get('section') or '').strip().upper() == SCOPE_SECTION,
+            'left': r.get('status') in LEFT_STATUSES,
+            't_req': t_req,
+            't_perf': t_perf,
+            't_rep': report_times.get(rid),
+            'validator': norm_name(validators.get(rid)),
+            'n': n,
+            'read': None,     # its interval in the reading queue (reading_queue())
+        })
+    return out
+
+
+def read_length(read: dict, typical: timedelta) -> timedelta:
+    """The most a read's work takes: its modality's typical length per study."""
+    return READ_TYPICAL.get(read['modality'], typical) * read['n']
+
+
+def read_work(reads: List[dict], work: List[tuple], typical: timedelta) -> List[tuple]:
+    """(read, (start, end)) of every validated read: the work it took.
+
+    Nothing records when a radiologist opens a study, only when the report is
+    validated (to the minute). So per radiologist, in the order of their
+    reports (their UPU ultrasound exams, `work`, included): a read ends at
+    its validation and starts at the latest of: its typical length before
+    (read_length()), the end of that radiologist's previous report, and the
+    moment the images existed. X-rays read in a batch then cost what they
+    took, a CT after a pause its typical length. Never under READ_MIN."""
+    lines: Dict[str, list] = {}
+    for j, (s, e) in work:
+        if j.get('validator'):
+            lines.setdefault(j['validator'], []).append((e, 0, None))
+    for rd in reads:
+        if rd['validator'] and rd['t_rep']:
+            lines.setdefault(rd['validator'], []).append((rd['t_rep'], 1, rd))
+    out = []
+    for line in lines.values():
+        prev = None
+        for end, _, rd in sorted(line, key=lambda x: (x[0], x[1])):
+            if rd is not None:
+                start = end - read_length(rd, typical)
+                if prev is not None and prev > start:
+                    start = prev
+                if rd['t_perf'] is not None and start < rd['t_perf'] < end:
+                    start = rd['t_perf']
+                if end - start < READ_MIN:
+                    start = end - READ_MIN
+                out.append((rd, (start, end)))
+            prev = end if prev is None or end > prev else prev
+    return out
+
+
+def reading_queue(reads: List[dict], team_of) -> None:
+    """Set each read's interval in the reading queue, exam done -> report
+    validated (None: not in it):
+      * a UPU read: from t_perf to its report; still open when performed and
+        not reported; unknown (out) when the row has left with no cached
+        report time, or was never performed;
+      * a ward read: only when an on-call team member validated it in the
+        on-call hours (`team_of(block_start)`), and from the handover at the
+        earliest. One left for the day staff is not the shift's."""
+    for rd in reads:
+        s, e = rd['t_perf'], rd['t_rep']
+        rd['read'] = None
+        if s is None:
+            continue
+        if rd['upu']:
+            if e is not None:
+                if e >= s:
+                    rd['read'] = (s, e)
+            elif not rd['left']:
+                rd['read'] = (s, None)
+        elif e is not None and rd['validator'] and in_on_call(e):
+            block = strain_index.duty_start(e)
+            if rd['validator'] in team_of(block):
+                s = max(s, on_call_from(block))
+                if e >= s:
+                    rd['read'] = (s, e)
 
 
 def _median_td(samples: List[tuple]) -> Optional[timedelta]:
@@ -556,14 +710,19 @@ def relative_lengths(samples: List[tuple], jobs: List[dict],
     return out
 
 
-def strain_refs(stats: List[dict]) -> 'strain_index.Refs':
+def strain_refs(stats: List[dict], read_L: Iterable[float] = (),
+                read_oldest: Iterable[Optional[float]] = ()) -> 'strain_index.Refs':
     """People waiting are judged against this queue's own busy hours (the
-    span's 90th percentile of the hourly L and W), never below the floors."""
+    span's 90th percentile of the hourly L and W), never below the floors;
+    the same for the studies waiting to be read and the oldest of them."""
     Ls = [e['L'] for e in stats if e['L']]
     Ws = [e['W'] for e in stats if e['W'] is not None]
+    Rs = [v for v in read_L if v]
+    Os = [v for v in read_oldest if v]
+    ref = lambda vals, floor: max(floor, _pct(vals, 0.9)) if vals else floor
     return strain_index.Refs(
-        queue=max(strain_index.QUEUE_REF, _pct(Ls, 0.9)) if Ls else strain_index.QUEUE_REF,
-        wait=max(strain_index.WAIT_REF_MIN, _pct(Ws, 0.9)) if Ws else strain_index.WAIT_REF_MIN)
+        queue=ref(Ls, strain_index.QUEUE_REF), wait=ref(Ws, strain_index.WAIT_REF_MIN),
+        read_queue=ref(Rs, strain_index.READ_QUEUE_REF), read_oldest=ref(Os, strain_index.READ_OLDEST_REF))
 
 
 def oldest_wait(exam_intervals, t: datetime) -> Optional[float]:
@@ -641,16 +800,27 @@ def compute(rows: List[dict], report_times: Dict[str, Optional[datetime]],
             hours: int = 24, window_min: int = 60, step_min: int = 10,
             truncated: bool = False, pacs_studies: Optional[Dict[str, list]] = None,
             regions: Optional[Dict[str, List[str]]] = None,
-            validators: Optional[Dict[str, str]] = None) -> dict:
-    """`regions`: the regions of each request's studies (from its report
+            validators: Optional[Dict[str, str]] = None,
+            counts: Optional[Dict[str, int]] = None,
+            now: Optional[datetime] = None) -> dict:
+    """`rows`: the schedule rows of every imaging lab; the UPU ultrasound
+    ones make the exam queue, the rest are reads.
+    `regions`: the regions of each request's studies (from its report
     page), so an exam's length is compared with the same kind of exam.
-    `validators`: who validated each request's report, so the senior on
-    call is found (on_call_radiologist()) and their own gaps are the rest of
-    the accumulated work; the names stay inside this function."""
+    `validators`: who validated each request's report, so the on-call team
+    and its senior are found (on_call_team(), on_call_radiologist()): the
+    team's work in every modality accumulates, the senior's own gaps are the
+    rest; the names stay inside this function.
+    `counts`: the validated studies of each request (a read's length).
+    `now`: the real present when as_of is in the past (default as_of): a
+    read still unreported now, long past its cap, was never going to be
+    read (about 5 % of the X-rays stay unreported), so it never waited."""
     jobs = build_jobs(rows, report_times, arrivals, pacs_studies)
     validators = validators or {}
     for j in jobs:
         j['validator'] = norm_name(validators.get(j['id']))
+    reads = build_reads(rows, report_times, validators, counts)
+    events = jobs + reads
     caps = open_caps(jobs)
     apply_caps(jobs, caps)
     window = timedelta(minutes=window_min)
@@ -660,59 +830,115 @@ def compute(rows: List[dict], report_times: Dict[str, Optional[datetime]],
     typical = _median_td(samples) or TYPICAL_EXAM
     work = work_intervals(jobs, samples, typical)
     busy = [iv for _, iv in work]
+    reading = read_work(reads, work, typical)
+
+    # Each duty block: its team, its senior, the team's work in every
+    # modality (the accumulated work) and the senior's own (whose gaps are
+    # the rest). Built on demand, also for the blocks before the span.
+    blocks: Dict[datetime, dict] = {}
+
+    def block_at(start: datetime) -> dict:
+        if start in blocks:
+            return blocks[start]
+        frm, until = on_call_from(start), min(start + timedelta(days=1), as_of)
+        team = on_call_team(events, start, as_of)
+        who = on_call_radiologist(events, start, as_of, team)
+        us = [(j, iv) for j, iv in work if iv[1] > frm]
+        us_in = [(j, iv) for j, iv in us if iv[0] < until]
+        rd_in = [(rd, iv) for rd, iv in reading if rd['validator'] in team and frm <= iv[1] < start + timedelta(days=1)]
+        reports = {label: 0 for label in MODALITY_LABEL.values()}
+        reports['us'] = len(us_in)
+        for rd, iv in rd_in:
+            if iv[1] <= until:
+                reports[MODALITY_LABEL[rd['modality']]] += 1
+        blocks[start] = {
+            'team_names': team,
+            # the team's work: every UPU ultrasound since the handover and the team's reads
+            'busy': [iv for _, iv in us] + [iv for _, iv in rd_in],
+            'reads': [iv for _, iv in rd_in],
+            'own': ([iv for j, iv in work if j['validator'] == who]
+                    + [iv for rd, iv in reading if rd['validator'] == who]) if who else None,
+            'known': who is not None,
+            'team': len(us_in),
+            'senior': sum(1 for j, _ in us_in if who and j['validator'] == who),
+            'radiologists': len(team) or len({j['validator'] for j, _ in us_in if j['validator']}),
+            'reports': reports,
+            'ward': sum(1 for rd, iv in rd_in if not rd['upu'] and iv[1] <= until),
+        }
+        return blocks[start]
+
+    reading_queue(reads, lambda start: block_at(start)['team_names'])
+    read_caps = open_caps(reads, ('read',))
+    apply_caps(reads, read_caps, ('read',))
+    caps.update(read_caps)
+    seen_at = max(now or as_of, as_of)
+    never_read = 0
+    for rd in reads:
+        iv = rd['read']
+        if iv and iv[1] is None and iv[0] + iv[2] < seen_at:
+            rd['read'] = None
+            never_read += 1
 
     current = _segment(jobs, as_of, span_start, window, samples, busy)
+    read_ivs = [rd['read'] for rd in reads if rd['read']]
+    w_start = as_of - window
+    cur_read = stage_stats(read_ivs, w_start, as_of)
+    current['reading'] = {**cur_read, 'now': sum(1 for iv in read_ivs if _waiting(iv, as_of)),
+                          'oldest': oldest_wait(read_ivs, as_of),
+                          'span': stage_stats(read_ivs, span_start, as_of)}
 
     exam = [j['exam'] for j in jobs if j['exam']]
     report = [j['report'] for j in jobs if j['report']]
-    # rho per point: lam of that point's hour over the span's capacity (the
-    # measured 1/E[S] when there is one, else the demonstrated p90 one)
+    # rho per point: the work offered in that point's hour, in radiologist
+    # hours per hour. Ultrasound: lam of the hour over the span's capacity
+    # (the measured 1/E[S] when there is one, else the demonstrated p90 one);
+    # reads: the minutes of work of the studies done in the hour.
     mu_eff = current['service']['mu'] or current['exam']['mu']
+    measured = {id(rd): iv[1] - iv[0] for rd, iv in reading}
+    offered = sorted(((rd['read'][0], _hours(measured.get(id(rd)) or read_length(rd, typical)))
+                      for rd in reads if rd['read']), key=lambda x: x[0])
+    offered_t = [t for t, _ in offered]
+    offered_sum = [0.0]
+    for _, h in offered:
+        offered_sum.append(offered_sum[-1] + h)
+
+    def read_load(a: datetime, b: datetime) -> float:
+        lo, hi = bisect.bisect_right(offered_t, a), bisect.bisect_right(offered_t, b)
+        return (offered_sum[hi] - offered_sum[lo]) / _hours(b - a)
+
     points = []
     t = span_start + timedelta(minutes=step_min)
     while t <= as_of:
-        points.append((t, stage_stats(exam, t - window, t)))
+        points.append((t, stage_stats(exam, t - window, t), stage_stats(read_ivs, t - window, t)['L'],
+                       oldest_wait(read_ivs, t)))
         t += timedelta(minutes=step_min)
-    refs = strain_refs([e for _, e in points])
+    refs = strain_refs([e for _, e, _, _ in points], [r for _, _, r, _ in points], [o for _, _, _, o in points])
     relative = relative_lengths(samples, jobs, regions or {})
-    busy_merged = strain_index.merge(busy)
     # the requests the exam queue counts (the same ones as its lambda)
     arrivals = sorted(j['t_req'] for j in jobs if j['exam'])
-    # The accumulated work of each duty block: the on-call team's UPU work
-    # (senior and junior: the junior's stands for the senior's ward, CT and
-    # other duties), decaying only while the senior rests (their own gaps).
-    blocks: Dict[datetime, dict] = {}
-
-    def block_of(t):
-        start = strain_index.duty_start(t)
-        if start not in blocks:
-            who = on_call_radiologist(jobs, start, as_of)
-            frm, until = on_call_from(start), min(start + timedelta(days=1), as_of)
-            team = [(j, iv) for j, iv in work if iv[1] > frm]
-            in_block = [(j, iv) for j, iv in team if iv[0] < until]
-            blocks[start] = {
-                'busy': [iv for _, iv in team],
-                'own': [iv for j, iv in work if j['validator'] == who] if who else None,
-                'known': who is not None,
-                'team': len(in_block),
-                'senior': sum(1 for j, _ in in_block if who and j['validator'] == who),
-                'radiologists': len({j['validator'] for j, _ in in_block if j['validator']}),
-            }
-        return blocks[start]
+    # the room is not idle while the team reads an X-ray or a CT
+    team_reads = [iv for start in sorted({strain_index.duty_start(t) for t, _, _, _ in points})
+                  for iv in block_at(start)['reads']]
+    busy_merged = strain_index.merge(busy + team_reads)
 
     series = []
-    for t, e in points:
-        rho_t = round(e['lam'] / mu_eff, 2) if mu_eff else None
+    for t, e, read_L, read_old in points:
+        rho_us = e['lam'] / mu_eff if mu_eff else None
+        rho_read = read_load(t - window, t)
+        rho_t = round((rho_us or 0.0) + rho_read, 2) if rho_us is not None or rho_read else None
         idle_w = idle_while_waiting(exam, busy_merged, t - window, t)
-        blk = block_of(t)
+        blk = block_at(strain_index.duty_start(t))
         st = strain_index.score(strain_index.Moment(
             t=t, rho=rho_t, queue=e['L'], wait=e['W'], oldest=oldest_wait(exam, t),
             idle_waiting=idle_w, busy=blk['busy'], own=blk['own'], arrivals=arrivals, capacity=mu_eff,
-            relative=[r for (s0, e0), r in relative if t - window < e0 <= t]), refs)
+            relative=[r for (s0, e0), r in relative if t - window < e0 <= t],
+            read_queue=read_L, read_oldest=read_old), refs)
         series.append({
             't': t.strftime('%Y-%m-%dT%H:%M'),
             'lam': e['lam'], 'x': e['x'], 'L': e['L'], 'W': e['W'],
-            'rho': rho_t, 'idle_waiting': round(idle_w, 2), 'on_call_known': blk['known'],
+            'rho': rho_t, 'rho_read': round(rho_read, 2),
+            'read_L': read_L, 'read_oldest': read_old,
+            'idle_waiting': round(idle_w, 2), 'on_call_known': blk['known'],
             'strain': st['index'], 'strain_c': st['c'],
         })
 
@@ -730,6 +956,9 @@ def compute(rows: List[dict], report_times: Dict[str, Optional[datetime]],
     in_span = [j for j in jobs if relevant(j)]
     left = [j for j in in_span if j['left'] and not j['inconsistent'] and not j['merged']]
     upu = [j for j in in_span if j['upu']]
+    reads_span = [rd for rd in reads if span_start < rd['t_req'] <= as_of]
+    reads_left = [rd for rd in reads_span if rd['left']]
+    shown = sorted(k for k in blocks if k + timedelta(days=1) > span_start and k < as_of)
     coverage = {
         'jobs': len(in_span),
         'exam_times': {'known': sum(1 for j in left if j['exam_known']), 'of': len(left)},
@@ -737,16 +966,20 @@ def compute(rows: List[dict], report_times: Dict[str, Optional[datetime]],
         'pacs_start': {'known': sum(1 for j in left if j['pacs_start']), 'of': len(left)},
         'inconsistent': sum(1 for j in in_span if j['inconsistent']),
         'merged': sum(1 for j in in_span if j['merged']),
+        # the reads requested in the span, and those of them with a cached report time
+        'reads': len(reads_span),
+        'read_times': {'known': sum(1 for rd in reads_left if rd['t_rep']), 'of': len(reads_left)},
         # per duty block (counts only, never a name): the on-call team's UPU
-        # exams, the senior's share, how many radiologists validated them
-        'on_call': [{'block': k.strftime('%Y-%m-%dT%H:%M'), 'known': v['known'], 'team_exams': v['team'],
-                     'senior_exams': v['senior'], 'radiologists': v['radiologists']}
-                    for k, v in sorted(blocks.items())],
+        # exams, the senior's share, how many radiologists are on call
+        'on_call': [{'block': k.strftime('%Y-%m-%dT%H:%M'), 'known': blocks[k]['known'],
+                     'team_exams': blocks[k]['team'], 'senior_exams': blocks[k]['senior'],
+                     'radiologists': blocks[k]['radiologists']} for k in shown],
         'upu_arrivals': {'known': sum(1 for j in upu if j['t_arr']), 'of': len(upu)},
         # open past their cap at as_of: left out of the queue
-        'stale': {stage: sum(1 for j in jobs if j[stage] and j[stage][1] is None
-                             and j[stage][0] + j[stage][2] < as_of)
-                  for stage in ('exam', 'report')},
+        'stale': {**{stage: sum(1 for j in jobs if j[stage] and j[stage][1] is None
+                                and j[stage][0] + j[stage][2] < as_of)
+                     for stage in ('exam', 'report')},
+                  'read': never_read},
     }
 
     return {
@@ -755,11 +988,42 @@ def compute(rows: List[dict], report_times: Dict[str, Optional[datetime]],
         'span_start': span_start.strftime('%Y-%m-%dT%H:%M'),
         'window_min': window_min,
         'step_min': step_min,
-        'scope': {'modality': SCOPE_MODALITY, 'section': SCOPE_SECTION},
+        'scope': {'modality': SCOPE_MODALITY, 'section': SCOPE_SECTION, 'work': sorted(SCOPE_LABS)},
         'current': current,
         'series': series,
+        'shifts': [shift_summary(k, blocks[k], series, span_start, as_of, step_min) for k in shown],
         'coverage': coverage,
         'truncated': truncated,
-        'strain_refs': {'queue': round(refs.queue, 2), 'wait_min': round(refs.wait, 1)},
+        'strain_refs': {'queue': round(refs.queue, 2), 'wait_min': round(refs.wait, 1),
+                        'read_queue': round(refs.read_queue, 2), 'read_oldest_min': round(refs.read_oldest, 1)},
         'open_caps_h': {f"{stage}:{m or 'all'}": round(_hours(cap), 2) for (stage, m), cap in caps.items()},
+    }
+
+
+def _waiting(iv, t: datetime) -> bool:
+    start, end, cap = _parts(iv)
+    return start <= t < (end if end is not None else start + cap)
+
+
+def shift_summary(start: datetime, blk: dict, series: List[dict], span_start: datetime,
+                  as_of: datetime, step_min: int) -> dict:
+    """One on-call shift (the on-call hours of the duty block at `start`) in
+    a few numbers, to compare shifts: the peak and mean strain, the hours at
+    SHIFT_HIGH or more, the team's reports by modality (us = UPU ultrasound
+    exams; `ward` = how many of the reads came from a ward) and the team's
+    size. `complete`: the whole shift lies in the span analysed. Counts only."""
+    frm, end = on_call_from(start), start + timedelta(days=1)
+    lo, hi = frm.strftime('%Y-%m-%dT%H:%M'), end.strftime('%Y-%m-%dT%H:%M')
+    vals = [p['strain'] for p in series if lo < p['t'] <= hi]
+    return {
+        'block': start.strftime('%Y-%m-%dT%H:%M'),
+        'from': lo, 'to': hi,
+        'complete': frm >= span_start and end <= as_of,
+        'peak': max(vals) if vals else None,
+        'mean': int(round(sum(vals) / len(vals))) if vals else None,
+        'hours_high': round(sum(1 for v in vals if v >= SHIFT_HIGH) * step_min / 60.0, 1),
+        'reports': dict(blk['reports']),
+        'ward': blk['ward'],
+        'radiologists': blk['radiologists'],
+        'known': blk['known'],
     }

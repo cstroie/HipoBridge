@@ -7993,7 +7993,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // ── Schedule queue metrics (queuestats.py, GET /api/schedule/queue) ──
     // Arrival rate, throughput, queue length, waits and utilisation of the
     // UPU ultrasound requests over a 1-hour window rolling every 10 minutes, plus
-    // a 12/24 h graph. Recomputed by the server from the schedule's own
+    // a 12/24 h graph. The strain index and the "To read" tile cover the whole
+    // on-call shift: every report the on-call team validates (X-ray, CT, RF,
+    // MRI, ward ultrasound), summed up per shift in `shifts`. Recomputed by the server from the schedule's own
     // timestamps and cached report/FUPU pages: nothing is stored.
     const QUEUE_RHO_HIGH = 0.85;
     // Fewer events than this in the 1-hour window: Poisson noise of ±40% or
@@ -8083,6 +8085,22 @@ document.addEventListener('DOMContentLoaded', function() {
         return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}`;
     }
     const fmtPct = v => v == null ? '–' : `${Math.round(v * 100)}%`;
+    // The strain index's parts (strain.py), for the tile and the readout tooltips
+    const strainTitle = c => 'Relative strain index 0–100 of the on-call shift\'s working conditions (not a probability, not calibrated): ' +
+        `now ${c.now} (load ${c.load}, waiting patients or unread studies ${c.pressure}, burst ${c.burst}, rushing ${c.rushing}) · ` +
+        `fatigue ${c.fatigue} (the on-call team's work in every modality, less the senior's rest, ${c.accumulated} × sleepiness ${c.sleepiness}), each 0–100`;
+    // One on-call shift in words: its reports by modality, the team's size and
+    // the strain's peak, mean and hours at 65 or more (queuestats.shift_summary)
+    function shiftText(sh, asOf) {
+        const r = sh.reports || {};
+        const counts = [['us', 'US'], ['xr', 'X-ray'], ['ct', 'CT'], ['rf', 'RF'], ['mr', 'MRI']]
+            .filter(([k]) => r[k]).map(([k, name]) => `${r[k]} ${name}`);
+        const who = sh.radiologists ? `${sh.radiologists} radiologist${sh.radiologists === 1 ? '' : 's'}` : 'team not known yet';
+        let text = `on call ${hhmm(sh.from)}–${hhmm(sh.to)} (${who}): ${counts.join(', ') || 'no reports yet'}`;
+        if (sh.ward) text += ` (${sh.ward} from wards)`;
+        if (sh.peak != null) text += ` · strain peak ${sh.peak}, mean ${sh.mean}, ${sh.hours_high} h at 65+`;
+        return text + (sh.complete ? '' : (asOf && sh.to <= asOf ? ' (partly in view)' : ' (so far)'));
+    }
     const pctOf = c => c && c.of ? Math.round(100 * c.known / c.of) : null;
     const hhmm = iso => (iso || '').slice(11, 16);
 
@@ -8131,6 +8149,18 @@ document.addEventListener('DOMContentLoaded', function() {
               note: `${d.span_h} h avg ${fmtMin(all.span.exam.W)}`,
               title: 'W: request → exam start (PACS, else the performed time), mean of the exams done in the last hour' },
         ];
+        // The reading queue: X-rays, CTs… done and not yet reported (UPU's, and
+        // the ward ones the on-call team validated)
+        const rd = all.reading;
+        if (rd) {
+            defs.push({
+                label: 'To read', value: String(rd.now), color: 'var(--mod-xr, var(--muted))',
+                note: rd.oldest != null ? `oldest ${fmtMin(rd.oldest)}` : `${d.span_h} h wait ${fmtMin(rd.span?.W)}`,
+                title: 'Studies done and not yet reported: X-ray, CT and the rest from UPU, and ward studies the on-call team validated ' +
+                    '(a ward study left for the day staff is not counted). Under it, how long the oldest has waited, ' +
+                    `else the mean exam → report wait over ${d.span_h} h. Average in the last hour: ${fmtRate(rd.L)}`,
+            });
+        }
         // Relative strain index at the analysed moment (strain.py): not a probability
         const lastPt = d.series?.[d.series.length - 1];
         if (lastPt && lastPt.strain != null) {
@@ -8140,9 +8170,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 label: 'Strain', value: String(lastPt.strain),
                 color: lastPt.strain >= 65 ? 'var(--urgent)' : lastPt.strain >= 40 ? 'var(--st-inprogress)' : 'var(--muted)',
                 note: `${d.span_h} h peak ${peak}`,
-                title: 'Relative strain index 0–100 of the working conditions (not a probability, not calibrated): ' +
-                    `now ${c.now} (load ${c.load}, people waiting ${c.pressure}, burst ${c.burst}, rushing ${c.rushing}) · ` +
-                    `fatigue ${c.fatigue} (the on-call team's UPU work, less the senior's rest, ${c.accumulated} × sleepiness ${c.sleepiness}), each 0–100`,
+                title: strainTitle(c),
             });
         }
         defs.forEach(m => {
@@ -8163,15 +8191,22 @@ document.addEventListener('DOMContentLoaded', function() {
             const rep = pctOf(cov.report_times), upu = pctOf(cov.upu_arrivals), ps = pctOf(cov.pacs_start);
             if (ps != null) parts.push(`exam start from PACS ${ps}%`);
             if (rep != null) parts.push(`reports ${rep}% known`);
+            const rdk = pctOf(cov.read_times);
+            if (rdk != null) parts.push(`other reports ${rdk}% known`);
             if (upu != null) parts.push(`UPU arrivals ${upu}% known`);
             const stale = (cov.stale?.exam || 0) + (cov.stale?.report || 0);
             if (stale) parts.push(`${stale} stale left out`);
             if (cov.inconsistent) parts.push(`${cov.inconsistent} with exam before request left out`);
             if (d.truncated) parts.push('list truncated');
             if (all.upu_door_W_span != null) parts.push(`UPU door → request ${fmtMin(all.upu_door_W_span)}`);
+            // The on-call shift(s) of the span: the last one in the line, all in the tooltip
+            const shifts = (d.shifts || []).filter(sh => sh.peak != null || Object.values(sh.reports || {}).some(Boolean));
+            if (shifts.length) parts.push(shiftText(shifts[shifts.length - 1], d.as_of));
             sub.textContent = parts.join(' · ');
             sub.title = 'Report and UPU arrival times come only from pages already cached (the idle prefetch warms them); rows with an unknown time are left out of that stage. ' +
-                'Stale: requests open longer than they usually take (95th percentile of the finished waits, 2–24 h), not counted as waiting';
+                'Stale: requests open longer than they usually take (95th percentile of the finished waits, 2–24 h), not counted as waiting' +
+                (shifts.length ? '\n\nOn-call shifts (reports validated by the on-call team; counts only):\n' +
+                    shifts.map(sh => `${(sh.from || '').slice(0, 10)}: ${shiftText(sh, d.as_of)}`).join('\n') : '');
         }
 
         // One bar: UPU ultrasound utilisation
@@ -8313,9 +8348,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 [`${hhmm(p.t)} (hour to)`, ''],
                 [`requests ${fmtRate(p.lam)}/h`, 'var(--st-inlab)'],
                 [`exams ${fmtRate(p.x)}/h`, 'var(--st-completed)'],
-                [`ρ ${fmtPct(p.rho)}`, p.rho != null && p.rho >= QUEUE_RHO_HIGH ? 'var(--urgent)' : 'var(--primary)'],
+                [`load ${fmtPct(p.rho)}`, p.rho != null && p.rho >= QUEUE_RHO_HIGH ? 'var(--urgent)' : 'var(--primary)'],
                 [`in queue ${fmtRate(p.L)}`, 'var(--muted)'],
                 [`wait ${fmtMin(p.W)}`, 'var(--st-inprogress)'],
+                [`to read ${fmtRate(p.read_L)}`, 'var(--mod-xr, var(--muted))'],
                 [`strain ${p.strain}`, p.strain >= 65 ? 'var(--urgent)' : p.strain >= 40 ? 'var(--st-inprogress)' : 'var(--muted)'],
             ];
             const nodes = [];
@@ -8328,9 +8364,8 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             elements.scheduleQueueReadout.replaceChildren(...nodes);
             const c = p.strain_c || {};
-            elements.scheduleQueueReadout.title = 'Relative strain index 0–100 (not a probability, not calibrated): ' +
-                `now ${c.now} (load ${c.load}, people waiting ${c.pressure}, burst ${c.burst}, rushing ${c.rushing}) · ` +
-                `fatigue ${c.fatigue} (the on-call team's UPU work, less the senior's rest, ${c.accumulated} × sleepiness ${c.sleepiness}), each 0–100` +
+            elements.scheduleQueueReadout.title = 'Load: the work offered in the hour, in radiologist hours (UPU ultrasound ' +
+                `plus the reading of the X-rays, CTs… done in it: ${fmtPct(p.rho_read)}). ` + strainTitle(c) +
                 (p.on_call_known === false ? ' · senior on call not known yet: the team\'s gaps are the rest' : '');
         };
         svg.addEventListener('pointermove', e => {

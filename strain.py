@@ -1,4 +1,4 @@
-"""Relative strain index of the UPU ultrasound radiologist, per time point.
+"""Relative strain index of the on-call radiology shift, per time point.
 
 NOT a probability and NOT calibrated: there are no outcomes (misses,
 addenda, complaints) to calibrate against, and nothing measures temper.
@@ -16,8 +16,11 @@ both together raise it more:
     index = 100 * (1 - (1 - now) * (1 - fatigue))
 
 now: the moment's work (NOW_WEIGHTS)
-    load      the room's utilisation of the hour (UPU and ward studies)
-    pressure  people waiting: count, mean wait or the longest wait
+    load      the work offered in the hour, in radiologist hours: the UPU
+              ultrasound queue's utilisation plus the X-ray, CT and other
+              studies done in it, at their reading time
+    pressure  people waiting for an ultrasound (count, mean wait or the
+              longest wait) or studies waiting to be read (count, the oldest)
     burst     a burst of arrivals beyond what the room clears in half an
               hour, felt fully for an hour after it and fading by two
               (owner: bursts add pressure over the next 1-2 hours)
@@ -25,11 +28,11 @@ now: the moment's work (NOW_WEIGHTS)
               for their region AND the room idle while people wait
 
 fatigue = accumulated * (FATIGUE_FLOOR + (1 - FATIGUE_FLOOR) * sleepiness)
-    accumulated  the on-call UPU work since the duty began (the senior's and
-                 the junior's: it stands for the senior's ward, CT and other
-                 duties too), an integral that only the senior's real rest
-                 (an idle gap of REST_MIN or more in their own exams) lets
-                 decay, with a half-life of ACCUM_HALF_LIFE_H; read on a
+    accumulated  the on-call team's work since the duty began, in every
+                 modality (UPU ultrasound exams and every report the team
+                 validates: X-ray, CT, RF, MRI, ward ultrasound), an integral
+                 that only the senior's real rest (an idle gap of REST_MIN
+                 or more in their own exams and reports) lets decay, with a half-life of ACCUM_HALF_LIFE_H; read on a
                  saturating scale, 1 - 2 ** -(hours / ACCUM_HALF_FULL_H)
     sleepiness   an assumed circadian curve and the hours on duty
 
@@ -48,6 +51,9 @@ LOAD_FLOOR = 0.30                 # utilisation that counts as no load
 QUEUE_REF = 3.0                   # people waiting = full pressure (a floor: queuestats
 WAIT_REF_MIN = 45.0               # mean wait, minutes      raises both to the span's p90)
 OLDEST_FACTOR = 2.0               # the longest wait is full at twice the wait reference
+READ_QUEUE_REF = 5.0              # studies waiting to be read = full pressure (floors too:
+READ_OLDEST_REF = 60.0            # their usual longest wait, minutes: raised to the span's p90);
+                                  # the oldest one is full at OLDEST_FACTOR times it
 SHORT_REF = 0.5                   # exams 50 % shorter than their region's median = 1
 SHORT_MIN_SAMPLES = 3             # exams needed in the hour to judge
 IDLE_REF = 0.25                   # a quarter of the hour idle while people wait = 1
@@ -60,9 +66,11 @@ CAPACITY_DEFAULT_H = 4.0                # exams per hour when no capacity is kno
 
 # --- fatigue --------------------------------------------------------------
 FATIGUE_FLOOR = 0.5               # the share of the accumulated work counted fully rested
-ACCUM_HALF_FULL_H = 2.5           # busy hours that make it half full (about 17 exams of 9 min);
-                                  # 5 h = 75 %, 7.5 h = 88 %: it nears 1, never clips. Real exams
-                                  # last 7-9 min (2026-11-12): the owner's 40-50 exams ~ 80 %
+ACCUM_HALF_FULL_H = 3.25          # busy hours that make it half full; 6.5 h = 75 %, 9.75 h = 88 %:
+                                  # it nears 1, never clips. Set on real nights (6-12 Nov 2026): with
+                                  # X-ray and CT reads counted, a heavy night is 9-10 busy hours
+                                  # (80+ ultrasounds of 7-9 min, 50-60 X-rays, a few CTs) and reads
+                                  # as it did at 2.5 h with ultrasound alone
 ACCUM_HALF_LIFE_H = 8.0           # during rest, the accumulated work halves in 8 h
 REST_MIN = timedelta(minutes=30)  # a shorter idle gap is not rest (owner, 2026-11-12)
 DUTY_START_HOUR = 8
@@ -85,14 +93,18 @@ class Moment:
     relative: List[float] = field(default_factory=list)   # the hour's exam lengths / their region's median
     arrivals: List[datetime] = field(default_factory=list)  # request times (sorted), the last BURST_FADE at least
     capacity: Optional[float] = None     # exams the room does per hour (1 / mean exam length)
-    busy: List[Interval] = field(default_factory=list)    # the on-call UPU work, senior and junior (accumulated)
-    own: Optional[List[Interval]] = None                 # the senior's own exams: their gaps are the rest
+    busy: List[Interval] = field(default_factory=list)    # the on-call team's work, every modality (accumulated)
+    own: Optional[List[Interval]] = None                 # the senior's own exams and reads: their gaps are the rest
+    read_queue: float = 0.0              # studies done and not yet reported: mean number over the hour
+    read_oldest: Optional[float] = None  # minutes the oldest of them has waited at t
 
 
 @dataclass
 class Refs:
     queue: float = QUEUE_REF
     wait: float = WAIT_REF_MIN
+    read_queue: float = READ_QUEUE_REF
+    read_oldest: float = READ_OLDEST_REF
 
 
 def clamp(v: float) -> float:
@@ -206,7 +218,9 @@ def score(m: Moment, refs: Optional[Refs] = None) -> dict:
     c: Dict[str, float] = {
         'load': clamp(((m.rho or 0.0) - LOAD_FLOOR) / (1.0 - LOAD_FLOOR)),
         'pressure': max(clamp((m.queue or 0.0) / refs.queue), clamp((m.wait or 0.0) / refs.wait),
-                        clamp((m.oldest or 0.0) / oldest_ref)),
+                        clamp((m.oldest or 0.0) / oldest_ref),
+                        clamp((m.read_queue or 0.0) / refs.read_queue),
+                        clamp((m.read_oldest or 0.0) / (OLDEST_FACTOR * refs.read_oldest))),
         'burst': burst(m.arrivals, m.t, m.capacity),
         'rushing': shorter(m.relative) * clamp((m.idle_waiting or 0.0) / IDLE_REF),
     }
