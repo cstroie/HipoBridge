@@ -13,3 +13,4 @@ log/
 UNINSTALL.md
 docs/vendor/*.pdf
 backfill_search.state
+/snippets/

@@ -27,7 +27,7 @@ from tests.extractors import test_extract_text_after_label_basic, test_extract_t
 from tests.hipo_data import TestHippoData
 from tests.llm_client import TestProviderSelection, TestPromptRegistry
 from tests.regions import TestLoadRegionRules
-from tests.snippets import TestLoadSnippets
+from tests.snippets import TestLoadSnippets, TestUserSnippets
 from tests.config import TestHippobridgeLoadConfig, TestInitLlm, TestGitignoreOnlyTracksExamples
 from tests.hippoclient_parsing import (TestParseBuletinHeader, TestIsMeaningfulText,
                                        TestSolicitareEmptyForm, TestCerereRecentStrip,
@@ -90,7 +90,7 @@ TEST_GROUPS = {
         TestProviderSelection,
         TestPromptRegistry,
         TestLoadRegionRules,
-        TestLoadSnippets,
+        TestLoadSnippets, TestUserSnippets,
         TestHippobridgeLoadConfig,
         TestInitLlm,
         TestGitignoreOnlyTracksExamples,
@@ -155,7 +155,7 @@ TEST_GROUPS = {
         TestPromptRegistry,
     ],
     "regions": [TestLoadRegionRules],
-    "snippets": [TestLoadSnippets],
+    "snippets": [TestLoadSnippets, TestUserSnippets],
     "config": [TestHippobridgeLoadConfig, TestInitLlm, TestGitignoreOnlyTracksExamples],
     "hippoclient_parsing": [TestParseBuletinHeader, TestIsMeaningfulText,
                             TestSolicitareEmptyForm, TestCerereRecentStrip,

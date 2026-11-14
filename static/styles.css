@@ -3788,6 +3788,84 @@ dialog.modal article > footer {
     flex-shrink: 0;
 }
 .editor-snippets-panel[hidden] { display: none; }
+.editor-snippets-bar { display: flex; gap: var(--space-8); align-items: center; }
+.editor-snippets-bar .editor-snippets-filter { flex: 1; min-width: 0; }
+.editor-snippets-manage { flex-shrink: 0; }
+
+/* Snippets manager: a tab per modality, a two-column table (name, text) with
+   Edit/Delete on each row and an empty row below to add one. */
+dialog.snippets-modal { width: min(860px, 96vw); }
+.snippets-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4, 4px);
+    padding: var(--space-8) var(--space-24) 0;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+.snippets-tab {
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: none;
+    padding: var(--space-8) var(--space-8);
+    font: inherit;
+    font-size: var(--font-size-sm);
+    color: var(--muted);
+    cursor: pointer;
+}
+.snippets-tab:hover { color: var(--text); }
+.snippets-tab[aria-selected="true"] { color: var(--primary); border-bottom-color: var(--primary); font-weight: var(--font-weight-semibold); }
+.snippets-table-wrap { overflow-y: auto; padding: 0 var(--space-24) var(--space-16); min-height: 180px; }
+.snippets-table { width: 100%; border-collapse: collapse; font-size: var(--font-size-sm); table-layout: fixed; }
+.snippets-table th {
+    position: sticky;
+    top: 0;
+    background: var(--card-bg);
+    text-align: left;
+    font-weight: var(--font-weight-semibold);
+    color: var(--muted);
+    padding: var(--space-8);
+    border-bottom: 1px solid var(--border);
+    z-index: 1;
+}
+.snippets-table th:first-child { width: 11.5em; }
+.snippets-table th:last-child { width: 6.5em; }
+.snippets-table td { padding: var(--space-8); border-bottom: 1px solid var(--border); vertical-align: top; }
+.snippet-row-name { display: block; font-weight: var(--font-weight-semibold); color: var(--primary); overflow-wrap: anywhere; }
+.snippet-row-tag { display: block; font-size: var(--font-size-xs, 0.75rem); color: var(--muted); }
+.snippet-row-tag-mine { color: var(--st-completed, var(--primary)); }
+.snippet-row-text {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    max-height: 4.8em;
+    overflow: hidden;
+    line-height: 1.6;
+    color: var(--text);
+}
+.snippet-row:hover .snippet-row-text { max-height: 16em; overflow-y: auto; }
+.snippet-cell-actions { white-space: nowrap; text-align: right; }
+.snippet-cell-actions button { padding: var(--space-8); min-width: 0; }
+.snippet-cell-actions button + button { margin-left: var(--space-4, 4px); }
+.snippet-cell-actions button:disabled { opacity: 0.4; cursor: not-allowed; }
+.snippet-input-name,
+.snippet-input-text {
+    width: 100%;
+    box-sizing: border-box;
+    font: inherit;
+    font-size: var(--font-size-sm);
+    padding: var(--space-8);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm, 6px);
+    background: var(--card-bg);
+    color: var(--text);
+}
+.snippet-input-text { resize: vertical; line-height: 1.6; }
+.snippet-input-name:focus,
+.snippet-input-text:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent); }
+.snippet-row-new td { border-bottom: 0; background: color-mix(in srgb, var(--primary) 4%, transparent); }
+dialog.snippets-modal article > footer { align-items: center; }
+.snippets-hint { margin: 0 auto 0 0; font-size: var(--font-size-xs, 0.75rem); color: var(--muted); }
+.snippets-hint kbd { font-family: inherit; font-weight: var(--font-weight-semibold); color: var(--text); }
 .editor-snippets-filter {
     width: 100%;
     box-sizing: border-box;

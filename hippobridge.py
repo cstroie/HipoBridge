@@ -991,11 +991,68 @@ async def get_observation(request):
     )
     return web_json_response(parsed)
 
+async def _snippets_user(request):
+    """(username, None) when the caller's credentials are valid, else (None,
+    the 401 response). The snippet routes never reach Hipocrate, and a user's
+    own snippets hang on the username alone, so it is checked for real."""
+    denied = await _text_search_denied(request)
+    if denied is not None:
+        return None, denied
+    return request['auth_credentials'][0], None
+
 @require_auth
 async def get_snippets(request):
-    """Report-editor snippets from snippets.cfg for ?modality=<slug>: [common]
-    overlaid by that modality's section, as {name: text} (empty when none)."""
-    return web.json_response(snippets.get_snippets(request.query.get('modality', '')))
+    """Report-editor snippets for ?modality=<slug>: snippets.cfg's [common]
+    overlaid by that modality's section, then by the caller's own snippets
+    (snippets.py), as {name: text} (empty when none)."""
+    user, denied = await _snippets_user(request)
+    if denied is not None:
+        return denied
+    return web.json_response(snippets.get_snippets(request.query.get('modality', ''), user=user))
+
+@require_auth
+async def get_snippets_all(request):
+    """Every section's snippets for the manager: the shared ones and the
+    caller's own ({sections: [{id, label, snippets: [{name, text, mine, shared}]}]})."""
+    user, denied = await _snippets_user(request)
+    if denied is not None:
+        return denied
+    return web.json_response(snippets.list_all(user))
+
+@require_auth
+async def put_snippet(request):
+    """Store one of the caller's own snippets: body {text[, name][, rename_from]}.
+    `name` in the body renames the one in the URL (rename_from defaults to it)."""
+    user, denied = await _snippets_user(request)
+    if denied is not None:
+        return denied
+    try:
+        body = await request.json()
+    except ValueError:
+        body = None
+    if not isinstance(body, dict):
+        return web_error_response("A JSON object is expected")
+    url_name = request.match_info['name']
+    new_name = body.get('name') or url_name
+    rename_from = body.get('rename_from') or (url_name if new_name != url_name else '')
+    try:
+        name = await asyncio.to_thread(snippets.set_snippet, user, request.match_info['section'], new_name,
+                                       body.get('text'), rename_from)
+    except snippets.SnippetError as e:
+        return web_error_response(str(e))
+    return web.json_response({'status': 'success', 'name': name})
+
+@require_auth
+async def delete_snippet(request):
+    """Remove one of the caller's own snippets (a shared one of that name shows again)."""
+    user, denied = await _snippets_user(request)
+    if denied is not None:
+        return denied
+    found = await asyncio.to_thread(snippets.delete_snippet, user, request.match_info['section'],
+                                    request.match_info['name'])
+    if not found:
+        return web_error_response("Not one of your snippets", 404)
+    return web.json_response({'status': 'success'})
 
 @require_auth
 async def get_whoami(request):
@@ -2132,6 +2189,9 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     app.router.add_get('/fhir/Schedule', get_fhir_schedule)
     app.router.add_get('/api/whoami', get_whoami)
     app.router.add_get('/api/snippets', get_snippets)
+    app.router.add_get('/api/snippets/all', get_snippets_all)
+    app.router.add_put('/api/snippets/{section}/{name}', put_snippet)
+    app.router.add_delete('/api/snippets/{section}/{name}', delete_snippet)
     app.router.add_post('/api/logout', post_logout)
     app.router.add_get('/api/cache/stats', get_cache_stats)
     app.router.add_post('/api/cache/cleanup', post_cache_cleanup)

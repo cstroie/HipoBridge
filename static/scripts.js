@@ -1677,6 +1677,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         modal.addEventListener('cancel', () => modal.remove());
 
+        modal.querySelector('.btn-user-snippets').addEventListener('click', () => openSnippetsManager());
         modal.querySelector('.btn-user-logout').addEventListener('click', async () => {
             try {
                 const resp = await apiFetch('/api/logout', { method: 'POST' });
@@ -5791,6 +5792,157 @@ document.addEventListener('DOMContentLoaded', function() {
         return true;
     }
 
+    // Snippets manager: the shared snippets (snippets.cfg, read-only here)
+    // and the user's own (GET /api/snippets/all, PUT/DELETE
+    // /api/snippets/{section}/{name}). One tab per modality plus Common; a
+    // two-column table with Edit and Delete on each row and an empty row
+    // below to add one. Editing a shared snippet saves the user's own copy;
+    // deleting an own one brings the shared one of that name back.
+    const SNIPPET_SECTION_OF = { radio: 'radiography', eco: 'ultrasound', ct: 'ct', irm: 'mri', rads: 'fluoroscopy', fluoro: 'fluoroscopy' };
+    const SNIPPET_NAME = /^[\p{L}\d][\p{L}\d_-]*$/u;
+    function openSnippetsManager({ modality = '', onChange } = {}) {
+        const tmpl = document.getElementById('snippets-modal-template');
+        const rowTmpl = document.getElementById('snippet-row-template');
+        const editTmpl = document.getElementById('snippet-edit-row-template');
+        if (!tmpl || !rowTmpl || !editTmpl) { showToast('Error: snippets template missing', 'error'); return; }
+        const modal = tmpl.content.cloneNode(true).querySelector('dialog');
+        const tabs = modal.querySelector('.snippets-tabs');
+        const tbody = modal.querySelector('.snippets-table tbody');
+        let sections = [];
+        let active = SNIPPET_SECTION_OF[modality] || localStorage.getItem('snippetsSection') || 'common';
+        let editing = null;   // the name of the row being edited, in the active section
+
+        const closeModal = () => { modal.close(); modal.remove(); };
+        modal.querySelectorAll('[data-close-modal], .close').forEach(b => b.addEventListener('click', closeModal));
+        modal.addEventListener('cancel', () => modal.remove());
+
+        const fail = async (resp, what) => {
+            let msg = `HTTP ${resp.status}`;
+            try { msg = (await resp.json()).message || msg; } catch (_) { /* not JSON */ }
+            showToast(`${what}: ${msg}`, 'error', 5000);
+        };
+        const load = async () => {
+            const resp = await apiFetch('/api/snippets/all');
+            if (!resp.ok) { await fail(resp, 'Snippets not loaded'); return; }
+            sections = (await resp.json()).sections || [];
+            if (!sections.some(s => s.id === active)) active = sections[0]?.id || 'common';
+            render();
+        };
+        const changed = async () => { editing = null; await load(); if (onChange) onChange(); };
+
+        // Name and text inputs of an edit row -> saved through PUT; `orig` is
+        // the user's own snippet being edited (renamed when the name changes).
+        const save = async (row, orig) => {
+            const nameEl = row.querySelector('.snippet-input-name');
+            const textEl = row.querySelector('.snippet-input-text');
+            const name = nameEl.value.trim().replace(/^;/, '').toLowerCase();
+            if (!SNIPPET_NAME.test(name)) { showToast('A name is letters and digits, then also _ or -', 'error', 5000); nameEl.focus(); return; }
+            if (!textEl.value.trim()) { showToast('The text is empty', 'error'); textEl.focus(); return; }
+            const sec = sections.find(s => s.id === active);
+            const taken = sec?.snippets.find(s => s.name === name && s.mine);
+            if (taken && name !== orig && !confirm(`You already have ;${name} here. Replace it?`)) return;
+            const body = { text: textEl.value, name };
+            if (orig && orig !== name && !taken) body.rename_from = orig;
+            row.querySelectorAll('button').forEach(b => { b.disabled = true; });
+            try {
+                const resp = await apiFetch(`/api/snippets/${encodeURIComponent(active)}/${encodeURIComponent(name)}`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                if (!resp.ok) { await fail(resp, 'Not saved'); return; }
+                // renamed onto another own snippet (confirmed above): the old name goes
+                if (orig && orig !== name && taken) {
+                    await apiFetch(`/api/snippets/${encodeURIComponent(active)}/${encodeURIComponent(orig)}`, { method: 'DELETE' });
+                }
+                await changed();
+            } catch (err) {
+                showToast(`Not saved: ${err.message}`, 'error');
+            } finally {
+                row.querySelectorAll('button').forEach(b => { b.disabled = false; });
+            }
+        };
+        const remove = async (snip) => {
+            const back = snip.shared != null ? ' The shared one of that name will show again.' : '';
+            if (!confirm(`Delete ;${snip.name}?${back}`)) return;
+            try {
+                const resp = await apiFetch(`/api/snippets/${encodeURIComponent(active)}/${encodeURIComponent(snip.name)}`, { method: 'DELETE' });
+                if (!resp.ok) { await fail(resp, 'Not deleted'); return; }
+                await changed();
+            } catch (err) {
+                showToast(`Not deleted: ${err.message}`, 'error');
+            }
+        };
+
+        const editRow = (snip) => {
+            const row = editTmpl.content.cloneNode(true).querySelector('tr');
+            const nameEl = row.querySelector('.snippet-input-name');
+            const textEl = row.querySelector('.snippet-input-text');
+            const saveBtn = row.querySelector('.snippet-save');
+            const cancelBtn = row.querySelector('.snippet-cancel');
+            if (snip) {
+                nameEl.value = snip.name;
+                textEl.value = snip.text;
+                textEl.rows = Math.min(12, Math.max(3, snip.text.split('\n').length + 1));
+                cancelBtn.addEventListener('click', () => { editing = null; render(); });
+            } else {   // the empty row below the table: add a new one
+                row.classList.add('snippet-row-new');
+                nameEl.placeholder = 'new name';
+                saveBtn.title = 'Add';
+                saveBtn.querySelector('i').className = 'fas fa-plus';
+                saveBtn.querySelector('.sr-only').textContent = 'Add';
+                cancelBtn.remove();
+            }
+            const orig = snip && snip.mine ? snip.name : '';
+            saveBtn.addEventListener('click', () => save(row, orig));
+            row.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey || e.target === nameEl)) { e.preventDefault(); save(row, orig); }
+                if (e.key === 'Escape' && snip) { e.preventDefault(); e.stopPropagation(); editing = null; render(); }
+            });
+            return row;
+        };
+        const viewRow = (snip) => {
+            const row = rowTmpl.content.cloneNode(true).querySelector('tr');
+            row.querySelector('.snippet-row-name').textContent = ';' + snip.name;
+            const tag = row.querySelector('.snippet-row-tag');
+            tag.textContent = !snip.mine ? 'shared' : snip.shared != null ? 'yours, over a shared one' : 'yours';
+            tag.classList.toggle('snippet-row-tag-mine', snip.mine);
+            row.querySelector('.snippet-row-text').textContent = snip.text;
+            const editBtn = row.querySelector('.snippet-edit');
+            const delBtn = row.querySelector('.snippet-delete');
+            if (!snip.mine) {
+                editBtn.title = 'Edit: saves your own copy, the shared one stays';
+                delBtn.disabled = true;
+                delBtn.title = 'A shared snippet cannot be deleted here';
+            }
+            editBtn.addEventListener('click', () => { editing = snip.name; render(); });
+            delBtn.addEventListener('click', () => remove(snip));
+            return row;
+        };
+        function render() {
+            tabs.replaceChildren(...sections.map(sec => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'snippets-tab';
+                b.setAttribute('role', 'tab');
+                b.setAttribute('aria-selected', String(sec.id === active));
+                b.textContent = `${sec.label} (${sec.snippets.length})`;
+                b.addEventListener('click', () => {
+                    active = sec.id; editing = null;
+                    localStorage.setItem('snippetsSection', active);
+                    render();
+                });
+                return b;
+            }));
+            const sec = sections.find(s => s.id === active);
+            const rows = (sec ? sec.snippets : []).map(snip => snip.name === editing ? editRow(snip) : viewRow(snip));
+            rows.push(editRow(null));
+            tbody.replaceChildren(...rows);
+            if (editing) tbody.querySelector('.snippet-row-editing:not(.snippet-row-new) .snippet-input-text')?.focus();
+        }
+
+        document.body.appendChild(modal);
+        modal.showModal();
+        load().catch(err => showToast(`Snippets not loaded: ${err.message}`, 'error'));
+    }
+
     // Core textarea-editor + save logic, decoupled from any specific card's
     // DOM. Callers pass in the analyses to edit and an onSaved() callback
     // invoked after a successful save (instead of assuming a fixed refresh
@@ -5880,10 +6032,14 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!snipPanel.hidden) { renderSnippetList(); snipFilter.focus(); }
         });
         snipFilter.addEventListener('input', renderSnippetList);
-        apiFetch('/api/snippets?modality=' + encodeURIComponent(modality)).then(r => r.ok ? r.json() : {}).then(d => {
-            snippets = d || {};
-            snipBtn.hidden = !Object.keys(snippets).length;
-        }).catch(() => {});
+        const loadSnippets = () => apiFetch('/api/snippets?modality=' + encodeURIComponent(modality))
+            .then(r => r.ok ? r.json() : {}).then(d => {
+                snippets = d || {};
+                if (!snipPanel.hidden) renderSnippetList();
+            }).catch(() => {});
+        loadSnippets();
+        modal.querySelector('.editor-snippets-manage').addEventListener('click', () =>
+            openSnippetsManager({ modality, onChange: loadSnippets }));
         for (const { ta } of textareas) {
             ta.addEventListener('keydown', (e) => {
                 if (e.key !== 'Tab' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;

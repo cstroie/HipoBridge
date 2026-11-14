@@ -863,6 +863,52 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
             </dialog>
         </template>
 
+        <template id="snippets-modal-template">
+            <dialog class="modal snippets-modal" aria-modal="true" aria-label="Snippets">
+                <article>
+                    <header>
+                        <h2><i class="fas fa-bolt" aria-hidden="true"></i> <span class="modal-title">Snippets</span></h2>
+                        <button class="close" aria-label="Close modal" title="Close"><i class="fas fa-times"></i></button>
+                    </header>
+                    <nav class="snippets-tabs" role="tablist" aria-label="Modality"></nav>
+                    <div class="snippets-table-wrap">
+                        <table class="snippets-table">
+                            <thead>
+                                <tr><th scope="col">Name</th><th scope="col">Text</th><th scope="col"><span class="sr-only">Actions</span></th></tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <footer>
+                        <p class="snippets-hint">Type <kbd>;name</kbd> then <kbd>Tab</kbd> in a report. <kbd>$0</kbd> marks where the cursor lands. Yours are private; editing a shared one saves your own copy.</p>
+                        <button class="btn-secondary" data-close-modal title="Close"><i class="fas fa-times" aria-hidden="true"></i><span>Close</span></button>
+                    </footer>
+                </article>
+            </dialog>
+        </template>
+
+        <template id="snippet-row-template">
+            <tr class="snippet-row">
+                <td class="snippet-cell-name"><span class="snippet-row-name"></span><span class="snippet-row-tag"></span></td>
+                <td class="snippet-cell-text"><div class="snippet-row-text"></div></td>
+                <td class="snippet-cell-actions">
+                    <button type="button" class="btn-secondary snippet-edit" title="Edit"><i class="fas fa-pen" aria-hidden="true"></i><span class="sr-only">Edit</span></button>
+                    <button type="button" class="btn-secondary snippet-delete" title="Delete"><i class="fas fa-trash" aria-hidden="true"></i><span class="sr-only">Delete</span></button>
+                </td>
+            </tr>
+        </template>
+
+        <template id="snippet-edit-row-template">
+            <tr class="snippet-row snippet-row-editing">
+                <td class="snippet-cell-name"><input type="text" class="snippet-input-name" placeholder="name" aria-label="Snippet name" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="40"></td>
+                <td class="snippet-cell-text"><textarea class="snippet-input-text" rows="3" placeholder="Text…" aria-label="Snippet text"></textarea></td>
+                <td class="snippet-cell-actions">
+                    <button type="button" class="btn-primary snippet-save" title="Save"><i class="fas fa-check" aria-hidden="true"></i><span class="sr-only">Save</span></button>
+                    <button type="button" class="btn-secondary snippet-cancel" title="Cancel"><i class="fas fa-times" aria-hidden="true"></i><span class="sr-only">Cancel</span></button>
+                </td>
+            </tr>
+        </template>
+
         <template id="user-modal-template">
             <dialog class="modal user-modal" aria-modal="true" role="dialog" aria-labelledby="user-modal-title">
                 <article>
@@ -882,6 +928,9 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                         </dl>
                     </div>
                     <footer>
+                        <button class="btn-secondary btn-user-snippets" title="Your report-editor snippets (;name + Tab)">
+                            <i class="fas fa-bolt" aria-hidden="true"></i><span>Snippets</span>
+                        </button>
                         <button class="btn-secondary" data-close-modal aria-label="Close modal" title="Close">
                             <i class="fas fa-times"></i><span>Close</span>
                         </button>
@@ -1023,11 +1072,14 @@ M376.261,332.406c-24.422,0-44.29,19.869-44.29,44.29c0,24.421,19.869,44.29,44.29,
                     </header>
                     <section class="editor-analyses"></section>
                     <div class="editor-snippets-panel" hidden>
-                        <input type="search" class="editor-snippets-filter" placeholder="Filter snippets…" aria-label="Filter snippets" autocomplete="off">
+                        <div class="editor-snippets-bar">
+                            <input type="search" class="editor-snippets-filter" placeholder="Filter snippets…" aria-label="Filter snippets" autocomplete="off">
+                            <button type="button" class="btn-secondary editor-snippets-manage" title="Add, edit or delete your snippets"><i class="fas fa-pen" aria-hidden="true"></i><span>Edit</span></button>
+                        </div>
                         <ul class="editor-snippets-list"></ul>
                     </div>
                     <footer>
-                        <button class="btn-secondary editor-snippets-btn" title="List snippets (;name + Tab)" hidden><i class="fas fa-bolt" aria-hidden="true"></i><span>Snippets</span></button>
+                        <button class="btn-secondary editor-snippets-btn" title="List snippets (;name + Tab)"><i class="fas fa-bolt" aria-hidden="true"></i><span>Snippets</span></button>
                         <button class="btn-secondary" data-close-modal title="Discard changes"><i class="fas fa-times" aria-hidden="true"></i><span>Cancel</span></button>
                         <button class="btn-primary editor-save" title="Save report"><i class="fas fa-check" aria-hidden="true"></i><span>Save</span></button>
                     </footer>
