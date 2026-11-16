@@ -71,7 +71,8 @@ ACCUM_HALF_FULL_H = 3.25          # busy hours that make it half full; 6.5 h = 7
                                   # X-ray and CT reads counted, a heavy night is 9-10 busy hours
                                   # (80+ ultrasounds of 7-9 min, 50-60 X-rays, a few CTs) and reads
                                   # as it did at 2.5 h with ultrasound alone
-ACCUM_HALF_LIFE_H = 8.0           # during rest, the accumulated work halves in 8 h
+ACCUM_HALF_LIFE_H = 3.5           # during rest, the accumulated work halves in 3.5 h (was 8 h until
+                                  # 2026-11-16: a quiet 03:00-05:00 barely lowered the strain)
 REST_MIN = timedelta(minutes=30)  # a shorter idle gap is not rest (owner, 2026-11-12)
 DUTY_START_HOUR = 8
 DUTY_REF_H = 24.0

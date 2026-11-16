@@ -52,10 +52,10 @@ class TestAccumulated(unittest.TestCase):
         busy = [(dt(9), dt(11))]
         h = sx.ACCUM_HALF_LIFE_H
         self.assertAlmostEqual(sx.accumulated_hours(busy, dt(11, 30)), 2 * 2 ** (-0.5 / h), places=6)
-        self.assertAlmostEqual(sx.accumulated_hours(busy, dt(19)), 1.0, places=6)          # 8 h: half
+        self.assertAlmostEqual(sx.accumulated_hours(busy, dt(19)), 2 * 2 ** (-8 / h), places=6)
         # a rest between two blocks decays only what came before it
         two = [(dt(9), dt(10)), (dt(18), dt(19))]
-        self.assertAlmostEqual(sx.accumulated_hours(two, dt(19)), 1.5, places=6)
+        self.assertAlmostEqual(sx.accumulated_hours(two, dt(19)), 2 ** (-8 / h) + 1, places=6)
 
     def test_the_junior_s_work_adds_up_and_the_senior_s_gaps_are_rest(self):
         h = sx.ACCUM_HALF_LIFE_H

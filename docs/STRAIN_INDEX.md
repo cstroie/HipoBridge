@@ -84,7 +84,7 @@ In the response: `current.reading` (λ, X, L, W of the last hour, `now`, `oldest
 - **`accumulated`**: the work done on call, as an integral:
   - busy time adds up: **the on-call team's work in every modality**. The UPU ultrasound exams, senior's and junior's (PACS start → report; with no measured end, the median exam length cut at the next start; with no PACS start at all, the median length ending at the report, else at the performed time: `work_intervals()`), and **every other report a team member validates** (`read_work()`, below);
   - an idle gap **under 30 minutes is not rest**: it changes nothing;
-  - a gap of 30 minutes or more **in the senior's own exams and reports** is rest: for its whole length the accumulated work decays with a **half-life of 8 hours** (a 2.5-hour rest takes off about 20 %);
+  - a gap of 30 minutes or more **in the senior's own exams and reports** is rest: for its whole length the accumulated work decays with a **half-life of 3.5 hours** (a 2.5-hour rest takes off about 40 %; 8 h until 2026-11-16, when a quiet 03:00-05:00 barely lowered the strain);
   - read on a saturating scale, `1 − 2^(−hours / 3.25)`: 3.25 busy hours = 50 %, 6.5 h = 75 %, 9.75 h = 88 %. Real ultrasound exams last 7–9 minutes (call to written report); with the night's X-rays and CTs the owner's 40–50 ultrasounds are about 9 busy hours and read about 85 %, as they did on the 2.5 h scale before the reads were counted. It nears 1 and never clips, so a heavy night still differs from a very heavy one.
 
 #### How long a read takes (`read_work()`)
@@ -107,7 +107,7 @@ Most on-call blocks have a **senior and a junior** radiologist; some have one (o
 - **The team** of a duty block (`on_call_team()`): whoever validated `TEAM_MIN_REPORTS` (5) reports or more, of any modality and section, in its on-call hours (weekdays from 14:00, weekends from 08:00, to 08:00). Until someone has that many, whoever validated one later than `TEAM_GRACE` (30 min) after the handover, which leaves out the day staff's last reports.
 - **The senior** (`on_call_radiologist()`): the team member who validated most reports, of any modality, between 20:00 and 02:00. Before 20:00, the one with most in the on-call hours so far. Alone on call, that is the one radiologist.
 - **What accumulates**: the team's work from the handover: every UPU ultrasound exam since then and every other report a team member validated. The day staff's work before 14:00 on weekdays is left out, as is a ward study the team did not report.
-- **What is rest**: an idle gap of 30 minutes or more in **the senior's own** exams and reports, between two of them or since their last one; the junior may be working meanwhile. Reading X-rays or a CT is no longer mistaken for rest. During rest the accumulated work decays (half-life 8 h); the junior's work in it still adds up.
+- **What is rest**: an idle gap of 30 minutes or more in **the senior's own** exams and reports, between two of them or since their last one; the junior may be working meanwhile. Reading X-rays or a CT is no longer mistaken for rest. During rest the accumulated work decays (half-life 3.5 h); the junior's work in it still adds up.
 - Before anyone has validated a report on call (a weekday morning seen live), the team's own gaps are the rest, and the point says so (`on_call_known: false`, in the tooltip).
 - **Names never leave** `queuestats.compute()`: not returned, logged or stored. The response has only counts.
 - `burst` and `rushing` stay the ultrasound queue's, whoever serves it.
@@ -222,7 +222,7 @@ All tunables are constants at the top of `strain.py`:
 | `CAPACITY_DEFAULT_H` | 4 | exams per hour when the mean length is unknown |
 | `IDLE_REF`, `CALL_ALLOWANCE` | 0.25, 5 min | a quarter of the hour idle while people wait = 1; calling is not idle |
 | `REST_MIN` | 30 min | a shorter idle gap is not rest |
-| `ACCUM_HALF_LIFE_H` | 8 h | decay of the accumulated work during rest |
+| `ACCUM_HALF_LIFE_H` | 3.5 h | decay of the accumulated work during rest |
 | `ACCUM_HALF_FULL_H` | 3.25 h | busy hours that make `accumulated` half full |
 | `FATIGUE_FLOOR` | 0.5 | share of the accumulated work counted fully rested |
 | `DUTY_START_HOUR`, `DUTY_REF_H` | 08:00, 24 h | the duty block |
