@@ -8252,7 +8252,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // The strain index's parts (strain.py), for the tile and the readout tooltips
     const strainTitle = c => 'Relative strain index 0–100 of the on-call shift\'s working conditions (not a probability, not calibrated): ' +
         `now ${c.now} (load ${c.load}, waiting patients or unread studies ${c.pressure}, burst ${c.burst}, rushing ${c.rushing}) · ` +
-        `fatigue ${c.fatigue} (the on-call team's work in every modality, less the senior's rest, ${c.accumulated} × sleepiness ${c.sleepiness}), each 0–100`;
+        `fatigue ${c.fatigue} (the on-call team's work in every modality, less the senior's rest, ${c.accumulated} × sleepiness ${c.sleepiness} near work ${c.engaged ?? 100}), each 0–100`;
     // One on-call shift in words: its reports by modality, the team's size and
     // the strain's peak, mean and hours at 65 or more (queuestats.shift_summary)
     function shiftText(sh, asOf) {

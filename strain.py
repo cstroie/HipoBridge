@@ -71,6 +71,9 @@ ACCUM_HALF_FULL_H = 3.25          # busy hours that make it half full; 6.5 h = 7
                                   # X-ray and CT reads counted, a heavy night is 9-10 busy hours
                                   # (80+ ultrasounds of 7-9 min, 50-60 X-rays, a few CTs) and reads
                                   # as it did at 2.5 h with ultrasound alone
+ENGAGED_HOLD = timedelta(minutes=60)   # sleepiness weighs fully this long after the team's last work,
+ENGAGED_FADE = timedelta(minutes=120)   # then fades to nothing at this gap (owner, 2026-11-16: a quiet
+                                       # 04:00 is not strain, a short break after heavy work still is)
 ACCUM_HALF_LIFE_H = 3.5           # during rest, the accumulated work halves in 3.5 h (was 8 h until
                                   # 2026-11-16: a quiet 03:00-05:00 barely lowered the strain)
 REST_MIN = timedelta(minutes=30)  # a shorter idle gap is not rest (owner, 2026-11-12)
@@ -212,6 +215,18 @@ def burst(arrivals: List[datetime], t: datetime, capacity: Optional[float]) -> f
     return worst
 
 
+def engaged(busy: List[Interval], t: datetime) -> float:
+    """1 while working or within ENGAGED_HOLD of the last work, fading linearly
+    to 0 at ENGAGED_FADE; 0 with no work yet."""
+    ends = [min(e, t) for s, e in (busy or []) if s <= t]
+    if not ends:
+        return 0.0
+    gap = t - max(ends)
+    if gap <= ENGAGED_HOLD:
+        return 1.0
+    return clamp((ENGAGED_FADE - gap) / (ENGAGED_FADE - ENGAGED_HOLD))
+
+
 def score(m: Moment, refs: Optional[Refs] = None) -> dict:
     """{'index': 0-100, 'c': {part: 0-100}} at m.t."""
     refs = refs or Refs()
@@ -228,7 +243,8 @@ def score(m: Moment, refs: Optional[Refs] = None) -> dict:
     now = sum(NOW_WEIGHTS[k] * c[k] for k in NOW_WEIGHTS)
     c['accumulated'] = 1.0 - 2 ** (-accumulated_hours(m.busy, m.t, own=m.own) / ACCUM_HALF_FULL_H)
     c['sleepiness'] = sleepiness(m.t)
-    fatigue = c['accumulated'] * (FATIGUE_FLOOR + (1.0 - FATIGUE_FLOOR) * c['sleepiness'])
+    c['engaged'] = engaged(m.busy, m.t)
+    fatigue = c['accumulated'] * (FATIGUE_FLOOR + (1.0 - FATIGUE_FLOOR) * c['sleepiness'] * c['engaged'])
     c['now'], c['fatigue'] = now, fatigue
     index = 100.0 * (1.0 - (1.0 - now) * (1.0 - fatigue))
     return {'index': int(round(index)), 'c': {k: int(round(100 * v)) for k, v in c.items()}}

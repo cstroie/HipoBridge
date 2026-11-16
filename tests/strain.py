@@ -131,7 +131,7 @@ class TestBurst(unittest.TestCase):
 class TestIndex(unittest.TestCase):
     def test_parts_and_weights(self):
         r = sx.score(Moment(dt(10)))
-        self.assertEqual(set(r['c']), set(sx.NOW_WEIGHTS) | {'accumulated', 'sleepiness', 'now', 'fatigue'})
+        self.assertEqual(set(r['c']), set(sx.NOW_WEIGHTS) | {'accumulated', 'sleepiness', 'engaged', 'now', 'fatigue'})
         self.assertAlmostEqual(sum(sx.NOW_WEIGHTS.values()), 1.0)
 
     def test_nothing_done_nobody_waiting_is_zero_at_any_hour(self):
@@ -158,6 +158,14 @@ class TestIndex(unittest.TestCase):
     def test_a_break_does_not_reset_the_strain(self):
         work = spread(45, ON, dt(3, 15))
         self.assertGreaterEqual(sx.score(Moment(dt(4), busy=work))['index'], 65)
+
+    def test_sleepiness_weighs_only_near_work(self):
+        work = spread(45, ON, dt(2, 30)) + [(dt(2, 20), dt(2, 30))]   # last work ends 02:30
+        self.assertEqual(sx.score(Moment(dt(3, 30), busy=work))['c']['engaged'], 100)
+        self.assertEqual(sx.score(Moment(dt(4), busy=work))['c']['engaged'], 50)
+        quiet = sx.score(Moment(dt(4, 30), busy=work))
+        self.assertEqual(quiet['c']['engaged'], 0)
+        self.assertAlmostEqual(quiet['c']['fatigue'], sx.FATIGUE_FLOOR * quiet['c']['accumulated'], delta=1)
 
     def test_accumulated_saturates_softly(self):
         h = timedelta(hours=sx.ACCUM_HALF_FULL_H)

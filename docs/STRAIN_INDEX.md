@@ -48,7 +48,7 @@ Two parts, each 0..1:
 ```
 index   = 100 · (1 − (1 − now) · (1 − fatigue))
 now     = 0.35 · load + 0.25 · pressure + 0.20 · burst + 0.20 · rushing
-fatigue = accumulated · (0.5 + 0.5 · sleepiness)
+fatigue = accumulated · (0.5 + 0.5 · sleepiness · engaged)
 ```
 
 Either part alone raises the index; both together raise it more. With nothing done since 08:00 and nobody waiting it reads 0 at any hour. It stays high while the room is idle late in a long block: it describes the conditions the next patient meets, not the work of that minute.
@@ -98,6 +98,7 @@ and never lasts under `READ_MIN` (1 minute: several reports validated the same m
 - **`sleepiness`** = `0.6 · circadian(t) + 0.4 · clamp(hours since 08:00 / 24)`:
   - **circadian(t)**: an *assumed* curve inspired by the two-process model's process C, linear between `0:00 .65 · 2:00 .85 · 4:00 1.0 · 6:00 .85 · 8:00 .40 · 10:00 .15 · 12:00 .20 · 14:00 .40 · 15:00 .40 · 16:00 .25 · 18:00 .10 · 20:00 .20 · 22:00 .45 · 24:00 .65`. Deepest 02:00–06:00, a smaller dip after lunch;
   - **hours on duty**: since 08:00 (before 08:00, since the day before's). Holidays are not known.
+- **`engaged`** (2026-11-16, owner: a quiet 03:00-05:00 is not strain): sleepiness weighs only near work. 1 while the team works and for `ENGAGED_HOLD` (60 min) after their last exam or report, fading linearly to 0 at `ENGAGED_FADE` (120 min); 0 before any work. A long quiet stretch leaves only the accumulated work at the fatigue floor; a short break after heavy work keeps the night's sleepiness.
 - The `0.5 +` floor: fully rested, the accumulated work counts half; at the deepest of the night after a long block, fully.
 
 ### Whose work, whose rest: the on-call team and the senior
@@ -224,6 +225,7 @@ All tunables are constants at the top of `strain.py`:
 | `REST_MIN` | 30 min | a shorter idle gap is not rest |
 | `ACCUM_HALF_LIFE_H` | 3.5 h | decay of the accumulated work during rest |
 | `ACCUM_HALF_FULL_H` | 3.25 h | busy hours that make `accumulated` half full |
+| `ENGAGED_HOLD`, `ENGAGED_FADE` | 60, 120 min | sleepiness weighs fully this long after the last work, gone at the second |
 | `FATIGUE_FLOOR` | 0.5 | share of the accumulated work counted fully rested |
 | `DUTY_START_HOUR`, `DUTY_REF_H` | 08:00, 24 h | the duty block |
 | `CIRCADIAN` | see above | the assumed curve |
