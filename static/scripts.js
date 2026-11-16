@@ -405,9 +405,6 @@ document.addEventListener('DOMContentLoaded', function() {
     let routeWriteLocked = false;
     let suppressRecent = false;
 
-    // Initialize application
-    initApp();
-    
     function initApp() {
         // Initialize theme
         initTheme();
@@ -8670,4 +8667,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     setupQrCarousel();
 
+    // Initialize application last: every top-level let/const above must be
+    // initialized first, or a route restored at startup (restoreFromUrl ->
+    // clearResults) hits them in their temporal dead zone.
+    initApp();
 });
