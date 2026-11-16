@@ -44,6 +44,8 @@ document.addEventListener('DOMContentLoaded', function() {
         patientDiagnosis: document.getElementById('patientDiagnosis'),
         refreshPatientBtn: document.getElementById('refreshPatientBtn'),
         patientBirthDate: document.getElementById('patientBirthDate'),
+        patientWeight: document.getElementById('patientWeight'),
+        patientHeight: document.getElementById('patientHeight'),
         patientPhone: document.getElementById('patientPhone'),
         patientEmail: document.getElementById('patientEmail'),
         patientAddress: document.getElementById('patientAddress'),
@@ -1511,6 +1513,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.patientGender) elements.patientGender.innerHTML = '';
         if (elements.patientDiagnosis) { elements.patientDiagnosis.textContent = ''; elements.patientDiagnosis.hidden = true; }
         if (elements.patientBirthDate) elements.patientBirthDate.textContent = '';
+        if (elements.patientWeight) elements.patientWeight.textContent = '';
+        if (elements.patientHeight) elements.patientHeight.textContent = '';
         if (elements.patientPhone) elements.patientPhone.textContent = '';
         if (elements.patientEmail) elements.patientEmail.textContent = '';
         if (elements.patientAddress) elements.patientAddress.textContent = '';
@@ -3475,6 +3479,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Report tab's Copy markdown ('' when none is documented).
     function patientRecordMarkdown(patientData) {
         const lines = [
+            ['Weight', patientData.weight && `${patientData.weight} kg`],
+            ['Height', patientData.height && `${patientData.height} cm`],
             ['Blood group', patientData.blood_group],
             ['Allergies', patientData.allergies],
             ['Warnings', patientData.attention],
@@ -4114,6 +4120,8 @@ document.addEventListener('DOMContentLoaded', function() {
             elements.patientCnp.title = (cnp && !cnpValid) ? 'This CNP failed validation (checksum/date/county code) — verify with the patient record' : '';
         }
         if (elements.patientBirthDate) elements.patientBirthDate.textContent = formatBirthDate(patientData.birth_date) || '—';
+        if (elements.patientWeight) elements.patientWeight.textContent = patientData.weight ? `${patientData.weight} kg` : '—';
+        if (elements.patientHeight) elements.patientHeight.textContent = patientData.height ? `${patientData.height} cm` : '—';
 
         const contactInfo = { phone: formatPhoneNumber(patientData.phone), email: patientData.email || null };
         if (elements.patientPhone) elements.patientPhone.textContent = contactInfo.phone || '—';
