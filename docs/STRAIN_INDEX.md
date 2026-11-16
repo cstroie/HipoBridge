@@ -18,7 +18,7 @@ Read it as "conditions known to raise the risk of errors, hurried reads and shor
 - One ultrasound runs from calling the patient (1–2 min), preparation, the scan, talking to the patient and discharge to the **written report**. Nothing else starts before the report (rare exceptions). So an exam's busy time is *PACS study start → report validation*.
 - The **exam queue** (patients waiting for the radiologist) is the UPU ultrasounds only, not the wards' (14 radiologists share those in the day).
 - On call there is usually a **senior and a junior**; the senior takes 20:00–02:00. A gap of 30 minutes or more in the senior's own UPU work, while the junior works, is rest (a 15–20 minute nap is possible). The junior's UPU work still counts toward the accumulated work: it stands for the senior's ward ultrasounds, CT and other duties, and for the nights they are alone.
-- The on-call radiologist **also works the morning**: the duty block is 08:00 → 08:00.
+- The on-call radiologist **also works the morning**: the duty block runs from one day's start to the next, 08:00 Monday-Friday and 09:00 Saturday and Sunday (owner, 2026-11-16). On call is weekdays from 14:00, weekends the whole block: Mon-Thu 18 h, Fri 19 h (to Saturday 09:00), Sat 24 h, Sun 23 h (to Monday 08:00).
 - The strain at 03:00–05:00 after 40–50 ultrasounds is **very high even with a short queue**: it builds up over the duty, and an idle gap of 10 minutes is not rest.
 - "Short exams with long spaces between them while a queue waits" is a sign of fatigue: getting rid of the patients fast.
 - ~~X-rays and CT are not counted.~~ Since 2026-11-14 (owner) **every report the on-call team validates counts**: X-ray, CT, RF, MRI, from UPU or a ward. What is on-call work is told by **who validated it and when**, not by the requesting section.
@@ -95,9 +95,9 @@ Per radiologist, in the order of their reports (their ultrasound exams included)
 - the moment the images existed (`performed_at`);
 
 and never lasts under `READ_MIN` (1 minute: several reports validated the same minute). A limit: one radiologist's work cannot exceed the clock, so the same reports done by one person squeezed between ultrasounds count fewer minutes than done by two in parallel.
-- **`sleepiness`** = `0.6 · circadian(t) + 0.4 · clamp(hours since 08:00 / 24)`:
+- **`sleepiness`** = `0.6 · circadian(t) + 0.4 · clamp(hours since the block's start / 24)`:
   - **circadian(t)**: an *assumed* curve inspired by the two-process model's process C, linear between `0:00 .65 · 2:00 .85 · 4:00 1.0 · 6:00 .85 · 8:00 .40 · 10:00 .15 · 12:00 .20 · 14:00 .40 · 15:00 .40 · 16:00 .25 · 18:00 .10 · 20:00 .20 · 22:00 .45 · 24:00 .65`. Deepest 02:00–06:00, a smaller dip after lunch;
-  - **hours on duty**: since 08:00 (before 08:00, since the day before's). Holidays are not known.
+  - **hours on duty**: since the block's start (08:00 weekdays, 09:00 weekends; before it, since the day before's). Holidays are not known.
 - **`engaged`** (2026-11-16, owner: a quiet 03:00-05:00 is not strain): sleepiness weighs only near work. 1 while the team works and for `ENGAGED_HOLD` (60 min) after their last exam or report, fading linearly to 0 at `ENGAGED_FADE` (120 min); 0 before any work. A long quiet stretch leaves only the accumulated work at the fatigue floor; a short break after heavy work keeps the night's sleepiness.
 - The `0.5 +` floor: fully rested, the accumulated work counts half; at the deepest of the night after a long block, fully.
 
@@ -121,7 +121,7 @@ Most on-call blocks have a **senior and a junior** radiologist; some have one (o
 
 | Field | Meaning |
 |---|---|
-| `from`, `to` | the on-call hours: weekdays 14:00, weekends 08:00, to 08:00 |
+| `from`, `to` | the on-call hours: weekdays 14:00, weekends 09:00, to the next block's start (08:00 weekdays, 09:00 weekends) |
 | `peak`, `mean` | of the index over those hours |
 | `hours_high` | hours with the index at 65 or more (`SHIFT_HIGH`) |
 | `reports` | the team's reports: `us` (UPU ultrasound exams), `xr`, `ct`, `rf`, `mr` |
@@ -227,7 +227,7 @@ All tunables are constants at the top of `strain.py`:
 | `ACCUM_HALF_FULL_H` | 3.25 h | busy hours that make `accumulated` half full |
 | `ENGAGED_HOLD`, `ENGAGED_FADE` | 60, 120 min | sleepiness weighs fully this long after the last work, gone at the second |
 | `FATIGUE_FLOOR` | 0.5 | share of the accumulated work counted fully rested |
-| `DUTY_START_HOUR`, `DUTY_REF_H` | 08:00, 24 h | the duty block |
+| `DUTY_START_HOUR`, `WEEKEND_START_HOUR`, `ON_CALL_HOUR`, `DUTY_REF_H` | 08:00, 09:00, 14:00, 24 h | the duty block (weekday, weekend start), weekday on call |
 | `CIRCADIAN` | see above | the assumed curve |
 
 In `queuestats.py`: `REGION_MIN_SAMPLES` (3) sets how many exams of a kind give that kind its own median; `READ_TYPICAL` (X-ray 3, CT 25, RF 15, MRI 30 min per study) and `READ_MIN` (1 min) a read's length; `TEAM_MIN_REPORTS` (5) and `TEAM_GRACE` (30 min) who is on call; `SHIFT_HIGH` (65) the summary's `hours_high`; `SCOPE_LABS` the laboratories fetched. Tests: `python3 runtests.py strain` and `python3 runtests.py queuestats`. The table above is reproduced by scoring `strain.Moment`s by hand.

@@ -77,7 +77,10 @@ ENGAGED_FADE = timedelta(minutes=120)   # then fades to nothing at this gap (own
 ACCUM_HALF_LIFE_H = 3.5           # during rest, the accumulated work halves in 3.5 h (was 8 h until
                                   # 2026-11-16: a quiet 03:00-05:00 barely lowered the strain)
 REST_MIN = timedelta(minutes=30)  # a shorter idle gap is not rest (owner, 2026-11-12)
-DUTY_START_HOUR = 8
+DUTY_START_HOUR = 8               # Monday-Friday: the day shift at 08:00, on call from 14:00
+WEEKEND_START_HOUR = 9            # Saturday, Sunday: one shift from 09:00 (owner, 2026-11-16);
+                                  # on-call blocks: Mon-Thu 18 h, Fri 19 h, Sat 24 h, Sun 23 h
+ON_CALL_HOUR = 14                 # weekdays
 DUTY_REF_H = 24.0
 
 # (hour, sleepiness 0..1): assumed shape, not measured
@@ -125,10 +128,33 @@ def circadian(t: datetime) -> float:
     return CIRCADIAN[-1][1]
 
 
+def day_start(d: datetime) -> datetime:
+    """When the duty block of d's calendar day begins: 08:00 Monday-Friday,
+    09:00 Saturday and Sunday."""
+    h = WEEKEND_START_HOUR if d.weekday() >= 5 else DUTY_START_HOUR
+    return d.replace(hour=h, minute=0, second=0, microsecond=0)
+
+
 def duty_start(t: datetime) -> datetime:
-    """Start of the 08:00 -> 08:00 duty block t falls in."""
-    start = t.replace(hour=DUTY_START_HOUR, minute=0, second=0, microsecond=0)
-    return start if t >= start else start - timedelta(days=1)
+    """Start of the duty block t falls in (each runs to the next day's start)."""
+    start = day_start(t)
+    return start if t >= start else day_start(t - timedelta(days=1))
+
+
+def duty_end(block_start: datetime) -> datetime:
+    """End of the duty block that began at block_start: the next day's start."""
+    return day_start(block_start + timedelta(days=1))
+
+
+def shift_changes(a: datetime, b: datetime) -> List[datetime]:
+    """Every handover in (a, b): each block's start and, on weekdays, 14:00."""
+    out, d = [], (a - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    while d <= b:
+        out.append(day_start(d))
+        if d.weekday() < 5:
+            out.append(d.replace(hour=ON_CALL_HOUR))
+        d += timedelta(days=1)
+    return sorted(x for x in out if a < x < b)
 
 
 def duty_hours(t: datetime) -> float:

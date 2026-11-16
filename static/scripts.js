@@ -8169,9 +8169,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // The span analysed. Real time (the "To" date is today or later, or none):
     // null, a rolling 12/24 h ending now. Historical (a past "To" date): the
-    // on-call day(s), 08:00 of "From" to 08:00 of "To" (a single past day D:
-    // 08:00 of D to 08:00 of the next day), so what builds up over a duty
-    // block is seen whole.
+    // on-call day(s), the duty-block start of "From" to that of "To" (a single
+    // past day D: D's block), so what builds up over a duty block is seen
+    // whole. Blocks start 08:00 Monday-Friday, 09:00 Saturday and Sunday.
     function scheduleQueueRange() {
         const to = elements.scheduleEndDate?.value || elements.scheduleStartDate?.value || '';
         if (!to || to >= localDateStr()) return null;
@@ -8183,7 +8183,8 @@ document.addEventListener('DOMContentLoaded', function() {
             endDay = localDateStr(d);
             startDay = to;
         }
-        return { start: `${startDay}T08:00`, end: `${endDay}T08:00` };
+        const at = s => `${s}T${[0, 6].includes(day(s).getDay()) ? '09' : '08'}:00`;
+        return { start: at(startDay), end: at(endDay) };
     }
 
     // While the metrics are computed: hero, utilisation bar and graph blurred,

@@ -32,12 +32,23 @@ class TestClock(unittest.TestCase):
         self.assertGreater(sx.circadian(dt(14, 30)), sx.circadian(dt(11)))   # after-lunch dip
         self.assertAlmostEqual(sx.circadian(dt(23, 59)), sx.circadian(dt(0)), places=1)
 
-    def test_duty_runs_08_to_08_every_day(self):
+    def test_duty_blocks_08_weekdays_09_weekends(self):
         self.assertEqual(sx.duty_start(dt(10)), dt(8))
         self.assertEqual(sx.duty_start(dt(20)), dt(8))                  # on call: since the morning
         self.assertEqual(sx.duty_start(dt(3)), dt(8, day=10))
-        self.assertEqual(sx.duty_start(dt(20, day=14)), dt(8, day=14))  # Saturday
         self.assertEqual(sx.duty_hours(dt(4)), 20.0)
+        # Friday 13: until Saturday 09:00; Saturday 14 and Sunday 15 from 09:00
+        self.assertEqual(sx.duty_start(dt(8, 30, day=14)), dt(8, day=13))
+        self.assertEqual(sx.duty_start(dt(20, day=14)), dt(9, day=14))
+        self.assertEqual(sx.duty_start(dt(7, 30, day=16)), dt(9, day=15))   # Monday 07:30: Sunday's
+        self.assertEqual(sx.duty_start(dt(8, day=16)), dt(8, day=16))
+        self.assertEqual(sx.duty_end(dt(8, day=13)), dt(9, day=14))
+        self.assertEqual(sx.duty_end(dt(9, day=15)), dt(8, day=16))
+
+    def test_shift_changes(self):
+        self.assertEqual(sx.shift_changes(dt(7, day=13), dt(10, day=14)),
+                         [dt(8, day=13), dt(14, day=13), dt(9, day=14)])
+        self.assertEqual(sx.shift_changes(dt(8), dt(14)), [])           # bounds excluded
 
 
 class TestAccumulated(unittest.TestCase):

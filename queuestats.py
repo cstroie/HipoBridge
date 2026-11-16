@@ -478,8 +478,10 @@ def norm_name(value) -> Optional[str]:
 
 def on_call_from(block_start: datetime) -> datetime:
     """When the on-call team takes the UPU over: weekdays 14:00, weekends at
-    the block's start (08:00). Holidays are not known."""
-    return block_start + timedelta(hours=6 if block_start.weekday() < 5 else 0)
+    the block's start (09:00). Holidays are not known."""
+    if block_start.weekday() < 5:
+        return block_start.replace(hour=strain_index.ON_CALL_HOUR)
+    return block_start
 
 
 def in_on_call(t: datetime) -> bool:
@@ -495,7 +497,7 @@ def on_call_team(events: List[dict], block_start: datetime, until: datetime) -> 
     someone has that many, whoever validated one later than TEAM_GRACE after
     the handover. Empty when nobody has. `events` have 'validator' and
     't_rep'. The names never leave compute()."""
-    frm, end = on_call_from(block_start), min(block_start + timedelta(days=1), until)
+    frm, end = on_call_from(block_start), min(strain_index.duty_end(block_start), until)
     counts: Dict[str, int] = {}
     late = set()
     for e in events:
@@ -516,7 +518,7 @@ def on_call_radiologist(jobs: List[dict], block_start: datetime, until: datetime
     radiologist. Only `team` members when given. None before anyone has
     validated one. Used only to tell the senior's rest from the team's work:
     never returned, never logged."""
-    end = min(block_start + timedelta(days=1), until)
+    end = min(strain_index.duty_end(block_start), until)
     windows = [(block_start + timedelta(hours=12), min(block_start + timedelta(hours=18), end)),
                (on_call_from(block_start), end)]
     for frm, to in windows:
@@ -664,16 +666,19 @@ def service_rate(intervals, a: datetime, b: datetime, window: timedelta = timede
     times, and departures per busy hour fails where someone is nearly
     always waiting (it is then the mean throughput, far below what the room
     does in its good hours). The percentile, not the max, so one batch of
-    exams marked done at once does not set the capacity. None when nothing
-    left in that share of the windows."""
+    exams marked done at once does not set the capacity. A window holding a
+    shift change (strain.shift_changes()) is left out: two teams' work is not
+    one room's hour. None when nothing left in that share of the windows."""
     ends = sorted(iv[1] for iv in intervals if iv[1] is not None and a - window < iv[1] <= b)
     if not ends:
         return None
     counts = []
+    changes = strain_index.shift_changes(a - window, b + window)
     t = a + window
     while t <= b:
         lo = t - window
-        counts.append(sum(1 for e in ends if lo < e <= t))
+        if not any(lo < c < t for c in changes):
+            counts.append(sum(1 for e in ends if lo < e <= t))
         t += step
     if not counts:
         return None
@@ -840,12 +845,12 @@ def compute(rows: List[dict], report_times: Dict[str, Optional[datetime]],
     def block_at(start: datetime) -> dict:
         if start in blocks:
             return blocks[start]
-        frm, until = on_call_from(start), min(start + timedelta(days=1), as_of)
+        frm, until = on_call_from(start), min(strain_index.duty_end(start), as_of)
         team = on_call_team(events, start, as_of)
         who = on_call_radiologist(events, start, as_of, team)
         us = [(j, iv) for j, iv in work if iv[1] > frm]
         us_in = [(j, iv) for j, iv in us if iv[0] < until]
-        rd_in = [(rd, iv) for rd, iv in reading if rd['validator'] in team and frm <= iv[1] < start + timedelta(days=1)]
+        rd_in = [(rd, iv) for rd, iv in reading if rd['validator'] in team and frm <= iv[1] < strain_index.duty_end(start)]
         reports = {label: 0 for label in MODALITY_LABEL.values()}
         reports['us'] = len(us_in)
         for rd, iv in rd_in:
@@ -958,7 +963,7 @@ def compute(rows: List[dict], report_times: Dict[str, Optional[datetime]],
     upu = [j for j in in_span if j['upu']]
     reads_span = [rd for rd in reads if span_start < rd['t_req'] <= as_of]
     reads_left = [rd for rd in reads_span if rd['left']]
-    shown = sorted(k for k in blocks if k + timedelta(days=1) > span_start and k < as_of)
+    shown = sorted(k for k in blocks if strain_index.duty_end(k) > span_start and k < as_of)
     coverage = {
         'jobs': len(in_span),
         'exam_times': {'known': sum(1 for j in left if j['exam_known']), 'of': len(left)},
@@ -1012,7 +1017,7 @@ def shift_summary(start: datetime, blk: dict, series: List[dict], span_start: da
     SHIFT_HIGH or more, the team's reports by modality (us = UPU ultrasound
     exams; `ward` = how many of the reads came from a ward) and the team's
     size. `complete`: the whole shift lies in the span analysed. Counts only."""
-    frm, end = on_call_from(start), start + timedelta(days=1)
+    frm, end = on_call_from(start), strain_index.duty_end(start)
     lo, hi = frm.strftime('%Y-%m-%dT%H:%M'), end.strftime('%Y-%m-%dT%H:%M')
     vals = [p['strain'] for p in series if lo < p['t'] <= hi]
     return {

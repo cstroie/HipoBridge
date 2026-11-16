@@ -198,7 +198,7 @@ class TestJobs(unittest.TestCase):
         self.assertEqual(qs.on_call_radiologist(jobs, t(11, 8), t(11, 18)), 'jr')
         self.assertIsNone(qs.on_call_radiologist(jobs, t(11, 8), t(11, 12)))   # weekday morning
         self.assertEqual(qs.on_call_from(t(11, 8)), t(11, 14))
-        self.assertEqual(qs.on_call_from(t(14, 8)), t(14, 8))                   # Saturday
+        self.assertEqual(qs.on_call_from(t(14, 9)), t(14, 9))                   # Saturday
         self.assertEqual(qs.norm_name('  Bo   POP '), 'bo pop')
 
     def test_team_work_accumulates_and_the_senior_s_gaps_are_rest(self):
@@ -460,6 +460,16 @@ class TestStats(unittest.TestCase):
         mu = qs.service_rate(ivs, a, a + timedelta(hours=24))
         self.assertTrue(2.0 <= mu < 12.0, mu)
         self.assertIsNone(qs.service_rate([(a, None)], a, a + timedelta(hours=4)))
+
+    def test_service_rate_skips_windows_across_a_shift_change(self):
+        # Wednesday: 1/h all day, but 6 just before 08:00 and 6 just after:
+        # a window holding both crosses the handover and does not count
+        a = datetime(2026, 11, 11, 0, 0)
+        ivs = [(a, a + timedelta(hours=h, minutes=30)) for h in range(24) if h not in (7, 8)]
+        ivs += [(a, a + timedelta(hours=7, minutes=31 + 4 * i)) for i in range(6)]
+        ivs += [(a, a + timedelta(hours=8, minutes=1 + 4 * i)) for i in range(6)]
+        mu = qs.service_rate(ivs, a, a + timedelta(hours=24), q=1.0)
+        self.assertEqual(mu, 6.0)   # either side of 08:00, never 12
 
     def test_open_interval_capped(self):
         a = datetime(2026, 11, 9, 0, 0)
