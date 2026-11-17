@@ -1516,7 +1516,8 @@ class HippoClientPatientSearch(HippoClientPatient):
         search_data = {
             "hdnSearchType": "1",
             "pageNo": "1",
-            "strDescription": search_term,
+            # Hipocrate matches a bare prefix itself; a literal '*' matches nothing
+            "strDescription": search_term.rstrip('*'),
             "strLastName": "",
             "strFirstName": "",
             "strCodePres": "",
