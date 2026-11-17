@@ -311,6 +311,7 @@ _ACCESS_DENIED_MARKER = "Nu aveti suficiente drepturi"
 # background burst (worklist enrichment: 3 patients x 2 fetches; pacs.py
 # per-modality gather: 6) can claim the whole cap and briefly queue live
 # /api/* and /fhir/* traffic behind it.
+_auth_tokens: dict = {}
 _hipocrate_semaphore = asyncio.Semaphore(6)
 
 
@@ -739,6 +740,32 @@ class HippoClient:
                 user_session_manager.set_authenticated(username, password, False)
                 return False
 
+    _AUTH_TOKEN_RE = re.compile(r"id=['\"]hipo-session-view['\"][^>]*>", re.I)
+
+    async def _get_auth_tokens(self, username, password, refresh=False):
+        """hdnAuthGeneration/hdnAuthUserId for POSTs, read from the hipo-session-view
+        script of an authenticated page (cached per user; generation changes on login)."""
+        key = (username, password)
+        if refresh:
+            _auth_tokens.pop(key, None)
+        if key in _auth_tokens:
+            return _auth_tokens[key]
+        # Caller already holds _hipocrate_semaphore (called from inside _make_request).
+        async with self.session.get(f"{self.service_url}/files/search.asp?what=PA", headers=self.headers) as resp:
+            page = await self.handle_response_encoding(resp)
+        m = self._AUTH_TOKEN_RE.search(page)
+        tokens = {}
+        if m:
+            gen = re.search(r"data-auth-generation=['\"]([^'\"]+)", m.group(0))
+            uid = re.search(r"data-auth-user=['\"]([^'\"]+)", m.group(0))
+            if gen and uid:
+                tokens = {"hdnAuthGeneration": gen.group(1), "hdnAuthUserId": uid.group(1)}
+        if tokens:
+            _auth_tokens[key] = tokens
+        else:
+            logger.warning(f"No hipo-session-view tokens found for {username}")
+        return tokens
+
     async def make_authenticated_request(self, url, method="GET", data=None, username=None, password=None):
         """Make an authenticated request to the Hipocrate service with automatic login handling.
 
@@ -768,14 +795,18 @@ class HippoClient:
                 logger.debug(f"Making POST request to: {url}")
                 # Strip Content-Type so aiohttp sets it automatically for form data
                 post_headers = {k: v for k, v in self.headers.items() if k != "Content-Type"}
-                if data:
-                    async with self.session.post(url, data=data, headers=post_headers) as response:
+                # Hipocrate rejects (409 + X-Hipo-Session-Expired) any POST lacking the
+                # page-identity fields its share_session.js adds to every form.
+                for attempt in (0, 1):
+                    tokens = await self._get_auth_tokens(username, password, refresh=bool(attempt))
+                    body = {**(data or {}), **tokens}
+                    async with self.session.post(url, data=body, headers=post_headers) as response:
                         response_text = await self.handle_response_encoding(response)
                         logger.debug(f"POST response status: {response.status}")
-                else:
-                    async with self.session.post(url, headers=post_headers) as response:
-                        response_text = await self.handle_response_encoding(response)
-                        logger.debug(f"POST response status: {response.status}")
+                        expired = response.status == 409 and response.headers.get("X-Hipo-Session-Expired") == "1"
+                    if not expired:
+                        break
+                    logger.warning(f"POST rejected as session-expired for {username}; refreshing auth tokens")
             text = re.sub(r'\s+', ' ', html.unescape(response_text))
             return text
 
