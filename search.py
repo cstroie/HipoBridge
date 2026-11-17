@@ -23,6 +23,7 @@ how sqlcache.SqliteCache is already kept off the event loop.
 """
 
 import asyncio
+import itertools
 import json
 import logging
 import re
@@ -317,7 +318,20 @@ class SearchIndex:
         if not slots:
             return []
         exprs = [_slot_fts(sl) for sl in slots]
-        match_query = (' AND ' if match == 'all' else ' OR ').join(exprs)
+        if match == 'all':
+            match_query = ' AND '.join(exprs)
+        else:
+            # Ask FTS only for passages holding at least `min_match` slots: an OR
+            # over the slots ranked by bm25 fills the candidate pool with short
+            # passages that hold one rare word, and those holding several (the
+            # answer) fall past the LIMIT. Combinations are capped; beyond that
+            # the plain OR stands and the slot count below still filters.
+            k = min(max(1, min_match), len(exprs))
+            combos = list(itertools.combinations(exprs, k)) if k > 1 else []
+            if 1 < k and len(combos) <= 64:
+                match_query = ' OR '.join('(' + ' AND '.join(c) + ')' for c in combos)
+            else:
+                match_query = ' OR '.join(exprs)
         where, params = ["passages_fts MATCH ?"], [match_query]
         if status:
             where.append("d.status = ?"); params.append(status)

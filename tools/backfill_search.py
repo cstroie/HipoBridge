@@ -87,7 +87,10 @@ def indexed_ids(db_path):
     con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     try:
         return {r[0] for r in con.execute(
-            "SELECT source_id FROM documents WHERE kind='imaging'")}
+            # Rows without `status`/`identifiers` predate the metadata columns and are
+            # never returned by a search: fetch them again so they are re-parsed.
+            "SELECT source_id FROM documents WHERE kind='imaging' "
+            "AND status IS NOT NULL AND identifiers IS NOT NULL")}
     finally:
         con.close()
 
