@@ -6191,6 +6191,14 @@ class HippoClientCererePerform(HippoClient):
             overrides={},
             log_label='CerereCancel')
 
+    async def uncancel(self, cerere_id: str) -> HippoData:
+        """Restore a cancelled request by replaying cerere.asp with hdnAction=DA
+        (the Dezanulează button, EditLink('DA'))."""
+        return await self._replay_form(
+            cerere_id, hdn_action='DA',
+            overrides={},
+            log_label='CerereUncancel')
+
     async def send(self, cerere_id: str) -> HippoData:
         """Send a 'not sent' request to the lab by fetching buletinRecoltari.asp with close=true."""
         data = HippoData()

@@ -211,6 +211,7 @@ All three replay the `cerere.asp` form: GET it, patch specific fields, POST it b
 |---|---|---|
 | `POST /api/request/{id}/perform` | `/PARA/NOM/Listare/cerere.asp?id={id}` (POST) | `DataEfectuarii` = now (or given timestamp), `hdnAction=S` |
 | `POST /api/request/{id}/cancel` | `/PARA/NOM/Listare/cerere.asp?id={id}` (POST) | `hdnAction=A` — mirrors Hipocrate's own "Anulează" button, no field override |
+| `POST /api/request/{id}/uncancel` | `/PARA/NOM/Listare/cerere.asp?id={id}` (POST) | `hdnAction=DA` — mirrors the "Dezanulează" button (`EditLink('DA')`), no field override |
 | `POST /api/request/{id}/report` | `/PARA/NOM/Listare/Rezultate.asp` (GET then POST) | report text for one analysis |
 | `POST /api/request/{id}/validate` | `/PARA/NOM/Listare/Ajax_Cerere.asp?action=VDV` (POST) | validation toggle for one analysis |
 

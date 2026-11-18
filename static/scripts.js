@@ -5585,15 +5585,14 @@ document.addEventListener('DOMContentLoaded', function() {
                                 performBtn.addEventListener('click', () => markExamPerformed(article, cerereId));
                             }
                         }
-                        let cancelBtn = actionGroup.querySelector('.btn-cancel-request');
-                        if (cancelBtn) {
-                            cancelBtn.replaceWith(cancelBtn.cloneNode(true));
-                            cancelBtn = actionGroup.querySelector('.btn-cancel-request');
-                            cancelBtn.disabled = locked;
-                            if (!locked) {
-                                cancelBtn.addEventListener('click', () => cancelRequest(article, cerereId));
-                            }
-                        }
+                        applyCancelButton(actionGroup, {
+                            locked, serverCancelled: Boolean(d.cancelled),
+                            onCancel: () => cancelRequest(article, cerereId),
+                            onUncancel: (btn) => uncancelRequestCore(cerereId, {
+                                setDisabled: v => { btn.disabled = v; },
+                                onDone: () => { delete article.dataset.cancelled; fetchAndFillReport(article); },
+                            }),
+                        });
                     }
 
                     // Edit: disabled until performed; once performed, enabled only
@@ -5729,6 +5728,49 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         showToast('Request cancelled', 'success');
         onDone();
+    }
+
+    async function uncancelRequestCore(cerereId, { setDisabled, onDone }) {
+        if (!confirm('Restore this cancelled request?')) return;
+        setDisabled(true);
+        const resp = await fetch(`/api/request/${cerereId}/uncancel`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeader() },
+            body: JSON.stringify({}),
+        });
+        if (!resp.ok) {
+            setDisabled(false);
+            showToast(await resp.text().catch(() => `HTTP ${resp.status}`), 'error');
+            return;
+        }
+        showToast('Request restored', 'success');
+        onDone();
+    }
+
+    // The Cancel button doubles as Un-cancel (Hipocrate's "Dezanulează",
+    // hdnAction=DA) once cerere.asp itself confirms the request is cancelled
+    // (d.cancelled) — never on the local optimistic flag alone. Otherwise it is
+    // Cancel, disabled while locked. Clone-and-replace drops stale listeners.
+    function applyCancelButton(actionGroup, { locked, serverCancelled, onCancel, onUncancel }) {
+        let btn = actionGroup.querySelector('.btn-cancel-request');
+        if (!btn) return null;
+        btn.replaceWith(btn.cloneNode(false));
+        btn = actionGroup.querySelector('.btn-cancel-request');
+        const [icon, label, title] = serverCancelled
+            ? ['fa-rotate-left', 'Un-cancel', 'Restore cancelled request']
+            : ['fa-ban', 'Cancel', 'Cancel request'];
+        const i = document.createElement('i');
+        i.className = `fas ${icon}`;
+        i.setAttribute('aria-hidden', 'true');
+        const span = document.createElement('span');
+        span.textContent = label;
+        btn.replaceChildren(i, ' ', span);
+        btn.title = title;
+        btn.setAttribute('aria-label', title);
+        btn.disabled = serverCancelled ? false : locked;
+        if (serverCancelled) btn.addEventListener('click', () => onUncancel(btn));
+        else if (!locked) btn.addEventListener('click', () => onCancel(btn));
+        return btn;
     }
 
     async function sendRequestCore(cerereId, { setDisabled, onDone }) {
@@ -6840,20 +6882,17 @@ document.addEventListener('DOMContentLoaded', function() {
                             });
                         }
                     }
-                    let cancelBtn = actionGroup.querySelector('.btn-cancel-request');
-                    if (cancelBtn) {
-                        cancelBtn.replaceWith(cancelBtn.cloneNode(true));
-                        cancelBtn = actionGroup.querySelector('.btn-cancel-request');
-                        cancelBtn.disabled = locked;
-                        if (!locked) {
-                            cancelBtn.addEventListener('click', () => {
-                                cancelRequestCore(requestId, {
-                                    setDisabled: v => { cancelBtn.disabled = v; if (performBtn) performBtn.disabled = v; },
-                                    onDone: () => { modal.dataset.cancelled = '1'; refreshAll(); }
-                                });
-                            });
-                        }
-                    }
+                    const cancelBtn = applyCancelButton(actionGroup, {
+                        locked, serverCancelled: Boolean(d.cancelled),
+                        onCancel: (btn) => cancelRequestCore(requestId, {
+                            setDisabled: v => { btn.disabled = v; if (performBtn) performBtn.disabled = v; },
+                            onDone: () => { modal.dataset.cancelled = '1'; refreshAll(); }
+                        }),
+                        onUncancel: (btn) => uncancelRequestCore(requestId, {
+                            setDisabled: v => { btn.disabled = v; },
+                            onDone: () => { delete modal.dataset.cancelled; refreshAll(); },
+                        }),
+                    });
                 }
 
                 // Edit: disabled until performed; once performed, enabled only while

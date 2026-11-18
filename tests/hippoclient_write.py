@@ -173,6 +173,19 @@ class TestCererePerformErrors(unittest.TestCase):
         self.assertEqual(data.get("status"), "error")
         self.assertEqual(data.get("message"), "POST failed")
 
+    def test_uncancel_posts_hdnaction_da(self):
+        client = _client(HippoClientCererePerform)
+        responses = [
+            ('<form><input name="hdnAction" value=""></form>', None),  # GET cerere.asp
+            ('OK', None),                                                # POST cerere.asp
+        ]
+        client.make_authenticated_request = AsyncMock(side_effect=responses)
+        data = _run(client.uncancel("111"))
+        self.assertEqual(data.get("status"), "success")
+        method, form = client.make_authenticated_request.call_args_list[1].args[1:3]
+        self.assertEqual(method, "POST")
+        self.assertEqual(form.get("hdnAction"), "DA")
+
     def test_happy_path_sets_success_status(self):
         client = _client(HippoClientCererePerform)
         responses = [

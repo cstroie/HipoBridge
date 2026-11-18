@@ -1136,6 +1136,17 @@ async def post_request_cancel(request):
     return web_json_response(result)
 
 @require_auth
+async def post_request_uncancel(request):
+    """Restore a cancelled request by replaying cerere.asp with hdnAction=DA (the Dezanulează button)."""
+    cerere_id = request.match_info['id']
+    username, _ = request['auth_credentials']
+    if username not in _ALLOWED_RADIOLOGISTS:
+        return web.Response(status=403, text='Not authorised to un-cancel requests')
+    client = HippoClientCererePerform(SERVICE_URL, request)
+    result = await client.uncancel(cerere_id)
+    return web_json_response(result)
+
+@require_auth
 async def post_request_send(request):
     """Send a 'not sent' request to the lab (buletinRecoltari.asp?close=true)."""
     cerere_id = request.match_info['id']
@@ -2180,6 +2191,7 @@ async def init_app(no_disk_cache: bool = False, no_worklist: bool = False,
     app.router.add_post('/api/request/{id}/validate', post_report_validate)
     app.router.add_post('/api/request/{id}/perform', post_study_perform)
     app.router.add_post('/api/request/{id}/cancel', post_request_cancel)
+    app.router.add_post('/api/request/{id}/uncancel', post_request_uncancel)
     app.router.add_post('/api/request/{id}/send', post_request_send)
     app.router.add_get('/api/schedule', get_schedule)
     app.router.add_get('/api/schedule/queue', get_schedule_queue)
