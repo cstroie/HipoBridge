@@ -60,12 +60,13 @@ class URLCache:
         # Optional L2 backing store (duck-typed get/put/remove); set by init_app() after construction
         self.fs_cache: Optional[Any] = None
 
-    def _l1_get(self, url: str) -> Optional[str]:
-        """Check L1 only; returns None on miss or expiry (does not touch L2)."""
+    def _l1_get(self, url: str, max_age: Optional[float] = None) -> Optional[str]:
+        """Check L1 only; returns None on miss or expiry (does not touch L2).
+        max_age, if given, replaces the cache-wide timeout for this lookup."""
         if url in self._cache:
             text, ts = self._cache[url]
             age = (datetime.now(timezone.utc) - ts).total_seconds()
-            if age >= self.timeout:
+            if age >= (self.timeout if max_age is None else max_age):
                 del self._cache[url]
                 self._inflight.pop(url, None)
                 logger.debug(f"Expired cache entry removed: {url}")
@@ -98,14 +99,16 @@ class URLCache:
 
         return None
 
-    async def get_async(self, url: str) -> Optional[str]:
+    async def get_async(self, url: str, max_age: Optional[float] = None,
+                        l2: bool = True) -> Optional[str]:
         """Async equivalent of ``get`` — runs L2 filesystem I/O in a thread
-        so it doesn't block the event loop."""
-        text = self._l1_get(url)
+        so it doesn't block the event loop. max_age overrides the L1 TTL for
+        this lookup; l2=False skips the filesystem store (volatile pages)."""
+        text = self._l1_get(url, max_age)
         if text is not None:
             return text
 
-        if self.fs_cache is not None:
+        if l2 and self.fs_cache is not None:
             text = await asyncio.to_thread(self.fs_cache.get, url)
             if text is not None:
                 self._l1_put(url, text)

@@ -254,9 +254,18 @@ async def search_request(request):
     client = HippoClientServiceRequestSearch(SERVICE_URL, request)
     if request.rel_url.query.get('refresh') == '1':
         await evict_patient_cache(client, patient_id)
+    background = ((lambda: foreground.wait_idle(request['auth_credentials'][0]))
+                  if request.query.get('background') == '1' else None)
     parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime,
-                                      background=((lambda: foreground.wait_idle(request['auth_credentials'][0]))
-                                                  if request.query.get('background') == '1' else None))
+                                      background=background)
+    # ?expect=<request id>: the caller knows this request exists (e.g. it was
+    # opened from the Schedule), so a list without it came from a stale cache.
+    expect = request.query.get('expect')
+    if expect and expect not in {str(r.get('id')) for r in parsed_data.get("requests") or []}:
+        logger.info(f"Request {expect} missing from cached list of patient {patient_id}; refetching")
+        await evict_patient_cache(client, patient_id)
+        parsed_data = await client.search(patient_id, type=exam_type, region=exam_region, dt=exam_datetime,
+                                          background=background)
     for req in parsed_data.get("requests") or []:
         # Display name of the request type ("Ultrasound") — the same text the
         # FHIR ServiceRequest carries as code.coding[0].display.

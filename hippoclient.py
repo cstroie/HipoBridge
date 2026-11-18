@@ -153,6 +153,19 @@ ANALYSIS_TYPES = {
 # These are fetched in parallel alongside imaging domains in HippoClientServiceRequestSearch.
 LAB_DOMAINS = [1, 2, 3, 5, 8, 9, 15, 19, 21, 22, 23, 24, 27, 39, 41]
 
+# A patient's imaging request lists (analysesEpisod.asp, imaging domains) go
+# stale as soon as a new request is placed, and are cheap to refetch (2-6 s),
+# so they live only in L1 for _SHORT_TTL and never on disk (2026-11-18: a
+# disk-cached list hid a request created the same day). Lab lists (~17 s
+# per domain) keep the normal cache.
+_SHORT_TTL = 300.0
+_IMAGING_EPISODE_RE = re.compile(
+    r'/Pacient/analysesEpisod\.asp\?.*\bstrDomeniu=(%s)(?:&|$)'
+    % '|'.join(str(v['domain']) for v in ANALYSIS_TYPES.values() if v['domain'] != 0))
+
+def _is_short_ttl(url: str) -> bool:
+    return bool(_IMAGING_EPISODE_RE.search(url))
+
 
 async def evict_patient_cache(client: 'HippoClient', patient_id: str) -> None:
     """Force-refresh a patient's demographic, imaging/lab list, and Observation
@@ -600,7 +613,10 @@ class HippoClient:
         Returns:
             Cached response text or None if not found or expired
         """
-        return await self.url_cache.get_async(self.get_full_url(url))
+        full_url = self.get_full_url(url)
+        if _is_short_ttl(full_url):
+            return await self.url_cache.get_async(full_url, max_age=_SHORT_TTL, l2=False)
+        return await self.url_cache.get_async(full_url)
 
     async def cache_put(self, url: str, response_text: str) -> None:
         """Add response to cache.
@@ -610,7 +626,7 @@ class HippoClient:
             response_text: Response text to cache
         """
         full_url = self.get_full_url(url)
-        persist = not any(p in full_url for p in _NO_PERSIST_PATTERNS)
+        persist = not any(p in full_url for p in _NO_PERSIST_PATTERNS) and not _is_short_ttl(full_url)
         await self.url_cache.put_async(full_url, response_text, persist=persist)
         # A fresh fetch means any previously parsed result for this url is
         # now stale (could be a different report, a newly filled result,

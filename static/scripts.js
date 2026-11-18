@@ -1402,10 +1402,17 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // {patient, id}: the request a Schedule row opened this patient from.
+    let expectedRequest = null;
+
     async function fetchAnalysesData(patientCode, group = '', background = false) {
         try {
             
-            const analysesResponse = await apiFetch(`/api/request?patient=${patientCode}${group ? `&type=${group}` : ''}${background ? '&background=1' : ''}`);
+            // Opened from a Schedule row: that request exists, so a cached
+            // list without it is stale — the server refetches it then.
+            const expect = expectedRequest && expectedRequest.patient === String(patientCode)
+                ? `&expect=${encodeURIComponent(expectedRequest.id)}` : '';
+            const analysesResponse = await apiFetch(`/api/request?patient=${patientCode}${group ? `&type=${group}` : ''}${background ? '&background=1' : ''}${expect}`);
             
             if (!analysesResponse.ok) {
                 if (analysesResponse.status === 401) {
@@ -6985,6 +6992,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const json = await resp.json();
                 const patientId = json.patient?.id || null;
                 if (patientId) {
+                    expectedRequest = { patient: String(patientId), id: String(requestId) };
                     elements.cnpInput.value = patientId;
                     triggerEl.textContent = originalText;
                     triggerEl.disabled = false;

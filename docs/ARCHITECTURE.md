@@ -106,6 +106,7 @@ Hipocrate handles one session's requests strictly serially (measured: parallel `
 - `/api/request?patient=` fans out over domains **sequentially**; `type=imaging` / `type=lab` fetch just that group (lab domains 2, 5, 8, 9, 21 take ~17s each cold, imaging ones 2–6s). The Report tab uses the full list, Imaging/Lab tabs their group.
 - `background=1` (frontend patient-open prefill: imaging → epicrisis encounters → lab → observations → full list, one step at a time) additionally waits before each domain until `foreground` (`ForegroundActivity`, counted in `require_auth`, excluding `/api/ai/*` and background requests) has been idle 1.5s (max 30s per domain).
 - Frontend dedupes concurrent checkin/checkout fetches (`encounterInflight`).
+- **Imaging lists are short-lived (2026-11-18)**: the imaging-domain `analysesEpisod.asp` pages are L1-only with a 5-min TTL, never on disk (`_is_short_ttl()` in `hippoclient.py`; `URLCache.get_async(max_age=, l2=False)`) — a 7-day disk copy hid a request created the same day. Lab lists keep the normal cache. `?expect=<request id>` (sent by the frontend when a patient is opened from a Schedule row) evicts and refetches the patient's lists when that id is missing.
 
 ### Schedule queue metrics (2026-11-11)
 
