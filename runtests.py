@@ -34,7 +34,7 @@ from tests.hippoclient_parsing import (TestParseBuletinHeader, TestIsMeaningfulT
                                        TestSolicitareDerivedFields, TestDiagnosticReportFlags)
 from tests.hippoclient_write import (
     TestReportWriteErrors, TestReportValidateErrors, TestCererePerformErrors,
-    TestWebJsonResponseEndToEnd, TestTextToReportHtml,
+    TestWebJsonResponseEndToEnd, TestTextToReportHtml, TestMainPageBounce,
 )
 from tests.hippoclient_triage import TestTriageResolution
 from tests.hippoclient_schedule import TestWardFamily, TestApplyFiltersSection, TestTranslation, TestFhirBundle
@@ -162,7 +162,7 @@ TEST_GROUPS = {
                             TestSolicitareDerivedFields, TestDiagnosticReportFlags],
     "hippoclient_write": [
         TestReportWriteErrors, TestReportValidateErrors, TestCererePerformErrors,
-        TestWebJsonResponseEndToEnd, TestTextToReportHtml,
+        TestWebJsonResponseEndToEnd, TestTextToReportHtml, TestMainPageBounce,
     ],
     "hippoclient_triage": [TestTriageResolution],
     "hippoclient_schedule": [TestWardFamily, TestApplyFiltersSection, TestTranslation, TestFhirBundle],

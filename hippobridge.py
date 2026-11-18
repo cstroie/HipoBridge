@@ -1632,7 +1632,8 @@ def web_error_response(message: str, status_code: int = 400, details: Dict[str, 
 
 
 def web_json_response(data: Dict[str, Any]) -> web.Response:
-    """Return 200 for successful HippoData, 401 for auth failures, 404 for not-found, 500 for other errors."""
+    """Return 200 for successful HippoData, 401 for auth failures, 404 for not-found,
+    503 when Hipocrate bounced to its main page, 500 for other errors."""
     s = data.get("status")
     if s == "success":
         status = 200
@@ -1641,6 +1642,8 @@ def web_json_response(data: Dict[str, Any]) -> web.Response:
         # Distinguish auth failures (401) and not-found (404) from generic upstream failures (500)
         if "authentication failed" in msg:
             status = 401
+        elif "returned its main page" in msg:
+            status = 503   # transient upstream hiccup (see hippoclient.MAIN_PAGE_ERROR)
         elif "not found" in msg:
             status = 404
         else:

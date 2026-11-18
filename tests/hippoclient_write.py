@@ -236,5 +236,50 @@ class TestWebJsonResponseEndToEnd(unittest.TestCase):
         self.assertEqual(resp.status, 200)
 
 
+class _FakeResp:
+    def __init__(self, text): self._t = text; self.status = 200
+    async def __aenter__(self): return self
+    async def __aexit__(self, *a): return False
+
+
+class TestMainPageBounce(unittest.TestCase):
+    """Hipocrate answering a GET with its main page must be retried once and,
+    if it persists, reported as MAIN_PAGE_ERROR (HTTP 503) — never cached."""
+    MAIN = '<html><head><title>HIPOCRATE - PAGINA PRINCIPALA</title></head></html>'
+    GOOD = '<html><head><title>HIPOCRATE - Cerere laborator</title></head></html>'
+
+    def _client(self, pages):
+        from unittest.mock import MagicMock
+        client = _client(HippoClientCererePerform)
+        client.session = MagicMock()
+        client.session.cookie_jar = None
+        client.session.get = MagicMock(side_effect=[_FakeResp(p) for p in pages])
+        client.handle_response_encoding = AsyncMock(side_effect=lambda r: r._t)
+        client.login_if_needed = AsyncMock(return_value=True)
+        client.cache_get = AsyncMock(return_value=None)
+        client.cache_put = AsyncMock()
+        return client
+
+    def test_persistent_main_page_is_error_and_not_cached(self):
+        from hippoclient import MAIN_PAGE_ERROR
+        client = self._client([self.MAIN, self.MAIN])
+        url = client.get_full_url("/PARA/NOM/Listare/cerere.asp?id=mainpage-test-1")
+        html, err = _run(client.make_authenticated_request(url, "GET", None, "u", "p"))
+        self.assertIsNone(html)
+        self.assertEqual(err, MAIN_PAGE_ERROR)
+        client.cache_put.assert_not_called()
+        from hippoclient import HippoData
+        d = HippoData(); d.set_error(err)
+        self.assertEqual(web_json_response(d).status, 503)
+
+    def test_main_page_then_good_page_is_cached(self):
+        client = self._client([self.MAIN, self.GOOD])
+        url = client.get_full_url("/PARA/NOM/Listare/cerere.asp?id=mainpage-test-2")
+        html, err = _run(client.make_authenticated_request(url, "GET", None, "u", "p"))
+        self.assertIsNone(err)
+        self.assertIn("Cerere laborator", html)
+        client.cache_put.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()

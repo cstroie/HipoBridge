@@ -304,6 +304,8 @@ parse_cache = ParseResultCache(max_size=300, timeout=url_cache.timeout)
 
 # Hipocrate's per-lab rights denial ("you don't have enough rights to view a
 # request from laboratory X"). Depends on who is asking, so never cached.
+MAIN_PAGE_ERROR = "Hipocrate returned its main page instead of the requested one (session bounced); try again"
+_MAIN_PAGE_RE = re.compile(r'<title>\s*HIPOCRATE - PAGINA PRINCIPALA', re.I)
 _ACCESS_DENIED_MARKER = "Nu aveti suficiente drepturi"
 
 # Global semaphore: cap total concurrent outbound requests to Hipocrate.
@@ -881,7 +883,22 @@ class HippoClient:
 
             # Cache the response for GET requests and wake up any waiters
             if method == "GET":
-                if _ACCESS_DENIED_MARKER in response_text:
+                if _MAIN_PAGE_RE.search(response_text) and 'main.asp' not in url:
+                    # Hipocrate sometimes answers a page request with its main
+                    # page ("PAGINA PRINCIPALA") — a bounced session, not the
+                    # page asked for. Caching it pinned a bogus cerere.asp for
+                    # the full TTL (/patient 500s). Retry once; if it persists,
+                    # report MAIN_PAGE_ERROR (→ 503) and never cache it.
+                    logger.warning(f"Got Hipocrate main page instead of {url}; retrying once")
+                    async with _hipocrate_semaphore:
+                        response_text = await _make_request()
+                    if _MAIN_PAGE_RE.search(response_text):
+                        logger.warning(f"Still got Hipocrate main page for {url}; not caching")
+                        parse_cache.evict(self.get_full_url(url))
+                        self.url_cache.resolve_inflight(url)
+                        return None, MAIN_PAGE_ERROR
+                    await self.cache_put(url, response_text)
+                elif _ACCESS_DENIED_MARKER in response_text:
                     # A per-user rights denial must not enter the shared,
                     # user-blind cache — it would be served to accounts that do
                     # have access (confirmed: XRayVision's denied cerere.asp
